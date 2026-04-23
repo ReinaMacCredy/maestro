@@ -32,7 +32,7 @@ export function initServices(projectDir: string): Services {
     ...buildNotesServices(projectDir),
     ...buildMissionServices(projectDir),
     ...buildMemoryServices(projectDir),
-    ...buildHandoffServices(projectDir),
+    ...buildHandoffServices(),
     ...buildRatchetServices(projectDir),
     ...buildGraphServices(),
     ...buildTaskServices(projectDir),

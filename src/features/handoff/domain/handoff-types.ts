@@ -36,21 +36,21 @@ export interface HandoffWorktree {
   readonly path: string;
 }
 
-export type HandoffLaunchStatus =
+export type HandoffStatus =
   | "launching"
   | "launched"
   | "completed"
   | "failed"
   | "consumed";
 
-export interface HandoffLaunchRecord {
+export interface HandoffRecord {
   readonly id: string;
   readonly createdAt: string;
   readonly task: string;
   readonly name: string;
   readonly agent: HandoffAgent;
   readonly model: string;
-  readonly status: HandoffLaunchStatus;
+  readonly status: HandoffStatus;
   readonly wait: boolean;
   readonly sourceDir: string;
   readonly targetDir: string;
@@ -90,7 +90,7 @@ export interface HandoffLaunchPort {
   launch(request: HandoffLaunchRequest): Promise<HandoffLaunchResult>;
 }
 
-export interface LaunchStorePort {
+export interface HandoffStorePort {
   create(input: {
     readonly task: string;
     readonly name: string;
@@ -104,15 +104,15 @@ export interface LaunchStorePort {
     readonly createdBySessionId?: string;
     readonly worktree?: HandoffWorktree;
     readonly prompt: string;
-  }): Promise<HandoffLaunchRecord>;
-  update(record: HandoffLaunchRecord): Promise<HandoffLaunchRecord>;
+  }): Promise<HandoffRecord>;
+  update(record: HandoffRecord): Promise<HandoffRecord>;
   consume(input: {
     readonly id: string;
     readonly agent: string;
     readonly sessionId?: string;
     readonly pickedUpAt: string;
-  }): Promise<HandoffLaunchRecord>;
-  get(id: string): Promise<HandoffLaunchRecord | undefined>;
-  list(): Promise<readonly HandoffLaunchRecord[]>;
+  }): Promise<HandoffRecord>;
+  get(id: string): Promise<HandoffRecord | undefined>;
+  list(): Promise<readonly HandoffRecord[]>;
   resolveArtifactPath(relativePath: string, refs: HandoffRefs): string;
 }

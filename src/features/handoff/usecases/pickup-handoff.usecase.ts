@@ -10,12 +10,12 @@ import {
   type TaskContinuationStorePort,
   type TaskStorePort,
 } from "@/features/task";
-import type { LaunchStorePort, HandoffLaunchRecord } from "@/features/handoff";
+import type { HandoffStorePort, HandoffRecord } from "@/features/handoff";
 import { MaestroError } from "@/shared/errors.js";
-import { reconcileLaunchRecord } from "./reconcile-launch-record.usecase.js";
+import { reconcileHandoffRecord } from "./reconcile-handoff-record.usecase.js";
 
 export interface PickupHandoffDeps {
-  readonly launchStore: LaunchStorePort;
+  readonly handoffStore: HandoffStorePort;
   readonly taskStore: TaskStorePort;
   readonly contractStore: Parameters<typeof transferContractOwnership>[0];
   readonly continuationStore: TaskContinuationStorePort;
@@ -23,7 +23,7 @@ export interface PickupHandoffDeps {
 }
 
 export interface PickupHandoffResult {
-  readonly record: HandoffLaunchRecord;
+  readonly record: HandoffRecord;
   readonly taskId?: string;
   readonly ownerId?: string;
   readonly contractTransferWarning?: string;
@@ -39,12 +39,12 @@ export async function pickupHandoff(
     readonly ownerId?: string;
   },
 ): Promise<PickupHandoffResult> {
-  const storedLaunch = await deps.launchStore.get(input.id);
+  const storedLaunch = await deps.handoffStore.get(input.id);
   if (!storedLaunch) {
     throw new MaestroError(`Handoff not found: ${input.id}`);
   }
-  const launch = await reconcileLaunchRecord(
-    { launchStore: deps.launchStore, taskStore: deps.taskStore },
+  const launch = await reconcileHandoffRecord(
+    { handoffStore: deps.handoffStore, taskStore: deps.taskStore },
     storedLaunch,
   );
   if (launch.consumedAt) {
@@ -55,7 +55,7 @@ export async function pickupHandoff(
 
   const taskId = launch.refs.taskId;
   if (!taskId) {
-    const consumedOnly = await deps.launchStore.consume({
+    const consumedOnly = await deps.handoffStore.consume({
       id: input.id,
       agent: input.actorAgent,
       ...(input.actorSessionId ? { sessionId: input.actorSessionId } : {}),
@@ -84,7 +84,7 @@ export async function pickupHandoff(
   const tasks = new Map((await deps.taskStore.all()).map((task) => [task.id, task] as const));
   const beforeTask = tasks.get(taskId);
   if (!beforeTask) {
-    const consumedOnly = await deps.launchStore.consume({
+    const consumedOnly = await deps.handoffStore.consume({
       id: input.id,
       agent: input.actorAgent,
       ...(input.actorSessionId ? { sessionId: input.actorSessionId } : {}),
@@ -109,7 +109,7 @@ export async function pickupHandoff(
     ]);
   }
 
-  const consumed = await deps.launchStore.consume({
+  const consumed = await deps.handoffStore.consume({
     id: input.id,
     agent: input.actorAgent,
     ...(input.actorSessionId ? { sessionId: input.actorSessionId } : {}),

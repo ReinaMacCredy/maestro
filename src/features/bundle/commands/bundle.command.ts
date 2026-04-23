@@ -55,7 +55,7 @@ Examples:
           assertionStore: services.assertionStore,
           checkpointStore: services.checkpointStore,
           replyStore: services.replyStore,
-          launchStore: services.launchStore,
+          handoffStore: services.handoffStore,
           archive: services.archive,
           sessionDetect: services.sessionDetect,
         },

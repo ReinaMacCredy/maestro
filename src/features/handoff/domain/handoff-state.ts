@@ -1,12 +1,12 @@
-import type { HandoffLaunchRecord } from "./launch-types.js";
+import type { HandoffRecord } from "./handoff-types.js";
 
-export type HandoffLaunchDisplayState = "open" | "consumed" | "completed" | "failed";
+export type HandoffDisplayState = "open" | "consumed" | "completed" | "failed";
 
-export function isOpenLaunchRecord(record: HandoffLaunchRecord): boolean {
+export function isOpenHandoffRecord(record: HandoffRecord): boolean {
   return !record.consumedAt && (record.status === "launching" || record.status === "launched");
 }
 
-export function getLaunchDisplayState(record: HandoffLaunchRecord): HandoffLaunchDisplayState {
+export function getHandoffDisplayState(record: HandoffRecord): HandoffDisplayState {
   if (record.consumedAt || record.status === "consumed") {
     return "consumed";
   }

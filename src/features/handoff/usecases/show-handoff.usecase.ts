@@ -1,15 +1,15 @@
 import type { TaskQueryPort } from "@/features/task";
-import type { HandoffLaunchRecord, LaunchStorePort } from "../domain/launch-types.js";
+import type { HandoffRecord, HandoffStorePort } from "../domain/handoff-types.js";
 import { MaestroError } from "@/shared/errors.js";
-import { reconcileLaunchRecord } from "./reconcile-launch-record.usecase.js";
+import { reconcileHandoffRecord } from "./reconcile-handoff-record.usecase.js";
 
-export async function showLaunch(
-  store: LaunchStorePort,
+export async function showHandoff(
+  store: HandoffStorePort,
   id: string,
   options: {
     readonly taskStore?: Pick<TaskQueryPort, "get">;
   } = {},
-): Promise<HandoffLaunchRecord> {
+): Promise<HandoffRecord> {
   const record = await store.get(id);
   if (!record) {
     throw new MaestroError(`Handoff packet not found: ${id}`, [
@@ -19,5 +19,5 @@ export async function showLaunch(
   if (!options.taskStore) {
     return record;
   }
-  return reconcileLaunchRecord({ launchStore: store, taskStore: options.taskStore }, record);
+  return reconcileHandoffRecord({ handoffStore: store, taskStore: options.taskStore }, record);
 }

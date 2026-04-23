@@ -15,7 +15,7 @@ import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
 import { buildMemoryStats } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
-import type { HandoffLaunchRecord, LaunchStorePort } from "@/features/handoff";
+import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
 import { TASK_STATUSES, type TaskQueryPort, type TaskStatus } from "@/features/task";
 import type { ReplyStorePort, AgentReply, ReplyOutcome } from "@/features/reply";
 import { ingestReply } from "@/features/reply";
@@ -77,7 +77,7 @@ export interface SnapshotDeps {
   learningStore?: LearningStorePort;
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
-  launchStore?: LaunchStorePort;
+  handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
@@ -91,7 +91,7 @@ export interface HomeSnapshotDeps {
   learningStore?: LearningStorePort;
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
-  launchStore?: LaunchStorePort;
+  handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
@@ -875,13 +875,13 @@ function buildPrincipleRecorder(
   outcomesCache: PrincipleOutcomeRecord[] | undefined,
 ): ((featureId: string, outcome: ReplyOutcome) => Promise<{ recorded: number; complete: boolean }>) | undefined {
   const principleStore = deps.principleStore;
-  const launchStore = deps.launchStore;
-  if (!principleStore || !launchStore || !outcomesCache) return undefined;
+  const handoffStore = deps.handoffStore;
+  if (!principleStore || !handoffStore || !outcomesCache) return undefined;
 
   return async (featureId, outcome) => {
     const resolved = outcome === "completed" ? "helpful" : "unhelpful";
     try {
-      const recentLaunches = (await launchStore.list())
+      const recentLaunches = (await handoffStore.list())
         .filter((launch) => launch.refs.missionId === missionId && launch.refs.featureId === featureId)
         .slice(0, 25);
       if (recentLaunches.length === 0) {
@@ -952,7 +952,7 @@ async function loadPrincipleEffectiveness(
   cachedOutcomes?: readonly PrincipleOutcomeRecord[],
 ): Promise<readonly PrincipleEffectivenessRow[] | undefined> {
   const principleStore = deps.principleStore;
-  const launchStore = deps.launchStore;
+  const handoffStore = deps.handoffStore;
   if (!principleStore) return undefined;
   try {
     const [principles, outcomes, launches] = await Promise.all([
@@ -960,7 +960,7 @@ async function loadPrincipleEffectiveness(
       cachedOutcomes !== undefined
         ? Promise.resolve(cachedOutcomes)
         : principleStore.listOutcomes(),
-      launchStore ? launchStore.list() : Promise.resolve<readonly HandoffLaunchRecord[]>([]),
+      handoffStore ? handoffStore.list() : Promise.resolve<readonly HandoffRecord[]>([]),
     ]);
     return buildPrincipleEffectivenessRows(principles, outcomes, launches);
   } catch {
@@ -971,7 +971,7 @@ async function loadPrincipleEffectiveness(
 export function buildPrincipleEffectivenessRows(
   principles: readonly Principle[],
   outcomes: readonly PrincipleOutcomeRecord[],
-  launches: readonly HandoffLaunchRecord[],
+  launches: readonly HandoffRecord[],
 ): readonly PrincipleEffectivenessRow[] {
   const rollup = buildPrincipleEffectiveness(principles, outcomes);
   const principleById = new Map(principles.map((p) => [p.id, p]));

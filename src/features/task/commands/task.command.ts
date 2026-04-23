@@ -365,7 +365,7 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       if (isJson) {
         const [task, openHandoffs] = await Promise.all([
           showTask(services.taskStore, id),
-          listOpenHandoffsForTask(services.launchStore, id, { taskStore: services.taskStore }),
+          listOpenHandoffsForTask(services.handoffStore, id, { taskStore: services.taskStore }),
         ]);
         output(true, { ...task, openHandoffs }, formatTaskDetail);
         return;
@@ -377,7 +377,7 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
           continuationStore: services.taskContinuationStore,
           continuationHistory: services.taskContinuationHistory,
         }, id),
-        listOpenHandoffsForTask(services.launchStore, id, { taskStore: services.taskStore }),
+        listOpenHandoffsForTask(services.handoffStore, id, { taskStore: services.taskStore }),
       ]);
       // Hide blockers that have already completed: the runtime treats them as
       // resolved (they no longer gate readiness), so showing them as active

@@ -16,7 +16,7 @@ import type {
   MissionStorePort,
 } from "@/features/mission/index.js";
 import { MISSION_ID_PATTERN } from "@/features/mission/index.js";
-import type { LaunchStorePort } from "@/features/handoff/index.js";
+import type { HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort } from "@/features/reply/index.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readText, dirExists } from "@/shared/lib/fs.js";
@@ -42,7 +42,7 @@ export interface CollectBundleSourcesDeps {
   readonly assertionStore: AssertionStorePort;
   readonly checkpointStore: CheckpointStorePort;
   readonly replyStore: ReplyStorePort;
-  readonly launchStore: LaunchStorePort;
+  readonly handoffStore: HandoffStorePort;
 }
 
 export interface BundleSources {
@@ -148,7 +148,7 @@ export async function collectBundleSources(
   }
 
   // handoff launches that reference this mission id
-  const allLaunches = await deps.launchStore.list();
+  const allLaunches = await deps.handoffStore.list();
   const missionLaunches = allLaunches.filter(
     (launch) => launch.refs.missionId === missionId,
   );

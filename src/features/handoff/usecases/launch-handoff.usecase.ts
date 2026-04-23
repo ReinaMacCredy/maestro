@@ -8,8 +8,8 @@ import type {
 import type {
   HandoffAgent,
   HandoffLaunchPort,
-  HandoffLaunchRecord,
-  LaunchStorePort,
+  HandoffRecord,
+  HandoffStorePort,
 } from "@/features/handoff";
 import { DEFAULT_HANDOFF_MODELS } from "@/features/handoff";
 import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
@@ -25,12 +25,12 @@ export interface LaunchHandoffDeps {
   readonly featureStore: FeatureStorePort;
   readonly assertionStore: AssertionStorePort;
   readonly git: GitPort;
-  readonly launchStore: LaunchStorePort;
+  readonly handoffStore: HandoffStorePort;
   readonly launchers: Readonly<Record<HandoffAgent, HandoffLaunchPort>>;
 }
 
 export interface LaunchHandoffResult {
-  readonly record: HandoffLaunchRecord;
+  readonly record: HandoffRecord;
   readonly prompt: string;
 }
 
@@ -97,7 +97,7 @@ export async function launchHandoff(
   const prompt = promptFromFile ?? generated.prompt;
   const context = generated.context;
 
-  const initialRecord = await deps.launchStore.create({
+  const initialRecord = await deps.handoffStore.create({
     task: input.task,
     name,
     agent: input.agent,
@@ -118,7 +118,7 @@ export async function launchHandoff(
   try {
     const launchPrompt = buildLaunchExecutionPrompt(prompt, initialRecord);
     await writeText(
-      deps.launchStore.resolveArtifactPath(initialRecord.promptPath, initialRecord.refs),
+      deps.handoffStore.resolveArtifactPath(initialRecord.promptPath, initialRecord.refs),
       launchPrompt,
     );
     const launchResult = await handoffLauncher.launch({
@@ -127,10 +127,10 @@ export async function launchHandoff(
       model,
       name,
       wait: input.wait,
-      logPath: deps.launchStore.resolveArtifactPath(initialRecord.outputPath, initialRecord.refs),
+      logPath: deps.handoffStore.resolveArtifactPath(initialRecord.outputPath, initialRecord.refs),
     });
     const waitedExitCode = input.wait ? launchResult.exitCode : undefined;
-    const finalRecord = await deps.launchStore.update({
+    const finalRecord = await deps.handoffStore.update({
       ...initialRecord,
       status: input.wait
         ? (waitedExitCode === 0 ? "completed" : "failed")
@@ -160,7 +160,7 @@ export async function launchHandoff(
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    const failedRecord = await deps.launchStore.update({
+    const failedRecord = await deps.handoffStore.update({
       ...initialRecord,
       status: "failed",
       errorMessage: message,
@@ -173,7 +173,7 @@ export async function launchHandoff(
   }
 }
 
-function buildLaunchExecutionPrompt(prompt: string, record: Pick<HandoffLaunchRecord, "id" | "refs">): string {
+function buildLaunchExecutionPrompt(prompt: string, record: Pick<HandoffRecord, "id" | "refs">): string {
   const taskLine = record.refs.taskId
     ? `This packet is linked to task ${record.refs.taskId}.`
     : "This packet is prompt-only and has no linked task.";

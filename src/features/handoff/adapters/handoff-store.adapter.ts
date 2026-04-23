@@ -1,18 +1,18 @@
 import { basename, join } from "node:path";
 import { open } from "node:fs/promises";
-import type { HandoffAgent, HandoffLaunchRecord, HandoffRefs, HandoffWorktree, LaunchStorePort } from "../domain/launch-types.js";
+import type { HandoffAgent, HandoffRecord, HandoffRefs, HandoffStorePort, HandoffWorktree } from "../domain/handoff-types.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { generateHandoffId, HANDOFF_ID_PATTERN } from "@/shared/domain/id.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
 import { ensureDir, listDirs, readJson, removeIfExists, writeJson, writeText } from "@/shared/lib/fs.js";
 import { MaestroError } from "@/shared/errors.js";
 
-const LAUNCHES_DIR = "launches";
+const HANDOFF_DIR = "handoff";
 const PICKUP_LOCK_WAIT_MS = 2_000;
 const PICKUP_LOCK_RETRY_MS = 20;
 
-export class FsLaunchStoreAdapter implements LaunchStorePort {
-  constructor(private readonly projectDir: string) { }
+export class FsHandoffStoreAdapter implements HandoffStorePort {
+  constructor(private readonly root: string) { }
 
   async create(input: {
     readonly task: string;
@@ -27,14 +27,14 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
     readonly createdBySessionId?: string;
     readonly worktree?: HandoffWorktree;
     readonly prompt: string;
-  }): Promise<HandoffLaunchRecord> {
+  }): Promise<HandoffRecord> {
     const existingIds = await this.listIds();
     const id = generateHandoffId(existingIds, new Date());
     const createdAt = new Date().toISOString();
-    const launchDirRelative = join(MAESTRO_DIR, LAUNCHES_DIR, id);
-    const promptPath = join(launchDirRelative, "prompt.md");
-    const outputPath = join(launchDirRelative, "output.log");
-    const record: HandoffLaunchRecord = {
+    const handoffDirRelative = join(MAESTRO_DIR, HANDOFF_DIR, id);
+    const promptPath = join(handoffDirRelative, "prompt.md");
+    const outputPath = join(handoffDirRelative, "output.log");
+    const record: HandoffRecord = {
       id,
       createdAt,
       task: input.task,
@@ -54,19 +54,19 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
       ...(input.worktree ? { worktree: input.worktree } : {}),
     };
 
-    const launchDir = this.resolveLaunchDir(id);
-    await ensureDir(launchDir);
+    const handoffDir = this.resolveHandoffDir(id);
+    await ensureDir(handoffDir);
     await Promise.all([
-      writeText(join(this.projectDir, promptPath), input.prompt),
-      writeText(join(this.projectDir, outputPath), ""),
-      writeJson(join(launchDir, "launch.json"), record),
+      writeText(join(this.root, promptPath), input.prompt),
+      writeText(join(this.root, outputPath), ""),
+      writeJson(join(handoffDir, "handoff.json"), record),
     ]);
     return record;
   }
 
-  async update(record: HandoffLaunchRecord): Promise<HandoffLaunchRecord> {
-    assertSafeSegment(record.id, "launch ID", HANDOFF_ID_PATTERN, "adjective-noun-N (e.g. swift-otter-3) or legacy YYYY-MM-DD-NNN");
-    await writeJson(join(this.resolveLaunchDir(record.id), "launch.json"), record);
+  async update(record: HandoffRecord): Promise<HandoffRecord> {
+    assertSafeSegment(record.id, "handoff ID", HANDOFF_ID_PATTERN, "adjective-noun-N (e.g. swift-otter-3) or legacy YYYY-MM-DD-NNN");
+    await writeJson(join(this.resolveHandoffDir(record.id), "handoff.json"), record);
     return record;
   }
 
@@ -75,9 +75,9 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
     readonly agent: string;
     readonly sessionId?: string;
     readonly pickedUpAt: string;
-  }): Promise<HandoffLaunchRecord> {
-    assertSafeSegment(input.id, "launch ID", HANDOFF_ID_PATTERN, "adjective-noun-N (e.g. swift-otter-3) or legacy YYYY-MM-DD-NNN");
-    const lockPath = join(this.resolveLaunchDir(input.id), ".pickup.lock");
+  }): Promise<HandoffRecord> {
+    assertSafeSegment(input.id, "handoff ID", HANDOFF_ID_PATTERN, "adjective-noun-N (e.g. swift-otter-3) or legacy YYYY-MM-DD-NNN");
+    const lockPath = join(this.resolveHandoffDir(input.id), ".pickup.lock");
     const deadline = Date.now() + PICKUP_LOCK_WAIT_MS;
 
     while (true) {
@@ -86,14 +86,14 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
         try {
           const current = await this.get(input.id);
           if (!current) {
-            throw new MaestroError(`Handoff launch not found: ${input.id}`);
+            throw new MaestroError(`Handoff not found: ${input.id}`);
           }
           if (current.consumedAt) {
             throw new MaestroError(
               `Handoff ${input.id} was already consumed by ${current.pickedUpByAgent ?? "another agent"} at ${current.consumedAt}`,
             );
           }
-          const updated: HandoffLaunchRecord = {
+          const updated: HandoffRecord = {
             ...current,
             status: "consumed",
             pickedUpByAgent: input.agent,
@@ -122,24 +122,24 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
     }
   }
 
-  async get(id: string): Promise<HandoffLaunchRecord | undefined> {
-    assertSafeSegment(id, "launch ID", HANDOFF_ID_PATTERN, "adjective-noun-N (e.g. swift-otter-3) or legacy YYYY-MM-DD-NNN");
-    const raw = await readJson<HandoffLaunchRecord>(join(this.resolveLaunchDir(id), "launch.json"));
-    return raw ? normalizeLaunchRecord(raw) : undefined;
+  async get(id: string): Promise<HandoffRecord | undefined> {
+    assertSafeSegment(id, "handoff ID", HANDOFF_ID_PATTERN, "adjective-noun-N (e.g. swift-otter-3) or legacy YYYY-MM-DD-NNN");
+    const raw = await readJson<HandoffRecord>(join(this.resolveHandoffDir(id), "handoff.json"));
+    return raw ? normalizeHandoffRecord(raw) : undefined;
   }
 
-  async list(): Promise<readonly HandoffLaunchRecord[]> {
+  async list(): Promise<readonly HandoffRecord[]> {
     const ids = await this.listIds();
     const records = await Promise.all(ids.map((id) => this.get(id)));
-    return records.filter((record): record is HandoffLaunchRecord => record !== undefined);
+    return records.filter((record): record is HandoffRecord => record !== undefined);
   }
 
   resolveArtifactPath(relativePath: string, _refs: HandoffRefs): string {
-    return join(this.projectDir, relativePath);
+    return join(this.root, relativePath);
   }
 
   private async listIds(): Promise<string[]> {
-    const dirs = await listDirs(this.launchesDir());
+    const dirs = await listDirs(this.handoffDir());
     return dirs
       .map((dir) => basename(dir))
       .filter((name) => HANDOFF_ID_PATTERN.test(name))
@@ -147,12 +147,12 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
       .reverse();
   }
 
-  private launchesDir(): string {
-    return join(this.projectDir, MAESTRO_DIR, LAUNCHES_DIR);
+  private handoffDir(): string {
+    return join(this.root, MAESTRO_DIR, HANDOFF_DIR);
   }
 
-  private resolveLaunchDir(id: string): string {
-    return join(this.launchesDir(), id);
+  private resolveHandoffDir(id: string): string {
+    return join(this.handoffDir(), id);
   }
 }
 
@@ -160,7 +160,7 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
 // `status: "launched"` on disk (the dedicated "consumed" status didn't exist
 // yet). Project the true status at read time so `handoff show --json` and any
 // downstream consumer of the record sees a single consistent lifecycle.
-function normalizeLaunchRecord(record: HandoffLaunchRecord): HandoffLaunchRecord {
+function normalizeHandoffRecord(record: HandoffRecord): HandoffRecord {
   if (record.consumedAt && record.status !== "consumed") {
     return { ...record, status: "consumed" };
   }

@@ -123,7 +123,7 @@ export function registerMissionControlCommand(program: Command): void {
           learningStore: services.learningStore,
           ratchetStore: services.ratchetStore,
           projectGraphStore: services.projectGraphStore,
-          launchStore: services.launchStore,
+          handoffStore: services.handoffStore,
           taskStore: services.taskStore,
           replyStore: services.replyStore,
           principleStore: services.principleStore,

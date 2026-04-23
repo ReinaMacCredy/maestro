@@ -2,18 +2,17 @@ export type {
   HandoffAgent,
   HandoffLaunchPort,
   HandoffLaunchRequest,
-  HandoffLaunchRecord,
   HandoffLaunchResult,
-  HandoffLaunchStatus,
   HandoffPromptContext,
+  HandoffRecord,
   HandoffRefs,
   HandoffRelevantFile,
+  HandoffStatus,
+  HandoffStorePort,
   HandoffWorktree,
-  LaunchStorePort,
-} from "./domain/launch-types.js";
-export { DEFAULT_HANDOFF_MODELS } from "./domain/launch-types.js";
-export { FsLaunchStoreAdapter } from "./adapters/launch-store.adapter.js";
-export { CompositeLaunchStore } from "./adapters/composite-launch-store.adapter.js";
+} from "./domain/handoff-types.js";
+export { DEFAULT_HANDOFF_MODELS } from "./domain/handoff-types.js";
+export { FsHandoffStoreAdapter } from "./adapters/handoff-store.adapter.js";
 export { CodexHandoffLaunchAdapter } from "./adapters/codex-handoff-launch.adapter.js";
 export { ClaudeHandoffLaunchAdapter } from "./adapters/claude-handoff-launch.adapter.js";
 export { buildHandoffPrompt } from "./usecases/build-handoff-prompt.usecase.js";
@@ -22,11 +21,11 @@ export { launchHandoff } from "./usecases/launch-handoff.usecase.js";
 export type { LaunchHandoffResult } from "./usecases/launch-handoff.usecase.js";
 export { pickupHandoff } from "./usecases/pickup-handoff.usecase.js";
 export type { PickupHandoffResult } from "./usecases/pickup-handoff.usecase.js";
-export { listLaunches } from "./usecases/list-launches.usecase.js";
-export type { ListLaunchesOptions } from "./usecases/list-launches.usecase.js";
-export { showLaunch } from "./usecases/show-launch.usecase.js";
+export { listHandoffs } from "./usecases/list-handoffs.usecase.js";
+export type { ListHandoffsOptions } from "./usecases/list-handoffs.usecase.js";
+export { showHandoff } from "./usecases/show-handoff.usecase.js";
 export { listOpenHandoffsForTask } from "./usecases/list-open-handoffs-for-task.usecase.js";
-export { getLaunchDisplayState, isOpenLaunchRecord } from "./domain/launch-state.js";
+export { getHandoffDisplayState, isOpenHandoffRecord } from "./domain/handoff-state.js";
 export { countLegacyHandoffFiles } from "./usecases/inspect-legacy-handoffs.usecase.js";
 export { registerHandoffCommand } from "./commands/handoff.command.js";
 export { buildHandoffServices } from "./services.js";

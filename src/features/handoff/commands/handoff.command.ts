@@ -5,13 +5,13 @@ import { getServices } from "@/services.js";
 import {
   DEFAULT_HANDOFF_MODELS,
   launchHandoff,
-  listLaunches,
+  listHandoffs,
   pickupHandoff,
-  showLaunch,
+  showHandoff,
   type HandoffAgent,
-  type HandoffLaunchRecord,
+  type HandoffRecord,
 } from "@/features/handoff";
-import { getLaunchDisplayState } from "../domain/launch-state.js";
+import { getHandoffDisplayState } from "../domain/handoff-state.js";
 import {
   buildTaskContinuationSummary,
   buildTaskOwnerId,
@@ -63,7 +63,7 @@ export function registerHandoffCommand(program: Command): void {
         featureStore: services.featureStore,
         assertionStore: services.assertionStore,
         git: services.git,
-        launchStore: services.launchStore,
+        handoffStore: services.handoffStore,
         launchers: services.handoffLaunchers,
       }, {
         cwd: process.cwd(),
@@ -100,7 +100,7 @@ export function registerHandoffCommand(program: Command): void {
         });
       }
 
-      output(isJson, result.record, formatLaunchRecord);
+      output(isJson, result.record, formatHandoffRecord);
     });
 
   handoffCmd
@@ -114,7 +114,7 @@ export function registerHandoffCommand(program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const handoffId = await resolvePickupId(typeof opts.id === "string" ? opts.id : undefined);
-      const launch = await services.launchStore.get(handoffId);
+      const launch = await services.handoffStore.get(handoffId);
       if (!launch) {
         throw new MaestroError(`Handoff not found: ${handoffId}`);
       }
@@ -126,7 +126,7 @@ export function registerHandoffCommand(program: Command): void {
       );
       const result = await pickupHandoff(
         {
-          launchStore: services.launchStore,
+          handoffStore: services.handoffStore,
           taskStore: services.taskStore,
           contractStore: services.contractStore,
           continuationStore: services.taskContinuationStore,
@@ -160,11 +160,11 @@ export function registerHandoffCommand(program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const records = await listLaunches(services.launchStore, {
+      const records = await listHandoffs(services.handoffStore, {
         openOnly: Boolean(opts.open),
         taskStore: services.taskStore,
       });
-      output(isJson, records, formatLaunchList);
+      output(isJson, records, formatHandoffList);
     });
 
   handoffCmd
@@ -174,8 +174,8 @@ export function registerHandoffCommand(program: Command): void {
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const record = await showLaunch(services.launchStore, id, { taskStore: services.taskStore });
-      output(isJson, record, (r) => formatLaunchDetail(r));
+      const record = await showHandoff(services.handoffStore, id, { taskStore: services.taskStore });
+      output(isJson, record, (r) => formatHandoffDetail(r));
     });
 }
 
@@ -253,7 +253,7 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
   }
 
   const services = getServices();
-  const open = await listLaunches(services.launchStore, {
+  const open = await listHandoffs(services.handoffStore, {
     openOnly: true,
     taskStore: services.taskStore,
   });
@@ -394,7 +394,7 @@ function normalizeDetectedAgent(value: string): HandoffAgent {
   ]);
 }
 
-function formatLaunchRecord(record: {
+function formatHandoffRecord(record: {
   readonly id: string;
   readonly agent: HandoffAgent;
   readonly model: string;
@@ -453,13 +453,13 @@ function formatPickupRecord(
   ];
 }
 
-function formatLaunchList(records: readonly HandoffLaunchRecord[]): string[] {
+function formatHandoffList(records: readonly HandoffRecord[]): string[] {
   if (records.length === 0) {
     return ["No handoff packets"];
   }
   const lines = [`[ok] ${records.length} packet(s)`];
   for (const r of records) {
-    const state = getLaunchDisplayState(r);
+    const state = getHandoffDisplayState(r);
     const task = r.refs.taskId ? ` task=${r.refs.taskId}` : "";
     const short = r.task.length > 60 ? `${r.task.slice(0, 57)}...` : r.task;
     lines.push(`  ${r.id}  ${state}  agent=${r.agent}  created=${r.createdAt}${task}  ${JSON.stringify(short)}`);
@@ -467,10 +467,10 @@ function formatLaunchList(records: readonly HandoffLaunchRecord[]): string[] {
   return lines;
 }
 
-function formatLaunchDetail(record: HandoffLaunchRecord): string[] {
+function formatHandoffDetail(record: HandoffRecord): string[] {
   const lines = [
     `[ok] ${record.id}`,
-    `  State: ${getLaunchDisplayState(record)}`,
+    `  State: ${getHandoffDisplayState(record)}`,
     `  Agent: ${record.agent}/${record.model}`,
     `  Status: ${record.status}`,
     `  Created: ${record.createdAt}`,
