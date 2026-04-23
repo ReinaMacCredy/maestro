@@ -1,5 +1,6 @@
 import { userInfo } from "node:os";
 import { Command } from "commander";
+import { fstatSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -386,16 +387,16 @@ async function loadContractDraftTemplate(
   initialContent = defaultContractTemplate(),
 ): Promise<ContractDraftTemplate> {
   const envEditor = process.env.EDITOR ?? process.env.VISUAL;
-  // Auto-detect piped stdin when the caller passed neither --from nor --editor.
-  // Lets `cat contract.yaml | maestro task contract new <id>` work without
-  // spelling `--from -`, matching Unix tradition and making the command safe
-  // for non-interactive (agent) callers. Only do this when no editor is
-  // configured, otherwise `task contract edit|amend` would consume an empty
-  // inherited stdin stream instead of launching $EDITOR. `isTTY` is
-  // `undefined` for pipes on some runtimes, so use a falsy check to cover both
-  // cases.
+  // Auto-detect real piped/redirected stdin when the caller passed neither
+  // --from nor --editor. Lets `cat contract.yaml | maestro task contract new`
+  // and `maestro task contract new <id> < contract.yaml` work without spelling
+  // `--from -`. Use fstat rather than `isTTY`: inherited-empty stdin in a
+  // subprocess (e.g. bun test runners calling the CLI while $EDITOR is set)
+  // is also non-TTY, but it's neither a FIFO nor a regular file, so we leave
+  // the editor path for it. Real pipe = FIFO, file redirect = regular file;
+  // both are unambiguous "user provided stdin" signals.
   const resolvedFromPath = fromPath
-    ?? (!editorCommand && !envEditor && !process.stdin.isTTY ? "-" : undefined);
+    ?? (!editorCommand && hasRealStdinPayload() ? "-" : undefined);
 
   if (!resolvedFromPath && !editorCommand && !envEditor) {
     throw new MaestroError("Provide --from <path>, pipe YAML on stdin, or pass --editor <cmd>", [
@@ -421,6 +422,15 @@ async function loadContractDraftTemplate(
     throw new MaestroError(`Cannot parse contract draft YAML: ${detail}`, [
       "Fix the YAML syntax in the template and retry",
     ]);
+  }
+}
+
+function hasRealStdinPayload(): boolean {
+  try {
+    const stat = fstatSync(0);
+    return stat.isFIFO() || stat.isFile();
+  } catch {
+    return false;
   }
 }
 

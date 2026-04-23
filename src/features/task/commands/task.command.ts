@@ -1,4 +1,5 @@
-import { userInfo } from "node:os";
+import { homedir, userInfo } from "node:os";
+import { basename } from "node:path";
 import { Command, Option } from "commander";
 import { getServices } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -378,7 +379,21 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
         }, id),
         listOpenHandoffsForTask(services.launchStore, id, { taskStore: services.taskStore }),
       ]);
-      output(false, view, (v) => {
+      // Hide blockers that have already completed: the runtime treats them as
+      // resolved (they no longer gate readiness), so showing them as active
+      // "Blocked by" entries misleads. Raw graph history still lives in
+      // `show --json` and `task list --json` for agents that need it.
+      const blockerTasks = await Promise.all(
+        view.task.blockedBy.map((blockerId) => services.taskStore.get(blockerId)),
+      );
+      const activeBlockers = view.task.blockedBy.filter((_, i) => {
+        const blocker = blockerTasks[i];
+        return blocker === undefined || blocker.status !== "completed";
+      });
+      const filteredView: typeof view = activeBlockers.length !== view.task.blockedBy.length
+        ? { ...view, task: { ...view.task, blockedBy: activeBlockers } }
+        : view;
+      output(false, filteredView, (v) => {
         const lines = [...formatTaskShowView(v)];
         if (openHandoffs.length > 0) {
           lines.push(`  Open handoffs: ${openHandoffs.join(", ")}`);
@@ -1086,11 +1101,26 @@ async function resolveOwnershipSessionId(explicitSessionId: string | undefined):
 function fallbackSessionUserId(): string {
   const envUser = (process.env.USER ?? process.env.USERNAME ?? "").trim();
   if (envUser.length > 0) return envUser;
+  // Bun's `userInfo().username` returns the literal string "unknown" when
+  // USER/USERNAME are unset. Treat it as a miss and fall through to homedir's
+  // basename, which resolves to the real account name on every platform we
+  // ship on.
   try {
-    return userInfo().username;
+    const name = userInfo().username.trim();
+    if (name.length > 0 && name !== "unknown") return name;
   } catch {
-    return "default";
+    // fall through
   }
+  try {
+    const home = homedir().trim();
+    if (home.length > 0) {
+      const base = basename(home);
+      if (base.length > 0 && base !== "root") return base;
+    }
+  } catch {
+    // fall through
+  }
+  return "default";
 }
 
 async function resolveOptionalOwnershipSessionId(explicitSessionId: string | undefined): Promise<string | undefined> {

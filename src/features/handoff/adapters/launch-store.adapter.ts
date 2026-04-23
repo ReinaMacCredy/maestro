@@ -124,7 +124,8 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
 
   async get(id: string): Promise<HandoffLaunchRecord | undefined> {
     assertSafeSegment(id, "launch ID", HANDOFF_ID_PATTERN, "adjective-noun-N (e.g. swift-otter-3) or legacy YYYY-MM-DD-NNN");
-    return readJson<HandoffLaunchRecord>(join(this.resolveLaunchDir(id), "launch.json"));
+    const raw = await readJson<HandoffLaunchRecord>(join(this.resolveLaunchDir(id), "launch.json"));
+    return raw ? normalizeLaunchRecord(raw) : undefined;
   }
 
   async list(): Promise<readonly HandoffLaunchRecord[]> {
@@ -153,4 +154,15 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
   private resolveLaunchDir(id: string): string {
     return join(this.launchesDir(), id);
   }
+}
+
+// Packets consumed by pre-0.56 binaries wrote `consumedAt` but left
+// `status: "launched"` on disk (the dedicated "consumed" status didn't exist
+// yet). Project the true status at read time so `handoff show --json` and any
+// downstream consumer of the record sees a single consistent lifecycle.
+function normalizeLaunchRecord(record: HandoffLaunchRecord): HandoffLaunchRecord {
+  if (record.consumedAt && record.status !== "consumed") {
+    return { ...record, status: "consumed" };
+  }
+  return record;
 }

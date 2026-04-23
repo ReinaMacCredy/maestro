@@ -1,5 +1,6 @@
 import type { Command } from "commander";
-import { userInfo } from "node:os";
+import { homedir, userInfo } from "node:os";
+import { basename } from "node:path";
 import { getServices } from "@/services.js";
 import {
   DEFAULT_HANDOFF_MODELS,
@@ -363,11 +364,26 @@ async function resolvePickupActor(
 function fallbackPickupSessionId(): string {
   const envUser = (process.env.USER ?? process.env.USERNAME ?? "").trim();
   if (envUser.length > 0) return envUser;
+  // Bun's `userInfo().username` returns the literal string "unknown" when
+  // USER/USERNAME are unset, unlike Node which falls back to getpwuid. Treat
+  // that literal as a miss and reach for homedir's basename, which is the
+  // user's real account name on every platform we run on.
   try {
-    return userInfo().username;
+    const name = userInfo().username.trim();
+    if (name.length > 0 && name !== "unknown") return name;
   } catch {
-    return "default";
+    // fall through
   }
+  try {
+    const home = homedir().trim();
+    if (home.length > 0) {
+      const base = basename(home);
+      if (base.length > 0 && base !== "root") return base;
+    }
+  } catch {
+    // fall through
+  }
+  return "default";
 }
 
 function normalizeDetectedAgent(value: string): HandoffAgent {

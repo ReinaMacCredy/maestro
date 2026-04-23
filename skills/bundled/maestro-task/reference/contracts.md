@@ -35,7 +35,11 @@ This reads `.maestro/tasks/contract-templates/<name>.md`. Contract drafts live u
 - `intent`: 1-3 sentences on what the task will change and why.
 - `scope.filesExpected`: globs the task expects to touch.
 - `scope.filesForbidden`: globs the task commits not to touch.
-- `doneWhen`: bullets that describe the observable signal of completion.
+- `doneWhen`: bullets that describe the observable signal of completion. Each
+  bullet needs a `kind`: `manual` means an operator ticks the box explicitly,
+  `receipt-hint` lets completion auto-mark the bullet when a matching entry
+  appears in the task's completion `verifiedBy` list (useful for mechanical
+  signals like "tests pass" or "build succeeds").
 
 ## Reusable templates
 

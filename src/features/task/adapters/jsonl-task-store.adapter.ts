@@ -416,19 +416,30 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (!blocker) {
         throw taskNotFound(id);
       }
-      if (blocker.status === "completed") {
-        throw taskAlreadyCompleted(id);
+      // A completed blocker is immutable: we can't touch its `blocks` list,
+      // but callers still need a way to clear the stale `blockedBy` entry on
+      // each blocked task. Skip mutating the blocker, keep mutating the
+      // blocked side.
+      const blockerCompleted = blocker.status === "completed";
+      if (!blockerCompleted) {
+        assertTaskMutationOwnership(blocker, opts, "unblock");
       }
-      assertTaskMutationOwnership(blocker, opts, "unblock");
 
       const removeSet = new Set(blockedTaskIds);
-      const nextBlocks = blocker.blocks.filter((blockedId) => !removeSet.has(blockedId));
       const now = new Date().toISOString();
-      let changed = upsertBlockList(tasks, id, blocker, nextBlocks, now);
+      let changed = false;
+      if (!blockerCompleted) {
+        const nextBlocks = blocker.blocks.filter((blockedId) => !removeSet.has(blockedId));
+        changed = upsertBlockList(tasks, id, blocker, nextBlocks, now);
+      }
 
       for (const blockedTaskId of blockedTaskIds) {
         const blockedTask = tasks.get(blockedTaskId);
         if (!blockedTask) {
+          continue;
+        }
+        // Completed blocked tasks are frozen too; leave their metadata alone.
+        if (blockedTask.status === "completed") {
           continue;
         }
         assertTaskMutationOwnership(blockedTask, opts, "unblock");
@@ -812,6 +823,13 @@ function normalizeGraph(tasks: Map<string, Task>): Map<string, Task> {
 
   const source = normalized ?? tasks;
   for (const task of source.values()) {
+    // Completed tasks are frozen historical records. Don't re-propagate their
+    // graph edges on every read -- that would resurrect stale `blockedBy` /
+    // `blocks` entries that `task unblock` just cleared from the active side.
+    // Runtime readiness still derives from unresolved blockers, so completed
+    // source edges stay preserved on the completed task itself without
+    // leaking into the active graph.
+    if (task.status === "completed") continue;
     for (const blockedId of task.blocks) {
       const blockedTask = (normalized ?? tasks).get(blockedId);
       if (!blockedTask || blockedTask.blockedBy.includes(task.id)) continue;
