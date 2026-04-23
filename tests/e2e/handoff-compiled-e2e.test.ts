@@ -21,10 +21,12 @@ import {
 import { runCommand } from "../helpers/command-runner.js";
 
 let tmpDir: string;
+let cleanupDirs: string[];
 
 beforeAll(buildCompiledCli, BUILD_TIMEOUT_MS);
 
 beforeEach(async () => {
+  cleanupDirs = [];
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-handoff-e2e-"));
   await initGitRepo(tmpDir);
   await runCommand(["git", "config", "user.name", "Test User"], tmpDir);
@@ -35,6 +37,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await Promise.all(cleanupDirs.map((dir) => rm(dir, { recursive: true, force: true })));
   await rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -61,12 +64,16 @@ async function installBehavioralProvider(
   argsPath: string,
   cwdPath: string,
   promptPath: string,
+  opts?: {
+    binRoot?: string;
+  },
 ): Promise<string> {
-  const binDir = join(tmpDir, "bin-behavioral");
+  const binDir = join(opts?.binRoot ?? tmpDir, "bin-behavioral");
   await Bun.$`mkdir -p ${binDir}`.quiet();
   const scriptPath = join(binDir, name);
   const script = `#!/usr/bin/env bun
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 const args = process.argv.slice(2);
 const prompt = args.at(-1) ?? "";
@@ -87,6 +94,12 @@ const mode = env.FAKE_PROVIDER_MODE;
 const maestroBin = env.FAKE_MAESTRO_BIN;
 const taskId = env.FAKE_PROVIDER_TASK_ID;
 
+function writeRuntimeFile(relativePath, content) {
+  const target = join(process.cwd(), relativePath);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, content);
+}
+
 function run(argv) {
   const result = Bun.spawnSync(argv, {
     cwd: process.cwd(),
@@ -104,6 +117,22 @@ if ((mode === "auto-pickup-complete" || mode === "complete-without-pickup") && !
   process.exit(41);
 }
 
+if (env.FAKE_PROVIDER_RUNTIME_NOISE === "1") {
+  writeRuntimeFile(".codex/.tmp/plugins.sha", "sha\\n");
+  writeRuntimeFile(".codex/.tmp/plugins/README.md", "plugins\\n");
+  writeRuntimeFile(".codex/config.toml", "model = \\"gpt-5.4\\"\\n");
+  writeRuntimeFile(".codex/installation_id", "installation\\n");
+  writeRuntimeFile(".codex/logs_2.sqlite", "logs\\n");
+  writeRuntimeFile(".codex/state_5.sqlite", "state\\n");
+  writeRuntimeFile(".codex/skills/.system/.codex-system-skills.marker", "marker\\n");
+  writeRuntimeFile(".claude/scheduled_tasks.lock", "lock\\n");
+  writeRuntimeFile(".maestro/config.yaml", "contracts:\\n  default: prompt\\n");
+}
+
+if (env.FAKE_PROVIDER_WORK_FILE) {
+  writeRuntimeFile(env.FAKE_PROVIDER_WORK_FILE, env.FAKE_PROVIDER_WORK_CONTENT ?? "provider work\\n");
+}
+
 if (mode === "auto-pickup-complete") {
   if (!handoffId) {
     console.error("pickup command missing from prompt");
@@ -116,7 +145,7 @@ if (mode === "auto-pickup-complete") {
 }
 
 if ((mode === "auto-pickup-complete" || mode === "complete-without-pickup") && taskId) {
-  const completed = run([
+  const completionArgs = [
     maestroBin,
     "task",
     "update",
@@ -128,7 +157,11 @@ if ((mode === "auto-pickup-complete" || mode === "complete-without-pickup") && t
     "--summary",
     mode === "auto-pickup-complete" ? "fake provider completed after pickup" : "fake provider completed without pickup",
     "--json",
-  ]);
+  ];
+  if (env.FAKE_PROVIDER_VERIFIED_BY) {
+    completionArgs.push("--verified-by", env.FAKE_PROVIDER_VERIFIED_BY);
+  }
+  const completed = run(completionArgs);
   if ((completed.exitCode ?? 1) !== 0) {
     process.exit(completed.exitCode ?? 1);
   }
@@ -228,9 +261,17 @@ async function createActiveTask(
 
 async function attachLockedContract(
   taskId: string,
-  scope = "README.md",
-  ownerSessionId = "codex-session-a",
+  opts?: {
+    scope?: string;
+    ownerSessionId?: string;
+    criterionText?: string;
+    criterionKind?: "manual" | "receipt-hint";
+  },
 ): Promise<string> {
+  const scope = opts?.scope ?? "README.md";
+  const ownerSessionId = opts?.ownerSessionId ?? "codex-session-a";
+  const criterionText = opts?.criterionText ?? "pickup preserves contract ownership";
+  const criterionKind = opts?.criterionKind ?? "manual";
   const templatePath = join(tmpDir, `contract-${taskId}.yaml`);
   await writeFile(
     templatePath,
@@ -241,8 +282,8 @@ async function attachLockedContract(
       `    - ${scope}`,
       "  filesForbidden: []",
       "doneWhen:",
-      "  - text: pickup preserves contract ownership",
-      "    kind: manual",
+      `  - text: ${criterionText}`,
+      `    kind: ${criterionKind}`,
       "",
     ].join("\n"),
   );
@@ -259,6 +300,7 @@ async function attachLockedContract(
     tmpDir,
   );
   expect(locked.exitCode).toBe(0);
+  await rm(templatePath, { force: true });
   return contract.id;
 }
 
@@ -591,6 +633,70 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
       const listedOpen = await runCompiled(["handoff", "list", "--open", "--json"], tmpDir, { env });
       expect(listedOpen.exitCode).toBe(0);
       expect(expectJson<Array<{ id: string }>>(listedOpen).map((entry) => entry.id)).not.toContain(record.id);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "keeps contract verdicts fulfilled when the launched receiver produces runtime noise",
+    async () => {
+      const taskId = await createActiveTask("Runtime-noise contract handoff", "codex-session-a");
+      const contractId = await attachLockedContract(taskId, {
+        criterionKind: "receipt-hint",
+        criterionText: "manual",
+      });
+      const runtimeDir = await mkdtemp(join(tmpdir(), "maestro-handoff-runtime-noise-"));
+      cleanupDirs.push(runtimeDir);
+      const argsPath = join(runtimeDir, "codex-runtime-noise-args.txt");
+      const cwdPath = join(runtimeDir, "codex-runtime-noise-cwd.txt");
+      const promptPath = join(runtimeDir, "codex-runtime-noise-prompt.txt");
+      const binDir = await installBehavioralProvider("codex", argsPath, cwdPath, promptPath, {
+        binRoot: runtimeDir,
+      });
+
+      const env = {
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        FAKE_PROVIDER_ARGS: argsPath,
+        FAKE_PROVIDER_CWD: cwdPath,
+        FAKE_PROVIDER_PROMPT: promptPath,
+        FAKE_PROVIDER_MODE: "auto-pickup-complete",
+        FAKE_PROVIDER_TASK_ID: taskId,
+        FAKE_PROVIDER_RUNTIME_NOISE: "1",
+        FAKE_PROVIDER_WORK_FILE: "README.md",
+        FAKE_PROVIDER_WORK_CONTENT: "# temp\nruntime clean\n",
+        FAKE_PROVIDER_VERIFIED_BY: "manual",
+        FAKE_MAESTRO_BIN: DIST_CLI,
+        CODEX_THREAD_ID: "",
+        CLAUDECODE: "",
+      };
+
+      const launched = await runCompiled(
+        ["handoff", "Runtime-noise contract handoff", "--task-id", taskId, "--json"],
+        tmpDir,
+        { env },
+      );
+      expect(launched.exitCode).toBe(0);
+      const record = expectJson<{ id: string }>(launched);
+
+      await waitForTaskStatus(taskId, "completed", env);
+      await waitForConsumedHandoff(record.id, env);
+
+      const shown = expectJson<{
+        status: string;
+        verdict?: {
+          fulfilled: boolean;
+          actualFilesTouched: string[];
+          outOfScopeFiles: string[];
+        };
+      }>(await runCompiled(["task", "contract", "show", contractId, "--json"], tmpDir, { env }));
+      expect(shown.status).toBe("fulfilled");
+      expect(shown.verdict?.fulfilled).toBe(true);
+      expect(shown.verdict?.actualFilesTouched).toContain("README.md");
+      expect(shown.verdict?.actualFilesTouched).not.toContain(".maestro/config.yaml");
+      expect(shown.verdict?.actualFilesTouched).not.toContain(".codex/config.toml");
+      expect(shown.verdict?.actualFilesTouched).not.toContain(".claude/scheduled_tasks.lock");
+      expect(shown.verdict?.actualFilesTouched).not.toContain(`.maestro/launches/${record.id}/launch.json`);
+      expect(shown.verdict?.outOfScopeFiles).toEqual([]);
     },
     SLOW_CLI_TIMEOUT_MS,
   );

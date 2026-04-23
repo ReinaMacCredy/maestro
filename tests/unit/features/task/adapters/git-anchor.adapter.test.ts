@@ -134,6 +134,67 @@ describe("ShellGitAnchorAdapter", () => {
     expect(result.actualFilesTouched).not.toContain(".maestro/tasks/tasks.jsonl");
   });
 
+  it("ignores untracked agent runtime files and handoff launch packets", async () => {
+    await commitFile("base.txt", "base\n", "base");
+    await mkdir(join(tmpDir, ".codex", ".tmp", "plugins"), { recursive: true });
+    await mkdir(join(tmpDir, ".codex", "skills", ".system"), { recursive: true });
+    await mkdir(join(tmpDir, ".maestro", "launches", "demo-launch"), { recursive: true });
+    await mkdir(join(tmpDir, ".claude"), { recursive: true });
+    await mkdir(join(tmpDir, "Library", "Caches", "bun", "@t@"), { recursive: true });
+
+    await Bun.write(join(tmpDir, ".codex", ".tmp", "plugins.sha"), "sha\n");
+    await Bun.write(join(tmpDir, ".codex", ".tmp", "plugins", "README.md"), "temp\n");
+    await Bun.write(join(tmpDir, ".codex", "config.toml"), "model = \"gpt-5.4\"\n");
+    await Bun.write(join(tmpDir, ".codex", "installation_id"), "installation\n");
+    await Bun.write(join(tmpDir, ".codex", "logs_2.sqlite"), "logs\n");
+    await Bun.write(join(tmpDir, ".codex", "state_5.sqlite"), "state\n");
+    await Bun.write(join(tmpDir, ".codex", "skills", ".system", ".codex-system-skills.marker"), "marker\n");
+    await Bun.write(join(tmpDir, ".maestro", "config.yaml"), "contracts:\n  default: prompt\n");
+    await Bun.write(join(tmpDir, ".maestro", "launches", "demo-launch", "launch.json"), "{}\n");
+    await Bun.write(join(tmpDir, ".maestro", "launches", "demo-launch", "output.log"), "provider output\n");
+    await Bun.write(join(tmpDir, ".claude", "scheduled_tasks.lock"), "lock\n");
+    await Bun.write(join(tmpDir, "Library", "Caches", "bun", "@t@", "cache.pile"), "pile\n");
+
+    const result = await new ShellGitAnchorAdapter().collectTouchedFiles({
+      repoRoot: tmpDir,
+      claimedAtCommit: (await runCommand(["git", "rev-parse", "HEAD"], tmpDir)).stdout,
+      rebaseFallback: "best-effort",
+    });
+
+    expect(result.actualFilesTouched).toEqual([]);
+    expect(result.notes ?? "").not.toContain("Includes untracked working-tree files.");
+  });
+
+  it("keeps tracked project config edits in the touched set", async () => {
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    await Bun.write(join(tmpDir, ".maestro", "config.yaml"), "contracts:\n  strict: false\n");
+    await runCommand(["git", "add", ".maestro/config.yaml"], tmpDir);
+    await runCommand(["git", "commit", "-m", "seed project config"], tmpDir);
+    await Bun.write(join(tmpDir, ".maestro", "config.yaml"), "contracts:\n  strict: true\n");
+
+    const result = await new ShellGitAnchorAdapter().collectTouchedFiles({
+      repoRoot: tmpDir,
+      claimedAtCommit: (await runCommand(["git", "rev-parse", "HEAD"], tmpDir)).stdout,
+      rebaseFallback: "best-effort",
+    });
+
+    expect(result.actualFilesTouched).toContain(".maestro/config.yaml");
+  });
+
+  it("keeps repo-owned untracked Codex skills in the touched set", async () => {
+    await commitFile("base.txt", "base\n", "base");
+    await mkdir(join(tmpDir, ".codex", "skills", "custom"), { recursive: true });
+    await Bun.write(join(tmpDir, ".codex", "skills", "custom", "SKILL.md"), "# Custom\n");
+
+    const result = await new ShellGitAnchorAdapter().collectTouchedFiles({
+      repoRoot: tmpDir,
+      claimedAtCommit: (await runCommand(["git", "rev-parse", "HEAD"], tmpDir)).stdout,
+      rebaseFallback: "best-effort",
+    });
+
+    expect(result.actualFilesTouched).toContain(".codex/skills/custom/SKILL.md");
+  });
+
   it("keeps repo-tracked contract templates in the touched set", async () => {
     await mkdir(join(tmpDir, ".maestro", "tasks", "contract-templates"), { recursive: true });
     await Bun.write(join(tmpDir, ".maestro", "tasks", "contract-templates", "default.md"), "base\n");

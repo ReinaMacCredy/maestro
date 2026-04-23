@@ -4,6 +4,7 @@ import type { GitAnchorPort, GitTouchedFilesResult } from "../ports/git-anchor.p
 
 const EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const MAX_STORED_TOUCHED_FILES = 2_000;
+type TouchedFileSource = "tracked" | "untracked";
 
 export class ShellGitAnchorAdapter implements GitAnchorPort {
   async resolveRepoRoot(cwd: string): Promise<string> {
@@ -49,7 +50,7 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       };
     }
 
-    const [range, workingTree, staged, untracked, mergeSourcedFiles] = await Promise.all([
+    const [range, workingTree, staged, untracked, rawMergeSourcedFiles] = await Promise.all([
       anchorResolution.anchor
         ? execArgv(["git", "diff", "--name-only", anchorResolution.anchor, head], { cwd: input.repoRoot })
         : Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }),
@@ -61,20 +62,24 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
         : Promise.resolve([] as readonly string[]),
     ]);
 
+    const rangePaths = filterTouchedPaths(range.stdout, "tracked");
+    const workingTreePaths = filterTouchedPaths(workingTree.stdout, "tracked");
+    const stagedPaths = filterTouchedPaths(staged.stdout, "tracked");
+    const untrackedPaths = filterTouchedPaths(untracked.stdout, "untracked");
+    const mergeSourcedFiles = filterCollectedPaths(rawMergeSourcedFiles, "tracked");
+
     const files = new Set<string>();
-    for (const output of [range.stdout, workingTree.stdout, staged.stdout, untracked.stdout]) {
-      for (const path of splitPaths(output)) {
-        if (!isContractRuntimePath(path)) {
-          files.add(path);
-        }
+    for (const paths of [rangePaths, workingTreePaths, stagedPaths, untrackedPaths]) {
+      for (const path of paths) {
+        files.add(path);
       }
     }
 
     const notes = [
       anchorResolution.notes,
-      workingTree.stdout ? "Includes uncommitted tracked changes." : undefined,
-      staged.stdout ? "Includes staged changes." : undefined,
-      untracked.stdout ? "Includes untracked working-tree files." : undefined,
+      workingTreePaths.length > 0 ? "Includes uncommitted tracked changes." : undefined,
+      stagedPaths.length > 0 ? "Includes staged changes." : undefined,
+      untrackedPaths.length > 0 ? "Includes untracked working-tree files." : undefined,
       mergeSourcedFiles.length > 0 ? formatMergeSourcedFilesNote(mergeSourcedFiles) : undefined,
     ].filter((value): value is string => Boolean(value));
 
@@ -266,7 +271,22 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
   }
 }
 
-function isContractRuntimePath(path: string): boolean {
+function filterTouchedPaths(output: string, source: TouchedFileSource): readonly string[] {
+  return filterCollectedPaths(splitPaths(output), source);
+}
+
+function filterCollectedPaths(paths: readonly string[], source: TouchedFileSource): readonly string[] {
+  return paths.filter((path) => !shouldIgnoreContractPath(path, source));
+}
+
+function shouldIgnoreContractPath(path: string, source: TouchedFileSource): boolean {
+  if (isAlwaysIgnoredContractRuntimePath(path)) {
+    return true;
+  }
+  return source === "untracked" && isIgnoredUntrackedContractRuntimePath(path);
+}
+
+function isAlwaysIgnoredContractRuntimePath(path: string): boolean {
   const normalized = normalizeSlashes(path);
   return normalized === ".maestro/tasks/tasks.jsonl"
     || normalized === ".maestro/tasks/NOW.md"
@@ -275,7 +295,26 @@ function isContractRuntimePath(path: string): boolean {
     || normalized.startsWith(".maestro/tasks/local-history/")
     || normalized.startsWith(".maestro/tasks/contracts/")
     || normalized.startsWith(".maestro/tasks/batches/")
-    || normalized.startsWith(".maestro/tasks/candidates/");
+    || normalized.startsWith(".maestro/tasks/candidates/")
+    || normalized.startsWith(".maestro/launches/");
+}
+
+function isIgnoredUntrackedContractRuntimePath(path: string): boolean {
+  const normalized = normalizeSlashes(path);
+  return normalized === ".maestro/config.yaml"
+    || normalized === ".claude/scheduled_tasks.lock"
+    || normalized === ".codex/config.toml"
+    || normalized === ".codex/installation_id"
+    || normalized.startsWith("Library/Caches/bun/")
+    || normalized.startsWith(".codex/.tmp/")
+    || normalized.startsWith(".codex/tmp/")
+    || normalized.startsWith(".codex/sessions/")
+    || normalized.startsWith(".codex/skills/.system/")
+    || isCodexRuntimeDatabasePath(normalized);
+}
+
+function isCodexRuntimeDatabasePath(path: string): boolean {
+  return /^\.codex\/(?:logs|state)(?:_[^/]+)?\.sqlite(?:-(?:shm|wal))?$/.test(path);
 }
 
 function splitPaths(output: string): readonly string[] {
