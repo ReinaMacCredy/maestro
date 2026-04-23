@@ -168,4 +168,51 @@ describe("task + handoff pickup CLI", () => {
       `Handoff ${launch.id} is already finished because linked task ${task.id} is completed`,
     );
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("keeps unrelated task show calls from reconciling another task's stale handoff", async () => {
+    const createdA = await runCli(["task", "create", "unrelated task", "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(createdA.exitCode).toBe(0);
+    const taskA = expectJson<{ id: string }>(createdA);
+
+    const createdB = await runCli(["task", "create", "handoff owner task", "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(createdB.exitCode).toBe(0);
+    const taskB = expectJson<{ id: string }>(createdB);
+
+    const startedB = await runCli(["task", "update", taskB.id, "--status", "in_progress", "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(startedB.exitCode).toBe(0);
+
+    const launchStore = new FsLaunchStoreAdapter(tmpDir);
+    const launch = await launchStore.create({
+      task: "linked to task B",
+      name: "linked to task B",
+      agent: "codex",
+      model: "gpt-5.4",
+      wait: false,
+      sourceDir: tmpDir,
+      targetDir: tmpDir,
+      refs: { taskId: taskB.id },
+      prompt: "## Task\n\nlinked to task B\n",
+    });
+    await launchStore.update({ ...launch, status: "launched" });
+
+    const completedB = await runCli(
+      ["task", "update", taskB.id, "--status", "completed", "--reason", "done", "--json"],
+      tmpDir,
+      { env: noDetectedSessionEnv },
+    );
+    expect(completedB.exitCode).toBe(0);
+    expect((await launchStore.get(launch.id))?.status).toBe("launched");
+
+    const shownA = await runCli(["task", "show", taskA.id, "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(shownA.exitCode).toBe(0);
+    expect((await launchStore.get(launch.id))?.status).toBe("launched");
+  }, SLOW_CLI_TIMEOUT_MS);
 });

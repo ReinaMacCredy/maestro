@@ -60,4 +60,35 @@ describe("listOpenHandoffsForTask", () => {
     expect(result).toEqual([]);
     expect((await store.get("stale-ibis-9"))?.status).toBe("completed");
   });
+
+  it("does not reconcile stale packets for other tasks", async () => {
+    const store = mockLaunchStore([
+      makeHandoffLaunchRecord({
+        id: "stale-ibis-9",
+        createdAt: "2026-04-23T00:00:00.000Z",
+        refs: { taskId: "tsk-abc123" },
+        status: "launched",
+      }),
+      makeHandoffLaunchRecord({
+        id: "other-heron-3",
+        createdAt: "2026-04-23T01:00:00.000Z",
+        refs: { taskId: "tsk-xyz789" },
+        status: "launched",
+      }),
+    ]);
+
+    const result = await listOpenHandoffsForTask(store, "tsk-abc123", {
+      taskStore: {
+        async get(id: string) {
+          return id === "tsk-abc123" || id === "tsk-xyz789"
+            ? { id, status: "completed" }
+            : undefined;
+        },
+      },
+    });
+
+    expect(result).toEqual([]);
+    expect((await store.get("stale-ibis-9"))?.status).toBe("completed");
+    expect((await store.get("other-heron-3"))?.status).toBe("launched");
+  });
 });
