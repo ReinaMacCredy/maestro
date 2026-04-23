@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.58.3 - Handoff scope follow-ups
+
+- Preserve global handoff scope options through `status` and `doctor` legacy
+  handoff checks instead of rebuilding partial option objects.
+- Avoid resolving the current Maestro project root in Mission Control snapshot
+  paths unless reply or principle rollup data is requested.
+- Keep principle outcome rollups empty when a project has no scoped handoffs,
+  preventing unrelated global outcomes from appearing in the current project.
+- Commit repo-local Claude and Codex copies of the built-in `maestro:*`
+  mission skills so the checked-out agent surfaces match the source bundle.
+
 ## 0.58.2 - Worktree-safe global handoff scoping
 
 - Normalize git worktrees back to the owning Maestro project root before
