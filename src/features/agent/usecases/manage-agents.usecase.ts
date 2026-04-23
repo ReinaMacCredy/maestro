@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { readdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { chmod, lstat, readdir, realpath } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
   SUPPORTED_AGENTS,
   agentConfigPath,
@@ -133,6 +133,54 @@ interface BundledSkillCleanupResult {
   readonly preservedUserEdits: readonly string[];
 }
 
+function isPathWithinRoot(root: string, target: string): boolean {
+  const relativePath = relative(root, target);
+  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
+}
+
+function desiredFileMode(mode: number, executable: boolean): number {
+  return executable
+    ? mode | ((mode & 0o444) >> 2)
+    : mode & ~0o111;
+}
+
+async function syncBundledFileMode(path: string, executable: boolean): Promise<boolean> {
+  const stats = await lstat(path);
+  if (!stats.isFile()) return false;
+
+  const currentMode = stats.mode & 0o777;
+  const nextMode = desiredFileMode(currentMode, executable) & 0o777;
+  if (currentMode === nextMode) return false;
+
+  await chmod(path, nextMode);
+  return true;
+}
+
+async function resolveManagedManifestPath(
+  skillDir: string,
+  realSkillDir: string,
+  relativePath: string,
+): Promise<string | undefined> {
+  if (relativePath.length === 0 || isAbsolute(relativePath)) {
+    return undefined;
+  }
+
+  const absolute = resolve(skillDir, relativePath);
+  if (!isPathWithinRoot(skillDir, absolute)) {
+    return undefined;
+  }
+
+  try {
+    const realAbsolute = await realpath(absolute);
+    return isPathWithinRoot(realSkillDir, realAbsolute) ? absolute : undefined;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 async function readBundledSkillManifest(path: string): Promise<BundledSkillManifest | undefined> {
   const raw = await readText(path);
   if (raw === undefined) return undefined;
@@ -167,17 +215,20 @@ async function writeBundledSkill(
 
   const perFile = await Promise.all(template.files.map(async (file) => {
     const absolute = join(skillDir, file.path);
+    const executable = file.executable === true;
     const shippedHash = contentHash(file.content);
     const existing = await readText(absolute);
 
     if (existing === undefined) {
       await ensureDir(dirname(absolute));
       await writeText(absolute, file.content);
+      await syncBundledFileMode(absolute, executable);
       return { path: file.path, manifestHash: shippedHash, changed: true, preserved: false };
     }
 
     if (existing === file.content) {
-      return { path: file.path, manifestHash: shippedHash, changed: false, preserved: false };
+      const modeChanged = await syncBundledFileMode(absolute, executable);
+      return { path: file.path, manifestHash: shippedHash, changed: modeChanged, preserved: false };
     }
 
     const existingHash = contentHash(existing);
@@ -198,6 +249,7 @@ async function writeBundledSkill(
     }
 
     await writeText(absolute, file.content);
+    await syncBundledFileMode(absolute, executable);
     return { path: file.path, manifestHash: shippedHash, changed: true, preserved: false };
   }));
 
@@ -255,12 +307,24 @@ async function removeStaleManagedFiles(
     return { changed: false, preservedUserEdits: [] };
   }
 
+  const resolvedSkillDir = resolve(skillDir);
+  const realSkillDir = await realpath(skillDir).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return resolvedSkillDir;
+    }
+    throw error;
+  });
   const preservedUserEdits: string[] = [];
   let changed = false;
   for (const [relativePath, prevHash] of Object.entries(prevManifest.fileHashes)) {
     if (currentPaths.has(relativePath)) continue;
 
-    const absolute = join(skillDir, relativePath);
+    const absolute = await resolveManagedManifestPath(resolvedSkillDir, realSkillDir, relativePath);
+    if (!absolute) {
+      preservedUserEdits.push(relativePath);
+      continue;
+    }
+
     const existing = await readText(absolute);
     if (existing === undefined) continue;
 

@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type {
   AssertionStorePort,
@@ -8,7 +9,6 @@ import type {
   HandoffAgent,
   HandoffLaunchPort,
   HandoffLaunchRecord,
-  HandoffPromptContext,
   LaunchStorePort,
 } from "@/features/handoff";
 import { DEFAULT_HANDOFF_MODELS } from "@/features/handoff";
@@ -87,18 +87,15 @@ export async function launchHandoff(
       : undefined,
   ].filter((line): line is string => line !== undefined);
 
-  const { prompt, context } = promptFromFile !== undefined
-    ? {
-        prompt: promptFromFile,
-        context: buildMinimalContext(input.task, extraConstraints, input.refs?.taskId),
-      }
-    : await buildHandoffPrompt(deps, {
-        cwd: input.cwd,
-        task: input.task,
-        extraConstraints,
-        continuation: input.continuation,
-        taskId: input.refs?.taskId,
-      });
+  const generated = await buildHandoffPrompt(deps, {
+    cwd: input.cwd,
+    task: input.task,
+    extraConstraints,
+    continuation: input.continuation,
+    taskId: input.refs?.taskId,
+  });
+  const prompt = promptFromFile ?? generated.prompt;
+  const context = generated.context;
 
   const initialRecord = await deps.launchStore.create({
     task: input.task,
@@ -232,18 +229,33 @@ function truncateTask(task: string): string {
 
 async function readPromptFromFile(promptFile: string, cwd: string): Promise<string> {
   const absolute = isAbsolute(promptFile) ? promptFile : resolve(cwd, promptFile);
-  let content: string | undefined;
+  // stat() up front so directories, FIFOs, sockets, and device files get a
+  // typed MaestroError instead of an EISDIR-only guard around readText (which
+  // would hang on a FIFO and silently inject garbage from a char device).
+  let stats;
   try {
-    content = await readText(absolute);
+    stats = await stat(absolute);
   } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException | undefined)?.code;
-    if (code === "EISDIR") {
-      throw new MaestroError(`--prompt-file is a directory, not a file: ${absolute}`, [
-        "Pass a path to a readable file containing the brief",
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new MaestroError(`--prompt-file not found: ${absolute}`, [
+        "Check the path is correct and readable",
+        "Use an absolute path or a path relative to the current working directory",
       ]);
     }
     throw err;
   }
+  if (stats.isDirectory()) {
+    throw new MaestroError(`--prompt-file is a directory, not a file: ${absolute}`, [
+      "Pass a path to a readable file containing the brief",
+    ]);
+  }
+  if (!stats.isFile()) {
+    throw new MaestroError(`--prompt-file is not a regular file: ${absolute}`, [
+      "Pass a path to a regular file containing the brief",
+      "FIFOs, sockets, and device files are not supported here",
+    ]);
+  }
+  const content = await readText(absolute);
   if (content === undefined) {
     throw new MaestroError(`--prompt-file not found: ${absolute}`, [
       "Check the path is correct and readable",
@@ -265,22 +277,4 @@ async function readPromptFromFile(promptFile: string, cwd: string): Promise<stri
     );
   }
   return content;
-}
-
-function buildMinimalContext(
-  task: string,
-  extraConstraints: readonly string[],
-  taskId: string | undefined,
-): HandoffPromptContext {
-  return {
-    task,
-    context: [],
-    relevantFiles: [],
-    currentState: [],
-    whatWasTried: [],
-    decisions: [],
-    acceptanceCriteria: [],
-    constraints: extraConstraints,
-    refs: taskId ? { taskId } : {},
-  };
 }

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { BUNDLED_SKILL_TEMPLATES } from "@/infra/domain/bundled-skill-templates.js";
 
 const ROOT = new URL("../../../..", import.meta.url).pathname;
 const SOURCE_DIR = join(ROOT, "skills", "bundled");
+const EXECUTABLE_EXTENSIONS = [".sh", ".bash", ".command", ".cmd", ".bat", ".ps1"] as const;
 
 async function listFilesRecursive(dir: string): Promise<string[]> {
   const entries = (await readdir(dir, { withFileTypes: true }))
@@ -23,6 +24,12 @@ async function listFilesRecursive(dir: string): Promise<string[]> {
 
 function normalize(text: string): string {
   return text.replace(/\r\n/g, "\n");
+}
+
+function isExecutableFile(path: string, mode: number): boolean {
+  if ((mode & 0o111) !== 0) return true;
+  if (process.platform !== "win32") return false;
+  return EXECUTABLE_EXTENSIONS.some((extension) => path.endsWith(extension));
 }
 
 describe("BUNDLED_SKILL_TEMPLATES", () => {
@@ -44,6 +51,10 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
         absolutes.map(async (abs) => ({
           path: relative(skillDir, abs).split(sep).join("/"),
           content: normalize(await Bun.file(abs).text()),
+          executable: isExecutableFile(
+            relative(skillDir, abs).split(sep).join("/"),
+            (await stat(abs)).mode,
+          ),
         })),
       );
 
@@ -52,6 +63,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
         const match = template!.files.find((f) => f.path === diskFile.path);
         expect(match, `${dirName}/${diskFile.path} present in template`).toBeDefined();
         expect(match!.content, `${dirName}/${diskFile.path} content`).toBe(diskFile.content);
+        expect(match!.executable === true, `${dirName}/${diskFile.path} executable`).toBe(diskFile.executable);
       }
     }
   });
@@ -99,5 +111,11 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(planSkill.content).toContain("maestro-task");
     expect(planSkill.content).toContain("maestro-handoff");
     expect(planSkill.content).toContain("## Persist the plan");
+  });
+
+  it("marks bundled shell helpers as executable", () => {
+    const brainstorm = BUNDLED_SKILL_TEMPLATES.find((template) => template.name === "maestro-brainstorm");
+    expect(brainstorm?.files.find((file) => file.path === "scripts/start-server.sh")?.executable).toBe(true);
+    expect(brainstorm?.files.find((file) => file.path === "scripts/stop-server.sh")?.executable).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
+import { chmod, mkdtemp, rm, mkdir, writeFile, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -288,6 +288,31 @@ describe("manage-agents use case logic", () => {
       expect(await readFile(userEditedPath, "utf8")).toBe(userContent);
     });
 
+    it("restores execute bits for shipped bundled scripts on reinstall", async () => {
+      if (process.platform === "win32") return;
+
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      const scriptPath = join(
+        fakeHome,
+        ".claude",
+        "skills",
+        "maestro-brainstorm",
+        "scripts",
+        "start-server.sh",
+      );
+      await chmod(scriptPath, 0o644);
+      expect((await stat(scriptPath)).mode & 0o111).toBe(0);
+
+      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      expect(second.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
+      expect((await stat(scriptPath)).mode & 0o111).not.toBe(0);
+    });
+
     it("removes stale manifest-owned files from still-shipped skill dirs", async () => {
       await mkdir(join(fakeHome, ".claude"), { recursive: true });
       await mkdir(join(fakeHome, ".codex"), { recursive: true });
@@ -311,6 +336,36 @@ describe("manage-agents use case logic", () => {
 
       await injectAgentBlocks(tmpDir, "all", fakeHome);
       expect(existsSync(staleFile)).toBe(false);
+    });
+
+    it("ignores manifest paths that escape the managed skill directory", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      const victimPath = join(fakeHome, ".claude", "outside.md");
+      const victimContent = "# keep me\n";
+      await writeFile(victimPath, victimContent);
+
+      const manifestPath = join(fakeHome, ".claude", "skills", "maestro-task", ".maestro-bundled.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+        managedBy: string;
+        skillName: string;
+        installedAt?: string;
+        maestroVersion?: string;
+        fileHashes: Record<string, string>;
+      };
+      manifest.fileHashes["../../outside.md"] = createHash("sha256").update(victimContent).digest("hex");
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      expect(existsSync(victimPath)).toBe(true);
+      expect(await readFile(victimPath, "utf8")).toBe(victimContent);
+      expect(second.find((r) => r.agent === "Claude Code")?.preservedUserEdits).toContain(
+        "maestro-task/../../outside.md",
+      );
     });
   });
 
