@@ -489,19 +489,6 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         ]);
       }
 
-      // Hard rule 2: every completion carries --reason. Enforce at the CLI so
-      // receipts cannot be written with a null reason silently.
-      if (
-        patch.status === "completed"
-        && (previous?.status !== "completed" || hasAdditionalCompletedTaskEdits(patch, continuationEdits))
-        && (typeof opts.reason !== "string" || opts.reason.trim().length === 0)
-      ) {
-        throw new MaestroError("Completion requires --reason", [
-          "Pass a short one-line outcome: --reason \"<one-line outcome>\"",
-          "The reason is persisted verbatim as shared context for future sessions",
-        ]);
-      }
-
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
 
       // Hard rule 1: one task in_progress per session unless --force. Enforce
@@ -547,6 +534,17 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       }
       if (previous?.status === "completed" && patch.status === "completed") {
         throw completedTaskUpdateRequiresReopen(id);
+      }
+      // Hard rule 2: every first-time completion carries --reason. Enforce at
+      // the CLI so receipts cannot be written with a null reason silently.
+      if (
+        patch.status === "completed"
+        && (typeof opts.reason !== "string" || opts.reason.trim().length === 0)
+      ) {
+        throw new MaestroError("Completion requires --reason", [
+          "Pass a short one-line outcome: --reason \"<one-line outcome>\"",
+          "The reason is persisted verbatim as shared context for future sessions",
+        ]);
       }
       if (patch.status === "completed" && previous) {
         await enforceContractCompletionPolicy(previous, patch, {

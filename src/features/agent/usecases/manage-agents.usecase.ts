@@ -18,7 +18,6 @@ import {
 import {
   dirExists,
   ensureDir,
-  readJson,
   readText,
   writeJson,
   writeText,
@@ -129,6 +128,22 @@ interface WriteBundledSkillResult {
   readonly preservedUserEdits: readonly string[];
 }
 
+interface BundledSkillCleanupResult {
+  readonly changed: boolean;
+  readonly preservedUserEdits: readonly string[];
+}
+
+async function readBundledSkillManifest(path: string): Promise<BundledSkillManifest | undefined> {
+  const raw = await readText(path);
+  if (raw === undefined) return undefined;
+  try {
+    return JSON.parse(raw) as BundledSkillManifest;
+  } catch (error) {
+    if (error instanceof SyntaxError) return undefined;
+    throw error;
+  }
+}
+
 /**
  * Write a single bundled skill into its install location. Uses a per-skill
  * manifest (`.maestro-bundled.json`) to distinguish user edits from stale
@@ -148,7 +163,7 @@ async function writeBundledSkill(
 ): Promise<WriteBundledSkillResult> {
   const skillDir = join(skillRoot, template.name);
   const manifestPath = join(skillDir, MANIFEST_FILENAME);
-  const prevManifest = await readJson<BundledSkillManifest>(manifestPath);
+  const prevManifest = await readBundledSkillManifest(manifestPath);
 
   const perFile = await Promise.all(template.files.map(async (file) => {
     const absolute = join(skillDir, file.path);
@@ -158,17 +173,17 @@ async function writeBundledSkill(
     if (existing === undefined) {
       await ensureDir(dirname(absolute));
       await writeText(absolute, file.content);
-      return { path: file.path, hash: shippedHash, changed: true, preserved: false };
+      return { path: file.path, manifestHash: shippedHash, changed: true, preserved: false };
     }
 
     if (existing === file.content) {
-      return { path: file.path, hash: shippedHash, changed: false, preserved: false };
+      return { path: file.path, manifestHash: shippedHash, changed: false, preserved: false };
     }
 
     const existingHash = contentHash(existing);
     const prevHash = prevManifest?.fileHashes?.[file.path];
     if (prevHash !== undefined && prevHash !== existingHash) {
-      return { path: file.path, hash: existingHash, changed: false, preserved: true };
+      return { path: file.path, manifestHash: prevHash, changed: false, preserved: true };
     }
 
     if (prevHash === undefined) {
@@ -183,14 +198,20 @@ async function writeBundledSkill(
     }
 
     await writeText(absolute, file.content);
-    return { path: file.path, hash: shippedHash, changed: true, preserved: false };
+    return { path: file.path, manifestHash: shippedHash, changed: true, preserved: false };
   }));
 
+  const staleCleanup = await removeStaleManagedFiles(
+    skillDir,
+    prevManifest,
+    new Set(template.files.map((file) => file.path)),
+  );
+
   const fileHashes: Record<string, string> = {};
-  const preservedUserEdits: string[] = [];
-  let changed = false;
+  const preservedUserEdits = [...staleCleanup.preservedUserEdits.map((path) => `${template.name}/${path}`)];
+  let changed = staleCleanup.changed;
   for (const result of perFile) {
-    fileHashes[result.path] = result.hash;
+    fileHashes[result.path] = result.manifestHash;
     if (result.changed) changed = true;
     if (result.preserved) {
       preservedUserEdits.push(`${template.name}/${result.path}`);
@@ -225,6 +246,35 @@ function manifestsEqual(a: BundledSkillManifest, b: BundledSkillManifest): boole
   return true;
 }
 
+async function removeStaleManagedFiles(
+  skillDir: string,
+  prevManifest: BundledSkillManifest | undefined,
+  currentPaths: ReadonlySet<string>,
+): Promise<BundledSkillCleanupResult> {
+  if (!prevManifest) {
+    return { changed: false, preservedUserEdits: [] };
+  }
+
+  const preservedUserEdits: string[] = [];
+  let changed = false;
+  for (const [relativePath, prevHash] of Object.entries(prevManifest.fileHashes)) {
+    if (currentPaths.has(relativePath)) continue;
+
+    const absolute = join(skillDir, relativePath);
+    const existing = await readText(absolute);
+    if (existing === undefined) continue;
+
+    if (contentHash(existing) !== prevHash) {
+      preservedUserEdits.push(relativePath);
+      continue;
+    }
+
+    changed = await removeIfExists(absolute) || changed;
+  }
+
+  return { changed, preservedUserEdits };
+}
+
 /**
  * Remove any maestro-managed skill directory under the agent's skills root
  * that is no longer in the current bundled template set. A skill dir is
@@ -244,7 +294,7 @@ async function removeStaleBundledSkillDirs(skillRoot: string): Promise<string[]>
     if (shipped.has(entry.name)) return undefined;
 
     const manifestPath = join(skillRoot, entry.name, MANIFEST_FILENAME);
-    const manifest = await readJson<BundledSkillManifest>(manifestPath);
+    const manifest = await readBundledSkillManifest(manifestPath);
     if (manifest?.managedBy !== "maestro") return undefined;
 
     await removeIfExists(join(skillRoot, entry.name), { recursive: true });
@@ -356,7 +406,7 @@ async function listManagedSkillDirs(skillsRoot: string): Promise<string[]> {
   const results = await Promise.all(entries.map(async (entry) => {
     if (!entry.isDirectory()) return undefined;
     if (!entry.name.startsWith(BUNDLED_SKILL_PREFIX)) return undefined;
-    const manifest = await readJson<BundledSkillManifest>(
+    const manifest = await readBundledSkillManifest(
       join(skillsRoot, entry.name, MANIFEST_FILENAME),
     );
     return manifest?.managedBy === "maestro" ? entry.name : undefined;

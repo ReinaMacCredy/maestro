@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -248,6 +249,50 @@ describe("manage-agents use case logic", () => {
 
       const afterContent = await readFile(userEditedPath, "utf8");
       expect(afterContent).toBe(userContent);
+    });
+
+    it("preserves user edits across repeated installs, not just one refresh", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      const userEditedPath = join(fakeHome, ".claude", "skills", "maestro-task", "SKILL.md");
+      const userContent = "---\nname: maestro-task\n---\n# my sticky custom override\n";
+      await writeFile(userEditedPath, userContent);
+
+      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(second.find((r) => r.agent === "Claude Code")?.preservedUserEdits).toContain("maestro-task/SKILL.md");
+      expect(await readFile(userEditedPath, "utf8")).toBe(userContent);
+
+      const third = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(third.find((r) => r.agent === "Claude Code")?.preservedUserEdits).toContain("maestro-task/SKILL.md");
+      expect(await readFile(userEditedPath, "utf8")).toBe(userContent);
+    });
+
+    it("removes stale manifest-owned files from still-shipped skill dirs", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      const staleFile = join(fakeHome, ".claude", "skills", "maestro-task", "reference", "stale.md");
+      await mkdir(join(fakeHome, ".claude", "skills", "maestro-task", "reference"), { recursive: true });
+      await writeFile(staleFile, "# stale\n");
+
+      const manifestPath = join(fakeHome, ".claude", "skills", "maestro-task", ".maestro-bundled.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+        managedBy: string;
+        skillName: string;
+        installedAt?: string;
+        maestroVersion?: string;
+        fileHashes: Record<string, string>;
+      };
+      manifest.fileHashes["reference/stale.md"] = createHash("sha256").update("# stale\n").digest("hex");
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(existsSync(staleFile)).toBe(false);
     });
   });
 

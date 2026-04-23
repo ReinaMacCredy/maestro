@@ -385,15 +385,19 @@ async function loadContractDraftTemplate(
   editorCommand: string | undefined,
   initialContent = defaultContractTemplate(),
 ): Promise<ContractDraftTemplate> {
+  const envEditor = process.env.EDITOR ?? process.env.VISUAL;
   // Auto-detect piped stdin when the caller passed neither --from nor --editor.
   // Lets `cat contract.yaml | maestro task contract new <id>` work without
   // spelling `--from -`, matching Unix tradition and making the command safe
-  // for non-interactive (agent) callers. `isTTY` is `undefined` for pipes on
-  // some runtimes, so use a falsy check to cover both cases.
+  // for non-interactive (agent) callers. Only do this when no editor is
+  // configured, otherwise `task contract edit|amend` would consume an empty
+  // inherited stdin stream instead of launching $EDITOR. `isTTY` is
+  // `undefined` for pipes on some runtimes, so use a falsy check to cover both
+  // cases.
   const resolvedFromPath = fromPath
-    ?? (!editorCommand && !process.stdin.isTTY ? "-" : undefined);
+    ?? (!editorCommand && !envEditor && !process.stdin.isTTY ? "-" : undefined);
 
-  if (!resolvedFromPath && !editorCommand && !process.env.EDITOR && !process.env.VISUAL) {
+  if (!resolvedFromPath && !editorCommand && !envEditor) {
     throw new MaestroError("Provide --from <path>, pipe YAML on stdin, or pass --editor <cmd>", [
       "Example: maestro task contract new <id> --from contract.yaml",
       "Example: cat contract.yaml | maestro task contract new <id>",
@@ -402,7 +406,7 @@ async function loadContractDraftTemplate(
   }
 
   const resolvedEditor = editorCommand
-    ?? (resolvedFromPath ? undefined : (process.env.EDITOR ?? process.env.VISUAL));
+    ?? (resolvedFromPath ? undefined : envEditor);
   const baseContent = resolvedFromPath
     ? await readDraftSource(resolvedFromPath)
     : initialContent;

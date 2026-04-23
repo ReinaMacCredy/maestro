@@ -685,7 +685,7 @@ describe("task contract completion", () => {
     expect(reset.closedBy).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("leaves completed task state unchanged when update-reopen cannot claim ownership", async () => {
+  it("reopens completed task updates through the stable local fallback session", async () => {
     await seedTrackedFile("README.md", "hello\n");
 
     const created = await runCli(["task", "create", "failed update reopen stays closed", "--json"], tmpDir);
@@ -736,7 +736,7 @@ describe("task contract completion", () => {
       tmpDir,
     );
 
-    const failed = await runCli(
+    const reopened = await runCli(
       ["task", "update", task.id, "--status", "in_progress"],
       tmpDir,
       {
@@ -746,18 +746,22 @@ describe("task contract completion", () => {
         },
       },
     );
-    expect(failed.exitCode).toBe(1);
-    expect(failed.stderr).toContain("Status 'in_progress' requires task ownership");
+    expect(reopened.exitCode).toBe(0);
 
     const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
-    expect(expectJson<{ status: string }>(shownTask).status).toBe("completed");
+    expect(expectJson<{ status: string; assignee?: string }>(shownTask)).toEqual(
+      expect.objectContaining({
+        status: "in_progress",
+        assignee: expect.stringMatching(/^local-/),
+      }),
+    );
 
     const shownContract = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir);
     const closed = expectJson<{
       status: string;
       verdict?: { fulfilled: boolean };
     }>(shownContract);
-    expect(closed.status).toBe("fulfilled");
-    expect(closed.verdict?.fulfilled).toBe(true);
+    expect(closed.status).toBe("locked");
+    expect(closed.verdict).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);
 });

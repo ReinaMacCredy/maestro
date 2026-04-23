@@ -309,6 +309,43 @@ describe("launchHandoff", () => {
       ).rejects.toThrow("--prompt-file not found");
     });
 
+    it("does not create a worktree before validating --prompt-file", async () => {
+      let createWorktreeCalls = 0;
+      await expect(
+        launchHandoff({
+          missionStore: mockMissionStore([]),
+          featureStore: mockFeatureStore("2026-04-20-001", []),
+          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          git: {
+            ...makeGit(),
+            async createWorktree(_cwd, input) {
+              createWorktreeCalls += 1;
+              return {
+                slug: input.slug,
+                baseBranch: input.baseBranch,
+                branch: `${input.branchPrefix}/${input.slug}`,
+                path: `/tmp/${input.slug}`,
+              };
+            },
+          },
+          launchStore: makeLaunchStore(),
+          launchers: {
+            codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+            claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+          },
+        }, {
+          cwd: "/tmp/project",
+          task: "probe",
+          agent: "codex",
+          wait: false,
+          worktree: "bad-prompt-worktree",
+          promptFile: "/tmp/maestro-prompt-file-definitely-not-here-xyz.md",
+        }),
+      ).rejects.toThrow("--prompt-file not found");
+
+      expect(createWorktreeCalls).toBe(0);
+    });
+
     it("throws a MaestroError when --prompt-file is empty", async () => {
       const briefPath = `/tmp/maestro-prompt-file-empty-${Date.now()}.md`;
       await Bun.write(briefPath, "   \n\n");

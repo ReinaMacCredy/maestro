@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsLaunchStoreAdapter } from "@/features/handoff";
@@ -112,5 +112,24 @@ describe("FsLaunchStoreAdapter", () => {
         pickedUpAt: "2026-04-21T10:01:00.000Z",
       }),
     ).rejects.toThrow("already consumed");
+  });
+
+  it("surfaces corrupt launch metadata instead of treating it as missing", async () => {
+    const store = new FsLaunchStoreAdapter(projectDir);
+    const created = await store.create({
+      task: "Corrupt me",
+      name: "[Handoff] Corrupt me",
+      agent: "codex",
+      model: "gpt-5.4",
+      wait: false,
+      sourceDir: projectDir,
+      targetDir: projectDir,
+      refs: {},
+      prompt: "## Task\n\nCorrupt me\n",
+    });
+
+    await writeFile(join(projectDir, ".maestro", "launches", created.id, "launch.json"), "{bad json\n");
+
+    await expect(store.get(created.id)).rejects.toThrow();
   });
 });

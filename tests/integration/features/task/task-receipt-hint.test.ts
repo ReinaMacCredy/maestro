@@ -41,6 +41,8 @@ describe("task completion receipt feeds hint keywords", () => {
         "completed",
         "--session",
         "test-alpha",
+        "--reason",
+        "completed authentication middleware",
         "--summary",
         "added argon2 hashing to the session pipeline",
         "--surprise",

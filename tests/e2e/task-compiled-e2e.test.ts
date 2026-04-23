@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import {
   BUILD_TIMEOUT_MS,
@@ -149,17 +149,23 @@ describe("compiled task feature E2E", () => {
   );
 
   it(
-    "task claim fails loudly when session detection is unavailable",
+    "task claim falls back to a per-user session when session detection is unavailable",
     async () => {
       const id = (await runCompiled(["task", "q", "unclaimed"], tmpDir)).stdout;
+      const fallbackUser = (process.env.USER ?? process.env.USERNAME ?? "").trim() || userInfo().username;
       const claim = await runCompiled(
-        ["task", "claim", id],
+        ["task", "claim", id, "--json"],
         tmpDir,
         { env: { CLAUDECODE: "", CODEX_THREAD_ID: "" } },
       );
-      expect(claim.exitCode).not.toBe(0);
-      expect(claim.stderr).toContain("Could not detect current session");
-      expect(claim.stderr).toContain("--session <id>");
+      expect(claim.exitCode).toBe(0);
+      expect(expectJson<{ assignee?: string; status: string }>(claim)).toEqual(
+        expect.objectContaining({
+          assignee: `local-${fallbackUser}`,
+          status: "pending",
+        }),
+      );
+      expect(claim.stderr).toContain("using a per-user synthesized session");
     },
     SLOW_CLI_TIMEOUT_MS,
   );
@@ -378,7 +384,8 @@ describe("compiled task feature E2E", () => {
           { env: { CLAUDECODE: "", CODEX_THREAD_ID: "" } },
         );
         expect(foreignComplete.exitCode).not.toBe(0);
-        expect(`${foreignComplete.stdout}\n${foreignComplete.stderr}`).toContain("requires the owner session or --force");
+        expect(`${foreignComplete.stdout}\n${foreignComplete.stderr}`).toContain("current session cannot 'update' it");
+        expect(`${foreignComplete.stdout}\n${foreignComplete.stderr}`).toContain("--force");
 
         await runCompiled(["task", "update", id, "--status", "in_progress", "--session", "session-a", "--json"], tmpDir);
 
@@ -392,8 +399,15 @@ describe("compiled task feature E2E", () => {
         tmpDir,
         { env: { CLAUDECODE: "", CODEX_THREAD_ID: "" } },
       );
-      expect(badStart.exitCode).not.toBe(0);
-      expect(badStart.stderr).toContain("requires task ownership");
+      expect(badStart.exitCode).toBe(0);
+
+      const shownAutoStarted = await runCompiled(["task", "show", unclaimedId, "--json"], tmpDir);
+      expect(expectJson<{ status: string; assignee?: string }>(shownAutoStarted)).toEqual(
+        expect.objectContaining({
+          status: "in_progress",
+          assignee: expect.stringMatching(/^local-/),
+        }),
+      );
 
       const completedId = (await runCompiled(["task", "q", "closed immutable"], tmpDir)).stdout;
       await runCompiled(
@@ -463,7 +477,7 @@ describe("compiled task feature E2E", () => {
           tmpDir,
         );
         expect(secondStart.exitCode).not.toBe(0);
-        expect(secondStart.stderr).toContain("already owns unresolved");
+        expect(secondStart.stderr).toContain("You already hold");
       },
       SLOW_CLI_TIMEOUT_MS,
     );

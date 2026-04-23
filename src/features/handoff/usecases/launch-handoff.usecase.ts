@@ -70,6 +70,9 @@ export async function launchHandoff(
     ]);
   }
 
+  const promptFromFile = input.promptFile !== undefined
+    ? await readPromptFromFile(input.promptFile, input.cwd)
+    : undefined;
   const worktree = input.worktree
     ? await createHandoffWorktree(deps.git, input.cwd, input.agent, input.worktree, input.baseBranch, input.task)
     : undefined;
@@ -84,9 +87,9 @@ export async function launchHandoff(
       : undefined,
   ].filter((line): line is string => line !== undefined);
 
-  const { prompt, context } = input.promptFile !== undefined
+  const { prompt, context } = promptFromFile !== undefined
     ? {
-        prompt: await readPromptFromFile(input.promptFile, input.cwd),
+        prompt: promptFromFile,
         context: buildMinimalContext(input.task, extraConstraints, input.refs?.taskId),
       }
     : await buildHandoffPrompt(deps, {
