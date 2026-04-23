@@ -7,7 +7,7 @@ import { assertSafeSegment } from "@/shared/lib/path-safety.js";
 import { ensureDir, listDirs, readJson, removeIfExists, writeJson, writeText } from "@/shared/lib/fs.js";
 import { MaestroError } from "@/shared/errors.js";
 
-const HANDOFF_DIR = "handoff";
+export const HANDOFF_DIR = "handoff";
 const PICKUP_LOCK_WAIT_MS = 2_000;
 const PICKUP_LOCK_RETRY_MS = 20;
 
@@ -134,7 +134,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     return records.filter((record): record is HandoffRecord => record !== undefined);
   }
 
-  resolveArtifactPath(relativePath: string, _refs: HandoffRefs): string {
+  resolveArtifactPath(relativePath: string): string {
     return join(this.root, relativePath);
   }
 

@@ -114,5 +114,5 @@ export interface HandoffStorePort {
   }): Promise<HandoffRecord>;
   get(id: string): Promise<HandoffRecord | undefined>;
   list(): Promise<readonly HandoffRecord[]>;
-  resolveArtifactPath(relativePath: string, refs: HandoffRefs): string;
+  resolveArtifactPath(relativePath: string): string;
 }

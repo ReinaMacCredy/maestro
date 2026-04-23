@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsHandoffStoreAdapter } from "@/features/handoff";
+import { FsHandoffStoreAdapter, HANDOFF_DIR } from "@/features/handoff";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 
 let storeRoot: string;
 
@@ -32,7 +33,7 @@ describe("FsHandoffStoreAdapter", () => {
 
     await access(join(storeRoot, record.promptPath));
     await access(join(storeRoot, record.outputPath));
-    await access(join(storeRoot, ".maestro", "handoff", record.id, "handoff.json"));
+    await access(join(storeRoot, MAESTRO_DIR, HANDOFF_DIR, record.id, "handoff.json"));
 
     const listed = await store.list();
     expect(listed).toHaveLength(1);
@@ -128,7 +129,7 @@ describe("FsHandoffStoreAdapter", () => {
       prompt: "## Task\n\nCorrupt me\n",
     });
 
-    await writeFile(join(storeRoot, ".maestro", "handoff", created.id, "handoff.json"), "{bad json\n");
+    await writeFile(join(storeRoot, MAESTRO_DIR, HANDOFF_DIR, created.id, "handoff.json"), "{bad json\n");
 
     await expect(store.get(created.id)).rejects.toThrow();
   });

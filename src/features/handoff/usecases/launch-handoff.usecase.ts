@@ -118,7 +118,7 @@ export async function launchHandoff(
   try {
     const launchPrompt = buildLaunchExecutionPrompt(prompt, initialRecord);
     await writeText(
-      deps.handoffStore.resolveArtifactPath(initialRecord.promptPath, initialRecord.refs),
+      deps.handoffStore.resolveArtifactPath(initialRecord.promptPath),
       launchPrompt,
     );
     const launchResult = await handoffLauncher.launch({
@@ -127,7 +127,7 @@ export async function launchHandoff(
       model,
       name,
       wait: input.wait,
-      logPath: deps.handoffStore.resolveArtifactPath(initialRecord.outputPath, initialRecord.refs),
+      logPath: deps.handoffStore.resolveArtifactPath(initialRecord.outputPath),
     });
     const waitedExitCode = input.wait ? launchResult.exitCode : undefined;
     const finalRecord = await deps.handoffStore.update({

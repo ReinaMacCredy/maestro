@@ -12,11 +12,12 @@ export async function listHandoffs(
   store: HandoffStorePort,
   options: ListHandoffsOptions = {},
 ): Promise<readonly HandoffRecord[]> {
+  const { taskStore } = options;
   const all = await store.list();
-  const reconciled = options.taskStore
+  const reconciled = taskStore
     ? await Promise.all(all.map((record) => reconcileHandoffRecord({
       handoffStore: store,
-      taskStore: options.taskStore!,
+      taskStore,
     }, record)))
     : all;
   const filtered = options.openOnly ? reconciled.filter(isOpenHandoffRecord) : reconciled;

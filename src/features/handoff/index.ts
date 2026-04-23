@@ -12,7 +12,7 @@ export type {
   HandoffWorktree,
 } from "./domain/handoff-types.js";
 export { DEFAULT_HANDOFF_MODELS } from "./domain/handoff-types.js";
-export { FsHandoffStoreAdapter } from "./adapters/handoff-store.adapter.js";
+export { FsHandoffStoreAdapter, HANDOFF_DIR } from "./adapters/handoff-store.adapter.js";
 export { CodexHandoffLaunchAdapter } from "./adapters/codex-handoff-launch.adapter.js";
 export { ClaudeHandoffLaunchAdapter } from "./adapters/claude-handoff-launch.adapter.js";
 export { buildHandoffPrompt } from "./usecases/build-handoff-prompt.usecase.js";
