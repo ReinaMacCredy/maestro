@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { BUNDLED_SKILL_TEMPLATES } from "@/infra/domain/bundled-skill-templates.js";
 
-const ROOT = new URL("../../../..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
 const SOURCE_DIR = join(ROOT, "skills", "bundled");
 const EXECUTABLE_EXTENSIONS = [".sh", ".bash", ".command", ".cmd", ".bat", ".ps1"] as const;
 

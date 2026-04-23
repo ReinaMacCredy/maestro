@@ -145,6 +145,10 @@ function desiredFileMode(mode: number, executable: boolean): number {
 }
 
 async function syncBundledFileMode(path: string, executable: boolean): Promise<boolean> {
+  if (process.platform === "win32") {
+    return false;
+  }
+
   const stats = await lstat(path);
   if (!stats.isFile()) return false;
 

@@ -39,9 +39,14 @@ async function seedTrackedFile(path: string, content: string): Promise<void> {
 async function installFakeProvider(name: "codex" | "claude"): Promise<string> {
   const binDir = await mkdtemp(join(tmpdir(), `maestro-provider-bin-${name}-`));
   cleanupDirs.push(binDir);
-  const scriptPath = join(binDir, name);
-  await Bun.write(scriptPath, `#!/bin/sh\necho "${name} output"\n`);
-  await chmod(scriptPath, 0o755);
+  if (process.platform === "win32") {
+    const scriptPath = join(binDir, `${name}.cmd`);
+    await Bun.write(scriptPath, `@echo off\r\necho ${name} output\r\n`);
+  } else {
+    const scriptPath = join(binDir, name);
+    await Bun.write(scriptPath, `#!/bin/sh\necho "${name} output"\n`);
+    await chmod(scriptPath, 0o755);
+  }
   return binDir;
 }
 

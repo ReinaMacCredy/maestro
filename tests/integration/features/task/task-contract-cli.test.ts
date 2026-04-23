@@ -400,7 +400,10 @@ describe("task contract CLI", () => {
     const amended = await runCli(
       ["task", "contract", "amend", contract.id, "--reason", "expanded test coverage", "--session", "criteria-owner", "--json"],
       tmpDir,
-      { env: { EDITOR: `bun '${editorPath}'` } },
+      {
+        env: { EDITOR: `bun '${editorPath}'` },
+        stdin: "",
+      },
     );
     const amendedContract = expectJson<{ status: string; scope: { filesExpected: string[] }; amendments: Array<{ reason: string }> }>(amended);
     expect(amendedContract.status).toBe("amended");
@@ -536,12 +539,63 @@ describe("task contract CLI", () => {
     const edited = await runCli(
       ["task", "contract", "edit", contract.id, "--json"],
       tmpDir,
-      { env: { EDITOR: `bun '${editorPath}'` } },
+      {
+        env: { EDITOR: `bun '${editorPath}'` },
+        stdin: "",
+      },
     );
     const payload = expectJson<{ status: string; intent: string; scope: { filesExpected: string[] } }>(edited);
     expect(payload.status).toBe("draft");
     expect(payload.intent).toBe("Edited draft intent");
     expect(payload.scope.filesExpected).toContain("tests/integration/features/task/**");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("prefers non-empty auto-detected stdin over an ambient editor", async () => {
+    const createdTask = await runCli(["task", "create", "stdin contract", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+
+    const editorPath = await writeEditorScript(
+      "stdin-editor.sh",
+      [
+        "intent: Editor fallback should not win",
+        "scope:",
+        "  filesExpected:",
+        "    - editor-only/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: editor should not be used here",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const stdinPath = await writeTemplate(
+      "stdin-payload.yaml",
+      [
+        "intent: Stdin contract wins",
+        "scope:",
+        "  filesExpected:",
+        "    - stdin-only/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: stdin payload wins over ambient editor",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--json"],
+      tmpDir,
+      {
+        env: { EDITOR: `bun '${editorPath}'` },
+        stdin: Bun.file(stdinPath),
+      },
+    );
+
+    const contract = expectJson<{ intent: string; scope: { filesExpected: string[] } }>(drafted);
+    expect(contract.intent).toBe("Stdin contract wins");
+    expect(contract.scope.filesExpected).toEqual(["stdin-only/**"]);
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("reopens a completed amended contract through the contract surface and relocks it", async () => {

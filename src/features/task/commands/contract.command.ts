@@ -387,16 +387,21 @@ async function loadContractDraftTemplate(
   initialContent = defaultContractTemplate(),
 ): Promise<ContractDraftTemplate> {
   const envEditor = process.env.EDITOR ?? process.env.VISUAL;
+  const autoDetectedStdin = fromPath === undefined
+    && editorCommand === undefined
+    && hasRealStdinPayload();
+  // Some runners hand the child an empty pipe/file on fd0. If we auto-read
+  // that and skip the editor, edit/amend silently collapse to an empty draft.
+  const autoDetectedDraft = autoDetectedStdin
+    ? await readDraftSource("-")
+    : undefined;
   // Auto-detect real piped/redirected stdin when the caller passed neither
   // --from nor --editor. Lets `cat contract.yaml | maestro task contract new`
   // and `maestro task contract new <id> < contract.yaml` work without spelling
-  // `--from -`. Use fstat rather than `isTTY`: inherited-empty stdin in a
-  // subprocess (e.g. bun test runners calling the CLI while $EDITOR is set)
-  // is also non-TTY, but it's neither a FIFO nor a regular file, so we leave
-  // the editor path for it. Real pipe = FIFO, file redirect = regular file;
-  // both are unambiguous "user provided stdin" signals.
+  // `--from -`. Keep non-empty stdin ahead of an ambient editor, but let the
+  // editor win when the inherited stdin is just an empty placeholder.
   const resolvedFromPath = fromPath
-    ?? (!editorCommand && hasRealStdinPayload() ? "-" : undefined);
+    ?? (autoDetectedDraft !== undefined && autoDetectedDraft.trim().length > 0 ? "-" : undefined);
 
   if (!resolvedFromPath && !editorCommand && !envEditor) {
     throw new MaestroError("Provide --from <path>, pipe YAML on stdin, or pass --editor <cmd>", [
@@ -409,7 +414,7 @@ async function loadContractDraftTemplate(
   const resolvedEditor = editorCommand
     ?? (resolvedFromPath ? undefined : envEditor);
   const baseContent = resolvedFromPath
-    ? await readDraftSource(resolvedFromPath)
+    ? (resolvedFromPath === "-" && autoDetectedDraft !== undefined ? autoDetectedDraft : await readDraftSource(resolvedFromPath))
     : initialContent;
   const finalContent = resolvedEditor
     ? await editContractDraft(baseContent, resolvedEditor)

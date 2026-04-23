@@ -305,6 +305,7 @@ function isIgnoredUntrackedContractRuntimePath(path: string): boolean {
     || normalized === ".claude/scheduled_tasks.lock"
     || normalized === ".codex/config.toml"
     || normalized === ".codex/installation_id"
+    || normalized.startsWith(".bun/install/cache/")
     || normalized.startsWith("Library/Caches/bun/")
     || normalized.startsWith(".codex/.tmp/")
     || normalized.startsWith(".codex/tmp/")

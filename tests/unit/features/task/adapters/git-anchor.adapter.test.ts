@@ -136,12 +136,14 @@ describe("ShellGitAnchorAdapter", () => {
 
   it("ignores untracked agent runtime files and handoff launch packets", async () => {
     await commitFile("base.txt", "base\n", "base");
+    await mkdir(join(tmpDir, ".bun", "install", "cache", "@t@"), { recursive: true });
     await mkdir(join(tmpDir, ".codex", ".tmp", "plugins"), { recursive: true });
     await mkdir(join(tmpDir, ".codex", "skills", ".system"), { recursive: true });
     await mkdir(join(tmpDir, ".maestro", "launches", "demo-launch"), { recursive: true });
     await mkdir(join(tmpDir, ".claude"), { recursive: true });
     await mkdir(join(tmpDir, "Library", "Caches", "bun", "@t@"), { recursive: true });
 
+    await Bun.write(join(tmpDir, ".bun", "install", "cache", "@t@", "cache.pile"), "pile\n");
     await Bun.write(join(tmpDir, ".codex", ".tmp", "plugins.sha"), "sha\n");
     await Bun.write(join(tmpDir, ".codex", ".tmp", "plugins", "README.md"), "temp\n");
     await Bun.write(join(tmpDir, ".codex", "config.toml"), "model = \"gpt-5.4\"\n");
