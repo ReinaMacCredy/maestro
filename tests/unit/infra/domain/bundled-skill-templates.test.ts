@@ -69,13 +69,14 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     }
   });
 
-  it("ships the expected 5 bundled skills", () => {
+  it("ships the expected bundled skills", () => {
     const names = BUNDLED_SKILL_TEMPLATES.map((t) => t.name).sort();
     expect(names).toEqual([
       "maestro-brainstorm",
       "maestro-handoff",
       "maestro-mission",
       "maestro-plan",
+      "maestro-setup",
       "maestro-task",
     ]);
   });
@@ -112,6 +113,67 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(planSkill.content).toContain("maestro-task");
     expect(planSkill.content).toContain("maestro-handoff");
     expect(planSkill.content).toContain("## Persist the plan");
+  });
+
+  it("ships maestro-setup with managed-marker and report contracts", () => {
+    const setup = BUNDLED_SKILL_TEMPLATES.find((template) => template.name === "maestro-setup");
+    expect(setup).toBeDefined();
+
+    const skill = setup!.files.find((file) => file.path === "SKILL.md")!;
+    expect(skill.content).toContain("name: maestro-setup");
+    expect(skill.content).toContain("Skill-first, CLI-second");
+    expect(skill.content).toContain("<!-- maestro-setup:start -->");
+    expect(skill.content).toContain("<!-- maestro-setup:end -->");
+    expect(skill.content).toContain("<!-- maestro-setup:generated:start -->");
+    expect(skill.content).toContain("<!-- maestro-setup:generated:end -->");
+    expect(skill.content).toContain(".maestro/setup-report.md");
+    expect(skill.content).toContain("maestro setup --dry-run --json");
+
+    const planningTemplate = setup!.files.find((file) => file.path === "reference/context-templates/planning.md");
+    expect(planningTemplate?.content).toContain("Approved implementation plans live under `.maestro/plans/`");
+    expect(planningTemplate?.content).toContain("Convert plan phases into `maestro task` entries");
+
+    const reportTemplate = setup!.files.find((file) => file.path === "reference/setup-report-template.md");
+    expect(reportTemplate?.content).toContain("## Evidence Sources");
+    expect(reportTemplate?.content).toContain("## TODOs Left");
+    expect(reportTemplate?.content).toContain("## Warnings");
+  });
+
+  it("ships maestro-setup Google styleguide snapshots with attribution", () => {
+    const setup = BUNDLED_SKILL_TEMPLATES.find((template) => template.name === "maestro-setup");
+    expect(setup).toBeDefined();
+
+    const expectedGuides = [
+      "angularjs.md",
+      "common-lisp.md",
+      "cpp.md",
+      "csharp.md",
+      "go.md",
+      "html-css.md",
+      "javascript.md",
+      "java.md",
+      "json.md",
+      "markdown.md",
+      "objective-c.md",
+      "python.md",
+      "r.md",
+      "shell.md",
+      "swift.md",
+      "typescript.md",
+      "vimscript.md",
+      "xml.md",
+    ];
+
+    for (const guide of expectedGuides) {
+      const file = setup!.files.find((entry) => entry.path === `reference/styleguides/${guide}`);
+      expect(file, `reference/styleguides/${guide}`).toBeDefined();
+      expect(file!.content).toContain("Snapshot date: 2026-04-24");
+      expect(file!.content).toContain("License: Creative Commons Attribution 3.0");
+      expect(file!.content).toContain("google.github.io");
+    }
+
+    const index = setup!.files.find((entry) => entry.path === "reference/styleguides/INDEX.md");
+    expect(index?.content).toContain("excludes external Dart and Kotlin guides");
   });
 
   it("marks bundled shell helpers as executable", () => {
