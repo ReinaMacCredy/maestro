@@ -21,6 +21,7 @@ Use this file with the repo-root [AGENTS.md](../AGENTS.md). The suite is split b
 - Prefer explicit stdout/stderr/exit-code and on-disk artifact assertions over snapshots.
 - Use `helpers/run-cli.ts` for source-run flows and `helpers/run-compiled-cli.ts` for compiled-binary flows.
 - Refresh `./dist/maestro` with `bun run build` before relying on compiled-binary tests.
+- Bun test timeout is configured in `bunfig.toml`; do not infer timeouts from Jest/Vitest conventions.
 
 ## GOTCHAS
 - `tests/helpers/command-runner.ts` inherits `process.env`; scrub session-related env vars for no-session assertions.

@@ -16,6 +16,7 @@ Use this file with the repo-root [AGENTS.md](../AGENTS.md). `scripts/` owns buil
 - `build.ts` is stateful: it syncs built-in skill templates, injects build metadata, and handles platform-specific build cleanup.
 - Bundled skill drift is enforced by `sync-bundled-skills.ts` and `bun run check:bundled-skills`, not by `build.ts`.
 - `ci.ts` assumes a clean tree and may roll back git state on failure.
+- `ci.ts` is POSIX-only; GitHub CI covers Windows through `.github/workflows/ci.yml`.
 - `release:local` installs locally; `deploy` is still a local/test flow unless explicitly changed.
 
 ## ANTI-PATTERNS

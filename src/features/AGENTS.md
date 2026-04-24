@@ -13,6 +13,7 @@ Use this file with the parent [AGENTS.md](../AGENTS.md). `src/features/` owns bo
 | Local wiring | `<feature>/services.ts` | Feature-local factory |
 | Storage and I/O | `<feature>/adapters/`, `<feature>/ports/` | Keep side effects explicit |
 | CLI command shape | `<feature>/commands/` | Only for features with user-facing commands |
+| Handoff packets | `handoff/` | Launch/pickup semantics, prompt files, task-linked ownership transfer |
 
 ## CONVENTIONS
 - Cross-feature imports go through `@/features/<name>` only.
@@ -31,6 +32,7 @@ Parent:
 - [../AGENTS.md](../AGENTS.md)
 
 Children:
+- [handoff/AGENTS.md](handoff/AGENTS.md)
 - [mission/AGENTS.md](mission/AGENTS.md)
 - [task/AGENTS.md](task/AGENTS.md)
 
