@@ -72,6 +72,11 @@ describe("task CLI daily loop", () => {
     const id = (await runCli(["task", "q", "legacy"], tmpDir)).stdout;
     const dep = (await runCli(["task", "q", "dep"], tmpDir)).stdout;
 
+    const taskHelp = await runCli(["task", "--help"], tmpDir);
+    expect(taskHelp.stdout).not.toContain("Legacy compatibility shim");
+    expect(taskHelp.stdout).not.toContain("deps");
+    expect(taskHelp.stdout).not.toContain("close <id>");
+
     const badClose = await runCli(["task", "close", id], tmpDir);
     expect(badClose.exitCode).not.toBe(0);
     expect(badClose.stderr).toContain("status completed");

@@ -1045,18 +1045,18 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
 
 function registerLegacyDepsCommand(taskCmd: Command): void {
   const depsCmd = taskCmd
-    .command("deps")
+    .command("deps", { hidden: true })
     .description("Legacy compatibility shim for renamed blocker commands");
 
   depsCmd
-    .command("add <id> <dependencyIds...>")
+    .command("add <id> <dependencyIds...>", { hidden: true })
     .description("Legacy compatibility shim")
     .action(() => {
       throw taskDependencyCommandsRenamed();
     });
 
   depsCmd
-    .command("remove <id> <dependencyIds...>")
+    .command("remove <id> <dependencyIds...>", { hidden: true })
     .description("Legacy compatibility shim")
     .action(() => {
       throw taskDependencyCommandsRenamed();
@@ -1065,7 +1065,7 @@ function registerLegacyDepsCommand(taskCmd: Command): void {
 
 function registerCloseCommand(taskCmd: Command): void {
   taskCmd
-    .command("close <id>")
+    .command("close <id>", { hidden: true })
     .description("Legacy compatibility shim; completion moved to task update")
     .action(() => {
       throw taskCompletedViaUpdateStatus();

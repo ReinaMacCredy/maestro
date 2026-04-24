@@ -263,14 +263,6 @@ function getAllApplicableScreens(snapshot: MissionControlSnapshot): PreviewScree
   return getApplicablePreviewScreens(snapshot);
 }
 
-/**
- * Resolve mission ID: explicit > executing/paused > newest.
- */
-async function resolveMissionId(explicit?: string): Promise<string | undefined> {
-  const services = getServices();
-  return resolveMissionIdFromStore(services.missionStore, explicit);
-}
-
 async function resolveMissionIdFromStore(
   missionStore: MissionStorePort,
   explicit?: string,
