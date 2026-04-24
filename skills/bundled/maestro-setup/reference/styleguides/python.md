@@ -2201,15 +2201,15 @@ The docstring may be descriptive-style (`"""Fetches rows from a Bigtable."""`) o
 Certain aspects of a function should be documented in special sections, listed below. Each section begins with a heading line, which ends with a colon. All sections other than the heading should maintain a hanging indent of two or four spaces (be consistent within a file). These sections can be omitted in cases where the function’s name and signature are informative enough that it can be aptly described using a one-line docstring.
 
 <span id="doc-function-args"></span>\
-[*Args:*](#doc-function-args)  
+[*Args:*](#doc-function-args)
 List each parameter by name. A description should follow the name, and be separated by a colon followed by either a space or newline. If the description is too long to fit on a single 80-character line, use a hanging indent of 2 or 4 spaces more than the parameter name (be consistent with the rest of the docstrings in the file). The description should include required type(s) if the code does not contain a corresponding type annotation. If a function accepts `*foo` (variable length argument lists) and/or `**bar` (arbitrary keyword arguments), they should be listed as `*foo` and `**bar`.
 
 <span id="doc-function-returns"></span>\
-[*Returns:* (or *Yields:* for generators)](#doc-function-returns)  
+[*Returns:* (or *Yields:* for generators)](#doc-function-returns)
 Describe the semantics of the return value, including any type information that the type annotation does not provide. If the function only returns None, this section is not required. It may also be omitted if the docstring starts with “Return”, “Returns”, “Yield”, or “Yields” (e.g. `"""Returns row from Bigtable as a tuple of strings."""`) *and* the opening sentence is sufficient to describe the return value. Do not imitate older ‘NumPy style’ ([example](https://numpy.org/doc/1.24/reference/generated/numpy.linalg.qr.html)), which frequently documented a tuple return value as if it were multiple return values with individual names (never mentioning the tuple). Instead, describe such a return value as: “Returns: A tuple (mat_a, mat_b), where mat_a is …, and …”. The auxiliary names in the docstring need not necessarily correspond to any internal names used in the function body (as those are not part of the API). If the function uses `yield` (is a generator), the `Yields:` section should document the object returned by `next()`, instead of the generator object itself that the call evaluates to.
 
 <span id="doc-function-raises"></span>\
-[*Raises:*](#doc-function-raises)  
+[*Raises:*](#doc-function-raises)
 List all exceptions that are relevant to the interface followed by a description. Use a similar exception name + colon + space or newline and hanging indent style as described in *Args:*. You should not document exceptions that get raised if the API specified in the docstring is violated (because this would paradoxically make behavior under violation of the API part of the API).
 
 <div class="language-python highlighter-rouge">
@@ -3667,7 +3667,7 @@ You can disable type checking on a line with the special comment `# type: ignore
 #### 3.19.8 Typing Variables
 
 <span id="annotated-assignments"></span>\
-[*Annotated Assignments*](#annotated-assignments)  
+[*Annotated Assignments*](#annotated-assignments)
 If an internal variable has a type that is hard or impossible to infer, specify its type with an annotated assignment - use a colon and type between the variable name and value (the same as is done with function arguments that have a default value):
 
 <div class="language-python highlighter-rouge">
@@ -3683,7 +3683,7 @@ a: Foo = SomeUndecoratedFunction()
 </div>
 
 <span id="type-comments"></span>\
-[*Type Comments*](#type-comments)  
+[*Type Comments*](#type-comments)
 Though you may see them remaining in the codebase (they were necessary before Python 3.6), do not add any more uses of a `# type: <type name>` comment on the end of the line:
 
 <div class="language-python highlighter-rouge">

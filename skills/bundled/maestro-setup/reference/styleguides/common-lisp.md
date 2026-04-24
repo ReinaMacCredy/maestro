@@ -2353,16 +2353,16 @@ You should not use `STRING-UPCASE` or `STRING-DOWNCASE` on format control parame
 
 Be careful when using the `FORMAT` conditional directive. The parameters are easy to forget.
 
-No parameters, e.g. `"~[Siamese~;Manx~;Persian~] Cat"`  
+No parameters, e.g. `"~[Siamese~;Manx~;Persian~] Cat"`
 Take one format argument, which should be an integer. Use it to choose a clause. Clause numbers are zero-based. If the number is out of range, just print nothing. You can provide a default value by putting a `":"` in front of the last `";"`. E.g. in `"~[Siamese~;Manx~;Persian~:;Alley~] Cat"`, an out-of-range arg prints `"Alley"`.
 
-`:` parameter, e.g. `"~:[Siamese~;Manx~]"`  
+`:` parameter, e.g. `"~:[Siamese~;Manx~]"`
 Take one format argument. If it's `NIL`, use the first clause, otherwise use the second clause.
 
-`@` parameter, e.g. `"~@[Siamese ~a~]"`  
+`@` parameter, e.g. `"~@[Siamese ~a~]"`
 If the next format argument is true, use the choice, but do NOT take the argument. If it's false, take one format argument and print nothing. (Normally the clause uses the format argument.)
 
-`#` parameter, e.g. `"~#[ none~; ~s~; ~s and ~s~]"`  
+`#` parameter, e.g. `"~#[ none~; ~s~; ~s and ~s~]"`
 Use the number of arguments to format as the number to choose a clause. The same as no parameters in all other ways. Here's the full hairy example: `"Items: ~#[ none~; ~S~; ~S and ~S~:;~@{~S~^~#[~; and ~:;, ~]~}~]."`
 
 </div>

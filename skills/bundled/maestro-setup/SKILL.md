@@ -116,7 +116,23 @@ content outside it.
 Create or update the root `AGENTS.md` managed block so agents know to reflect on
 `.maestro/context/index.md` before non-trivial work.
 
-The block must say:
+Use this exact block:
+
+```md
+<!-- maestro-setup:start -->
+## Maestro Context
+
+Before non-trivial work:
+- Load `.maestro/context/index.md` first.
+- Open only the specific context docs relevant to the task.
+- Follow detected language guides under `.maestro/context/code_styleguides/`.
+- Preserve user content outside managed setup sections.
+- If context docs conflict with closer repo instructions, follow the closer
+  instruction file and report the conflict.
+<!-- maestro-setup:end -->
+```
+
+The block says:
 
 - load `.maestro/context/index.md` first
 - open only the specific context docs relevant to the task

@@ -35,28 +35,28 @@ There are a few core goals that we believe this guide should serve. These are th
 
 The goals of the style guide as we currently see them are as follows:
 
-Style rules should pull their weight  
+Style rules should pull their weight
 The benefit of a style rule must be large enough to justify asking all of our engineers to remember it. The benefit is measured relative to the codebase we would get without the rule, so a rule against a very harmful practice may still have a small benefit if people are unlikely to do it anyway. This principle mostly explains the rules we don't have, rather than the rules we do: for example, `goto` contravenes many of the following principles, but is already vanishingly rare, so the Style Guide doesn't discuss it.
 
-Optimize for the reader, not the writer  
+Optimize for the reader, not the writer
 Our codebase (and most individual components submitted to it) is expected to continue for quite some time. As a result, more time will be spent reading most of our code than writing it. We explicitly choose to optimize for the experience of our average software engineer reading, maintaining, and debugging code in our codebase rather than ease when writing said code. "Leave a trace for the reader" is a particularly common sub-point of this principle: When something surprising or unusual is happening in a snippet of code (for example, transfer of pointer ownership), leaving textual hints for the reader at the point of use is valuable (`std::unique_ptr` demonstrates the ownership transfer unambiguously at the call site).
 
-Be consistent with existing code  
+Be consistent with existing code
 Using one style consistently through our codebase lets us focus on other (more important) issues. Consistency also allows for automation: tools that format your code or adjust your `#include`s only work properly when your code is consistent with the expectations of the tooling. In many cases, rules that are attributed to "Be Consistent" boil down to "Just pick one and stop worrying about it"; the potential value of allowing flexibility on these points is outweighed by the cost of having people argue over them. However, there are limits to consistency; it is a good tie breaker when there is no clear technical argument, nor a long-term direction. It applies more heavily locally (per file, or for a tightly-related set of interfaces). Consistency should not generally be used as a justification to do things in an old style without considering the benefits of the new style, or the tendency of the codebase to converge on newer styles over time.
 
-Be consistent with the broader C++ community when appropriate  
+Be consistent with the broader C++ community when appropriate
 Consistency with the way other organizations use C++ has value for the same reasons as consistency within our codebase. If a feature in the C++ standard solves a problem, or if some idiom is widely known and accepted, that's an argument for using it. However, sometimes standard features and idioms are flawed, or were just designed without our codebase's needs in mind. In those cases (as described below) it's appropriate to constrain or ban standard features. In some cases we prefer a homegrown or third-party library over a library defined in the C++ Standard, either out of perceived superiority or insufficient value to transition the codebase to the standard interface.
 
-Avoid surprising or dangerous constructs  
+Avoid surprising or dangerous constructs
 C++ has features that are more surprising or dangerous than one might think at a glance. Some style guide restrictions are in place to prevent falling into these pitfalls. There is a high bar for style guide waivers on such restrictions, because waiving such rules often directly risks compromising program correctness.
 
-Avoid constructs that our average C++ programmer would find tricky or hard to maintain  
+Avoid constructs that our average C++ programmer would find tricky or hard to maintain
 C++ has features that may not be generally appropriate because of the complexity they introduce to the code. In widely used code, it may be more acceptable to use trickier language constructs, because any benefits of more complex implementation are multiplied widely by usage, and the cost in understanding the complexity does not need to be paid again when working with new portions of the codebase. When in doubt, waivers to rules of this type can be sought by asking your project leads. This is specifically important for our codebase because code ownership and team membership changes over time: even if everyone that works with some piece of code currently understands it, such understanding is not guaranteed to hold a few years from now.
 
-Be mindful of our scale  
+Be mindful of our scale
 With a codebase of 100+ million lines and thousands of engineers, some mistakes and simplifications for one engineer can become costly for many. For instance it's particularly important to avoid polluting the global namespace: name collisions across a codebase of hundreds of millions of lines are difficult to work with and hard to avoid if everyone puts things into the global namespace.
 
-Concede to optimization when necessary  
+Concede to optimization when necessary
 Performance optimizations can sometimes be necessary and appropriate, even when they conflict with the other principles of this document.
 
 The intent of this document is to provide maximal guidance with reasonable restriction. As always, common sense and good taste should prevail. By this we specifically refer to the established conventions of the entire Google C++ community, not just your personal preferences or those of your team. Be skeptical about and reluctant to use clever or unusual constructs: the absence of a prohibition is not the same as a license to proceed. Use your judgment, and if you are unsure, please don't hesitate to ask your project leads to get additional input.
@@ -651,7 +651,7 @@ Such a variable is actually a collection of objects, so that when different thre
 
 ``` goodcode
    constinit thread_local Foo foo = ...;
-  
+
 ```
 
 `thread_local` variables inside a function have no initialization concerns, but still risk use-after-free during thread exit. Note that you can use a function-scope `thread_local` to simulate a class- or namespace-scope `thread_local` by defining a function or static method that exposes it:
@@ -1012,7 +1012,7 @@ Sometimes it's easier and more readable to specify a return type after the funct
 ``` neutralcode
     template <typename T, typename U>
     auto Add(T t, U u) -> decltype(t + u);
-  
+
 ```
 
 versus
@@ -1020,7 +1020,7 @@ versus
 ``` neutralcode
     template <typename T, typename U>
     decltype(declval<T&>() + declval<U&>()) Add(T t, U u);
-  
+
 ```
 
 Trailing return type syntax has no analogue in C++-like languages such as C and Java, so some readers may find it unfamiliar.
@@ -1446,7 +1446,7 @@ Use type deduction only if it makes the code clearer to readers who aren't famil
 
 There are several contexts in which C++ allows (or even requires) types to be deduced by the compiler, rather than spelled out explicitly in the code:
 
-[Function template argument deduction](https://en.cppreference.com/w/cpp/language/template_argument_deduction)  
+[Function template argument deduction](https://en.cppreference.com/w/cpp/language/template_argument_deduction)
 A function template can be invoked without explicit template arguments. The compiler deduces those arguments from the types of the function arguments:
 
 ``` neutralcode
@@ -1456,7 +1456,7 @@ void f(T t);
 f(0);  // Invokes f<int>(0)
 ```
 
-[`auto` variable declarations](https://en.cppreference.com/w/cpp/language/auto)  
+[`auto` variable declarations](https://en.cppreference.com/w/cpp/language/auto)
 A variable declaration can use the `auto` keyword in place of the type. The compiler deduces the type from the variable's initializer, following the same rules as function template argument deduction with the same initializer (so long as you don't use curly braces instead of parentheses).
 
 ``` neutralcode
@@ -1468,7 +1468,7 @@ auto d{42};   // d is an int, not a std::initializer_list<int>
 
 `auto` can be qualified with `const`, and can be used as part of a pointer or reference type, and (since C++17) as a non-type template argument. A rare variant of this syntax uses `decltype(auto)` instead of `auto`, in which case the deduced type is the result of applying [`decltype`](https://en.cppreference.com/w/cpp/language/decltype) to the initializer.
 
-[Function return type deduction](https://en.cppreference.com/w/cpp/language/function#Return_type_deduction)  
+[Function return type deduction](https://en.cppreference.com/w/cpp/language/function#Return_type_deduction)
 `auto` (and `decltype(auto)`) can also be used in place of a function return type. The compiler deduces the return type from the `return` statements in the function body, following the same rules as for variable declarations:
 
 ``` neutralcode
@@ -1477,7 +1477,7 @@ auto f() { return 0; }  // The return type of f is int
 
 [Lambda expression](#Lambda_expressions) return types can be deduced in the same way, but this is triggered by omitting the return type, rather than by an explicit `auto`. Confusingly, [trailing return type](#trailing_return) syntax for functions also uses `auto` in the return-type position, but that doesn't rely on type deduction; it's just an alternative syntax for an explicit return type.
 
-[Generic lambdas](https://isocpp.org/wiki/faq/cpp14-language#generic-lambdas)  
+[Generic lambdas](https://isocpp.org/wiki/faq/cpp14-language#generic-lambdas)
 A lambda expression can use the `auto` keyword in place of one or more of its parameter types. This causes the lambda's call operator to be a function template instead of an ordinary function, with a separate template parameter for each `auto` function parameter:
 
 ``` neutralcode
@@ -1485,7 +1485,7 @@ A lambda expression can use the `auto` keyword in place of one or more of its pa
 std::sort(vec.begin(), vec.end(), [](auto lhs, auto rhs) { return lhs > rhs; });
 ```
 
-[Lambda init captures](https://isocpp.org/wiki/faq/cpp14-language#lambda-captures)  
+[Lambda init captures](https://isocpp.org/wiki/faq/cpp14-language#lambda-captures)
 Lambda captures can have explicit initializers, which can be used to declare wholly new variables rather than only capturing existing ones:
 
 ``` neutralcode
@@ -1494,10 +1494,10 @@ Lambda captures can have explicit initializers, which can be used to declare who
 
 This syntax doesn't allow the type to be specified; instead, it's deduced using the rules for `auto` variables.
 
-[Class template argument deduction](https://en.cppreference.com/w/cpp/language/class_template_argument_deduction)  
+[Class template argument deduction](https://en.cppreference.com/w/cpp/language/class_template_argument_deduction)
 See [below](#CTAD).
 
-[Structured bindings](https://en.cppreference.com/w/cpp/language/structured_binding)  
+[Structured bindings](https://en.cppreference.com/w/cpp/language/structured_binding)
 When declaring a tuple, struct, or array using `auto`, you can specify names for the individual elements instead of a name for the whole object; these names are called "structured bindings", and the whole declaration is called a "structured binding declaration". This syntax provides no way of specifying the type of either the enclosing object or the individual names:
 
 ``` neutralcode
@@ -2277,19 +2277,19 @@ The name for an [alias](#Aliases) follows the same principles as any other new n
 
 If you are naming something that is analogous to an existing C or C++ entity (or a Rust entity via interop), then you can follow the existing naming convention scheme.
 
-`bigopen()`  
+`bigopen()`
 function name, follows form of `open()`
 
-`uint`  
+`uint`
 `typedef`
 
-`bigpos`  
+`bigpos`
 `struct` or `class`, follows form of `pos`
 
-`sparse_hash_map`  
+`sparse_hash_map`
 STL-like entity; follows STL naming conventions
 
-`LONGLONG_MAX`  
+`LONGLONG_MAX`
 a constant, as in `INT_MAX`
 
 ## Comments

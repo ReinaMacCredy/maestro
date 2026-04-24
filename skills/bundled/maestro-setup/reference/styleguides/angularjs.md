@@ -55,9 +55,9 @@ For example:
   goog.require('my.submoduleA');
 
   Yes: my.application.module = angular.module('hello', [my.submoduleA.name]);
-  
+
       No: my.application.module = angular.module('hello', ['my.submoduleA']);
-  
+
 ```
 
 **Why?** Using a property of my.submoduleA prevents Closure presubmit failures complaining that the file is required but never used. Using the .name property avoids duplicating strings.

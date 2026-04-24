@@ -3,7 +3,7 @@
 Source: https://google.github.io/styleguide/jsoncstyleguide.xml
 Snapshot date: 2026-04-24
 Attribution: Copied from the Google Style Guides project for Maestro bundled setup use.
-License: Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/)
+License: Content is Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/); code samples are Apache 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
 
 ---
 

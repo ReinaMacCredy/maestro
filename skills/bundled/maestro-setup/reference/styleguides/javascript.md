@@ -2291,7 +2291,7 @@ All enums and typedefs must be documented with appropriate JSDoc tags (`@typedef
  * @typedef {!FruitType|!FruitTypeEnum}
  */
 let CoolUnionType;
- 
+
 /**
  * Types of fruits.
  * @enum {string}

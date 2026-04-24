@@ -2,11 +2,11 @@
  * Sync `src/infra/domain/bundled-skill-templates.ts` with `skills/bundled/`.
  *
  * `skills/bundled/` is the single source of truth for the maestro skill bundle
- * (maestro-handoff, maestro-task, maestro-mission, maestro-brainstorm,
- * maestro-plan). This script walks it and emits the embedded TS module the
- * compiled binary needs to install skills into `~/.claude/skills/` and
- * `~/.codex/skills/` via `maestro agent inject` (the install-site has no repo
- * checkout).
+ * (maestro-brainstorm, maestro-plan, maestro-task, maestro-mission,
+ * maestro-handoff, maestro-setup). This script walks it and emits the embedded
+ * TS module the compiled binary needs to install skills into
+ * `~/.claude/skills/` and `~/.codex/skills/` via `maestro install` /
+ * `maestro update` (the install-site has no repo checkout).
  *
  * Run `bun scripts/sync-bundled-skills.ts` to regenerate, or
  * `bun scripts/sync-bundled-skills.ts --check` in CI to fail on drift.

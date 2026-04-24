@@ -126,6 +126,17 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(skill.content).toContain("<!-- maestro-setup:end -->");
     expect(skill.content).toContain("<!-- maestro-setup:generated:start -->");
     expect(skill.content).toContain("<!-- maestro-setup:generated:end -->");
+    expect(skill.content).toContain(`<!-- maestro-setup:start -->
+## Maestro Context
+
+Before non-trivial work:
+- Load \`.maestro/context/index.md\` first.
+- Open only the specific context docs relevant to the task.
+- Follow detected language guides under \`.maestro/context/code_styleguides/\`.
+- Preserve user content outside managed setup sections.
+- If context docs conflict with closer repo instructions, follow the closer
+  instruction file and report the conflict.
+<!-- maestro-setup:end -->`);
     expect(skill.content).toContain(".maestro/setup-report.md");
     expect(skill.content).toContain("maestro setup --dry-run --json");
 
@@ -168,12 +179,16 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
       const file = setup!.files.find((entry) => entry.path === `reference/styleguides/${guide}`);
       expect(file, `reference/styleguides/${guide}`).toBeDefined();
       expect(file!.content).toContain("Snapshot date: 2026-04-24");
-      expect(file!.content).toContain("License: Creative Commons Attribution 3.0");
+      expect(file!.content).toContain("Creative Commons Attribution 3.0");
       expect(file!.content).toContain("google.github.io");
     }
 
+    const jsonGuide = setup!.files.find((entry) => entry.path === "reference/styleguides/json.md");
+    expect(jsonGuide?.content).toContain("code samples are Apache 2.0");
+
     const index = setup!.files.find((entry) => entry.path === "reference/styleguides/INDEX.md");
     expect(index?.content).toContain("excludes external Dart and Kotlin guides");
+    expect(index?.content).toContain("code samples under Apache 2.0");
   });
 
   it("marks bundled shell helpers as executable", () => {

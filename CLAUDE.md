@@ -3,7 +3,7 @@
 
 ## The skill bundle is the spec
 
-`skills/bundled/` (the 5 `maestro-*` skills installed to `~/.claude/skills/` and `~/.codex/skills/` by `maestro install`) is the **source of truth** for maestro's agent-facing CLI. The CLI must match what those skills describe.
+`skills/bundled/` (the 6 `maestro-*` skills installed to `~/.claude/skills/` and `~/.codex/skills/` by `maestro install`) is the **source of truth** for maestro's agent-facing CLI. The CLI must match what those skills describe.
 
 - **When the CLI diverges from a skill, fix the CLI.** Do not "document around" the mismatch in the skill. The skills are what agents read; they must stay clean and authoritative.
 - **Never edit a skill to match surprising CLI behavior.** If a skill needs to change (new section, new flag, renamed verb, semantic shift), stop and ask the user first. Skill content is behavioral contract, not scratch space.
