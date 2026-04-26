@@ -31,7 +31,7 @@ maestro task ready --json --compact --limit 5         # list of ready tasks (eac
 maestro task mine                                     # tasks owned by current session
 maestro task show <id-or-slug>                        # full task + continuation state (accepts slug)
 maestro task list [--tracks]                          # list tasks; --tracks prints just the track headers
-maestro task status [--all] [--track <slug>] [--json] # screenshot-style grouped view
+maestro task status [--all] [--track <slug>] [--json] # grouped view; solo tracks render single-line, multi-step tracks multi-line
 maestro task backfill-slugs [--apply] [--limit n]     # derive slugs for legacy slugless tracks (dry-run by default)
 maestro task stuck [--older-than 4h]                  # in_progress with no recent activity
 maestro task similar <id>                             # past tasks with keyword overlap

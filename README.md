@@ -368,9 +368,7 @@ Rules enforced by the domain layer:
 $ maestro task status
 tasks: 3 active, 7 pending, 2 blocked
 
-implement/worktree-config-lock-race
-  o Pass git config overrides to prevent .git/config.lock race
-      in-progress
+  o implement/worktree-config-lock-race  Pass git config overrides to prevent .git/config.lock race  in-progress
 
 implement/template-prompt-fixes
   o Remove contradictory close-issue instruction from implement-prompt.md
@@ -398,8 +396,9 @@ Flags:
 |---|---|
 | `--all` | Include completed tasks (rendered with the `v` glyph). |
 | `--track <slug-or-id>` | Restrict output to one track. |
-| `--no-compact` | Render every track in multi-line form. By default solo tracks (no children) collapse to one line and the blank line between consecutive solo tracks is dropped, so flat queues stay scannable. |
 | `--json` | Emit a structured projection (`{ header, tracks[], orphans[], tasksById }`) for tooling. |
+
+**Render shape.** Solo tracks (no step children) render on a single line: `  o slug  title  in-progress`. The blank line between consecutive solo tracks is dropped so flat queues stay scannable. Tracks with step children keep the multi-line form (slug header followed by an indented bullet list) so step structure remains readable.
 
 Color is auto-detected: `NO_COLOR=1` or a non-TTY pipe disables ANSI codes. Tracks (top-level tasks) carry a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`) which doubles as a human-friendly id — `task show implement/foo` and `task update implement/foo --status ...` work the same way `tsk-XXX` does.
 

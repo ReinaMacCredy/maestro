@@ -232,26 +232,19 @@ export interface FormatTaskStatusOptions {
   readonly all?: boolean;
   /** When true, emit ANSI color codes. Default: detect via NO_COLOR + TTY. */
   readonly color?: boolean;
-  /**
-   * Compact mode: tracks with zero visible steps render on a single line
-   * (slug + glyph + title + inline status), and the blank line between
-   * consecutive solo tracks is dropped. Tracks with steps still render in
-   * the multi-line form so step lists remain scannable.
-   */
-  readonly compact?: boolean;
 }
 
 /**
- * Render the screenshot-style `task status` view from a projection. Returns a
- * line array (no trailing newline). Color is auto-detected via `NO_COLOR`
- * and `process.stdout.isTTY` unless `opts.color` is set explicitly.
+ * Render the `task status` view from a projection. Solo tracks (no step
+ * children) render on a single line (`  o slug  title  in-progress`) with
+ * no blank between consecutive solo lines. Tracks with steps render with a
+ * slug header and bulleted step list.
  */
 export function formatTaskStatusView(
   projection: TaskStatusProjection,
   opts: FormatTaskStatusOptions = {},
 ): string[] {
   const colorOn = opts.color ?? isColorEnabled();
-  const compact = opts.compact === true;
   const { header, tracks, orphans, tasksById } = projection;
 
   const lines: string[] = [
@@ -264,7 +257,7 @@ export function formatTaskStatusView(
 
   let prevSolo = false;
   for (const track of tracks) {
-    const isSolo = compact && track.steps.length === 0;
+    const isSolo = track.steps.length === 0;
     if (!(prevSolo && isSolo)) {
       lines.push("");
     }
@@ -294,23 +287,11 @@ function appendTrack(
   colorOn: boolean,
 ): void {
   lines.push(colorize(track.identifier, "cyan", colorOn));
-
-  // Steps are already filtered by `groupTasksByTrack` (it honors
-  // `includeCompleted`). Tracks with no remaining steps render the
-  // track-task as the single bullet (H4); tracks with steps treat the
-  // track-task as an epic container and skip its title.
-  const tasks = track.steps.length === 0 ? [track.task] : track.steps;
-  for (const task of tasks) {
-    appendStep(lines, task, tasksById, colorOn);
+  for (const step of track.steps) {
+    appendStep(lines, step, tasksById, colorOn);
   }
 }
 
-/**
- * Render a solo (zero-step) track as a single line:
- *   `  o slug  title  in-progress`
- * Status is appended inline (yellow) when present; otherwise just the
- * glyph + slug + title.
- */
 function formatSoloTrackLine(
   track: TaskTrackGroup,
   tasksById: ReadonlyMap<string, Task>,

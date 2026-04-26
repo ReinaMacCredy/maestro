@@ -114,14 +114,12 @@ describe("formatTaskStatusView", () => {
     ];
 
     const projection = groupTasksByTrack(tasks);
-    const lines = formatTaskStatusView(projection, { color: false, compact: false });
+    const lines = formatTaskStatusView(projection, { color: false });
 
     expect(lines).toEqual([
       "tasks: 3 active, 7 pending, 2 blocked",
       "",
-      "implement/worktree-config-lock-race",
-      "  o Pass git config overrides to prevent .git/config.lock race",
-      "      in-progress",
+      "  o implement/worktree-config-lock-race  Pass git config overrides to prevent .git/config.lock race  in-progress",
       "",
       "implement/template-prompt-fixes",
       "  o Remove contradictory close-issue instruction from implement-prompt.md",
@@ -144,7 +142,7 @@ describe("formatTaskStatusView", () => {
     ]);
   });
 
-  it("compact mode collapses solo tracks to one line and drops blanks between them", () => {
+  it("collapses solo tracks (no step children) to one line each, with no blank between them", () => {
     const a = makeTask({
       id: "tsk-aaaaaa",
       title: "Update agents",
@@ -173,7 +171,7 @@ describe("formatTaskStatusView", () => {
     });
 
     const projection = groupTasksByTrack([a, b, blocker, blocked]);
-    const lines = formatTaskStatusView(projection, { color: false, compact: true });
+    const lines = formatTaskStatusView(projection, { color: false });
 
     expect(lines).toEqual([
       "tasks: 1 active, 2 pending, 1 blocked",
@@ -185,7 +183,7 @@ describe("formatTaskStatusView", () => {
     ]);
   });
 
-  it("compact mode keeps multi-line form for tracks that have steps", () => {
+  it("keeps multi-line form for tracks that have steps", () => {
     const trackTask = makeTask({
       id: "tsk-aaaaaa",
       title: "Track epic",
@@ -198,7 +196,7 @@ describe("formatTaskStatusView", () => {
     });
 
     const projection = groupTasksByTrack([trackTask, step]);
-    const lines = formatTaskStatusView(projection, { color: false, compact: true });
+    const lines = formatTaskStatusView(projection, { color: false });
 
     expect(lines).toEqual([
       "tasks: 0 active, 1 pending, 0 blocked",
