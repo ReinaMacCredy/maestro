@@ -1,5 +1,5 @@
 import type { Task, TaskType } from "./task-types.js";
-import { TASK_ID_PATTERN } from "./task-id.js";
+import { isTaskId } from "./task-id.js";
 import {
   invalidTaskField,
   slugNotFound,
@@ -17,10 +17,19 @@ export const ALLOWED_VERBS = [
 export type SlugVerb = (typeof ALLOWED_VERBS)[number];
 
 export const SLUG_MAX_LENGTH = 60;
+export const SLUG_DERIVE_MAX_SUFFIX = 9;
 
 const VERB_SET: ReadonlySet<string> = new Set(ALLOWED_VERBS);
 
 const SLUG_TAIL_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Single source of truth for the slug regex pattern. Used both for runtime
+ * shape checks (via {@link isValidSlugShape}) and for the JSON Schema
+ * `pattern` property exposed by `task plan --schema`.
+ */
+export const SLUG_PATTERN_SOURCE =
+  `^(?:${ALLOWED_VERBS.join("|")})/[a-z0-9]+(?:-[a-z0-9]+)*$`;
 
 /**
  * Validate the printable shape of a slug. Returns true when the slug is
@@ -147,7 +156,7 @@ export async function resolveTaskRef(
     throw invalidTaskField("ref", "must be a non-empty task id or slug");
   }
 
-  if (TASK_ID_PATTERN.test(input)) {
+  if (isTaskId(input)) {
     const task = await store.get(input);
     if (!task) {
       throw taskNotFound(input);
@@ -183,6 +192,43 @@ export function closestSlugSuggestion(
     }
   }
   return best;
+}
+
+/**
+ * Collect every top-level (parentId-less) task's slug into a set. Shared by
+ * `task create` and `task plan` to seed the on-disk collision check before
+ * the lock-held write.
+ */
+export async function collectExistingTopLevelSlugs(
+  store: Pick<TaskRefStore, "all">,
+): Promise<Set<string>> {
+  const slugs = new Set<string>();
+  const all = await store.all();
+  for (const task of all) {
+    if (task.parentId === undefined && task.slug !== undefined) {
+      slugs.add(task.slug);
+    }
+  }
+  return slugs;
+}
+
+/**
+ * Return the first free slug from `<base>`, `<base>-2`, ... `<base>-N` where
+ * a candidate is "free" iff it appears in neither `existing` nor
+ * `usedInBatch`. Returns undefined when every candidate is taken.
+ */
+export function pickFreeDerivedSlug(
+  base: string,
+  existing: ReadonlySet<string>,
+  usedInBatch: ReadonlySet<string> = new Set(),
+): string | undefined {
+  const isFree = (slug: string): boolean => !existing.has(slug) && !usedInBatch.has(slug);
+  if (isFree(base)) return base;
+  for (let suffix = 2; suffix <= SLUG_DERIVE_MAX_SUFFIX; suffix++) {
+    const candidate = `${base}-${suffix}`;
+    if (isFree(candidate)) return candidate;
+  }
+  return undefined;
 }
 
 function levenshteinAtMostOne(a: string, b: string): boolean {

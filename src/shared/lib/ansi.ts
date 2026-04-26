@@ -32,7 +32,7 @@ export function isColorEnabled(): boolean {
   return Boolean(process.stdout.isTTY);
 }
 
-export function colorize(text: string, color: AnsiColor, enabled: boolean = isColorEnabled()): string {
+export function colorize(text: string, color: AnsiColor, enabled: boolean): string {
   if (!enabled) return text;
   return `${CODES[color]}${text}${RESET}`;
 }

@@ -1,5 +1,6 @@
 import { TASK_ID_PATTERN } from "../domain/task-id.js";
 import { TASK_PRIORITIES, TASK_TYPES } from "../domain/task-types.js";
+import { SLUG_MAX_LENGTH, SLUG_PATTERN_SOURCE } from "../domain/task-slug.js";
 
 const TASK_ID_REGEX_SOURCE = TASK_ID_PATTERN.source;
 const TASK_REFERENCE_REGEX_SOURCE = "^(?:" + TASK_ID_REGEX_SOURCE.replace(/^\^|\$$/g, "") + "|[^\\s].*)$";
@@ -76,8 +77,8 @@ export function buildBatchInputSchema(): Record<string, unknown> {
             type: "string",
             description:
               "Mandatory human-readable slug for top-level entries. Shape: '<verb>/<kebab>' (verbs: implement, fix, chore, spike, epic). When omitted on a top-level entry, derived from the title. Forbidden when `parent` is set.",
-            pattern: "^(?:implement|fix|chore|spike|epic)/[a-z0-9]+(?:-[a-z0-9]+)*$",
-            maxLength: 60,
+            pattern: SLUG_PATTERN_SOURCE,
+            maxLength: SLUG_MAX_LENGTH,
           },
           blockedBy: {
             type: "array",

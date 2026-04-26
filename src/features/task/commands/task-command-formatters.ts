@@ -14,6 +14,17 @@ import type {
 } from "../usecases/group-tasks-by-track.usecase.js";
 import { hasUnresolvedBlockers } from "../domain/task-state.js";
 
+const GLYPH = {
+  active: "o",
+  blocked: "!",
+  done: "v",
+  pending: "·",
+} as const;
+
+function trackIdentifier(task: Pick<Task, "id" | "slug" | "parentId">): string {
+  return task.parentId === undefined && task.slug ? task.slug : task.id;
+}
+
 export type CompactReadyTaskItem = Pick<
   Task,
   "id" | "title" | "status" | "priority" | "type" | "labels" | "parentId" | "assignee"
@@ -28,9 +39,8 @@ export interface CompactReadyTaskPayload {
 }
 
 export function formatTaskSummary(task: Task): string[] {
-  const headerLabel = task.parentId === undefined && task.slug ? task.slug : task.id;
   return [
-    `[ok] Task created: ${headerLabel}`,
+    `[ok] Task created: ${trackIdentifier(task)}`,
     ...(task.slug ? [`  Slug: ${task.slug}`] : []),
     `  Title: ${task.title}`,
     `  Status: ${task.status}`,
@@ -53,8 +63,7 @@ export function formatTaskList(tasks: readonly Task[]): string[] {
     const status = task.status.padEnd(12);
     const priority = `P${task.priority}`;
     const title = task.title.length > 40 ? `${task.title.slice(0, 37)}...` : task.title;
-    const identifier = task.parentId === undefined && task.slug ? task.slug : task.id;
-    lines.push(`${identifier}  ${priority}  ${status}  ${title}`);
+    lines.push(`${trackIdentifier(task)}  ${priority}  ${status}  ${title}`);
   }
   return lines;
 }
@@ -82,11 +91,7 @@ export function formatTaskBriefingList(briefings: readonly TaskBriefing[]): stri
     const status = briefing.status.padEnd(12);
     const priority = `P${briefing.priority}`;
     const title = briefing.title.length > 40 ? `${briefing.title.slice(0, 37)}...` : briefing.title;
-    const briefingWithSlug = briefing as TaskBriefing & { readonly slug?: string; readonly parentId?: string };
-    const identifier = briefingWithSlug.parentId === undefined && briefingWithSlug.slug
-      ? briefingWithSlug.slug
-      : briefing.id;
-    lines.push(`${identifier}  ${priority}  ${status}  ${title}`);
+    lines.push(`${trackIdentifier(briefing)}  ${priority}  ${status}  ${title}`);
     for (const hint of briefing.hints) {
       lines.push(`  >> ${formatHintLine(hint)}`);
     }
@@ -231,45 +236,34 @@ export interface FormatTaskStatusOptions {
 
 /**
  * Render the screenshot-style `task status` view from a projection. Returns a
- * line array (no trailing newline). Plain-text shape is stable; color is only
- * applied when `opts.color` is explicitly true (default: auto-detect via
- * `isColorEnabled()`).
+ * line array (no trailing newline). Color is auto-detected via `NO_COLOR`
+ * and `process.stdout.isTTY` unless `opts.color` is set explicitly.
  */
 export function formatTaskStatusView(
   projection: TaskStatusProjection,
   opts: FormatTaskStatusOptions = {},
 ): string[] {
   const colorOn = opts.color ?? isColorEnabled();
-  const all = opts.all === true;
-  const { header, tracks, orphans } = projection;
+  const { header, tracks, orphans, tasksById } = projection;
 
-  const lines: string[] = [];
-  lines.push(
+  const lines: string[] = [
     `tasks: ${header.active} active, ${header.pending} pending, ${header.blocked} blocked`,
-  );
+  ];
 
   if (tracks.length === 0 && orphans.length === 0) {
     return lines;
   }
 
-  const tasksById = projection.tasksById;
-
-  for (let idx = 0; idx < tracks.length; idx++) {
-    const track = tracks[idx]!;
+  for (const track of tracks) {
     lines.push("");
-    appendTrack(lines, track, tasksById, colorOn, all);
+    appendTrack(lines, track, tasksById, colorOn);
   }
 
   if (orphans.length > 0) {
     lines.push("");
     lines.push(colorize("(orphans)", "dim", colorOn));
     for (const orphan of orphans) {
-      const glyph = stepGlyph(orphan, tasksById, colorOn);
-      lines.push(`  ${glyph} ${orphan.title}`);
-      const status = stepStatusLine(orphan, tasksById, colorOn);
-      if (status !== undefined) {
-        lines.push(`      ${status}`);
-      }
+      appendStep(lines, orphan, tasksById, colorOn);
     }
   }
 
@@ -281,89 +275,60 @@ function appendTrack(
   track: TaskTrackGroup,
   tasksById: ReadonlyMap<string, Task>,
   colorOn: boolean,
-  includeAll: boolean,
 ): void {
   lines.push(colorize(track.identifier, "cyan", colorOn));
 
-  const visibleSteps = includeAll
-    ? track.steps
-    : track.steps.filter((step) => step.status !== "completed");
-
-  // Tracks with no visible steps render the track-task itself as the single
-  // bullet (H4). Tracks with steps treat the track-task as a container and
-  // skip its title; only the steps render.
-  if (visibleSteps.length === 0) {
-    if (track.task.status === "completed" && !includeAll) return;
-    const taskBlocked = hasUnresolvedBlockers(track.task, tasksById);
-    const headlineGlyph = trackHeadlineGlyph(track.task, taskBlocked, colorOn);
-    lines.push(`  ${headlineGlyph} ${track.task.title}`);
-    const headlineStatus = stepStatusLine(track.task, tasksById, colorOn);
-    if (headlineStatus !== undefined) {
-      lines.push(`      ${headlineStatus}`);
-    }
-    return;
-  }
-
-  for (const step of visibleSteps) {
-    const glyph = stepGlyph(step, tasksById, colorOn);
-    lines.push(`  ${glyph} ${step.title}`);
-    const status = stepStatusLine(step, tasksById, colorOn);
-    if (status !== undefined) {
-      lines.push(`      ${status}`);
-    }
+  // Steps are already filtered by `groupTasksByTrack` (it honors
+  // `includeCompleted`). Tracks with no remaining steps render the
+  // track-task as the single bullet (H4); tracks with steps treat the
+  // track-task as an epic container and skip its title.
+  const tasks = track.steps.length === 0 ? [track.task] : track.steps;
+  for (const task of tasks) {
+    appendStep(lines, task, tasksById, colorOn);
   }
 }
 
-function trackHeadlineGlyph(task: Task, blocked: boolean, colorOn: boolean): string {
-  if (task.status === "in_progress") return colorize("o", "green", colorOn);
-  if (blocked) return colorize("!", "red", colorOn);
-  if (task.status === "completed") return "v";
-  return "·";
-}
-
-function stepGlyph(
-  step: Task,
+function appendStep(
+  lines: string[],
+  task: Task,
   tasksById: ReadonlyMap<string, Task>,
   colorOn: boolean,
-): string {
-  if (step.status === "in_progress") return colorize("o", "green", colorOn);
-  if (hasUnresolvedBlockers(step, tasksById)) return colorize("!", "red", colorOn);
-  if (step.status === "completed") return "v";
-  return "·";
+): void {
+  const blocked = hasUnresolvedBlockers(task, tasksById);
+  lines.push(`  ${stepGlyph(task, blocked, colorOn)} ${task.title}`);
+  const status = stepStatusLine(task, blocked, tasksById, colorOn);
+  if (status !== undefined) {
+    lines.push(`      ${status}`);
+  }
+}
+
+function stepGlyph(task: Task, blocked: boolean, colorOn: boolean): string {
+  if (task.status === "in_progress") return colorize(GLYPH.active, "green", colorOn);
+  if (blocked) return colorize(GLYPH.blocked, "red", colorOn);
+  if (task.status === "completed") return GLYPH.done;
+  return GLYPH.pending;
 }
 
 function stepStatusLine(
-  step: Task,
+  task: Task,
+  blocked: boolean,
   tasksById: ReadonlyMap<string, Task>,
   colorOn: boolean,
 ): string | undefined {
-  if (step.status === "in_progress") {
+  if (task.status === "in_progress") {
     return colorize("in-progress", "yellow", colorOn);
   }
-  if (step.status === "pending") {
-    if (!hasUnresolvedBlockers(step, tasksById)) {
-      return undefined;
-    }
-    const labels = step.blockedBy
-      .map((blockerId) => describeBlocker(blockerId, tasksById))
-      .filter((label): label is string => label !== undefined);
-    if (labels.length === 0) return undefined;
-    return colorize(`blocked by ${labels.join(", ")}`, "red", colorOn);
-  }
-  return undefined;
+  if (task.status !== "pending" || !blocked) return undefined;
+
+  const labels = task.blockedBy.map((id) => describeBlocker(id, tasksById));
+  return colorize(`blocked by ${labels.join(", ")}`, "red", colorOn);
 }
 
-function describeBlocker(
-  blockerId: string,
-  tasksById: ReadonlyMap<string, Task>,
-): string | undefined {
+function describeBlocker(blockerId: string, tasksById: ReadonlyMap<string, Task>): string {
   const blocker = tasksById.get(blockerId);
   if (!blocker) return blockerId;
-  const label = blocker.parentId === undefined && blocker.slug ? blocker.slug : blocker.id;
-  if (blocker.status === "completed") {
-    return `${label} (done)`;
-  }
-  return label;
+  const label = trackIdentifier(blocker);
+  return blocker.status === "completed" ? `${label} (done)` : label;
 }
 
 function formatContinuationEvent(event: TaskShowView["recentEvents"][number]): string {

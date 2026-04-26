@@ -839,56 +839,32 @@ function resolveSlugChange(
   const isSettingParent = patch.parentId !== undefined && patch.parentId !== "";
   const becomingTrack = isClearingParent && existing.parentId !== undefined;
   const becomingStep = isSettingParent && existing.parentId === undefined;
-  const stayingTrack = !becomingStep && existing.parentId === undefined && !isSettingParent;
-  const stayingStep = !becomingTrack && existing.parentId !== undefined && !isClearingParent;
+  const willBeStep = becomingStep || (existing.parentId !== undefined && !isClearingParent);
 
-  if (patch.slug !== undefined && patch.slug !== "") {
-    if (becomingStep) {
+  if (willBeStep) {
+    if (patch.slug !== undefined && patch.slug !== "") {
       throw slugForbiddenOnStep();
     }
-    if (stayingStep) {
-      throw slugForbiddenOnStep();
-    }
-  }
-
-  if (becomingTrack) {
-    const next = patch.slug && patch.slug !== "" ? patch.slug : undefined;
-    if (next === undefined) {
-      throw slugRequired();
-    }
-    assertSlugUnique(tasks, next, existing.id);
-    return { next };
-  }
-
-  if (becomingStep) {
-    if (existing.slug !== undefined && patch.dropSlug !== true) {
+    if (becomingStep && existing.slug !== undefined && patch.dropSlug !== true) {
       throw slugMissingDropFlag(existing.id);
     }
     return { next: undefined };
   }
 
-  if (stayingStep) {
-    if (patch.slug !== undefined && patch.slug !== "") {
-      throw slugForbiddenOnStep();
-    }
-    return { next: undefined };
-  }
-
-  if (stayingTrack) {
-    if (patch.slug === undefined) {
-      return { next: existing.slug };
-    }
-    if (patch.slug === "") {
+  if (becomingTrack) {
+    if (patch.slug === undefined || patch.slug === "") {
       throw slugRequired();
-    }
-    if (patch.slug === existing.slug) {
-      return { next: existing.slug };
     }
     assertSlugUnique(tasks, patch.slug, existing.id);
     return { next: patch.slug };
   }
 
-  return { next: existing.slug };
+  // Staying a track. Optional rename via patch.slug.
+  if (patch.slug === undefined) return { next: existing.slug };
+  if (patch.slug === "") throw slugRequired();
+  if (patch.slug === existing.slug) return { next: existing.slug };
+  assertSlugUnique(tasks, patch.slug, existing.id);
+  return { next: patch.slug };
 }
 
 const BATCH_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;

@@ -6,12 +6,14 @@ import type {
   CreateBatchInput,
 } from "../domain/task-batch-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
-import { TASK_ID_PATTERN } from "../domain/task-id.js";
+import { isTaskId } from "../domain/task-id.js";
 import { TASK_PRIORITIES, TASK_TYPES } from "../domain/task-types.js";
 import { isTaskPriority, isTaskType } from "../domain/task-validators.js";
 import {
+  collectExistingTopLevelSlugs,
   deriveSlugFromTitle,
   isValidSlugShape,
+  pickFreeDerivedSlug,
 } from "../domain/task-slug.js";
 import {
   batchDuplicateName,
@@ -24,7 +26,6 @@ import {
 } from "../domain/task-errors.js";
 
 const MAX_BATCH_SIZE = 500;
-const MAX_DERIVED_SLUG_SUFFIX = 9;
 
 export interface PlanTasksOptions {
   readonly maxBatchSize?: number;
@@ -102,7 +103,7 @@ function buildNameIndex(tasks: readonly BatchTaskInput[]): ReadonlyMap<string, n
   const nameToIndex = new Map<string, number>();
   for (const [idx, task] of tasks.entries()) {
     if (task.name === undefined) continue;
-    if (TASK_ID_PATTERN.test(task.name)) {
+    if (isTaskId(task.name)) {
       throw batchNameLooksLikeTaskId(task.name);
     }
     if (nameToIndex.has(task.name)) {
@@ -167,23 +168,6 @@ function taskLabel(idx: number, task: BatchTaskInput): string {
   return `Task #${idx + 1}${nameSuffix}`;
 }
 
-async function collectExistingTopLevelSlugs(store: TaskStorePort): Promise<Set<string>> {
-  const slugs = new Set<string>();
-  const all = await store.all();
-  for (const task of all) {
-    if (task.parentId === undefined && task.slug !== undefined) {
-      slugs.add(task.slug);
-    }
-  }
-  return slugs;
-}
-
-/**
- * Walk every batch entry and assign a slug to top-level entries (PC1, PC3,
- * PC4, PC5, PC7, PC9). Returns a parallel array of slugs keyed by index;
- * entries with `parent` set get `undefined`. Throws atomically before any
- * write happens.
- */
 function resolveSlugs(
   tasks: readonly BatchTaskInput[],
   existingTopLevelSlugs: ReadonlySet<string>,
@@ -217,7 +201,7 @@ function resolveSlugs(
     let derived: string;
     try {
       derived = deriveSlugFromTitle(task.title.trim(), task.type);
-    } catch (error) {
+    } catch {
       issues.push(
         `${taskLabel(idx, task)}: cannot derive a slug from title '${task.title}'; pass 'slug' explicitly`,
       );
@@ -227,7 +211,7 @@ function resolveSlugs(
     const candidate = pickFreeDerivedSlug(derived, existingTopLevelSlugs, usedInBatch);
     if (candidate === undefined) {
       issues.push(
-        `${taskLabel(idx, task)}: derived slug '${derived}' and suffixes -2..-${MAX_DERIVED_SLUG_SUFFIX} are all in use; pass 'slug' explicitly`,
+        `${taskLabel(idx, task)}: derived slug '${derived}' and its numeric suffixes are all in use; pass 'slug' explicitly`,
       );
       continue;
     }
@@ -241,20 +225,6 @@ function resolveSlugs(
   }
 
   return result;
-}
-
-function pickFreeDerivedSlug(
-  base: string,
-  existing: ReadonlySet<string>,
-  usedInBatch: ReadonlySet<string>,
-): string | undefined {
-  const isFree = (slug: string): boolean => !existing.has(slug) && !usedInBatch.has(slug);
-  if (isFree(base)) return base;
-  for (let suffix = 2; suffix <= MAX_DERIVED_SLUG_SUFFIX; suffix++) {
-    const candidate = `${base}-${suffix}`;
-    if (isFree(candidate)) return candidate;
-  }
-  return undefined;
 }
 
 function buildSlugIndex(
@@ -298,7 +268,7 @@ function resolveReference(
   nameToIndex: ReadonlyMap<string, number>,
   slugToIndex: ReadonlyMap<string, number>,
 ): number | string {
-  if (TASK_ID_PATTERN.test(raw)) {
+  if (isTaskId(raw)) {
     return raw;
   }
   const nameIdx = nameToIndex.get(raw);

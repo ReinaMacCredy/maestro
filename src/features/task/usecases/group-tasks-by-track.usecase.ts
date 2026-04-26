@@ -60,20 +60,28 @@ export function groupTasksByTrack(
   const includeCompleted = options.includeCompleted === true;
   const byId = new Map(tasks.map((task) => [task.id, task] as const));
 
-  const tracksRaw: TaskTrackGroup[] = [];
+  const stepsByTrack = new Map<string, Task[]>();
   const orphans: Task[] = [];
-
-  const trackByAncestor = new Map<string, Task>();
   for (const task of tasks) {
-    if (task.parentId === undefined) {
-      trackByAncestor.set(task.id, task);
+    if (task.parentId === undefined) continue;
+    const ancestor = nearestTrackAncestor(task, byId);
+    if (ancestor === undefined) {
+      if (!includeCompleted && task.status === "completed") continue;
+      orphans.push(task);
+      continue;
     }
+    const list = stepsByTrack.get(ancestor.id);
+    if (list) list.push(task);
+    else stepsByTrack.set(ancestor.id, [task]);
   }
 
+  const tracksRaw: TaskTrackGroup[] = [];
   for (const task of tasks) {
     if (task.parentId !== undefined) continue;
-    const allSteps = collectSteps(task.id, tasks, byId);
-    const stepsForDisplay = allSteps.filter((step) => includeCompleted || step.status !== "completed");
+    const allSteps = stepsByTrack.get(task.id) ?? [];
+    const stepsForDisplay = includeCompleted
+      ? allSteps
+      : allSteps.filter((step) => step.status !== "completed");
     if (!includeCompleted && task.status === "completed" && stepsForDisplay.length === 0) {
       continue;
     }
@@ -89,36 +97,15 @@ export function groupTasksByTrack(
     });
   }
 
-  if (options.trackFilter === undefined) {
-    for (const task of tasks) {
-      if (task.parentId === undefined) continue;
-      const ancestor = nearestTrackAncestor(task, byId);
-      if (ancestor !== undefined) continue;
-      if (!includeCompleted && task.status === "completed") continue;
-      orphans.push(task);
-    }
-  }
-
   const tracks = sortTracks(tracksRaw);
-  const header = computeHeader(tasks, byId, includeCompleted);
+  const header = computeHeader(tasks, byId);
 
-  return { header, tracks, orphans, tasksById: byId };
-}
-
-function collectSteps(
-  rootId: string,
-  tasks: readonly Task[],
-  byId: ReadonlyMap<string, Task>,
-): Task[] {
-  const result: Task[] = [];
-  for (const task of tasks) {
-    if (task.parentId === undefined) continue;
-    const ancestor = nearestTrackAncestor(task, byId);
-    if (ancestor?.id === rootId) {
-      result.push(task);
-    }
-  }
-  return result;
+  return {
+    header,
+    tracks,
+    orphans: options.trackFilter === undefined ? orphans : [],
+    tasksById: byId,
+  };
 }
 
 function nearestTrackAncestor(
@@ -186,7 +173,6 @@ function sortTracks(tracks: readonly TaskTrackGroup[]): TaskTrackGroup[] {
 function computeHeader(
   tasks: readonly Task[],
   byId: ReadonlyMap<string, Task>,
-  includeCompleted: boolean,
 ): TaskStatusHeader {
   let active = 0;
   let pending = 0;
@@ -203,38 +189,26 @@ function computeHeader(
   for (const task of tasks) {
     if (task.status === "completed") continue;
     if (task.parentId === undefined) {
-      const directChildren = childrenByParent.get(task.id) ?? [];
-      const visibleChildren = directChildren.filter(
+      const visibleChildren = (childrenByParent.get(task.id) ?? []).filter(
         (child) => child.status !== "completed",
       );
       if (visibleChildren.length === 0) {
-        if (task.status === "in_progress") {
-          active += 1;
-        } else if (isBlocked(task, byId)) {
-          blocked += 1;
-        } else {
-          pending += 1;
-        }
+        if (task.status === "in_progress") active += 1;
+        else if (isBlocked(task, byId)) blocked += 1;
+        else pending += 1;
         continue;
       }
       const trackHasInProgress = visibleChildren.some(
         (child) => child.status === "in_progress",
       );
       const trackHasBlocked = visibleChildren.some((child) => isBlocked(child, byId));
-      if (!trackHasInProgress && trackHasBlocked) {
-        blocked += 1;
-      }
+      if (!trackHasInProgress && trackHasBlocked) blocked += 1;
       continue;
     }
 
-    if (task.status === "in_progress") {
-      active += 1;
-    } else if (isBlocked(task, byId)) {
-      blocked += 1;
-    } else {
-      pending += 1;
-    }
+    if (task.status === "in_progress") active += 1;
+    else if (isBlocked(task, byId)) blocked += 1;
+    else pending += 1;
   }
-  void includeCompleted;
   return { active, pending, blocked };
 }

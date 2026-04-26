@@ -1,10 +1,13 @@
 import type { Task, CreateTaskInput } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { validateCreateInput } from "../domain/task-validators.js";
-import { deriveSlugFromTitle, isValidSlugShape } from "../domain/task-slug.js";
+import {
+  collectExistingTopLevelSlugs,
+  deriveSlugFromTitle,
+  isValidSlugShape,
+  pickFreeDerivedSlug,
+} from "../domain/task-slug.js";
 import { slugCollision } from "../domain/task-errors.js";
-
-const MAX_SLUG_SUFFIX_ATTEMPTS = 9;
 
 /**
  * Create a new task after validating inputs and cross-checking references.
@@ -29,35 +32,10 @@ export async function createTask(
   }
 
   const baseSlug = deriveSlugFromTitle(input.title, input.type);
-  const existingTopLevelSlugs = await collectTopLevelSlugs(store);
-
-  const candidates = [baseSlug];
-  for (let suffix = 2; suffix <= MAX_SLUG_SUFFIX_ATTEMPTS; suffix++) {
-    candidates.push(`${baseSlug}-${suffix}`);
+  const existing = await collectExistingTopLevelSlugs(store);
+  const candidate = pickFreeDerivedSlug(baseSlug, existing);
+  if (candidate === undefined) {
+    throw slugCollision(baseSlug, "(numeric suffixes -2..-9 exhausted)");
   }
-
-  let lastCollision: string | undefined;
-  for (const candidate of candidates) {
-    if (existingTopLevelSlugs.has(candidate)) {
-      lastCollision = candidate;
-      continue;
-    }
-    return store.create({ ...input, slug: candidate });
-  }
-
-  throw slugCollision(
-    lastCollision ?? baseSlug,
-    `(${candidates.length} candidates exhausted)`,
-  );
-}
-
-async function collectTopLevelSlugs(store: TaskStorePort): Promise<Set<string>> {
-  const all = await store.all();
-  const slugs = new Set<string>();
-  for (const task of all) {
-    if (task.parentId === undefined && task.slug !== undefined) {
-      slugs.add(task.slug);
-    }
-  }
-  return slugs;
+  return store.create({ ...input, slug: candidate });
 }

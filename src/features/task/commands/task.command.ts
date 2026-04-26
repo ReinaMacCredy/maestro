@@ -378,14 +378,11 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       const id = resolved.id;
 
       if (isJson) {
-        const [task, openHandoffs] = await Promise.all([
-          showTask(services.taskStore, id),
-          listOpenHandoffsForTask(services.handoffStore, id, {
-            taskStore: services.taskStore,
-            currentProjectRoot,
-          }),
-        ]);
-        output(true, { ...task, openHandoffs }, formatTaskDetail);
+        const openHandoffs = await listOpenHandoffsForTask(services.handoffStore, id, {
+          taskStore: services.taskStore,
+          currentProjectRoot,
+        });
+        output(true, { ...resolved, openHandoffs }, formatTaskDetail);
         return;
       }
 
@@ -404,11 +401,10 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       // resolved (they no longer gate readiness), so showing them as active
       // "Blocked by" entries misleads. Raw graph history still lives in
       // `show --json` and `task list --json` for agents that need it.
-      const blockerTasks = await Promise.all(
-        view.task.blockedBy.map((blockerId) => services.taskStore.get(blockerId)),
-      );
-      const activeBlockers = view.task.blockedBy.filter((_, i) => {
-        const blocker = blockerTasks[i];
+      const allTasks = await services.taskStore.all();
+      const tasksById = new Map(allTasks.map((t) => [t.id, t] as const));
+      const activeBlockers = view.task.blockedBy.filter((blockerId) => {
+        const blocker = tasksById.get(blockerId);
         return blocker === undefined || blocker.status !== "completed";
       });
       const filteredView: typeof view = activeBlockers.length !== view.task.blockedBy.length
