@@ -12,71 +12,25 @@
  * `bun scripts/sync-bundled-skills.ts --check` in CI to fail on drift.
  */
 
-import { readdir, readFile, stat } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
-import { listFilesRecursive, readText } from "@/shared/lib/fs.js";
-
-const UTF8_STRICT = new TextDecoder("utf-8", { fatal: true });
-const EXECUTABLE_EXTENSIONS = [".sh", ".bash", ".command", ".cmd", ".bat", ".ps1"] as const;
+import { join, relative } from "node:path";
+import { readText } from "@/shared/lib/fs.js";
+import {
+  collectSkillTemplates,
+  normalizeLineEndings,
+  type SkillTemplate,
+} from "./skill-template-source-lib";
 
 const ROOT = join(import.meta.dir, "..");
 const SOURCE_DIR = join(ROOT, "skills", "bundled");
 const TARGET_FILE = join(ROOT, "src", "infra", "domain", "bundled-skill-templates.ts");
 
-interface SkillFile {
-  readonly path: string;
-  readonly content: string;
-  readonly executable?: boolean;
-}
-
-interface SkillTemplate {
-  readonly name: string;
-  readonly files: readonly SkillFile[];
-}
-
-async function collectTemplates(): Promise<SkillTemplate[]> {
-  const skillDirs = (await readdir(SOURCE_DIR, { withFileTypes: true }))
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((left, right) => left.localeCompare(right, "en"));
-
-  const templates: SkillTemplate[] = [];
-  for (const dirName of skillDirs) {
-    const skillDir = join(SOURCE_DIR, dirName);
-    const absolutePaths = await listFilesRecursive(skillDir);
-    const files: SkillFile[] = [];
-    for (const absolute of absolutePaths) {
-      const relativePath = relative(skillDir, absolute).split(sep).join("/");
-      const content = normalizeLineEndings(await readStrictUtf8(absolute)) ?? "";
-      const executable = await isBundledFileExecutable(absolute, relativePath);
-      files.push({
-        path: relativePath,
-        content,
-        ...(executable ? { executable: true } : {}),
-      });
-    }
-    templates.push({ name: dirName, files });
-  }
-  return templates;
-}
-
-async function readStrictUtf8(path: string): Promise<string> {
-  // Fatal decode rejects non-UTF-8 files (e.g., a stray binary dropped under
-  // skills/bundled/) so the sync fails loudly instead of silently embedding
-  // U+FFFD-mangled content into the generated template module.
-  const bytes = await readFile(path);
-  try {
-    return UTF8_STRICT.decode(bytes);
-  } catch {
-    throw new Error(`Non-UTF-8 content under skills/bundled/: ${relative(ROOT, path)}`);
-  }
-}
-
-async function isBundledFileExecutable(path: string, relativePath: string): Promise<boolean> {
-  const mode = (await stat(path)).mode;
-  if ((mode & 0o111) !== 0) return true;
-  if (process.platform !== "win32") return false;
-  return EXECUTABLE_EXTENSIONS.some((extension) => relativePath.endsWith(extension));
+async function collectTemplates(): Promise<readonly SkillTemplate[]> {
+  return collectSkillTemplates({
+    sourceDir: SOURCE_DIR,
+    rootDir: ROOT,
+    errorScope: "skills/bundled/",
+    includeExecutableMetadata: true,
+  });
 }
 
 function renderModule(templates: readonly SkillTemplate[]): string {
@@ -102,9 +56,7 @@ function renderModule(templates: readonly SkillTemplate[]): string {
   return `${header}\n${body};\n`;
 }
 
-export function normalizeLineEndings(text: string | undefined): string | undefined {
-  return text?.replace(/\r\n/g, "\n");
-}
+export { normalizeLineEndings };
 
 export async function syncBundledSkills(options: { check?: boolean } = {}): Promise<void> {
   const templates = await collectTemplates();

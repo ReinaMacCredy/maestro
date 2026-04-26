@@ -17,6 +17,7 @@ import {
   buildSnapshot,
   type SnapshotBuildOptions,
 } from "@/tui/state/snapshot.js";
+import { buildMissionControlSnapshotDemand } from "@/tui/state/snapshot-demand.js";
 import { CachingGitPort, CachingConfigPort } from "@/tui/lib/snapshot-poll-cache.js";
 import type { MissionControlSnapshot } from "@/tui/state/types.js";
 import {
@@ -139,12 +140,12 @@ export function registerMissionControlCommand(program: Command): void {
           redactSnapshotForReadOutput(await snapshotLoader.load(options));
 
         if (isJson) {
-          output(true, await loadReadSnapshot({ includeTaskBoard: true }), () => []);
+          output(true, await loadReadSnapshot(buildMissionControlSnapshotDemand({ mode: "json" })), () => []);
           return;
         }
 
             if (opts.renderCheck) {
-                const snapshot = await loadReadSnapshot({ includeTaskBoard: true });
+                const snapshot = await loadReadSnapshot(buildMissionControlSnapshotDemand({ mode: "render-check" }));
               const result = await runRenderCheck(snapshot, {
                 width: renderSize?.width,
                 height: renderSize?.height,
@@ -154,7 +155,7 @@ export function registerMissionControlCommand(program: Command): void {
       }
 
           if (previewScreen === "all") {
-              const snapshot = await loadReadSnapshot({ includeTaskBoard: true });
+              const snapshot = await loadReadSnapshot(buildMissionControlSnapshotDemand({ mode: "preview-all" }));
             const screens = getAllApplicableScreens(snapshot);
               for (const screen of screens) {
                 console.log(`--- ${screen} ---`);
@@ -173,9 +174,10 @@ export function registerMissionControlCommand(program: Command): void {
 
             if (previewScreen) {
                 const frame = await renderPreviewFrame({
-                  snapshot: await loadReadSnapshot({
-                    includeTaskBoard: previewScreen === "tasks",
-                  }),
+                  snapshot: await loadReadSnapshot(buildMissionControlSnapshotDemand({
+                    mode: "preview-screen",
+                    screen: previewScreen,
+                  })),
                   screen: previewScreen,
                 featureId: opts.feature,
           width: renderSize?.width,

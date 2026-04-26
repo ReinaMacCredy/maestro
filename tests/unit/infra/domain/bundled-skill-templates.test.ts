@@ -3,6 +3,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BUNDLED_SKILL_TEMPLATES } from "@/infra/domain/bundled-skill-templates.js";
+import { isIgnoredSkillSourceArtifact } from "../../../../scripts/skill-template-source-lib";
 
 const ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
 const SOURCE_DIR = join(ROOT, "skills", "bundled");
@@ -18,7 +19,7 @@ async function listFilesRecursive(dir: string): Promise<string[]> {
       files.push(...(await listFilesRecursive(absolute)));
       continue;
     }
-    if (entry.isFile()) files.push(absolute);
+    if (entry.isFile() && !isIgnoredSkillSourceArtifact(entry.name)) files.push(absolute);
   }
   return files;
 }

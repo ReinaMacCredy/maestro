@@ -64,6 +64,11 @@ export type { Contract } from "./domain/contract/contract-types.js";
 
 export { createTask } from "./usecases/create-task.usecase.js";
 export { showTask } from "./usecases/show-task.usecase.js";
+export { inspectTask } from "./usecases/inspect-task.usecase.js";
+export type {
+  TaskInspectionDeps,
+  TaskInspectionView,
+} from "./usecases/inspect-task.usecase.js";
 export { listTasks } from "./usecases/list-tasks.usecase.js";
 export { updateTask } from "./usecases/update-task.usecase.js";
 export { claimTask } from "./usecases/claim-task.usecase.js";

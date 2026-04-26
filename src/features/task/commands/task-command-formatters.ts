@@ -2,6 +2,7 @@ import { formatRelativeAge } from "@/shared/version-format.js";
 import { colorize, isColorEnabled } from "@/shared/lib/ansi.js";
 import type { Task } from "../domain/task-types.js";
 import type { TaskShowView } from "../usecases/task-continuation.usecase.js";
+import type { TaskInspectionView } from "../usecases/inspect-task.usecase.js";
 import type { TaskHint } from "../usecases/match-candidates.usecase.js";
 import type { ReadyTaskPage, TaskBriefing } from "../usecases/ready-tasks.usecase.js";
 import type {
@@ -167,13 +168,18 @@ export function formatTaskDetail(task: Task): string[] {
   return lines;
 }
 
-export function formatTaskShowView(view: TaskShowView): string[] {
-  const lines = formatTaskDetail(view.task);
+export function formatTaskShowView(view: TaskShowView | TaskInspectionView): string[] {
+  const activeBlockerIds = "activeBlockerIds" in view ? view.activeBlockerIds : view.task.blockedBy;
+  const task = "activeBlockerIds" in view ? { ...view.task, blockedBy: activeBlockerIds } : view.task;
+  const lines = formatTaskDetail(task);
   if (view.steps && view.steps.length > 0) {
     lines.push(`  Steps:`);
     for (const step of view.steps) {
       lines.push(`    ${step.id}  ${step.status.padEnd(12)}  ${step.title}`);
     }
+  }
+  if ("openHandoffs" in view && view.openHandoffs.length > 0) {
+    lines.push(`  Open handoffs: ${view.openHandoffs.join(", ")}`);
   }
   const summary = view.continuation;
   if (!summary) {

@@ -7,7 +7,6 @@ import { readTextOrStdin } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { createTask } from "../usecases/create-task.usecase.js";
-import { showTask } from "../usecases/show-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
 import { claimTask } from "../usecases/claim-task.usecase.js";
@@ -19,7 +18,7 @@ import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase
 import { planTasks, validatePlanTasks } from "../usecases/plan-tasks.usecase.js";
 import { buildBatchInputSchema } from "../usecases/batch-input-schema.usecase.js";
 import { nextTask } from "../usecases/next-task.usecase.js";
-import { listOpenHandoffsForTask } from "@/features/handoff";
+import { listOpenProjectHandoffIdsForTask } from "@/features/handoff";
 import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
 import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
@@ -36,12 +35,12 @@ import { parseDuration } from "./duration.js";
 import {
   buildTaskContinuationSummary,
   buildTaskOwnerId,
-  buildTaskShowView,
   deriveAgentFromAssignee,
   loadTaskContinuationSummary,
   parseTaskOwnerId,
   syncTaskContinuation,
 } from "../usecases/task-continuation.usecase.js";
+import { inspectTask } from "../usecases/inspect-task.usecase.js";
 import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
 import type {
   ListTasksFilters,
@@ -77,7 +76,6 @@ import {
 import {
   assertTaskMutationOwnership,
   assertTaskUpdateAllowed,
-  getUnresolvedBlockerIds,
 } from "../domain/task-state.js";
 import {
   buildCompactReadyTaskPayload,
@@ -389,43 +387,27 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
 
       const resolved = await resolveTaskRef(services.taskStore, rawRef);
       const id = resolved.id;
-
-      if (isJson) {
-        const openHandoffs = await listOpenHandoffsForTask(services.handoffStore, id, {
-          taskStore: services.taskStore,
-          currentProjectRoot,
-        });
-        output(true, { ...resolved, openHandoffs }, formatTaskDetail);
-        return;
-      }
-
-      const [view, openHandoffs] = await Promise.all([
-        buildTaskShowView({
-          taskStore: services.taskStore,
-          continuationStore: services.taskContinuationStore,
-          continuationHistory: services.taskContinuationHistory,
-        }, id),
-        listOpenHandoffsForTask(services.handoffStore, id, {
+      const view = await inspectTask({
+        taskStore: services.taskStore,
+        continuationStore: services.taskContinuationStore,
+        continuationHistory: services.taskContinuationHistory,
+        listOpenHandoffIds: (taskId) => listOpenProjectHandoffIdsForTask(services.handoffStore, taskId, {
           taskStore: services.taskStore,
           currentProjectRoot,
         }),
-      ]);
-      // Hide blockers that have already completed: the runtime treats them as
-      // resolved (they no longer gate readiness), so showing them as active
-      // "Blocked by" entries misleads. Raw graph history still lives in
-      // `show --json` and `task list --json` for agents that need it.
-      const allTasks = await services.taskStore.all();
-      const tasksById = indexTasksById(allTasks);
-      const activeBlockers = getUnresolvedBlockerIds(view.task, tasksById);
-      const filteredView: typeof view = activeBlockers.length !== view.task.blockedBy.length
-        ? { ...view, task: { ...view.task, blockedBy: activeBlockers } }
-        : view;
-      output(false, filteredView, (v) => {
-        const lines = [...formatTaskShowView(v)];
-        if (openHandoffs.length > 0) {
-          lines.push(`  Open handoffs: ${openHandoffs.join(", ")}`);
-        }
-        return lines;
+      }, id);
+
+      if (isJson) {
+        output(true, {
+          ...view.task,
+          activeBlockers: view.activeBlockerIds,
+          openHandoffs: view.openHandoffs,
+        }, formatTaskDetail);
+        return;
+      }
+
+      output(false, view, (v) => {
+        return formatTaskShowView(v);
       });
     });
 }
