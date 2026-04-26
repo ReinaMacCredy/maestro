@@ -506,6 +506,32 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     }
   }
 
+  async backfillSlug(id: string, slug: string): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+      if (existing.parentId !== undefined) {
+        throw slugForbiddenOnStep();
+      }
+      if (existing.slug !== undefined) {
+        throw new MaestroError(`Task ${id} already has slug '${existing.slug}'`, [
+          "Use 'maestro task update <id> --slug <new>' to rename an existing slug",
+          "Backfill is only for tracks that have no slug yet",
+        ]);
+      }
+      assertSlugUnique(tasks, slug);
+
+      const now = new Date().toISOString();
+      const updated: Task = { ...existing, slug, updatedAt: now };
+      tasks.set(id, updated);
+      await this.writeAll(tasks);
+      return updated;
+    });
+  }
+
   async syncMetadata(id: string, patch: TaskMetadataPatch): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();

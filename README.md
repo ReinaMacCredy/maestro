@@ -402,6 +402,18 @@ Flags:
 
 Color is auto-detected: `NO_COLOR=1` or a non-TTY pipe disables ANSI codes. Tracks (top-level tasks) carry a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`) which doubles as a human-friendly id — `task show implement/foo` and `task update implement/foo --status ...` work the same way `tsk-XXX` does.
 
+#### Backfilling legacy tasks
+
+Tasks created before slugs landed have no slug and render with their bare `tsk-<id>` as the header. To bulk-derive slugs from titles:
+
+```bash
+maestro task backfill-slugs                  # dry-run; prints what would change
+maestro task backfill-slugs --apply          # write the slugs
+maestro task backfill-slugs --apply --limit 20
+```
+
+Backfill is display-only and bypasses the completion + ownership locks (slugs don't affect runtime state), so it works on completed and currently-claimed tasks. It refuses to overwrite an existing slug.
+
 ### Ownership and claim
 
 Claiming is exclusive and session-scoped. Session IDs come from the `sessionDetection` config (Claude Code out of the box) or `--session <id>` when scripting.

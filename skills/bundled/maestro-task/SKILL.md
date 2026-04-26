@@ -188,16 +188,28 @@ completed it's marked `(done)` as a hint that the wait is over.
 ## Slug backfill (legacy slugless top-level tasks)
 
 Existing top-level tasks without a slug render with their bare `tsk-<id>` as
-the header. Backfill incrementally:
+the header. Bulk-backfill the whole queue (derives a slug from each title +
+type, applies after preview):
+
+```bash
+maestro task backfill-slugs              # dry-run / planning
+maestro task backfill-slugs --apply      # write the slugs
+maestro task backfill-slugs --apply --limit 10
+```
+
+Backfill is display-only metadata: it bypasses the completion + ownership
+locks so it works on completed and currently-claimed tasks. It will not
+overwrite an existing slug.
+
+To set or rename one slug at a time:
 
 ```bash
 maestro task update tsk-<id> --slug implement/<kebab>
 ```
 
-Slug uniqueness is enforced across all top-level tasks. To rename a slug,
-pass `--slug <new>` on a track that already has one. Slugs are not preserved
-when a track is demoted to a step (`task update <id> --parent <other>`); the
-CLI requires `--drop-slug` to acknowledge that.
+Slug uniqueness is enforced across all top-level tasks. Slugs are not
+preserved when a track is demoted to a step (`task update <id> --parent
+<other>`); the CLI requires `--drop-slug` to acknowledge that.
 
 ## Recovery
 

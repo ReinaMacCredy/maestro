@@ -69,7 +69,11 @@ import {
   taskUpdateClaimViaDedicatedCommand,
   taskUpdateOwnershipViaClaim,
 } from "../domain/task-errors.js";
-import { resolveTaskRef } from "../domain/task-slug.js";
+import {
+  deriveSlugFromTitle,
+  pickFreeDerivedSlug,
+  resolveTaskRef,
+} from "../domain/task-slug.js";
 import { assertTaskMutationOwnership, assertTaskUpdateAllowed } from "../domain/task-state.js";
 import {
   buildCompactReadyTaskPayload,
@@ -120,6 +124,7 @@ Typical loop:
   registerShowCommand(taskCmd, program);
   registerListCommand(taskCmd, program);
   registerStatusCommand(taskCmd, program);
+  registerBackfillSlugsCommand(taskCmd, program);
   registerUpdateCommand(taskCmd, program);
   registerClaimCommand(taskCmd, program);
   registerContractCommand(taskCmd, program);
@@ -481,6 +486,122 @@ function registerStatusCommand(taskCmd: Command, program: Command): void {
       for (const line of lines) {
         console.log(line);
       }
+    });
+}
+
+function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("backfill-slugs")
+    .description("Derive a slug for every top-level task that is missing one (legacy/pre-slug tasks)")
+    .option("--apply", "Actually write the changes (default is dry-run / planning only)")
+    .option("--limit <n>", "Process at most N tasks")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const apply = opts.apply === true;
+      const limit = parseLimit(opts.limit);
+
+      const all = await services.taskStore.all();
+      const slugged = new Set<string>();
+      const slugless: Task[] = [];
+      for (const task of all) {
+        if (task.parentId !== undefined) continue;
+        if (task.slug !== undefined) slugged.add(task.slug);
+        else slugless.push(task);
+      }
+      slugless.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const target = limit !== undefined && limit > 0 ? slugless.slice(0, limit) : slugless;
+
+      const inBatch = new Set<string>();
+      const planned: Array<{ id: string; title: string; slug: string }> = [];
+      const skipped: Array<{ id: string; title: string; reason: string }> = [];
+      for (const task of target) {
+        try {
+          const base = deriveSlugFromTitle(task.title, task.type);
+          const candidate = pickFreeDerivedSlug(base, slugged, inBatch);
+          if (candidate === undefined) {
+            skipped.push({ id: task.id, title: task.title, reason: `'${base}' and -2..-9 suffixes all taken` });
+            continue;
+          }
+          inBatch.add(candidate);
+          planned.push({ id: task.id, title: task.title, slug: candidate });
+        } catch (err) {
+          skipped.push({
+            id: task.id,
+            title: task.title,
+            reason: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      if (!apply) {
+        const result = {
+          dryRun: true,
+          totalSlugless: slugless.length,
+          planned,
+          skipped,
+        };
+        output(isJson, result, (r) => {
+          const lines: string[] = [
+            `[dry-run] ${r.planned.length} of ${r.totalSlugless} slugless tracks would be backfilled`,
+            "",
+          ];
+          for (const item of r.planned) {
+            lines.push(`  ${item.id}  -->  ${item.slug}`);
+          }
+          if (r.skipped.length > 0) {
+            lines.push("");
+            lines.push(`  ${r.skipped.length} skipped:`);
+            for (const item of r.skipped) {
+              lines.push(`    ${item.id}: ${item.reason}`);
+            }
+          }
+          lines.push("");
+          lines.push("Re-run with --apply to write the slugs.");
+          return lines;
+        });
+        return;
+      }
+
+      const applied: Array<{ id: string; slug: string }> = [];
+      const failures: Array<{ id: string; slug: string; error: string }> = [];
+      for (const item of planned) {
+        try {
+          await services.taskStore.backfillSlug(item.id, item.slug);
+          applied.push({ id: item.id, slug: item.slug });
+        } catch (err) {
+          failures.push({
+            id: item.id,
+            slug: item.slug,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      output(isJson, { applied, failures, skipped }, (r) => {
+        const lines: string[] = [
+          `[ok] Backfilled ${r.applied.length} slug(s)`,
+        ];
+        for (const item of r.applied) {
+          lines.push(`  ${item.id}  -->  ${item.slug}`);
+        }
+        if (r.failures.length > 0) {
+          lines.push("");
+          lines.push(`${r.failures.length} failure(s):`);
+          for (const item of r.failures) {
+            lines.push(`  ${item.id} (${item.slug}): ${item.error}`);
+          }
+        }
+        if (r.skipped.length > 0) {
+          lines.push("");
+          lines.push(`${r.skipped.length} skipped (no slug derivable):`);
+          for (const item of r.skipped) {
+            lines.push(`  ${item.id}: ${item.reason}`);
+          }
+        }
+        return lines;
+      });
     });
 }
 
