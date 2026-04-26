@@ -98,7 +98,7 @@ Slugs derive to `fix/fix-race-in-writer` and `chore/follow-up-doc-note`
 (verb chosen from `type`). When two derives collide, suffixes `-2..-9` are
 appended; if all 9 collide, the batch is rejected with a clear error.
 
-## Example 4: Appending to an existing task
+## Example 5: Appending to an existing task
 
 `blockedBy` and `parent` accept real `tsk-*` ids alongside batch-local names. To append a new phase after an existing task:
 

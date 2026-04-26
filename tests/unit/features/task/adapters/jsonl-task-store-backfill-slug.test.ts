@@ -141,6 +141,26 @@ describe("JsonlTaskStoreAdapter.backfillSlug", () => {
     );
   });
 
+  it("atomically backfills multiple slugs so rederive swaps can succeed", async () => {
+    const first = await createTask(store, { title: "First", slug: "implement/old-second" });
+    const second = await createTask(store, { title: "Second", slug: "implement/old-first" });
+
+    const updated = await store.backfillSlugs(
+      [
+        { id: first.id, slug: "implement/old-first" },
+        { id: second.id, slug: "implement/old-second" },
+      ],
+      { force: true },
+    );
+
+    expect(updated.map((task) => task.slug)).toEqual([
+      "implement/old-first",
+      "implement/old-second",
+    ]);
+    expect((await store.get(first.id))?.slug).toBe("implement/old-first");
+    expect((await store.get(second.id))?.slug).toBe("implement/old-second");
+  });
+
   it("backfilled tasks become resolvable by slug", async () => {
     const path = join(tmpDir, ".maestro", "tasks", "tasks.jsonl");
     await Bun.write(

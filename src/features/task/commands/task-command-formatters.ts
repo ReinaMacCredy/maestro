@@ -12,7 +12,7 @@ import type {
   TaskStatusProjection,
   TaskTrackGroup,
 } from "../usecases/group-tasks-by-track.usecase.js";
-import { hasUnresolvedBlockers } from "../domain/task-state.js";
+import { hasUnresolvedBlockers, isTaskReady } from "../domain/task-state.js";
 
 const GLYPH = {
   active: "o",
@@ -458,6 +458,7 @@ interface StatusItem {
   readonly track: TaskTrackGroup;
   readonly task: Task;
   readonly blocked: boolean;
+  readonly ready: boolean;
 }
 
 function collectStatusItems(
@@ -476,6 +477,7 @@ function collectTrackItems(
     track,
     task,
     blocked: hasUnresolvedBlockers(task, tasksById),
+    ready: task.assignee === undefined && isTaskReady(task, tasksById),
   }));
 }
 
@@ -602,11 +604,7 @@ function appendMoreLine(lines: string[], hiddenCount: number): void {
 }
 
 function isReadyStatusItem(item: StatusItem): boolean {
-  return (
-    item.task.status === "pending" &&
-    item.task.assignee === undefined &&
-    !item.blocked
-  );
+  return item.ready;
 }
 
 function pluralize(label: string, count: number): string {

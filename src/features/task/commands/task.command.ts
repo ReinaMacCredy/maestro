@@ -16,7 +16,7 @@ import { blockTasks, unblockTasks } from "../usecases/manage-task-blockers.useca
 import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
 import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
-import { planTasks } from "../usecases/plan-tasks.usecase.js";
+import { planTasks, validatePlanTasks } from "../usecases/plan-tasks.usecase.js";
 import { buildBatchInputSchema } from "../usecases/batch-input-schema.usecase.js";
 import { nextTask } from "../usecases/next-task.usecase.js";
 import { listOpenHandoffsForTask } from "@/features/handoff";
@@ -74,7 +74,11 @@ import {
   pickFreeDerivedSlug,
   resolveTaskRef,
 } from "../domain/task-slug.js";
-import { assertTaskMutationOwnership, assertTaskUpdateAllowed } from "../domain/task-state.js";
+import {
+  assertTaskMutationOwnership,
+  assertTaskUpdateAllowed,
+  getUnresolvedBlockerIds,
+} from "../domain/task-state.js";
 import {
   buildCompactReadyTaskPayload,
   formatPruneReport,
@@ -86,7 +90,10 @@ import {
   formatTaskSummary,
   formatTaskTrackList,
 } from "./task-command-formatters.js";
-import { groupTasksByTrack } from "../usecases/group-tasks-by-track.usecase.js";
+import {
+  groupTasksByTrack,
+  type TaskStatusProjection,
+} from "../usecases/group-tasks-by-track.usecase.js";
 import { registerContractCommand } from "./contract.command.js";
 import { syncTaskMetadata } from "../usecases/sync-task-metadata.usecase.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
@@ -273,7 +280,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
       }
 
       if (opts.dryRun === true) {
-        output(isJson, { batchId: batchInput.batchId, taskCount: batchInput.tasks.length, dryRun: true }, (data) => [
+        const validation = await validatePlanTasks(services.taskStore, batchInput);
+        output(isJson, { ...validation, dryRun: true }, (data) => [
           `[ok] Dry run: ${data.taskCount} task(s) validated, nothing written`,
         ]);
         return;
@@ -407,11 +415,8 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       // "Blocked by" entries misleads. Raw graph history still lives in
       // `show --json` and `task list --json` for agents that need it.
       const allTasks = await services.taskStore.all();
-      const tasksById = new Map(allTasks.map((t) => [t.id, t] as const));
-      const activeBlockers = view.task.blockedBy.filter((blockerId) => {
-        const blocker = tasksById.get(blockerId);
-        return blocker === undefined || blocker.status !== "completed";
-      });
+      const tasksById = indexTasksById(allTasks);
+      const activeBlockers = getUnresolvedBlockerIds(view.task, tasksById);
       const filteredView: typeof view = activeBlockers.length !== view.task.blockedBy.length
         ? { ...view, task: { ...view.task, blockedBy: activeBlockers } }
         : view;
@@ -480,17 +485,24 @@ function registerStatusCommand(taskCmd: Command, program: Command): void {
       });
 
       if (isJson) {
-        output(true, projection, () => []);
+        output(true, toTaskStatusJson(projection), () => []);
         return;
       }
       const lines = formatTaskStatusView(projection, {
         all: opts.all === true,
         compact: opts.compact !== false,
       });
-      for (const line of lines) {
-        console.log(line);
-      }
+      output(false, lines, (value) => value);
     });
+}
+
+function toTaskStatusJson(
+  projection: TaskStatusProjection,
+): Omit<TaskStatusProjection, "tasksById"> & { readonly tasksById: Record<string, Task> } {
+  return {
+    ...projection,
+    tasksById: Object.fromEntries(projection.tasksById),
+  };
 }
 
 function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void {
@@ -510,19 +522,21 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
 
       const all = await services.taskStore.all();
       const tracks: Task[] = [];
-      const stableSlugs = new Set<string>();
+      const slugOwners = new Map<string, string>();
       for (const task of all) {
         if (task.parentId !== undefined) continue;
         if (task.slug === undefined) {
           tracks.push(task);
-        } else if (rederive) {
-          tracks.push(task);
         } else {
-          stableSlugs.add(task.slug);
+          slugOwners.set(task.slug, task.id);
+          if (rederive) {
+            tracks.push(task);
+          }
         }
       }
       tracks.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       const target = limit !== undefined && limit > 0 ? tracks.slice(0, limit) : tracks;
+      const targetIds = new Set(target.map((task) => task.id));
 
       const inBatch = new Set<string>();
       const planned: Array<{ id: string; title: string; slug: string; previous?: string }> = [];
@@ -530,7 +544,13 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
       for (const task of target) {
         try {
           const base = deriveSlugFromTitle(task.title, task.type);
-          const candidate = pickFreeDerivedSlug(base, stableSlugs, inBatch);
+          const reservedSlugs = new Set<string>();
+          for (const [slug, ownerId] of slugOwners.entries()) {
+            if (!targetIds.has(ownerId)) {
+              reservedSlugs.add(slug);
+            }
+          }
+          const candidate = pickFreeDerivedSlug(base, reservedSlugs, inBatch);
           if (candidate === undefined) {
             skipped.push({ id: task.id, title: task.title, reason: `'${base}' and -2..-9 suffixes all taken` });
             continue;
@@ -590,19 +610,27 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
 
       const applied: Array<{ id: string; slug: string; previous?: string }> = [];
       const failures: Array<{ id: string; slug: string; error: string }> = [];
-      for (const item of planned) {
-        try {
-          await services.taskStore.backfillSlug(item.id, item.slug, { force: rederive });
+      try {
+        const updated = await services.taskStore.backfillSlugs(
+          planned.map((item) => ({ id: item.id, slug: item.slug })),
+          { force: rederive },
+        );
+        const updatedIds = new Set(updated.map((task) => task.id));
+        for (const item of planned) {
+          if (!updatedIds.has(item.id)) continue;
           applied.push({
             id: item.id,
             slug: item.slug,
             ...(item.previous !== undefined ? { previous: item.previous } : {}),
           });
-        } catch (err) {
+        }
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        for (const item of planned) {
           failures.push({
             id: item.id,
             slug: item.slug,
-            error: err instanceof Error ? err.message : String(err),
+            error,
           });
         }
       }

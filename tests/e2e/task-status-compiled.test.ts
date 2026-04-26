@@ -104,11 +104,6 @@ describe("compiled task status + plan slug conversion", () => {
       const planResult = await runCompiled(["task", "plan", "--file", planPath], tmpDir);
       expect(planResult.exitCode).toBe(0);
 
-      // Move the worktree task to in_progress so it shows the `o` glyph and
-      // the active counter increments. Without this nothing is in_progress.
-      const planJson = await runCompiled(["task", "plan", "--file", planPath, "--json"], tmpDir);
-      void planJson;
-
       const list = await runCompiled(["task", "list", "--json"], tmpDir);
       const tasks = expectJson<Array<{ id: string; slug?: string; title: string; parentId?: string }>>(list);
       const worktree = tasks.find((t) => t.slug === "implement/worktree-config-lock-race");
@@ -197,6 +192,7 @@ describe("compiled task status + plan slug conversion", () => {
           blockedTracks: number;
         };
         tracks: Array<{ identifier: string; slug?: string; task: { slug?: string } }>;
+        tasksById: Record<string, { id: string }>;
       }>(statusJson);
       expect(projection.header).toEqual({
         open: 12,
@@ -208,6 +204,7 @@ describe("compiled task status + plan slug conversion", () => {
       });
       const slugs = projection.tracks.map((t) => t.identifier);
       expect(slugs).toContain("implement/worktree-config-lock-race");
+      expect(projection.tasksById[worktree!.id]?.id).toBe(worktree!.id);
     },
     SLOW_CLI_TIMEOUT_MS,
   );
@@ -228,6 +225,13 @@ describe("compiled task status + plan slug conversion", () => {
         "utf8",
       );
 
+      const dryRun = await runCompiled(["task", "plan", "--file", planPath, "--dry-run"], tmpDir);
+      expect(dryRun.exitCode).not.toBe(0);
+      expect(dryRun.stderr).toContain("Plan validation failed");
+
+      const afterDryRun = await runCompiled(["task", "list", "--json"], tmpDir);
+      expect(expectJson<Array<unknown>>(afterDryRun)).toEqual([]);
+
       const result = await runCompiled(["task", "plan", "--file", planPath], tmpDir);
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("Plan validation failed");
@@ -235,6 +239,35 @@ describe("compiled task status + plan slug conversion", () => {
       const list = await runCompiled(["task", "list", "--json"], tmpDir);
       const tasks = expectJson<Array<unknown>>(list);
       expect(tasks).toEqual([]);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "rederives slug swaps atomically",
+    async () => {
+      const first = await runCompiled(
+        ["task", "create", "First", "--slug", "implement/second"],
+        tmpDir,
+      );
+      expect(first.exitCode).toBe(0);
+      const second = await runCompiled(
+        ["task", "create", "Second", "--slug", "implement/first"],
+        tmpDir,
+      );
+      expect(second.exitCode).toBe(0);
+
+      const apply = await runCompiled(
+        ["task", "backfill-slugs", "--rederive", "--apply"],
+        tmpDir,
+      );
+      expect(apply.exitCode).toBe(0);
+      expect(apply.stdout).toContain("[ok] Backfilled 2 slug(s)");
+
+      const list = await runCompiled(["task", "list", "--json"], tmpDir);
+      const tasks = expectJson<Array<{ title: string; slug?: string }>>(list);
+      expect(tasks.find((task) => task.title === "First")?.slug).toBe("implement/first");
+      expect(tasks.find((task) => task.title === "Second")?.slug).toBe("implement/second");
     },
     SLOW_CLI_TIMEOUT_MS,
   );

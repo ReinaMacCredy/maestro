@@ -42,7 +42,6 @@ function isNoiseToken(word: string): boolean {
   if (/^[0-9a-f]{6,}$/.test(word)) return true;
   return false;
 }
-
 /**
  * Single source of truth for the slug regex pattern. Used both for runtime
  * shape checks (via {@link isValidSlugShape}) and for the JSON Schema
@@ -302,4 +301,3 @@ function levenshteinAtMostOne(a: string, b: string): boolean {
   }
   return true;
 }
-

@@ -100,4 +100,14 @@ export interface TaskStorePort extends TaskQueryPort {
    */
   backfillSlug(id: string, slug: string, opts?: { force?: boolean }): Promise<Task>;
 
+  /**
+   * Atomically set slugs for multiple top-level tasks. Used by rederive so
+   * valid slug swaps are evaluated against the final batch state instead of
+   * failing on sequential intermediate collisions.
+   */
+  backfillSlugs(
+    updates: readonly { readonly id: string; readonly slug: string }[],
+    opts?: { force?: boolean },
+  ): Promise<readonly Task[]>;
+
 }

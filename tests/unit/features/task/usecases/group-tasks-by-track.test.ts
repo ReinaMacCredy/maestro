@@ -130,4 +130,28 @@ describe("groupTasksByTrack", () => {
     const projection = groupTasksByTrack(tasks, { trackFilter: "implement/a" });
     expect(projection.tracks.map((t) => t.identifier)).toEqual(["implement/a"]);
   });
+
+  it("filters by tsk-id for slugged tracks and scopes header counts", () => {
+    const tasks = [
+      makeTask({
+        id: "tsk-aaaaaa",
+        title: "A",
+        slug: "implement/a",
+        status: "in_progress",
+      }),
+      makeTask({ id: "tsk-bbbbbb", title: "B", slug: "implement/b" }),
+    ];
+
+    const projection = groupTasksByTrack(tasks, { trackFilter: "tsk-aaaaaa" });
+
+    expect(projection.tracks.map((t) => t.identifier)).toEqual(["implement/a"]);
+    expect(projection.header).toEqual({
+      open: 1,
+      active: 1,
+      ready: 0,
+      pending: 0,
+      blocked: 0,
+      blockedTracks: 0,
+    });
+  });
 });

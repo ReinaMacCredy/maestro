@@ -1,6 +1,6 @@
 import type { Task, ReadyTasksFilters } from "../domain/task-types.js";
 import { indexTasksById } from "../domain/task-types.js";
-import { hasUnresolvedBlockers } from "../domain/task-state.js";
+import { isTaskReady } from "../domain/task-state.js";
 import type { TaskQueryPort } from "../ports/task-store.port.js";
 import type { CandidateStorePort } from "../ports/candidate-store.port.js";
 import {
@@ -62,7 +62,7 @@ function selectReadyTaskPage(
   const selected = all.filter((task) => {
     if (task.status !== "pending") return false;
     totalPending += 1;
-    if (hasUnresolvedBlockers(task, byId)) return false;
+    if (!isTaskReady(task, byId)) return false;
 
     if (filters.label !== undefined && !task.labels.includes(filters.label)) return false;
     if (filters.priority !== undefined && task.priority !== filters.priority) return false;

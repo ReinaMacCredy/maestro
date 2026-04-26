@@ -1,5 +1,5 @@
 import type { Task } from "../domain/task-types.js";
-import { hasUnresolvedBlockers } from "../domain/task-state.js";
+import { hasUnresolvedBlockers, isTaskReady } from "../domain/task-state.js";
 
 export interface TaskStatusHeader {
   readonly open: number;
@@ -89,7 +89,11 @@ export function groupTasksByTrack(
       continue;
     }
     const identifier = task.slug ?? task.id;
-    if (options.trackFilter !== undefined && options.trackFilter !== identifier) {
+    if (
+      options.trackFilter !== undefined &&
+      options.trackFilter !== identifier &&
+      options.trackFilter !== task.id
+    ) {
       continue;
     }
     tracksRaw.push({
@@ -101,7 +105,10 @@ export function groupTasksByTrack(
   }
 
   const tracks = sortTracks(tracksRaw);
-  const header = computeHeader(tasks, byId);
+  const headerTasks = options.trackFilter === undefined
+    ? tasks
+    : tracksRaw.flatMap((track) => [track.task, ...track.steps]);
+  const header = computeHeader(headerTasks, byId);
 
   return {
     header,
@@ -210,7 +217,7 @@ function computeHeader(
           blockedTracks += 1;
         } else {
           pending += 1;
-          if (isReady(task, byId)) ready += 1;
+          if (task.assignee === undefined && isTaskReady(task, byId)) ready += 1;
         }
         continue;
       }
@@ -227,7 +234,7 @@ function computeHeader(
     else if (isBlocked(task, byId)) blocked += 1;
     else {
       pending += 1;
-      if (isReady(task, byId)) ready += 1;
+      if (task.assignee === undefined && isTaskReady(task, byId)) ready += 1;
     }
   }
   return {
@@ -238,12 +245,4 @@ function computeHeader(
     blocked,
     blockedTracks,
   };
-}
-
-function isReady(task: Task, byId: ReadonlyMap<string, Task>): boolean {
-  return (
-    task.status === "pending" &&
-    task.assignee === undefined &&
-    !isBlocked(task, byId)
-  );
 }

@@ -31,11 +31,59 @@ export interface PlanTasksOptions {
   readonly maxBatchSize?: number;
 }
 
+export interface PlanTasksValidationResult {
+  readonly batchId?: string;
+  readonly taskCount: number;
+  readonly replayed?: boolean;
+}
+
+interface PreparedPlanTasks {
+  readonly replay?: BatchResult;
+  readonly createInputs: readonly CreateBatchInput[];
+  readonly receiptMeta?: { readonly batchId: string; readonly names: readonly (string | undefined)[] };
+}
+
 export async function planTasks(
   store: TaskStorePort,
   input: BatchInput,
   options: PlanTasksOptions = {},
 ): Promise<BatchResult> {
+  const prepared = await preparePlanTasks(store, input, options);
+  if (prepared.replay) return { ...prepared.replay, replayed: true };
+
+  const created = await store.createBatch(prepared.createInputs, prepared.receiptMeta);
+
+  const results: BatchCreatedTask[] = created.map((task, idx) => ({
+    name: input.tasks[idx]!.name,
+    id: task.id,
+    status: task.status,
+    assignee: task.assignee,
+  }));
+
+  return {
+    batchId: input.batchId,
+    created: results,
+  };
+}
+
+export async function validatePlanTasks(
+  store: TaskStorePort,
+  input: BatchInput,
+  options: PlanTasksOptions = {},
+): Promise<PlanTasksValidationResult> {
+  const prepared = await preparePlanTasks(store, input, options);
+  return {
+    taskCount: prepared.replay?.created.length ?? input.tasks.length,
+    ...(input.batchId !== undefined ? { batchId: input.batchId } : {}),
+    ...(prepared.replay ? { replayed: true } : {}),
+  };
+}
+
+async function preparePlanTasks(
+  store: TaskStorePort,
+  input: BatchInput,
+  options: PlanTasksOptions,
+): Promise<PreparedPlanTasks> {
   const maxBatchSize = options.maxBatchSize ?? MAX_BATCH_SIZE;
 
   if (!Array.isArray(input.tasks) || input.tasks.length === 0) {
@@ -47,7 +95,7 @@ export async function planTasks(
 
   if (input.batchId !== undefined) {
     const replay = await tryReplayReceipt(store, input.batchId);
-    if (replay) return { ...replay, replayed: true };
+    if (replay) return { replay, createInputs: [] };
   }
 
   const nameToIndex = buildNameIndex(input.tasks);
@@ -68,19 +116,9 @@ export async function planTasks(
     ? undefined
     : { batchId: input.batchId, names: input.tasks.map((t) => t.name) };
 
-  const created = await store.createBatch(createInputs, receiptMeta);
-
-  const results: BatchCreatedTask[] = created.map((task, idx) => ({
-    name: input.tasks[idx]!.name,
-    id: task.id,
-    status: task.status,
-    assignee: task.assignee,
-  }));
-
-  return {
-    batchId: input.batchId,
-    created: results,
-  };
+  return receiptMeta === undefined
+    ? { createInputs }
+    : { createInputs, receiptMeta };
 }
 
 async function tryReplayReceipt(

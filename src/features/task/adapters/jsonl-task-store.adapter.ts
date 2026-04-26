@@ -511,26 +511,66 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     slug: string,
     opts: { force?: boolean } = {},
   ): Promise<Task> {
+    const [updated] = await this.backfillSlugs([{ id, slug }], opts);
+    return updated!;
+  }
+
+  async backfillSlugs(
+    updates: readonly { readonly id: string; readonly slug: string }[],
+    opts: { force?: boolean } = {},
+  ): Promise<readonly Task[]> {
+    if (updates.length === 0) return [];
+
     return this.withLock(async () => {
       const tasks = await this.readAll();
-      const existing = tasks.get(id);
-      if (!existing) {
-        throw taskNotFound(id);
+
+      const seenIds = new Set<string>();
+      const updateIds = new Set<string>();
+      for (const update of updates) {
+        if (seenIds.has(update.id)) {
+          throw new MaestroError(`Duplicate backfill update for task ${update.id}`, [
+            "Each task can appear at most once in a slug backfill batch",
+          ]);
+        }
+        seenIds.add(update.id);
+        updateIds.add(update.id);
       }
-      if (existing.parentId !== undefined) {
-        throw slugForbiddenOnStep();
-      }
-      if (existing.slug !== undefined && opts.force !== true) {
-        throw new MaestroError(`Task ${id} already has slug '${existing.slug}'`, [
-          "Use 'maestro task update <id> --slug <new>' to rename an existing slug",
-          "Use 'maestro task backfill-slugs --rederive' to overwrite auto-derived slugs",
-        ]);
-      }
-      assertSlugUnique(tasks, slug, id);
 
       const now = new Date().toISOString();
-      const updated: Task = { ...existing, slug, updatedAt: now };
-      tasks.set(id, updated);
+      const slugOwners = new Map<string, string>();
+      for (const task of tasks.values()) {
+        if (task.parentId !== undefined || task.slug === undefined || updateIds.has(task.id)) {
+          continue;
+        }
+        slugOwners.set(task.slug, task.id);
+      }
+
+      const updated: Task[] = [];
+      for (const update of updates) {
+        const existing = tasks.get(update.id);
+        if (!existing) {
+          throw taskNotFound(update.id);
+        }
+        if (existing.parentId !== undefined) {
+          throw slugForbiddenOnStep();
+        }
+        if (existing.slug !== undefined && opts.force !== true) {
+          throw new MaestroError(`Task ${update.id} already has slug '${existing.slug}'`, [
+            "Use 'maestro task update <id> --slug <new>' to rename an existing slug",
+            "Use 'maestro task backfill-slugs --rederive' to overwrite auto-derived slugs",
+          ]);
+        }
+        const owner = slugOwners.get(update.slug);
+        if (owner !== undefined) {
+          throw slugCollision(update.slug, owner);
+        }
+        slugOwners.set(update.slug, update.id);
+
+        const next: Task = { ...existing, slug: update.slug, updatedAt: now };
+        tasks.set(update.id, next);
+        updated.push(next);
+      }
+
       await this.writeAll(tasks);
       return updated;
     });

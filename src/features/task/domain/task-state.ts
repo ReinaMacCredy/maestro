@@ -70,6 +70,16 @@ export function hasUnresolvedBlockers(
   return getUnresolvedBlockerIds(task, tasks).length > 0;
 }
 
+export function isTaskReady(
+  task: Task,
+  tasks: ReadonlyMap<string, Task>,
+): boolean {
+  return (
+    task.status === "pending" &&
+    !hasUnresolvedBlockers(task, tasks)
+  );
+}
+
 export function assertTaskUpdateAllowed(
   existing: Task,
   patch: UpdateTaskInput,

@@ -4,7 +4,6 @@ import { validateCreateInput } from "../domain/task-validators.js";
 import {
   collectExistingTopLevelSlugs,
   deriveSlugFromTitle,
-  isValidSlugShape,
   pickFreeDerivedSlug,
 } from "../domain/task-slug.js";
 import { slugCollision } from "../domain/task-errors.js";
@@ -27,7 +26,7 @@ export async function createTask(
     return store.create(input);
   }
 
-  if (input.slug !== undefined && isValidSlugShape(input.slug)) {
+  if (input.slug !== undefined) {
     return store.create(input);
   }
 

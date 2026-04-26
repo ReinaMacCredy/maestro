@@ -103,6 +103,8 @@ function createTaskStore(state: { current: Task }): TaskStorePort {
     heartbeat: unused,
     findBatchReceipt: unused,
     syncMetadata: unused,
+    backfillSlug: unused,
+    backfillSlugs: unused,
   };
 }
 
