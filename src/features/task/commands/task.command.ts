@@ -69,6 +69,7 @@ import {
   taskUpdateClaimViaDedicatedCommand,
   taskUpdateOwnershipViaClaim,
 } from "../domain/task-errors.js";
+import { resolveTaskRef } from "../domain/task-slug.js";
 import { assertTaskMutationOwnership, assertTaskUpdateAllowed } from "../domain/task-state.js";
 import {
   buildCompactReadyTaskPayload,
@@ -77,8 +78,11 @@ import {
   formatTaskDetail,
   formatTaskShowView,
   formatTaskList,
+  formatTaskStatusView,
   formatTaskSummary,
+  formatTaskTrackList,
 } from "./task-command-formatters.js";
+import { groupTasksByTrack } from "../usecases/group-tasks-by-track.usecase.js";
 import { registerContractCommand } from "./contract.command.js";
 import { syncTaskMetadata } from "../usecases/sync-task-metadata.usecase.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
@@ -115,6 +119,7 @@ Typical loop:
   registerQuickCommand(taskCmd, program);
   registerShowCommand(taskCmd, program);
   registerListCommand(taskCmd, program);
+  registerStatusCommand(taskCmd, program);
   registerUpdateCommand(taskCmd, program);
   registerClaimCommand(taskCmd, program);
   registerContractCommand(taskCmd, program);
@@ -141,7 +146,8 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     .option("--description <text>", "Task description")
     .option("--type <type>", `Task type (${TASK_TYPES.join("|")})`)
     .option("--priority <n>", "Priority 0-4 (0=critical, 4=backlog)")
-    .option("--parent <id>", "Parent task id for hierarchy grouping")
+    .option("--parent <id-or-slug>", "Parent task id (tsk-XXX) or slug for hierarchy grouping")
+    .option("--slug <slug>", "Optional explicit slug for top-level tasks ('<verb>/<kebab>'). Default: derived from title.")
     .option("--labels <labels>", "Comma-separated labels")
     .option("--blocked-by <ids>", "Comma-separated blocker task ids")
     .option(
@@ -175,11 +181,15 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
         await maybeReleaseStaleOwnedTasks([sessionId]);
       }
 
+      const parentId = opts.parent !== undefined
+        ? (await resolveTaskRef(services.taskStore, opts.parent)).id
+        : undefined;
       const input = buildCreateInput(title, {
         description: opts.description,
         type: opts.type,
         priority: opts.priority,
-        parent: opts.parent,
+        parent: parentId,
+        slug: typeof opts.slug === "string" && opts.slug.length > 0 ? opts.slug : undefined,
         labels: opts.labels,
         blockedBy: opts.blockedBy,
       });
@@ -356,13 +366,16 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
 
 function registerShowCommand(taskCmd: Command, program: Command): void {
   taskCmd
-    .command("show <id>")
-    .description("Show task details")
+    .command("show <id-or-slug>")
+    .description("Show task details (accepts a tsk-XXX id or a track slug)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (rawRef: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
+
+      const resolved = await resolveTaskRef(services.taskStore, rawRef);
+      const id = resolved.id;
 
       if (isJson) {
         const [task, openHandoffs] = await Promise.all([
@@ -422,6 +435,7 @@ function registerListCommand(taskCmd: Command, program: Command): void {
     .option("--parent <id>", "Filter by parent task id")
     .option("--assignee <name>", "Filter by assignee")
     .option("--limit <n>", "Maximum number of tasks to return")
+    .option("--tracks", "Print only track headers (slug or tsk-id; one per line)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
@@ -438,14 +452,46 @@ function registerListCommand(taskCmd: Command, program: Command): void {
       };
 
       const tasks = await listTasks(services.taskStore, filters);
+      if (opts.tracks === true) {
+        output(isJson, tasks, formatTaskTrackList);
+        return;
+      }
       output(isJson, tasks, formatTaskList);
+    });
+}
+
+function registerStatusCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("status")
+    .description("Show tracks grouped by top-level slug with status glyphs")
+    .option("--all", "Include completed tasks (rendered with 'v' glyph)")
+    .option("--track <slug>", "Restrict output to a single track by slug or tsk-id")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      const tasks = await services.taskStore.all();
+      const projection = groupTasksByTrack(tasks, {
+        includeCompleted: opts.all === true,
+        trackFilter: typeof opts.track === "string" && opts.track.length > 0 ? opts.track : undefined,
+      });
+
+      if (isJson) {
+        output(true, projection, () => []);
+        return;
+      }
+      const lines = formatTaskStatusView(projection, { all: opts.all === true });
+      for (const line of lines) {
+        console.log(line);
+      }
     });
 }
 
 function registerUpdateCommand(taskCmd: Command, program: Command): void {
   taskCmd
-    .command("update <id>")
-    .description("Update task fields or move task status explicitly")
+    .command("update <id-or-slug>")
+    .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug)")
     .option("--title <title>", "New title")
     .option("--description <text>", "New description")
     .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
@@ -457,7 +503,9 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .option("--no-contract", "Allow completion without a contract when contracts.default=required")
     .option("--priority <n>", "New priority 0-4")
     .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
-    .option("--parent <id>", "New parent id (empty string clears)")
+    .option("--parent <id-or-slug>", "New parent (tsk-XXX or slug; empty string clears for promotion)")
+    .option("--slug <slug>", "Set or rename the slug ('<verb>/<kebab>'); empty rejects (use --parent <id> --drop-slug to demote a track)")
+    .option("--drop-slug", "Acknowledge that demoting a track to a step will drop its slug")
     .option("--current-state <text>", "Update the resumable current-state summary")
     .option("--next-action <text>", "Update the resumable next action")
     .option("--add-decision <items>", "Comma-separated active decisions to add")
@@ -470,9 +518,11 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .addOption(new Option("--claim").hideHelp())
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (rawRef: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const resolved = await resolveTaskRef(services.taskStore, rawRef);
+      const id = resolved.id;
       const previous = await services.taskStore.get(id);
       const continuationEdits = parseContinuationEdits(opts);
 
@@ -483,6 +533,12 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         throw taskUpdateClaimViaDedicatedCommand();
       }
 
+      const parentId = typeof opts.parent === "string"
+        ? (opts.parent.length === 0
+            ? ""
+            : (await resolveTaskRef(services.taskStore, opts.parent)).id)
+        : undefined;
+
       const patch: UpdateTaskInput = {
         title: opts.title,
         description: opts.description,
@@ -490,7 +546,9 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         reason: opts.reason,
         priority: parsePriority(opts.priority),
         type: parseType(opts.type),
-        parentId: opts.parent,
+        parentId,
+        slug: typeof opts.slug === "string" ? opts.slug : undefined,
+        dropSlug: opts.dropSlug === true ? true : undefined,
         addLabels: parseList(opts.addLabel),
         removeLabels: parseList(opts.removeLabel),
         summary: typeof opts.summary === "string" ? opts.summary : undefined,
@@ -507,8 +565,8 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       if (!hasTaskPatch && !hasContinuationPatch) {
         throw new MaestroError("No update specified", [
           "Pass at least one field such as --title, --description, --status, --reason,",
-          "--priority, --type, --parent, --current-state, --next-action,",
-          "--add-decision, --remove-decision, --add-label, or --remove-label",
+          "--priority, --type, --parent, --slug, --drop-slug, --current-state,",
+          "--next-action, --add-decision, --remove-decision, --add-label, or --remove-label",
         ]);
       }
 

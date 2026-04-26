@@ -59,6 +59,13 @@ export interface Task {
   readonly priority: TaskPriority;
   readonly status: TaskStatus;
   readonly parentId?: string;
+  /**
+   * Human-readable identifier for top-level "track" tasks (parentId undefined).
+   * Shape: `<verb>/<kebab>`, e.g. `implement/template-prompt-fixes`. Always
+   * undefined when `parentId` is set; mandatory at every new-track creation
+   * path (plan, single create, parent->root promotion).
+   */
+  readonly slug?: string;
   readonly labels: readonly string[];
   readonly blocks: readonly string[];
   readonly blockedBy: readonly string[];
@@ -83,6 +90,7 @@ export interface CreateTaskInput {
   readonly type?: TaskType;
   readonly priority?: TaskPriority;
   readonly parentId?: string;
+  readonly slug?: string;
   readonly labels?: readonly string[];
   readonly blockedBy?: readonly string[];
 }
@@ -95,6 +103,13 @@ export interface UpdateTaskInput {
   readonly priority?: TaskPriority;
   readonly type?: TaskType;
   readonly parentId?: string;
+  /**
+   * New slug for a top-level task. Empty string clears the slug (only valid
+   * when the task is being demoted via --parent).
+   */
+  readonly slug?: string;
+  /** Demotion safety flag: required when an existing slug is being dropped. */
+  readonly dropSlug?: boolean;
   readonly addLabels?: readonly string[];
   readonly removeLabels?: readonly string[];
   readonly summary?: string;

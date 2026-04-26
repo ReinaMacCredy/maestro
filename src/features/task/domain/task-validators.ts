@@ -17,8 +17,10 @@ import {
   parentDepthExceeded,
   taskBlockCycle,
   taskSelfBlock,
+  slugForbiddenOnStep,
 } from "./task-errors.js";
 import { normalizeStoredTaskStatus } from "./task-state.js";
+import { isValidSlugShape } from "./task-slug.js";
 
 const MAX_PARENT_DEPTH = 32;
 
@@ -55,6 +57,9 @@ export function validateTask(value: unknown): Task | undefined {
   if (!normalizedStatus) return undefined;
   if (!Array.isArray(t.labels)) return undefined;
   if (!t.labels.every((l) => typeof l === "string")) return undefined;
+  if (t.slug !== undefined) {
+    if (typeof t.slug !== "string" || !isValidSlugShape(t.slug)) return undefined;
+  }
 
   const blocks = normalizeTaskIdArray(t.blocks);
   if (!blocks) return undefined;
@@ -89,6 +94,7 @@ export function validateTask(value: unknown): Task | undefined {
     priority: t.priority,
     status: normalizedStatus,
     parentId: t.parentId as string | undefined,
+    slug: t.slug as string | undefined,
     labels: t.labels as readonly string[],
     blocks,
     blockedBy,
@@ -154,6 +160,17 @@ export function validateCreateInput(input: CreateTaskInput): CreateTaskInput {
       }
     }
   }
+  if (input.slug !== undefined) {
+    if (input.parentId !== undefined) {
+      throw slugForbiddenOnStep();
+    }
+    if (!isValidSlugShape(input.slug)) {
+      throw invalidTaskField(
+        "slug",
+        `'${input.slug}' must be '<verb>/<kebab>' (verbs: implement, fix, chore, spike, epic; kebab is lowercase ASCII; total <= 60 chars)`,
+      );
+    }
+  }
 
   return {
     title: input.title.trim(),
@@ -161,6 +178,7 @@ export function validateCreateInput(input: CreateTaskInput): CreateTaskInput {
     type: input.type,
     priority: input.priority,
     parentId: input.parentId,
+    slug: input.slug,
     labels: input.labels,
     blockedBy: input.blockedBy,
   };
@@ -184,6 +202,12 @@ export function validateUpdateInput(input: UpdateTaskInput): UpdateTaskInput {
   }
   if (input.parentId !== undefined && input.parentId !== "" && !TASK_ID_PATTERN.test(input.parentId)) {
     throw invalidTaskField("parent", `must match ${TASK_ID_PATTERN} or be empty`);
+  }
+  if (input.slug !== undefined && input.slug !== "" && !isValidSlugShape(input.slug)) {
+    throw invalidTaskField(
+      "slug",
+      `'${input.slug}' must be '<verb>/<kebab>' (verbs: implement, fix, chore, spike, epic; kebab is lowercase ASCII; total <= 60 chars) or empty`,
+    );
   }
   if (input.reason !== undefined && typeof input.reason !== "string") {
     throw invalidTaskField("reason", "must be a string");

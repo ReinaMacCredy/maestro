@@ -1,4 +1,5 @@
 import { formatRelativeAge } from "@/shared/version-format.js";
+import { colorize, isColorEnabled } from "@/shared/lib/ansi.ts";
 import type { Task } from "../domain/task-types.js";
 import type { TaskShowView } from "../usecases/task-continuation.usecase.js";
 import type { TaskHint } from "../usecases/match-candidates.usecase.js";
@@ -7,11 +8,16 @@ import type {
   PruneKindReport,
   PruneReport,
 } from "../usecases/prune-local-task-state.usecase.js";
+import type {
+  TaskStatusProjection,
+  TaskTrackGroup,
+} from "../usecases/group-tasks-by-track.usecase.js";
+import { hasUnresolvedBlockers } from "../domain/task-state.js";
 
 export type CompactReadyTaskItem = Pick<
   Task,
   "id" | "title" | "status" | "priority" | "type" | "labels" | "parentId" | "assignee"
->;
+> & { readonly slug?: string };
 
 export interface CompactReadyTaskPayload {
   readonly schemaVersion: 1;
@@ -22,8 +28,10 @@ export interface CompactReadyTaskPayload {
 }
 
 export function formatTaskSummary(task: Task): string[] {
+  const headerLabel = task.parentId === undefined && task.slug ? task.slug : task.id;
   return [
-    `[ok] Task created: ${task.id}`,
+    `[ok] Task created: ${headerLabel}`,
+    ...(task.slug ? [`  Slug: ${task.slug}`] : []),
     `  Title: ${task.title}`,
     `  Status: ${task.status}`,
     `  Priority: P${task.priority}`,
@@ -45,9 +53,23 @@ export function formatTaskList(tasks: readonly Task[]): string[] {
     const status = task.status.padEnd(12);
     const priority = `P${task.priority}`;
     const title = task.title.length > 40 ? `${task.title.slice(0, 37)}...` : task.title;
-    lines.push(`${task.id}  ${priority}  ${status}  ${title}`);
+    const identifier = task.parentId === undefined && task.slug ? task.slug : task.id;
+    lines.push(`${identifier}  ${priority}  ${status}  ${title}`);
   }
   return lines;
+}
+
+/**
+ * Render only the track headers from a task list ("--tracks" flag on `task
+ * list`). Top-level slug tasks render their slug; legacy slugless top-level
+ * tasks render their `tsk-<id>`. Step tasks are skipped.
+ */
+export function formatTaskTrackList(tasks: readonly Task[]): string[] {
+  const tracks = tasks.filter((task) => task.parentId === undefined);
+  if (tracks.length === 0) {
+    return ["No tracks found"];
+  }
+  return tracks.map((task) => task.slug ?? task.id);
 }
 
 export function formatTaskBriefingList(briefings: readonly TaskBriefing[]): string[] {
@@ -60,7 +82,11 @@ export function formatTaskBriefingList(briefings: readonly TaskBriefing[]): stri
     const status = briefing.status.padEnd(12);
     const priority = `P${briefing.priority}`;
     const title = briefing.title.length > 40 ? `${briefing.title.slice(0, 37)}...` : briefing.title;
-    lines.push(`${briefing.id}  ${priority}  ${status}  ${title}`);
+    const briefingWithSlug = briefing as TaskBriefing & { readonly slug?: string; readonly parentId?: string };
+    const identifier = briefingWithSlug.parentId === undefined && briefingWithSlug.slug
+      ? briefingWithSlug.slug
+      : briefing.id;
+    lines.push(`${identifier}  ${priority}  ${status}  ${title}`);
     for (const hint of briefing.hints) {
       lines.push(`  >> ${formatHintLine(hint)}`);
     }
@@ -84,6 +110,7 @@ export function buildCompactReadyTaskPayload(page: ReadyTaskPage): CompactReadyT
       priority: task.priority,
       type: task.type,
       labels: task.labels,
+      ...(task.slug ? { slug: task.slug } : {}),
       ...(task.parentId ? { parentId: task.parentId } : {}),
       ...(task.assignee ? { assignee: task.assignee } : {}),
     })),
@@ -98,6 +125,7 @@ function formatHintLine(hint: TaskHint): string {
 export function formatTaskDetail(task: Task): string[] {
   const lines: string[] = [
     `Task: ${task.id}`,
+    ...(task.slug ? [`  Slug: ${task.slug}`] : []),
     `  Title: ${task.title}`,
     `  Status: ${task.status}`,
     `  Priority: P${task.priority}`,
@@ -131,6 +159,12 @@ export function formatTaskDetail(task: Task): string[] {
 
 export function formatTaskShowView(view: TaskShowView): string[] {
   const lines = formatTaskDetail(view.task);
+  if (view.steps && view.steps.length > 0) {
+    lines.push(`  Steps:`);
+    for (const step of view.steps) {
+      lines.push(`    ${step.id}  ${step.status.padEnd(12)}  ${step.title}`);
+    }
+  }
   const summary = view.continuation;
   if (!summary) {
     return lines;
@@ -186,6 +220,150 @@ function formatPruneKindLine(kind: PruneKindReport, dryRun: boolean): string {
   if (kind.oldestKeptAt) parts.push(`oldest kept ${kind.oldestKeptAt}`);
   if (kind.newestPurgedAt) parts.push(`newest purged ${kind.newestPurgedAt}`);
   return parts.join(", ");
+}
+
+export interface FormatTaskStatusOptions {
+  /** When true, include completed tasks in the rendered output. */
+  readonly all?: boolean;
+  /** When true, emit ANSI color codes. Default: detect via NO_COLOR + TTY. */
+  readonly color?: boolean;
+}
+
+/**
+ * Render the screenshot-style `task status` view from a projection. Returns a
+ * line array (no trailing newline). Plain-text shape is stable; color is only
+ * applied when `opts.color` is explicitly true (default: auto-detect via
+ * `isColorEnabled()`).
+ */
+export function formatTaskStatusView(
+  projection: TaskStatusProjection,
+  opts: FormatTaskStatusOptions = {},
+): string[] {
+  const colorOn = opts.color ?? isColorEnabled();
+  const all = opts.all === true;
+  const { header, tracks, orphans } = projection;
+
+  const lines: string[] = [];
+  lines.push(
+    `tasks: ${header.active} active, ${header.pending} pending, ${header.blocked} blocked`,
+  );
+
+  if (tracks.length === 0 && orphans.length === 0) {
+    return lines;
+  }
+
+  const tasksById = projection.tasksById;
+
+  for (let idx = 0; idx < tracks.length; idx++) {
+    const track = tracks[idx]!;
+    lines.push("");
+    appendTrack(lines, track, tasksById, colorOn, all);
+  }
+
+  if (orphans.length > 0) {
+    lines.push("");
+    lines.push(colorize("(orphans)", "dim", colorOn));
+    for (const orphan of orphans) {
+      const glyph = stepGlyph(orphan, tasksById, colorOn);
+      lines.push(`  ${glyph} ${orphan.title}`);
+      const status = stepStatusLine(orphan, tasksById, colorOn);
+      if (status !== undefined) {
+        lines.push(`      ${status}`);
+      }
+    }
+  }
+
+  return lines;
+}
+
+function appendTrack(
+  lines: string[],
+  track: TaskTrackGroup,
+  tasksById: ReadonlyMap<string, Task>,
+  colorOn: boolean,
+  includeAll: boolean,
+): void {
+  lines.push(colorize(track.identifier, "cyan", colorOn));
+
+  const visibleSteps = includeAll
+    ? track.steps
+    : track.steps.filter((step) => step.status !== "completed");
+
+  // Tracks with no visible steps render the track-task itself as the single
+  // bullet (H4). Tracks with steps treat the track-task as a container and
+  // skip its title; only the steps render.
+  if (visibleSteps.length === 0) {
+    if (track.task.status === "completed" && !includeAll) return;
+    const taskBlocked = hasUnresolvedBlockers(track.task, tasksById);
+    const headlineGlyph = trackHeadlineGlyph(track.task, taskBlocked, colorOn);
+    lines.push(`  ${headlineGlyph} ${track.task.title}`);
+    const headlineStatus = stepStatusLine(track.task, tasksById, colorOn);
+    if (headlineStatus !== undefined) {
+      lines.push(`      ${headlineStatus}`);
+    }
+    return;
+  }
+
+  for (const step of visibleSteps) {
+    const glyph = stepGlyph(step, tasksById, colorOn);
+    lines.push(`  ${glyph} ${step.title}`);
+    const status = stepStatusLine(step, tasksById, colorOn);
+    if (status !== undefined) {
+      lines.push(`      ${status}`);
+    }
+  }
+}
+
+function trackHeadlineGlyph(task: Task, blocked: boolean, colorOn: boolean): string {
+  if (task.status === "in_progress") return colorize("o", "green", colorOn);
+  if (blocked) return colorize("!", "red", colorOn);
+  if (task.status === "completed") return "v";
+  return "·";
+}
+
+function stepGlyph(
+  step: Task,
+  tasksById: ReadonlyMap<string, Task>,
+  colorOn: boolean,
+): string {
+  if (step.status === "in_progress") return colorize("o", "green", colorOn);
+  if (hasUnresolvedBlockers(step, tasksById)) return colorize("!", "red", colorOn);
+  if (step.status === "completed") return "v";
+  return "·";
+}
+
+function stepStatusLine(
+  step: Task,
+  tasksById: ReadonlyMap<string, Task>,
+  colorOn: boolean,
+): string | undefined {
+  if (step.status === "in_progress") {
+    return colorize("in-progress", "yellow", colorOn);
+  }
+  if (step.status === "pending") {
+    if (!hasUnresolvedBlockers(step, tasksById)) {
+      return undefined;
+    }
+    const labels = step.blockedBy
+      .map((blockerId) => describeBlocker(blockerId, tasksById))
+      .filter((label): label is string => label !== undefined);
+    if (labels.length === 0) return undefined;
+    return colorize(`blocked by ${labels.join(", ")}`, "red", colorOn);
+  }
+  return undefined;
+}
+
+function describeBlocker(
+  blockerId: string,
+  tasksById: ReadonlyMap<string, Task>,
+): string | undefined {
+  const blocker = tasksById.get(blockerId);
+  if (!blocker) return blockerId;
+  const label = blocker.parentId === undefined && blocker.slug ? blocker.slug : blocker.id;
+  if (blocker.status === "completed") {
+    return `${label} (done)`;
+  }
+  return label;
 }
 
 function formatContinuationEvent(event: TaskShowView["recentEvents"][number]): string {

@@ -33,6 +33,7 @@ describe("buildBatchInputSchema", () => {
     expect(defs.BatchTaskInput.properties).toHaveProperty("labels");
     expect(defs.BatchTaskInput.properties).toHaveProperty("parent");
     expect(defs.BatchTaskInput.properties).toHaveProperty("blockedBy");
+    expect(defs.BatchTaskInput.properties).toHaveProperty("slug");
   });
 
   it("enumerates the same task types and priorities the validator accepts", () => {

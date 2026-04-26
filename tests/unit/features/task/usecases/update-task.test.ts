@@ -200,4 +200,96 @@ describe("updateTask", () => {
     const { task: moved } = await updateTask(store, leaf.id, { parentId: b.id });
     expect(moved.parentId).toBe(b.id);
   });
+
+  describe("slug lifecycle", () => {
+    it("L1: promotes a step to a track only when a slug is supplied", async () => {
+      const track = await createTask(store, { title: "Parent track", type: "feature" });
+      const step = await createTask(store, { title: "Step", parentId: track.id });
+
+      await expect(
+        updateTask(store, step.id, { parentId: "" }),
+      ).rejects.toThrow(/Top-level tasks require a slug/);
+
+      const { task: promoted } = await updateTask(store, step.id, {
+        parentId: "",
+        slug: "implement/promoted-step",
+      });
+      expect(promoted.parentId).toBeUndefined();
+      expect(promoted.slug).toBe("implement/promoted-step");
+    });
+
+    it("L2: demoting a track requires --drop-slug when the track has a slug", async () => {
+      const trackA = await createTask(store, { title: "A", type: "feature" });
+      const trackB = await createTask(store, { title: "B", type: "feature" });
+
+      await expect(
+        updateTask(store, trackA.id, { parentId: trackB.id }),
+      ).rejects.toThrow(/--drop-slug to confirm/);
+
+      const { task: demoted } = await updateTask(store, trackA.id, {
+        parentId: trackB.id,
+        dropSlug: true,
+      });
+      expect(demoted.parentId).toBe(trackB.id);
+      expect(demoted.slug).toBeUndefined();
+    });
+
+    it("L3: renames a slug in place and rejects collisions", async () => {
+      const a = await createTask(store, { title: "Alpha", type: "feature" });
+      const b = await createTask(store, { title: "Beta", type: "feature" });
+
+      const { task: renamed } = await updateTask(store, a.id, { slug: "implement/renamed" });
+      expect(renamed.slug).toBe("implement/renamed");
+
+      await expect(
+        updateTask(store, b.id, { slug: "implement/renamed" }),
+      ).rejects.toThrow(/already used by/);
+    });
+
+    it("rejects setting a slug on a step task", async () => {
+      const track = await createTask(store, { title: "T", type: "feature" });
+      const step = await createTask(store, { title: "Step", parentId: track.id });
+
+      await expect(
+        updateTask(store, step.id, { slug: "implement/x" }),
+      ).rejects.toThrow(/cannot carry a slug/);
+    });
+
+    it("L4 regression: deleting a track with steps does not surface a slug error", async () => {
+      const track = await createTask(store, { title: "Track", type: "feature" });
+      await createTask(store, { title: "Step 1", parentId: track.id });
+      await createTask(store, { title: "Step 2", parentId: track.id });
+
+      const deleted = await store.delete(track.id);
+      expect(deleted.id).toBe(track.id);
+      const remaining = await store.all();
+      expect(remaining.every((t) => t.parentId === undefined || t.parentId === track.id)).toBe(true);
+    });
+  });
+
+  describe("uniqueness", () => {
+    it("appends -2 suffix when a derived slug already exists, and gives a clear error after exhausting suffixes", async () => {
+      const baseTitle = "Bump deps";
+      const created: string[] = [];
+      for (let i = 0; i < 9; i++) {
+        const t = await createTask(store, { title: baseTitle, type: "chore" });
+        if (t.slug) created.push(t.slug);
+      }
+      expect(created).toEqual([
+        "chore/bump-deps",
+        "chore/bump-deps-2",
+        "chore/bump-deps-3",
+        "chore/bump-deps-4",
+        "chore/bump-deps-5",
+        "chore/bump-deps-6",
+        "chore/bump-deps-7",
+        "chore/bump-deps-8",
+        "chore/bump-deps-9",
+      ]);
+
+      await expect(createTask(store, { title: baseTitle, type: "chore" })).rejects.toThrow(
+        MaestroError,
+      );
+    });
+  });
 });

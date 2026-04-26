@@ -21,6 +21,12 @@ export interface BatchTaskInput {
   readonly type?: TaskType;
   readonly priority?: TaskPriority;
   readonly parent?: string;
+  /**
+   * Optional explicit slug for top-level entries. Mandatory at plan-conversion
+   * (auto-derived from the title when omitted on a top-level entry). Forbidden
+   * when `parent` is set.
+   */
+  readonly slug?: string;
   readonly labels?: readonly string[];
   readonly blockedBy?: readonly string[];
 }
@@ -42,6 +48,7 @@ export interface CreateBatchInput {
   readonly priority?: TaskPriority;
   readonly labels?: readonly string[];
   readonly parentRef?: number | string;
+  readonly slug?: string;
   readonly blockedByRefs?: readonly (number | string)[];
 }
 

@@ -331,6 +331,73 @@ export function batchStaleReceipt(batchId: string, missingIds: readonly string[]
   );
 }
 
+// ============================
+// Slug error factories
+// ============================
+
+export function slugInvalidShape(slug: string): MaestroError {
+  return new MaestroError(
+    `Invalid slug shape: '${slug}'`,
+    [
+      "Slug must be '<verb>/<kebab>'",
+      "Verb must be one of: implement, fix, chore, spike, epic",
+      "Kebab tail is lowercase ASCII alphanumerics + single hyphens, total <= 60 chars",
+    ],
+  );
+}
+
+export function slugCollision(slug: string, ownerId: string): MaestroError {
+  return new MaestroError(
+    `Slug '${slug}' is already used by ${ownerId}`,
+    [
+      "Pick a different slug or rename the existing track",
+      "Slugs must be unique across all top-level tasks",
+    ],
+  );
+}
+
+export function slugRequired(): MaestroError {
+  return new MaestroError(
+    "Top-level tasks require a slug",
+    [
+      "Pass --slug '<verb>/<kebab>' on creation, or omit and let the title derive one",
+      "Provide a non-empty title that can be kebab-cased so a slug can be derived",
+      "Verbs: implement, fix, chore, spike, epic",
+    ],
+  );
+}
+
+export function slugForbiddenOnStep(): MaestroError {
+  return new MaestroError(
+    "Step tasks (with --parent) cannot carry a slug",
+    [
+      "Slugs only apply to top-level 'tracks'; step tasks address by tsk-id",
+      "Drop the slug on the step, or promote it to a track via 'task update <id> --parent \"\" --slug ...'",
+    ],
+  );
+}
+
+export function slugNotFound(slug: string, suggestion?: string): MaestroError {
+  const hints = [
+    "List existing tasks: maestro task list",
+    "Slugs only address top-level tasks; step tasks must be referenced by 'tsk-<id>'",
+  ];
+  if (suggestion !== undefined) {
+    hints.unshift(`Did you mean '${suggestion}'?`);
+  }
+  return new MaestroError(`No task found for slug '${slug}'`, hints);
+}
+
+export function slugMissingDropFlag(id: string): MaestroError {
+  return new MaestroError(
+    `Demoting ${id} to a step would drop its slug; pass --drop-slug to confirm`,
+    [
+      "Slugs are not preserved when a track becomes a step",
+      "Pass --drop-slug to acknowledge the slug will be cleared",
+    ],
+  );
+}
+
 export function batchValidationErrors(issues: readonly string[]): MaestroError {
   const header = issues.length === 1
     ? "Plan validation failed"

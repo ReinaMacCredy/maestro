@@ -236,4 +236,99 @@ describe("planTasks", () => {
       ).rejects.toThrow(/Invalid batchId/);
     });
   });
+
+  describe("mandatory slug at plan conversion (PC1-PC9)", () => {
+    it("PC1: rejects an explicit slug whose shape is invalid", async () => {
+      await expect(
+        planTasks(store, {
+          tasks: [{ name: "a", title: "A", slug: "Foo/Bar" }],
+        }),
+      ).rejects.toThrow(/Plan validation failed/);
+      expect(await store.all()).toHaveLength(0);
+    });
+
+    it("PC3+PC7: derives a slug for top-level entries that omit it", async () => {
+      const result = await planTasks(store, {
+        tasks: [
+          { name: "first", title: "Add login form", type: "feature" },
+          { name: "second", title: "Fix race in writer", type: "bug", parent: "first" },
+        ],
+      });
+      const created = result.created;
+      const firstId = created.find((t) => t.name === "first")!.id;
+      const first = await store.get(firstId);
+      expect(first?.slug).toBe("implement/add-login-form");
+
+      const secondId = created.find((t) => t.name === "second")!.id;
+      const second = await store.get(secondId);
+      expect(second?.slug).toBeUndefined();
+      expect(second?.parentId).toBe(firstId);
+    });
+
+    it("PC4: rejects two batch entries that derive to the same slug atomically", async () => {
+      await expect(
+        planTasks(store, {
+          tasks: [
+            { name: "a", title: "Bump deps", type: "chore" },
+            { name: "b", title: "Bump deps", type: "chore", slug: "chore/bump-deps" },
+          ],
+        }),
+      ).rejects.toThrow(/Plan validation failed/);
+      expect(await store.all()).toHaveLength(0);
+    });
+
+    it("PC5+PC9: rejects a batch slug that collides with an on-disk top-level slug", async () => {
+      await createTask(store, { title: "Existing", type: "feature", slug: "implement/existing" });
+
+      await expect(
+        planTasks(store, {
+          tasks: [{ name: "a", title: "A", slug: "implement/existing" }],
+        }),
+      ).rejects.toThrow(/already used by an existing/);
+      expect(await store.all()).toHaveLength(1);
+    });
+
+    it("PC6: rejects an entry that has both 'slug' and 'parent'", async () => {
+      await expect(
+        planTasks(store, {
+          tasks: [
+            { name: "root", title: "Root", type: "feature" },
+            { name: "child", title: "Child", parent: "root", slug: "implement/child" },
+          ],
+        }),
+      ).rejects.toThrow(/forbidden on step entries/);
+      expect(await store.all()).toHaveLength(0);
+    });
+
+    it("PC8: a slug from one entry can be used as a cross-reference by another", async () => {
+      const result = await planTasks(store, {
+        tasks: [
+          { title: "Root", type: "feature", slug: "implement/foo" },
+          { title: "Child", parent: "implement/foo" },
+        ],
+      });
+      expect(result.created).toHaveLength(2);
+      const child = await store.get(result.created[1]!.id);
+      const root = await store.get(result.created[0]!.id);
+      expect(child?.parentId).toBe(root!.id);
+    });
+
+    it("auto-derives suffixes when multiple top-level entries share a base", async () => {
+      const result = await planTasks(store, {
+        tasks: [
+          { name: "a", title: "Bump deps", type: "chore" },
+          { name: "b", title: "Bump deps", type: "chore" },
+          { name: "c", title: "Bump deps", type: "chore" },
+        ],
+      });
+      const slugs = await Promise.all(
+        result.created.map(async (t) => (await store.get(t.id))?.slug),
+      );
+      expect(slugs).toEqual([
+        "chore/bump-deps",
+        "chore/bump-deps-2",
+        "chore/bump-deps-3",
+      ]);
+    });
+  });
 });

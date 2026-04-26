@@ -26,6 +26,7 @@ Do not activate for one-liner edits or read-only questions.
 3. **Update continuation state on meaningful change only.** Current state shifted, next action changed, a decision was made, blockers appeared. Not on every trivial edit.
 4. **Blockers block transitions.** A task cannot move to `in_progress` or `completed` with unresolved blockers.
 5. **Handoff is for cross-session transfer only.** Same-session resume uses continuation state, not handoffs.
+6. **Mandatory slug at plan conversion.** Every top-level "track" carries a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`). Pass `slug` explicitly on top-level entries or omit it and let the title derive one. Step entries (those with `parent`) must NOT carry a slug. The whole batch is rejected on slug shape errors, on-disk collisions, or `slug` + `parent` together.
 
 ## Converting a plan into a task batch
 
@@ -45,29 +46,34 @@ cat <<'JSON' | maestro task plan --file - --start scaffold
       "title": "Scaffold feature X",
       "description": "Create the feature directory, wire index.ts, add skeleton services.ts.",
       "type": "feature",
-      "priority": 1
+      "priority": 1,
+      "slug": "implement/feature-x"
     },
     {
       "name": "impl",
       "title": "Implement the core use-case",
       "description": "Build the use-case behind the port; cover happy path first.",
-      "blockedBy": ["scaffold"]
+      "parent": "scaffold"
     },
     {
       "name": "tests",
       "title": "Add unit + integration tests",
+      "parent": "scaffold",
       "blockedBy": ["impl"]
     },
     {
       "name": "ship",
       "title": "Open PR",
       "type": "chore",
+      "parent": "scaffold",
       "blockedBy": ["tests"]
     }
   ]
 }
 JSON
 ```
+
+`slug` is REQUIRED on every top-level entry. Either pass it explicitly (preferred when the kebab matters) or omit it and let `task plan` derive one from the title (`Title text` → `<verb>/title-text`). Step entries (`parent` set) must NOT carry a slug — they address by `tsk-<id>`.
 
 `--start <name>` claims the named task and flips it to `in_progress` in the same command. `batchId` makes retries idempotent (receipt persists under `.maestro/tasks/batches/`). Any validation error rejects the whole batch.
 
@@ -155,11 +161,43 @@ maestro task update <id> --status completed \
 ```bash
 maestro status --json
 maestro task ready --json --compact --limit 5
-maestro task show <id>
+maestro task show <id-or-slug>
 maestro task mine
 maestro task stuck --older-than 4h
 maestro task similar <id>
 ```
+
+`task show` and `task update` accept either `tsk-<id>` or a track slug like `implement/foo`. `task list --tracks` prints just the track headers (slugs + slugless legacy ids), one per line.
+
+## Status view
+
+```bash
+maestro task status                       # all tracks, hides completed
+maestro task status --all                 # include completed (with `v` glyph)
+maestro task status --track implement/foo # restrict to one track
+maestro task status --json                # structured projection
+```
+
+The text view groups tasks by their top-level "track" (slug as header), with
+status glyphs: `o` active (in_progress), `!` blocked, `·` pending, `v`
+completed (only with `--all`). A track with steps shows the steps; a track
+with no steps shows the track-task itself as the single bullet. Blocked
+steps render `blocked by <slug-or-id>` underneath; if a blocker has
+completed it's marked `(done)` as a hint that the wait is over.
+
+## Slug backfill (legacy slugless top-level tasks)
+
+Existing top-level tasks without a slug render with their bare `tsk-<id>` as
+the header. Backfill incrementally:
+
+```bash
+maestro task update tsk-<id> --slug implement/<kebab>
+```
+
+Slug uniqueness is enforced across all top-level tasks. To rename a slug,
+pass `--slug <new>` on a track that already has one. Slugs are not preserved
+when a track is demoted to a step (`task update <id> --parent <other>`); the
+CLI requires `--drop-slug` to acknowledge that.
 
 ## Recovery
 

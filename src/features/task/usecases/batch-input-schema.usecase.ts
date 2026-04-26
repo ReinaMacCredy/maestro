@@ -69,8 +69,15 @@ export function buildBatchInputSchema(): Record<string, unknown> {
           parent: {
             type: "string",
             description:
-              "Parent reference. Either a real `tsk-*` id OR a batch-local `name` defined in this same plan.",
+              "Parent reference. Either a real `tsk-*` id, a batch-local `name`, or another entry's `slug`. Forbidden in combination with `slug` on this entry (only top-level tasks carry slugs).",
             pattern: TASK_REFERENCE_REGEX_SOURCE,
+          },
+          slug: {
+            type: "string",
+            description:
+              "Mandatory human-readable slug for top-level entries. Shape: '<verb>/<kebab>' (verbs: implement, fix, chore, spike, epic). When omitted on a top-level entry, derived from the title. Forbidden when `parent` is set.",
+            pattern: "^(?:implement|fix|chore|spike|epic)/[a-z0-9]+(?:-[a-z0-9]+)*$",
+            maxLength: 60,
           },
           blockedBy: {
             type: "array",
