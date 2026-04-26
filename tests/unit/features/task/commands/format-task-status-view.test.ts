@@ -114,7 +114,7 @@ describe("formatTaskStatusView", () => {
     ];
 
     const projection = groupTasksByTrack(tasks);
-    const lines = formatTaskStatusView(projection, { color: false });
+    const lines = formatTaskStatusView(projection, { color: false, compact: false });
 
     expect(lines).toEqual([
       "tasks: 3 active, 7 pending, 2 blocked",
@@ -141,6 +141,70 @@ describe("formatTaskStatusView", () => {
       "      in-progress",
       "  · Investigate and surface Codex agent error text on non-zero exit",
       "  · Investigate and surface OpenCode agent error text on non-zero exit",
+    ]);
+  });
+
+  it("compact mode collapses solo tracks to one line and drops blanks between them", () => {
+    const a = makeTask({
+      id: "tsk-aaaaaa",
+      title: "Update agents",
+      slug: "chore/update-agents",
+      status: "in_progress",
+      createdAt: "2026-04-26T00:00:01.000Z",
+    });
+    const b = makeTask({
+      id: "tsk-bbbbbb",
+      title: "Bump deps",
+      slug: "chore/bump-deps",
+      createdAt: "2026-04-26T00:00:02.000Z",
+    });
+    const blocker = makeTask({
+      id: "tsk-cccccc",
+      title: "Open blocker",
+      slug: "implement/blocker",
+      createdAt: "2026-04-26T00:00:03.000Z",
+    });
+    const blocked = makeTask({
+      id: "tsk-dddddd",
+      title: "Blocked work",
+      slug: "implement/blocked-work",
+      blockedBy: [blocker.id],
+      createdAt: "2026-04-26T00:00:04.000Z",
+    });
+
+    const projection = groupTasksByTrack([a, b, blocker, blocked]);
+    const lines = formatTaskStatusView(projection, { color: false, compact: true });
+
+    expect(lines).toEqual([
+      "tasks: 1 active, 2 pending, 1 blocked",
+      "",
+      "  o chore/update-agents  Update agents  in-progress",
+      "  · chore/bump-deps  Bump deps",
+      "  · implement/blocker  Open blocker",
+      "  ! implement/blocked-work  Blocked work  blocked by implement/blocker",
+    ]);
+  });
+
+  it("compact mode keeps multi-line form for tracks that have steps", () => {
+    const trackTask = makeTask({
+      id: "tsk-aaaaaa",
+      title: "Track epic",
+      slug: "implement/track-epic",
+    });
+    const step = makeTask({
+      id: "tsk-bbbbbb",
+      title: "Step one",
+      parentId: trackTask.id,
+    });
+
+    const projection = groupTasksByTrack([trackTask, step]);
+    const lines = formatTaskStatusView(projection, { color: false, compact: true });
+
+    expect(lines).toEqual([
+      "tasks: 0 active, 1 pending, 0 blocked",
+      "",
+      "implement/track-epic",
+      "  · Step one",
     ]);
   });
 

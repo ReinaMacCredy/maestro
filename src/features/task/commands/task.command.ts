@@ -467,6 +467,10 @@ function registerStatusCommand(taskCmd: Command, program: Command): void {
     .description("Show tracks grouped by top-level slug with status glyphs")
     .option("--all", "Include completed tasks (rendered with 'v' glyph)")
     .option("--track <slug>", "Restrict output to a single track by slug or tsk-id")
+    .option(
+      "--no-compact",
+      "Render every track in multi-line form (default: solo tracks render on one line)",
+    )
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
@@ -482,7 +486,10 @@ function registerStatusCommand(taskCmd: Command, program: Command): void {
         output(true, projection, () => []);
         return;
       }
-      const lines = formatTaskStatusView(projection, { all: opts.all === true });
+      const lines = formatTaskStatusView(projection, {
+        all: opts.all === true,
+        compact: opts.compact !== false,
+      });
       for (const line of lines) {
         console.log(line);
       }

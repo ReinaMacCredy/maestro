@@ -232,6 +232,13 @@ export interface FormatTaskStatusOptions {
   readonly all?: boolean;
   /** When true, emit ANSI color codes. Default: detect via NO_COLOR + TTY. */
   readonly color?: boolean;
+  /**
+   * Compact mode: tracks with zero visible steps render on a single line
+   * (slug + glyph + title + inline status), and the blank line between
+   * consecutive solo tracks is dropped. Tracks with steps still render in
+   * the multi-line form so step lists remain scannable.
+   */
+  readonly compact?: boolean;
 }
 
 /**
@@ -244,6 +251,7 @@ export function formatTaskStatusView(
   opts: FormatTaskStatusOptions = {},
 ): string[] {
   const colorOn = opts.color ?? isColorEnabled();
+  const compact = opts.compact === true;
   const { header, tracks, orphans, tasksById } = projection;
 
   const lines: string[] = [
@@ -254,9 +262,18 @@ export function formatTaskStatusView(
     return lines;
   }
 
+  let prevSolo = false;
   for (const track of tracks) {
-    lines.push("");
-    appendTrack(lines, track, tasksById, colorOn);
+    const isSolo = compact && track.steps.length === 0;
+    if (!(prevSolo && isSolo)) {
+      lines.push("");
+    }
+    if (isSolo) {
+      lines.push(formatSoloTrackLine(track, tasksById, colorOn));
+    } else {
+      appendTrack(lines, track, tasksById, colorOn);
+    }
+    prevSolo = isSolo;
   }
 
   if (orphans.length > 0) {
@@ -286,6 +303,26 @@ function appendTrack(
   for (const task of tasks) {
     appendStep(lines, task, tasksById, colorOn);
   }
+}
+
+/**
+ * Render a solo (zero-step) track as a single line:
+ *   `  o slug  title  in-progress`
+ * Status is appended inline (yellow) when present; otherwise just the
+ * glyph + slug + title.
+ */
+function formatSoloTrackLine(
+  track: TaskTrackGroup,
+  tasksById: ReadonlyMap<string, Task>,
+  colorOn: boolean,
+): string {
+  const task = track.task;
+  const blocked = hasUnresolvedBlockers(task, tasksById);
+  const glyph = stepGlyph(task, blocked, colorOn);
+  const slug = colorize(track.identifier, "cyan", colorOn);
+  const status = stepStatusLine(task, blocked, tasksById, colorOn);
+  const head = `  ${glyph} ${slug}  ${task.title}`;
+  return status === undefined ? head : `${head}  ${status}`;
 }
 
 function appendStep(

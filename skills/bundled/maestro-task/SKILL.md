@@ -172,17 +172,24 @@ maestro task similar <id>
 ## Status view
 
 ```bash
-maestro task status                       # all tracks, hides completed
+maestro task status                       # all tracks, hides completed (compact by default)
 maestro task status --all                 # include completed (with `v` glyph)
+maestro task status --no-compact          # multi-line form for every track
 maestro task status --track implement/foo # restrict to one track
 maestro task status --json                # structured projection
 ```
 
 The text view groups tasks by their top-level "track" (slug as header), with
 status glyphs: `o` active (in_progress), `!` blocked, `·` pending, `v`
-completed (only with `--all`). A track with steps shows the steps; a track
-with no steps shows the track-task itself as the single bullet. Blocked
-steps render `blocked by <slug-or-id>` underneath; if a blocker has
+completed (only with `--all`).
+
+By default, solo tracks (no step children) render on one line:
+`  o slug  title  in-progress`, and the blank line between consecutive solo
+tracks is dropped so flat queues stay scannable. Tracks with steps keep the
+multi-line form so step lists remain readable. Pass `--no-compact` to force
+the multi-line shape for every track.
+
+Blocked steps render `blocked by <slug-or-id>` underneath; if a blocker has
 completed it's marked `(done)` as a hint that the wait is over.
 
 ## Slug backfill (legacy slugless top-level tasks)
