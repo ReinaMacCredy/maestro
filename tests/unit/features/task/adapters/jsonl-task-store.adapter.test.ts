@@ -271,13 +271,13 @@ describe("JsonlTaskStoreAdapter", () => {
     expect((await store.get(child.id))?.parentId).toBeUndefined();
   });
 
-    it("releases unresolved tasks owned by a dead session", async () => {
-      const task = await store.create({ title: "Owned" });
-      await store.claim(task.id, "codex-session-a");
-      await store.update(task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
+  it("releases unresolved tasks owned by a dead session", async () => {
+    const task = await store.create({ title: "Owned" });
+    await store.claim(task.id, "codex-session-a");
+    await store.update(task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
 
-      const released = await store.releaseOwned("codex-session-a");
-      expect(released).toHaveLength(1);
+    const released = await store.releaseOwned("codex-session-a");
+    expect(released).toHaveLength(1);
     expect(released[0]?.status).toBe("pending");
     expect(released[0]?.assignee).toBeUndefined();
   });
@@ -299,5 +299,51 @@ describe("JsonlTaskStoreAdapter", () => {
     expect(reopened.claimedAtCommit).toBeUndefined();
     // contractId is intentionally preserved so the reopen flow can re-lock
     // the prior contract for the task.
+  });
+
+  it("keeps updatedAt strictly increasing across fast ownership and liveness writes", async () => {
+    const originalDateNow = Date.now;
+    Date.now = () => 1_700_000_000_000;
+
+    try {
+      const task = await store.create({ title: "Monotonic ownership" });
+      const claimed = await store.claim(task.id, "session-a");
+      const heartbeat = await store.heartbeat(task.id, "session-a");
+      const unclaimed = await store.unclaim(task.id, "session-a");
+      const reopenedSource = await store.claim(unclaimed.id, "session-a");
+      await store.update(reopenedSource.id, { status: "completed", reason: "done" }, { sessionId: "session-a" });
+      const reopened = await store.reopen(reopenedSource.id);
+
+      expect(claimed.updatedAt > task.updatedAt).toBeTrue();
+      expect(heartbeat.updatedAt > claimed.updatedAt).toBeTrue();
+      expect(unclaimed.updatedAt > heartbeat.updatedAt).toBeTrue();
+      expect(reopened.updatedAt > unclaimed.updatedAt).toBeTrue();
+    } finally {
+      Date.now = originalDateNow;
+    }
+  });
+
+  it("keeps updatedAt strictly increasing when delete rewrites related tasks in one tick", async () => {
+    const originalDateNow = Date.now;
+    Date.now = () => 1_700_000_000_000;
+
+    try {
+      const blocker = await store.create({ title: "Blocker" });
+      const target = await store.create({ title: "Target", blockedBy: [blocker.id] });
+      const child = await store.create({ title: "Child", parentId: target.id });
+
+      const blockerBeforeDelete = (await store.get(blocker.id))!;
+      const childBeforeDelete = (await store.get(child.id))!;
+
+      await store.delete(target.id);
+
+      const blockerAfterDelete = (await store.get(blocker.id))!;
+      const childAfterDelete = (await store.get(child.id))!;
+
+      expect(blockerAfterDelete.updatedAt > blockerBeforeDelete.updatedAt).toBeTrue();
+      expect(childAfterDelete.updatedAt > childBeforeDelete.updatedAt).toBeTrue();
+    } finally {
+      Date.now = originalDateNow;
+    }
   });
 });

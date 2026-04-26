@@ -250,7 +250,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       const reason = patch.reason === undefined
         ? existing.closeReason
         : (patch.reason.length === 0 ? undefined : patch.reason);
-      const now = new Date().toISOString();
+      const now = nextIsoTimestamp(existing.updatedAt);
       const receipt = buildTaskReceipt(existing.receipt, {
         nextStatus,
         capturedAt: now,
@@ -321,7 +321,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         return existing;
       }
 
-      const now = new Date().toISOString();
+      const now = nextIsoTimestamp(existing.updatedAt);
       const claimed: Task = {
         ...existing,
         assignee: sessionId,
@@ -353,7 +353,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         throw taskClaimOwnedByDifferentSession(id, existing.assignee);
       }
 
-      const now = new Date().toISOString();
+      const now = nextIsoTimestamp(existing.updatedAt);
       const unclaimed = releaseTaskOwnership(existing, now);
 
       tasks.set(id, unclaimed);
@@ -381,9 +381,11 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       ensureTasksExist(id, blockedTaskIds, tasks);
       assertNoBlockCycle(id, blockedTaskIds, tasks);
 
-      const now = new Date().toISOString();
+      let clock = blocker.updatedAt;
       let blockerChanged = false;
-      blockerChanged = upsertBlockList(tasks, id, blocker, [...blocker.blocks, ...blockedTaskIds], now) || blockerChanged;
+      const blockerNow = nextIsoTimestamp(clock);
+      clock = blockerNow;
+      blockerChanged = upsertBlockList(tasks, id, blocker, [...blocker.blocks, ...blockedTaskIds], blockerNow) || blockerChanged;
 
       for (const blockedTaskId of blockedTaskIds) {
         const blockedTask = tasks.get(blockedTaskId)!;
@@ -391,8 +393,10 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
           throw taskAlreadyCompleted(blockedTaskId);
         }
         assertTaskMutationOwnership(blockedTask, opts, "block");
+        const blockedNow = nextIsoTimestamp(blockedTask.updatedAt > clock ? blockedTask.updatedAt : clock);
+        clock = blockedNow;
         blockerChanged =
-          upsertBlockedByList(tasks, blockedTaskId, blockedTask, [...blockedTask.blockedBy, id], now) ||
+          upsertBlockedByList(tasks, blockedTaskId, blockedTask, [...blockedTask.blockedBy, id], blockedNow) ||
           blockerChanged;
       }
 
@@ -426,11 +430,13 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       }
 
       const removeSet = new Set(blockedTaskIds);
-      const now = new Date().toISOString();
+      let clock = blocker.updatedAt;
       let changed = false;
       if (!blockerCompleted) {
         const nextBlocks = blocker.blocks.filter((blockedId) => !removeSet.has(blockedId));
-        changed = upsertBlockList(tasks, id, blocker, nextBlocks, now);
+        const blockerNow = nextIsoTimestamp(clock);
+        clock = blockerNow;
+        changed = upsertBlockList(tasks, id, blocker, nextBlocks, blockerNow);
       }
 
       for (const blockedTaskId of blockedTaskIds) {
@@ -444,7 +450,9 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         }
         assertTaskMutationOwnership(blockedTask, opts, "unblock");
         const nextBlockedBy = blockedTask.blockedBy.filter((blockerId) => blockerId !== id);
-        changed = upsertBlockedByList(tasks, blockedTaskId, blockedTask, nextBlockedBy, now) || changed;
+        const blockedNow = nextIsoTimestamp(blockedTask.updatedAt > clock ? blockedTask.updatedAt : clock);
+        clock = blockedNow;
+        changed = upsertBlockedByList(tasks, blockedTaskId, blockedTask, nextBlockedBy, blockedNow) || changed;
       }
 
       if (!changed) {
@@ -505,13 +513,15 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   async releaseOwned(sessionId: string): Promise<readonly Task[]> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
-      const now = new Date().toISOString();
+      let clock: string | undefined;
       const released: Task[] = [];
 
       for (const [id, task] of tasks.entries()) {
         if (task.status === "completed" || task.assignee !== sessionId) {
           continue;
         }
+        const now = nextIsoTimestamp(task.updatedAt && clock ? (task.updatedAt > clock ? task.updatedAt : clock) : (task.updatedAt ?? clock));
+        clock = now;
         const updated = releaseTaskOwnership(task, now);
         tasks.set(id, updated);
         released.push(updated);
@@ -543,7 +553,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         throw taskClaimOwnedByDifferentSession(id, existing.assignee);
       }
 
-      const now = new Date().toISOString();
+      const now = nextIsoTimestamp(existing.updatedAt);
       const beat: Task = {
         ...existing,
         lastActivityAt: now,
@@ -567,7 +577,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         throw taskReopenRequiresCompletedStatus(id);
       }
 
-      const now = new Date().toISOString();
+      const now = nextIsoTimestamp(existing.updatedAt);
       const reopened: Task = {
         ...existing,
         status: "pending",
@@ -594,14 +604,16 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         throw taskNotFound(id);
       }
 
-      const now = new Date().toISOString();
       tasks.delete(id);
+      let clock = existing.updatedAt;
 
       for (const [taskId, task] of tasks.entries()) {
         let changed = false;
         let nextTask = task;
 
         if (task.parentId === id) {
+          const now = nextIsoTimestamp(task.updatedAt > clock ? task.updatedAt : clock);
+          clock = now;
           nextTask = {
             ...nextTask,
             parentId: undefined,
@@ -612,6 +624,8 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
 
         const nextBlocks = task.blocks.filter((blockedId) => blockedId !== id);
         if (!sameValues(task.blocks, nextBlocks)) {
+          const now = nextIsoTimestamp(nextTask.updatedAt > clock ? nextTask.updatedAt : clock);
+          clock = now;
           nextTask = {
             ...nextTask,
             blocks: nextBlocks,
@@ -622,6 +636,8 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
 
         const nextBlockedBy = task.blockedBy.filter((blockerId) => blockerId !== id);
         if (!sameValues(task.blockedBy, nextBlockedBy)) {
+          const now = nextIsoTimestamp(nextTask.updatedAt > clock ? nextTask.updatedAt : clock);
+          clock = now;
           nextTask = {
             ...nextTask,
             blockedBy: nextBlockedBy,
@@ -905,6 +921,15 @@ function dedupeValues(values: readonly string[]): readonly string[] {
     }
   }
   return result;
+}
+
+function nextIsoTimestamp(previousIso?: string): string {
+  const nowMs = Date.now();
+  const previousMs = previousIso ? Date.parse(previousIso) : Number.NaN;
+  const safeMs = Number.isFinite(previousMs)
+    ? Math.max(nowMs, previousMs + 1)
+    : nowMs;
+  return new Date(safeMs).toISOString();
 }
 
 function sameValues(left: readonly string[], right: readonly string[]): boolean {

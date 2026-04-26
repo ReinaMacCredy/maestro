@@ -224,10 +224,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         services.contractStore,
         services.gitAnchor,
         contract,
-        {
-          ...task,
-          updatedAt: new Date().toISOString(),
-        },
+        task,
         undefined,
         await services.gitAnchor.resolveRepoRoot(process.cwd()),
       );

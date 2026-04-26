@@ -228,17 +228,23 @@ describe("task contract compiled E2E", () => {
 
     await Bun.write(join(tmpDir, "README.md"), "hello\npreview\n");
 
+    const storedTask = JSON.parse((await runCompiled(["task", "show", task.id, "--json"], tmpDir)).stdout) as {
+      updatedAt: string;
+    };
+
     const preview = JSON.parse(
       (await runCompiled(["task", "contract", "verdict", contract.id, "--json"], tmpDir)).stdout,
     ) as {
       contractId: string;
       verdict: {
         fulfilled: boolean;
+        computedAt: string;
         actualFilesTouched: string[];
       };
     };
     expect(preview.contractId).toBe(contract.id);
     expect(preview.verdict.fulfilled).toBe(false);
+    expect(preview.verdict.computedAt).toBe(storedTask.updatedAt);
     expect(preview.verdict.actualFilesTouched).toContain("README.md");
   }, SLOW_CLI_TIMEOUT_MS);
 
