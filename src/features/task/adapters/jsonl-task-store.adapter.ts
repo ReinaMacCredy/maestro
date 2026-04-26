@@ -506,7 +506,11 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     }
   }
 
-  async backfillSlug(id: string, slug: string): Promise<Task> {
+  async backfillSlug(
+    id: string,
+    slug: string,
+    opts: { force?: boolean } = {},
+  ): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
@@ -516,13 +520,13 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (existing.parentId !== undefined) {
         throw slugForbiddenOnStep();
       }
-      if (existing.slug !== undefined) {
+      if (existing.slug !== undefined && opts.force !== true) {
         throw new MaestroError(`Task ${id} already has slug '${existing.slug}'`, [
           "Use 'maestro task update <id> --slug <new>' to rename an existing slug",
-          "Backfill is only for tracks that have no slug yet",
+          "Use 'maestro task backfill-slugs --rederive' to overwrite auto-derived slugs",
         ]);
       }
-      assertSlugUnique(tasks, slug);
+      assertSlugUnique(tasks, slug, id);
 
       const now = new Date().toISOString();
       const updated: Task = { ...existing, slug, updatedAt: now };

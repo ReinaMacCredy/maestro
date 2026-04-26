@@ -494,38 +494,55 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
     .command("backfill-slugs")
     .description("Derive a slug for every top-level task that is missing one (legacy/pre-slug tasks)")
     .option("--apply", "Actually write the changes (default is dry-run / planning only)")
+    .option("--rederive", "Re-derive slugs that already exist (overwrites; intended for refreshing auto-derived slugs after a derivation algorithm change)")
     .option("--limit <n>", "Process at most N tasks")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const apply = opts.apply === true;
+      const rederive = opts.rederive === true;
       const limit = parseLimit(opts.limit);
 
       const all = await services.taskStore.all();
-      const slugged = new Set<string>();
-      const slugless: Task[] = [];
+      const tracks: Task[] = [];
+      const stableSlugs = new Set<string>();
       for (const task of all) {
         if (task.parentId !== undefined) continue;
-        if (task.slug !== undefined) slugged.add(task.slug);
-        else slugless.push(task);
+        if (task.slug === undefined) {
+          tracks.push(task);
+        } else if (rederive) {
+          tracks.push(task);
+        } else {
+          stableSlugs.add(task.slug);
+        }
       }
-      slugless.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      const target = limit !== undefined && limit > 0 ? slugless.slice(0, limit) : slugless;
+      tracks.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const target = limit !== undefined && limit > 0 ? tracks.slice(0, limit) : tracks;
 
       const inBatch = new Set<string>();
-      const planned: Array<{ id: string; title: string; slug: string }> = [];
+      const planned: Array<{ id: string; title: string; slug: string; previous?: string }> = [];
       const skipped: Array<{ id: string; title: string; reason: string }> = [];
       for (const task of target) {
         try {
           const base = deriveSlugFromTitle(task.title, task.type);
-          const candidate = pickFreeDerivedSlug(base, slugged, inBatch);
+          const candidate = pickFreeDerivedSlug(base, stableSlugs, inBatch);
           if (candidate === undefined) {
             skipped.push({ id: task.id, title: task.title, reason: `'${base}' and -2..-9 suffixes all taken` });
             continue;
           }
+          if (candidate === task.slug) {
+            // No-op: re-derive matched the existing slug exactly.
+            inBatch.add(candidate);
+            continue;
+          }
           inBatch.add(candidate);
-          planned.push({ id: task.id, title: task.title, slug: candidate });
+          planned.push({
+            id: task.id,
+            title: task.title,
+            slug: candidate,
+            ...(task.slug !== undefined ? { previous: task.slug } : {}),
+          });
         } catch (err) {
           skipped.push({
             id: task.id,
@@ -538,17 +555,20 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
       if (!apply) {
         const result = {
           dryRun: true,
-          totalSlugless: slugless.length,
+          considered: target.length,
+          rederive,
           planned,
           skipped,
         };
         output(isJson, result, (r) => {
+          const headerVerb = r.rederive ? "(re-)derived" : "backfilled";
           const lines: string[] = [
-            `[dry-run] ${r.planned.length} of ${r.totalSlugless} slugless tracks would be backfilled`,
+            `[dry-run] ${r.planned.length} of ${r.considered} tracks would be ${headerVerb}`,
             "",
           ];
           for (const item of r.planned) {
-            lines.push(`  ${item.id}  -->  ${item.slug}`);
+            const arrow = item.previous ? `${item.previous}  -->  ${item.slug}` : `(none)  -->  ${item.slug}`;
+            lines.push(`  ${item.id}  ${arrow}`);
           }
           if (r.skipped.length > 0) {
             lines.push("");
@@ -564,12 +584,16 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
         return;
       }
 
-      const applied: Array<{ id: string; slug: string }> = [];
+      const applied: Array<{ id: string; slug: string; previous?: string }> = [];
       const failures: Array<{ id: string; slug: string; error: string }> = [];
       for (const item of planned) {
         try {
-          await services.taskStore.backfillSlug(item.id, item.slug);
-          applied.push({ id: item.id, slug: item.slug });
+          await services.taskStore.backfillSlug(item.id, item.slug, { force: rederive });
+          applied.push({
+            id: item.id,
+            slug: item.slug,
+            ...(item.previous !== undefined ? { previous: item.previous } : {}),
+          });
         } catch (err) {
           failures.push({
             id: item.id,
@@ -584,7 +608,8 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
           `[ok] Backfilled ${r.applied.length} slug(s)`,
         ];
         for (const item of r.applied) {
-          lines.push(`  ${item.id}  -->  ${item.slug}`);
+          const arrow = item.previous ? `${item.previous}  -->  ${item.slug}` : `(none)  -->  ${item.slug}`;
+          lines.push(`  ${item.id}  ${arrow}`);
         }
         if (r.failures.length > 0) {
           lines.push("");

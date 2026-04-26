@@ -94,9 +94,10 @@ export interface TaskStorePort extends TaskQueryPort {
   /**
    * Set the slug on a top-level task. Display-only metadata write that
    * bypasses the completion + ownership locks (slugs do not affect runtime
-   * state). Throws when the task is a step, when a slug is already set,
-   * or when the slug collides with another track's slug.
+   * state). Throws when the task is a step or when the slug collides with
+   * another track's slug. Refuses to overwrite an existing slug unless
+   * `force` is true (used by `task backfill-slugs --rederive`).
    */
-  backfillSlug(id: string, slug: string): Promise<Task>;
+  backfillSlug(id: string, slug: string, opts?: { force?: boolean }): Promise<Task>;
 
 }

@@ -18,10 +18,30 @@ export type SlugVerb = (typeof ALLOWED_VERBS)[number];
 
 export const SLUG_MAX_LENGTH = 60;
 export const SLUG_DERIVE_MAX_SUFFIX = 9;
+/** Soft cap applied to derived slugs so the kebab stays scannable. */
+export const SLUG_DERIVE_TAIL_MAX = 32;
+/** Word count cap applied to derived slugs after stop-word filtering. */
+export const SLUG_DERIVE_MAX_WORDS = 4;
 
 const VERB_SET: ReadonlySet<string> = new Set(ALLOWED_VERBS);
 
 const SLUG_TAIL_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const STOP_WORDS: ReadonlySet<string> = new Set([
+  "a", "an", "the",
+  "and", "or", "but",
+  "of", "for", "to", "in", "on", "at", "by", "with", "from", "into", "onto",
+  "after", "before", "as",
+  "is", "are", "was", "were", "be", "been", "being",
+  "this", "that", "these", "those", "it", "its",
+]);
+
+/** Drop hex commit hashes and pure-digit tokens — they're noise in display slugs. */
+function isNoiseToken(word: string): boolean {
+  if (/^[0-9]+$/.test(word)) return true;
+  if (/^[0-9a-f]{6,}$/.test(word)) return true;
+  return false;
+}
 
 /**
  * Single source of truth for the slug regex pattern. Used both for runtime
@@ -66,11 +86,14 @@ export function parseSlug(input: string): string {
 }
 
 /**
- * Lowercase, transliterate, and kebab-case a free-form title.
+ * Lowercase, transliterate, and kebab-case a free-form title for use as a
+ * display slug. Drops English stop-words and pure-hex/digit noise tokens
+ * (commit shas, line numbers), keeps at most {@link SLUG_DERIVE_MAX_WORDS}
+ * significant words, and truncates at word boundaries so a slug never ends
+ * mid-word.
  *
- * Returns the empty string when no kebab can be derived (e.g. punctuation only
- * or empty input). Length capped at `max` characters; trailing hyphens are
- * stripped after truncation.
+ * Returns the empty string when no kebab can be derived (e.g. punctuation
+ * only).
  */
 export function kebabFromTitle(title: string, max: number = SLUG_MAX_LENGTH): string {
   if (typeof title !== "string" || title.length === 0) return "";
@@ -83,9 +106,24 @@ export function kebabFromTitle(title: string, max: number = SLUG_MAX_LENGTH): st
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
   if (collapsed.length === 0) return "";
-  if (collapsed.length <= max) return collapsed;
-  const truncated = collapsed.slice(0, max).replace(/-+$/g, "");
-  return truncated;
+
+  const words = collapsed.split("-").filter((w) => w.length > 0);
+  const meaningful = words.filter((w) => !STOP_WORDS.has(w) && !isNoiseToken(w));
+  const useWords = (meaningful.length > 0 ? meaningful : words).slice(
+    0,
+    SLUG_DERIVE_MAX_WORDS,
+  );
+
+  const picked: string[] = [];
+  for (const word of useWords) {
+    const next = picked.length === 0 ? word : `${picked.join("-")}-${word}`;
+    if (next.length > max) {
+      if (picked.length === 0) return word.slice(0, max).replace(/-+$/g, "");
+      break;
+    }
+    picked.push(word);
+  }
+  return picked.join("-");
 }
 
 /**
@@ -113,7 +151,8 @@ function verbForType(type: TaskType | undefined): SlugVerb {
  */
 export function deriveSlugFromTitle(title: string, type: TaskType | undefined): string {
   const verb = verbForType(type);
-  const tailMax = SLUG_MAX_LENGTH - verb.length - 1;
+  const totalCap = SLUG_MAX_LENGTH - verb.length - 1;
+  const tailMax = Math.min(totalCap, SLUG_DERIVE_TAIL_MAX);
   if (tailMax <= 0) {
     throw invalidTaskField(
       "slug",

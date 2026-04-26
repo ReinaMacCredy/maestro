@@ -192,14 +192,19 @@ the header. Bulk-backfill the whole queue (derives a slug from each title +
 type, applies after preview):
 
 ```bash
-maestro task backfill-slugs              # dry-run / planning
-maestro task backfill-slugs --apply      # write the slugs
+maestro task backfill-slugs                       # dry-run / planning
+maestro task backfill-slugs --apply               # write the slugs
 maestro task backfill-slugs --apply --limit 10
+maestro task backfill-slugs --rederive --apply    # refresh existing auto-derived slugs
 ```
 
+Derivation drops stop-words, hex shas, and digit-only tokens, caps at four
+significant words, and only cuts at word boundaries (no `...beads-ru` mid-word
+truncation).
+
 Backfill is display-only metadata: it bypasses the completion + ownership
-locks so it works on completed and currently-claimed tasks. It will not
-overwrite an existing slug.
+locks so it works on completed and currently-claimed tasks. By default it
+refuses to overwrite an existing slug; `--rederive` opts in to overwriting.
 
 To set or rename one slug at a time:
 

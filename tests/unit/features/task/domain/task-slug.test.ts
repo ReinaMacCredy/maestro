@@ -70,7 +70,8 @@ describe("deriveSlugFromTitle", () => {
   });
 
   it("uses 'fix' for bugs", () => {
-    expect(deriveSlugFromTitle("Race in writer", "bug")).toBe("fix/race-in-writer");
+    // "in" is a stop word; the derived slug drops it.
+    expect(deriveSlugFromTitle("Race in writer", "bug")).toBe("fix/race-writer");
   });
 
   it("uses 'chore' for chores", () => {
@@ -79,6 +80,36 @@ describe("deriveSlugFromTitle", () => {
 
   it("uses 'epic' for epics", () => {
     expect(deriveSlugFromTitle("Mission alpha", "epic")).toBe("epic/mission-alpha");
+  });
+
+  it("caps at 4 significant words and ~32-char tail for readability", () => {
+    const slug = deriveSlugFromTitle(
+      "Check maestro task dependency support against beads-rust",
+      "chore",
+    );
+    expect(slug).toBe("chore/check-maestro-task-dependency");
+    expect(slug.length).toBeLessThanOrEqual(40);
+  });
+
+  it("drops hex commit hashes and pure-digit tokens", () => {
+    const slug = deriveSlugFromTitle(
+      "Read-only standards review 35f644fd^..1c8296da",
+      "task",
+    );
+    expect(slug).toBe("implement/read-only-standards-review");
+  });
+
+  it("never truncates mid-word", () => {
+    const slug = deriveSlugFromTitle(
+      "Build and verify compact task ready through dist and install",
+      "chore",
+    );
+    expect(slug.endsWith("-")).toBe(false);
+    for (const part of slug.slice("chore/".length).split("-")) {
+      // each token in the kebab tail is a complete English-style word, not a
+      // mid-word fragment like "ru" (truncated "rust").
+      expect(part).toMatch(/^[a-z0-9]+$/);
+    }
   });
 
   it("respects 60-char cap when title is long", () => {

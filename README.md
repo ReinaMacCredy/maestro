@@ -410,9 +410,12 @@ Tasks created before slugs landed have no slug and render with their bare `tsk-<
 maestro task backfill-slugs                  # dry-run; prints what would change
 maestro task backfill-slugs --apply          # write the slugs
 maestro task backfill-slugs --apply --limit 20
+maestro task backfill-slugs --rederive --apply  # refresh auto-derived slugs after the algorithm changes
 ```
 
-Backfill is display-only and bypasses the completion + ownership locks (slugs don't affect runtime state), so it works on completed and currently-claimed tasks. It refuses to overwrite an existing slug.
+Derivation drops English stop-words ("and", "of", "in", ...), drops pure-hex tokens (commit shas) and digit-only tokens, caps at 4 significant words, and never truncates mid-word — so the result is short and scannable.
+
+Backfill is display-only and bypasses the completion + ownership locks (slugs don't affect runtime state), so it works on completed and currently-claimed tasks. By default it refuses to overwrite an existing slug; `--rederive` opts in to overwriting (use it when the derivation algorithm has changed).
 
 ### Ownership and claim
 
