@@ -182,26 +182,30 @@ maestro task status --json                # structured projection
 Status glyphs: `o` active (in_progress), `!` blocked, `·` pending, `v`
 completed (only with `--all`).
 
-Default render shape: a track-first board. The header reports open, active,
-ready, blocked, and blocked-track counts. Each track prints once, with active,
-ready, and blocked work indented underneath. If a ready task unlocks blocked
-downstream work, a one-line `next:` hint appears under the header and the task
-gets a small `ready, N unblocks` line.
+Default render shape: a hybrid operator board. The header reports open, active,
+ready, blocked, and blocked-track counts. Simple one-task tracks render as
+compact rows under `ACTIVE`, `READY`, or `BLOCKED`. Multi-step tracks expand
+only when dependency structure matters: blocked steps or ready steps that unlock
+downstream work. If a ready task unlocks blocked downstream work, a one-line
+`next:` hint appears under the header.
 
 Default examples:
 
 ```text
 tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track
 
-implement/template-prompt-fixes
-  o Remove contradictory close-issue instruction from implement-prompt.md
-      in-progress
-  · Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
+ACTIVE
+  o implement/template-prompt-fixes  Remove contradictory close-issue instruction from implement-prompt.md
+
+DEPENDENCY TRACKS
 
 implement/init-template-e2e-tests
   ! Add AgentInvoker seam, test support module, and blank template e2e test
       blocked by implement/template-prompt-fixes
   · Add e2e test for simple-loop init template
+
+READY
+  · implement/template-prompt-fixes  Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
 ```
 
 `--no-compact` renders the unsectioned grouped detail view: solo tracks (no step
@@ -210,7 +214,8 @@ blank line between consecutive solo tracks. Tracks with step children render
 multi-line (slug header, indented bullet list, status text under blocked /
 in-progress steps) so step structure stays readable.
 
-Blocked items render `blocked by <slug-or-id>` underneath. If a blocker has
+Blocked rows render `blocked by <slug-or-id>` inline, while blocked steps inside
+dependency tracks render the blocker on the next line. If a blocker has
 completed it's marked `(done)` as a hint that the wait is over.
 
 ## Slug backfill (legacy slugless top-level tasks)

@@ -21,7 +21,10 @@ const GLYPH = {
   pending: "·",
 } as const;
 
-const TRACK_BOARD_ITEM_LIMIT = 8;
+const ACTIVE_SECTION_LIMIT = 4;
+const LIST_SECTION_LIMIT = 5;
+const DEPENDENCY_TRACK_COMPACT_LIMIT = 3;
+const DEPENDENCY_TRACK_FULL_LIMIT = 4;
 
 function trackIdentifier(task: Pick<Task, "id" | "slug" | "parentId">): string {
   return task.parentId === undefined && task.slug ? task.slug : task.id;
@@ -257,12 +260,13 @@ export function formatTaskStatusView(
     return formatGroupedTaskStatusView(projection, colorOn);
   }
 
-  return formatTrackBoardTaskStatusView(projection, colorOn);
+  return formatTrackBoardTaskStatusView(projection, colorOn, opts.all === true);
 }
 
 function formatTrackBoardTaskStatusView(
   projection: TaskStatusProjection,
   colorOn: boolean,
+  showCompleted: boolean,
 ): string[] {
   const { header, tracks, orphans, tasksById } = projection;
   const lines: string[] = [formatTaskStatusHeader(header)];
@@ -278,18 +282,60 @@ function formatTrackBoardTaskStatusView(
     lines.push(nextLine);
   }
 
-  for (const track of tracks) {
-    const trackItems = sortTrackBoardItems(
-      collectTrackItems(track, tasksById),
+  const dependencyTracks = tracks.filter((track) =>
+    isDependencyTrack(track, tasksById, downstreamBlockedCounts),
+  );
+  const dependencyTrackIds = new Set(dependencyTracks.map((track) => track.task.id));
+  const simpleItems = items.filter((item) => !dependencyTrackIds.has(item.track.task.id));
+
+  appendInlineItemSection(
+    lines,
+    "ACTIVE",
+    simpleItems.filter((item) => item.task.status === "in_progress"),
+    tasksById,
+    downstreamBlockedCounts,
+    colorOn,
+    ACTIVE_SECTION_LIMIT,
+    "title",
+  );
+  appendDependencyTracksSection(
+    lines,
+    dependencyTracks,
+    tasksById,
+    downstreamBlockedCounts,
+    colorOn,
+  );
+  appendInlineItemSection(
+    lines,
+    "READY",
+    simpleItems.filter(isReadyStatusItem),
+    tasksById,
+    downstreamBlockedCounts,
+    colorOn,
+    LIST_SECTION_LIMIT,
+    "title",
+  );
+  appendInlineItemSection(
+    lines,
+    "BLOCKED",
+    simpleItems.filter((item) => item.blocked),
+    tasksById,
+    downstreamBlockedCounts,
+    colorOn,
+    LIST_SECTION_LIMIT,
+    "blockedBy",
+  );
+  if (showCompleted) {
+    appendInlineItemSection(
+      lines,
+      "DONE",
+      simpleItems.filter((item) => item.task.status === "completed"),
+      tasksById,
       downstreamBlockedCounts,
+      colorOn,
+      LIST_SECTION_LIMIT,
+      "title",
     );
-    if (trackItems.length === 0) continue;
-    lines.push("");
-    lines.push(colorize(track.identifier, "cyan", colorOn));
-    for (const item of trackItems.slice(0, TRACK_BOARD_ITEM_LIMIT)) {
-      appendTrackBoardItem(lines, item, tasksById, downstreamBlockedCounts, colorOn);
-    }
-    appendMoreLine(lines, trackItems.length - TRACK_BOARD_ITEM_LIMIT);
   }
 
   if (orphans.length > 0) {
@@ -301,6 +347,39 @@ function formatTrackBoardTaskStatusView(
   }
 
   return lines;
+}
+
+function appendDependencyTracksSection(
+  lines: string[],
+  tracks: readonly TaskTrackGroup[],
+  tasksById: ReadonlyMap<string, Task>,
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+  colorOn: boolean,
+): void {
+  if (tracks.length === 0) return;
+  lines.push("");
+  lines.push(colorize("DEPENDENCY TRACKS", "dim", colorOn));
+
+  for (const track of tracks) {
+    const trackItems = sortTrackBoardItems(
+      collectTrackItems(track, tasksById),
+      downstreamBlockedCounts,
+    );
+    if (trackItems.length === 0) continue;
+    lines.push("");
+    lines.push(colorize(track.identifier, "cyan", colorOn));
+    const limit = dependencyTrackItemLimit(trackItems.length);
+    for (const item of trackItems.slice(0, limit)) {
+      appendTrackBoardItem(lines, item, tasksById, downstreamBlockedCounts, colorOn);
+    }
+    appendMoreLine(lines, trackItems.length - limit);
+  }
+}
+
+function dependencyTrackItemLimit(itemCount: number): number {
+  return itemCount > DEPENDENCY_TRACK_FULL_LIMIT
+    ? DEPENDENCY_TRACK_COMPACT_LIMIT
+    : DEPENDENCY_TRACK_FULL_LIMIT;
 }
 
 function formatTaskStatusHeader(header: TaskStatusProjection["header"]): string {
@@ -398,6 +477,67 @@ function collectTrackItems(
     task,
     blocked: hasUnresolvedBlockers(task, tasksById),
   }));
+}
+
+function isDependencyTrack(
+  track: TaskTrackGroup,
+  tasksById: ReadonlyMap<string, Task>,
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+): boolean {
+  if (track.steps.length === 0) return false;
+  return collectTrackItems(track, tasksById).some((item) =>
+    item.blocked || downstreamCount(item.task, downstreamBlockedCounts) > 0,
+  );
+}
+
+function appendInlineItemSection(
+  lines: string[],
+  title: string,
+  items: readonly StatusItem[],
+  tasksById: ReadonlyMap<string, Task>,
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+  colorOn: boolean,
+  limit: number,
+  mode: "title" | "blockedBy",
+): void {
+  if (items.length === 0) return;
+  lines.push("");
+  lines.push(colorize(title, "dim", colorOn));
+  const visible = items.slice(0, limit);
+  const identifierWidth = Math.max(...visible.map((item) => item.track.identifier.length));
+  for (const item of visible) {
+    appendInlineItem(
+      lines,
+      item,
+      tasksById,
+      downstreamBlockedCounts,
+      colorOn,
+      identifierWidth,
+      mode,
+    );
+  }
+  appendMoreLine(lines, items.length - limit);
+}
+
+function appendInlineItem(
+  lines: string[],
+  item: StatusItem,
+  tasksById: ReadonlyMap<string, Task>,
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+  colorOn: boolean,
+  identifierWidth: number,
+  mode: "title" | "blockedBy",
+): void {
+  const glyph = stepGlyph(item.task, item.blocked, colorOn);
+  const identifier = colorize(item.track.identifier.padEnd(identifierWidth), "cyan", colorOn);
+  if (mode === "blockedBy") {
+    const blockedBy = formatBlockedByLine(item.task, tasksById, colorOn);
+    lines.push(`  ${glyph} ${identifier}  ${blockedBy}`);
+    return;
+  }
+  const downstream = downstreamCount(item.task, downstreamBlockedCounts);
+  const suffix = downstream > 0 ? `  ${pluralizeCount(downstream, "unblock")}` : "";
+  lines.push(`  ${glyph} ${identifier}  ${item.task.title}${suffix}`);
 }
 
 function appendTrackBoardItem(

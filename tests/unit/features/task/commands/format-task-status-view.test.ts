@@ -23,7 +23,7 @@ function makeTask(partial: Partial<Task> & { id: string; title: string }): Task 
 }
 
 describe("formatTaskStatusView", () => {
-  it("renders the track board by default and preserves grouped detail with compact disabled", () => {
+  it("renders the hybrid status board by default and preserves grouped detail with compact disabled", () => {
     const worktree = makeTask({
       id: "tsk-100001",
       title: "Pass git config overrides to prevent .git/config.lock race",
@@ -119,15 +119,12 @@ describe("formatTaskStatusView", () => {
     expect(lines).toEqual([
       "tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track",
       "",
-      "implement/worktree-config-lock-race",
-      "  o Pass git config overrides to prevent .git/config.lock race",
-      "      in-progress",
+      "ACTIVE",
+      "  o implement/worktree-config-lock-race       Pass git config overrides to prevent .git/config.lock race",
+      "  o implement/template-prompt-fixes           Remove contradictory close-issue instruction from implement-prompt.md",
+      "  o implement/agent-error-text-investigation  Investigate and surface Pi agent error text on non-zero exit",
       "",
-      "implement/template-prompt-fixes",
-      "  o Remove contradictory close-issue instruction from implement-prompt.md",
-      "      in-progress",
-      "  · Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}",
-      "  · Return reviewer result from Phase 2 callback in parallel-planner-with-review",
+      "DEPENDENCY TRACKS",
       "",
       "implement/init-template-e2e-tests",
       "  ! Add AgentInvoker seam, test support module, and blank template e2e test",
@@ -136,11 +133,11 @@ describe("formatTaskStatusView", () => {
       "  · Add e2e test for sequential-reviewer init template",
       "  · Add e2e test for parallel-planner init template",
       "",
-      "implement/agent-error-text-investigation",
-      "  o Investigate and surface Pi agent error text on non-zero exit",
-      "      in-progress",
-      "  · Investigate and surface Codex agent error text on non-zero exit",
-      "  · Investigate and surface OpenCode agent error text on non-zero exit",
+      "READY",
+      "  · implement/template-prompt-fixes           Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}",
+      "  · implement/template-prompt-fixes           Return reviewer result from Phase 2 callback in parallel-planner-with-review",
+      "  · implement/agent-error-text-investigation  Investigate and surface Codex agent error text on non-zero exit",
+      "  · implement/agent-error-text-investigation  Investigate and surface OpenCode agent error text on non-zero exit",
     ]);
 
     const grouped = formatTaskStatusView(projection, { color: false, compact: false });
@@ -170,7 +167,7 @@ describe("formatTaskStatusView", () => {
     ]);
   });
 
-  it("renders solo tracks as track blocks", () => {
+  it("renders solo tracks as compact status rows", () => {
     const a = makeTask({
       id: "tsk-aaaaaa",
       title: "Update agents",
@@ -205,24 +202,19 @@ describe("formatTaskStatusView", () => {
       "tasks: 4 open | 1 active | 2 ready | 1 blocked | 1 blocked track",
       "next: implement/blocker / Open blocker (1 unblock)",
       "",
-      "chore/update-agents",
-      "  o Update agents",
-      "      in-progress",
+      "ACTIVE",
+      "  o chore/update-agents  Update agents",
       "",
-      "chore/bump-deps",
-      "  · Bump deps",
+      "READY",
+      "  · chore/bump-deps    Bump deps",
+      "  · implement/blocker  Open blocker  1 unblock",
       "",
-      "implement/blocker",
-      "  · Open blocker",
-      "      ready, 1 unblock",
-      "",
-      "implement/blocked-work",
-      "  ! Blocked work",
-      "      blocked by implement/blocker",
+      "BLOCKED",
+      "  ! implement/blocked-work  blocked by implement/blocker",
     ]);
   });
 
-  it("keeps multi-line form for tracks that have steps", () => {
+  it("renders step-only tracks in the compact ready section when they have no dependencies", () => {
     const trackTask = makeTask({
       id: "tsk-aaaaaa",
       title: "Track epic",
@@ -240,8 +232,8 @@ describe("formatTaskStatusView", () => {
     expect(lines).toEqual([
       "tasks: 1 open | 0 active | 1 ready | 0 blocked | 0 blocked tracks",
       "",
-      "implement/track-epic",
-      "  · Step one",
+      "READY",
+      "  · implement/track-epic  Step one",
     ]);
   });
 

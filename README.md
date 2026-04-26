@@ -353,7 +353,7 @@ Rules enforced by the domain layer:
 
 | Command | Returns |
 |---|---|
-| `maestro task status` | Track-first board with status glyphs, blocker lines, and a small next hint when one task unlocks blocked work. |
+| `maestro task status` | Hybrid board: compact active/ready/blocked lists plus expanded dependency tracks. |
 | `maestro task ready` | Pending, unblocked, unassigned tasks, `P0`/`P1` first. |
 | `maestro task mine` | Tasks claimed by the active session. |
 | `maestro task stuck` | `in_progress` tasks idle past `--older-than` (default `4h`). |
@@ -362,21 +362,18 @@ Rules enforced by the domain layer:
 
 ### Status view
 
-`maestro task status` renders a compact track board. The header keeps the old active/pending/blocked counters in JSON and adds open, ready, and blocked-track counts for the text view. The default text shape prints each track once, then indents the active, ready, and blocked work inside that track. If a ready task unlocks blocked downstream work, a one-line `next:` hint appears under the header.
+`maestro task status` renders a hybrid operator board. Simple one-task tracks render as compact rows under `ACTIVE`, `READY`, or `BLOCKED`. Multi-step tracks expand only when dependency structure matters: blocked steps or ready steps that unlock downstream work. If a ready task unlocks blocked downstream work, a one-line `next:` hint appears under the header.
 
 ```text
 $ maestro task status
 tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track
 
-implement/worktree-config-lock-race
-  o Pass git config overrides to prevent .git/config.lock race
-      in-progress
+ACTIVE
+  o implement/worktree-config-lock-race       Pass git config overrides to prevent .git/config.lock race
+  o implement/template-prompt-fixes           Remove contradictory close-issue instruction from implement-prompt.md
+  o implement/agent-error-text-investigation  Investigate and surface Pi agent error text on non-zero exit
 
-implement/template-prompt-fixes
-  o Remove contradictory close-issue instruction from implement-prompt.md
-      in-progress
-  · Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
-  · Return reviewer result from Phase 2 callback in parallel-planner-with-review
+DEPENDENCY TRACKS
 
 implement/init-template-e2e-tests
   ! Add AgentInvoker seam, test support module, and blank template e2e test
@@ -385,11 +382,11 @@ implement/init-template-e2e-tests
   · Add e2e test for sequential-reviewer init template
   · Add e2e test for parallel-planner init template
 
-implement/agent-error-text-investigation
-  o Investigate and surface Pi agent error text on non-zero exit
-      in-progress
-  · Investigate and surface Codex agent error text on non-zero exit
-  · Investigate and surface OpenCode agent error text on non-zero exit
+READY
+  · implement/template-prompt-fixes           Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
+  · implement/template-prompt-fixes           Return reviewer result from Phase 2 callback in parallel-planner-with-review
+  · implement/agent-error-text-investigation  Investigate and surface Codex agent error text on non-zero exit
+  · implement/agent-error-text-investigation  Investigate and surface OpenCode agent error text on non-zero exit
 ```
 
 Flags:
@@ -401,7 +398,7 @@ Flags:
 | `--no-compact` | Render the unsectioned grouped detail view with solo tracks collapsed onto one line. |
 | `--json` | Emit a structured projection (`{ header, tracks[], orphans[], tasksById }`) for tooling. `header` includes `open`, `active`, `ready`, `pending`, `blocked`, and `blockedTracks`. |
 
-**Render shape.** The default view keeps every visible task inside its track block and caps long tracks with `+ N more`. Ready tasks that unblock downstream work get a small `ready, N unblocks` line. Blocked tasks render `blocked by <slug-or-id>` underneath; completed blockers are marked `(done)`. `--no-compact` keeps the older grouped detail shape where solo tracks render on one line.
+**Render shape.** The default view keeps solo/non-dependent work compact and expands only dependency tracks. `ACTIVE` shows at most four rows before `+ N more`; `READY`, `BLOCKED`, and dependency tracks are capped separately. Blocked rows render `blocked by <slug-or-id>` inline, while blocked steps inside dependency tracks render the blocker on the next line. Completed blockers are marked `(done)`. `--no-compact` keeps the older grouped detail shape where solo tracks render on one line.
 
 Color is auto-detected: `NO_COLOR=1` or a non-TTY pipe disables ANSI codes. Tracks (top-level tasks) carry a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`) which doubles as a human-friendly id — `task show implement/foo` and `task update implement/foo --status ...` work the same way `tsk-XXX` does.
 
