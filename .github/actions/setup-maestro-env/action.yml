@@ -1,0 +1,47 @@
+name: Setup Maestro environment
+description: Setup Bun and optionally install Maestro dependencies.
+
+inputs:
+  bun-version:
+    description: Bun version to install.
+    required: false
+    default: "1.3.11"
+  install-deps:
+    description: Whether to run bun install.
+    required: false
+    default: "true"
+  frozen-lockfile:
+    description: Whether dependency install should use --frozen-lockfile.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Runtime versions
+      shell: bash
+      run: |
+        set -euo pipefail
+        bun --version
+        node --version
+
+    - name: Install dependencies
+      if: inputs.install-deps == 'true'
+      shell: bash
+      env:
+        FROZEN_LOCKFILE: ${{ inputs.frozen-lockfile }}
+      run: |
+        set -euo pipefail
+        case "$FROZEN_LOCKFILE" in
+          true) bun install --frozen-lockfile ;;
+          false) bun install ;;
+          *)
+            echo "::error::Invalid frozen-lockfile input: '$FROZEN_LOCKFILE' (expected true or false)"
+            exit 2
+            ;;
+        esac

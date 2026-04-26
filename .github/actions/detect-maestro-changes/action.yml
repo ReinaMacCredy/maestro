@@ -1,0 +1,172 @@
+name: Detect Maestro changes
+description: Route Maestro CI lanes from changed paths.
+
+inputs:
+  base-sha:
+    description: Base commit used for diff routing.
+    required: false
+    default: ""
+  head-sha:
+    description: Head commit used for diff routing.
+    required: false
+    default: "HEAD"
+  fallback-base-ref:
+    description: Remote base ref to fetch when base-sha is unavailable.
+    required: false
+    default: "main"
+
+outputs:
+  docs_only:
+    description: Whether every changed file is docs-only.
+    value: ${{ steps.detect.outputs.docs_only }}
+  docs_changed:
+    description: Whether documentation changed.
+    value: ${{ steps.detect.outputs.docs_changed }}
+  github_changed:
+    description: Whether GitHub automation files changed.
+    value: ${{ steps.detect.outputs.github_changed }}
+  source_changed:
+    description: Whether source files changed.
+    value: ${{ steps.detect.outputs.source_changed }}
+  tests_changed:
+    description: Whether tests changed.
+    value: ${{ steps.detect.outputs.tests_changed }}
+  scripts_changed:
+    description: Whether scripts changed.
+    value: ${{ steps.detect.outputs.scripts_changed }}
+  release_changed:
+    description: Whether release/install/build paths changed.
+    value: ${{ steps.detect.outputs.release_changed }}
+  skills_changed:
+    description: Whether skill sources changed.
+    value: ${{ steps.detect.outputs.skills_changed }}
+  tui_changed:
+    description: Whether TUI files changed.
+    value: ${{ steps.detect.outputs.tui_changed }}
+  full_ci:
+    description: Whether heavyweight build/test lanes should run.
+    value: ${{ steps.detect.outputs.full_ci }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect changed paths
+      id: detect
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        FALLBACK_BASE_REF: ${{ inputs.fallback-base-ref }}
+      run: |
+        set -euo pipefail
+
+        base="$BASE_SHA"
+        head="${HEAD_SHA:-HEAD}"
+        fallback="${FALLBACK_BASE_REF:-main}"
+
+        all_changed=false
+        if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+          all_changed=true
+        elif ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+          git fetch --no-tags --depth=1 origin "$fallback" || true
+          if git rev-parse --verify "origin/$fallback" >/dev/null 2>&1; then
+            base="origin/$fallback"
+          else
+            all_changed=true
+          fi
+        fi
+
+        if [ "$all_changed" = "true" ]; then
+          mapfile -t changed < <(git ls-files)
+        else
+          mapfile -t changed < <(git diff --name-only "$base" "$head")
+        fi
+
+        bool_false() { printf '%s=false\n' "$1" >> "$GITHUB_OUTPUT"; }
+        bool_true() { printf '%s=true\n' "$1" >> "$GITHUB_OUTPUT"; }
+
+        if [ "${#changed[@]}" -eq 0 ]; then
+          bool_false docs_only
+          bool_false docs_changed
+          bool_false github_changed
+          bool_false source_changed
+          bool_false tests_changed
+          bool_false scripts_changed
+          bool_false release_changed
+          bool_false skills_changed
+          bool_false tui_changed
+          bool_false full_ci
+          exit 0
+        fi
+
+        docs_changed=false
+        github_changed=false
+        source_changed=false
+        tests_changed=false
+        scripts_changed=false
+        release_changed=false
+        skills_changed=false
+        tui_changed=false
+        full_ci=false
+        docs_only=true
+
+        for path in "${changed[@]}"; do
+          case "$path" in
+            *.md|docs/**)
+              docs_changed=true
+              ;;
+            *)
+              docs_only=false
+              ;;
+          esac
+
+          case "$path" in
+            .github/**) github_changed=true ;;
+          esac
+          case "$path" in
+            src/**) source_changed=true; full_ci=true ;;
+          esac
+          case "$path" in
+            src/tui/**) tui_changed=true ;;
+          esac
+          case "$path" in
+            tests/**) tests_changed=true; full_ci=true ;;
+          esac
+          case "$path" in
+            scripts/**) scripts_changed=true; full_ci=true ;;
+          esac
+          case "$path" in
+            scripts/build.ts|scripts/build-lib.ts|scripts/install-local.ts|scripts/install-local-lib.ts|scripts/install.sh|scripts/install.ps1|scripts/release-notes.ts|scripts/release-notes-lib.ts|scripts/version-file.ts|scripts/ci.ts|.github/workflows/release.yml|.github/workflows/release-checks.yml|.github/workflows/install-smoke.yml)
+              release_changed=true
+              full_ci=true
+              ;;
+          esac
+          case "$path" in
+            skills/**) skills_changed=true; full_ci=true ;;
+          esac
+          case "$path" in
+            package.json|bun.lock|bunfig.toml|tsconfig.json)
+              full_ci=true
+              ;;
+          esac
+          case "$path" in
+            .github/workflows/**|.github/actions/**)
+              github_changed=true
+              ;;
+          esac
+        done
+
+        if [ "$docs_only" = "true" ] && [ "$github_changed" = "false" ]; then
+          full_ci=false
+        fi
+
+        printf 'docs_only=%s\n' "$docs_only" >> "$GITHUB_OUTPUT"
+        printf 'docs_changed=%s\n' "$docs_changed" >> "$GITHUB_OUTPUT"
+        printf 'github_changed=%s\n' "$github_changed" >> "$GITHUB_OUTPUT"
+        printf 'source_changed=%s\n' "$source_changed" >> "$GITHUB_OUTPUT"
+        printf 'tests_changed=%s\n' "$tests_changed" >> "$GITHUB_OUTPUT"
+        printf 'scripts_changed=%s\n' "$scripts_changed" >> "$GITHUB_OUTPUT"
+        printf 'release_changed=%s\n' "$release_changed" >> "$GITHUB_OUTPUT"
+        printf 'skills_changed=%s\n' "$skills_changed" >> "$GITHUB_OUTPUT"
+        printf 'tui_changed=%s\n' "$tui_changed" >> "$GITHUB_OUTPUT"
+        printf 'full_ci=%s\n' "$full_ci" >> "$GITHUB_OUTPUT"

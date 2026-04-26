@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -17,6 +17,7 @@ jobs:
   release-gate:
     name: Determine Release Eligibility
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       should_release: ${{ steps.gate.outputs.should_release }}
       tag: ${{ steps.version.outputs.tag }}
@@ -25,6 +26,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Resolve release version
         id: version
         run: |
@@ -37,6 +39,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EXPECTED_RELEASE_SUBJECT: "chore(release): v${{ steps.version.outputs.version }}"
         run: |
+          set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "Manual release run requested."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
@@ -44,7 +47,6 @@ jobs:
           fi
 
           HEAD_COMMIT_SUBJECT="$(git log -1 --pretty=%s)"
-
           if [ "$HEAD_COMMIT_SUBJECT" = "$EXPECTED_RELEASE_SUBJECT" ]; then
             echo "Release commit detected on main."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
@@ -64,29 +66,52 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.11
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+          persist-credentials: false
+      - uses: ./.github/actions/setup-maestro-env
       - name: Check feature boundaries
         run: bun run check:boundaries
-      - name: Check agent-facing skill templates are in sync
+      - name: Check agent-facing templates
         run: bun run check:agent-spec
+      - name: Check built-in skills
+        run: bun run check:skills
+      - name: Check bundled skills
+        run: bun run check:bundled-skills
       - name: Run test suite
         run: bun run test
       - name: Build compiled binary
         run: bun run build
       - name: Verify compiled binary version
-        run: ./dist/maestro --version
+        env:
+          EXPECTED_VERSION: ${{ needs.release-gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="$(./dist/maestro --version)"
+          echo "$version"
+          if [[ "$version" != "$EXPECTED_VERSION"* ]]; then
+            echo "::error::Expected binary version to start with $EXPECTED_VERSION, got $version"
+            exit 1
+          fi
       - name: Smoke-test Mission Control renderer
         run: ./dist/maestro mission-control --render-check --size 120x40
+
+  install-smoke:
+    name: Install Smoke
+    needs:
+      - release-gate
+      - verify
+    if: needs.release-gate.outputs.should_release == 'true'
+    uses: ./.github/workflows/install-smoke.yml
+    with:
+      ref: ${{ github.sha }}
+    permissions:
+      contents: read
 
   build-assets:
     name: Build ${{ matrix.asset }}
     needs:
       - release-gate
       - verify
+      - install-smoke
     if: needs.release-gate.outputs.should_release == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -114,19 +139,26 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.11
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-      - name: Check agent-facing skill templates are in sync
+          persist-credentials: false
+      - uses: ./.github/actions/setup-maestro-env
+      - name: Check agent-facing templates
         run: bun run check:agent-spec
       - name: Build release asset
         run: bun scripts/build.ts
       - name: Verify built asset version
-        run: ./dist/${{ matrix.src }} --version
+        env:
+          EXPECTED_VERSION: ${{ needs.release-gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="$(./dist/${{ matrix.src }} --version)"
+          echo "$version"
+          if [[ "$version" != "$EXPECTED_VERSION"* ]]; then
+            echo "::error::Expected binary version to start with $EXPECTED_VERSION, got $version"
+            exit 1
+          fi
       - name: Stage named release asset
-        run: cp dist/${{ matrix.src }} dist/${{ matrix.asset }}
+        run: cp "dist/${{ matrix.src }}" "dist/${{ matrix.asset }}"
       - name: Upload release asset
         uses: actions/upload-artifact@v4
         with:
@@ -142,19 +174,33 @@ jobs:
     if: needs.release-gate.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.11
+          persist-credentials: false
+      - uses: ./.github/actions/setup-maestro-env
       - name: Download built assets
         uses: actions/download-artifact@v4
         with:
           path: dist
           pattern: maestro-*
           merge-multiple: true
+      - name: Verify expected release asset set
+        run: |
+          set -euo pipefail
+          expected=(
+            maestro-linux-x64
+            maestro-linux-arm64
+            maestro-darwin-x64
+            maestro-darwin-arm64
+            maestro-windows-x64.exe
+          )
+          for asset in "${expected[@]}"; do
+            test -s "dist/$asset"
+          done
       - name: Build release notes
         env:
           VERSION: ${{ needs.release-gate.outputs.version }}

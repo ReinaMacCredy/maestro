@@ -1,0 +1,102 @@
+name: Resolve Maestro ref
+description: Validate and check out a Maestro release-check target ref.
+
+inputs:
+  ref:
+    description: Release tag or full 40-character commit SHA to validate.
+    required: true
+  require-main:
+    description: Require the workflow to be dispatched from main.
+    required: false
+    default: "true"
+
+outputs:
+  ref:
+    description: The validated input ref.
+    value: ${{ steps.resolve.outputs.ref }}
+  sha:
+    description: The checked-out commit SHA.
+    value: ${{ steps.resolve.outputs.sha }}
+  version:
+    description: Version from package.json at the checked-out ref.
+    value: ${{ steps.resolve.outputs.version }}
+  tag:
+    description: Expected release tag for the package version.
+    value: ${{ steps.resolve.outputs.tag }}
+  is_tag:
+    description: Whether the input ref is a tag.
+    value: ${{ steps.resolve.outputs.is_tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate workflow branch
+      shell: bash
+      env:
+        REQUIRE_MAIN: ${{ inputs.require-main }}
+      run: |
+        set -euo pipefail
+        if [ "$REQUIRE_MAIN" != "true" ]; then
+          exit 0
+        fi
+        if [ "${GITHUB_REF:-}" != "refs/heads/main" ]; then
+          echo "::error::Release checks must be dispatched from main so workflow logic stays controlled."
+          exit 1
+        fi
+
+    - name: Validate target ref syntax
+      shell: bash
+      env:
+        TARGET_REF: ${{ inputs.ref }}
+      run: |
+        set -euo pipefail
+        if [[ "$TARGET_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || [[ "$TARGET_REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+          exit 0
+        fi
+        echo "::error::Expected an existing release tag like v0.61.2 or a full 40-character commit SHA, got: $TARGET_REF"
+        exit 1
+
+    - name: Checkout selected ref
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.ref }}
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Resolve checked-out ref
+      id: resolve
+      shell: bash
+      env:
+        TARGET_REF: ${{ inputs.ref }}
+      run: |
+        set -euo pipefail
+
+        sha="$(git rev-parse HEAD)"
+        version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+        expected_tag="v$version"
+        is_tag=false
+
+        if [[ "$TARGET_REF" =~ ^v ]]; then
+          is_tag=true
+          if [ "$TARGET_REF" != "$expected_tag" ]; then
+            echo "::error::Target tag $TARGET_REF does not match package.json version $version ($expected_tag)."
+            exit 1
+          fi
+        elif [ "${TARGET_REF,,}" != "${sha,,}" ]; then
+          echo "::error::Checked-out SHA $sha does not match requested SHA $TARGET_REF."
+          exit 1
+        fi
+
+        git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+        if ! git merge-base --is-ancestor HEAD origin/main; then
+          echo "::error::Selected ref is not contained in origin/main."
+          exit 1
+        fi
+
+        {
+          echo "ref=$TARGET_REF"
+          echo "sha=$sha"
+          echo "version=$version"
+          echo "tag=$expected_tag"
+          echo "is_tag=$is_tag"
+        } >> "$GITHUB_OUTPUT"

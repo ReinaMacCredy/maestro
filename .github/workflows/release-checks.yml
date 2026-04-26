@@ -1,0 +1,209 @@
+name: Release Checks
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Existing release tag or full 40-character release-candidate SHA to validate.
+        required: true
+        type: string
+      mode:
+        description: Which install lanes to run.
+        required: false
+        default: both
+        type: choice
+        options:
+          - fresh
+          - upgrade
+          - both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-checks-${{ inputs.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-target:
+    name: Resolve Target
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+      sha: ${{ steps.resolve.outputs.sha }}
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      is_tag: ${{ steps.resolve.outputs.is_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Resolve Maestro ref
+        id: resolve
+        uses: ./.github/actions/resolve-maestro-ref
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Summarize target
+        run: |
+          {
+            echo "## Release checks"
+            echo
+            echo "- Ref: \`${{ steps.resolve.outputs.ref }}\`"
+            echo "- SHA: \`${{ steps.resolve.outputs.sha }}\`"
+            echo "- Version: \`${{ steps.resolve.outputs.version }}\`"
+            echo "- Expected tag: \`${{ steps.resolve.outputs.tag }}\`"
+            echo "- Mode: \`${{ inputs.mode }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  ci:
+    name: CI
+    needs: resolve-target
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.resolve-target.outputs.ref }}
+    permissions:
+      contents: read
+
+  fresh-install:
+    name: Fresh Install
+    needs: resolve-target
+    if: inputs.mode == 'fresh' || inputs.mode == 'both'
+    uses: ./.github/workflows/install-smoke.yml
+    with:
+      ref: ${{ needs.resolve-target.outputs.ref }}
+    permissions:
+      contents: read
+
+  build-assets:
+    name: Build ${{ matrix.asset }}
+    needs:
+      - resolve-target
+      - ci
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            asset: maestro-linux-x64
+            src: maestro
+          - runner: ubuntu-24.04-arm
+            asset: maestro-linux-arm64
+            src: maestro
+          - runner: macos-15-intel
+            asset: maestro-darwin-x64
+            src: maestro
+          - runner: macos-15
+            asset: maestro-darwin-arm64
+            src: maestro
+          - runner: windows-latest
+            asset: maestro-windows-x64.exe
+            src: maestro.exe
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-target.outputs.ref }}
+      - uses: ./.github/actions/setup-maestro-env
+      - name: Check agent-facing templates
+        run: bun run check:agent-spec
+      - name: Build release asset
+        run: bun scripts/build.ts
+      - name: Verify built asset version
+        env:
+          EXPECTED_VERSION: ${{ needs.resolve-target.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="$(./dist/${{ matrix.src }} --version)"
+          echo "$version"
+          if [[ "$version" != "$EXPECTED_VERSION"* ]]; then
+            echo "::error::Expected binary version to start with $EXPECTED_VERSION, got $version"
+            exit 1
+          fi
+      - name: Stage named release asset
+        run: cp "dist/${{ matrix.src }}" "dist/${{ matrix.asset }}"
+      - name: Upload release-check asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  verify-assets:
+    name: Verify Asset Set
+    needs:
+      - resolve-target
+      - build-assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: maestro-*
+          merge-multiple: true
+      - name: Check expected release assets
+        run: |
+          set -euo pipefail
+          expected=(
+            maestro-linux-x64
+            maestro-linux-arm64
+            maestro-darwin-x64
+            maestro-darwin-arm64
+            maestro-windows-x64.exe
+          )
+          for asset in "${expected[@]}"; do
+            test -s "dist/$asset"
+          done
+          ls -l dist
+
+  upgrade-install:
+    name: Upgrade Install Linux
+    needs:
+      - resolve-target
+      - build-assets
+    if: inputs.mode == 'upgrade' || inputs.mode == 'both'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-target.outputs.ref }}
+      - uses: ./.github/actions/setup-maestro-env
+      - name: Install previous release when available
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOME: ${{ runner.temp }}/maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}/maestro-bin
+          CURRENT_TAG: ${{ needs.resolve-target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME" "$MAESTRO_INSTALL_DIR"
+          echo "$MAESTRO_INSTALL_DIR" >> "$GITHUB_PATH"
+          previous="$(
+            gh release list --limit 20 --json tagName,isDraft --jq \
+              'map(select(.isDraft == false and .tagName != env.CURRENT_TAG)) | .[0].tagName // ""'
+          )"
+          if [ -z "$previous" ]; then
+            echo "::notice::No previous release found; continuing with overwrite-only upgrade smoke."
+            exit 0
+          fi
+          MAESTRO_VERSION="$previous" bash scripts/install.sh
+          maestro --version
+      - name: Upgrade to checked-out candidate
+        env:
+          HOME: ${{ runner.temp }}/maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}/maestro-bin
+        run: |
+          set -euo pipefail
+          bun run build
+          bun scripts/install-local.ts
+          command -v maestro
+          maestro --version
+          maestro mission-control --render-check --size 120x40

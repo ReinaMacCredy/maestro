@@ -1,0 +1,133 @@
+name: Install Smoke
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to validate.
+        required: false
+        default: main
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: Ref to validate.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-smoke-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-install-linux:
+    name: Local Install Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/setup-maestro-env
+      - name: Build checked-out binary
+        run: bun run build
+      - name: Install checked-out binary into clean temp home
+        env:
+          HOME: ${{ runner.temp }}/maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}/maestro-bin
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME" "$MAESTRO_INSTALL_DIR"
+          echo "$MAESTRO_INSTALL_DIR" >> "$GITHUB_PATH"
+          bun scripts/install-local.ts
+      - name: Verify installed CLI on PATH
+        env:
+          HOME: ${{ runner.temp }}/maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}/maestro-bin
+        run: |
+          set -euo pipefail
+          command -v maestro
+          maestro --version
+          maestro mission-control --render-check --size 120x40
+
+  local-install-windows:
+    name: Local Install Windows
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/setup-maestro-env
+      - name: Build checked-out binary
+        run: bun run build
+      - name: Install checked-out binary into clean temp home
+        env:
+          HOME: ${{ runner.temp }}\maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}\maestro-bin
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:HOME, $env:MAESTRO_INSTALL_DIR | Out-Null
+          Add-Content -Path $env:GITHUB_PATH -Value $env:MAESTRO_INSTALL_DIR
+          bun scripts/install-local.ts
+      - name: Verify installed CLI on PATH
+        env:
+          HOME: ${{ runner.temp }}\maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}\maestro-bin
+        run: |
+          Get-Command maestro.exe
+          maestro.exe --version
+          maestro.exe mission-control --render-check --size 120x40
+
+  install-script-linux:
+    name: Release Installer Linux
+    if: startsWith(inputs.ref || '', 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Exercise release installer script
+        env:
+          HOME: ${{ runner.temp }}/maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}/maestro-bin
+          MAESTRO_VERSION: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME" "$MAESTRO_INSTALL_DIR"
+          echo "$MAESTRO_INSTALL_DIR" >> "$GITHUB_PATH"
+          bash scripts/install.sh
+          command -v maestro
+          maestro --version
+
+  install-script-windows:
+    name: Release Installer Windows
+    if: startsWith(inputs.ref || '', 'v')
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Exercise release installer script
+        env:
+          HOME: ${{ runner.temp }}\maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}\maestro-bin
+          MAESTRO_VERSION: ${{ inputs.ref }}
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:HOME, $env:MAESTRO_INSTALL_DIR | Out-Null
+          Add-Content -Path $env:GITHUB_PATH -Value $env:MAESTRO_INSTALL_DIR
+          ./scripts/install.ps1
+          Get-Command maestro.exe
+          maestro.exe --version
