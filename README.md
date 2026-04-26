@@ -353,11 +353,54 @@ Rules enforced by the domain layer:
 
 | Command | Returns |
 |---|---|
+| `maestro task status` | Tracks grouped by slug with status glyphs (`o` active, `!` blocked, `·` pending, `v` completed). |
 | `maestro task ready` | Pending, unblocked, unassigned tasks, `P0`/`P1` first. |
 | `maestro task mine` | Tasks claimed by the active session. |
 | `maestro task stuck` | `in_progress` tasks idle past `--older-than` (default `4h`). |
 | `maestro task similar <id>` | Tasks that look alike by title, completion reason, receipt text, and linked contract text. |
-| `maestro task list` | Full filter set: `--status`, `--priority`, `--type`, `--label`, `--parent`, `--assignee`, `--limit`. |
+| `maestro task list` | Full filter set: `--status`, `--priority`, `--type`, `--label`, `--parent`, `--assignee`, `--limit`. Add `--tracks` for headline-only output. |
+
+### Status view
+
+`maestro task status` groups every open task under its top-level "track" (the slug), with a header counting active/pending/blocked work. Steps blocked on another track render their blocker by slug, with a `(done)` suffix once the blocker completes.
+
+```text
+$ maestro task status
+tasks: 3 active, 7 pending, 2 blocked
+
+implement/worktree-config-lock-race
+  o Pass git config overrides to prevent .git/config.lock race
+      in-progress
+
+implement/template-prompt-fixes
+  o Remove contradictory close-issue instruction from implement-prompt.md
+      in-progress
+  · Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
+  · Return reviewer result from Phase 2 callback in parallel-planner-with-review
+
+implement/init-template-e2e-tests
+  ! Add AgentInvoker seam, test support module, and blank template e2e test
+      blocked by implement/template-prompt-fixes
+  · Add e2e test for simple-loop init template
+  · Add e2e test for sequential-reviewer init template
+  · Add e2e test for parallel-planner init template
+
+implement/agent-error-text-investigation
+  o Investigate and surface Pi agent error text on non-zero exit
+      in-progress
+  · Investigate and surface Codex agent error text on non-zero exit
+  · Investigate and surface OpenCode agent error text on non-zero exit
+```
+
+Flags:
+
+| Flag | Effect |
+|---|---|
+| `--all` | Include completed tasks (rendered with the `v` glyph). |
+| `--track <slug-or-id>` | Restrict output to one track. |
+| `--json` | Emit a structured projection (`{ header, tracks[], orphans[], tasksById }`) for tooling. |
+
+Color is auto-detected: `NO_COLOR=1` or a non-TTY pipe disables ANSI codes. Tracks (top-level tasks) carry a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`) which doubles as a human-friendly id — `task show implement/foo` and `task update implement/foo --status ...` work the same way `tsk-XXX` does.
 
 ### Ownership and claim
 

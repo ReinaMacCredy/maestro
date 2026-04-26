@@ -148,14 +148,20 @@ function sortSteps(
 }
 
 function sortTracks(tracks: readonly TaskTrackGroup[]): TaskTrackGroup[] {
-  // Tracks where the track-task itself is `in_progress` come first (they are
-  // the literal "active work" the operator is driving). All other tracks fall
-  // back to insertion order (createdAt) so the on-disk layout drives display
-  // and the rendering matches the agent-friendly screenshot fixture.
+  // Sort order, top to bottom:
+  //   1. tracks the operator is actively driving (track-task `in_progress`),
+  //   2. tracks with a slug (the modern "named" view),
+  //   3. legacy slugless `tsk-XXX` tracks (so heavy backlogs of pre-slug
+  //      tasks don't push the clean named view off-screen).
+  // Within each bucket, ties break by createdAt so the on-disk layout drives
+  // display and matches the agent-friendly screenshot fixture.
   return [...tracks].sort((a, b) => {
     const aActive = a.task.status === "in_progress" ? 0 : 1;
     const bActive = b.task.status === "in_progress" ? 0 : 1;
     if (aActive !== bActive) return aActive - bActive;
+    const aSlugged = a.slug ? 0 : 1;
+    const bSlugged = b.slug ? 0 : 1;
+    if (aSlugged !== bSlugged) return aSlugged - bSlugged;
     return a.task.createdAt.localeCompare(b.task.createdAt);
   });
 }

@@ -304,7 +304,7 @@ function appendStep(
 
 function stepGlyph(task: Task, blocked: boolean, colorOn: boolean): string {
   if (task.status === "in_progress") return colorize(GLYPH.active, "green", colorOn);
-  if (blocked) return colorize(GLYPH.blocked, "red", colorOn);
+  if (blocked) return colorize(GLYPH.blocked, "yellow", colorOn);
   if (task.status === "completed") return GLYPH.done;
   return GLYPH.pending;
 }
@@ -321,7 +321,7 @@ function stepStatusLine(
   if (task.status !== "pending" || !blocked) return undefined;
 
   const labels = task.blockedBy.map((id) => describeBlocker(id, tasksById));
-  return colorize(`blocked by ${labels.join(", ")}`, "red", colorOn);
+  return colorize(`blocked by ${labels.join(", ")}`, "yellow", colorOn);
 }
 
 function describeBlocker(blockerId: string, tasksById: ReadonlyMap<string, Task>): string {
