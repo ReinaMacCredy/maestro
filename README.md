@@ -366,27 +366,45 @@ Rules enforced by the domain layer:
 
 ```text
 $ maestro task status
-tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track
+tasks: 42 open | 13 active | 5 ready | 16 blocked | 5 blocked tracks
+next: epic/desktop-path-native-ghostty / Phase 0: verify env and stock paseo desktop dev flow (9 unblocks)
 
 ACTIVE
-  o implement/worktree-config-lock-race       Pass git config overrides to prevent .git/config.lock race
-  o implement/template-prompt-fixes           Remove contradictory close-issue instruction from implement-prompt.md
-  o implement/agent-error-text-investigation  Investigate and surface Pi agent error text on non-zero exit
+  o chore/update-global-agents-md        Update global AGENTS.md guidance
+  o chore/check-maestro-task-dependency  Check maestro task dependency support against beads-rust
+  o chore/map-full-parallel-agent        Map full parallel-agent safety picture in maestro
+  o fix/fix-all-reviewed-regressions     Fix all reviewed regressions
+  + 9 more
 
 DEPENDENCY TRACKS
 
-implement/init-template-e2e-tests
-  ! Add AgentInvoker seam, test support module, and blank template e2e test
-      blocked by implement/template-prompt-fixes
-  · Add e2e test for simple-loop init template
-  · Add e2e test for sequential-reviewer init template
-  · Add e2e test for parallel-planner init template
+epic/desktop-path-native-ghostty
+  · Phase 0: verify env and stock paseo desktop dev flow
+      ready, 9 unblocks
+  ! Phase 1: build pinned GhosttyKit xcframework
+      blocked by Phase 0: verify env and stock paseo desktop dev flow
+  ! Phase 2: scaffold ghostty-bridge N-API addon
+      blocked by Phase 1: build pinned GhosttyKit xcframework
+  + 7 more
+
+epic/test-batch-non-code
+  · Test batch: inspect ready queue
+      ready, 2 unblocks
+  · Test batch: inventory pending handoffs
+      ready, 2 unblocks
+  ! Test batch: draft cleanup notes
+      blocked by Test batch: inspect ready queue, Test batch: inventory pending handoffs
+  ! Test batch: close out temporary test set
+      blocked by Test batch: draft cleanup notes
 
 READY
-  · implement/template-prompt-fixes           Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
-  · implement/template-prompt-fixes           Return reviewer result from Phase 2 callback in parallel-planner-with-review
-  · implement/agent-error-text-investigation  Investigate and surface Codex agent error text on non-zero exit
-  · implement/agent-error-text-investigation  Investigate and surface OpenCode agent error text on non-zero exit
+  · implement/review-last-four-commits      Review last four commits from 44d5f670 to e55384bf
+  · implement/implement-continuation-layer  Implement continuation layer
+
+BLOCKED
+  ! implement/investigate-regression            blocked by implement/scope-diff-history-feat
+  ! implement/inspect-changed-files-efficiency  blocked by implement/load-review-instructions-diff
+  ! implement/report-concise-findings-2         blocked by implement/inspect-changed-files-efficiency
 ```
 
 Flags:
@@ -395,10 +413,9 @@ Flags:
 |---|---|
 | `--all` | Include completed tasks (rendered with the `v` glyph). |
 | `--track <slug-or-id>` | Restrict output to one track. |
-| `--no-compact` | Render the unsectioned grouped detail view with solo tracks collapsed onto one line. |
 | `--json` | Emit a structured projection (`{ header, tracks[], orphans[], tasksById }`) for tooling. `header` includes `open`, `active`, `ready`, `pending`, `blocked`, and `blockedTracks`. |
 
-**Render shape.** The default view keeps solo/non-dependent work compact and expands only dependency tracks. `ACTIVE` shows at most four rows before `+ N more`; `READY`, `BLOCKED`, and dependency tracks are capped separately. Blocked rows render `blocked by <slug-or-id>` inline, while blocked steps inside dependency tracks render the blocker on the next line. Completed blockers are marked `(done)`. `--no-compact` keeps the older grouped detail shape where solo tracks render on one line.
+**Render shape.** The default view keeps solo/non-dependent work compact and expands only dependency tracks. `ACTIVE` shows at most four rows before `+ N more`; `READY`, `BLOCKED`, and dependency tracks are capped separately. Blocked rows render `blocked by <slug-or-id>` inline, while blocked steps inside dependency tracks render the blocker on the next line. Completed blockers are marked `(done)`.
 
 Color is auto-detected: `NO_COLOR=1` or a non-TTY pipe disables ANSI codes. Tracks (top-level tasks) carry a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`) which doubles as a human-friendly id — `task show implement/foo` and `task update implement/foo --status ...` work the same way `tsk-XXX` does.
 
