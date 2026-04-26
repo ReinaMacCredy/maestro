@@ -2,10 +2,12 @@
 import { basename, win32 } from "node:path";
 import { Command, CommanderError } from "commander";
 import { formatVersionOutputForArgv } from "@/shared/version-format.js";
+import { VERSION } from "@/shared/version.js";
 import { MaestroError } from "@/shared/errors.js";
 import { removeIfExists } from "@/shared/lib/fs.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { initServices } from "./services.js";
+import { checkForUpdate, isNewerSemver } from "@/infra/usecases/check-for-update.usecase.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
 import { registerStatusCommand } from "@/infra/commands/status.command.js";
 import { registerDoctorCommand } from "@/infra/commands/doctor.command.js";
@@ -120,7 +122,17 @@ async function main(): Promise<void> {
   try {
     await cleanupStaleWindowsBinary();
     assertNoDeprecatedMissionControlFlags(process.argv);
-    await program.parseAsync(process.argv);
+    // Run the cache read in parallel with the user's command so the FS read
+    // does not delay parsing. Stale-cache refresh is fire-and-forget inside
+    // checkForUpdate() and intentionally not awaited here.
+    const updateCheckPromise = shouldRunUpdateCheck(process.argv, process.env)
+      ? checkForUpdate().catch(() => undefined)
+      : Promise.resolve(undefined);
+    const [, updateCheck] = await Promise.all([
+      program.parseAsync(process.argv),
+      updateCheckPromise,
+    ]);
+    maybePrintUpdateBanner(updateCheck?.cached, process.argv, process.env);
   } catch (err) {
     if (err instanceof CommanderError) {
       process.exit(err.exitCode);
@@ -145,6 +157,49 @@ async function main(): Promise<void> {
     }
     throw err;
   }
+}
+
+export function shouldRunUpdateCheck(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv,
+): boolean {
+  if (env.MAESTRO_NO_UPDATE_CHECK) return false;
+  if (env.CI) return false;
+  if (env.NODE_ENV === "test") return false;
+  if (isPureInfoCommand(argv)) return false;
+  // Skip on `update` itself: that command does its own fetch (e.g., --check,
+  // or installReleaseBinary), so an ambient refresh would race a duplicate.
+  if (isUpdateCommand(argv)) return false;
+  return true;
+}
+
+export function maybePrintUpdateBanner(
+  cached: { readonly latestVersion: string; readonly latestTag: string } | undefined,
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv,
+): void {
+  if (!cached) return;
+  if (!isNewerSemver(cached.latestVersion, VERSION)) return;
+  if (env.MAESTRO_NO_UPDATE_CHECK) return;
+  if (env.CI) return;
+  if (env.NODE_ENV === "test") return;
+  if (!process.stderr.isTTY) return;
+  if (isPureInfoCommand(argv)) return;
+  if (isUpdateCommand(argv)) return;
+  console.error(
+    `[maestro] ${cached.latestTag} available (you have ${VERSION}). Run \`maestro update\` to upgrade.`,
+  );
+}
+
+function isPureInfoCommand(argv: readonly string[]): boolean {
+  // Look only at the first user-provided arg after the bin path so flags later
+  // in the line don't accidentally trigger suppression.
+  const first = argv[2];
+  return first === "--version" || first === "-V" || first === "--help" || first === "-h";
+}
+
+function isUpdateCommand(argv: readonly string[]): boolean {
+  return argv[2] === "update";
 }
 
 function assertNoDeprecatedMissionControlFlags(argv: readonly string[]): void {
