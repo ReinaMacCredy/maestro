@@ -353,7 +353,7 @@ Rules enforced by the domain layer:
 
 | Command | Returns |
 |---|---|
-| `maestro task status` | Tracks grouped by slug with status glyphs (`o` active, `!` blocked, `·` pending, `v` completed). |
+| `maestro task status` | Track-first board with status glyphs, blocker lines, and a small next hint when one task unlocks blocked work. |
 | `maestro task ready` | Pending, unblocked, unassigned tasks, `P0`/`P1` first. |
 | `maestro task mine` | Tasks claimed by the active session. |
 | `maestro task stuck` | `in_progress` tasks idle past `--older-than` (default `4h`). |
@@ -362,13 +362,15 @@ Rules enforced by the domain layer:
 
 ### Status view
 
-`maestro task status` groups every open task under its top-level "track" (the slug), with a header counting active/pending/blocked work. Steps blocked on another track render their blocker by slug, with a `(done)` suffix once the blocker completes.
+`maestro task status` renders a compact track board. The header keeps the old active/pending/blocked counters in JSON and adds open, ready, and blocked-track counts for the text view. The default text shape prints each track once, then indents the active, ready, and blocked work inside that track. If a ready task unlocks blocked downstream work, a one-line `next:` hint appears under the header.
 
 ```text
 $ maestro task status
-tasks: 3 active, 7 pending, 2 blocked
+tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track
 
-  o implement/worktree-config-lock-race  Pass git config overrides to prevent .git/config.lock race  in-progress
+implement/worktree-config-lock-race
+  o Pass git config overrides to prevent .git/config.lock race
+      in-progress
 
 implement/template-prompt-fixes
   o Remove contradictory close-issue instruction from implement-prompt.md
@@ -396,9 +398,10 @@ Flags:
 |---|---|
 | `--all` | Include completed tasks (rendered with the `v` glyph). |
 | `--track <slug-or-id>` | Restrict output to one track. |
-| `--json` | Emit a structured projection (`{ header, tracks[], orphans[], tasksById }`) for tooling. |
+| `--no-compact` | Render the unsectioned grouped detail view with solo tracks collapsed onto one line. |
+| `--json` | Emit a structured projection (`{ header, tracks[], orphans[], tasksById }`) for tooling. `header` includes `open`, `active`, `ready`, `pending`, `blocked`, and `blockedTracks`. |
 
-**Render shape.** Solo tracks (no step children) render on a single line: `  o slug  title  in-progress`. The blank line between consecutive solo tracks is dropped so flat queues stay scannable. Tracks with step children keep the multi-line form (slug header followed by an indented bullet list) so step structure remains readable.
+**Render shape.** The default view keeps every visible task inside its track block and caps long tracks with `+ N more`. Ready tasks that unblock downstream work get a small `ready, N unblocks` line. Blocked tasks render `blocked by <slug-or-id>` underneath; completed blockers are marked `(done)`. `--no-compact` keeps the older grouped detail shape where solo tracks render on one line.
 
 Color is auto-detected: `NO_COLOR=1` or a non-TTY pipe disables ANSI codes. Tracks (top-level tasks) carry a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`) which doubles as a human-friendly id — `task show implement/foo` and `task update implement/foo --status ...` work the same way `tsk-XXX` does.
 

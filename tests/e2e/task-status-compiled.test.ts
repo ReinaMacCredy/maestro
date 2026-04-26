@@ -158,9 +158,18 @@ describe("compiled task status + plan slug conversion", () => {
         env: { ...process.env, NO_COLOR: "1" },
       });
       expect(status.exitCode).toBe(0);
-      expect(status.stdout).toContain("tasks: 3 active, 7 pending, 2 blocked");
+      expect(status.stdout).toContain(
+        "tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track",
+      );
       expect(status.stdout).toContain("implement/worktree-config-lock-race");
       expect(status.stdout).toContain("blocked by implement/template-prompt-fixes");
+
+      const groupedStatus = await runCompiled(["task", "status", "--no-compact"], tmpDir, {
+        env: { ...process.env, NO_COLOR: "1" },
+      });
+      expect(groupedStatus.exitCode).toBe(0);
+      expect(groupedStatus.stdout).toContain("tasks: 3 active, 7 pending, 2 blocked");
+      expect(groupedStatus.stdout).toContain("      in-progress");
 
       const showSlug = await runCompiled(
         ["task", "show", "implement/init-template-e2e-tests"],
@@ -179,10 +188,24 @@ describe("compiled task status + plan slug conversion", () => {
 
       const statusJson = await runCompiled(["task", "status", "--json"], tmpDir);
       const projection = expectJson<{
-        header: { active: number; pending: number; blocked: number };
+        header: {
+          open: number;
+          active: number;
+          ready: number;
+          pending: number;
+          blocked: number;
+          blockedTracks: number;
+        };
         tracks: Array<{ identifier: string; slug?: string; task: { slug?: string } }>;
       }>(statusJson);
-      expect(projection.header).toEqual({ active: 3, pending: 7, blocked: 2 });
+      expect(projection.header).toEqual({
+        open: 12,
+        active: 3,
+        ready: 7,
+        pending: 7,
+        blocked: 2,
+        blockedTracks: 1,
+      });
       const slugs = projection.tracks.map((t) => t.identifier);
       expect(slugs).toContain("implement/worktree-config-lock-race");
     },

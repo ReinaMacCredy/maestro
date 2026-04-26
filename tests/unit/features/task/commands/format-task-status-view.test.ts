@@ -23,7 +23,7 @@ function makeTask(partial: Partial<Task> & { id: string; title: string }): Task 
 }
 
 describe("formatTaskStatusView", () => {
-  it("matches the screenshot fixture line-for-line with color disabled", () => {
+  it("renders the track board by default and preserves grouped detail with compact disabled", () => {
     const worktree = makeTask({
       id: "tsk-100001",
       title: "Pass git config overrides to prevent .git/config.lock race",
@@ -117,6 +117,34 @@ describe("formatTaskStatusView", () => {
     const lines = formatTaskStatusView(projection, { color: false });
 
     expect(lines).toEqual([
+      "tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track",
+      "",
+      "implement/worktree-config-lock-race",
+      "  o Pass git config overrides to prevent .git/config.lock race",
+      "      in-progress",
+      "",
+      "implement/template-prompt-fixes",
+      "  o Remove contradictory close-issue instruction from implement-prompt.md",
+      "      in-progress",
+      "  · Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}",
+      "  · Return reviewer result from Phase 2 callback in parallel-planner-with-review",
+      "",
+      "implement/init-template-e2e-tests",
+      "  ! Add AgentInvoker seam, test support module, and blank template e2e test",
+      "      blocked by implement/template-prompt-fixes",
+      "  · Add e2e test for simple-loop init template",
+      "  · Add e2e test for sequential-reviewer init template",
+      "  · Add e2e test for parallel-planner init template",
+      "",
+      "implement/agent-error-text-investigation",
+      "  o Investigate and surface Pi agent error text on non-zero exit",
+      "      in-progress",
+      "  · Investigate and surface Codex agent error text on non-zero exit",
+      "  · Investigate and surface OpenCode agent error text on non-zero exit",
+    ]);
+
+    const grouped = formatTaskStatusView(projection, { color: false, compact: false });
+    expect(grouped).toEqual([
       "tasks: 3 active, 7 pending, 2 blocked",
       "",
       "  o implement/worktree-config-lock-race  Pass git config overrides to prevent .git/config.lock race  in-progress",
@@ -142,7 +170,7 @@ describe("formatTaskStatusView", () => {
     ]);
   });
 
-  it("collapses solo tracks (no step children) to one line each, with no blank between them", () => {
+  it("renders solo tracks as track blocks", () => {
     const a = makeTask({
       id: "tsk-aaaaaa",
       title: "Update agents",
@@ -174,12 +202,23 @@ describe("formatTaskStatusView", () => {
     const lines = formatTaskStatusView(projection, { color: false });
 
     expect(lines).toEqual([
-      "tasks: 1 active, 2 pending, 1 blocked",
+      "tasks: 4 open | 1 active | 2 ready | 1 blocked | 1 blocked track",
+      "next: implement/blocker / Open blocker (1 unblock)",
       "",
-      "  o chore/update-agents  Update agents  in-progress",
-      "  · chore/bump-deps  Bump deps",
-      "  · implement/blocker  Open blocker",
-      "  ! implement/blocked-work  Blocked work  blocked by implement/blocker",
+      "chore/update-agents",
+      "  o Update agents",
+      "      in-progress",
+      "",
+      "chore/bump-deps",
+      "  · Bump deps",
+      "",
+      "implement/blocker",
+      "  · Open blocker",
+      "      ready, 1 unblock",
+      "",
+      "implement/blocked-work",
+      "  ! Blocked work",
+      "      blocked by implement/blocker",
     ]);
   });
 
@@ -199,7 +238,7 @@ describe("formatTaskStatusView", () => {
     const lines = formatTaskStatusView(projection, { color: false });
 
     expect(lines).toEqual([
-      "tasks: 0 active, 1 pending, 0 blocked",
+      "tasks: 1 open | 0 active | 1 ready | 0 blocked | 0 blocked tracks",
       "",
       "implement/track-epic",
       "  · Step one",
@@ -209,7 +248,9 @@ describe("formatTaskStatusView", () => {
   it("renders only the header line when there are no tasks", () => {
     const projection = groupTasksByTrack([]);
     const lines = formatTaskStatusView(projection, { color: false });
-    expect(lines).toEqual(["tasks: 0 active, 0 pending, 0 blocked"]);
+    expect(lines).toEqual([
+      "tasks: 0 open | 0 active | 0 ready | 0 blocked | 0 blocked tracks",
+    ]);
   });
 
   it("renders only the header line when every task is completed and --all is not set", () => {
@@ -218,7 +259,9 @@ describe("formatTaskStatusView", () => {
     ];
     const projection = groupTasksByTrack(tasks);
     const lines = formatTaskStatusView(projection, { color: false, all: false });
-    expect(lines).toEqual(["tasks: 0 active, 0 pending, 0 blocked"]);
+    expect(lines).toEqual([
+      "tasks: 0 open | 0 active | 0 ready | 0 blocked | 0 blocked tracks",
+    ]);
   });
 
   it("B1: renders blocked-by with (done) suffix for already-completed blockers in mixed lists", () => {
@@ -239,6 +282,26 @@ describe("formatTaskStatusView", () => {
     expect(joined).toContain(
       "blocked by implement/done-blocker (done), implement/still-open",
     );
+  });
+
+  it("renders child-step blockers by title instead of raw id", () => {
+    const track = makeTrack("tsk-aaaaaa", "epic/example", "Example");
+    const blocker = makeTask({
+      id: "tsk-bbbbbb",
+      title: "Phase 0: prepare",
+      parentId: track.id,
+    });
+    const blocked = makeTask({
+      id: "tsk-cccccc",
+      title: "Phase 1: build",
+      parentId: track.id,
+      blockedBy: [blocker.id],
+    });
+
+    const projection = groupTasksByTrack([track, blocker, blocked]);
+    const lines = formatTaskStatusView(projection, { color: false });
+
+    expect(lines.join("\n")).toContain("blocked by Phase 0: prepare");
   });
 });
 

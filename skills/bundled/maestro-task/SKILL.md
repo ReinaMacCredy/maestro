@@ -174,6 +174,7 @@ maestro task similar <id>
 ```bash
 maestro task status                       # all open tracks
 maestro task status --all                 # include completed (with `v` glyph)
+maestro task status --no-compact          # unsectioned grouped detail view
 maestro task status --track implement/foo # restrict to one track
 maestro task status --json                # structured projection
 ```
@@ -181,14 +182,36 @@ maestro task status --json                # structured projection
 Status glyphs: `o` active (in_progress), `!` blocked, `·` pending, `v`
 completed (only with `--all`).
 
-Render shape: solo tracks (no step children) render on a single line
-(`  o slug  title  in-progress`) with no blank line between consecutive
-solo tracks. Tracks with step children render multi-line (slug header,
-indented bullet list, status text under blocked / in-progress steps) so
-step structure stays readable.
+Default render shape: a track-first board. The header reports open, active,
+ready, blocked, and blocked-track counts. Each track prints once, with active,
+ready, and blocked work indented underneath. If a ready task unlocks blocked
+downstream work, a one-line `next:` hint appears under the header and the task
+gets a small `ready, N unblocks` line.
 
-Blocked steps render `blocked by <slug-or-id>` underneath; if a blocker
-has completed it's marked `(done)` as a hint that the wait is over.
+Default examples:
+
+```text
+tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track
+
+implement/template-prompt-fixes
+  o Remove contradictory close-issue instruction from implement-prompt.md
+      in-progress
+  · Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
+
+implement/init-template-e2e-tests
+  ! Add AgentInvoker seam, test support module, and blank template e2e test
+      blocked by implement/template-prompt-fixes
+  · Add e2e test for simple-loop init template
+```
+
+`--no-compact` renders the unsectioned grouped detail view: solo tracks (no step
+children) render on a single line (`  o slug  title  in-progress`) with no
+blank line between consecutive solo tracks. Tracks with step children render
+multi-line (slug header, indented bullet list, status text under blocked /
+in-progress steps) so step structure stays readable.
+
+Blocked items render `blocked by <slug-or-id>` underneath. If a blocker has
+completed it's marked `(done)` as a hint that the wait is over.
 
 ## Slug backfill (legacy slugless top-level tasks)
 

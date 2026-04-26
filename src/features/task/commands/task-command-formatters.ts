@@ -1,5 +1,5 @@
 import { formatRelativeAge } from "@/shared/version-format.js";
-import { colorize, isColorEnabled } from "@/shared/lib/ansi.ts";
+import { colorize, isColorEnabled } from "@/shared/lib/ansi.js";
 import type { Task } from "../domain/task-types.js";
 import type { TaskShowView } from "../usecases/task-continuation.usecase.js";
 import type { TaskHint } from "../usecases/match-candidates.usecase.js";
@@ -20,6 +20,8 @@ const GLYPH = {
   done: "v",
   pending: "·",
 } as const;
+
+const TRACK_BOARD_ITEM_LIMIT = 8;
 
 function trackIdentifier(task: Pick<Task, "id" | "slug" | "parentId">): string {
   return task.parentId === undefined && task.slug ? task.slug : task.id;
@@ -232,13 +234,17 @@ export interface FormatTaskStatusOptions {
   readonly all?: boolean;
   /** When true, emit ANSI color codes. Default: detect via NO_COLOR + TTY. */
   readonly color?: boolean;
+  /**
+   * When false, render the unsectioned grouped detail view. Default true renders
+   * the operator board.
+   */
+  readonly compact?: boolean;
 }
 
 /**
- * Render the `task status` view from a projection. Solo tracks (no step
- * children) render on a single line (`  o slug  title  in-progress`) with
- * no blank between consecutive solo lines. Tracks with steps render with a
- * slug header and bulleted step list.
+ * Render the `task status` track board from a projection. The default view
+ * keeps each track in one visual block so operators can scan active, ready, and
+ * blocked steps without mentally joining sections.
  */
 export function formatTaskStatusView(
   projection: TaskStatusProjection,
@@ -247,6 +253,95 @@ export function formatTaskStatusView(
   const colorOn = opts.color ?? isColorEnabled();
   const { header, tracks, orphans, tasksById } = projection;
 
+  if (opts.compact === false) {
+    return formatGroupedTaskStatusView(projection, colorOn);
+  }
+
+  return formatTrackBoardTaskStatusView(projection, colorOn);
+}
+
+function formatTrackBoardTaskStatusView(
+  projection: TaskStatusProjection,
+  colorOn: boolean,
+): string[] {
+  const { header, tracks, orphans, tasksById } = projection;
+  const lines: string[] = [formatTaskStatusHeader(header)];
+
+  if (tracks.length === 0 && orphans.length === 0) {
+    return lines;
+  }
+
+  const items = collectStatusItems(tracks, tasksById);
+  const downstreamBlockedCounts = collectDownstreamBlockedCounts(tasksById);
+  const nextLine = formatNextReadyLine(items, downstreamBlockedCounts, colorOn);
+  if (nextLine !== undefined) {
+    lines.push(nextLine);
+  }
+
+  for (const track of tracks) {
+    const trackItems = sortTrackBoardItems(
+      collectTrackItems(track, tasksById),
+      downstreamBlockedCounts,
+    );
+    if (trackItems.length === 0) continue;
+    lines.push("");
+    lines.push(colorize(track.identifier, "cyan", colorOn));
+    for (const item of trackItems.slice(0, TRACK_BOARD_ITEM_LIMIT)) {
+      appendTrackBoardItem(lines, item, tasksById, downstreamBlockedCounts, colorOn);
+    }
+    appendMoreLine(lines, trackItems.length - TRACK_BOARD_ITEM_LIMIT);
+  }
+
+  if (orphans.length > 0) {
+    lines.push("");
+    lines.push(colorize("ORPHANS", "dim", colorOn));
+    for (const orphan of orphans) {
+      appendStep(lines, orphan, tasksById, colorOn);
+    }
+  }
+
+  return lines;
+}
+
+function formatTaskStatusHeader(header: TaskStatusProjection["header"]): string {
+  return [
+    `tasks: ${header.open} open`,
+    `${header.active} active`,
+    `${header.ready} ready`,
+    `${header.blocked} blocked`,
+    `${header.blockedTracks} ${pluralize("blocked track", header.blockedTracks)}`,
+  ].join(" | ");
+}
+
+function formatNextReadyLine(
+  items: readonly StatusItem[],
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+  colorOn: boolean,
+): string | undefined {
+  const ready = items.filter(isReadyStatusItem);
+  if (ready.length === 0) return undefined;
+  const [best] = [...ready].sort((a, b) => {
+    const aDownstream = downstreamCount(a.task, downstreamBlockedCounts);
+    const bDownstream = downstreamCount(b.task, downstreamBlockedCounts);
+    if (aDownstream !== bDownstream) return bDownstream - aDownstream;
+    if (a.task.priority !== b.task.priority) return a.task.priority - b.task.priority;
+    return a.task.createdAt.localeCompare(b.task.createdAt);
+  });
+  if (best === undefined) return undefined;
+  const downstream = downstreamCount(best.task, downstreamBlockedCounts);
+  if (downstream === 0) return undefined;
+  return colorize(
+    `next: ${best.track.identifier} / ${best.task.title} (${pluralizeCount(downstream, "unblock")})`,
+    "dim",
+    colorOn,
+  );
+}
+
+function formatGroupedTaskStatusView(
+  projection: TaskStatusProjection,
+  colorOn: boolean,
+): string[] {
+  const { header, tracks, orphans, tasksById } = projection;
   const lines: string[] = [
     `tasks: ${header.active} active, ${header.pending} pending, ${header.blocked} blocked`,
   ];
@@ -278,6 +373,143 @@ export function formatTaskStatusView(
   }
 
   return lines;
+}
+
+interface StatusItem {
+  readonly track: TaskTrackGroup;
+  readonly task: Task;
+  readonly blocked: boolean;
+}
+
+function collectStatusItems(
+  tracks: readonly TaskTrackGroup[],
+  tasksById: ReadonlyMap<string, Task>,
+): StatusItem[] {
+  return tracks.flatMap((track) => collectTrackItems(track, tasksById));
+}
+
+function collectTrackItems(
+  track: TaskTrackGroup,
+  tasksById: ReadonlyMap<string, Task>,
+): StatusItem[] {
+  const tasks = track.steps.length > 0 ? track.steps : [track.task];
+  return tasks.map((task) => ({
+    track,
+    task,
+    blocked: hasUnresolvedBlockers(task, tasksById),
+  }));
+}
+
+function appendTrackBoardItem(
+  lines: string[],
+  item: StatusItem,
+  tasksById: ReadonlyMap<string, Task>,
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+  colorOn: boolean,
+): void {
+  lines.push(`  ${stepGlyph(item.task, item.blocked, colorOn)} ${item.task.title}`);
+  if (item.task.status === "in_progress") {
+    lines.push(`      ${colorize("in-progress", "yellow", colorOn)}`);
+    return;
+  }
+  if (item.blocked) {
+    lines.push(`      ${formatBlockedByLine(item.task, tasksById, colorOn)}`);
+    return;
+  }
+  if (isReadyStatusItem(item)) {
+    const downstream = downstreamCount(item.task, downstreamBlockedCounts);
+    if (downstream > 0) {
+      lines.push(`      ready, ${pluralizeCount(downstream, "unblock")}`);
+    }
+  }
+}
+
+function sortTrackBoardItems(
+  items: readonly StatusItem[],
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+): StatusItem[] {
+  return [...items].sort((a, b) => {
+    const aRank = trackBoardItemRank(a, downstreamBlockedCounts);
+    const bRank = trackBoardItemRank(b, downstreamBlockedCounts);
+    if (aRank !== bRank) return aRank - bRank;
+    const aDownstream = downstreamCount(a.task, downstreamBlockedCounts);
+    const bDownstream = downstreamCount(b.task, downstreamBlockedCounts);
+    if (aDownstream !== bDownstream) return bDownstream - aDownstream;
+    if (a.task.priority !== b.task.priority) return a.task.priority - b.task.priority;
+    return a.task.createdAt.localeCompare(b.task.createdAt);
+  });
+}
+
+function trackBoardItemRank(
+  item: StatusItem,
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+): number {
+  if (item.task.status === "in_progress") return 0;
+  if (isReadyStatusItem(item) && downstreamCount(item.task, downstreamBlockedCounts) > 0) {
+    return 1;
+  }
+  if (item.blocked) return 2;
+  if (isReadyStatusItem(item)) return 3;
+  if (item.task.status === "pending") return 4;
+  if (item.task.status === "completed") return 5;
+  return 6;
+}
+
+function appendMoreLine(lines: string[], hiddenCount: number): void {
+  if (hiddenCount > 0) {
+    lines.push(`  + ${hiddenCount} more`);
+  }
+}
+
+function isReadyStatusItem(item: StatusItem): boolean {
+  return (
+    item.task.status === "pending" &&
+    item.task.assignee === undefined &&
+    !item.blocked
+  );
+}
+
+function pluralize(label: string, count: number): string {
+  return count === 1 ? label : `${label}s`;
+}
+
+function pluralizeCount(count: number, label: string): string {
+  return `${count} ${count === 1 ? label : `${label}s`}`;
+}
+
+function collectDownstreamBlockedCounts(
+  tasksById: ReadonlyMap<string, Task>,
+): ReadonlyMap<string, number> {
+  const waitingByBlocker = new Map<string, Task[]>();
+  for (const candidate of tasksById.values()) {
+    if (candidate.status === "completed") continue;
+    for (const blockerId of candidate.blockedBy) {
+      const list = waitingByBlocker.get(blockerId);
+      if (list) list.push(candidate);
+      else waitingByBlocker.set(blockerId, [candidate]);
+    }
+  }
+
+  const counts = new Map<string, number>();
+  for (const task of tasksById.values()) {
+    const seen = new Set<string>();
+    const queue = [...(waitingByBlocker.get(task.id) ?? [])];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (current === undefined || seen.has(current.id)) continue;
+      seen.add(current.id);
+      queue.push(...(waitingByBlocker.get(current.id) ?? []));
+    }
+    if (seen.size > 0) counts.set(task.id, seen.size);
+  }
+  return counts;
+}
+
+function downstreamCount(
+  task: Task,
+  downstreamBlockedCounts: ReadonlyMap<string, number>,
+): number {
+  return downstreamBlockedCounts.get(task.id) ?? 0;
 }
 
 function appendTrack(
@@ -338,6 +570,14 @@ function stepStatusLine(
   }
   if (task.status !== "pending" || !blocked) return undefined;
 
+  return formatBlockedByLine(task, tasksById, colorOn);
+}
+
+function formatBlockedByLine(
+  task: Task,
+  tasksById: ReadonlyMap<string, Task>,
+  colorOn: boolean,
+): string {
   const labels = task.blockedBy.map((id) => describeBlocker(id, tasksById));
   return colorize(`blocked by ${labels.join(", ")}`, "yellow", colorOn);
 }
@@ -345,7 +585,7 @@ function stepStatusLine(
 function describeBlocker(blockerId: string, tasksById: ReadonlyMap<string, Task>): string {
   const blocker = tasksById.get(blockerId);
   if (!blocker) return blockerId;
-  const label = trackIdentifier(blocker);
+  const label = blocker.parentId === undefined ? trackIdentifier(blocker) : blocker.title;
   return blocker.status === "completed" ? `${label} (done)` : label;
 }
 

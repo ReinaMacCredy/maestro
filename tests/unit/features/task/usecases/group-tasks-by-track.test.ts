@@ -77,7 +77,14 @@ describe("groupTasksByTrack", () => {
       makeTask({ id: "tsk-eeeeee", title: "Done", status: "completed", slug: "implement/done" }),
     ];
     const projection = groupTasksByTrack(tasks);
-    expect(projection.header).toEqual({ active: 1, pending: 2, blocked: 1 });
+    expect(projection.header).toEqual({
+      open: 4,
+      active: 1,
+      ready: 2,
+      pending: 2,
+      blocked: 1,
+      blockedTracks: 1,
+    });
   });
 
   it("places track-tasks in_progress first, then by createdAt", () => {

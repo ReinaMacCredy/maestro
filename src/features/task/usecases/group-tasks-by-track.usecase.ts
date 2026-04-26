@@ -2,9 +2,12 @@ import type { Task } from "../domain/task-types.js";
 import { hasUnresolvedBlockers } from "../domain/task-state.js";
 
 export interface TaskStatusHeader {
+  readonly open: number;
   readonly active: number;
+  readonly ready: number;
   readonly pending: number;
   readonly blocked: number;
+  readonly blockedTracks: number;
 }
 
 export interface TaskTrackGroup {
@@ -181,8 +184,10 @@ function computeHeader(
   byId: ReadonlyMap<string, Task>,
 ): TaskStatusHeader {
   let active = 0;
+  let ready = 0;
   let pending = 0;
   let blocked = 0;
+  let blockedTracks = 0;
 
   const childrenByParent = new Map<string, Task[]>();
   for (const task of tasks) {
@@ -200,21 +205,45 @@ function computeHeader(
       );
       if (visibleChildren.length === 0) {
         if (task.status === "in_progress") active += 1;
-        else if (isBlocked(task, byId)) blocked += 1;
-        else pending += 1;
+        else if (isBlocked(task, byId)) {
+          blocked += 1;
+          blockedTracks += 1;
+        } else {
+          pending += 1;
+          if (isReady(task, byId)) ready += 1;
+        }
         continue;
       }
       const trackHasInProgress = visibleChildren.some(
         (child) => child.status === "in_progress",
       );
       const trackHasBlocked = visibleChildren.some((child) => isBlocked(child, byId));
+      if (trackHasBlocked) blockedTracks += 1;
       if (!trackHasInProgress && trackHasBlocked) blocked += 1;
       continue;
     }
 
     if (task.status === "in_progress") active += 1;
     else if (isBlocked(task, byId)) blocked += 1;
-    else pending += 1;
+    else {
+      pending += 1;
+      if (isReady(task, byId)) ready += 1;
+    }
   }
-  return { active, pending, blocked };
+  return {
+    open: active + pending + blocked,
+    active,
+    ready,
+    pending,
+    blocked,
+    blockedTracks,
+  };
+}
+
+function isReady(task: Task, byId: ReadonlyMap<string, Task>): boolean {
+  return (
+    task.status === "pending" &&
+    task.assignee === undefined &&
+    !isBlocked(task, byId)
+  );
 }
