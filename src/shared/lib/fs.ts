@@ -1,5 +1,4 @@
 import { appendFile, lstat, mkdir, readdir, readlink, rename, rm, stat, symlink } from "node:fs/promises";
-import type { Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
@@ -148,15 +147,6 @@ export async function readlinkSafe(link: string): Promise<string | undefined> {
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "EINVAL") return undefined;
-    throw err;
-  }
-}
-
-export async function lstatSafe(path: string): Promise<Stats | undefined> {
-  try {
-    return await lstat(path);
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw err;
   }
 }

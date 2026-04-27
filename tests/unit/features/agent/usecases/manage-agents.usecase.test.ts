@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { createHash } from "node:crypto";
 import { chmod, lstat, mkdtemp, readlink, rm, mkdir, symlink, writeFile, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { BUNDLED_SKILL_TEMPLATES } from "@/infra/domain/bundled-skill-templates.js";
@@ -576,16 +576,6 @@ describe("manage-agents use case logic", () => {
   });
 
   describe("migration from pre-redesign real-dir installs", () => {
-    function shippedSkillFile(skillName: string, relativePath: string): string {
-      const template = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === skillName)!;
-      return template.files.find((f) => f.path === relativePath)!.content;
-    }
-
-    function shippedSkillFileHash(skillName: string, relativePath: string): string {
-      const content = shippedSkillFile(skillName, relativePath);
-      return createHash("sha256").update(content).digest("hex");
-    }
-
     async function seedLegacyAgentSkill(
       agentDir: string,
       skillName: string,
@@ -597,7 +587,7 @@ describe("manage-agents use case logic", () => {
       const fileHashes: Record<string, string> = {};
       for (const file of template.files) {
         const onDiskPath = join(skillDir, file.path);
-        await mkdir(join(skillDir, file.path, ".."), { recursive: true });
+        await mkdir(dirname(onDiskPath), { recursive: true });
         const content = overrides[file.path] ?? file.content;
         await writeFile(onDiskPath, content);
         // Manifest always records the SHIPPED hash (pre-edit baseline) — that's

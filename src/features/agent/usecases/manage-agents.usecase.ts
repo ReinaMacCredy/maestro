@@ -66,6 +66,11 @@ function isMaestroTreeLink(target: string, maestroSkillsRoot: string): boolean {
   return target === maestroSkillsRoot || target.startsWith(maestroSkillsRoot + sep);
 }
 
+function formatPathUnderRoot(root: string, relativePath: string): string {
+  if (relativePath.length === 0) return root;
+  return root.endsWith(sep) ? `${root}${relativePath}` : `${root}${sep}${relativePath}`;
+}
+
 /**
  * Marker written into each shipped skill directory under the maestro source
  * of truth (`~/.maestro/skills/<skill>/`). Its presence identifies a dir as
@@ -370,14 +375,13 @@ async function removeStaleManagedFiles(
 async function removeStaleBundledSkillDirs(skillRoot: string): Promise<string[]> {
   if (!(await dirExists(skillRoot))) return [];
 
-  const shipped = new Set(BUNDLED_SKILL_TEMPLATES.map((template) => template.name));
   const entries = (await readdir(skillRoot, { withFileTypes: true }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
   const results = await Promise.all(entries.map(async (entry) => {
     if (!entry.isDirectory()) return undefined;
     if (!entry.name.startsWith(BUNDLED_SKILL_PREFIX)) return undefined;
-    if (shipped.has(entry.name)) return undefined;
+    if (BUNDLED_SKILL_NAME_SET.has(entry.name)) return undefined;
 
     const manifestPath = join(skillRoot, entry.name, MANIFEST_FILENAME);
     const manifest = await readBundledSkillManifest(manifestPath);
@@ -431,8 +435,9 @@ async function ensureSkillLink(
     // override (e.g. linking our skill name to their own local fork).
     // Replacing it would silently destroy that override. Leave it alone.
     if (current !== undefined && !isMaestroTreeLink(current, maestroSkillsRoot)) {
+      const maestroSkillsDisplayPath = formatPathUnderRoot(maestroSkillsRoot, "");
       process.stderr.write(
-        `[warn] ${link} is a user symlink pointing outside ~/.maestro/skills/ (${current}); leaving in place\n`,
+        `[warn] ${link} is a user symlink pointing outside ${maestroSkillsDisplayPath} (${current}); leaving in place\n`,
       );
       return { changed: false, preservedUserEdits: [] };
     }
@@ -479,14 +484,14 @@ async function migrateRealDirToSymlink(
   }
 
   const resolvedRealDir = resolve(realDirPath);
-  const realRealDir = await realpath(realDirPath).catch((error: unknown) => {
+  const realSkillDirPath = await realpath(realDirPath).catch((error: unknown) => {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return resolvedRealDir;
     throw error;
   });
 
   const userEditCandidates = await Promise.all(
     Object.entries(manifest.fileHashes).map(async ([relativePath, prevHash]) => {
-      const absolute = await resolveManagedManifestPath(resolvedRealDir, realRealDir, relativePath);
+      const absolute = await resolveManagedManifestPath(resolvedRealDir, realSkillDirPath, relativePath);
       if (!absolute) return undefined;
       const existing = await readText(absolute);
       if (existing === undefined) return undefined;
@@ -649,7 +654,7 @@ async function processInject(
 
   for (const path of localPreservedEdits) {
     process.stderr.write(
-      `[warn] preserved user-edited skill file: ~/${join(agent.configDir, "skills", path)} (not overwritten)\n`,
+      `[warn] preserved user-edited skill file: ${formatPathUnderRoot(skillsRoot, path)} (not overwritten)\n`,
     );
   }
 
@@ -745,7 +750,7 @@ export async function injectAgentBlocks(
   for (const r of writeResults) {
     for (const path of r.preservedUserEdits) {
       process.stderr.write(
-        `[warn] preserved user-edited skill file: ~/.maestro/skills/${path} (not overwritten)\n`,
+        `[warn] preserved user-edited skill file: ${formatPathUnderRoot(maestroSkillsRoot, path)} (not overwritten)\n`,
       );
     }
   }
