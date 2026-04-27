@@ -20,7 +20,7 @@ import type {
   MissionStorePort,
 } from "@/features/mission/index.js";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
-import type { ReplyStorePort, AgentReply } from "@/features/reply/index.js";
+import type { ReplyStorePort, AgentReply } from "@/features/mission/index.js";
 
 const MISSION_ID = "2026-04-15-001";
 

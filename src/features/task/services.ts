@@ -2,7 +2,6 @@ import type { TaskStorePort } from "./ports/task-store.port.js";
 import type { CandidateStorePort } from "./ports/candidate-store.port.js";
 import type { TaskContinuationStorePort } from "./ports/task-continuation-store.port.js";
 import type { TaskContinuationHistoryPort } from "./ports/task-continuation-history.port.js";
-import type { NowMdWriterPort } from "./ports/now-md-writer.port.js";
 import type { ContractStorePort } from "./ports/contract-store.port.js";
 import type { GitAnchorPort } from "./ports/git-anchor.port.js";
 import { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
@@ -20,7 +19,7 @@ export interface TaskServices {
   readonly taskCandidateStore: CandidateStorePort;
   readonly taskContinuationStore: TaskContinuationStorePort;
   readonly taskContinuationHistory: TaskContinuationHistoryPort;
-  readonly taskNowMdWriter: NowMdWriterPort;
+  readonly taskNowMdWriter: FsNowMdWriterAdapter;
 }
 
 export function buildTaskServices(projectDir: string): TaskServices {

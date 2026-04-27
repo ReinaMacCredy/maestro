@@ -8,8 +8,9 @@ import type {
   MilestoneProfile,
   FeatureStatus,
   PrincipleMode,
+  ReplyOutcome,
+  ReplyAuthor,
 } from "@/features/mission";
-import type { ReplyOutcome, ReplyAuthor } from "@/features/reply";
 import type { MissionControlEvent } from "./types.js";
 
 export type InferredAgentStatus = "active" | "waiting" | "completed" | "stale";

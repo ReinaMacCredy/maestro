@@ -1,0 +1,196 @@
+// I/O layer for the MissionControlSnapshot. Reads stores, ingests pending
+// replies, and returns a `SnapshotProjectionInput` that the pure projection
+// layer (projection.ts) consumes.
+import { MaestroError } from "@/shared/errors.js";
+import type {
+  MissionStorePort,
+  FeatureStorePort,
+  AssertionStorePort,
+  CheckpointStorePort,
+  AgentReply,
+  PrincipleStorePort,
+  ReplyStorePort,
+} from "@/features/mission";
+import type { ConfigPort } from "@/infra/ports/config.port.js";
+import type { GitPort } from "@/infra/ports/git.port.js";
+import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
+import type { RatchetStorePort } from "@/features/ratchet";
+import type { ProjectGraphStorePort } from "@/features/graph";
+import type { HandoffStorePort } from "@/features/handoff";
+import type { TaskQueryPort } from "@/features/task";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
+import { buildMissionControlEnvironmentSummary } from "./environment-projection.js";
+import { buildMissionControlMemorySnapshot } from "./memory-projection.js";
+import {
+  loadAndIngestReplies,
+  loadPrincipleEffectiveness,
+  safeListReplies,
+} from "./reply-projection.js";
+import { buildTaskBoard } from "./task-board.js";
+import type {
+  SnapshotProjectionInput,
+  HomeProjectionInput,
+} from "./projection.js";
+
+export interface SnapshotDeps {
+  missionStore: MissionStorePort;
+  featureStore: FeatureStorePort;
+  assertionStore: AssertionStorePort;
+  checkpointStore: CheckpointStorePort;
+  config: ConfigPort;
+  git: GitPort;
+  correctionStore?: CorrectionStorePort;
+  learningStore?: LearningStorePort;
+  ratchetStore?: RatchetStorePort;
+  projectGraphStore?: ProjectGraphStorePort;
+  handoffStore?: HandoffStorePort;
+  taskStore?: TaskQueryPort;
+  replyStore?: ReplyStorePort;
+  principleStore?: PrincipleStorePort;
+  cwd: string;
+}
+
+export interface HomeSnapshotDeps {
+  config: ConfigPort;
+  git: GitPort;
+  correctionStore?: CorrectionStorePort;
+  learningStore?: LearningStorePort;
+  ratchetStore?: RatchetStorePort;
+  projectGraphStore?: ProjectGraphStorePort;
+  handoffStore?: HandoffStorePort;
+  taskStore?: TaskQueryPort;
+  replyStore?: ReplyStorePort;
+  principleStore?: PrincipleStorePort;
+  cwd: string;
+}
+
+export interface SnapshotBuildOptions {
+  includeTaskBoard?: boolean;
+  includeReplies?: boolean;
+}
+
+export async function loadSnapshotInput(
+  deps: SnapshotDeps,
+  missionId: string,
+  options: SnapshotBuildOptions,
+): Promise<SnapshotProjectionInput> {
+  const currentProjectRoot = options.includeReplies === true
+    ? resolveMaestroProjectRoot(deps.cwd)
+    : undefined;
+  const taskBoardPromise = options.includeTaskBoard === true
+    ? buildTaskBoard(deps.taskStore)
+    : Promise.resolve(undefined);
+
+  // Ingest replies FIRST when requested, so the features list below reflects
+  // post-ingest state (advanced/kicked-back). Without this the inbox appears
+  // stale for one poll cycle.
+  const ingest = currentProjectRoot !== undefined
+    ? await loadAndIngestReplies(deps, missionId, currentProjectRoot)
+    : {
+        replies: undefined as readonly AgentReply[] | undefined,
+        outcomesCache: undefined,
+        handoffsCache: undefined,
+      };
+
+  const [
+    mission,
+    features,
+    assertions,
+    checkpoints,
+    env,
+    configLayers,
+    gitState,
+    memorySnapshot,
+    taskBoard,
+  ] = await Promise.all([
+    deps.missionStore.get(missionId),
+    deps.featureStore.list(missionId),
+    deps.assertionStore.list(missionId),
+    deps.checkpointStore.list(missionId),
+    buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
+    deps.config.loadLayers(deps.cwd),
+    deps.git.getState(deps.cwd),
+    buildMissionControlMemorySnapshot({
+      correctionStore: deps.correctionStore,
+      learningStore: deps.learningStore,
+      ratchetStore: deps.ratchetStore,
+      projectGraphStore: deps.projectGraphStore,
+      cwd: deps.cwd,
+    }),
+    taskBoardPromise,
+  ]);
+
+  if (!mission) {
+    throw new MaestroError(`Mission ${missionId} not found`, [
+      "List missions: maestro mission list",
+      `Check that mission ID '${missionId}' is correct`,
+    ]);
+  }
+
+  // Principle effectiveness piggybacks on includeReplies because the reply
+  // ingest is what produces most of the decided outcomes. Reuses the
+  // in-memory caches from ingest to avoid re-reading outcomes.jsonl.
+  const principleEffectiveness = currentProjectRoot !== undefined
+    ? await loadPrincipleEffectiveness(deps, currentProjectRoot, ingest.outcomesCache, ingest.handoffsCache)
+    : undefined;
+
+  return {
+    mission,
+    features,
+    assertions,
+    checkpoints,
+    env,
+    configLayers,
+    gitState,
+    memorySnapshot,
+    taskBoard,
+    replies: ingest.replies,
+    principleEffectiveness,
+  };
+}
+
+export async function loadHomeSnapshotInput(
+  deps: HomeSnapshotDeps,
+  options: SnapshotBuildOptions,
+): Promise<HomeProjectionInput> {
+  const currentProjectRoot = options.includeReplies === true
+    ? resolveMaestroProjectRoot(deps.cwd)
+    : undefined;
+  const taskBoardPromise = options.includeTaskBoard === true
+    ? buildTaskBoard(deps.taskStore)
+    : Promise.resolve(undefined);
+  // Replies in home mode: list without ingest (home mode has no mission to
+  // update). Home surface is purely read-only per Mission Control contracts.
+  const repliesPromise = currentProjectRoot !== undefined && deps.replyStore
+    ? safeListReplies(deps.replyStore)
+    : Promise.resolve(undefined);
+  const principleEffectivenessPromise = currentProjectRoot !== undefined
+    ? loadPrincipleEffectiveness(deps, currentProjectRoot)
+    : Promise.resolve(undefined);
+  const [env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness] = await Promise.all([
+    buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
+    deps.config.loadLayers(deps.cwd),
+    deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
+    buildMissionControlMemorySnapshot({
+      correctionStore: deps.correctionStore,
+      learningStore: deps.learningStore,
+      ratchetStore: deps.ratchetStore,
+      projectGraphStore: deps.projectGraphStore,
+      cwd: deps.cwd,
+    }),
+    taskBoardPromise,
+    repliesPromise,
+    principleEffectivenessPromise,
+  ]);
+
+  return {
+    env,
+    configLayers,
+    gitState,
+    memorySnapshot,
+    taskBoard,
+    replies,
+    principleEffectiveness,
+    cwd: deps.cwd,
+  };
+}

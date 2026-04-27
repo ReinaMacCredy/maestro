@@ -27,6 +27,7 @@ import {
   registerMilestoneCommand,
   registerCheckpointCommand,
   registerPrincipleCommand,
+  registerReplyCommand,
 } from "./features/mission/index.js";
 import { registerMissionControlCommand } from "@/infra/commands/mission-control.command.js";
 import {
@@ -48,7 +49,6 @@ import {
 } from "./features/graph/index.js";
 import { registerHandoffCommand } from "./features/handoff/index.js";
 import { registerTaskCommand } from "./features/task/index.js";
-import { registerReplyCommand } from "./features/reply/index.js";
 import { registerBundleCommand } from "./features/bundle/index.js";
 
 export const program = new Command()

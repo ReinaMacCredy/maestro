@@ -20,8 +20,8 @@ import type {
 } from "@/features/mission/domain/mission-types.js";
 import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
 import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "@/features/mission/validation/ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "@/features/mission/checkpoint/ports/checkpoint-store.port.js";
+import type { AssertionStorePort } from "@/features/mission/ports/assertion-store.port.js";
+import type { CheckpointStorePort } from "@/features/mission/ports/checkpoint-store.port.js";
 
 // Test fixtures
 function createTestMission(

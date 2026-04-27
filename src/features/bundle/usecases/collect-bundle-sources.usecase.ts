@@ -14,13 +14,13 @@ import type {
   FeatureStorePort,
   Mission,
   MissionStorePort,
+  ReplyStorePort,
 } from "@/features/mission/index.js";
 import { MISSION_ID_PATTERN } from "@/features/mission/index.js";
 import {
   isHandoffInProject,
   type HandoffStorePort,
 } from "@/features/handoff/index.js";
-import type { ReplyStorePort } from "@/features/reply/index.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readText, dirExists } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";

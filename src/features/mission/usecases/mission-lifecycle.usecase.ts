@@ -4,7 +4,7 @@
  */
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { FeatureStorePort } from "../feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../validation/ports/assertion-store.port.js";
+import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type {
   Mission,
   CreateMissionInput,

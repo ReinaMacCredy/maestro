@@ -13,7 +13,7 @@ import type { Feature, Milestone, Principle, PrincipleOutcomeRecord, PrincipleSt
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
 import type { MissionControlEvent } from "@/tui/state/types.js";
 import type { Task, TaskQueryPort } from "@/features/task";
-import type { AgentReply } from "@/features/reply";
+import type { AgentReply } from "@/features/mission";
 import { mockConfig, mockGit } from "../../../helpers/mocks.js";
 
 function makeFeature(overrides: Partial<Feature> & { id: string }): Feature {

@@ -47,10 +47,7 @@ export { validateTaskCandidate } from "./domain/task-candidate.js";
 export { extractKeywords } from "./domain/extract-keywords.js";
 
 export type { TaskQueryPort, TaskStorePort } from "./ports/task-store.port.js";
-export type {
-  TaskContinuationQueryPort,
-  TaskContinuationStorePort,
-} from "./ports/task-continuation-store.port.js";
+export type { TaskContinuationStorePort } from "./ports/task-continuation-store.port.js";
 export type { TaskContinuationHistoryPort } from "./ports/task-continuation-history.port.js";
 export type {
   CandidateStorePort,

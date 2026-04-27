@@ -7,7 +7,7 @@ import { MaestroError } from "@/shared/errors.js";
 import type { Mission, Milestone, Feature, Assertion, MissionStatus, MilestoneStatus, FeatureStatus, AssertionResult } from "@/features/mission/domain/mission-types.js";
 import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
 import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "@/features/mission/validation/ports/assertion-store.port.js";
+import type { AssertionStorePort } from "@/features/mission/ports/assertion-store.port.js";
 
 // Test fixtures
 function createTestMission(status: MissionStatus = "draft", milestones: Milestone[] = []): Mission {
