@@ -219,14 +219,31 @@ export function maybePrintUpdateBanner(
 }
 
 function isPureInfoCommand(argv: readonly string[]): boolean {
-  // Look only at the first user-provided arg after the bin path so flags later
-  // in the line don't accidentally trigger suppression.
-  const first = argv[2];
-  return first === "--version" || first === "-V" || first === "--help" || first === "-h";
+  const parsed = parseCommandIntent(argv);
+  return parsed.infoOnly;
 }
 
 function isUpdateCommand(argv: readonly string[]): boolean {
-  return argv[2] === "update";
+  return parseCommandIntent(argv).command === "update";
+}
+
+function parseCommandIntent(argv: readonly string[]): {
+  readonly command?: string;
+  readonly infoOnly: boolean;
+} {
+  for (let i = 2; i < argv.length; i++) {
+    const token = argv[i];
+    if (!token) continue;
+    if (token === "--") return { command: argv[i + 1], infoOnly: false };
+    if (token === "--version" || token === "-V" || token === "--help" || token === "-h") {
+      return { infoOnly: true };
+    }
+    if (token === "--json") continue;
+    if (token.startsWith("--json=")) continue;
+    if (token.startsWith("-")) continue;
+    return { command: token, infoOnly: false };
+  }
+  return { infoOnly: false };
 }
 
 function assertNoDeprecatedMissionControlFlags(argv: readonly string[]): void {

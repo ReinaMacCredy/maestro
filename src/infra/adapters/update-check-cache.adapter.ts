@@ -5,6 +5,7 @@ import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 
 export interface UpdateCheckCacheEntry {
   readonly checkedAt: string;
+  readonly lastAttemptAt?: string;
   readonly currentVersion: string;
   readonly latestVersion: string;
   readonly latestTag: string;
@@ -40,14 +41,21 @@ export async function writeUpdateCheckCache(
 function parseEntry(raw: unknown): UpdateCheckCacheEntry | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const value = raw as Record<string, unknown>;
-  const { checkedAt, currentVersion, latestVersion, latestTag } = value;
+  const { checkedAt, lastAttemptAt, currentVersion, latestVersion, latestTag } = value;
   if (
     typeof checkedAt !== "string"
+    || (lastAttemptAt !== undefined && typeof lastAttemptAt !== "string")
     || typeof currentVersion !== "string"
     || typeof latestVersion !== "string"
     || typeof latestTag !== "string"
   ) {
     return undefined;
   }
-  return { checkedAt, currentVersion, latestVersion, latestTag };
+  return {
+    checkedAt,
+    ...(lastAttemptAt !== undefined ? { lastAttemptAt } : {}),
+    currentVersion,
+    latestVersion,
+    latestTag,
+  };
 }

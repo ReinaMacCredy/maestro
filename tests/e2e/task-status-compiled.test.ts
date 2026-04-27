@@ -181,6 +181,14 @@ describe("compiled task status + plan slug conversion", () => {
         "implement/worktree-config-lock-race",
       ].sort());
 
+      const tracksOnlyJson = await runCompiled(["task", "list", "--tracks", "--json"], tmpDir);
+      expect(expectJson<string[]>(tracksOnlyJson).sort()).toEqual([
+        "implement/agent-error-text-investigation",
+        "implement/init-template-e2e-tests",
+        "implement/template-prompt-fixes",
+        "implement/worktree-config-lock-race",
+      ].sort());
+
       const statusJson = await runCompiled(["task", "status", "--json"], tmpDir);
       const projection = expectJson<{
         header: {

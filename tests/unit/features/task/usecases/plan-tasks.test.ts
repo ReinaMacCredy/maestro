@@ -313,6 +313,19 @@ describe("planTasks", () => {
       expect(child?.parentId).toBe(root!.id);
     });
 
+    it("rejects a batch-local name that collides with another entry's slug", async () => {
+      await expect(
+        planTasks(store, {
+          tasks: [
+            { name: "implement/root", title: "Name collision", type: "feature" },
+            { name: "root", title: "Root", type: "feature", slug: "implement/root" },
+            { title: "Child", parent: "implement/root" },
+          ],
+        }),
+      ).rejects.toThrow(/collides with slug/);
+      expect(await store.all()).toHaveLength(0);
+    });
+
     it("auto-derives suffixes when multiple top-level entries share a base", async () => {
       const result = await planTasks(store, {
         tasks: [

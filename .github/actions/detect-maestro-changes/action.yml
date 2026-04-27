@@ -152,6 +152,7 @@ runs:
           case "$path" in
             .github/workflows/**|.github/actions/**)
               github_changed=true
+              full_ci=true
               ;;
           esac
         done

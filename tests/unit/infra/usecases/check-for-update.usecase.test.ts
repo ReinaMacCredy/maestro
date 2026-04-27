@@ -108,20 +108,54 @@ describe("checkForUpdate", () => {
     expect(written?.latestVersion).toBe("0.60.0");
     expect(written?.latestTag).toBe("v0.60.0");
     expect(written?.currentVersion).toBe("0.59.0");
-    expect(writes).toHaveLength(1);
+    expect(written?.lastAttemptAt).toBeUndefined();
+    expect(writes).toHaveLength(2);
+    expect(writes[0]?.lastAttemptAt).toBe(FIXED_NOW.toISOString());
+    expect(writes[1]).toEqual(written);
+  });
+
+  it("does not refresh a stale cache while a recent refresh attempt is cooling down", async () => {
+    const cache = {
+      ...staleCache(),
+      lastAttemptAt: new Date(FIXED_NOW.getTime() - 5 * 60 * 1000).toISOString(),
+    };
+    const result = await checkForUpdate({
+      now: () => FIXED_NOW,
+      currentVersion: "0.59.0",
+      readCache: async () => cache,
+      writeCache: async () => {
+        throw new Error("should not write during cooldown");
+      },
+      fetchImpl: asFetch(async () => {
+        throw new Error("should not fetch during cooldown");
+      }),
+    });
+    expect(result.cached).toBe(cache);
+    expect(result.refreshing).toBeUndefined();
   });
 
   it("triggers refresh when no cache exists and swallows errors", async () => {
+    const writes: UpdateCheckCacheEntry[] = [];
     const result = await checkForUpdate({
       now: () => FIXED_NOW,
       currentVersion: "0.59.0",
       readCache: async () => undefined,
-      writeCache: async () => undefined,
+      writeCache: async (entry) => {
+        writes.push(entry);
+      },
       fetchImpl: asFetch(async () => new Response("nope", { status: 500 })),
     });
     expect(result.cached).toBeUndefined();
     expect(result.hasNewerVersion).toBe(false);
     expect(await result.refreshing).toBeUndefined();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toEqual({
+      checkedAt: "1970-01-01T00:00:00.000Z",
+      lastAttemptAt: FIXED_NOW.toISOString(),
+      currentVersion: "0.59.0",
+      latestVersion: "0.59.0",
+      latestTag: "v0.59.0",
+    });
   });
 
   it("forwards refreshSignal so callers can cancel the in-flight fetch", async () => {
@@ -135,6 +169,9 @@ describe("checkForUpdate", () => {
       refreshSignal: controller.signal,
       fetchImpl: asFetch((_url, init) => {
         observedSignal = init?.signal ?? undefined;
+        if (init?.signal?.aborted) {
+          return Promise.reject(new DOMException("aborted", "AbortError"));
+        }
         return new Promise((_, reject) => {
           init?.signal?.addEventListener("abort", () => {
             reject(new DOMException("aborted", "AbortError"));

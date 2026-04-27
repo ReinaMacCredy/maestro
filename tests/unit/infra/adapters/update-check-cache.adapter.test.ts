@@ -32,6 +32,7 @@ describe("update check cache adapter", () => {
     const path = await makeTempPath();
     const entry = {
       checkedAt: "2026-04-26T12:00:00.000Z",
+      lastAttemptAt: "2026-04-26T12:01:00.000Z",
       currentVersion: "0.59.0",
       latestVersion: "0.60.0",
       latestTag: "v0.60.0",

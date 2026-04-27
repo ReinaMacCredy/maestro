@@ -107,6 +107,7 @@ async function preparePlanTasks(
   const existingTopLevelSlugs = await collectExistingTopLevelSlugs(store);
   const resolvedSlugs = resolveSlugs(input.tasks, existingTopLevelSlugs);
   const slugToIndex = buildSlugIndex(resolvedSlugs);
+  assertNameSlugNamespacesDisjoint(input.tasks, resolvedSlugs);
 
   const createInputs: CreateBatchInput[] = input.tasks.map((task, idx) =>
     buildCreateBatchInput(task, idx, nameToIndex, slugToIndex, resolvedSlugs),
@@ -277,6 +278,25 @@ function buildSlugIndex(
   return map;
 }
 
+function assertNameSlugNamespacesDisjoint(
+  tasks: readonly BatchTaskInput[],
+  resolvedSlugs: readonly (string | undefined)[],
+): void {
+  const slugToIndex = buildSlugIndex(resolvedSlugs);
+  const issues: string[] = [];
+  for (const [idx, task] of tasks.entries()) {
+    if (task.name === undefined) continue;
+    const slugIdx = slugToIndex.get(task.name);
+    if (slugIdx === undefined) continue;
+    issues.push(
+      `${taskLabel(idx, task)}: name '${task.name}' collides with slug on ${taskLabel(slugIdx, tasks[slugIdx]!)}`,
+    );
+  }
+  if (issues.length > 0) {
+    throw batchValidationErrors(issues);
+  }
+}
+
 function buildCreateBatchInput(
   task: BatchTaskInput,
   idx: number,
@@ -310,10 +330,15 @@ function resolveReference(
     return raw;
   }
   const nameIdx = nameToIndex.get(raw);
+  const slugIdx = slugToIndex.get(raw);
+  if (nameIdx !== undefined && slugIdx !== undefined) {
+    throw batchValidationErrors([
+      `${source} reference '${raw}' is ambiguous: it matches both a batch-local name and a task slug`,
+    ]);
+  }
   if (nameIdx !== undefined) {
     return nameIdx;
   }
-  const slugIdx = slugToIndex.get(raw);
   if (slugIdx !== undefined) {
     return slugIdx;
   }

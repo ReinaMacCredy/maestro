@@ -441,7 +441,8 @@ function registerListCommand(taskCmd: Command, program: Command): void {
 
       const tasks = await listTasks(services.taskStore, filters);
       if (opts.tracks === true) {
-        output(isJson, tasks, formatTaskTrackList);
+        const tracks = formatTaskTrackList(tasks);
+        output(isJson, tracks, (value) => value);
         return;
       }
       output(isJson, tasks, formatTaskList);
