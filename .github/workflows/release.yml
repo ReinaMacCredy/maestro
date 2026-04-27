@@ -183,7 +183,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-maestro-env
       - name: Download built assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: maestro-*
