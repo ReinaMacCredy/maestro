@@ -91,4 +91,23 @@ export interface TaskStorePort extends TaskQueryPort {
   /** Persist internal task metadata without widening the public task update surface. */
   syncMetadata(id: string, patch: TaskMetadataPatch): Promise<Task>;
 
+  /**
+   * Set the slug on a top-level task. Display-only metadata write that
+   * bypasses the completion + ownership locks (slugs do not affect runtime
+   * state). Throws when the task is a step or when the slug collides with
+   * another track's slug. Refuses to overwrite an existing slug unless
+   * `force` is true (used by `task backfill-slugs --rederive`).
+   */
+  backfillSlug(id: string, slug: string, opts?: { force?: boolean }): Promise<Task>;
+
+  /**
+   * Atomically set slugs for multiple top-level tasks. Used by rederive so
+   * valid slug swaps are evaluated against the final batch state instead of
+   * failing on sequential intermediate collisions.
+   */
+  backfillSlugs(
+    updates: readonly { readonly id: string; readonly slug: string }[],
+    opts?: { force?: boolean },
+  ): Promise<readonly Task[]>;
+
 }

@@ -9,10 +9,10 @@ import type {
 /**
  * One task entry inside a batch plan. Mirrors CreateTaskInput but allows
  * `parent` / `blockedBy` to reference other members of the same batch by the
- * optional local `name` slot. Resolution is by shape: a string matching
- * TASK_ID_PATTERN is always treated as a real task id; any other string is
- * always treated as a batch-local name. Name-slot values that happen to match
- * TASK_ID_PATTERN are rejected at parse time.
+ * optional local `name` slot or a top-level task slug. Resolution is by shape:
+ * a string matching TASK_ID_PATTERN is always treated as a real task id; any
+ * other string must match exactly one batch-local name or slug. Name-slot
+ * values that happen to match TASK_ID_PATTERN are rejected at parse time.
  */
 export interface BatchTaskInput {
   readonly name?: string;
@@ -21,6 +21,12 @@ export interface BatchTaskInput {
   readonly type?: TaskType;
   readonly priority?: TaskPriority;
   readonly parent?: string;
+  /**
+   * Optional explicit slug for top-level entries. Mandatory at plan-conversion
+   * (auto-derived from the title when omitted on a top-level entry). Forbidden
+   * when `parent` is set.
+   */
+  readonly slug?: string;
   readonly labels?: readonly string[];
   readonly blockedBy?: readonly string[];
 }
@@ -42,6 +48,7 @@ export interface CreateBatchInput {
   readonly priority?: TaskPriority;
   readonly labels?: readonly string[];
   readonly parentRef?: number | string;
+  readonly slug?: string;
   readonly blockedByRefs?: readonly (number | string)[];
 }
 

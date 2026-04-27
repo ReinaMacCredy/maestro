@@ -1,7 +1,5 @@
 // Build a MissionControlSnapshot from existing stores. Polls once per call;
 // no subscriptions, no event tailing.
-import { basename } from "node:path";
-import { cached, setCachedEntry, type CacheEntry } from "@/tui/lib/snapshot-poll-cache.js";
 import { MaestroError } from "@/shared/errors.js";
 import type {
   MissionStorePort,
@@ -12,21 +10,14 @@ import type {
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
-import { buildMemoryStats } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
-import { isHandoffInProject, type HandoffRecord, type HandoffStorePort } from "@/features/handoff";
-import { TASK_STATUSES, type TaskQueryPort, type TaskStatus } from "@/features/task";
-import type { ReplyStorePort, AgentReply, ReplyOutcome } from "@/features/reply";
-import { ingestReply } from "@/features/reply";
+import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
+import type { TaskQueryPort } from "@/features/task";
+import type { ReplyStorePort, AgentReply } from "@/features/reply";
 import type {
-  Principle,
   PrincipleOutcomeRecord,
   PrincipleStorePort,
-} from "@/features/mission";
-import {
-  buildPrincipleEffectiveness,
-  PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
 } from "@/features/mission";
 import {
   type Mission,
@@ -36,20 +27,15 @@ import {
   type MissionReport,
   getValidFeatureTransitions,
 } from "@/features/mission";
-import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
+import { getMissionControlBackgroundMode } from "@/shared/domain/ui-config.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import type { DoctorCheck, StatusReport } from "@/infra/domain/status-types.js";
-import { getGraphContext } from "@/features/graph";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";
 import type {
   AgentGridRow,
   DispatchQueueItem,
   EventStreamEntry,
-  PrincipleEffectivenessRow,
-  ReplyInboxEntry,
-  TaskBoardSnapshot,
-  TaskBoardItem,
   TimelineMilestoneEntry,
   InferredAgentStatus,
 } from "./screen-types.js";
@@ -64,8 +50,22 @@ import type {
   TaskPreviewPane,
   MissionOverviewPane,
   DependencyMapRow,
-  MissionControlMemorySnapshot,
 } from "./types.js";
+import { buildIgnoredProjectOverrideChecks, buildMissionControlEnvironmentSummary } from "./environment-projection.js";
+import { buildMissionControlMemorySnapshot } from "./memory-projection.js";
+import {
+  buildReplyInbox,
+  loadAndIngestReplies,
+  loadPrincipleEffectiveness,
+  safeListReplies,
+} from "./reply-projection.js";
+import { buildTaskBoard } from "./task-board.js";
+
+export { buildTaskBoard } from "./task-board.js";
+export {
+  buildPrincipleEffectivenessRows,
+  buildReplyInbox,
+} from "./reply-projection.js";
 
 export interface SnapshotDeps {
   missionStore: MissionStorePort;
@@ -440,69 +440,6 @@ function findActiveFeature(taskPreviews: readonly TaskPreviewPane[]): MissionCon
   ) ?? taskPreviews.find((feature) => feature.status === "pending") ?? null;
 }
 
-const MEMORY_SNAPSHOT_TTL_MS = 30_000;
-const memorySnapshotCache = new Map<string, CacheEntry<MissionControlMemorySnapshot | null>>();
-
-async function buildMissionControlMemorySnapshot(
-  deps: {
-    correctionStore?: CorrectionStorePort;
-    learningStore?: LearningStorePort;
-    ratchetStore?: RatchetStorePort;
-    projectGraphStore?: ProjectGraphStorePort;
-    cwd: string;
-  },
-): Promise<MissionControlMemorySnapshot | null> {
-  if (!deps.correctionStore || !deps.learningStore || !deps.ratchetStore) {
-    return null;
-  }
-
-  const hit = cached(memorySnapshotCache.get(deps.cwd));
-  if (hit !== undefined) return hit;
-
-  const [corrections, rawLearnings, compiledLearnings, ratchetSuite, ratchetBaseline, graphContext] = await Promise.all([
-    deps.correctionStore.list(),
-    deps.learningStore.listRaw(),
-    deps.learningStore.readCompiled(),
-    deps.ratchetStore.getSuite(),
-    deps.ratchetStore.getBaseline(),
-    deps.projectGraphStore
-      ? getGraphContext(deps.projectGraphStore, basename(deps.cwd))
-      : Promise.resolve(undefined),
-  ]);
-  const stats = buildMemoryStats({
-    corrections,
-    rawLearningCount: rawLearnings.length,
-    compiledLearnings,
-    ratchetSuite,
-    ratchetBaseline,
-    graphProjects: graphContext?.totalProjects ?? 0,
-    graphLinks: graphContext?.totalEdges ?? 0,
-  });
-
-  const result: MissionControlMemorySnapshot = {
-    stats,
-    corrections,
-    rawLearnings,
-    compiledLearnings,
-    ratchetSuite,
-    ratchetBaseline,
-    graphContext: graphContext
-      ? {
-          currentProject: graphContext.currentProject,
-          relationships: graphContext.relationships.map((relationship) => ({
-            project: relationship.project,
-            direction: relationship.direction,
-            edge: relationship.edge,
-          })),
-          totalProjects: graphContext.totalProjects,
-          totalEdges: graphContext.totalEdges,
-        }
-      : undefined,
-  };
-  setCachedEntry(memorySnapshotCache, deps.cwd, result, MEMORY_SNAPSHOT_TTL_MS);
-  return result;
-}
-
 function buildHomeActions(
   status: StatusReport,
   checks: readonly DoctorCheck[],
@@ -568,15 +505,6 @@ function buildTaskPreview(
     fulfills: active.fulfills,
     validTransitions: [...getValidFeatureTransitions(active.status)],
   };
-}
-
-function buildIgnoredProjectOverrideChecks(projectConfig: import("@/infra/domain/config-types.js").MaestroConfig | undefined): DoctorCheck[] {
-  return listIgnoredProjectConfigKeys(projectConfig).map((keyPath) => ({
-    name: `ignored-${keyPath.replaceAll(".", "-")}`,
-    status: "warn" as const,
-    message: `${keyPath} is set in project config but only global config is used`,
-    fix: "Remove the project value or set it in ~/.maestro/config.yaml instead",
-  }));
 }
 
 function buildFeatureGraph(features: readonly Feature[]): Map<string, FeatureGraphEntry> {
@@ -818,320 +746,6 @@ function getEventStreamBaseMs(
   return Number.isFinite(baseMs) ? baseMs : undefined;
 }
 
-interface IngestResult {
-  readonly replies: readonly AgentReply[];
-  /** Cached outcomes (plus any appends from this ingest pass) for downstream aggregators. */
-  readonly outcomesCache?: readonly PrincipleOutcomeRecord[];
-  /** Cached handoff list for downstream aggregators to avoid a second global scan. */
-  readonly handoffsCache?: readonly HandoffRecord[];
-}
-
-async function loadAndIngestReplies(
-  deps: SnapshotDeps,
-  missionId: string,
-  currentProjectRoot: string,
-): Promise<IngestResult> {
-  if (!deps.replyStore) return { replies: [] };
-  try {
-    const replies = (await deps.replyStore.list()).filter((reply) => reply.missionId === missionId);
-    if (replies.length === 0) return { replies: [] };
-
-    // Cache outcomes and the global handoff list once per snapshot so the
-    // recorder doesn't re-read them per handoff per reply (N*M disk reads
-    // -> 1). Appends are tracked in-memory so subsequent recorder calls
-    // and the effectiveness aggregator see the post-ingest state.
-    const outcomesCache: PrincipleOutcomeRecord[] | undefined = deps.principleStore
-      ? [...(await deps.principleStore.listOutcomes())]
-      : undefined;
-    const handoffsCache: readonly HandoffRecord[] | undefined = deps.handoffStore
-      ? filterHandoffsForProject(await deps.handoffStore.list(), currentProjectRoot)
-      : undefined;
-
-    const recordPrincipleOutcomes = buildPrincipleRecorder(deps, missionId, outcomesCache, handoffsCache);
-
-    for (const reply of replies) {
-      // Fast path: skip already-ingested replies without entering the
-      // usecase at all. The usecase also defends against this, but this
-      // avoids the extra function call and conditional wiring.
-        if (await deps.replyStore.isIngested(missionId, reply.featureId)) continue;
-      try {
-        await ingestReply(
-          {
-            missionStore: deps.missionStore,
-            featureStore: deps.featureStore,
-            assertionStore: deps.assertionStore,
-            replyStore: deps.replyStore,
-            baseDir: deps.cwd,
-            ...(recordPrincipleOutcomes ? { recordPrincipleOutcomes } : {}),
-          },
-          missionId,
-          reply.featureId,
-        );
-      } catch {
-        // Snapshot projection must not throw on a single bad reply.
-        // The reply remains on disk; next poll will retry.
-      }
-    }
-
-    return { replies, outcomesCache, ...(handoffsCache ? { handoffsCache } : {}) };
-  } catch {
-    return { replies: [] };
-  }
-}
-
-/**
- * Build a principle-outcome recorder that marks every `pending` principle
- * row for the handoffs linked to the feature as either `helpful` or
- * `unhelpful`. The `outcomesCache` is filtered in-memory to avoid
- * re-reading outcomes.jsonl once per handoff; appends are pushed back
- * into the cache so the effectiveness aggregator sees fresh state.
- */
-function buildPrincipleRecorder(
-  deps: SnapshotDeps,
-  missionId: string,
-  outcomesCache: PrincipleOutcomeRecord[] | undefined,
-  handoffsCache: readonly HandoffRecord[] | undefined,
-): ((featureId: string, outcome: ReplyOutcome) => Promise<{ recorded: number; complete: boolean }>) | undefined {
-  const principleStore = deps.principleStore;
-  if (!principleStore || !handoffsCache || !outcomesCache) return undefined;
-
-  return async (featureId, outcome) => {
-    const resolved = outcome === "completed" ? "helpful" : "unhelpful";
-    try {
-      const recentHandoffs = handoffsCache
-        .filter((handoff) => handoff.refs.missionId === missionId && handoff.refs.featureId === featureId)
-        .slice(0, 25);
-      if (recentHandoffs.length === 0) {
-        return { recorded: 0, complete: true };
-      }
-
-      let recorded = 0;
-      let complete = true;
-      const recordedAt = new Date().toISOString();
-      for (const handoff of recentHandoffs) {
-        const pending = filterPendingForHandoff(outcomesCache, handoff.id);
-        for (const row of pending) {
-          const record: PrincipleOutcomeRecord = {
-            principleId: row.principleId,
-            handoffId: handoff.id,
-            featureId,
-            missionId,
-            outcome: resolved,
-            recordedAt,
-          };
-          if (await principleStore.recordOutcome(record)) {
-            outcomesCache.push(record);
-            recorded += 1;
-            continue;
-          }
-          complete = false;
-        }
-      }
-      return { recorded, complete };
-    } catch {
-      return { recorded: 0, complete: false };
-    }
-  };
-}
-
-async function safeListReplies(
-  replyStore: ReplyStorePort,
-): Promise<readonly AgentReply[]> {
-  try {
-    return await replyStore.list();
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Return the effective `pending` outcomes for a single handoff, using the
- * latest record per (principleId, handoffId) pair. Pure in-memory filter
- * over the pre-fetched cache; mirrors JsonlPrincipleStoreAdapter.listPendingOutcomesForHandoff.
- */
-function filterPendingForHandoff(
-  outcomes: readonly PrincipleOutcomeRecord[],
-  handoffId: string,
-): readonly PrincipleOutcomeRecord[] {
-  const latestByPrinciple = new Map<string, PrincipleOutcomeRecord>();
-  for (const record of outcomes) {
-    if (record.handoffId !== handoffId) continue;
-    const existing = latestByPrinciple.get(record.principleId);
-    if (!existing || existing.recordedAt <= record.recordedAt) {
-      latestByPrinciple.set(record.principleId, record);
-    }
-  }
-  return [...latestByPrinciple.values()].filter((r) => r.outcome === "pending");
-}
-
-async function loadPrincipleEffectiveness(
-  deps: SnapshotDeps | HomeSnapshotDeps,
-  currentProjectRoot: string,
-  cachedOutcomes?: readonly PrincipleOutcomeRecord[],
-  cachedHandoffs?: readonly HandoffRecord[],
-): Promise<readonly PrincipleEffectivenessRow[] | undefined> {
-  const principleStore = deps.principleStore;
-  const handoffStore = deps.handoffStore;
-  if (!principleStore) return undefined;
-  try {
-    const [principles, outcomes, handoffs] = await Promise.all([
-      principleStore.list(),
-      cachedOutcomes !== undefined
-        ? Promise.resolve(cachedOutcomes)
-        : principleStore.listOutcomes(),
-      cachedHandoffs !== undefined
-        ? Promise.resolve(cachedHandoffs)
-        : (handoffStore ? handoffStore.list() : Promise.resolve<readonly HandoffRecord[]>([])),
-    ]);
-    const scopedHandoffs = cachedHandoffs !== undefined
-      ? handoffs
-      : filterHandoffsForProject(handoffs, currentProjectRoot);
-    const hasHandoffScopeSource = handoffStore !== undefined || cachedHandoffs !== undefined;
-    const scopedOutcomes = hasHandoffScopeSource
-      ? filterOutcomesForHandoffs(outcomes, scopedHandoffs)
-      : outcomes;
-    return buildPrincipleEffectivenessRows(principles, scopedOutcomes, scopedHandoffs);
-  } catch {
-    return undefined;
-  }
-}
-
-function filterHandoffsForProject(
-  handoffs: readonly HandoffRecord[],
-  currentProjectRoot: string,
-): readonly HandoffRecord[] {
-  return handoffs.filter((handoff) => isHandoffInProject(handoff, currentProjectRoot));
-}
-
-function filterOutcomesForHandoffs(
-  outcomes: readonly PrincipleOutcomeRecord[],
-  handoffs: readonly HandoffRecord[],
-): readonly PrincipleOutcomeRecord[] {
-  if (handoffs.length === 0) return [];
-  const handoffIds = new Set(handoffs.map((handoff) => handoff.id));
-  return outcomes.filter((record) => handoffIds.has(record.handoffId));
-}
-
-export function buildPrincipleEffectivenessRows(
-  principles: readonly Principle[],
-  outcomes: readonly PrincipleOutcomeRecord[],
-  handoffs: readonly HandoffRecord[],
-): readonly PrincipleEffectivenessRow[] {
-  const rollup = buildPrincipleEffectiveness(principles, outcomes);
-  const principleById = new Map(principles.map((p) => [p.id, p]));
-  const handoffById = new Map(handoffs.map((handoff) => [handoff.id, handoff]));
-
-  // Index most recent unhelpful outcomes per principle, newest first.
-  const unhelpfulByPrinciple = new Map<string, PrincipleOutcomeRecord[]>();
-  for (const record of [...outcomes].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))) {
-    if (record.outcome !== "unhelpful") continue;
-    const bucket = unhelpfulByPrinciple.get(record.principleId) ?? [];
-    if (bucket.length < 3) bucket.push(record);
-    unhelpfulByPrinciple.set(record.principleId, bucket);
-  }
-
-  const rows: PrincipleEffectivenessRow[] = [];
-  for (const stats of rollup.values()) {
-    const principle = principleById.get(stats.principleId);
-    const decided = stats.helpful + stats.unhelpful;
-    const examples = (unhelpfulByPrinciple.get(stats.principleId) ?? [])
-      .map((r) => {
-        const handoff = handoffById.get(r.handoffId);
-        const title = handoff?.name ?? handoff?.task ?? r.handoffId;
-        return `${r.handoffId}: ${title}`;
-      });
-
-    rows.push({
-      id: stats.principleId,
-      name: principle?.name ?? stats.principleId,
-      mode: principle?.mode ?? "advisory",
-      helpful: stats.helpful,
-      unhelpful: stats.unhelpful,
-      pending: stats.pending,
-      total: stats.total,
-      effectivenessPct: stats.effectiveness === undefined
-        ? undefined
-        : Math.round(stats.effectiveness * 100),
-      lowSample: decided < PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
-      recentKickbackExamples: examples,
-    });
-  }
-
-  // Worst first (lowest effectiveness). Principles with no decided outcomes
-  // sort last so the scoreboard leads with actionable signal.
-  rows.sort((a, b) => {
-    const ae = a.effectivenessPct ?? 101;
-    const be = b.effectivenessPct ?? 101;
-    if (ae !== be) return ae - be;
-    const aDecided = a.helpful + a.unhelpful;
-    const bDecided = b.helpful + b.unhelpful;
-    return bDecided - aDecided;
-  });
-  return rows;
-}
-
-export function buildReplyInbox(
-  features: readonly Feature[],
-  replies: readonly AgentReply[],
-): readonly ReplyInboxEntry[] {
-  const featureById = new Map(features.map((f) => [f.id, f]));
-  const entries: ReplyInboxEntry[] = replies.map((reply) => {
-    const feature = featureById.get(reply.featureId);
-    return {
-      featureId: reply.featureId,
-      outcome: reply.outcome,
-      writtenAt: reply.writtenAt,
-      writtenBy: reply.writtenBy,
-      featureTitle: feature?.title,
-      featureStatus: feature?.status,
-      pending: isReplyPending(reply, feature),
-      notes: reply.notes,
-    };
-  });
-  entries.sort((a, b) => b.writtenAt.localeCompare(a.writtenAt));
-  return entries;
-}
-
-function isReplyPending(reply: AgentReply, feature: Feature | undefined): boolean {
-  if (!feature) return true;
-  if (reply.outcome === "completed") return feature.status !== "done";
-  if (reply.outcome === "abandoned") return feature.status !== "blocked";
-  // kicked-back: the loop lands at pending
-  return feature.status !== "pending";
-}
-
-export async function buildTaskBoard(
-  taskStore?: TaskQueryPort,
-): Promise<TaskBoardSnapshot | null> {
-  if (!taskStore) return null;
-  const tasks = await taskStore.all();
-  if (tasks.length === 0) return null;
-
-  const columns = Object.fromEntries(
-    TASK_STATUSES.map((s) => [s, [] as TaskBoardItem[]]),
-  ) as Record<TaskStatus, TaskBoardItem[]>;
-
-  for (const task of tasks) {
-    const item: TaskBoardItem = {
-      id: task.id,
-      title: task.title,
-      status: task.status,
-      priority: task.priority,
-      assignee: task.assignee,
-      labels: task.labels,
-      blockedByCount: task.blockedBy.length,
-    };
-    columns[task.status]?.push(item);
-  }
-
-  // Sort each column by priority (lower = higher priority), then createdAt
-  for (const status of TASK_STATUSES) {
-    columns[status]!.sort((a, b) => a.priority - b.priority);
-  }
-
-  return { columns, totalCount: tasks.length };
-}
-
 export function buildTimelineMilestones(
   milestones: readonly Milestone[],
   features: readonly Feature[],
@@ -1154,55 +768,4 @@ export function buildTimelineMilestones(
       progressPct: totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0,
     };
   });
-}
-
-async function buildMissionControlEnvironmentSummary(
-  config: ConfigPort,
-  git: GitPort,
-  cwd: string,
-): Promise<{ status: StatusReport; checks: readonly DoctorCheck[] }> {
-  const [
-    projectConfigExists,
-    globalConfigExists,
-    gitAvailable,
-  ] = await Promise.all([
-    config.exists("project", cwd),
-    config.exists("global", cwd),
-    git.isRepo(cwd),
-  ]);
-
-  const configSource: StatusReport["configSource"] = projectConfigExists
-    ? "project"
-    : globalConfigExists
-      ? "global"
-      : "none";
-
-  return {
-    status: {
-      initialized: projectConfigExists || globalConfigExists,
-      configSource,
-      gitAvailable,
-      legacyHandoffCount: 0,
-    },
-    checks: [
-      {
-        name: "git",
-        status: gitAvailable ? "ok" : "fail",
-        message: gitAvailable ? "Git repository detected" : "Not inside a git repository",
-        fix: gitAvailable ? undefined : "Run: git init",
-      },
-      {
-        name: "project-config",
-        status: projectConfigExists ? "ok" : "warn",
-        message: projectConfigExists ? "Project config found at .maestro/config.yaml" : "No project config found",
-        fix: projectConfigExists ? undefined : "Run: maestro init",
-      },
-      {
-        name: "global-config",
-        status: globalConfigExists ? "ok" : "warn",
-        message: globalConfigExists ? "Global config found at ~/.maestro/config.yaml" : "No global config found",
-        fix: globalConfigExists ? undefined : "Run: maestro init --global",
-      },
-    ],
-  };
 }

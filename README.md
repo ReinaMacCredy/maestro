@@ -353,11 +353,86 @@ Rules enforced by the domain layer:
 
 | Command | Returns |
 |---|---|
+| `maestro task status` | Hybrid board: compact active/ready/blocked lists plus expanded dependency tracks. |
 | `maestro task ready` | Pending, unblocked, unassigned tasks, `P0`/`P1` first. |
 | `maestro task mine` | Tasks claimed by the active session. |
 | `maestro task stuck` | `in_progress` tasks idle past `--older-than` (default `4h`). |
 | `maestro task similar <id>` | Tasks that look alike by title, completion reason, receipt text, and linked contract text. |
-| `maestro task list` | Full filter set: `--status`, `--priority`, `--type`, `--label`, `--parent`, `--assignee`, `--limit`. |
+| `maestro task list` | Full filter set: `--status`, `--priority`, `--type`, `--label`, `--parent`, `--assignee`, `--limit`. Add `--tracks` for headline-only output. |
+
+### Status view
+
+`maestro task status` renders a hybrid operator board. Simple one-task tracks render as compact rows under `ACTIVE`, `READY`, or `BLOCKED`. Multi-step tracks expand only when dependency structure matters: blocked steps or ready steps that unlock downstream work. If a ready task unlocks blocked downstream work, a one-line `next:` hint appears under the header.
+
+```text
+$ maestro task status
+tasks: 42 open | 13 active | 5 ready | 16 blocked | 5 blocked tracks
+next: epic/desktop-path-native-ghostty / Phase 0: verify env and stock paseo desktop dev flow (9 unblocks)
+
+ACTIVE
+  o chore/update-global-agents-md        Update global AGENTS.md guidance
+  o chore/check-maestro-task-dependency  Check maestro task dependency support against beads-rust
+  o chore/map-full-parallel-agent        Map full parallel-agent safety picture in maestro
+  o fix/fix-all-reviewed-regressions     Fix all reviewed regressions
+  + 9 more
+
+DEPENDENCY TRACKS
+
+epic/desktop-path-native-ghostty
+  · Phase 0: verify env and stock paseo desktop dev flow
+      ready, 9 unblocks
+  ! Phase 1: build pinned GhosttyKit xcframework
+      blocked by Phase 0: verify env and stock paseo desktop dev flow
+  ! Phase 2: scaffold ghostty-bridge N-API addon
+      blocked by Phase 1: build pinned GhosttyKit xcframework
+  + 7 more
+
+epic/test-batch-non-code
+  · Test batch: inspect ready queue
+      ready, 2 unblocks
+  · Test batch: inventory pending handoffs
+      ready, 2 unblocks
+  ! Test batch: draft cleanup notes
+      blocked by Test batch: inspect ready queue, Test batch: inventory pending handoffs
+  ! Test batch: close out temporary test set
+      blocked by Test batch: draft cleanup notes
+
+READY
+  · implement/review-last-four-commits      Review last four commits from 44d5f670 to e55384bf
+  · implement/implement-continuation-layer  Implement continuation layer
+
+BLOCKED
+  ! implement/investigate-regression            blocked by implement/scope-diff-history-feat
+  ! implement/inspect-changed-files-efficiency  blocked by implement/load-review-instructions-diff
+  ! implement/report-concise-findings-2         blocked by implement/inspect-changed-files-efficiency
+```
+
+Flags:
+
+| Flag | Effect |
+|---|---|
+| `--all` | Include completed tasks (rendered with the `v` glyph). |
+| `--track <slug-or-id>` | Restrict output to one track. |
+| `--json` | Emit a structured projection (`{ header, tracks[], orphans[], tasksById }`) for tooling. `header` includes `open`, `active`, `ready`, `pending`, `blocked`, and `blockedTracks`. |
+
+**Render shape.** The default view keeps solo/non-dependent work compact and expands only dependency tracks. `ACTIVE` shows at most four rows before `+ N more`; `READY`, `BLOCKED`, and dependency tracks are capped separately. Blocked rows render `blocked by <slug-or-id>` inline, while blocked steps inside dependency tracks render the blocker on the next line. Completed blockers are marked `(done)`.
+
+Color is auto-detected: `NO_COLOR=1` or a non-TTY pipe disables ANSI codes. Tracks (top-level tasks) carry a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`) which doubles as a human-friendly id — `task show implement/foo` and `task update implement/foo --status ...` work the same way `tsk-XXX` does.
+
+#### Backfilling legacy tasks
+
+Tasks created before slugs landed have no slug and render with their bare `tsk-<id>` as the header. To bulk-derive slugs from titles:
+
+```bash
+maestro task backfill-slugs                  # dry-run; prints what would change
+maestro task backfill-slugs --apply          # write the slugs
+maestro task backfill-slugs --apply --limit 20
+maestro task backfill-slugs --rederive --apply  # refresh auto-derived slugs after the algorithm changes
+```
+
+Derivation drops English stop-words ("and", "of", "in", ...), drops pure-hex tokens (commit shas) and digit-only tokens, caps at 4 significant words, and never truncates mid-word — so the result is short and scannable.
+
+Backfill is display-only and bypasses the completion + ownership locks (slugs don't affect runtime state), so it works on completed and currently-claimed tasks. By default it refuses to overwrite an existing slug; `--rederive` opts in to overwriting (use it when the derivation algorithm has changed).
 
 ### Ownership and claim
 

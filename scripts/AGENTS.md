@@ -8,13 +8,13 @@ Use this file with the repo-root [AGENTS.md](../AGENTS.md). `scripts/` owns buil
 | Build pipeline | `build.ts`, `build-lib.ts` | Syncs built-in skills before compile |
 | Versioning | `bump.ts`, `auto-bump.ts`, `version-file.ts` | Custom `0.x.y` policy |
 | Local release/install | `ci.ts`, `install-local.ts`, `install.sh`, `install.ps1` | `ci.ts` is release-prep, not a no-op check |
-| Skill syncing | `sync-built-in-skills.ts`, `sync-bundled-skills.ts` | Source is `skills/built-in/` and `skills/bundled/` |
+| Skill syncing | `sync-built-in-skills.ts`, `sync-bundled-skills.ts`, `check-agent-spec.ts` | Source is `skills/built-in/` and `skills/bundled/` |
 | TUI iteration | `tui-dev.ts`, `test-tty.ts` | Dev watcher and raw TTY probes |
 
 ## CONVENTIONS
 - Prefer Bun TypeScript entrypoints here; shell and PowerShell wrappers are installation edges only.
 - `build.ts` is stateful: it syncs built-in skill templates, injects build metadata, and handles platform-specific build cleanup.
-- Bundled skill drift is enforced by `sync-bundled-skills.ts` and `bun run check:bundled-skills`, not by `build.ts`.
+- Agent-facing skill drift is enforced by `bun run check:agent-spec` in CI/release paths. Bundled skill drift is not silently synced by `build.ts`.
 - `ci.ts` assumes a clean tree and may roll back git state on failure.
 - `ci.ts` is POSIX-only; GitHub CI covers Windows through `.github/workflows/ci.yml`.
 - `release:local` installs locally; `deploy` is still a local/test flow unless explicitly changed.

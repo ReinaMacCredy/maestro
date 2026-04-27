@@ -352,7 +352,7 @@ function getReleasesBaseUrl(): string {
     || `https://github.com/${getReleaseRepo()}/releases`;
 }
 
-function getReleasesApiBaseUrl(): string {
+export function getReleasesApiBaseUrl(): string {
   return process.env.MAESTRO_RELEASE_API_BASE_URL?.trim()
     || `https://api.github.com/repos/${getReleaseRepo()}/releases`;
 }

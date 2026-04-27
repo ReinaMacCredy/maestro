@@ -1,5 +1,6 @@
 import { TASK_ID_PATTERN } from "../domain/task-id.js";
 import { TASK_PRIORITIES, TASK_TYPES } from "../domain/task-types.js";
+import { SLUG_MAX_LENGTH, SLUG_PATTERN_SOURCE } from "../domain/task-slug.js";
 
 const TASK_ID_REGEX_SOURCE = TASK_ID_PATTERN.source;
 const TASK_REFERENCE_REGEX_SOURCE = "^(?:" + TASK_ID_REGEX_SOURCE.replace(/^\^|\$$/g, "") + "|[^\\s].*)$";
@@ -69,8 +70,15 @@ export function buildBatchInputSchema(): Record<string, unknown> {
           parent: {
             type: "string",
             description:
-              "Parent reference. Either a real `tsk-*` id OR a batch-local `name` defined in this same plan.",
+              "Parent reference. Either a real `tsk-*` id, a batch-local `name`, or another entry's `slug`. Forbidden in combination with `slug` on this entry (only top-level tasks carry slugs).",
             pattern: TASK_REFERENCE_REGEX_SOURCE,
+          },
+          slug: {
+            type: "string",
+            description:
+              "Mandatory human-readable slug for top-level entries. Shape: '<verb>/<kebab>' (verbs: implement, fix, chore, spike, epic). When omitted on a top-level entry, derived from the title. Forbidden when `parent` is set.",
+            pattern: SLUG_PATTERN_SOURCE,
+            maxLength: SLUG_MAX_LENGTH,
           },
           blockedBy: {
             type: "array",

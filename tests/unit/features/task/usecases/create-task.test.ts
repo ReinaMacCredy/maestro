@@ -68,4 +68,44 @@ describe("createTask", () => {
     expect(task.title).toBe("spaced");
     expect(task.labels).toEqual(["auth", "urgent"]);
   });
+
+  it("auto-derives a slug for top-level tasks", async () => {
+    const task = await createTask(store, { title: "Add login form", type: "feature" });
+    expect(task.slug).toBe("implement/add-login-form");
+    expect(task.parentId).toBeUndefined();
+  });
+
+  it("appends -2..-9 on derived-slug collisions", async () => {
+    const a = await createTask(store, { title: "Bump deps", type: "chore" });
+    const b = await createTask(store, { title: "Bump deps", type: "chore" });
+    const c = await createTask(store, { title: "Bump deps", type: "chore" });
+    expect(a.slug).toBe("chore/bump-deps");
+    expect(b.slug).toBe("chore/bump-deps-2");
+    expect(c.slug).toBe("chore/bump-deps-3");
+  });
+
+  it("does not assign a slug to step tasks", async () => {
+    const parent = await createTask(store, { title: "Track", type: "feature" });
+    const child = await createTask(store, { title: "Step", parentId: parent.id });
+    expect(child.slug).toBeUndefined();
+    expect(parent.slug).toBe("implement/track");
+  });
+
+  it("rejects an explicit slug whose shape is invalid", async () => {
+    await expect(createTask(store, { title: "X", slug: "Foo/Bar" })).rejects.toThrow(MaestroError);
+  });
+
+  it("surfaces slugCollision when an explicit slug duplicates an existing track", async () => {
+    await createTask(store, { title: "First", slug: "implement/foo" });
+    await expect(createTask(store, { title: "Second", slug: "implement/foo" })).rejects.toThrow(
+      MaestroError,
+    );
+  });
+
+  it("rejects a slug on a step task at validate time", async () => {
+    const parent = await createTask(store, { title: "Track" });
+    await expect(
+      createTask(store, { title: "Step", parentId: parent.id, slug: "implement/x" }),
+    ).rejects.toThrow(MaestroError);
+  });
 });

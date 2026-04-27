@@ -2,6 +2,10 @@ import type { Command } from "commander";
 import { injectAgentBlocks } from "@/features/agent";
 import { formatAgentResults, output } from "@/shared/lib/output.js";
 import { installReleaseBinary } from "../usecases/install-release-binary.usecase.js";
+import { fetchLatestVersion } from "../usecases/fetch-latest-version.usecase.js";
+import { isNewerSemver } from "../usecases/check-for-update.usecase.js";
+import { writeUpdateCheckCache } from "../adapters/update-check-cache.adapter.js";
+import { VERSION } from "@/shared/version.js";
 
 export function registerUpdateCommand(program: Command): void {
   program
@@ -10,9 +14,28 @@ export function registerUpdateCommand(program: Command): void {
     .option("--agents-only", "Only refresh bundled agent skills, skip binary download")
     .option("--version <version>", "Install a specific release version or tag")
     .option("--force", "Reinstall even when already on the latest published release")
+    .option("--check", "Print whether a newer release is available; exit 2 if newer, 0 otherwise. Does not download.")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const isJson = opts.json ?? program.opts().json;
+
+      if (opts.check) {
+        const latest = await fetchLatestVersion();
+        const newer = isNewerSemver(latest.version, VERSION);
+        await writeUpdateCheckCache({
+          checkedAt: new Date().toISOString(),
+          currentVersion: VERSION,
+          latestVersion: latest.version,
+          latestTag: latest.tag,
+        }).catch(() => undefined);
+        output(isJson, { current: VERSION, latest: latest.version, tag: latest.tag, newer }, (r) => [
+          r.newer
+            ? `[!] ${r.tag} available (you have ${r.current}). Run \`maestro update\` to upgrade.`
+            : `[ok] Already on the latest release (${r.current})`,
+        ]);
+        process.exit(newer ? 2 : 0);
+      }
+
       let binary:
         | {
           readonly binaryUpdated: boolean;

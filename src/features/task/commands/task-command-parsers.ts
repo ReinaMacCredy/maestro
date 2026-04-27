@@ -26,6 +26,7 @@ export interface CreateOpts {
   parent?: string;
   labels?: string;
   blockedBy?: string;
+  slug?: string;
 }
 
 export function buildCreateInput(title: string, opts: CreateOpts): CreateTaskInput {
@@ -35,6 +36,7 @@ export function buildCreateInput(title: string, opts: CreateOpts): CreateTaskInp
     type: parseType(opts.type),
     priority: parsePriority(opts.priority),
     parentId: opts.parent,
+    slug: opts.slug,
     labels: parseList(opts.labels),
     blockedBy: parseList(opts.blockedBy),
   };
@@ -101,6 +103,8 @@ export function hasAnyPatchField(patch: UpdateTaskInput): boolean {
     patch.priority !== undefined ||
     patch.type !== undefined ||
     patch.parentId !== undefined ||
+    patch.slug !== undefined ||
+    patch.dropSlug === true ||
     (patch.addLabels !== undefined && patch.addLabels.length > 0) ||
     (patch.removeLabels !== undefined && patch.removeLabels.length > 0) ||
     patch.summary !== undefined ||

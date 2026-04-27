@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { shouldCleanupStaleWindowsBinary } from "@/index.js";
+import { shouldCleanupStaleWindowsBinary, shouldRunUpdateCheck } from "@/index.js";
 
 describe("startup cleanup", () => {
   it("only cleans the configured installed Windows binary path", () => {
@@ -41,5 +41,28 @@ describe("startup cleanup", () => {
         throw Object.assign(new Error("locked"), { code: "EPERM" });
       },
     )).resolves.toBeUndefined();
+  });
+});
+
+describe("update-check startup gating", () => {
+  it("skips update commands after leading global flags", () => {
+    expect(shouldRunUpdateCheck(["node", "maestro", "--json", "update", "--check"], {})).toBe(false);
+  });
+
+  it("skips pure info commands after leading global flags", () => {
+    expect(shouldRunUpdateCheck(["node", "maestro", "--json", "--version"], {})).toBe(false);
+  });
+
+  it("skips subcommand help and help command invocations", () => {
+    expect(shouldRunUpdateCheck(["node", "maestro", "task", "--help"], {})).toBe(false);
+    expect(shouldRunUpdateCheck(["node", "maestro", "help", "task"], {})).toBe(false);
+  });
+
+  it("skips bare invocations that only print root help", () => {
+    expect(shouldRunUpdateCheck(["node", "maestro"], {})).toBe(false);
+  });
+
+  it("still runs for normal commands after leading global flags", () => {
+    expect(shouldRunUpdateCheck(["node", "maestro", "--json", "task", "list"], {})).toBe(true);
   });
 });

@@ -30,6 +30,10 @@ import {
   validateTask,
 } from "../domain/task-validators.js";
 import {
+  slugCollision,
+  slugForbiddenOnStep,
+  slugMissingDropFlag,
+  slugRequired,
   taskAlreadyClaimed,
   taskAlreadyCompleted,
   taskBlockedByOpenTasks,
@@ -40,6 +44,7 @@ import {
   taskReopenRequiresCompletedStatus,
   unknownBlocker,
 } from "../domain/task-errors.js";
+import { parseSlug } from "../domain/task-slug.js";
 import { MaestroError } from "@/shared/errors.js";
 import {
   DEFAULT_TASK_TYPE,
@@ -104,6 +109,13 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       }
       ensureTasksExist("<new task>", input.blockedBy ?? [], tasks);
 
+      if (input.slug !== undefined) {
+        if (input.parentId !== undefined) {
+          throw slugForbiddenOnStep();
+        }
+        assertSlugUnique(tasks, input.slug);
+      }
+
       const id = generateUniqueIds(1, tasks)[0]!;
 
       const now = new Date().toISOString();
@@ -115,6 +127,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         priority: input.priority ?? DEFAULT_TASK_PRIORITY,
         status: DEFAULT_TASK_STATUS,
         parentId: input.parentId,
+        slug: input.parentId === undefined ? input.slug : undefined,
         labels: input.labels ?? [],
         blocks: [],
         blockedBy: dedupeValues(input.blockedBy ?? []),
@@ -171,23 +184,35 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
             throw unknownBlocker(generatedIds[idx]!, [blockerRef]);
           }
         }
+        if (input.slug !== undefined) {
+          if (input.parentRef !== undefined) {
+            throw slugForbiddenOnStep();
+          }
+          assertSlugUnique(tasks, input.slug);
+        }
       }
 
       const now = new Date().toISOString();
-      const proposed: Task[] = inputs.map((input, idx) => ({
-        id: generatedIds[idx]!,
-        title: input.title,
-        description: input.description,
-        type: input.type ?? DEFAULT_TASK_TYPE,
-        priority: input.priority ?? DEFAULT_TASK_PRIORITY,
-        status: DEFAULT_TASK_STATUS,
-        parentId: input.parentRef === undefined ? undefined : resolveRef(input.parentRef, "parent"),
-        labels: input.labels ?? [],
-        blocks: [],
-        blockedBy: dedupeValues((input.blockedByRefs ?? []).map((r) => resolveRef(r, "blockedBy"))),
-        createdAt: now,
-        updatedAt: now,
-      }));
+      const proposed: Task[] = inputs.map((input, idx) => {
+        const parentId = input.parentRef === undefined
+          ? undefined
+          : resolveRef(input.parentRef, "parent");
+        return {
+          id: generatedIds[idx]!,
+          title: input.title,
+          description: input.description,
+          type: input.type ?? DEFAULT_TASK_TYPE,
+          priority: input.priority ?? DEFAULT_TASK_PRIORITY,
+          status: DEFAULT_TASK_STATUS,
+          parentId,
+          slug: parentId === undefined ? input.slug : undefined,
+          labels: input.labels ?? [],
+          blocks: [],
+          blockedBy: dedupeValues((input.blockedByRefs ?? []).map((r) => resolveRef(r, "blockedBy"))),
+          createdAt: now,
+          updatedAt: now,
+        };
+      });
 
       for (const task of proposed) {
         tasks.set(task.id, task);
@@ -244,6 +269,8 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         assertNoParentCycle(id, patch.parentId, tasks);
       }
 
+      const slugChange = resolveSlugChange(existing, patch, tasks);
+
       const { nextStatus, autoClaim } = assertTaskUpdateAllowed(existing, patch, tasks, opts);
 
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
@@ -272,6 +299,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         priority: patch.priority ?? existing.priority,
         status: nextStatus,
         parentId: patch.parentId === "" ? undefined : (patch.parentId ?? existing.parentId),
+        slug: slugChange.next,
         labels,
         assignee: nextAssignee,
         claimedAt: autoClaim ? now : existing.claimedAt,
@@ -477,6 +505,77 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     } catch {
       return undefined;
     }
+  }
+
+  async backfillSlug(
+    id: string,
+    slug: string,
+    opts: { force?: boolean } = {},
+  ): Promise<Task> {
+    const [updated] = await this.backfillSlugs([{ id, slug }], opts);
+    return updated!;
+  }
+
+  async backfillSlugs(
+    updates: readonly { readonly id: string; readonly slug: string }[],
+    opts: { force?: boolean } = {},
+  ): Promise<readonly Task[]> {
+    if (updates.length === 0) return [];
+
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+
+      const seenIds = new Set<string>();
+      const updateIds = new Set<string>();
+      for (const update of updates) {
+        parseSlug(update.slug);
+        if (seenIds.has(update.id)) {
+          throw new MaestroError(`Duplicate backfill update for task ${update.id}`, [
+            "Each task can appear at most once in a slug backfill batch",
+          ]);
+        }
+        seenIds.add(update.id);
+        updateIds.add(update.id);
+      }
+
+      const now = new Date().toISOString();
+      const slugOwners = new Map<string, string>();
+      for (const task of tasks.values()) {
+        if (task.parentId !== undefined || task.slug === undefined || updateIds.has(task.id)) {
+          continue;
+        }
+        slugOwners.set(task.slug, task.id);
+      }
+
+      const updated: Task[] = [];
+      for (const update of updates) {
+        const existing = tasks.get(update.id);
+        if (!existing) {
+          throw taskNotFound(update.id);
+        }
+        if (existing.parentId !== undefined) {
+          throw slugForbiddenOnStep();
+        }
+        if (existing.slug !== undefined && opts.force !== true) {
+          throw new MaestroError(`Task ${update.id} already has slug '${existing.slug}'`, [
+            "Use 'maestro task update <id> --slug <new>' to rename an existing slug",
+            "Use 'maestro task backfill-slugs --rederive' to overwrite auto-derived slugs",
+          ]);
+        }
+        const owner = slugOwners.get(update.slug);
+        if (owner !== undefined) {
+          throw slugCollision(update.slug, owner);
+        }
+        slugOwners.set(update.slug, update.id);
+
+        const next: Task = { ...existing, slug: update.slug, updatedAt: now };
+        tasks.set(update.id, next);
+        updated.push(next);
+      }
+
+      await this.writeAll(tasks);
+      return updated;
+    });
   }
 
   async syncMetadata(id: string, patch: TaskMetadataPatch): Promise<Task> {
@@ -772,6 +871,72 @@ function ensureTasksExist(
   if (missing.length > 0) {
     throw unknownBlocker(id, missing);
   }
+}
+
+/**
+ * Throw `slugCollision` if any other top-level task already owns `slug`.
+ * Top-level here means `parentId === undefined`. `excludeId` skips the task
+ * being updated.
+ */
+function assertSlugUnique(
+  tasks: ReadonlyMap<string, Task>,
+  slug: string,
+  excludeId?: string,
+): void {
+  for (const task of tasks.values()) {
+    if (task.parentId !== undefined) continue;
+    if (excludeId !== undefined && task.id === excludeId) continue;
+    if (task.slug === slug) {
+      throw slugCollision(slug, task.id);
+    }
+  }
+}
+
+/**
+ * Resolve the next slug value for `update()`, applying L1/L2/L3 rules.
+ *
+ * - L1 (step -> track promotion via --parent ""): a slug must be supplied
+ *   alongside the parent clear, and it must be unique.
+ * - L2 (track -> step demotion via --parent <id>): if the existing track has
+ *   a slug, the caller must pass --drop-slug to acknowledge it will be lost.
+ * - L3 (rename in place): patch.slug on a track-with-existing-slug renames it
+ *   and must be unique.
+ */
+function resolveSlugChange(
+  existing: Task,
+  patch: UpdateTaskInput,
+  tasks: ReadonlyMap<string, Task>,
+): { readonly next: string | undefined } {
+  const isClearingParent = patch.parentId === "";
+  const isSettingParent = patch.parentId !== undefined && patch.parentId !== "";
+  const becomingTrack = isClearingParent && existing.parentId !== undefined;
+  const becomingStep = isSettingParent && existing.parentId === undefined;
+  const willBeStep = becomingStep || (existing.parentId !== undefined && !isClearingParent);
+
+  if (willBeStep) {
+    if (patch.slug !== undefined && patch.slug !== "") {
+      throw slugForbiddenOnStep();
+    }
+    if (becomingStep && existing.slug !== undefined && patch.dropSlug !== true) {
+      throw slugMissingDropFlag(existing.id);
+    }
+    return { next: undefined };
+  }
+
+  if (becomingTrack) {
+    if (patch.slug === undefined || patch.slug === "") {
+      throw slugRequired();
+    }
+    assertSlugUnique(tasks, patch.slug, existing.id);
+    return { next: patch.slug };
+  }
+
+  // Staying a track. Optional rename via patch.slug.
+  if (patch.slug === undefined) return { next: existing.slug };
+  if (patch.slug === "") throw slugRequired();
+  if (patch.slug === existing.slug) return { next: existing.slug };
+  assertSlugUnique(tasks, patch.slug, existing.id);
+  return { next: patch.slug };
 }
 
 const BATCH_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;

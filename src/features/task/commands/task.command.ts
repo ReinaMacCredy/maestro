@@ -7,7 +7,6 @@ import { readTextOrStdin } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { createTask } from "../usecases/create-task.usecase.js";
-import { showTask } from "../usecases/show-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
 import { claimTask } from "../usecases/claim-task.usecase.js";
@@ -16,10 +15,10 @@ import { blockTasks, unblockTasks } from "../usecases/manage-task-blockers.useca
 import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
 import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
-import { planTasks } from "../usecases/plan-tasks.usecase.js";
+import { planTasks, validatePlanTasks } from "../usecases/plan-tasks.usecase.js";
 import { buildBatchInputSchema } from "../usecases/batch-input-schema.usecase.js";
 import { nextTask } from "../usecases/next-task.usecase.js";
-import { listOpenHandoffsForTask } from "@/features/handoff";
+import { listOpenProjectHandoffIdsForTask } from "@/features/handoff";
 import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
 import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
@@ -36,12 +35,12 @@ import { parseDuration } from "./duration.js";
 import {
   buildTaskContinuationSummary,
   buildTaskOwnerId,
-  buildTaskShowView,
   deriveAgentFromAssignee,
   loadTaskContinuationSummary,
   parseTaskOwnerId,
   syncTaskContinuation,
 } from "../usecases/task-continuation.usecase.js";
+import { inspectTask } from "../usecases/inspect-task.usecase.js";
 import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
 import type {
   ListTasksFilters,
@@ -69,7 +68,15 @@ import {
   taskUpdateClaimViaDedicatedCommand,
   taskUpdateOwnershipViaClaim,
 } from "../domain/task-errors.js";
-import { assertTaskMutationOwnership, assertTaskUpdateAllowed } from "../domain/task-state.js";
+import {
+  deriveSlugFromTitle,
+  pickFreeDerivedSlug,
+  resolveTaskRef,
+} from "../domain/task-slug.js";
+import {
+  assertTaskMutationOwnership,
+  assertTaskUpdateAllowed,
+} from "../domain/task-state.js";
 import {
   buildCompactReadyTaskPayload,
   formatPruneReport,
@@ -77,8 +84,14 @@ import {
   formatTaskDetail,
   formatTaskShowView,
   formatTaskList,
+  formatTaskStatusView,
   formatTaskSummary,
+  formatTaskTrackList,
 } from "./task-command-formatters.js";
+import {
+  groupTasksByTrack,
+  type TaskStatusProjection,
+} from "../usecases/group-tasks-by-track.usecase.js";
 import { registerContractCommand } from "./contract.command.js";
 import { syncTaskMetadata } from "../usecases/sync-task-metadata.usecase.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
@@ -115,6 +128,8 @@ Typical loop:
   registerQuickCommand(taskCmd, program);
   registerShowCommand(taskCmd, program);
   registerListCommand(taskCmd, program);
+  registerStatusCommand(taskCmd, program);
+  registerBackfillSlugsCommand(taskCmd, program);
   registerUpdateCommand(taskCmd, program);
   registerClaimCommand(taskCmd, program);
   registerContractCommand(taskCmd, program);
@@ -141,7 +156,8 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     .option("--description <text>", "Task description")
     .option("--type <type>", `Task type (${TASK_TYPES.join("|")})`)
     .option("--priority <n>", "Priority 0-4 (0=critical, 4=backlog)")
-    .option("--parent <id>", "Parent task id for hierarchy grouping")
+    .option("--parent <id-or-slug>", "Parent task id (tsk-XXX) or slug for hierarchy grouping")
+    .option("--slug <slug>", "Optional explicit slug for top-level tasks ('<verb>/<kebab>'). Default: derived from title.")
     .option("--labels <labels>", "Comma-separated labels")
     .option("--blocked-by <ids>", "Comma-separated blocker task ids")
     .option(
@@ -175,11 +191,15 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
         await maybeReleaseStaleOwnedTasks([sessionId]);
       }
 
+      const parentId = opts.parent !== undefined
+        ? (await resolveTaskRef(services.taskStore, opts.parent)).id
+        : undefined;
       const input = buildCreateInput(title, {
         description: opts.description,
         type: opts.type,
         priority: opts.priority,
-        parent: opts.parent,
+        parent: parentId,
+        slug: typeof opts.slug === "string" && opts.slug.length > 0 ? opts.slug : undefined,
         labels: opts.labels,
         blockedBy: opts.blockedBy,
       });
@@ -258,7 +278,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
       }
 
       if (opts.dryRun === true) {
-        output(isJson, { batchId: batchInput.batchId, taskCount: batchInput.tasks.length, dryRun: true }, (data) => [
+        const validation = await validatePlanTasks(services.taskStore, batchInput);
+        output(isJson, { ...validation, dryRun: true }, (data) => [
           `[ok] Dry run: ${data.taskCount} task(s) validated, nothing written`,
         ]);
         return;
@@ -356,57 +377,37 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
 
 function registerShowCommand(taskCmd: Command, program: Command): void {
   taskCmd
-    .command("show <id>")
-    .description("Show task details")
+    .command("show <id-or-slug>")
+    .description("Show task details (accepts a tsk-XXX id or a track slug)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (rawRef: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
 
-      if (isJson) {
-        const [task, openHandoffs] = await Promise.all([
-          showTask(services.taskStore, id),
-          listOpenHandoffsForTask(services.handoffStore, id, {
-            taskStore: services.taskStore,
-            currentProjectRoot,
-          }),
-        ]);
-        output(true, { ...task, openHandoffs }, formatTaskDetail);
-        return;
-      }
-
-      const [view, openHandoffs] = await Promise.all([
-        buildTaskShowView({
-          taskStore: services.taskStore,
-          continuationStore: services.taskContinuationStore,
-          continuationHistory: services.taskContinuationHistory,
-        }, id),
-        listOpenHandoffsForTask(services.handoffStore, id, {
+      const resolved = await resolveTaskRef(services.taskStore, rawRef);
+      const id = resolved.id;
+      const view = await inspectTask({
+        taskStore: services.taskStore,
+        continuationStore: services.taskContinuationStore,
+        continuationHistory: services.taskContinuationHistory,
+        listOpenHandoffIds: (taskId) => listOpenProjectHandoffIdsForTask(services.handoffStore, taskId, {
           taskStore: services.taskStore,
           currentProjectRoot,
         }),
-      ]);
-      // Hide blockers that have already completed: the runtime treats them as
-      // resolved (they no longer gate readiness), so showing them as active
-      // "Blocked by" entries misleads. Raw graph history still lives in
-      // `show --json` and `task list --json` for agents that need it.
-      const blockerTasks = await Promise.all(
-        view.task.blockedBy.map((blockerId) => services.taskStore.get(blockerId)),
-      );
-      const activeBlockers = view.task.blockedBy.filter((_, i) => {
-        const blocker = blockerTasks[i];
-        return blocker === undefined || blocker.status !== "completed";
-      });
-      const filteredView: typeof view = activeBlockers.length !== view.task.blockedBy.length
-        ? { ...view, task: { ...view.task, blockedBy: activeBlockers } }
-        : view;
-      output(false, filteredView, (v) => {
-        const lines = [...formatTaskShowView(v)];
-        if (openHandoffs.length > 0) {
-          lines.push(`  Open handoffs: ${openHandoffs.join(", ")}`);
-        }
-        return lines;
+      }, id);
+
+      if (isJson) {
+        output(true, {
+          ...view.task,
+          activeBlockers: view.activeBlockerIds,
+          openHandoffs: view.openHandoffs,
+        }, formatTaskDetail);
+        return;
+      }
+
+      output(false, view, (v) => {
+        return formatTaskShowView(v);
       });
     });
 }
@@ -422,6 +423,7 @@ function registerListCommand(taskCmd: Command, program: Command): void {
     .option("--parent <id>", "Filter by parent task id")
     .option("--assignee <name>", "Filter by assignee")
     .option("--limit <n>", "Maximum number of tasks to return")
+    .option("--tracks", "Print only track headers (slug or tsk-id; one per line)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
@@ -438,14 +440,204 @@ function registerListCommand(taskCmd: Command, program: Command): void {
       };
 
       const tasks = await listTasks(services.taskStore, filters);
+      if (opts.tracks === true) {
+        const tracks = formatTaskTrackList(tasks);
+        output(isJson, tracks, (value) => value);
+        return;
+      }
       output(isJson, tasks, formatTaskList);
+    });
+}
+
+function registerStatusCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("status")
+    .description("Show tracks grouped by top-level slug with status glyphs")
+    .option("--all", "Include completed tasks (rendered with 'v' glyph)")
+    .option("--track <slug>", "Restrict output to a single track by slug or tsk-id")
+    .option("--no-compact", "Render the unsectioned grouped detail view")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      const tasks = await services.taskStore.all();
+      const projection = groupTasksByTrack(tasks, {
+        includeCompleted: opts.all === true,
+        trackFilter: typeof opts.track === "string" && opts.track.length > 0 ? opts.track : undefined,
+      });
+
+      if (isJson) {
+        output(true, toTaskStatusJson(projection), () => []);
+        return;
+      }
+      const lines = formatTaskStatusView(projection, {
+        all: opts.all === true,
+        compact: opts.compact !== false,
+      });
+      output(false, lines, (value) => value);
+    });
+}
+
+function toTaskStatusJson(
+  projection: TaskStatusProjection,
+): Omit<TaskStatusProjection, "tasksById"> & { readonly tasksById: Record<string, Task> } {
+  return {
+    ...projection,
+    tasksById: Object.fromEntries(projection.tasksById),
+  };
+}
+
+function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("backfill-slugs")
+    .description("Derive a slug for every top-level task that is missing one (legacy/pre-slug tasks)")
+    .option("--apply", "Actually write the changes (default is dry-run / planning only)")
+    .option("--rederive", "Re-derive slugs that already exist (overwrites; intended for refreshing auto-derived slugs after a derivation algorithm change)")
+    .option("--limit <n>", "Process at most N tasks")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const apply = opts.apply === true;
+      const rederive = opts.rederive === true;
+      const limit = parseLimit(opts.limit);
+
+      const all = await services.taskStore.all();
+      const tracks: Task[] = [];
+      const slugOwners = new Map<string, string>();
+      for (const task of all) {
+        if (task.parentId !== undefined) continue;
+        if (task.slug === undefined) {
+          tracks.push(task);
+        } else {
+          slugOwners.set(task.slug, task.id);
+          if (rederive) {
+            tracks.push(task);
+          }
+        }
+      }
+      tracks.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const target = limit !== undefined && limit > 0 ? tracks.slice(0, limit) : tracks;
+      const targetIds = new Set(target.map((task) => task.id));
+      const reservedSlugs = new Set<string>();
+      for (const [slug, ownerId] of slugOwners.entries()) {
+        if (!targetIds.has(ownerId)) {
+          reservedSlugs.add(slug);
+        }
+      }
+
+      const inBatch = new Set<string>();
+      const planned: Array<{ id: string; title: string; slug: string; previous?: string }> = [];
+      const skipped: Array<{ id: string; title: string; reason: string }> = [];
+      for (const task of target) {
+        try {
+          const base = deriveSlugFromTitle(task.title, task.type);
+          const candidate = pickFreeDerivedSlug(base, reservedSlugs, inBatch);
+          if (candidate === undefined) {
+            skipped.push({ id: task.id, title: task.title, reason: `'${base}' and -2..-9 suffixes all taken` });
+            continue;
+          }
+          if (candidate === task.slug) {
+            // No-op: re-derive matched the existing slug exactly.
+            inBatch.add(candidate);
+            continue;
+          }
+          inBatch.add(candidate);
+          planned.push({
+            id: task.id,
+            title: task.title,
+            slug: candidate,
+            ...(task.slug !== undefined ? { previous: task.slug } : {}),
+          });
+        } catch (err) {
+          skipped.push({
+            id: task.id,
+            title: task.title,
+            reason: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      if (!apply) {
+        const result = {
+          dryRun: true,
+          considered: target.length,
+          rederive,
+          planned,
+          skipped,
+        };
+        output(isJson, result, (r) => {
+          const headerVerb = r.rederive ? "(re-)derived" : "backfilled";
+          const lines: string[] = [
+            `[dry-run] ${r.planned.length} of ${r.considered} tracks would be ${headerVerb}`,
+            "",
+          ];
+          for (const item of r.planned) {
+            const arrow = item.previous ? `${item.previous}  -->  ${item.slug}` : `(none)  -->  ${item.slug}`;
+            lines.push(`  ${item.id}  ${arrow}`);
+          }
+          if (r.skipped.length > 0) {
+            lines.push("");
+            lines.push(`  ${r.skipped.length} skipped:`);
+            for (const item of r.skipped) {
+              lines.push(`    ${item.id}: ${item.reason}`);
+            }
+          }
+          lines.push("");
+          lines.push("Re-run with --apply to write the slugs.");
+          return lines;
+        });
+        return;
+      }
+
+      const applied: Array<{ id: string; slug: string; previous?: string }> = [];
+      const failures: Array<{ id: string; slug: string; error: string }> = [];
+      const updated = await services.taskStore.backfillSlugs(
+        planned.map((item) => ({ id: item.id, slug: item.slug })),
+        { force: rederive },
+      );
+      const updatedIds = new Set(updated.map((task) => task.id));
+      for (const item of planned) {
+        if (!updatedIds.has(item.id)) continue;
+        applied.push({
+          id: item.id,
+          slug: item.slug,
+          ...(item.previous !== undefined ? { previous: item.previous } : {}),
+        });
+      }
+
+      output(isJson, { applied, failures, skipped }, (r) => {
+        const lines: string[] = [
+          `[ok] Backfilled ${r.applied.length} slug(s)`,
+        ];
+        for (const item of r.applied) {
+          const arrow = item.previous ? `${item.previous}  -->  ${item.slug}` : `(none)  -->  ${item.slug}`;
+          lines.push(`  ${item.id}  ${arrow}`);
+        }
+        if (r.failures.length > 0) {
+          lines.push("");
+          lines.push(`${r.failures.length} failure(s):`);
+          for (const item of r.failures) {
+            lines.push(`  ${item.id} (${item.slug}): ${item.error}`);
+          }
+        }
+        if (r.skipped.length > 0) {
+          lines.push("");
+          lines.push(`${r.skipped.length} skipped (no slug derivable):`);
+          for (const item of r.skipped) {
+            lines.push(`  ${item.id}: ${item.reason}`);
+          }
+        }
+        return lines;
+      });
     });
 }
 
 function registerUpdateCommand(taskCmd: Command, program: Command): void {
   taskCmd
-    .command("update <id>")
-    .description("Update task fields or move task status explicitly")
+    .command("update <id-or-slug>")
+    .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug)")
     .option("--title <title>", "New title")
     .option("--description <text>", "New description")
     .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
@@ -457,7 +649,9 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .option("--no-contract", "Allow completion without a contract when contracts.default=required")
     .option("--priority <n>", "New priority 0-4")
     .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
-    .option("--parent <id>", "New parent id (empty string clears)")
+    .option("--parent <id-or-slug>", "New parent (tsk-XXX or slug; empty string clears for promotion)")
+    .option("--slug <slug>", "Set or rename the slug ('<verb>/<kebab>'); empty rejects (use --parent <id> --drop-slug to demote a track)")
+    .option("--drop-slug", "Acknowledge that demoting a track to a step will drop its slug")
     .option("--current-state <text>", "Update the resumable current-state summary")
     .option("--next-action <text>", "Update the resumable next action")
     .option("--add-decision <items>", "Comma-separated active decisions to add")
@@ -470,9 +664,11 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .addOption(new Option("--claim").hideHelp())
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (rawRef: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const resolved = await resolveTaskRef(services.taskStore, rawRef);
+      const id = resolved.id;
       const previous = await services.taskStore.get(id);
       const continuationEdits = parseContinuationEdits(opts);
 
@@ -483,6 +679,12 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         throw taskUpdateClaimViaDedicatedCommand();
       }
 
+      const parentId = typeof opts.parent === "string"
+        ? (opts.parent.length === 0
+            ? ""
+            : (await resolveTaskRef(services.taskStore, opts.parent)).id)
+        : undefined;
+
       const patch: UpdateTaskInput = {
         title: opts.title,
         description: opts.description,
@@ -490,7 +692,9 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         reason: opts.reason,
         priority: parsePriority(opts.priority),
         type: parseType(opts.type),
-        parentId: opts.parent,
+        parentId,
+        slug: typeof opts.slug === "string" ? opts.slug : undefined,
+        dropSlug: opts.dropSlug === true ? true : undefined,
         addLabels: parseList(opts.addLabel),
         removeLabels: parseList(opts.removeLabel),
         summary: typeof opts.summary === "string" ? opts.summary : undefined,
@@ -507,8 +711,8 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       if (!hasTaskPatch && !hasContinuationPatch) {
         throw new MaestroError("No update specified", [
           "Pass at least one field such as --title, --description, --status, --reason,",
-          "--priority, --type, --parent, --current-state, --next-action,",
-          "--add-decision, --remove-decision, --add-label, or --remove-label",
+          "--priority, --type, --parent, --slug, --drop-slug, --current-state,",
+          "--next-action, --add-decision, --remove-decision, --add-label, or --remove-label",
         ]);
       }
 

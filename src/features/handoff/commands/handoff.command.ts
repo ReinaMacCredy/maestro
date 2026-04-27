@@ -5,9 +5,9 @@ import { getServices } from "@/services.js";
 import {
   DEFAULT_HANDOFF_MODELS,
   launchHandoff,
-  listHandoffs,
+  listProjectHandoffs,
   pickupHandoff,
-  showHandoff,
+  showProjectHandoff,
   type HandoffAgent,
   type HandoffRecord,
 } from "@/features/handoff";
@@ -172,7 +172,7 @@ export function registerHandoffCommand(program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
-      const records = await listHandoffs(services.handoffStore, {
+      const records = await listProjectHandoffs(services.handoffStore, {
         openOnly: Boolean(opts.open),
         taskStore: services.taskStore,
         currentProjectRoot,
@@ -188,7 +188,7 @@ export function registerHandoffCommand(program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
-      const record = await showHandoff(services.handoffStore, id, {
+      const record = await showProjectHandoff(services.handoffStore, id, {
         taskStore: services.taskStore,
         currentProjectRoot,
       });
@@ -271,7 +271,7 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
 
   const services = getServices();
   const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
-  const open = await listHandoffs(services.handoffStore, {
+  const open = await listProjectHandoffs(services.handoffStore, {
     openOnly: true,
     taskStore: services.taskStore,
     currentProjectRoot,

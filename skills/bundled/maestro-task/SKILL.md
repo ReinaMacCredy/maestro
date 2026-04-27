@@ -26,6 +26,7 @@ Do not activate for one-liner edits or read-only questions.
 3. **Update continuation state on meaningful change only.** Current state shifted, next action changed, a decision was made, blockers appeared. Not on every trivial edit.
 4. **Blockers block transitions.** A task cannot move to `in_progress` or `completed` with unresolved blockers.
 5. **Handoff is for cross-session transfer only.** Same-session resume uses continuation state, not handoffs.
+6. **Mandatory slug at plan conversion.** Every top-level "track" carries a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`). Pass `slug` explicitly on top-level entries or omit it and let the title derive one. Step entries (those with `parent`) must NOT carry a slug. The whole batch is rejected on slug shape errors, on-disk collisions, or `slug` + `parent` together.
 
 ## Converting a plan into a task batch
 
@@ -45,29 +46,34 @@ cat <<'JSON' | maestro task plan --file - --start scaffold
       "title": "Scaffold feature X",
       "description": "Create the feature directory, wire index.ts, add skeleton services.ts.",
       "type": "feature",
-      "priority": 1
+      "priority": 1,
+      "slug": "implement/feature-x"
     },
     {
       "name": "impl",
       "title": "Implement the core use-case",
       "description": "Build the use-case behind the port; cover happy path first.",
-      "blockedBy": ["scaffold"]
+      "parent": "scaffold"
     },
     {
       "name": "tests",
       "title": "Add unit + integration tests",
+      "parent": "scaffold",
       "blockedBy": ["impl"]
     },
     {
       "name": "ship",
       "title": "Open PR",
       "type": "chore",
+      "parent": "scaffold",
       "blockedBy": ["tests"]
     }
   ]
 }
 JSON
 ```
+
+`slug` is REQUIRED on every top-level entry. Either pass it explicitly (preferred when the kebab matters) or omit it and let `task plan` derive one from the title (`Title text` → `<verb>/title-text`). Step entries (`parent` set) must NOT carry a slug — they address by `tsk-<id>`.
 
 `--start <name>` claims the named task and flips it to `in_progress` in the same command. `batchId` makes retries idempotent (receipt persists under `.maestro/tasks/batches/`). Any validation error rejects the whole batch.
 
@@ -155,11 +161,93 @@ maestro task update <id> --status completed \
 ```bash
 maestro status --json
 maestro task ready --json --compact --limit 5
-maestro task show <id>
+maestro task show <id-or-slug>
 maestro task mine
 maestro task stuck --older-than 4h
 maestro task similar <id>
 ```
+
+`task show` and `task update` accept either `tsk-<id>` or a track slug like `implement/foo`. `task list --tracks` prints just the track headers (slugs + slugless legacy ids), one per line.
+
+## Status view
+
+```bash
+maestro task status                       # all open tracks
+maestro task status --all                 # include completed (with `v` glyph)
+maestro task status --no-compact          # unsectioned grouped detail view
+maestro task status --track implement/foo # restrict to one track
+maestro task status --json                # structured projection
+```
+
+Status glyphs: `o` active (in_progress), `!` blocked, `·` pending, `v`
+completed (only with `--all`).
+
+Default render shape: a hybrid operator board. The header reports open, active,
+ready, blocked, and blocked-track counts. Simple one-task tracks render as
+compact rows under `ACTIVE`, `READY`, or `BLOCKED`. Multi-step tracks expand
+only when dependency structure matters: blocked steps or ready steps that unlock
+downstream work. If a ready task unlocks blocked downstream work, a one-line
+`next:` hint appears under the header.
+
+Default examples:
+
+```text
+tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track
+
+ACTIVE
+  o implement/template-prompt-fixes  Remove contradictory close-issue instruction from implement-prompt.md
+
+DEPENDENCY TRACKS
+
+implement/init-template-e2e-tests
+  ! Add AgentInvoker seam, test support module, and blank template e2e test
+      blocked by implement/template-prompt-fixes
+  · Add e2e test for simple-loop init template
+
+READY
+  · implement/template-prompt-fixes  Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
+```
+
+`--no-compact` renders the unsectioned grouped detail view: solo tracks (no step
+children) render on a single line (`  o slug  title  in-progress`) with no
+blank line between consecutive solo tracks. Tracks with step children render
+multi-line (slug header, indented bullet list, status text under blocked /
+in-progress steps) so step structure stays readable.
+
+Blocked rows render `blocked by <slug-or-id>` inline, while blocked steps inside
+dependency tracks render the blocker on the next line. If a blocker has
+completed it's marked `(done)` as a hint that the wait is over.
+
+## Slug backfill (legacy slugless top-level tasks)
+
+Existing top-level tasks without a slug render with their bare `tsk-<id>` as
+the header. Bulk-backfill the whole queue (derives a slug from each title +
+type, applies after preview):
+
+```bash
+maestro task backfill-slugs                       # dry-run / planning
+maestro task backfill-slugs --apply               # write the slugs
+maestro task backfill-slugs --apply --limit 10
+maestro task backfill-slugs --rederive --apply    # refresh existing auto-derived slugs
+```
+
+Derivation drops stop-words, hex shas, and digit-only tokens, caps at four
+significant words, and only cuts at word boundaries (no `...beads-ru` mid-word
+truncation).
+
+Backfill is display-only metadata: it bypasses the completion + ownership
+locks so it works on completed and currently-claimed tasks. By default it
+refuses to overwrite an existing slug; `--rederive` opts in to overwriting.
+
+To set or rename one slug at a time:
+
+```bash
+maestro task update tsk-<id> --slug implement/<kebab>
+```
+
+Slug uniqueness is enforced across all top-level tasks. Slugs are not
+preserved when a track is demoted to a step (`task update <id> --parent
+<other>`); the CLI requires `--drop-slug` to acknowledge that.
 
 ## Recovery
 

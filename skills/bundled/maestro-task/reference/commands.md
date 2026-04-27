@@ -13,21 +13,33 @@ maestro task create "Title" \
   [--type task|bug|feature|epic|chore] \
   [--priority 0-4] \
   [--labels a,b] \
-  [--parent <id>] \
+  [--parent <id-or-slug>] \
+  [--slug <verb>/<kebab>] \
   [--blocked-by <id1,id2>] \
   [--status pending|in_progress]
 ```
+
+`--slug` is optional on a top-level create (auto-derived from the title when
+omitted). Forbidden when `--parent` is set. `--parent` accepts either a
+`tsk-<id>` or a track slug.
 
 ## Discovery
 
 ```bash
 maestro task next --json                              # claim next ready task
-maestro task ready --json --compact --limit 5        # list of ready tasks
+maestro task ready --json --compact --limit 5         # list of ready tasks (each item carries `slug` if it has one)
 maestro task mine                                     # tasks owned by current session
-maestro task show <id>                                # full task + continuation state
+maestro task show <id-or-slug>                        # full task + continuation state (accepts slug)
+maestro task list [--tracks]                          # list tasks; --tracks prints just the track headers
+maestro task status [--all] [--track <slug>] [--json] # grouped view; solo tracks render single-line, multi-step tracks multi-line
+maestro task backfill-slugs [--apply] [--limit n]     # derive slugs for legacy slugless tracks (dry-run by default)
 maestro task stuck [--older-than 4h]                  # in_progress with no recent activity
 maestro task similar <id>                             # past tasks with keyword overlap
 ```
+
+`task status` glyph palette: `o` active, `!` blocked, `·` pending, `v`
+completed (only with `--all`). Color is auto-detected via `NO_COLOR` and
+TTY; pipe-safe by default.
 
 ## Ownership
 
@@ -42,13 +54,18 @@ maestro task heartbeat <id>                          # bump lastActivityAt so th
 ## State and continuation
 
 ```bash
-maestro task update <id> --status in_progress         # auto-claims if unowned
-maestro task update <id> --current-state "..."
-maestro task update <id> --next-action "..."
-maestro task update <id> --add-decision "..."
-maestro task update <id> --remove-decision "..."
+maestro task update <id-or-slug> --status in_progress  # auto-claims if unowned
+maestro task update <id-or-slug> --current-state "..."
+maestro task update <id-or-slug> --next-action "..."
+maestro task update <id-or-slug> --add-decision "..."
+maestro task update <id-or-slug> --remove-decision "..."
 
-maestro task update <id> --status completed \
+# Slug lifecycle
+maestro task update <id> --slug implement/<kebab>          # rename or set on a track
+maestro task update <id> --parent "" --slug implement/foo  # promote step -> track (slug required)
+maestro task update <id> --parent <other> --drop-slug      # demote track -> step (slug cleared)
+
+maestro task update <id-or-slug> --status completed \
   --reason "<one-line outcome>" \
   [--summary "<receipt summary>"] \
   [--surprise "<gotcha>"] \

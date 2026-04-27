@@ -92,6 +92,8 @@ function createTaskStore(state: { current?: Task; deleteCalls: number }): TaskSt
     heartbeat: unused,
     findBatchReceipt: unused,
     syncMetadata: unused,
+    backfillSlug: unused,
+    backfillSlugs: unused,
   };
 }
 

@@ -9,9 +9,10 @@
  *   1. Guard: reject dirty working tree (unstaged/staged changes)
  *   2. Auto-bump version from conventional commits
  *   3. Check feature-folder boundaries
- *   4. Run tests
- *   5. Commit version files
- *   6. Build the release artifact and install locally
+ *   4. Check agent-facing skill template drift
+ *   5. Run tests
+ *   6. Commit version files
+ *   7. Build the release artifact and install locally
  *
  * On test failure the version bump is rolled back automatically.
  */
@@ -96,7 +97,22 @@ if (boundaryResult !== 0) {
 }
 console.log("[ok] Feature boundaries OK.");
 
-// ---- step 4: test ----
+// ---- step 4: agent-facing spec check ----
+
+console.log("\n[-->] Checking agent-facing skill templates...");
+const agentSpecResult = await Bun.spawn(["bun", "run", "check:agent-spec"], {
+  cwd: root,
+  stdout: "inherit",
+  stderr: "inherit",
+}).exited;
+
+if (agentSpecResult !== 0) {
+  await restoreVersion(origPkgText, origVersionText);
+  fail(`Agent-facing skill template check failed. Version reverted to ${origVersion}.`);
+}
+console.log("[ok] Agent-facing skill templates are in sync.");
+
+// ---- step 5: test ----
 
 console.log("\n[-->] Running tests...");
 const testResult = await Bun.spawn(["bun", "run", "test"], {
@@ -111,7 +127,7 @@ if (testResult !== 0) {
 }
 console.log("[ok] Tests passed.");
 
-// ---- step 5: commit release metadata ----
+// ---- step 6: commit release metadata ----
 
 console.log("\n[-->] Committing release...");
 await $`git add package.json src/shared/version.ts`.cwd(root);
@@ -120,7 +136,7 @@ const commitMsg = `chore(release): v${nextVersion}`;
 await $`git commit -m ${commitMsg}`.cwd(root);
 console.log(`[ok] Committed release metadata for v${nextVersion}.`);
 
-// ---- step 6: build + install locally ----
+// ---- step 7: build + install locally ----
 
 console.log("\n[-->] Building release artifact...");
 const buildResult = await Bun.spawn(["bun", "run", "build"], {

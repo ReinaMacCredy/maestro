@@ -48,6 +48,11 @@ export interface TaskShowView {
   readonly task: Task;
   readonly continuation?: TaskContinuationSummary;
   readonly recentEvents: readonly TaskContinuationEvent[];
+  /**
+   * Children of `task`, populated only when `task` is a top-level track. Empty
+   * for step tasks. Used by the renderer to surface inline "Steps" listings.
+   */
+  readonly steps?: readonly Task[];
 }
 
 export interface ContinuationSummaryOverrides {
@@ -78,7 +83,13 @@ export async function buildTaskShowView(
     ? await deps.continuationHistory.listRecent(id, 5)
     : [];
 
-  return { task, continuation, recentEvents };
+  let steps: readonly Task[] | undefined;
+  if (task.parentId === undefined) {
+    const all = await deps.taskStore.all();
+    steps = all.filter((t) => t.parentId === id);
+  }
+
+  return { task, continuation, recentEvents, ...(steps !== undefined ? { steps } : {}) };
 }
 
 export async function syncTaskContinuation(

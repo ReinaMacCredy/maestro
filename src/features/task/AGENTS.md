@@ -28,6 +28,7 @@ task/
 - Task status: `pending`, `in_progress`, `completed`. Legacy statuses collapse on read.
 - Blocking is symmetric: updating `blockedBy` auto-updates the blocked task's `blocks`.
 - `task ready` returns only pending, unblocked, unassigned tasks.
+- Top-level tasks are "tracks" and carry a `slug` like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`); tasks with a `parentId` are "steps" and have no slug. Slug is mandatory at every new-track creation path: `task plan`, `task create` (no `--parent`), and `task update --parent ""` (promotion).
 
 ## ANTI-PATTERNS
 - Treating `task` and `mission` as interchangeable (they are separate systems).

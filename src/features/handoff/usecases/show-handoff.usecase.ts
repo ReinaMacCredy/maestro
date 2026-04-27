@@ -1,7 +1,6 @@
 import type { TaskQueryPort } from "@/features/task";
 import type { HandoffRecord, HandoffStorePort } from "../domain/handoff-types.js";
-import { MaestroError } from "@/shared/errors.js";
-import { reconcileHandoffRecord } from "./reconcile-handoff-record.usecase.js";
+import { showAnyHandoff } from "./read-handoffs.usecase.js";
 
 export async function showHandoff(
   store: HandoffStorePort,
@@ -11,18 +10,5 @@ export async function showHandoff(
     readonly currentProjectRoot?: string;
   } = {},
 ): Promise<HandoffRecord> {
-  const record = await store.get(id);
-  if (!record) {
-    throw new MaestroError(`Handoff packet not found: ${id}`, [
-      "Run `maestro handoff list` to see available packets",
-    ]);
-  }
-  if (!options.taskStore || !options.currentProjectRoot) {
-    return record;
-  }
-  return reconcileHandoffRecord({
-    handoffStore: store,
-    taskStore: options.taskStore,
-    currentProjectRoot: options.currentProjectRoot,
-  }, record);
+  return showAnyHandoff(store, id, options);
 }
