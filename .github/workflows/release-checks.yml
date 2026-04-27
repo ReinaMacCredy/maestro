@@ -127,7 +127,7 @@ jobs:
       - name: Stage named release asset
         run: cp "dist/${{ matrix.src }}" "dist/${{ matrix.asset }}"
       - name: Upload release-check asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset }}
           path: dist/${{ matrix.asset }}
