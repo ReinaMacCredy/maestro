@@ -520,6 +520,12 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
       tracks.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       const target = limit !== undefined && limit > 0 ? tracks.slice(0, limit) : tracks;
       const targetIds = new Set(target.map((task) => task.id));
+      const reservedSlugs = new Set<string>();
+      for (const [slug, ownerId] of slugOwners.entries()) {
+        if (!targetIds.has(ownerId)) {
+          reservedSlugs.add(slug);
+        }
+      }
 
       const inBatch = new Set<string>();
       const planned: Array<{ id: string; title: string; slug: string; previous?: string }> = [];
@@ -527,12 +533,6 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
       for (const task of target) {
         try {
           const base = deriveSlugFromTitle(task.title, task.type);
-          const reservedSlugs = new Set<string>();
-          for (const [slug, ownerId] of slugOwners.entries()) {
-            if (!targetIds.has(ownerId)) {
-              reservedSlugs.add(slug);
-            }
-          }
           const candidate = pickFreeDerivedSlug(base, reservedSlugs, inBatch);
           if (candidate === undefined) {
             skipped.push({ id: task.id, title: task.title, reason: `'${base}' and -2..-9 suffixes all taken` });
@@ -593,29 +593,18 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
 
       const applied: Array<{ id: string; slug: string; previous?: string }> = [];
       const failures: Array<{ id: string; slug: string; error: string }> = [];
-      try {
-        const updated = await services.taskStore.backfillSlugs(
-          planned.map((item) => ({ id: item.id, slug: item.slug })),
-          { force: rederive },
-        );
-        const updatedIds = new Set(updated.map((task) => task.id));
-        for (const item of planned) {
-          if (!updatedIds.has(item.id)) continue;
-          applied.push({
-            id: item.id,
-            slug: item.slug,
-            ...(item.previous !== undefined ? { previous: item.previous } : {}),
-          });
-        }
-      } catch (err) {
-        const error = err instanceof Error ? err.message : String(err);
-        for (const item of planned) {
-          failures.push({
-            id: item.id,
-            slug: item.slug,
-            error,
-          });
-        }
+      const updated = await services.taskStore.backfillSlugs(
+        planned.map((item) => ({ id: item.id, slug: item.slug })),
+        { force: rederive },
+      );
+      const updatedIds = new Set(updated.map((task) => task.id));
+      for (const item of planned) {
+        if (!updatedIds.has(item.id)) continue;
+        applied.push({
+          id: item.id,
+          slug: item.slug,
+          ...(item.previous !== undefined ? { previous: item.previous } : {}),
+        });
       }
 
       output(isJson, { applied, failures, skipped }, (r) => {

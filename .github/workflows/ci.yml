@@ -58,6 +58,8 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.github_changed == 'true'
     uses: ./.github/workflows/workflow-sanity.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
     permissions:
       contents: read
 

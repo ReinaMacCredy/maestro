@@ -53,6 +53,15 @@ describe("update-check startup gating", () => {
     expect(shouldRunUpdateCheck(["node", "maestro", "--json", "--version"], {})).toBe(false);
   });
 
+  it("skips subcommand help and help command invocations", () => {
+    expect(shouldRunUpdateCheck(["node", "maestro", "task", "--help"], {})).toBe(false);
+    expect(shouldRunUpdateCheck(["node", "maestro", "help", "task"], {})).toBe(false);
+  });
+
+  it("skips bare invocations that only print root help", () => {
+    expect(shouldRunUpdateCheck(["node", "maestro"], {})).toBe(false);
+  });
+
   it("still runs for normal commands after leading global flags", () => {
     expect(shouldRunUpdateCheck(["node", "maestro", "--json", "task", "list"], {})).toBe(true);
   });

@@ -44,6 +44,7 @@ import {
   taskReopenRequiresCompletedStatus,
   unknownBlocker,
 } from "../domain/task-errors.js";
+import { parseSlug } from "../domain/task-slug.js";
 import { MaestroError } from "@/shared/errors.js";
 import {
   DEFAULT_TASK_TYPE,
@@ -527,6 +528,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       const seenIds = new Set<string>();
       const updateIds = new Set<string>();
       for (const update of updates) {
+        parseSlug(update.slug);
         if (seenIds.has(update.id)) {
           throw new MaestroError(`Duplicate backfill update for task ${update.id}`, [
             "Each task can appear at most once in a slug backfill batch",

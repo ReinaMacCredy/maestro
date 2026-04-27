@@ -7,6 +7,11 @@ on:
       - main
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: Optional ref to validate when called by another workflow.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +27,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - name: Fail on tabs in workflow files
         run: |
           python3 - <<'PY'
@@ -91,6 +98,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - name: Install actionlint
         run: |
           set -euo pipefail

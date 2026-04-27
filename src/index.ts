@@ -190,14 +190,7 @@ export function shouldRunUpdateCheck(
   argv: readonly string[],
   env: NodeJS.ProcessEnv,
 ): boolean {
-  if (env.MAESTRO_NO_UPDATE_CHECK) return false;
-  if (env.CI) return false;
-  if (env.NODE_ENV === "test") return false;
-  if (isPureInfoCommand(argv)) return false;
-  // Skip on `update` itself: that command does its own fetch (e.g., --check,
-  // or installReleaseBinary), so an ambient refresh would race a duplicate.
-  if (isUpdateCommand(argv)) return false;
-  return true;
+  return !isUpdateCheckSuppressed(argv, env);
 }
 
 export function maybePrintUpdateBanner(
@@ -207,24 +200,25 @@ export function maybePrintUpdateBanner(
 ): void {
   if (!cached) return;
   if (!isNewerSemver(cached.latestVersion, VERSION)) return;
-  if (env.MAESTRO_NO_UPDATE_CHECK) return;
-  if (env.CI) return;
-  if (env.NODE_ENV === "test") return;
+  if (isUpdateCheckSuppressed(argv, env)) return;
   if (!process.stderr.isTTY) return;
-  if (isPureInfoCommand(argv)) return;
-  if (isUpdateCommand(argv)) return;
   console.error(
     `[maestro] ${cached.latestTag} available (you have ${VERSION}). Run \`maestro update\` to upgrade.`,
   );
 }
 
-function isPureInfoCommand(argv: readonly string[]): boolean {
+function isUpdateCheckSuppressed(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv,
+): boolean {
+  if (env.MAESTRO_NO_UPDATE_CHECK) return true;
+  if (env.CI) return true;
+  if (env.NODE_ENV === "test") return true;
   const parsed = parseCommandIntent(argv);
-  return parsed.infoOnly;
-}
-
-function isUpdateCommand(argv: readonly string[]): boolean {
-  return parseCommandIntent(argv).command === "update";
+  if (parsed.infoOnly) return true;
+  // Skip on `update` itself: that command does its own fetch (e.g., --check,
+  // or installReleaseBinary), so an ambient refresh would race a duplicate.
+  return parsed.command === "update";
 }
 
 function parseCommandIntent(argv: readonly string[]): {
@@ -241,9 +235,17 @@ function parseCommandIntent(argv: readonly string[]): {
     if (token === "--json") continue;
     if (token.startsWith("--json=")) continue;
     if (token.startsWith("-")) continue;
+    if (token === "help") return { command: token, infoOnly: true };
+    for (let j = i + 1; j < argv.length; j++) {
+      const nested = argv[j];
+      if (nested === "--") break;
+      if (nested === "--version" || nested === "-V" || nested === "--help" || nested === "-h") {
+        return { command: token, infoOnly: true };
+      }
+    }
     return { command: token, infoOnly: false };
   }
-  return { infoOnly: false };
+  return { infoOnly: true };
 }
 
 function assertNoDeprecatedMissionControlFlags(argv: readonly string[]): void {

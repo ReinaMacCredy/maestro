@@ -141,6 +141,14 @@ describe("JsonlTaskStoreAdapter.backfillSlug", () => {
     );
   });
 
+  it("rejects invalid slug shapes at the store boundary", async () => {
+    const task = await createTask(store, { title: "Legacy" });
+
+    await expect(store.backfillSlug(task.id, "Legacy")).rejects.toThrow(
+      /must be '<verb>\/<kebab>'/,
+    );
+  });
+
   it("atomically backfills multiple slugs so rederive swaps can succeed", async () => {
     const first = await createTask(store, { title: "First", slug: "implement/old-second" });
     const second = await createTask(store, { title: "Second", slug: "implement/old-first" });
