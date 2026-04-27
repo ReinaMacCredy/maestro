@@ -7,7 +7,7 @@
       "dependencies": {
         "@opentui/core": "0.1.105",
         "@opentui/react": "0.1.105",
-        "cli-spinners": "^2.9.2",
+        "cli-spinners": "^3.4.0",
         "commander": "^13.0.0",
         "react": "19.2.5",
         "react-devtools-core": "^7.0.1",
@@ -133,7 +133,7 @@
 
     "bun-webgpu-win32-x64": ["bun-webgpu-win32-x64@0.1.6", "", { "os": "win32", "cpu": "x64" }, "sha512-MHSFAKqizISb+C5NfDrFe3g0Al5Njnu0j/A+oO2Q+bIWX+fUYjBSowiYE1ZXJx65KuryuB+tiM7Qh6cQbVvkEg=="],
 
-    "cli-spinners": ["cli-spinners@2.9.2", "", {}, "sha512-ywqV+5MmyL4E7ybXgKys4DugZbX0FC6LnwrhjuykIjnK9k8OQacQ7axGKnjDXWNhns0xot3bZI5h55H8yo9cJg=="],
+    "cli-spinners": ["cli-spinners@3.4.0", "", {}, "sha512-bXfOC4QcT1tKXGorxL3wbJm6XJPDqEnij2gQ2m7ESQuE+/z9YFIWnl/5RpTiKWbMq3EVKR4fRLJGn6DVfu0mpw=="],
 
     "commander": ["commander@13.1.0", "", {}, "sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw=="],
 
