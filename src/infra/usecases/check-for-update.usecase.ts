@@ -8,6 +8,10 @@ import { fetchLatestVersion } from "./fetch-latest-version.usecase.js";
 
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 const ATTEMPT_COOLDOWN_MS = 15 * 60 * 1000;
+const SEMVER_IDENTIFIER = "[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*";
+const SEMVER_PATTERN = new RegExp(
+  `^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-(${SEMVER_IDENTIFIER}))?(?:\\+${SEMVER_IDENTIFIER})?$`,
+);
 
 export interface CheckForUpdateDeps {
   readonly now?: () => Date;
@@ -118,19 +122,74 @@ export function isNewerSemver(candidate: string, baseline: string): boolean {
   const a = parseSemver(candidate);
   const b = parseSemver(baseline);
   if (!a || !b) return false;
-  if (a[0] !== b[0]) return a[0] > b[0];
-  if (a[1] !== b[1]) return a[1] > b[1];
-  return a[2] > b[2];
+  if (a.major !== b.major) return a.major > b.major;
+  if (a.minor !== b.minor) return a.minor > b.minor;
+  if (a.patch !== b.patch) return a.patch > b.patch;
+  return comparePrerelease(a.prerelease, b.prerelease) > 0;
 }
 
-function parseSemver(value: string): [number, number, number] | undefined {
-  const parts = value.split(".");
-  if (parts.length < 3) return undefined;
-  const major = Number.parseInt(parts[0] ?? "", 10);
-  const minor = Number.parseInt(parts[1] ?? "", 10);
-  const patch = Number.parseInt(parts[2] ?? "", 10);
-  if (!Number.isFinite(major) || !Number.isFinite(minor) || !Number.isFinite(patch)) {
+interface ParsedSemver {
+  readonly major: number;
+  readonly minor: number;
+  readonly patch: number;
+  readonly prerelease: readonly string[];
+}
+
+function parseSemver(value: string): ParsedSemver | undefined {
+  const match = value.match(SEMVER_PATTERN);
+  if (!match) return undefined;
+  const major = Number.parseInt(match[1]!, 10);
+  const minor = Number.parseInt(match[2]!, 10);
+  const patch = Number.parseInt(match[3]!, 10);
+  if (!Number.isSafeInteger(major) || !Number.isSafeInteger(minor) || !Number.isSafeInteger(patch)) {
     return undefined;
   }
-  return [major, minor, patch];
+  const prerelease = match[4]?.split(".") ?? [];
+  if (prerelease.some((identifier) => /^\d+$/.test(identifier) && !isNumericIdentifier(identifier))) {
+    return undefined;
+  }
+  return {
+    major,
+    minor,
+    patch,
+    prerelease,
+  };
+}
+
+function comparePrerelease(
+  candidate: readonly string[],
+  baseline: readonly string[],
+): number {
+  if (candidate.length === 0 && baseline.length === 0) return 0;
+  if (candidate.length === 0) return 1;
+  if (baseline.length === 0) return -1;
+
+  const length = Math.max(candidate.length, baseline.length);
+  for (let idx = 0; idx < length; idx++) {
+    const left = candidate[idx];
+    const right = baseline[idx];
+    if (left === undefined) return -1;
+    if (right === undefined) return 1;
+    if (left === right) continue;
+
+    const leftNumber = parseNumericIdentifier(left);
+    const rightNumber = parseNumericIdentifier(right);
+    if (leftNumber !== undefined && rightNumber !== undefined) {
+      return leftNumber > rightNumber ? 1 : -1;
+    }
+    if (leftNumber !== undefined) return -1;
+    if (rightNumber !== undefined) return 1;
+    return left > right ? 1 : -1;
+  }
+  return 0;
+}
+
+function parseNumericIdentifier(value: string): number | undefined {
+  if (!isNumericIdentifier(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function isNumericIdentifier(value: string): boolean {
+  return /^(0|[1-9]\d*)$/.test(value);
 }

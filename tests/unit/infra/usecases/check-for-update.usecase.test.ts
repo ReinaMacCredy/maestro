@@ -47,6 +47,16 @@ describe("isNewerSemver", () => {
   it("returns false on unparseable versions", () => {
     expect(isNewerSemver("not-a-version", "0.59.0")).toBe(false);
     expect(isNewerSemver("0.59", "0.59.0")).toBe(false);
+    expect(isNewerSemver("01.2.3", "1.2.2")).toBe(false);
+    expect(isNewerSemver("1.2.3-rc..1", "1.2.2")).toBe(false);
+    expect(isNewerSemver("1.2.3-rc.01", "1.2.2")).toBe(false);
+  });
+
+  it("uses SemVer prerelease precedence", () => {
+    expect(isNewerSemver("1.2.3", "1.2.3-rc.1")).toBe(true);
+    expect(isNewerSemver("1.2.3-rc.2", "1.2.3-rc.1")).toBe(true);
+    expect(isNewerSemver("1.2.3-rc.1", "1.2.3")).toBe(false);
+    expect(isNewerSemver("1.2.3+build.2", "1.2.3+build.1")).toBe(false);
   });
 });
 

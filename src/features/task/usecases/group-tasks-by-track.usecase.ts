@@ -207,10 +207,8 @@ function computeHeader(
   for (const task of tasks) {
     if (task.status === "completed") continue;
     if (task.parentId === undefined) {
-      const visibleChildren = (childrenByParent.get(task.id) ?? []).filter(
-        (child) => child.status !== "completed",
-      );
-      if (visibleChildren.length === 0) {
+      const visibleDescendants = collectVisibleDescendants(task.id, childrenByParent);
+      if (visibleDescendants.length === 0) {
         if (task.status === "in_progress") active += 1;
         else if (isBlocked(task, byId)) {
           blocked += 1;
@@ -221,10 +219,10 @@ function computeHeader(
         }
         continue;
       }
-      const trackHasInProgress = visibleChildren.some(
+      const trackHasInProgress = visibleDescendants.some(
         (child) => child.status === "in_progress",
       );
-      const trackHasBlocked = visibleChildren.some((child) => isBlocked(child, byId));
+      const trackHasBlocked = visibleDescendants.some((child) => isBlocked(child, byId));
       if (trackHasBlocked) blockedTracks += 1;
       if (!trackHasInProgress && trackHasBlocked) blocked += 1;
       continue;
@@ -245,4 +243,23 @@ function computeHeader(
     blocked,
     blockedTracks,
   };
+}
+
+function collectVisibleDescendants(
+  taskId: string,
+  childrenByParent: ReadonlyMap<string, readonly Task[]>,
+): readonly Task[] {
+  const visible: Task[] = [];
+  const stack = [...(childrenByParent.get(taskId) ?? [])].reverse();
+  while (stack.length > 0) {
+    const child = stack.pop()!;
+    if (child.status !== "completed") {
+      visible.push(child);
+    }
+    const children = childrenByParent.get(child.id) ?? [];
+    for (let idx = children.length - 1; idx >= 0; idx--) {
+      stack.push(children[idx]!);
+    }
+  }
+  return visible;
 }

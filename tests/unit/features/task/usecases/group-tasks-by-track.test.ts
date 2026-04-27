@@ -154,4 +154,48 @@ describe("groupTasksByTrack", () => {
       blockedTracks: 0,
     });
   });
+
+  it("counts a track as blocked when a visible blocked grandchild sits under a completed step", () => {
+    const track = makeTask({
+      id: "tsk-aaaaaa",
+      title: "Track",
+      slug: "implement/track",
+    });
+    const completedStep = makeTask({
+      id: "tsk-bbbbbb",
+      title: "Completed intermediate step",
+      parentId: track.id,
+      status: "completed",
+    });
+    const blocker = makeTask({
+      id: "tsk-cccccc",
+      title: "Blocker",
+      slug: "implement/blocker",
+    });
+    const blockedGrandchild = makeTask({
+      id: "tsk-dddddd",
+      title: "Blocked grandchild",
+      parentId: completedStep.id,
+      blockedBy: [blocker.id],
+    });
+
+    const projection = groupTasksByTrack([
+      track,
+      completedStep,
+      blocker,
+      blockedGrandchild,
+    ]);
+
+    expect(projection.tracks.find((item) => item.task.id === track.id)?.steps.map((step) => step.id)).toEqual([
+      blockedGrandchild.id,
+    ]);
+    expect(projection.header).toEqual({
+      open: 3,
+      active: 0,
+      ready: 1,
+      pending: 1,
+      blocked: 2,
+      blockedTracks: 1,
+    });
+  });
 });
