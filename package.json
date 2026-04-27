@@ -28,7 +28,7 @@
   "dependencies": {
     "@opentui/core": "0.1.105",
     "@opentui/react": "0.1.105",
-    "cli-spinners": "^2.9.2",
+    "cli-spinners": "^3.4.0",
     "commander": "^13.0.0",
     "react": "19.2.5",
     "react-devtools-core": "^7.0.1",
