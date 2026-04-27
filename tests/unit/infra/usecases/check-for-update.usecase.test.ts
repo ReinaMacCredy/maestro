@@ -124,6 +124,30 @@ describe("checkForUpdate", () => {
     expect(await result.refreshing).toBeUndefined();
   });
 
+  it("forwards refreshSignal so callers can cancel the in-flight fetch", async () => {
+    const controller = new AbortController();
+    let observedSignal: AbortSignal | undefined;
+    const result = await checkForUpdate({
+      now: () => FIXED_NOW,
+      currentVersion: "0.59.0",
+      readCache: async () => undefined,
+      writeCache: async () => undefined,
+      refreshSignal: controller.signal,
+      fetchImpl: asFetch((_url, init) => {
+        observedSignal = init?.signal ?? undefined;
+        return new Promise((_, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        });
+      }),
+    });
+    controller.abort();
+    expect(await result.refreshing).toBeUndefined();
+    expect(observedSignal).toBeDefined();
+    expect(observedSignal!.aborted).toBe(true);
+  });
+
   it("treats malformed checkedAt as stale", async () => {
     const result = await checkForUpdate({
       now: () => FIXED_NOW,

@@ -10,6 +10,7 @@ const FETCH_TIMEOUT_MS = 8000;
 export interface FetchLatestVersionOptions {
   readonly fetchImpl?: typeof fetch;
   readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
 }
 
 export interface LatestRelease {
@@ -22,12 +23,16 @@ export async function fetchLatestVersion(
 ): Promise<LatestRelease> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const url = `${getReleasesApiBaseUrl()}/latest`;
+  const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : timeoutSignal;
   const response = await fetchImpl(url, {
     headers: {
       Accept: "application/vnd.github+json",
       "User-Agent": "maestro-cli",
     },
-    signal: options.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal,
   });
 
   if (!response.ok) {

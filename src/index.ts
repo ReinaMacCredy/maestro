@@ -118,7 +118,14 @@ export async function cleanupStaleWindowsBinary(
   } catch {}
 }
 
+// Bound on how long we'll wait for an in-flight background refresh after the
+// user's command finishes. Healthy networks finish well under this; slow ones
+// get aborted so a stuck fetch can't pin the event loop until its own 8s
+// timeout fires (verified ~9s hang on cold cache + slow network).
+const REFRESH_GRACE_MS = 1500;
+
 async function main(): Promise<void> {
+  const refreshController = new AbortController();
   try {
     await cleanupStaleWindowsBinary();
     assertNoDeprecatedMissionControlFlags(process.argv);
@@ -126,14 +133,16 @@ async function main(): Promise<void> {
     // does not delay parsing. Stale-cache refresh is fire-and-forget inside
     // checkForUpdate() and intentionally not awaited here.
     const updateCheckPromise = shouldRunUpdateCheck(process.argv, process.env)
-      ? checkForUpdate().catch(() => undefined)
+      ? checkForUpdate({ refreshSignal: refreshController.signal }).catch(() => undefined)
       : Promise.resolve(undefined);
     const [, updateCheck] = await Promise.all([
       program.parseAsync(process.argv),
       updateCheckPromise,
     ]);
+    await drainRefresh(updateCheck?.refreshing, refreshController);
     maybePrintUpdateBanner(updateCheck?.cached, process.argv, process.env);
   } catch (err) {
+    refreshController.abort();
     if (err instanceof CommanderError) {
       process.exit(err.exitCode);
     }
@@ -157,6 +166,24 @@ async function main(): Promise<void> {
     }
     throw err;
   }
+}
+
+async function drainRefresh(
+  refreshing: Promise<unknown> | undefined,
+  controller: AbortController,
+): Promise<void> {
+  if (!refreshing) {
+    controller.abort();
+    return;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const grace = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, REFRESH_GRACE_MS);
+    timer.unref?.();
+  });
+  await Promise.race([refreshing.catch(() => undefined), grace]);
+  if (timer) clearTimeout(timer);
+  controller.abort();
 }
 
 export function shouldRunUpdateCheck(

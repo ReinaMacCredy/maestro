@@ -14,6 +14,11 @@ export interface CheckForUpdateDeps {
   readonly readCache?: () => Promise<UpdateCheckCacheEntry | undefined>;
   readonly writeCache?: (entry: UpdateCheckCacheEntry) => Promise<void>;
   readonly fetchImpl?: typeof fetch;
+  // Cancels the background refresh if the user's command finishes before the
+  // network call resolves. Without this, an in-flight fetch keeps the event
+  // loop alive until its own 8s timeout fires (verified ~9s hang on cold
+  // cache + slow network).
+  readonly refreshSignal?: AbortSignal;
 }
 
 export interface CheckForUpdateResult {
@@ -45,6 +50,7 @@ export async function checkForUpdate(
       currentVersion,
       writeCache,
       fetchImpl: deps.fetchImpl,
+      signal: deps.refreshSignal,
     }).catch(() => undefined);
   }
 
@@ -67,8 +73,9 @@ async function refreshCache(args: {
   readonly currentVersion: string;
   readonly writeCache: (entry: UpdateCheckCacheEntry) => Promise<void>;
   readonly fetchImpl?: typeof fetch;
+  readonly signal?: AbortSignal;
 }): Promise<UpdateCheckCacheEntry> {
-  const latest = await fetchLatestVersion({ fetchImpl: args.fetchImpl });
+  const latest = await fetchLatestVersion({ fetchImpl: args.fetchImpl, signal: args.signal });
   const entry: UpdateCheckCacheEntry = {
     checkedAt: args.now().toISOString(),
     currentVersion: args.currentVersion,
