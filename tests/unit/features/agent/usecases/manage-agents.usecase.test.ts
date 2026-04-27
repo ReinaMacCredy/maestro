@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { createHash } from "node:crypto";
-import { chmod, mkdtemp, rm, mkdir, writeFile, readFile, stat } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, readlink, rm, mkdir, symlink, writeFile, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -261,9 +261,7 @@ describe("manage-agents use case logic", () => {
 
       // Second install should preserve the edit because the manifest hash
       // differs from the on-disk hash.
-      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
-      const claude = second.find((r) => r.agent === "Claude Code")!;
-      expect(claude.preservedUserEdits).toContain("maestro-task/SKILL.md");
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
 
       const afterContent = await readFile(userEditedPath, "utf8");
       expect(afterContent).toBe(userContent);
@@ -279,12 +277,10 @@ describe("manage-agents use case logic", () => {
       const userContent = "---\nname: maestro-task\n---\n# my sticky custom override\n";
       await writeFile(userEditedPath, userContent);
 
-      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
-      expect(second.find((r) => r.agent === "Claude Code")?.preservedUserEdits).toContain("maestro-task/SKILL.md");
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
       expect(await readFile(userEditedPath, "utf8")).toBe(userContent);
 
-      const third = await injectAgentBlocks(tmpDir, "all", fakeHome);
-      expect(third.find((r) => r.agent === "Claude Code")?.preservedUserEdits).toContain("maestro-task/SKILL.md");
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
       expect(await readFile(userEditedPath, "utf8")).toBe(userContent);
     });
 
@@ -359,13 +355,10 @@ describe("manage-agents use case logic", () => {
       manifest.fileHashes["../../outside.md"] = createHash("sha256").update(victimContent).digest("hex");
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
 
-      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
 
       expect(existsSync(victimPath)).toBe(true);
       expect(await readFile(victimPath, "utf8")).toBe(victimContent);
-      expect(second.find((r) => r.agent === "Claude Code")?.preservedUserEdits).toContain(
-        "maestro-task/../../outside.md",
-      );
     });
   });
 
@@ -429,25 +422,402 @@ describe("manage-agents use case logic", () => {
   });
 
   describe("corrupt manifest tolerance", () => {
-    it("treats an invalid-JSON manifest as missing and re-writes shipped content", async () => {
+    it("treats an invalid-JSON manifest in ~/.maestro/skills/ as missing and re-writes shipped content", async () => {
       await mkdir(join(fakeHome, ".claude"), { recursive: true });
       await mkdir(join(fakeHome, ".codex"), { recursive: true });
 
-      // Put a shipped skill dir in place with a corrupt manifest.
-      const skillDir = join(fakeHome, ".claude", "skills", "maestro-task");
-      await mkdir(skillDir, { recursive: true });
-      await writeFile(join(skillDir, ".maestro-bundled.json"), "{not valid json");
-      await writeFile(join(skillDir, "SKILL.md"), "stale content");
+      // Pre-seed the maestro source-of-truth tree with a corrupt manifest.
+      const maestroSkillDir = join(fakeHome, ".maestro", "skills", "maestro-task");
+      await mkdir(maestroSkillDir, { recursive: true });
+      await writeFile(join(maestroSkillDir, ".maestro-bundled.json"), "{not valid json");
+      await writeFile(join(maestroSkillDir, "SKILL.md"), "stale content");
 
       const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
       expect(results.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
 
-      // Manifest rewritten to valid JSON, skill content refreshed.
-      const raw = await readFile(join(skillDir, ".maestro-bundled.json"), "utf8");
+      // Manifest rewritten to valid JSON in the maestro tree, content refreshed.
+      const raw = await readFile(join(maestroSkillDir, ".maestro-bundled.json"), "utf8");
       const manifest = JSON.parse(raw);
       expect(manifest.managedBy).toBe("maestro");
-      const skillContent = await readFile(join(skillDir, "SKILL.md"), "utf8");
+      const skillContent = await readFile(join(maestroSkillDir, "SKILL.md"), "utf8");
       expect(skillContent).toContain("name: maestro-task");
+
+      // Agent side reads through the symlink and sees the same fresh content.
+      const agentContent = await readFile(
+        join(fakeHome, ".claude", "skills", "maestro-task", "SKILL.md"),
+        "utf8",
+      );
+      expect(agentContent).toBe(skillContent);
+    });
+  });
+
+  describe("symlink layout (~/.maestro/skills as source of truth)", () => {
+    it("writes skills to ~/.maestro/skills/ and links each agent's skills root into it", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      const maestroSkills = join(fakeHome, ".maestro", "skills");
+      for (const skillName of BUNDLED_SKILL_NAMES) {
+        // Source of truth is a real directory.
+        const srcStats = await lstat(join(maestroSkills, skillName));
+        expect(srcStats.isDirectory()).toBe(true);
+        expect(srcStats.isSymbolicLink()).toBe(false);
+
+        // Each agent's entry is a symlink/junction pointing at the maestro tree.
+        for (const agentDir of [".claude", ".codex"]) {
+          const linkPath = join(fakeHome, agentDir, "skills", skillName);
+          const linkStats = await lstat(linkPath);
+          expect(linkStats.isSymbolicLink()).toBe(true);
+          const target = await readlink(linkPath);
+          expect(target).toBe(join(maestroSkills, skillName));
+        }
+      }
+
+      // Reading through the symlink resolves to the maestro tree's content.
+      const throughLink = await readFile(
+        join(fakeHome, ".claude", "skills", "maestro-task", "SKILL.md"),
+        "utf8",
+      );
+      const direct = await readFile(join(maestroSkills, "maestro-task", "SKILL.md"), "utf8");
+      expect(throughLink).toBe(direct);
+    });
+
+    it("does not duplicate manifests into the agent paths", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // The manifest exists at the maestro tree.
+      const maestroManifest = join(fakeHome, ".maestro", "skills", "maestro-task", ".maestro-bundled.json");
+      expect(existsSync(maestroManifest)).toBe(true);
+
+      // It does NOT exist as a separate file under the agent path — the agent
+      // path is a symlink and any read goes through to the maestro tree.
+      const agentSkillEntry = join(fakeHome, ".claude", "skills", "maestro-task");
+      const stats = await lstat(agentSkillEntry);
+      expect(stats.isSymbolicLink()).toBe(true);
+    });
+
+    it("re-creates a missing symlink on the next install", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // User (or tooling) accidentally removes the symlink.
+      const linkPath = join(fakeHome, ".claude", "skills", "maestro-task");
+      await rm(linkPath);
+      expect(existsSync(linkPath)).toBe(false);
+
+      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(second.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
+
+      const linkStats = await lstat(linkPath);
+      expect(linkStats.isSymbolicLink()).toBe(true);
+    });
+
+    it("repairs a symlink that points to the wrong skill within the maestro tree", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      const linkPath = join(fakeHome, ".claude", "skills", "maestro-task");
+      const wrongTarget = join(fakeHome, ".maestro", "skills", "maestro-plan");
+      await rm(linkPath);
+      await symlink(wrongTarget, linkPath);
+
+      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(second.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
+
+      const target = await readlink(linkPath);
+      expect(target).toBe(join(fakeHome, ".maestro", "skills", "maestro-task"));
+    });
+
+    it("leaves a user-authored symlink pointing outside the maestro tree alone", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      // User has overridden one of our shipped skill names with their own
+      // local skill (e.g. linked to their dotfiles). Don't clobber.
+      const userOverrideTarget = join(tmpDir, "user-skills", "maestro-setup");
+      await mkdir(userOverrideTarget, { recursive: true });
+      await writeFile(join(userOverrideTarget, "SKILL.md"), "user override\n");
+      await mkdir(join(fakeHome, ".claude", "skills"), { recursive: true });
+      await symlink(userOverrideTarget, join(fakeHome, ".claude", "skills", "maestro-setup"));
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // User's override is preserved.
+      const linkTarget = await readlink(join(fakeHome, ".claude", "skills", "maestro-setup"));
+      expect(linkTarget).toBe(userOverrideTarget);
+      const content = await readFile(
+        join(fakeHome, ".claude", "skills", "maestro-setup", "SKILL.md"),
+        "utf8",
+      );
+      expect(content).toBe("user override\n");
+
+      // Other shipped skills still get linked normally.
+      const planLink = await lstat(join(fakeHome, ".claude", "skills", "maestro-plan"));
+      expect(planLink.isSymbolicLink()).toBe(true);
+    });
+
+    it("removes stale agent symlinks for skills no longer in the bundle", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // Simulate a skill dropped from the bundle in a later release: a stray
+      // symlink under the agent path that points at a maestro-tree entry no
+      // longer in the current set.
+      const stalePath = join(fakeHome, ".claude", "skills", "maestro-dropped");
+      const staleTarget = join(fakeHome, ".maestro", "skills", "maestro-dropped");
+      await mkdir(staleTarget, { recursive: true });
+      await symlink(staleTarget, stalePath);
+
+      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(second.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
+      expect(existsSync(stalePath)).toBe(false);
+    });
+  });
+
+  describe("migration from pre-redesign real-dir installs", () => {
+    function shippedSkillFile(skillName: string, relativePath: string): string {
+      const template = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === skillName)!;
+      return template.files.find((f) => f.path === relativePath)!.content;
+    }
+
+    function shippedSkillFileHash(skillName: string, relativePath: string): string {
+      const content = shippedSkillFile(skillName, relativePath);
+      return createHash("sha256").update(content).digest("hex");
+    }
+
+    async function seedLegacyAgentSkill(
+      agentDir: string,
+      skillName: string,
+      overrides: Record<string, string> = {},
+    ): Promise<void> {
+      const skillDir = join(fakeHome, agentDir, "skills", skillName);
+      await mkdir(skillDir, { recursive: true });
+      const template = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === skillName)!;
+      const fileHashes: Record<string, string> = {};
+      for (const file of template.files) {
+        const onDiskPath = join(skillDir, file.path);
+        await mkdir(join(skillDir, file.path, ".."), { recursive: true });
+        const content = overrides[file.path] ?? file.content;
+        await writeFile(onDiskPath, content);
+        // Manifest always records the SHIPPED hash (pre-edit baseline) — that's
+        // how the real pre-redesign installs left things.
+        fileHashes[file.path] = createHash("sha256").update(file.content).digest("hex");
+      }
+      await writeFile(
+        join(skillDir, ".maestro-bundled.json"),
+        JSON.stringify({
+          managedBy: "maestro",
+          skillName,
+          installedAt: new Date().toISOString(),
+          maestroVersion: "0.0.0-legacy",
+          fileHashes,
+        }),
+      );
+    }
+
+    it("migrates an unedited legacy real dir into a symlink", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+      await seedLegacyAgentSkill(".claude", "maestro-task");
+
+      const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(results.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
+
+      const linkPath = join(fakeHome, ".claude", "skills", "maestro-task");
+      const stats = await lstat(linkPath);
+      expect(stats.isSymbolicLink()).toBe(true);
+      expect(await readlink(linkPath)).toBe(join(fakeHome, ".maestro", "skills", "maestro-task"));
+    });
+
+    it("migrates user edits from legacy real dir into the maestro tree before linking", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      const userContent = "---\nname: maestro-task\n---\n# my legacy edit\n";
+      await seedLegacyAgentSkill(".claude", "maestro-task", { "SKILL.md": userContent });
+
+      const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      const claude = results.find((r) => r.agent === "Claude Code")!;
+      expect(claude.action).toBe("installed");
+      expect(claude.preservedUserEdits).toContain("maestro-task/SKILL.md");
+
+      // Edit landed in the maestro tree.
+      const inMaestro = await readFile(
+        join(fakeHome, ".maestro", "skills", "maestro-task", "SKILL.md"),
+        "utf8",
+      );
+      expect(inMaestro).toBe(userContent);
+
+      // Real dir replaced by a symlink; reading through it returns the same content.
+      const linkStats = await lstat(join(fakeHome, ".claude", "skills", "maestro-task"));
+      expect(linkStats.isSymbolicLink()).toBe(true);
+      const throughLink = await readFile(
+        join(fakeHome, ".claude", "skills", "maestro-task", "SKILL.md"),
+        "utf8",
+      );
+      expect(throughLink).toBe(userContent);
+
+      // Re-running install keeps the edit preserved at the source-of-truth tree.
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+      const stillEdited = await readFile(
+        join(fakeHome, ".maestro", "skills", "maestro-task", "SKILL.md"),
+        "utf8",
+      );
+      expect(stillEdited).toBe(userContent);
+    });
+
+    it("refuses migration when Claude and Codex have divergent edits to the same file", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+      const claudeContent = "---\nname: maestro-task\n---\n# claude edit\n";
+      const codexContent = "---\nname: maestro-task\n---\n# codex edit\n";
+      await seedLegacyAgentSkill(".claude", "maestro-task", { "SKILL.md": claudeContent });
+      await seedLegacyAgentSkill(".codex", "maestro-task", { "SKILL.md": codexContent });
+
+      const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // Claude (first in SUPPORTED_AGENTS) wins; its real dir becomes a symlink
+      // and its edit lives in the maestro tree.
+      const claudeLink = await lstat(join(fakeHome, ".claude", "skills", "maestro-task"));
+      expect(claudeLink.isSymbolicLink()).toBe(true);
+      const inMaestro = await readFile(
+        join(fakeHome, ".maestro", "skills", "maestro-task", "SKILL.md"),
+        "utf8",
+      );
+      expect(inMaestro).toBe(claudeContent);
+
+      // Codex's real dir is left in place — divergence is loud, not silent.
+      const codexEntry = await lstat(join(fakeHome, ".codex", "skills", "maestro-task"));
+      expect(codexEntry.isDirectory()).toBe(true);
+      expect(codexEntry.isSymbolicLink()).toBe(false);
+      const codexFileStill = await readFile(
+        join(fakeHome, ".codex", "skills", "maestro-task", "SKILL.md"),
+        "utf8",
+      );
+      expect(codexFileStill).toBe(codexContent);
+
+      const codex = results.find((r) => r.agent === "Codex")!;
+      expect(codex.preservedUserEdits).toContain("maestro-task/SKILL.md");
+    });
+
+    it("ensures other agents still get clean symlinks for non-divergent skills", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+      // Only maestro-task diverges; maestro-plan is fresh on both sides.
+      await seedLegacyAgentSkill(".claude", "maestro-task", { "SKILL.md": "claude\n" });
+      await seedLegacyAgentSkill(".codex", "maestro-task", { "SKILL.md": "codex\n" });
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // maestro-plan symlinks were created normally on both agents.
+      for (const agentDir of [".claude", ".codex"]) {
+        const planLink = await lstat(join(fakeHome, agentDir, "skills", "maestro-plan"));
+        expect(planLink.isSymbolicLink()).toBe(true);
+      }
+    });
+
+    it("leaves a real dir without a maestro manifest untouched and does not link over it", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      const userDir = join(fakeHome, ".claude", "skills", "maestro-task");
+      await mkdir(userDir, { recursive: true });
+      await writeFile(join(userDir, "SKILL.md"), "user content");
+      // No manifest file at all.
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // Real dir still there, content untouched.
+      const stats = await lstat(userDir);
+      expect(stats.isDirectory()).toBe(true);
+      expect(stats.isSymbolicLink()).toBe(false);
+      const content = await readFile(join(userDir, "SKILL.md"), "utf8");
+      expect(content).toBe("user content");
+    });
+  });
+
+  describe("environment overrides", () => {
+    let savedCodexHome: string | undefined;
+    let savedMaestroHome: string | undefined;
+
+    beforeEach(() => {
+      savedCodexHome = process.env["CODEX_HOME"];
+      savedMaestroHome = process.env["MAESTRO_HOME"];
+    });
+
+    afterEach(() => {
+      if (savedCodexHome === undefined) delete process.env["CODEX_HOME"];
+      else process.env["CODEX_HOME"] = savedCodexHome;
+      if (savedMaestroHome === undefined) delete process.env["MAESTRO_HOME"];
+      else process.env["MAESTRO_HOME"] = savedMaestroHome;
+    });
+
+    it("honors CODEX_HOME for the Codex skills root", async () => {
+      const codexHome = join(tmpDir, "custom-codex");
+      await mkdir(codexHome, { recursive: true });
+      process.env["CODEX_HOME"] = codexHome;
+
+      // Don't pre-create ~/.codex; the override should take precedence.
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+
+      const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(results.find((r) => r.agent === "Codex")?.action).toBe("installed");
+
+      const linkPath = join(codexHome, "skills", "maestro-task");
+      const stats = await lstat(linkPath);
+      expect(stats.isSymbolicLink()).toBe(true);
+      expect(await readlink(linkPath)).toBe(join(fakeHome, ".maestro", "skills", "maestro-task"));
+    });
+
+    it("honors MAESTRO_HOME for the source-of-truth tree", async () => {
+      const maestroHome = join(tmpDir, "custom-maestro");
+      process.env["MAESTRO_HOME"] = maestroHome;
+
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // Skills live under MAESTRO_HOME, not ~/.maestro.
+      const expectedSrc = join(maestroHome, "skills", "maestro-task", "SKILL.md");
+      expect(existsSync(expectedSrc)).toBe(true);
+
+      const linkPath = join(fakeHome, ".claude", "skills", "maestro-task");
+      const linkStats = await lstat(linkPath);
+      expect(linkStats.isSymbolicLink()).toBe(true);
+      expect(await readlink(linkPath)).toBe(join(maestroHome, "skills", "maestro-task"));
+    });
+  });
+
+  describe("uninstall handles symlinks and legacy real dirs", () => {
+    it("removes agent symlinks for current bundled skills (post-redesign install)", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      const results = await removeAgentBlocks(tmpDir, "all", fakeHome);
+      expect(results.find((r) => r.agent === "Claude Code")?.action).toBe("removed");
+
+      for (const skillName of BUNDLED_SKILL_NAMES) {
+        expect(existsSync(join(fakeHome, ".claude", "skills", skillName))).toBe(false);
+        expect(existsSync(join(fakeHome, ".codex", "skills", skillName))).toBe(false);
+      }
+    });
+
+    it("leaves user-authored skill dirs and dangling symlinks (non-maestro target) alone", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // User-authored dir alongside the maestro symlinks.
+      const userDir = join(fakeHome, ".claude", "skills", "my-personal-skill");
+      await mkdir(userDir, { recursive: true });
+      await writeFile(join(userDir, "SKILL.md"), "mine\n");
+
+      // Symlink that uses the maestro- prefix but points outside the maestro tree.
+      const userSymlinkSource = join(tmpDir, "elsewhere-skill");
+      await mkdir(userSymlinkSource, { recursive: true });
+      await symlink(userSymlinkSource, join(fakeHome, ".claude", "skills", "maestro-foreign"));
+
+      await removeAgentBlocks(tmpDir, "all", fakeHome);
+
+      expect(existsSync(userDir)).toBe(true);
+      expect(existsSync(join(fakeHome, ".claude", "skills", "maestro-foreign"))).toBe(true);
     });
   });
 });

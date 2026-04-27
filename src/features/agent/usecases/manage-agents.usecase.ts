@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { chmod, lstat, readdir, realpath } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import type { Dirent } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   SUPPORTED_AGENTS,
   agentConfigPath,
@@ -18,11 +19,14 @@ import {
 import {
   dirExists,
   ensureDir,
+  readlinkSafe,
   readText,
+  symlinkDir,
   writeJson,
   writeText,
   removeIfExists,
 } from "@/shared/lib/fs.js";
+import { resolveMaestroSkillsRoot } from "@/shared/domain/defaults.js";
 import {
   removeReference,
   removeBlock,
@@ -50,11 +54,24 @@ type AgentConfigTargetScope = "all" | "home" | "project";
 const BUNDLED_SKILL_PREFIX = "maestro-";
 const MANIFEST_FILENAME = ".maestro-bundled.json";
 
+const BUNDLED_SKILL_NAMES: readonly string[] = BUNDLED_SKILL_TEMPLATES.map((t) => t.name);
+const BUNDLED_SKILL_NAME_SET: ReadonlySet<string> = new Set(BUNDLED_SKILL_NAMES);
+
 /**
- * Marker written into each shipped skill directory. Its presence identifies
- * a dir as maestro-managed (so stale cleanup can delete it safely), and its
- * file-hash map lets us detect user edits between releases so we don't
- * silently clobber them.
+ * Whether a symlink target lives under the maestro skills tree. Uses a
+ * separator-aware prefix check so `~/.maestro/skills-extra/foo` doesn't get
+ * misclassified as living under `~/.maestro/skills/`.
+ */
+function isMaestroTreeLink(target: string, maestroSkillsRoot: string): boolean {
+  return target === maestroSkillsRoot || target.startsWith(maestroSkillsRoot + sep);
+}
+
+/**
+ * Marker written into each shipped skill directory under the maestro source
+ * of truth (`~/.maestro/skills/<skill>/`). Its presence identifies a dir as
+ * maestro-managed (so stale cleanup can delete it safely), and its file-hash
+ * map lets us detect user edits between releases so we don't silently
+ * clobber them.
  */
 interface BundledSkillManifest {
   readonly managedBy: "maestro";
@@ -197,9 +214,10 @@ async function readBundledSkillManifest(path: string): Promise<BundledSkillManif
 }
 
 /**
- * Write a single bundled skill into its install location. Uses a per-skill
- * manifest (`.maestro-bundled.json`) to distinguish user edits from stale
- * content so user edits are preserved across updates.
+ * Write a single bundled skill into its install location under the maestro
+ * source of truth (`~/.maestro/skills/<skill>/`). Uses a per-skill manifest
+ * (`.maestro-bundled.json`) to distinguish user edits from stale content so
+ * user edits are preserved across updates.
  *
  * Decision table per file (existing = on-disk content, shipped = new content
  * from the bundled template, prev = hash recorded in the prior manifest):
@@ -344,10 +362,10 @@ async function removeStaleManagedFiles(
 }
 
 /**
- * Remove any maestro-managed skill directory under the agent's skills root
- * that is no longer in the current bundled template set. A skill dir is
- * maestro-managed iff it contains the `.maestro-bundled.json` manifest.
- * User-authored directories sharing the `maestro-` prefix are left untouched.
+ * Remove any maestro-managed skill directory under `skillRoot` that is no
+ * longer in the current bundled template set. A skill dir is maestro-managed
+ * iff it contains the `.maestro-bundled.json` manifest. User-authored
+ * directories sharing the `maestro-` prefix are left untouched.
  */
 async function removeStaleBundledSkillDirs(skillRoot: string): Promise<string[]> {
   if (!(await dirExists(skillRoot))) return [];
@@ -372,10 +390,229 @@ async function removeStaleBundledSkillDirs(skillRoot: string): Promise<string[]>
   return results.filter((name): name is string => name !== undefined);
 }
 
+interface EnsureSkillLinkResult {
+  readonly changed: boolean;
+  readonly preservedUserEdits: readonly string[];
+}
+
+/**
+ * Ensure `<agentSkillsRoot>/<skillName>` is a directory link pointing to
+ * `<maestroSkillsRoot>/<skillName>`. Self-heals on every install/update:
+ *
+ *   missing                                 -> create link
+ *   correct symlink/junction                -> no-op
+ *   wrong-target symlink/junction           -> replace
+ *   real dir, our manifest, no edits        -> migrate; replace with link
+ *   real dir, our manifest, with edits      -> copy edits up; replace with link
+ *   real dir, our manifest, divergent edits -> refuse; leave real dir
+ *   real dir, no manifest (user-authored)   -> leave; do not link
+ *   plain file                              -> refuse; do not clobber
+ */
+async function ensureSkillLink(
+  agentSkillsRoot: string,
+  skillName: string,
+  maestroSkillsRoot: string,
+  entry: Dirent | undefined,
+): Promise<EnsureSkillLinkResult> {
+  const target = resolve(maestroSkillsRoot, skillName);
+  const link = join(agentSkillsRoot, skillName);
+
+  if (entry === undefined) {
+    await symlinkDir(target, link);
+    return { changed: true, preservedUserEdits: [] };
+  }
+
+  if (entry.isSymbolicLink()) {
+    const current = await readlinkSafe(link);
+    if (current === target) {
+      return { changed: false, preservedUserEdits: [] };
+    }
+    // A symlink that points outside the maestro tree is a user-authored
+    // override (e.g. linking our skill name to their own local fork).
+    // Replacing it would silently destroy that override. Leave it alone.
+    if (current !== undefined && !isMaestroTreeLink(current, maestroSkillsRoot)) {
+      process.stderr.write(
+        `[warn] ${link} is a user symlink pointing outside ~/.maestro/skills/ (${current}); leaving in place\n`,
+      );
+      return { changed: false, preservedUserEdits: [] };
+    }
+    await removeIfExists(link);
+    await symlinkDir(target, link);
+    return { changed: true, preservedUserEdits: [] };
+  }
+
+  if (entry.isDirectory()) {
+    return migrateRealDirToSymlink(link, target, skillName);
+  }
+
+  process.stderr.write(
+    `[error] expected directory link at ${link} but found a non-directory entry; skipping ${skillName}\n`,
+  );
+  return { changed: false, preservedUserEdits: [] };
+}
+
+/**
+ * Replace a pre-redesign maestro-managed real directory with a symlink into
+ * `~/.maestro/skills/<skill>`. Any user-edited files (relative to the recorded
+ * manifest hashes) are first copied into the maestro tree so they survive.
+ *
+ * If the maestro tree already holds a different value for a user-edited file
+ * (e.g. another agent migrated a different edit earlier in this run), we
+ * refuse to migrate this skill: the real dir is left in place, an error is
+ * surfaced, and the user reconciles before re-running install.
+ */
+async function migrateRealDirToSymlink(
+  realDirPath: string,
+  target: string,
+  skillName: string,
+): Promise<EnsureSkillLinkResult> {
+  const manifestPath = join(realDirPath, MANIFEST_FILENAME);
+  const manifest = await readBundledSkillManifest(manifestPath);
+
+  if (manifest?.managedBy !== "maestro") {
+    // User-authored skill dir that happens to share a name with one we now
+    // ship. Don't touch it; don't create a link over it.
+    process.stderr.write(
+      `[warn] user-authored skill dir at ${realDirPath} — skipping symlink creation for ${skillName}\n`,
+    );
+    return { changed: false, preservedUserEdits: [] };
+  }
+
+  const resolvedRealDir = resolve(realDirPath);
+  const realRealDir = await realpath(realDirPath).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return resolvedRealDir;
+    throw error;
+  });
+
+  const userEditCandidates = await Promise.all(
+    Object.entries(manifest.fileHashes).map(async ([relativePath, prevHash]) => {
+      const absolute = await resolveManagedManifestPath(resolvedRealDir, realRealDir, relativePath);
+      if (!absolute) return undefined;
+      const existing = await readText(absolute);
+      if (existing === undefined) return undefined;
+      if (contentHash(existing) === prevHash) return undefined;
+      return { relativePath, content: existing };
+    }),
+  );
+  const userEdits = userEditCandidates.filter((e): e is { relativePath: string; content: string } => e !== undefined);
+
+  // Divergence detection: compare each user edit against the maestro tree's
+  // current value. If maestro tree differs from the agent's edit AND from the
+  // shipped baseline (prevHash), another agent has already migrated a
+  // conflicting edit in this run.
+  const divergenceChecks = await Promise.all(userEdits.map(async (edit) => {
+    const targetFile = join(target, edit.relativePath);
+    const existingInMaestro = await readText(targetFile);
+    if (existingInMaestro === undefined) return undefined;
+    if (existingInMaestro === edit.content) return undefined;
+    const prevHash = manifest.fileHashes[edit.relativePath];
+    if (contentHash(existingInMaestro) === prevHash) return undefined;
+    return edit.relativePath;
+  }));
+  const conflicts = divergenceChecks.filter((p): p is string => p !== undefined);
+
+  if (conflicts.length > 0) {
+    process.stderr.write(
+      `[error] divergent user edits for ${skillName} across agents: ${conflicts.join(", ")}. ` +
+        `Leaving ${realDirPath} in place; reconcile and re-run \`maestro install\`.\n`,
+    );
+    return {
+      changed: false,
+      preservedUserEdits: conflicts.map((path) => `${skillName}/${path}`),
+    };
+  }
+
+  // Apply user edits to the maestro tree, then replace the real dir with a
+  // symlink. The maestro-tree manifest still records the shipped hash for
+  // these paths — the existing preservation logic in writeBundledSkill keeps
+  // them preserved on subsequent runs (existing != shipped, hash != prev).
+  for (const edit of userEdits) {
+    const targetFile = join(target, edit.relativePath);
+    await ensureDir(dirname(targetFile));
+    await writeText(targetFile, edit.content);
+  }
+
+  await removeIfExists(realDirPath, { recursive: true });
+  await symlinkDir(target, realDirPath);
+
+  return {
+    changed: true,
+    preservedUserEdits: userEdits.map((e) => `${skillName}/${e.relativePath}`),
+  };
+}
+
+interface ManagedSkillEntry {
+  readonly name: string;
+  readonly path: string;
+  readonly isSymlink: boolean;
+}
+
+/**
+ * Classify a single agent-skills directory entry. Returns a `ManagedSkillEntry`
+ * iff the entry is one of:
+ *   - a symlink whose target lives under `maestroSkillsRoot` (post-redesign install)
+ *   - a real dir carrying our `.maestro-bundled.json` manifest (legacy install)
+ * Anything else (user dir, foreign symlink, plain file) returns undefined and
+ * is left alone by both the install-time stale sweep and uninstall.
+ */
+async function classifyAgentSkillEntry(
+  entry: Dirent,
+  entryPath: string,
+  maestroSkillsRoot: string,
+): Promise<ManagedSkillEntry | undefined> {
+  if (!entry.name.startsWith(BUNDLED_SKILL_PREFIX)) return undefined;
+
+  if (entry.isSymbolicLink()) {
+    const target = await readlinkSafe(entryPath);
+    if (target && isMaestroTreeLink(target, maestroSkillsRoot)) {
+      return { name: entry.name, path: entryPath, isSymlink: true };
+    }
+    return undefined;
+  }
+
+  if (entry.isDirectory()) {
+    const manifest = await readBundledSkillManifest(join(entryPath, MANIFEST_FILENAME));
+    if (manifest?.managedBy === "maestro") {
+      return { name: entry.name, path: entryPath, isSymlink: false };
+    }
+  }
+
+  return undefined;
+}
+
+async function removeManagedSkillEntry(entry: ManagedSkillEntry): Promise<boolean> {
+  return entry.isSymlink
+    ? removeIfExists(entry.path)
+    : removeIfExists(entry.path, { recursive: true });
+}
+
+/**
+ * Sweep maestro-managed entries no longer in the current bundle, given the
+ * pre-read directory entries. Symlinks pointing outside the maestro tree and
+ * unmanaged real dirs are left alone.
+ */
+async function sweepStaleAgentSkillEntries(
+  agentSkillsRoot: string,
+  entries: readonly Dirent[],
+  maestroSkillsRoot: string,
+): Promise<string[]> {
+  const candidates = entries.filter((e) => !BUNDLED_SKILL_NAME_SET.has(e.name));
+  const classifications = await Promise.all(
+    candidates.map((entry) =>
+      classifyAgentSkillEntry(entry, join(agentSkillsRoot, entry.name), maestroSkillsRoot),
+    ),
+  );
+  const stale = classifications.filter((c): c is ManagedSkillEntry => c !== undefined);
+  await Promise.all(stale.map(removeManagedSkillEntry));
+  return stale.map((s) => s.name);
+}
+
 async function processInject(
   agent: AgentConfigSpec,
   projectDir: string,
   homeDir: string,
+  maestroSkillsRoot: string,
+  globalChanged: boolean,
 ): Promise<InjectResult> {
   const configDir = agentConfigDirPath(agent, projectDir, homeDir);
   const skillsRoot = agentSkillsRoot(agent, projectDir, homeDir);
@@ -391,26 +628,34 @@ async function processInject(
   }
 
   await ensureDir(skillsRoot);
-  const removedStaleSkillDirs = await removeStaleBundledSkillDirs(skillsRoot);
 
-  const results = await Promise.all(
-    BUNDLED_SKILL_TEMPLATES.map((template) => writeBundledSkill(skillsRoot, template)),
+  const dirents = await readdir(skillsRoot, { withFileTypes: true });
+  const direntByName = new Map(dirents.map((e) => [e.name, e]));
+
+  // Per-skill links are independent (each touches a distinct maestro-tree
+  // subdirectory) so we run them in parallel. Cross-agent divergence is
+  // serialized at the injectAgentBlocks level by running agents sequentially.
+  const linkResults = await Promise.all(
+    BUNDLED_SKILL_NAMES.map((name) =>
+      ensureSkillLink(skillsRoot, name, maestroSkillsRoot, direntByName.get(name)),
+    ),
   );
-  const anyChanged = removedStaleSkillDirs.length > 0 || results.some((r) => r.changed);
-  const installed = BUNDLED_SKILL_TEMPLATES.map((template) => template.name);
-  const preservedUserEdits = results.flatMap((r) => r.preservedUserEdits);
 
-  for (const path of preservedUserEdits) {
+  const removedStale = await sweepStaleAgentSkillEntries(skillsRoot, dirents, maestroSkillsRoot);
+  const hadLegacy = await cleanupLegacyMaestroMd(agent, projectDir, homeDir);
+
+  const localChanged = linkResults.some((r) => r.changed) || removedStale.length > 0;
+  const localPreservedEdits = linkResults.flatMap((r) => [...r.preservedUserEdits]);
+
+  for (const path of localPreservedEdits) {
     process.stderr.write(
       `[warn] preserved user-edited skill file: ~/${join(agent.configDir, "skills", path)} (not overwritten)\n`,
     );
   }
 
-  const hadLegacy = await cleanupLegacyMaestroMd(agent, projectDir, homeDir);
-
   const action: InjectResult["action"] = hadLegacy
     ? "migrated-to-skills"
-    : anyChanged
+    : globalChanged || localChanged
       ? "installed"
       : "skipped";
 
@@ -418,8 +663,8 @@ async function processInject(
     agent: agent.displayName,
     action,
     configPath: configDir,
-    installedSkills: installed,
-    preservedUserEdits,
+    installedSkills: BUNDLED_SKILL_NAMES,
+    preservedUserEdits: localPreservedEdits,
   };
 }
 
@@ -427,6 +672,7 @@ async function processRemove(
   agent: AgentConfigSpec,
   projectDir: string,
   homeDir: string,
+  maestroSkillsRoot: string,
 ): Promise<RemoveResult> {
   const configDir = agentConfigDirPath(agent, projectDir, homeDir);
   const skillsRoot = agentSkillsRoot(agent, projectDir, homeDir);
@@ -440,15 +686,14 @@ async function processRemove(
     };
   }
 
-  const [managedDirs, legacyRemoved] = await Promise.all([
-    listManagedSkillDirs(skillsRoot),
+  const [managedEntries, legacyRemoved] = await Promise.all([
+    listManagedSkillEntries(skillsRoot, maestroSkillsRoot),
     cleanupLegacyMaestroMd(agent, projectDir, homeDir),
   ]);
 
-  const removed = await Promise.all(managedDirs.map(async (name) => {
-    const skillDir = join(skillsRoot, name);
-    return (await removeIfExists(skillDir, { recursive: true })) ? name : undefined;
-  }));
+  const removed = await Promise.all(managedEntries.map(async (entry) =>
+    (await removeManagedSkillEntry(entry)) ? entry.name : undefined,
+  ));
   const removedNames = removed.filter((name): name is string => name !== undefined);
   const didSomething = removedNames.length > 0 || legacyRemoved;
 
@@ -461,25 +706,21 @@ async function processRemove(
 }
 
 /**
- * Enumerate every maestro-managed skill dir under `skillsRoot` (any dir
- * containing a `.maestro-bundled.json` manifest with `managedBy: "maestro"`),
- * regardless of whether the skill is still in the current bundled set.
- * `maestro uninstall` uses this to sweep skills that were dropped from the
- * bundle in a prior release so they don't orphan on disk.
+ * Enumerate every maestro-managed skill entry under `skillsRoot`. Used by
+ * `maestro uninstall`; matches the same classification rules as the install
+ * stale sweep, just without the "not in current bundle" filter.
  */
-async function listManagedSkillDirs(skillsRoot: string): Promise<string[]> {
+async function listManagedSkillEntries(
+  skillsRoot: string,
+  maestroSkillsRoot: string,
+): Promise<ManagedSkillEntry[]> {
   if (!(await dirExists(skillsRoot))) return [];
   const entries = (await readdir(skillsRoot, { withFileTypes: true }))
     .sort((left, right) => left.name.localeCompare(right.name));
-  const results = await Promise.all(entries.map(async (entry) => {
-    if (!entry.isDirectory()) return undefined;
-    if (!entry.name.startsWith(BUNDLED_SKILL_PREFIX)) return undefined;
-    const manifest = await readBundledSkillManifest(
-      join(skillsRoot, entry.name, MANIFEST_FILENAME),
-    );
-    return manifest?.managedBy === "maestro" ? entry.name : undefined;
-  }));
-  return results.filter((name): name is string => name !== undefined);
+  const results = await Promise.all(entries.map((entry) =>
+    classifyAgentSkillEntry(entry, join(skillsRoot, entry.name), maestroSkillsRoot),
+  ));
+  return results.filter((entry): entry is ManagedSkillEntry => entry !== undefined);
 }
 
 export async function injectAgentBlocks(
@@ -488,11 +729,35 @@ export async function injectAgentBlocks(
   homeDir?: string,
 ): Promise<InjectResult[]> {
   const resolvedHomeDir = homeDir ?? homedir();
-  return Promise.all(
-    SUPPORTED_AGENTS
-      .filter((agent) => agentMatchesTargetScope(agent, targetScope))
-      .map((agent) => processInject(agent, projectDir, resolvedHomeDir)),
-  );
+  const maestroSkillsRoot = resolveMaestroSkillsRoot(resolvedHomeDir);
+
+  await ensureDir(maestroSkillsRoot);
+
+  // Stale-dir removal and per-skill writes touch disjoint paths (stale dirs
+  // are by definition not in BUNDLED_SKILL_NAMES), so they're safe to run
+  // concurrently.
+  const [removedStaleMaestro, writeResults] = await Promise.all([
+    removeStaleBundledSkillDirs(maestroSkillsRoot),
+    Promise.all(BUNDLED_SKILL_TEMPLATES.map((t) => writeBundledSkill(maestroSkillsRoot, t))),
+  ]);
+  const globalChanged = removedStaleMaestro.length > 0 || writeResults.some((r) => r.changed);
+
+  for (const r of writeResults) {
+    for (const path of r.preservedUserEdits) {
+      process.stderr.write(
+        `[warn] preserved user-edited skill file: ~/.maestro/skills/${path} (not overwritten)\n`,
+      );
+    }
+  }
+
+  // Run agents sequentially so cross-agent divergence detection during
+  // migration sees the maestro tree state left by the prior agent — Promise.all
+  // would race two migrations against the same maestro-tree path.
+  const results: InjectResult[] = [];
+  for (const agent of SUPPORTED_AGENTS.filter((a) => agentMatchesTargetScope(a, targetScope))) {
+    results.push(await processInject(agent, projectDir, resolvedHomeDir, maestroSkillsRoot, globalChanged));
+  }
+  return results;
 }
 
 export async function removeAgentBlocks(
@@ -501,13 +766,12 @@ export async function removeAgentBlocks(
   homeDir?: string,
 ): Promise<RemoveResult[]> {
   const resolvedHomeDir = homeDir ?? homedir();
+  const maestroSkillsRoot = resolveMaestroSkillsRoot(resolvedHomeDir);
   return Promise.all(
     SUPPORTED_AGENTS
       .filter((agent) => agentMatchesTargetScope(agent, targetScope))
-      .map((agent) => processRemove(agent, projectDir, resolvedHomeDir)),
+      .map((agent) => processRemove(agent, projectDir, resolvedHomeDir, maestroSkillsRoot)),
   );
 }
 
-// Legacy helper paths — retained for callers that may still reference them
-// (tests, older code paths). `agentLegacyConfigPaths` now always returns [].
 export { agentLegacyConfigPaths };

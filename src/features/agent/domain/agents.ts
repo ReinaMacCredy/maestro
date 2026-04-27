@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveCodexHome } from "@/shared/domain/defaults.js";
 
 export const BLOCK_START_MARKER = "<!-- maestro:start -->";
 export const BLOCK_END_MARKER = "<!-- maestro:end -->";
@@ -22,31 +23,44 @@ export const SUPPORTED_AGENTS: readonly AgentConfigSpec[] = [
 ];
 
 /**
+ * Resolve the agent's home-scoped config root. For Codex this honors the
+ * `CODEX_HOME` env var; other agents resolve to `<home>/<configDir>`.
+ */
+function resolveAgentHomeRoot(agent: AgentConfigSpec, homeDir: string): string {
+  if (agent.slug === "codex") return resolveCodexHome(homeDir);
+  return join(homeDir, agent.configDir);
+}
+
+/**
  * Directory where bundled maestro-* skills live for an agent, e.g.
  * `~/.claude/skills/` for Claude Code.
  */
 export function agentSkillsRoot(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
-  return agent.configScope === "project"
-    ? join(projectDir, agent.configDir, "skills")
-    : join(homeDir, agent.configDir, "skills");
+  if (agent.configScope === "project") {
+    return join(projectDir, agent.configDir, "skills");
+  }
+  return join(resolveAgentHomeRoot(agent, homeDir), "skills");
 }
 
 export function agentConfigPath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
-  return agent.configScope === "project"
-    ? join(projectDir, agent.configDir, agent.configFile)
-    : join(homeDir, agent.configDir, agent.configFile);
+  if (agent.configScope === "project") {
+    return join(projectDir, agent.configDir, agent.configFile);
+  }
+  return join(resolveAgentHomeRoot(agent, homeDir), agent.configFile);
 }
 
 export function agentConfigDirPath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
-  return agent.configScope === "project"
-    ? join(projectDir, agent.configDir)
-    : join(homeDir, agent.configDir);
+  if (agent.configScope === "project") {
+    return join(projectDir, agent.configDir);
+  }
+  return resolveAgentHomeRoot(agent, homeDir);
 }
 
 export function agentReferencePath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
-  return agent.configScope === "project"
-    ? join(projectDir, agent.configDir, REFERENCE_FILE)
-    : join(homeDir, agent.configDir, REFERENCE_FILE);
+  if (agent.configScope === "project") {
+    return join(projectDir, agent.configDir, REFERENCE_FILE);
+  }
+  return join(resolveAgentHomeRoot(agent, homeDir), REFERENCE_FILE);
 }
 
 export function agentLegacyConfigPaths(

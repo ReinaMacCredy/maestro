@@ -1,4 +1,5 @@
-import { appendFile, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { appendFile, lstat, mkdir, readdir, readlink, rename, rm, stat, symlink } from "node:fs/promises";
+import type { Stats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
@@ -125,6 +126,38 @@ export async function listDirs(dir: string): Promise<string[]> {
     return entries.filter((e) => e.isDirectory()).map((e) => join(dir, e.name));
   } catch {
     return [];
+  }
+}
+
+/**
+ * Create a directory symlink. On POSIX this is an ordinary symlink; on Windows
+ * passing `"junction"` makes Node create an NTFS junction, which behaves like a
+ * directory symlink for our purposes (cd through it, read files through it) and
+ * — unlike a Windows directory symlink — does NOT require admin or Developer
+ * Mode. Junctions only work within the same volume; for the maestro skills
+ * tree both target and link sit under the user's home directory, so that
+ * precondition is satisfied.
+ */
+export async function symlinkDir(target: string, link: string): Promise<void> {
+  await symlink(target, link, "junction");
+}
+
+export async function readlinkSafe(link: string): Promise<string | undefined> {
+  try {
+    return await readlink(link);
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "EINVAL") return undefined;
+    throw err;
+  }
+}
+
+export async function lstatSafe(path: string): Promise<Stats | undefined> {
+  try {
+    return await lstat(path);
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw err;
   }
 }
 
