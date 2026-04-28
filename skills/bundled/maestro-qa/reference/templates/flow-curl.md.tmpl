@@ -1,0 +1,42 @@
+### Protocol: `curl`
+
+Issues HTTP requests and asserts on responses. Bodies live in `qa-{{app_slug}}/SKILL.md` under `## Flow: <anchor>` headings.
+
+Per-flow body shape:
+
+```markdown
+## Flow: <anchor>
+
+**Persona:** <persona-name>
+**Goal:** <one-sentence description>
+
+### Steps
+1. Request:
+   - method: `GET`
+   - url: `{{base_url}}/path`
+   - headers: `Authorization: Bearer ${{ env.API_TOKEN }}`
+   - body: `{"key": "value"}`
+   - timeout: 30s
+2. Request:
+   - method: `POST`
+   - url: `{{base_url}}/another-path`
+
+### Expect
+- status_code: 200
+- body_contains: `<substring>`
+- body_jsonpath: `<jsonpath expression resolving to non-empty>`
+- header_equals: `Content-Type: application/json`
+
+### Cleanup
+1. Request:
+   - method: `DELETE`
+   - url: `{{base_url}}/path/<created-id>`
+```
+
+Execution rules:
+
+1. Substitute `${{ env.NAME }}` references from the process environment. If a referenced var is empty, emit `BLOCKED: env var NAME is unset` and skip. (List the env var name in the registry's `blocked_if_missing[]` so the runtime checks before invoking.)
+2. Run each request via `curl -sS -i -X <method> ...` so headers and body are captured.
+3. Save the full response to `qa-results/{{app_slug}}/<flow_id>.http`.
+4. Evaluate `### Expect`. `status_code` defaults to `200`. Multiple expectations must all hold.
+5. Run `### Cleanup` per `policies.cleanup.strategy`. Cleanup request failures are recorded but do not change the flow's pass/fail.

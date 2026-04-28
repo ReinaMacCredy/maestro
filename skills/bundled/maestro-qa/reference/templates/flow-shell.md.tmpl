@@ -1,0 +1,35 @@
+### Protocol: `shell`
+
+Each flow body is a sequence of shell commands. Bodies live in `qa-{{app_slug}}/SKILL.md` under `## Flow: <anchor>` headings (the `anchor` from the registry entry). The flow registry in `config.yaml` provides only `{id, name, anchor, persona, blocked_if_missing[]}`; everything below lives in markdown.
+
+Per-flow body shape:
+
+```markdown
+## Flow: <anchor>
+
+**Persona:** <persona-name>
+**Goal:** <one-sentence description>
+
+### Steps
+1. Run: `<command>`
+   - cwd: `<optional path>`
+   - env: `KEY=VALUE`
+   - timeout: 60s
+2. Run: `<next command>`
+
+### Expect
+- exit_code: 0
+- stdout_contains: `<substring>`
+- stderr_contains: `<substring>`
+
+### Cleanup
+1. Run: `<cleanup command>`
+```
+
+Execution rules:
+
+1. Run each `### Steps` line in order via Bash. The agent parses the markdown list, extracts the command and any cwd/env/timeout sub-items.
+2. If any non-final step exits non-zero, fail the flow with the failing step's stderr as evidence.
+3. Capture stdout and stderr of every step into `qa-results/{{app_slug}}/<flow_id>.log`.
+4. After the final step, evaluate `### Expect`. All listed expectations must hold. `exit_code` defaults to `0` if not listed.
+5. Run `### Cleanup` per `policies.cleanup.strategy`. Cleanup exit codes are recorded but do not affect pass/fail.

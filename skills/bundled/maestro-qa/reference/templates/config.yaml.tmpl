@@ -1,0 +1,36 @@
+version: 1
+generated_by: maestro-qa
+generated_at: {{generated_at}}
+project: {{project_name}}
+
+modalities:
+{{modalities_yaml}}
+
+environments:
+{{environments_yaml}}
+
+default_target: {{default_target}}
+
+personas:
+{{personas_yaml}}
+
+apps:
+{{apps_yaml}}
+
+integrations:
+{{integrations_yaml}}
+
+policies:
+  cleanup:
+    strategy: {{cleanup_strategy}}
+    protected_envs:
+{{protected_envs_yaml}}
+  failure_learning: {{failure_learning_policy}}
+  integration_default: {{integration_default}}
+
+ci:
+  provider: {{ci_provider}}
+  agent_runtime: {{ci_agent_runtime}}
+
+report:
+  path: qa-results/report.md

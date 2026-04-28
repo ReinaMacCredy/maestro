@@ -1,0 +1,41 @@
+version: 1
+generated_by: maestro-qa
+generated_at: {{generated_at}}
+complete: {{complete}}
+
+# Detection record (filled in install-flow step 2; not a questionnaire category).
+detection:
+  modalities: {{detected_modalities}}
+  integrations: {{detected_integrations}}
+  ci_provider: {{detected_ci_provider}}
+  test_tool_defaults: {{detected_test_tool_defaults}}
+
+# Questionnaire progress. Factory's 8 categories. Save after each.
+progress:
+  critical_flows:
+    status: {{critical_flows_status}}
+    values: {{critical_flows_values}}
+  default_qa_target:
+    status: {{default_qa_target_status}}
+    environments: {{default_qa_target_environments}}
+    default: {{default_qa_target_default}}
+  personas:
+    status: {{personas_status}}
+    values: {{personas_values}}
+  cleanup:
+    status: {{cleanup_status}}
+    strategy: {{cleanup_strategy}}
+    protected_envs: {{cleanup_protected_envs}}
+  failure_learning:
+    status: {{failure_learning_status}}
+    value: {{failure_learning_value}}
+  external_creds:
+    status: {{external_creds_status}}
+    values: {{external_creds_values}}
+  imagemagick:
+    status: {{imagemagick_status}}
+    value: {{imagemagick_value}}
+  ci:
+    status: {{ci_status}}
+    provider: {{ci_provider}}
+    agent_runtime: {{ci_agent_runtime}}

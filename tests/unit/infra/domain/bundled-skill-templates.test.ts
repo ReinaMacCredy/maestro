@@ -77,6 +77,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
       "maestro-handoff",
       "maestro-mission",
       "maestro-plan",
+      "maestro-qa",
       "maestro-setup",
       "maestro-task",
     ]);
@@ -149,6 +150,16 @@ Before non-trivial work:
     expect(reportTemplate?.content).toContain("## Evidence Sources");
     expect(reportTemplate?.content).toContain("## TODOs Left");
     expect(reportTemplate?.content).toContain("## Warnings");
+
+    expect(skill.content).toContain("reference/init-deep.md");
+    expect(skill.content).toContain("Generate Hierarchical AGENTS.md (init-deep)");
+
+    const initDeep = setup!.files.find((file) => file.path === "reference/init-deep.md");
+    expect(initDeep, "reference/init-deep.md present in maestro-setup bundle").toBeDefined();
+    expect(initDeep!.content).toContain("# Init Deep");
+    for (const phaseName of ["discovery", "scoring", "generate", "review"]) {
+      expect(initDeep!.content, `init-deep references phase '${phaseName}'`).toContain(phaseName);
+    }
   });
 
   it("ships maestro-setup Google styleguide snapshots with attribution", () => {

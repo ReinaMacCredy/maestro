@@ -1,0 +1,45 @@
+### Protocol: `electron`
+
+Drives an Electron app via `agent-browser` in CDP attach mode. Bodies live in `qa-{{app_slug}}/SKILL.md` under `## Flow: <anchor>` headings.
+
+Per-flow body shape:
+
+```markdown
+## Flow: <anchor>
+
+**Persona:** <persona-name>
+**Goal:** <one-sentence description>
+
+### Steps
+1. Launch:
+   - cmd: `{{electron_launch_cmd}}`
+   - cdp_port: 9222
+   - ready_when: `<css-selector or url>`
+2. Attach:
+   - cdp_port: 9222
+3. Click: `<css-selector>`
+4. Type:
+   - selector: `<css-selector>`
+   - text: `...`
+5. Screenshot: `<filename>`
+
+### Expect
+- exit_code: 0
+- selector_visible: `<css-selector>`
+- text_present: `<substring>`
+- console_clean: true
+
+### Cleanup
+1. Terminate the Electron process
+2. Clear per-run profile dir (if any)
+```
+
+Execution rules:
+
+1. Spawn the Electron app with `--remote-debugging-port=<cdp_port>` (or the equivalent flag for the project's launcher).
+2. Wait for `ready_when` to satisfy before running subsequent steps.
+3. Attach `agent-browser` over CDP and run interaction steps.
+4. Screenshots are written to `qa-results/{{app_slug}}/<flow_id>.<step>.png`.
+5. If `agent-browser` is not on PATH, emit `BLOCKED: agent-browser not installed` and skip. (List `agent-browser` in the registry's `blocked_if_missing[]` so the runtime checks before invoking.)
+6. Evaluate `### Expect`. `exit_code` is checked on Electron shutdown.
+7. Run `### Cleanup` per `policies.cleanup.strategy`. Cleanup terminates the Electron process and clears any per-run profile dir.

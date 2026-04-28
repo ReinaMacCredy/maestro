@@ -1,0 +1,40 @@
+---
+name: qa-{{app_slug}}
+description: Run the {{modality}} QA flows for this repo using the {{test_tool}} protocol. Invoked by /qa or directly. Reads its flow registry from .maestro/qa/config.yaml under apps.{{app_slug}}; flow bodies live below in this file under `## Flow: <anchor>` sections.
+user-invocable: true
+---
+
+# QA — {{app_slug}}
+
+You are the per-modality runner for `{{modality}}`. The orchestrator (`/qa`) calls you with the resolved `apps.{{app_slug}}` block. You can also be invoked directly by the user (`/qa-{{app_slug}}`).
+
+## Protocol: {{test_tool}}
+
+{{flow_protocol_block}}
+
+## Per-flow loop
+
+For each entry in the `apps.{{app_slug}}.flows[]` registry in `.maestro/qa/config.yaml`:
+
+1. Look up the flow body in this file under `## Flow: <anchor>` (the registry's `anchor` field is the heading slug).
+2. Check the registry's `blocked_if_missing[]`. If any primitive or env var is absent, emit `BLOCKED: <name> — <how to install or set>` and skip.
+3. Run the body's `### Steps` per the protocol block above.
+4. Evaluate the body's `### Expect` block. Any matching expectation not satisfied = fail; all satisfied = pass.
+5. Capture stdout/stderr/screenshots/page state to `qa-results/{{app_slug}}/<flow_id>.{log,png}` for the orchestrator's report.
+6. Run the body's `### Cleanup` block per `policies.cleanup.strategy` (the orchestrator decides whether to keep `qa-results/` per `policies.cleanup`).
+
+## Output
+
+Return `{flow_id, status: pass|fail|blocked, evidence: <relative path>}` per flow.
+
+## Anchor invariant
+
+The installer emits each registry entry and its matching `## Flow: <anchor>` heading from one template. Never rename a heading without updating the registry's `anchor`, and vice versa — drift breaks the runtime's flow lookup.
+
+<!-- maestro-qa:user:start -->
+<!-- Add project-specific overrides for {{app_slug}} here. The installer preserves this block. -->
+<!-- maestro-qa:user:end -->
+
+## Flows
+
+{{flow_bodies_block}}

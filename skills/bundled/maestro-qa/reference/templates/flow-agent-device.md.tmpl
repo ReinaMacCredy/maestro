@@ -1,0 +1,39 @@
+### Protocol: `agent-device`
+
+Drives a mobile simulator/emulator via the project's `agent-device` tool. Bodies live in `qa-{{app_slug}}/SKILL.md` under `## Flow: <anchor>` headings.
+
+Per-flow body shape:
+
+```markdown
+## Flow: <anchor>
+
+**Persona:** <persona-name>
+**Goal:** <one-sentence description>
+
+### Steps
+1. Launch:
+   - app_id: `<bundle-id-or-package-name>`
+   - platform: `ios` or `android`
+2. Tap: `<accessibility-label-or-selector>`
+3. Type:
+   - selector: `<selector>`
+   - text: `...`
+4. Wait for: `<selector>`
+5. Screenshot: `<filename>`
+
+### Expect
+- screen_match: `<accessibility label or selector>`
+- text_present: `<substring>`
+- screenshot_diff_under: 0.05
+
+### Cleanup
+1. Terminate the launched app and reset simulator state
+```
+
+Execution rules:
+
+1. If no simulator/emulator is running, attempt to boot one (`xcrun simctl boot ...` or `emulator -avd ...`). If neither runtime is installed, emit `BLOCKED: <runtime> not installed — install Xcode / Android Studio first` and skip. (List the runtime in the registry's `blocked_if_missing[]` so the runtime checks before invoking.)
+2. Each step calls the matching `agent-device` subcommand.
+3. Screenshots are written to `qa-results/{{app_slug}}/<flow_id>.<step>.png`.
+4. Evaluate `### Expect`. `screenshot_diff_under` requires ImageMagick; if absent, the diff check reports BLOCKED but other expectations still evaluate.
+5. Run `### Cleanup` per `policies.cleanup.strategy`. Cleanup typically terminates the launched app and resets the simulator.

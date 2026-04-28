@@ -1,0 +1,54 @@
+---
+name: qa
+description: Run QA flows declared in .maestro/qa/config.yaml. Dispatches per-app runners ({{app_slug_list}}) and writes qa-results/report.md. Use when the user says "/qa", "run QA", "qa this repo", or asks to verify the chosen critical flows.
+user-invocable: true
+---
+
+# QA Orchestrator
+
+You are the project-local `/qa` runtime. The installer (`maestro-qa`) wrote this file by filling `reference/templates/orchestrator-skill.md.tmpl`. Do not hand-edit outside the `<!-- maestro-qa:user:start -->` markers — the installer will overwrite it on the next run.
+
+## Inputs
+
+- `.maestro/qa/config.yaml` — the source of truth. Read it before doing anything.
+- `.maestro/qa/REPORT-TEMPLATE.md` — the report skeleton.
+- `.maestro/qa/quirks/<app>.md` — optional per-app warnings to surface before running.
+- `.maestro/qa/failure-modes/<app>.md` — optional per-app triage entries.
+
+## Run
+
+1. Parse `.maestro/qa/config.yaml`. If invalid, BLOCKED with the parse error.
+2. For each app in `apps`, invoke the matching `qa-<app>` skill in order. Pass the resolved `apps.<slug>` block (registry only — the bodies live as `## Flow: <anchor>` sections in the corresponding `qa-<app>/SKILL.md`).
+3. Each runner returns `{flow_id, status, evidence}` per flow.
+4. Apply `policies.cleanup.strategy` (refusing to clean any environment in `policies.cleanup.protected_envs` regardless of strategy):
+   - `manual`: do nothing; user cleans up by hand.
+   - `auto_after_run`: each flow runs its own `### Cleanup` section.
+   - `ephemeral_env`: rely on the env to be torn down externally.
+   - `none`: no-op (read-only QA).
+5. Apply `policies.failure_learning` to each failed flow:
+   - `suggest_in_report`: include copy-paste snippets in `qa-results/report.md`.
+   - `auto_commit`: append to `.maestro/qa/quirks/<app>.md` and `.maestro/qa/failure-modes/<app>.md`, then commit.
+   - `open_pr`: same updates, but open a draft PR instead of committing directly.
+6. Render `qa-results/report.md` from `REPORT-TEMPLATE.md` with the per-flow results.
+7. Exit code: 0 if every flow passed, 1 otherwise.
+
+## Reading quirks
+
+For each app whose flows are about to run, read `.maestro/qa/quirks/<app>.md` if it exists. Surface any entry whose `<flow_id>` matches a flow about to run as a one-line warning before running.
+
+## Reading failure-modes
+
+For each app whose flows are about to run, read `.maestro/qa/failure-modes/<app>.md` if it exists. Surface any open entry (status `open`) whose `<flow_id>` matches a flow about to run as a root-cause hypothesis before running.
+
+<!-- maestro-qa:user:start -->
+<!-- Add project-specific orchestration overrides here. The installer preserves this block. -->
+<!-- maestro-qa:user:end -->
+
+## Apps enabled
+
+{{app_list_block}}
+
+## Reference
+
+- Per-modality runner skills: `.claude/skills/qa-<app>/SKILL.md` (symlinked from `.maestro/qa/skills/qa-<app>/`).
+- Schema: `.maestro/qa/config.yaml` (canonical) — see maestro-qa installer's `reference/config-schema.md` for the full field reference.

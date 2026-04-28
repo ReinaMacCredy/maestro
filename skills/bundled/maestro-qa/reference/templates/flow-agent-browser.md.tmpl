@@ -1,0 +1,38 @@
+### Protocol: `agent-browser`
+
+Drives a headless browser via the project's `agent-browser` tool. Bodies live in `qa-{{app_slug}}/SKILL.md` under `## Flow: <anchor>` headings.
+
+Per-flow body shape:
+
+```markdown
+## Flow: <anchor>
+
+**Persona:** <persona-name>
+**Goal:** <one-sentence description>
+
+### Steps
+1. Navigate: `{{base_url}}/path`
+2. Wait for: `<css-selector or text>`
+3. Click: `<css-selector>`
+4. Type:
+   - selector: `<css-selector>`
+   - text: `...`
+5. Screenshot: `<filename>`
+
+### Expect
+- selector_visible: `<css-selector>`
+- text_present: `<substring>`
+- url_matches: `<regex>`
+- console_clean: true
+
+### Cleanup
+1. Close page or clear cookies (browser context torn down per flow regardless)
+```
+
+Execution rules:
+
+1. Each step calls the matching `agent-browser` subcommand. The agent parses the markdown list, extracting selectors, URLs, and text.
+2. Screenshots are written to `qa-results/{{app_slug}}/<flow_id>.<step>.png`.
+3. If `agent-browser` is not on PATH, emit `BLOCKED: agent-browser not installed — see https://docs.anthropic.com/...` and skip. (List `agent-browser` in the registry's `blocked_if_missing[]` so the runtime checks before invoking.)
+4. Evaluate `### Expect` against the final page state.
+5. Run `### Cleanup` per `policies.cleanup.strategy`. Browser context tears down per flow regardless.

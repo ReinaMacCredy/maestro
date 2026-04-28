@@ -1,0 +1,21 @@
+# Failure Modes — {{app_slug}}
+
+This file accumulates structured root-cause entries for flows in the `{{app_slug}}` app that have failed in non-trivial ways. The orchestrator surfaces an open entry whose `flow_id` matches a flow about to run, so future runs warn about known traps.
+
+One file per app: `.maestro/qa/failure-modes/{{app_slug}}.md`. Entries are append-only across runs; the installer never rewrites this file once created.
+
+Format per entry:
+
+```
+## <flow_id> — <short title>
+
+- Date: <YYYY-MM-DD>
+- Status: open | mitigated | resolved
+- Symptom: <what was observed>
+- Hypothesis: <suspected root cause>
+- Repro: <minimal reproduction steps>
+- Mitigation: <if any>
+- Resolved by: <commit or note>
+```
+
+Do not delete this file. The installer preserves entries across runs.

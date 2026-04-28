@@ -1,0 +1,60 @@
+name: QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up runtime
+        run: |
+          # TODO(maestro-qa): replace with the project's actual runtime setup
+          # (e.g. setup-node, setup-python, setup-go).
+          echo "runtime-setup placeholder for {{modality_list}}"
+
+      - name: Install ImageMagick
+        if: {{needs_imagemagick}}
+        run: sudo apt-get install -y imagemagick
+
+      - name: Install agent-browser
+        if: {{needs_agent_browser}}
+        run: |
+          npm install -g @anthropic-ai/agent-browser || true
+
+      # === Agent runtime: {{ci_agent_runtime}} ===
+      # The block below is selected at install time based on the user's
+      # answer to questionnaire category 8. Edit `.maestro/qa/config.yaml`
+      # `ci.agent_runtime` and re-run `/maestro-qa` to switch.
+      {{ci_agent_install_block}}
+
+      - name: Run /qa
+        env:
+{{secret_env_block}}
+        run: |
+          {{ci_agent_invoke_command}}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-results
+          path: qa-results/
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request' && always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: qa-results/report.md

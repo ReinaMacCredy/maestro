@@ -1,0 +1,17 @@
+# Quirks — {{app_slug}}
+
+This file accumulates short notes about flaky or unexpected behavior observed during `/qa` runs against the `{{app_slug}}` app. The orchestrator surfaces relevant entries before running flows that touch the same area.
+
+One file per app: `.maestro/qa/quirks/{{app_slug}}.md`. Entries are append-only across runs; the installer never rewrites this file once created.
+
+Format per entry:
+
+```
+## <flow_id> — <one-line title>
+
+- Date: <YYYY-MM-DD>
+- Status: <observed | mitigated | resolved>
+- Note: <one or two sentences>
+```
+
+Do not delete this file. The installer regenerates the orchestrator and per-app skills, but it preserves quirk entries across runs.

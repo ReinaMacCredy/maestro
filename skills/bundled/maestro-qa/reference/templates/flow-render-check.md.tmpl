@@ -1,0 +1,35 @@
+### Protocol: `render-check`
+
+Drives the project's render-check command (e.g., `mission-control --render-check --size 120x40`) and asserts a usable frame was emitted. Bodies live in `qa-{{app_slug}}/SKILL.md` under `## Flow: <anchor>` headings.
+
+Per-flow body shape:
+
+```markdown
+## Flow: <anchor>
+
+**Persona:** <persona-name>
+**Goal:** <one-sentence description>
+
+### Steps
+1. Run render-check:
+   - cmd: `{{render_check_cmd}}`
+   - size: `120x40`
+   - screen: `<optional screen name>`
+   - timeout: 30s
+
+### Expect
+- exit_code: 0
+- frame_nonempty: true
+- stdout_contains: `<optional substring>`
+
+### Cleanup
+1. (typically a no-op for render-check flows)
+```
+
+Execution rules:
+
+1. Invoke `cmd` with the size/screen flags. The agent parses the step's sub-items.
+2. Capture stdout to `qa-results/{{app_slug}}/<flow_id>.frame.txt`.
+3. If the project's render-check command is missing on PATH, emit `BLOCKED: render-check command not found — install/build the project's CLI first` and skip. (List the command in the registry's `blocked_if_missing[]` so the runtime checks before invoking.)
+4. Evaluate `### Expect`. `exit_code` defaults to `0`, `frame_nonempty` defaults to `true`.
+5. Run `### Cleanup` per `policies.cleanup.strategy`. Cleanup is typically a no-op for render-check flows.
