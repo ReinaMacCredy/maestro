@@ -31,6 +31,11 @@ import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { AgentSession } from "@/features/session";
 import type { NoteEntry } from "@/features/notes";
+import type { Contract, Task } from "@/features/task";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
+import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
+import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
 import type {
   Mission,
   Feature,
@@ -375,6 +380,158 @@ export function mockMissions(input: {
     mockAssertionStore(missionId, input.assertions ?? []),
     mockCheckpointStore(missionId, input.checkpoints ?? []),
   );
+}
+
+export function mockTaskStore(initial: readonly Task[] = []): TaskStorePort {
+  const tasks = new Map(initial.map((task) => [task.id, task]));
+
+  return {
+    get: async (id) => tasks.get(id),
+    all: async () => [...tasks.values()],
+    create: async () => {
+      throw new Error("mockTaskStore.create is not implemented");
+    },
+    createBatch: async () => {
+      throw new Error("mockTaskStore.createBatch is not implemented");
+    },
+    update: async (id, patch) => {
+      const existing = tasks.get(id);
+      if (!existing) throw new Error(`Task not found: ${id}`);
+      const updated = {
+        ...existing,
+        ...patch,
+        status: patch.status ?? existing.status,
+        updatedAt: new Date().toISOString(),
+      };
+      tasks.set(id, updated);
+      return { task: updated, autoClaimed: false };
+    },
+    claim: async () => {
+      throw new Error("mockTaskStore.claim is not implemented");
+    },
+    unclaim: async () => {
+      throw new Error("mockTaskStore.unclaim is not implemented");
+    },
+    block: async () => {
+      throw new Error("mockTaskStore.block is not implemented");
+    },
+    unblock: async () => {
+      throw new Error("mockTaskStore.unblock is not implemented");
+    },
+    releaseOwned: async () => [],
+    reopen: async () => {
+      throw new Error("mockTaskStore.reopen is not implemented");
+    },
+    delete: async () => {
+      throw new Error("mockTaskStore.delete is not implemented");
+    },
+    heartbeat: async () => {
+      throw new Error("mockTaskStore.heartbeat is not implemented");
+    },
+    findBatchReceipt: async () => undefined,
+    syncMetadata: async (id, patch) => {
+      const existing = tasks.get(id);
+      if (!existing) throw new Error(`Task not found: ${id}`);
+      const updated = {
+        ...existing,
+        ...(patch.contractId !== undefined
+          ? { contractId: patch.contractId ?? undefined }
+          : {}),
+        ...(patch.claimedAtCommit !== undefined
+          ? { claimedAtCommit: patch.claimedAtCommit ?? undefined }
+          : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      tasks.set(id, updated);
+      return updated;
+    },
+    backfillSlug: async () => {
+      throw new Error("mockTaskStore.backfillSlug is not implemented");
+    },
+    backfillSlugs: async () => {
+      throw new Error("mockTaskStore.backfillSlugs is not implemented");
+    },
+  };
+}
+
+export function mockContractStore(initial: readonly Contract[] = []): ContractStorePort {
+  const contracts = new Map(initial.map((contract) => [contract.id, contract]));
+  const index = initial.map((contract) => ({
+    id: contract.id,
+    taskId: contract.taskId,
+    status: contract.status,
+    at: contract.closedAt ?? contract.discardedAt ?? contract.lockedAt ?? contract.createdAt,
+  }));
+  let nextContractId = initial.length + 1;
+
+  return {
+    get: async (id) => contracts.get(id),
+    getByTaskId: async (taskId) => {
+      for (let i = index.length - 1; i >= 0; i -= 1) {
+        const entry = index[i];
+        if (!entry || entry.taskId !== taskId) continue;
+        return contracts.get(entry.id);
+      }
+      return undefined;
+    },
+    all: async () => [...contracts.values()],
+    readIndex: async () => index,
+    create: async (input) => {
+      const id = input.id ?? `c-${String(nextContractId++).padStart(6, "0")}`;
+      const contract: Contract = {
+        schemaVersion: CONTRACT_SCHEMA_VERSION,
+        id,
+        taskId: input.taskId,
+        repoRoot: input.repoRoot,
+        status: "draft",
+        createdAt: input.createdAt,
+        intent: input.intent,
+        scope: input.scope,
+        doneWhen: input.doneWhen,
+        amendments: [],
+        createdBy: input.createdBy,
+        configSnapshot: input.configSnapshot,
+      };
+      contracts.set(id, contract);
+      index.push({ id, taskId: contract.taskId, status: contract.status, at: contract.createdAt });
+      return contract;
+    },
+    save: async (contract) => {
+      contracts.set(contract.id, contract);
+      index.push({
+        id: contract.id,
+        taskId: contract.taskId,
+        status: contract.status,
+        at: contract.closedAt ?? contract.discardedAt ?? contract.lockedAt ?? new Date().toISOString(),
+      });
+      return contract;
+    },
+    delete: async (id, input) => {
+      const deleted = contracts.delete(id);
+      index.push({
+        id,
+        taskId: input.taskId,
+        status: input.status ?? "discarded",
+        at: input.at,
+        reason: input.reason,
+      });
+      return deleted;
+    },
+  };
+}
+
+export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchorPort {
+  return {
+    resolveRepoRoot: async (cwd) => cwd,
+    resolveHeadCommit: async () => "HEAD",
+    collectTouchedFiles: async () => ({
+      gitAvailable: true,
+      actualFilesTouched: [],
+      closedAtCommit: "HEAD",
+    }),
+    windowsOverlap: async () => false,
+    ...overrides,
+  };
 }
 
 export function mockCorrectionStore(

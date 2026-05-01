@@ -112,4 +112,15 @@ export type {
 export { registerTaskCommand } from "./commands/task.command.js";
 export { buildTaskServices } from "./services.js";
 export type { TaskServices } from "./services.js";
+export { buildContractWorkflows } from "./usecases/contract-workflows.usecase.js";
+export type {
+  ContractAmendmentCommand,
+  ContractCriterionDraftInput,
+  ContractVerdictInput,
+  ContractWorkflows,
+  CreateContractInput,
+  EditContractInput,
+  ListContractsFilters,
+  LockContractInput,
+} from "./usecases/contract-workflows.usecase.js";
 export { transferContractOwnership } from "./usecases/contract/transfer-ownership.usecase.js";

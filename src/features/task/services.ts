@@ -4,6 +4,10 @@ import type { TaskContinuationStorePort } from "./ports/task-continuation-store.
 import type { TaskContinuationHistoryPort } from "./ports/task-continuation-history.port.js";
 import type { ContractStorePort } from "./ports/contract-store.port.js";
 import type { GitAnchorPort } from "./ports/git-anchor.port.js";
+import {
+  buildContractWorkflows,
+  type ContractWorkflows,
+} from "./usecases/contract-workflows.usecase.js";
 import { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
 import { FsCandidateStoreAdapter } from "./adapters/fs-candidate-store.adapter.js";
 import { FsTaskContinuationStoreAdapter } from "./adapters/fs-task-continuation-store.adapter.js";
@@ -15,6 +19,7 @@ import { ShellGitAnchorAdapter } from "./adapters/git-anchor.adapter.js";
 export interface TaskServices {
   readonly taskStore: TaskStorePort;
   readonly contractStore: ContractStorePort;
+  readonly contracts: ContractWorkflows;
   readonly gitAnchor: GitAnchorPort;
   readonly taskCandidateStore: CandidateStorePort;
   readonly taskContinuationStore: TaskContinuationStorePort;
@@ -23,11 +28,15 @@ export interface TaskServices {
 }
 
 export function buildTaskServices(projectDir: string): TaskServices {
+  const taskStore = new JsonlTaskStoreAdapter(projectDir);
   const contractStore = new FsContractStoreAdapter(projectDir);
+  const gitAnchor = new ShellGitAnchorAdapter();
+  const contracts = buildContractWorkflows(contractStore, taskStore, gitAnchor);
   return {
-    taskStore: new JsonlTaskStoreAdapter(projectDir),
+    taskStore,
     contractStore,
-    gitAnchor: new ShellGitAnchorAdapter(),
+    contracts,
+    gitAnchor,
     taskCandidateStore: new FsCandidateStoreAdapter(projectDir),
     taskContinuationStore: new FsTaskContinuationStoreAdapter(projectDir),
     taskContinuationHistory: new FsTaskContinuationHistoryStoreAdapter(projectDir),
