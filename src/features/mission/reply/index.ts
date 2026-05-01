@@ -22,5 +22,3 @@ export {
 } from "./usecases/ingest-reply.usecase.js";
 
 export { registerReplyCommand } from "./commands/reply.command.js";
-export { buildReplyServices } from "./services.js";
-export type { ReplyServices } from "./services.js";

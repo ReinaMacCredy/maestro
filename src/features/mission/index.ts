@@ -158,5 +158,3 @@ export {
 } from "./reply/usecases/ingest-reply.usecase.js";
 
 export { registerReplyCommand } from "./reply/commands/reply.command.js";
-export { buildReplyServices } from "./reply/services.js";
-export type { ReplyServices } from "./reply/services.js";
