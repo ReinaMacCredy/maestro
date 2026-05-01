@@ -26,8 +26,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opentui/core": "0.1.105",
-    "@opentui/react": "0.1.105",
+    "@opentui/core": "0.2.1",
+    "@opentui/react": "0.2.1",
     "cli-spinners": "^3.4.0",
     "commander": "^14.0.3",
     "react": "19.2.5",
