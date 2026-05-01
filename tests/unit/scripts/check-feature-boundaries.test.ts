@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import {
+  findCompositionRootImportViolation,
   findCrossFeatureImportViolation,
   resolveBoundaryCheckRoot,
   scanFeatureBoundaryViolations,
@@ -93,6 +94,37 @@ describe("findCrossFeatureImportViolation", () => {
     ).toBeUndefined();
   });
 
+  it("allows src/services.ts to import feature-root service builders only", () => {
+    expect(
+      findCompositionRootImportViolation(
+        "src/services.ts",
+        "./features/mission/services.js",
+      ),
+    ).toBeUndefined();
+
+    expect(
+      findCompositionRootImportViolation(
+        "src/services.ts",
+        "./features/mission/reply/services.js",
+      ),
+    ).toMatchObject({
+      file: "src/services.ts",
+      ownFeature: "composition-root",
+      importSpec: "./features/mission/reply/services.js",
+      otherFeature: "mission",
+    });
+
+    expect(
+      findCompositionRootImportViolation(
+        "src/services.ts",
+        "./features/mission/index.js",
+      ),
+    ).toMatchObject({
+      ownFeature: "composition-root",
+      otherFeature: "mission",
+    });
+  });
+
   it("scans feature files on disk and ignores exempt cross-feature aggregators", async () => {
     const agentDir = join(tmpDir, "src", "features", "agent", "usecases");
     const graphDir = join(tmpDir, "src", "features", "graph");
@@ -118,6 +150,30 @@ describe("findCrossFeatureImportViolation", () => {
         file: "src/features/agent/usecases/bad-import.ts",
         ownFeature: "agent",
         importSpec: "@/features/mission/usecases/mission-report.usecase.js",
+        otherFeature: "mission",
+      },
+    ]);
+  });
+
+  it("scans src/services.ts for nested feature-internal imports", async () => {
+    const srcDir = join(tmpDir, "src");
+    await mkdir(srcDir, { recursive: true });
+
+    await writeFile(
+      join(srcDir, "services.ts"),
+      [
+        'import { buildMissionServices } from "./features/mission/services.js";',
+        'import { buildReplyServices } from "./features/mission/reply/services.js";',
+      ].join("\n"),
+    );
+
+    const violations = await scanFeatureBoundaryViolations(tmpDir);
+
+    expect(violations).toEqual([
+      {
+        file: "src/services.ts",
+        ownFeature: "composition-root",
+        importSpec: "./features/mission/reply/services.js",
         otherFeature: "mission",
       },
     ]);
