@@ -6,10 +6,11 @@
 import { basename, join } from "node:path";
 import type { Mission, CreateMissionInput, UpdateMissionInput } from "../domain/mission-types.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
-import { validateMission } from "../domain/mission-validators.js";
+import { MISSION_ID_PATTERN, validateMission } from "../domain/mission-validators.js";
 import { MaestroError } from "@/shared/errors.js";
 import { ensureDir, readJson, writeJson, dirExists, listDirs } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
+import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
 
 export class FsMissionStoreAdapter implements MissionStorePort {
   constructor(private readonly baseDir: string) {}
@@ -19,7 +20,8 @@ export class FsMissionStoreAdapter implements MissionStorePort {
   }
 
   private missionDir(id: string): string {
-    return join(this.missionsRoot(), id);
+    assertSafeSegment(id, "mission ID", MISSION_ID_PATTERN, "YYYY-MM-DD-NNN");
+    return resolveWithin(this.missionsRoot(), id, "Mission directory");
   }
 
   private missionPath(id: string): string {
@@ -27,7 +29,8 @@ export class FsMissionStoreAdapter implements MissionStorePort {
   }
 
   private stagingDir(id: string): string {
-    return join(this.missionsRoot(), `.staging-${id}`);
+    assertSafeSegment(id, "mission ID", MISSION_ID_PATTERN, "YYYY-MM-DD-NNN");
+    return resolveWithin(this.missionsRoot(), `.staging-${id}`, "Mission staging directory");
   }
 
   private stagingMissionPath(id: string): string {

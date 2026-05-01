@@ -2,7 +2,7 @@
 set -euo pipefail
 
 INSTALL_DIR="${MAESTRO_INSTALL_DIR:-$HOME/.local/bin}"
-RELEASE_REPO="${MAESTRO_RELEASE_REPO:-ReinaMacCredy/maestro}"
+RELEASE_REPO="ReinaMacCredy/maestro"
 REQUESTED_VERSION="${MAESTRO_VERSION:-latest}"
 TARGET_BIN="$INSTALL_DIR/maestro"
 
@@ -16,19 +16,23 @@ main() {
 
   command -v curl >/dev/null 2>&1 || fail "curl is required."
 
-  local asset url
+  local asset url checksum_url
   asset="$(resolve_asset_name)"
   url="$(build_download_url "$asset")"
+  checksum_url="${url}.sha256"
 
   mkdir -p "$INSTALL_DIR"
   TMP_BIN="$(mktemp "$INSTALL_DIR/.maestro.tmp.XXXXXX")"
-  trap 'rm -f "$TMP_BIN"' EXIT
+  TMP_CHECKSUM="$(mktemp "$INSTALL_DIR/.maestro.sha256.XXXXXX")"
+  trap 'rm -f "$TMP_BIN" "$TMP_CHECKSUM"' EXIT
 
   echo "Installing asset: $asset"
   echo "Download URL: $url"
   echo ""
 
   curl -fsSL "$url" -o "$TMP_BIN"
+  curl -fsSL "$checksum_url" -o "$TMP_CHECKSUM"
+  verify_checksum "$TMP_BIN" "$TMP_CHECKSUM" "$asset"
   chmod +x "$TMP_BIN"
   mv "$TMP_BIN" "$TARGET_BIN"
 
@@ -86,6 +90,31 @@ resolve_asset_name() {
   esac
 
   printf "maestro-%s-%s" "$os" "$arch"
+}
+
+verify_checksum() {
+  local binary_path="$1"
+  local checksum_path="$2"
+  local asset="$3"
+  local expected actual
+
+  expected="$(awk -v asset="$asset" '
+    length($1) == 64 && $1 ~ /^[[:xdigit:]]+$/ {
+      if (NF == 1 || $2 == asset || $2 == "*" asset) {
+        print tolower($1);
+        exit;
+      }
+    }
+  ' "$checksum_path")"
+  [ -n "$expected" ] || fail "Checksum asset did not contain a SHA-256 digest for $asset."
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$binary_path" | awk '{ print tolower($1) }')"
+  else
+    actual="$(shasum -a 256 "$binary_path" | awk '{ print tolower($1) }')"
+  fi
+
+  [ "$actual" = "$expected" ] || fail "Checksum mismatch for $asset. Refusing to install downloaded binary."
 }
 
 main "$@"

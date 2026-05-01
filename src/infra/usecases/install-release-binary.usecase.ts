@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, posix, win32 } from "node:path";
@@ -7,6 +8,8 @@ import { VERSION } from "@/shared/version.js";
 
 const DEFAULT_RELEASE_REPO = "ReinaMacCredy/maestro";
 const TARGET_BINARY_BASENAME = "maestro";
+const CHECKSUM_SUFFIX = ".sha256";
+const TRUSTED_RELEASE_DOWNLOAD_HOST = "github.com";
 
 export function resolveInstalledBinaryName(
   platform: NodeJS.Platform = process.platform,
@@ -45,6 +48,7 @@ interface GitHubReleasePayload {
 interface ReleaseAsset {
   readonly name: string;
   readonly downloadUrl: string;
+  readonly checksumUrl: string;
 }
 
 export interface InstallReleaseBinaryOptions {
@@ -138,6 +142,8 @@ export async function installReleaseBinary(
 
   try {
     const binaryBytes = await downloadAsset(fetchImpl, release.asset.downloadUrl);
+    const expectedChecksum = await downloadChecksum(fetchImpl, release.asset.checksumUrl, release.asset.name);
+    verifySha256(binaryBytes, expectedChecksum, release.asset.name);
     await Bun.write(tempPath, binaryBytes);
     if (platform !== "win32") {
       await chmod(tempPath, 0o755);
@@ -227,6 +233,8 @@ function resolveReleaseAsset(
   tagName: string,
 ): ReleaseAsset {
   const asset = assets?.find((candidate) => candidate.name === assetName);
+  const checksumAssetName = `${assetName}${CHECKSUM_SUFFIX}`;
+  const checksumAsset = assets?.find((candidate) => candidate.name === checksumAssetName);
   if (!asset?.browser_download_url) {
     const availableAssets = assets?.map((candidate) => candidate.name).filter(Boolean) ?? [];
     throw new MaestroError(`Release ${tagName} does not include ${assetName}`, [
@@ -235,10 +243,23 @@ function resolveReleaseAsset(
         : "The release is missing binary assets",
     ]);
   }
+  if (!checksumAsset?.browser_download_url) {
+    const availableAssets = assets?.map((candidate) => candidate.name).filter(Boolean) ?? [];
+    throw new MaestroError(`Release ${tagName} does not include ${checksumAssetName}`, [
+      availableAssets.length > 0
+        ? `Available assets: ${availableAssets.join(", ")}`
+        : "The release is missing checksum assets",
+      `Publish a ${checksumAssetName} asset containing the SHA-256 digest for ${assetName}`,
+    ]);
+  }
+
+  assertTrustedReleaseDownloadUrl(asset.browser_download_url, "Release binary download URL");
+  assertTrustedReleaseDownloadUrl(checksumAsset.browser_download_url, "Release checksum download URL");
 
   return {
     name: assetName,
     downloadUrl: asset.browser_download_url,
+    checksumUrl: checksumAsset.browser_download_url,
   };
 }
 
@@ -295,6 +316,73 @@ async function downloadAsset(
   return new Uint8Array(await response.arrayBuffer());
 }
 
+async function downloadChecksum(
+  fetchImpl: typeof fetch,
+  url: string,
+  assetName: string,
+): Promise<string> {
+  const response = await fetchImpl(url, {
+    headers: {
+      Accept: "text/plain",
+      "User-Agent": "maestro-cli",
+    },
+  });
+
+  if (!response.ok) {
+    throw new MaestroError(`Checksum download failed (${response.status})`, [
+      `Checksum URL: ${url}`,
+    ]);
+  }
+
+  const checksum = parseSha256Checksum(await response.text(), assetName);
+  if (!checksum) {
+    throw new MaestroError("Release checksum asset did not contain a SHA-256 digest", [
+      `Checksum URL: ${url}`,
+      `Expected a line like: <64 hex characters>  ${assetName}`,
+    ]);
+  }
+  return checksum;
+}
+
+function parseSha256Checksum(value: string, assetName: string): string | undefined {
+  const lines = value.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
+  for (const line of lines) {
+    const match = /^([a-fA-F0-9]{64})(?:\s+\*?(.+))?$/.exec(line);
+    if (!match) continue;
+    const listedName = match[2]?.trim();
+    if (!listedName || listedName === assetName) {
+      return match[1]!.toLowerCase();
+    }
+  }
+  return undefined;
+}
+
+function verifySha256(bytes: Uint8Array, expectedChecksum: string, assetName: string): void {
+  const actualChecksum = createHash("sha256").update(bytes).digest("hex");
+  if (actualChecksum !== expectedChecksum) {
+    throw new MaestroError(`Release checksum mismatch for ${assetName}`, [
+      `Expected SHA-256: ${expectedChecksum}`,
+      `Actual SHA-256: ${actualChecksum}`,
+      "Refusing to install the downloaded binary",
+    ]);
+  }
+}
+
+function assertTrustedReleaseDownloadUrl(url: string, label: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new MaestroError(`${label} is not a valid URL`, [`URL: ${url}`]);
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname !== TRUSTED_RELEASE_DOWNLOAD_HOST) {
+    throw new MaestroError(`${label} must use the official GitHub release host`, [
+      `URL: ${url}`,
+      `Expected host: ${TRUSTED_RELEASE_DOWNLOAD_HOST}`,
+    ]);
+  }
+}
+
 function resolveReleaseOs(platform: NodeJS.Platform): "darwin" | "linux" | "windows" {
   switch (platform) {
     case "darwin":
@@ -344,15 +432,13 @@ function resolveReleaseArch(os: "darwin" | "linux" | "windows", arch: string): "
 }
 
 function getReleaseRepo(): string {
-  return process.env.MAESTRO_RELEASE_REPO?.trim() || DEFAULT_RELEASE_REPO;
+  return DEFAULT_RELEASE_REPO;
 }
 
 function getReleasesBaseUrl(): string {
-  return process.env.MAESTRO_RELEASE_BASE_URL?.trim()
-    || `https://github.com/${getReleaseRepo()}/releases`;
+  return `https://github.com/${getReleaseRepo()}/releases`;
 }
 
 export function getReleasesApiBaseUrl(): string {
-  return process.env.MAESTRO_RELEASE_API_BASE_URL?.trim()
-    || `https://api.github.com/repos/${getReleaseRepo()}/releases`;
+  return `https://api.github.com/repos/${getReleaseRepo()}/releases`;
 }

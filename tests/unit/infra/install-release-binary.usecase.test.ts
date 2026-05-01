@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
+import type { PathLike } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -6,6 +8,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { VERSION } from "@/shared/version.js";
 import {
   buildReleaseDownloadUrl,
+  getReleasesApiBaseUrl,
   installReleaseBinary,
   normalizeReleaseTag,
   replaceInstalledBinary,
@@ -21,6 +24,36 @@ function asFetch(
   fn: (input: URL | RequestInfo, init?: RequestInit) => Promise<Response>,
 ): typeof fetch {
   return fn as unknown as typeof fetch;
+}
+
+function checksumFor(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function checksumAsset(assetName: string): { readonly name: string; readonly browser_download_url: string } {
+  return {
+    name: `${assetName}.sha256`,
+    browser_download_url: `https://github.com/ReinaMacCredy/maestro/releases/download/v9.9.9/${assetName}.sha256`,
+  };
+}
+
+function binaryAsset(assetName: string): { readonly name: string; readonly browser_download_url: string } {
+  return {
+    name: assetName,
+    browser_download_url: `https://github.com/ReinaMacCredy/maestro/releases/download/v9.9.9/${assetName}`,
+  };
+}
+
+function checksumResponse(assetName: string, content: string): Response {
+  return new Response(`${checksumFor(content)}  ${assetName}\n`, { status: 200 });
+}
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
 }
 
 afterEach(async () => {
@@ -84,11 +117,14 @@ describe("install release binary usecase", () => {
       if (url.endsWith("/releases/latest")) {
         return Response.json({
           tag_name: "v9.9.9",
-          assets: [{
-            name: "maestro-linux-x64",
-            browser_download_url: "https://downloads.example.test/maestro-linux-x64",
-          }],
+          assets: [
+            binaryAsset("maestro-linux-x64"),
+            checksumAsset("maestro-linux-x64"),
+          ],
         });
+      }
+      if (url.endsWith("/maestro-linux-x64.sha256")) {
+        return checksumResponse("maestro-linux-x64", "new-binary");
       }
       if (url.endsWith("/maestro-linux-x64")) {
         return new Response("new-binary", { status: 200 });
@@ -130,11 +166,14 @@ describe("install release binary usecase", () => {
       if (url.endsWith("/releases/latest")) {
         return Response.json({
           tag_name: "v9.9.9",
-          assets: [{
-            name: "maestro-windows-x64.exe",
-            browser_download_url: "https://downloads.example.test/maestro-windows-x64.exe",
-          }],
+          assets: [
+            binaryAsset("maestro-windows-x64.exe"),
+            checksumAsset("maestro-windows-x64.exe"),
+          ],
         });
+      }
+      if (url.endsWith("/maestro-windows-x64.exe.sha256")) {
+        return checksumResponse("maestro-windows-x64.exe", "new-binary");
       }
       if (url.endsWith("/maestro-windows-x64.exe")) {
         return new Response("new-binary", { status: 200 });
@@ -163,12 +202,12 @@ describe("install release binary usecase", () => {
     await Bun.write(tempPath, "new-binary");
 
     let renameCalls = 0;
-    const renameImpl = async (from: string, to: string): Promise<void> => {
+    const renameImpl = async (from: PathLike, to: PathLike): Promise<void> => {
       renameCalls += 1;
       if (renameCalls === 2) {
         throw new Error("rename failed");
       }
-      await Bun.write(to, await Bun.file(from).text());
+      await Bun.write(String(to), await Bun.file(String(from)).text());
       await rm(from, { force: true });
     };
 
@@ -190,7 +229,7 @@ describe("install release binary usecase", () => {
       await Bun.write(tempPath, "new-binary");
 
       let renameCalls = 0;
-      const renameImpl = async (from: string, to: string): Promise<void> => {
+      const renameImpl = async (from: PathLike, to: PathLike): Promise<void> => {
         renameCalls += 1;
         if (renameCalls === 2) {
           throw new Error("rename failed");
@@ -198,7 +237,7 @@ describe("install release binary usecase", () => {
         if (renameCalls === 3) {
           throw new Error("rollback failed");
         }
-        await Bun.write(to, await Bun.file(from).text());
+        await Bun.write(String(to), await Bun.file(String(from)).text());
         await rm(from, { force: true });
       };
 
@@ -225,7 +264,27 @@ describe("install release binary usecase", () => {
     it("normalizes release tags and direct download URLs", () => {
       expect(normalizeReleaseTag("0.32.0")).toBe("v0.32.0");
       expect(buildReleaseDownloadUrl("maestro-darwin-arm64")).toContain("/latest/download/maestro-darwin-arm64");
-    expect(buildReleaseDownloadUrl("maestro-darwin-arm64", "0.32.0")).toContain("/download/v0.32.0/maestro-darwin-arm64");
+      expect(buildReleaseDownloadUrl("maestro-darwin-arm64", "0.32.0")).toContain("/download/v0.32.0/maestro-darwin-arm64");
+    });
+
+  it("ignores release source environment overrides", () => {
+    const previousRepo = process.env.MAESTRO_RELEASE_REPO;
+    const previousBaseUrl = process.env.MAESTRO_RELEASE_BASE_URL;
+    const previousApiBaseUrl = process.env.MAESTRO_RELEASE_API_BASE_URL;
+    process.env.MAESTRO_RELEASE_REPO = "attacker/repo";
+    process.env.MAESTRO_RELEASE_BASE_URL = "https://evil.example/releases";
+    process.env.MAESTRO_RELEASE_API_BASE_URL = "https://evil.example/api";
+
+    try {
+      expect(buildReleaseDownloadUrl("maestro-darwin-arm64")).toBe(
+        "https://github.com/ReinaMacCredy/maestro/releases/latest/download/maestro-darwin-arm64",
+      );
+      expect(getReleasesApiBaseUrl()).toBe("https://api.github.com/repos/ReinaMacCredy/maestro/releases");
+    } finally {
+      restoreEnv("MAESTRO_RELEASE_REPO", previousRepo);
+      restoreEnv("MAESTRO_RELEASE_BASE_URL", previousBaseUrl);
+      restoreEnv("MAESTRO_RELEASE_API_BASE_URL", previousApiBaseUrl);
+    }
   });
 
   it("installs the matching asset from the latest release", async () => {
@@ -238,15 +297,17 @@ describe("install release binary usecase", () => {
           return Response.json({
           tag_name: "v9.9.9",
           assets: [
-            {
-              name: "maestro-darwin-arm64",
-              browser_download_url: "https://downloads.example.test/maestro-darwin-arm64",
-            },
+            binaryAsset("maestro-darwin-arm64"),
+            checksumAsset("maestro-darwin-arm64"),
           ],
         });
       }
 
-        if (url === "https://downloads.example.test/maestro-darwin-arm64") {
+        if (url.endsWith("/maestro-darwin-arm64.sha256")) {
+          return checksumResponse("maestro-darwin-arm64", "binary-data");
+        }
+
+        if (url.endsWith("/maestro-darwin-arm64")) {
           return new Response("binary-data", { status: 200 });
         }
 
@@ -279,10 +340,8 @@ describe("install release binary usecase", () => {
           return Response.json({
           tag_name: `v${VERSION}`,
           assets: [
-            {
-              name: "maestro-darwin-arm64",
-              browser_download_url: "https://downloads.example.test/maestro-darwin-arm64",
-            },
+            binaryAsset("maestro-darwin-arm64"),
+            checksumAsset("maestro-darwin-arm64"),
           ],
         });
       }
@@ -316,15 +375,17 @@ describe("install release binary usecase", () => {
           return Response.json({
           tag_name: `v${VERSION}`,
           assets: [
-            {
-              name: "maestro-darwin-arm64",
-              browser_download_url: "https://downloads.example.test/maestro-darwin-arm64",
-            },
+            binaryAsset("maestro-darwin-arm64"),
+            checksumAsset("maestro-darwin-arm64"),
           ],
         });
       }
 
-      if (url === "https://downloads.example.test/maestro-darwin-arm64") {
+      if (url.endsWith("/maestro-darwin-arm64.sha256")) {
+        return checksumResponse("maestro-darwin-arm64", "binary-data");
+      }
+
+      if (url.endsWith("/maestro-darwin-arm64")) {
         downloadRequested = true;
         return new Response("binary-data", { status: 200 });
       }
@@ -343,6 +404,67 @@ describe("install release binary usecase", () => {
     expect(result.alreadyCurrent).toBe(false);
     expect(downloadRequested).toBe(true);
     expect(await Bun.file(join(installDir, "maestro")).text()).toBe("binary-data");
+  });
+
+  it("rejects releases that omit the checksum asset", async () => {
+    const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
+    installDirs.push(installDir);
+
+    const fetchImpl = asFetch(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/releases/latest")) {
+        return Response.json({
+          tag_name: "v9.9.9",
+          assets: [binaryAsset("maestro-darwin-arm64")],
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    await expect(
+      installReleaseBinary({
+        fetchImpl,
+        installDir,
+        platform: "darwin",
+        arch: "arm64",
+      }),
+    ).rejects.toThrow(/does not include maestro-darwin-arm64\.sha256/);
+    expect(await Bun.file(join(installDir, "maestro")).exists()).toBe(false);
+  });
+
+  it("rejects binaries when the checksum does not match", async () => {
+    const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
+    installDirs.push(installDir);
+
+    const fetchImpl = asFetch(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/releases/latest")) {
+        return Response.json({
+          tag_name: "v9.9.9",
+          assets: [
+            binaryAsset("maestro-darwin-arm64"),
+            checksumAsset("maestro-darwin-arm64"),
+          ],
+        });
+      }
+      if (url.endsWith("/maestro-darwin-arm64.sha256")) {
+        return checksumResponse("maestro-darwin-arm64", "different-binary");
+      }
+      if (url.endsWith("/maestro-darwin-arm64")) {
+        return new Response("binary-data", { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    await expect(
+      installReleaseBinary({
+        fetchImpl,
+        installDir,
+        platform: "darwin",
+        arch: "arm64",
+      }),
+    ).rejects.toThrow(/checksum mismatch/);
+    expect(await Bun.file(join(installDir, "maestro")).exists()).toBe(false);
   });
 
   it("fails clearly when the platform is unsupported", () => {
