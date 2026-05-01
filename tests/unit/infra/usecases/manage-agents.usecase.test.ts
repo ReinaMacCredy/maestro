@@ -14,10 +14,14 @@ import {
   hasReference,
   injectReference,
   removeReference,
+} from "@/infra/lib/agent-block.js";
+import {
   injectAgentBlocks,
   removeAgentBlocks,
+} from "@/infra/usecases/manage-agents.usecase.js";
+import {
   REFERENCE_FILE,
-} from "@/features/agent";
+} from "@/infra/domain/agents.js";
 
 const REFERENCE_LINE = `@${REFERENCE_FILE}`;
 const BUNDLED_SKILL_NAMES = BUNDLED_SKILL_TEMPLATES.map((template) => template.name);
