@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { TarArchiveAdapter } from "@/features/bundle/adapters/tar-archive.adapter.js";
@@ -122,6 +122,23 @@ describe("TarArchiveAdapter", () => {
         content: "nope",
       },
     ])).rejects.toThrow(/outside the allowed root/i);
+  });
+
+  it("rejects manifest entries that could be parsed as tar options", async () => {
+    const archiveRoot = join(tmpDir, "unsafe-archive");
+    const entryDir = join(archiveRoot, "--checkpoint=1");
+    const outPath = join(tmpDir, "option-member.tar.gz");
+    await mkdir(entryDir, { recursive: true });
+    await writeFile(join(entryDir, "manifest.json"), JSON.stringify(sampleManifest), "utf8");
+
+    const tar = Bun.spawnSync({
+      cmd: ["tar", "-czf", outPath, "-C", archiveRoot, "--", "--checkpoint=1/manifest.json"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(tar.exitCode).toBe(0);
+
+    await expect(adapter.readManifest(outPath)).rejects.toThrow(/unsafe/i);
   });
 
   it("surfaces tar errors when given a missing file", async () => {

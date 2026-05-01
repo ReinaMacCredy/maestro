@@ -1,7 +1,7 @@
 #Requires -Version 7
 $ErrorActionPreference = "Stop"
 
-$releaseRepo = if ($env:MAESTRO_RELEASE_REPO) { $env:MAESTRO_RELEASE_REPO } else { "ReinaMacCredy/maestro" }
+$releaseRepo = "ReinaMacCredy/maestro"
 $requestedVersion = if ($env:MAESTRO_VERSION) { $env:MAESTRO_VERSION } else { "latest" }
 $installDir = if ($env:MAESTRO_INSTALL_DIR) { $env:MAESTRO_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\maestro" }
 $targetBin = Join-Path $installDir "maestro.exe"
@@ -32,6 +32,7 @@ if ($requestedVersion -eq "latest") {
     if (-not $tag.StartsWith("v")) { $tag = "v$tag" }
     $url = "$baseUrl/download/$tag/$asset"
 }
+$checksumUrl = "$url.sha256"
 
 Write-Host "Installing asset: $asset"
 Write-Host "Download URL: $url"
@@ -40,8 +41,26 @@ Write-Host ""
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 
 $tempBin = Join-Path $installDir ".maestro.tmp.$([guid]::NewGuid().ToString('N')).exe"
+$tempChecksum = Join-Path $installDir ".maestro.sha256.$([guid]::NewGuid().ToString('N'))"
 try {
     Invoke-WebRequest -Uri $url -OutFile $tempBin -UseBasicParsing
+    Invoke-WebRequest -Uri $checksumUrl -OutFile $tempChecksum -UseBasicParsing
+    $checksumText = Get-Content -Raw -Path $tempChecksum
+    $expected = $null
+    foreach ($line in ($checksumText -split '\r?\n')) {
+        $trimmed = $line.Trim()
+        if ($trimmed -match '^([a-fA-F0-9]{64})(?:\s+\*?(.+))?$') {
+            $listedName = $Matches[2]
+            if (-not $listedName -or $listedName -eq $asset) {
+                $expected = $Matches[1].ToLowerInvariant()
+                break
+            }
+        }
+    }
+    if (-not $expected) { Write-Fail "Checksum asset did not contain a SHA-256 digest for $asset." }
+    $actual = (Get-FileHash -Algorithm SHA256 -Path $tempBin).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) { Write-Fail "Checksum mismatch for $asset. Refusing to install downloaded binary." }
+    Remove-Item $tempChecksum -Force -ErrorAction SilentlyContinue
 
     if (Test-Path $targetBin) {
         if (Test-Path $oldBin) { Remove-Item $oldBin -Force -ErrorAction SilentlyContinue }
@@ -55,6 +74,7 @@ try {
     Write-Info "Installed maestro $version to $targetBin"
 } catch {
     if (Test-Path $tempBin) { Remove-Item $tempBin -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $tempChecksum) { Remove-Item $tempChecksum -Force -ErrorAction SilentlyContinue }
     if (Test-Path $oldBin) {
         if (Test-Path $targetBin) { Remove-Item $targetBin -Force -ErrorAction SilentlyContinue }
         try {

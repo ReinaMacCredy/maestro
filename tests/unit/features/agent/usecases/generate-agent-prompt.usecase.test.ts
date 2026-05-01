@@ -256,12 +256,12 @@ describe("generateAgentPrompt", () => {
         featureStore,
         assertionStore,
           tmpDir,
-        "non-existent",
+        "2026-03-28-999",
         "f1",
       );
     } catch (err) {
       errorThrown = true;
-      expect((err as Error).message).toContain("Mission non-existent not found");
+      expect((err as Error).message).toContain("Mission 2026-03-28-999 not found");
     }
 
     expect(errorThrown).toBe(true);

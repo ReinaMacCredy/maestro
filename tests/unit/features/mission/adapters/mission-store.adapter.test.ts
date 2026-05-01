@@ -77,7 +77,7 @@ describe("FsMissionStoreAdapter", () => {
 
   describe("get", () => {
     it("returns undefined for non-existent mission", async () => {
-      const result = await store.get("non-existent");
+      const result = await store.get("2026-03-28-999");
       expect(result).toBeUndefined();
     });
 
@@ -91,11 +91,15 @@ describe("FsMissionStoreAdapter", () => {
       expect(mission!.id).toBe(id);
       expect(mission!.milestones).toHaveLength(1);
     });
+
+    it("rejects mission IDs that try to escape the mission root", async () => {
+      await expect(store.get("../../outside")).rejects.toThrow(/Invalid mission ID/);
+    });
   });
 
   describe("exists", () => {
     it("returns false for non-existent mission", async () => {
-      const result = await store.exists("non-existent");
+      const result = await store.exists("2026-03-28-999");
       expect(result).toBe(false);
     });
 
@@ -106,6 +110,10 @@ describe("FsMissionStoreAdapter", () => {
 
       const result = await store.exists(id);
       expect(result).toBe(true);
+    });
+
+    it("rejects unsafe mission IDs before checking the filesystem", async () => {
+      await expect(store.exists("../outside")).rejects.toThrow(/Invalid mission ID/);
     });
   });
 
@@ -153,7 +161,7 @@ describe("FsMissionStoreAdapter", () => {
 
   describe("update", () => {
     it("returns undefined for non-existent mission", async () => {
-      const result = await store.update("non-existent", { status: "approved" });
+      const result = await store.update("2026-03-28-999", { status: "approved" });
       expect(result).toBeUndefined();
     });
 
@@ -208,6 +216,16 @@ describe("FsMissionStoreAdapter", () => {
       const updated = await store.update(id, { status: "completed" });
       expect(updated!.status).toBe("completed");
       expect(updated!.completedAt).toBeTruthy();
+    });
+
+    it("rejects unsafe mission IDs before updating", async () => {
+      await expect(store.update("../outside", { status: "approved" })).rejects.toThrow(/Invalid mission ID/);
+    });
+  });
+
+  describe("path safety", () => {
+    it("rejects unsafe mission IDs before staging", async () => {
+      await expect(store.stage(makeCreateInput(), "../outside", [])).rejects.toThrow(/Invalid mission ID/);
     });
   });
 

@@ -117,9 +117,15 @@ export class TarArchiveAdapter implements ArchivePort {
         "Try re-exporting the mission with `maestro bundle export <missionId>`",
       ]);
     }
+    if (manifestEntry.startsWith("-")) {
+      throw new MaestroError("Bundle manifest entry is unsafe", [
+        `Manifest entry: ${manifestEntry}`,
+        "Archive member names used for manifest lookup must not start with '-'",
+      ]);
+    }
 
     const extract = await execArgv(
-      ["tar", "-xzf", archiveBase, "-O", manifestEntry],
+      ["tar", "-xzf", archiveBase, "-O", "--", manifestEntry],
       { cwd: archiveDir },
     );
     if (extract.exitCode !== 0) {
