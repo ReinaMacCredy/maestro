@@ -18,10 +18,9 @@ afterEach(async () => {
 describe("posttooluse hook", () => {
   it("does not persist free-form status text in session events", async () => {
     const hookPath = join(import.meta.dir, "../../../hooks/posttooluse.mjs");
-    const proc = spawnSync("bun", [hookPath], {
+    const proc = spawnSync(process.execPath, [hookPath], {
       cwd: tmpDir,
       env: {
-        ...process.env,
         CLAUDE_PROJECT_DIR: tmpDir,
       },
       input: JSON.stringify({
