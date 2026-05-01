@@ -18,10 +18,11 @@ afterEach(async () => {
 describe("posttooluse hook", () => {
   it("does not persist free-form status text in session events", async () => {
     const hookPath = join(import.meta.dir, "../../../hooks/posttooluse.mjs");
-    const proc = spawnSync(process.execPath, [hookPath], {
+    const proc = spawnSync("node", [hookPath], {
       cwd: tmpDir,
       env: {
         CLAUDE_PROJECT_DIR: tmpDir,
+        PATH: process.env.PATH ?? "",
       },
       input: JSON.stringify({
         tool_name: "Bash",
@@ -35,7 +36,9 @@ describe("posttooluse hook", () => {
       encoding: "utf8",
     });
 
-    expect(proc.status).toBe(0);
+    if (proc.status !== 0) {
+      throw new Error(`posttooluse exited ${proc.status}: ${proc.stderr || proc.stdout}`);
+    }
     const raw = await readFile(join(tmpDir, ".maestro", "sessions", "events.jsonl"), "utf8");
     const event = JSON.parse(raw.trim()) as Record<string, unknown>;
     expect(event).toMatchObject({ tool: "Bash", feature: "f1", task: "task-1" });
