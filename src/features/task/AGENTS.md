@@ -7,7 +7,7 @@ Use with the parent [AGENTS.md](../AGENTS.md). `src/features/task/` is the daily
 task/
 ├── commands/           # task.command.ts (main), contract.command.ts
 ├── usecases/           # CRUD, claim, block, ready, plan
-├── usecases/contract/  # Contract use cases (new, edit, lock, amend, verdict)
+├── usecases/contract-workflows.usecase.ts  # Contract workflows (draft, edit, lock, amend, verdict)
 ├── domain/             # Task types, validators, state machines, contract types
 ├── ports/              # task-store.port.ts, contract-store.port.ts
 ├── adapters/           # jsonl-task-store.adapter.ts, fs-contract-store.adapter.ts

@@ -5,10 +5,11 @@ import { join } from "node:path";
 import { MaestroError } from "@/shared/errors.js";
 import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
-import { createContract } from "@/features/task/usecases/contract/create-contract.usecase.js";
+import { buildContractWorkflows } from "@/features/task/usecases/contract-workflows.usecase.js";
 import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
 import { findSimilarTasks } from "@/features/task/usecases/find-similar-tasks.usecase.js";
+import { mockGitAnchor } from "../../../../helpers/mocks.js";
 
 describe("findSimilarTasks", () => {
   let tmpDir: string;
@@ -91,7 +92,7 @@ describe("findSimilarTasks", () => {
 
   it("includes contract intent and criteria text in the similarity pool", async () => {
     const contracted = await createTask(store, { title: "unrelated backlog item" });
-    await createContract(store, contractStore, {
+    await buildContractWorkflows(contractStore, store, mockGitAnchor()).draft({
       taskId: contracted.id,
       repoRoot: tmpDir,
       intent: "stabilize websocket backpressure flow",

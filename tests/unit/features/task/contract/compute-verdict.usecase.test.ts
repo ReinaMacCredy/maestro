@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
-import { computeContractVerdictForTask } from "@/features/task/usecases/contract/compute-verdict.usecase.js";
-import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
+import { buildContractWorkflows } from "@/features/task/usecases/contract-workflows.usecase.js";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { GitAnchorPort, GitTouchedFilesResult } from "@/features/task/ports/git-anchor.port.js";
+import { mockTaskStore } from "../../../../helpers/mocks.js";
 
 function contractFixture(overrides: Partial<Contract> = {}): Contract {
   return {
@@ -40,7 +41,7 @@ const baseGitResult: GitTouchedFilesResult = {
   anchorFallback: "direct",
 };
 
-function contractStore(contracts: readonly Contract[]): ContractStoreQueryPort {
+function contractStore(contracts: readonly Contract[]): ContractStorePort {
   return {
     async get(id) {
       return contracts.find((contract) => contract.id === id);
@@ -53,6 +54,15 @@ function contractStore(contracts: readonly Contract[]): ContractStoreQueryPort {
     },
     async readIndex() {
       return [];
+    },
+    async create() {
+      throw new Error("unused");
+    },
+    async save() {
+      throw new Error("unused");
+    },
+    async delete() {
+      throw new Error("unused");
     },
   };
 }
@@ -91,15 +101,18 @@ describe("computeContractVerdictForTask", () => {
       },
     };
 
-    const computed = await computeContractVerdictForTask(
+    const contracts = buildContractWorkflows(
       contractStore([current, older]),
+      mockTaskStore(),
       gitAnchor,
-      current,
-      {
+    );
+    const computed = await contracts.previewVerdict({
+      contract: current,
+      task: {
         updatedAt: "2026-04-21T03:00:00.000Z",
         assignee: "session:test",
       },
-    );
+    });
 
     expect(computed.verdict.overlapDetected).toBeUndefined();
     expect(computed.verdict.fulfilled).toBe(true);
@@ -133,15 +146,18 @@ describe("computeContractVerdictForTask", () => {
       },
     };
 
-    const computed = await computeContractVerdictForTask(
+    const contracts = buildContractWorkflows(
       contractStore([current, sibling]),
+      mockTaskStore(),
       gitAnchor,
-      current,
-      {
+    );
+    const computed = await contracts.previewVerdict({
+      contract: current,
+      task: {
         updatedAt: "2026-04-21T03:00:00.000Z",
         assignee: "session:test",
       },
-    );
+    });
 
     expect(computed.verdict.overlapDetected).toEqual({
       otherContractIds: ["c-sibling"],
@@ -174,16 +190,18 @@ describe("computeContractVerdictForTask", () => {
       },
     };
 
-    await computeContractVerdictForTask(
+    const contracts = buildContractWorkflows(
       contractStore([current]),
+      mockTaskStore(),
       gitAnchor,
-      current,
-      {
+    );
+    await contracts.previewVerdict({
+      contract: current,
+      task: {
         updatedAt: "2026-04-21T03:00:00.000Z",
         assignee: "session:test",
       },
-      undefined,
-      trustedRepoRoot,
-    );
+      runtimeRepoRoot: trustedRepoRoot,
+    });
   });
 });

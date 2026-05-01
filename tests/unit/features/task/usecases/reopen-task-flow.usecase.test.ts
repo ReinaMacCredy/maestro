@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
 import type { Task } from "@/features/task/domain/task-types.js";
+import { buildContractWorkflows } from "@/features/task/usecases/contract-workflows.usecase.js";
 import { reopenTaskFlow } from "@/features/task/usecases/reopen-task-flow.usecase.js";
 import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { TaskContinuationHistoryPort } from "@/features/task/ports/task-continuation-history.port.js";
 import type { TaskContinuationStorePort } from "@/features/task/ports/task-continuation-store.port.js";
 import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
+import { mockGitAnchor } from "../../../../helpers/mocks.js";
 
 function completedTaskFixture(): Task {
   return {
@@ -163,11 +165,13 @@ describe("reopenTaskFlow", () => {
       delete: async () => false,
     };
 
+    const taskStore = createTaskStore(taskState);
     await expect(reopenTaskFlow({
-      taskStore: createTaskStore(taskState),
+      taskStore,
       continuationStore: createContinuationStore(continuationState),
       continuationHistory: createHistoryStore(historyState),
       contractStore,
+      contracts: buildContractWorkflows(contractStore, taskStore, mockGitAnchor()),
     }, taskState.current.id)).rejects.toThrow("save failed");
 
     expect(taskState.current.status).toBe("completed");

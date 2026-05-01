@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
-import { reopenContractForTask } from "@/features/task/usecases/contract/reopen-contract.usecase.js";
+import { buildContractWorkflows } from "@/features/task/usecases/contract-workflows.usecase.js";
+import { mockGitAnchor, mockTaskStore } from "../../../../helpers/mocks.js";
 
 function createInput(overrides: Partial<Contract> = {}) {
   return {
@@ -87,7 +88,7 @@ describe("reopenContractForTask", () => {
       },
     });
 
-    const reopened = await reopenContractForTask(store, {
+    const reopened = await buildContractWorkflows(store, mockTaskStore(), mockGitAnchor()).reopenForTask({
       id: fulfilled.taskId,
       contractId: fulfilled.id,
     });
@@ -123,7 +124,7 @@ describe("reopenContractForTask", () => {
       },
     });
 
-    const reopened = await reopenContractForTask(store, {
+    const reopened = await buildContractWorkflows(store, mockTaskStore(), mockGitAnchor()).reopenForTask({
       id: fulfilled.taskId,
       contractId: fulfilled.id,
     });
@@ -164,7 +165,7 @@ describe("reopenContractForTask", () => {
       lockedBy: "session:codex:b",
     });
 
-    await expect(reopenContractForTask(store, {
+    await expect(buildContractWorkflows(store, mockTaskStore(), mockGitAnchor()).reopenForTask({
       id: fulfilled.taskId,
       contractId: fulfilled.id,
     })).rejects.toThrow("overlaps an active contract in the same repo");

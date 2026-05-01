@@ -21,10 +21,6 @@ import { nextTask } from "../usecases/next-task.usecase.js";
 import { listOpenProjectHandoffIdsForTask } from "@/features/handoff";
 import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
-import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
-import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
-import { loadContractForReopen } from "../usecases/contract/reopen-contract.usecase.js";
-import { transferContractOwnership } from "../usecases/contract/transfer-ownership.usecase.js";
 import { deleteTaskFlow } from "../usecases/delete-task-flow.usecase.js";
 import {
   pruneLocalTaskState,
@@ -93,7 +89,6 @@ import {
   type TaskStatusProjection,
 } from "../usecases/group-tasks-by-track.usecase.js";
 import { registerContractCommand } from "./contract.command.js";
-import { syncTaskMetadata } from "../usecases/sync-task-metadata.usecase.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
 
 interface ContinuationEditInput {
@@ -793,6 +788,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
             continuationStore: services.taskContinuationStore,
             continuationHistory: services.taskContinuationHistory,
             contractStore: services.contractStore,
+            contracts: services.contracts,
           }, id);
         }
         const result = await updateTask(
@@ -1004,6 +1000,7 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
         continuationStore: services.taskContinuationStore,
         continuationHistory: services.taskContinuationHistory,
         contractStore: services.contractStore,
+        contracts: services.contracts,
       }, id);
       await refreshNowMd();
 
@@ -1362,7 +1359,7 @@ async function preflightCompletedTaskRestart(
   const allTasks = await services.taskStore.all();
   const tasks = indexTasksById(allTasks.map((task) => task.id === reopenedTask.id ? reopenedTask : task));
   assertTaskUpdateAllowed(reopenedTask, patch, tasks, actor);
-  await loadContractForReopen(services.contractStore, previous);
+  await services.contracts.prepareReopen(previous);
 }
 
 function buildPreflightReopenedTask(previous: Task): Task {
@@ -1882,7 +1879,7 @@ async function maybeAttachClaimAnchor(taskId: string): Promise<void> {
     if (!claimedAtCommit) {
       return;
     }
-    await syncTaskMetadata(services.taskStore, taskId, { claimedAtCommit });
+    await services.taskStore.syncMetadata(taskId, { claimedAtCommit });
   } catch {
     // Claim anchor is best-effort and should not block ownership.
   }
@@ -1962,18 +1959,15 @@ async function enforceContractCompletionPolicy(
     return;
   }
 
-  const preview = await computeContractVerdictForTask(
-    services.contractStore,
-    services.gitAnchor,
+  const preview = await services.contracts.previewVerdict({
     contract,
-    {
+    task: {
       assignee: task.assignee,
       receipt: previewTaskReceipt(task, patch),
       updatedAt: new Date().toISOString(),
     },
-    undefined,
-    await services.gitAnchor.resolveRepoRoot(process.cwd()),
-  );
+    runtimeRepoRoot: await services.gitAnchor.resolveRepoRoot(process.cwd()),
+  });
 
   if (!preview.verdict.fulfilled) {
     throw new MaestroError(`Contract ${contract.id} is broken and strict mode refused completion`, [
@@ -2044,9 +2038,7 @@ function formatVerdictHint(verdict: {
 async function maybeFinalizeTaskContract(task: Task): Promise<void> {
   try {
     const services = getServices();
-    await closeContractForTask(
-      services.contractStore,
-      services.gitAnchor,
+    await services.contracts.closeForTask(
       task,
       await services.gitAnchor.resolveRepoRoot(process.cwd()),
     );
@@ -2063,7 +2055,7 @@ async function maybeTransferClaimedContractOwnership(
 ): Promise<void> {
   try {
     const services = getServices();
-    await transferContractOwnership(services.contractStore, taskId, newActor, reason);
+    await services.contracts.transferOwnership(taskId, newActor, reason);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warn(`Task ${taskId} kept its new owner, but contract ownership transfer failed: ${message}`);

@@ -4,8 +4,8 @@ import {
   getUnresolvedBlockerIds,
   loadTaskContinuationSummary,
   syncTaskContinuation,
-  transferContractOwnership,
   updateTask,
+  type ContractWorkflows,
   type TaskContinuationHistoryPort,
   type TaskContinuationStorePort,
   type TaskStorePort,
@@ -18,7 +18,7 @@ import { reconcileHandoffRecord } from "./reconcile-handoff-record.usecase.js";
 export interface PickupHandoffDeps {
   readonly handoffStore: HandoffStorePort;
   readonly taskStore: TaskStorePort;
-  readonly contractStore: Parameters<typeof transferContractOwnership>[0];
+  readonly contracts: ContractWorkflows;
   readonly continuationStore: TaskContinuationStorePort;
   readonly continuationHistory: TaskContinuationHistoryPort;
 }
@@ -139,7 +139,7 @@ export async function pickupHandoff(
   // user sees the failure instead of silently leaving lockedBy out of sync.
   let contractTransferWarning: string | undefined;
   try {
-    await transferContractOwnership(deps.contractStore, taskId, ownerId, "handoff_pickup");
+    await deps.contracts.transferOwnership(taskId, ownerId, "handoff_pickup");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     contractTransferWarning = `Task ${taskId} was resumed from handoff ${input.id}, but contract ownership transfer failed: ${message}`;

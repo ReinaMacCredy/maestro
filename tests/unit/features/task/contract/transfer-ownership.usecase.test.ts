@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
-import { transferContractOwnership } from "@/features/task/usecases/contract/transfer-ownership.usecase.js";
+import { buildContractWorkflows } from "@/features/task/usecases/contract-workflows.usecase.js";
+import { mockGitAnchor, mockTaskStore } from "../../../../helpers/mocks.js";
 
 function createInput(overrides: Partial<Contract> = {}) {
   return {
@@ -52,7 +53,8 @@ describe("transferContractOwnership", () => {
       lockedBy: "session:codex:a",
     });
 
-    const transferred = await transferContractOwnership(store, locked.taskId, "session:codex:b");
+    const contracts = buildContractWorkflows(store, mockTaskStore(), mockGitAnchor());
+    const transferred = await contracts.transferOwnership(locked.taskId, "session:codex:b");
     expect(transferred?.lockedBy).toBe("session:codex:b");
     expect(transferred?.ownershipHistory).toEqual([
       expect.objectContaining({
@@ -80,7 +82,7 @@ describe("transferContractOwnership", () => {
       },
     });
 
-    const closed = await transferContractOwnership(store, fulfilled.taskId, "session:codex:c");
+    const closed = await contracts.transferOwnership(fulfilled.taskId, "session:codex:c");
     expect(closed?.lockedBy).toBe("session:codex:b");
     expect(closed?.ownershipHistory).toHaveLength(1);
   });

@@ -25,19 +25,6 @@ import type {
   ContractVerdict,
   DoneWhenCriterion,
 } from "../domain/contract/contract-types.js";
-import { amendContract } from "../usecases/contract/amend-contract.usecase.js";
-import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
-import { editContract } from "../usecases/contract/edit-contract.usecase.js";
-import {
-  addContractCriterion,
-  markContractCriterion,
-  removeContractCriterion,
-} from "../usecases/contract/criteria.usecase.js";
-import { createContract } from "../usecases/contract/create-contract.usecase.js";
-import { discardContract } from "../usecases/contract/discard-contract.usecase.js";
-import { listContracts } from "../usecases/contract/list-contracts.usecase.js";
-import { lockContract } from "../usecases/contract/lock-contract.usecase.js";
-import { showContract } from "../usecases/contract/show-contract.usecase.js";
 import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
 import { buildTaskOwnerId } from "../usecases/task-continuation.usecase.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
@@ -89,7 +76,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const cwd = process.cwd();
       const config = await services.config.load(cwd);
       const template = await loadContractDraftTemplate(opts.from, opts.editor);
-      const contract = await createContract(services.taskStore, services.contractStore, {
+      const contract = await services.contracts.draft({
         taskId,
         repoRoot: await services.gitAnchor.resolveRepoRoot(cwd),
         intent: readTemplateIntent(template),
@@ -114,7 +101,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const config = await services.config.load(process.cwd());
-      const contract = await lockContract(services.contractStore, {
+      const contract = await services.contracts.lock({
         ref,
         actorId: await resolveDraftContractActor(ref, opts.session),
         claimedAtCommit: await services.gitAnchor.resolveHeadCommit(process.cwd()),
@@ -139,9 +126,9 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       await resolveDraftContractActor(ref, opts.session);
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await showContract(services.contractStore, ref);
+      const contract = await services.contracts.load(ref);
       const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract));
-      const edited = await editContract(services.contractStore, {
+      const edited = await services.contracts.editDraft({
         ref,
         intent: readTemplateIntent(template),
         scope: readTemplateScope(template),
@@ -165,9 +152,10 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (ref: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await showContract(services.contractStore, ref);
+      const contract = await services.contracts.load(ref);
       const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract));
-      const amended = await amendContract(services.contractStore, {
+      const amended = await services.contracts.amend({
+        kind: "replace",
         ref,
         actorId: await resolveActiveContractActor(ref, opts.session),
         reason: opts.reason,
@@ -189,7 +177,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (ref: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await showContract(services.contractStore, ref);
+      const contract = await services.contracts.load(ref);
 
       if (isJson || opts.format === "json") {
         output(true, contract, formatContractDetail);
@@ -210,7 +198,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (ref: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await showContract(services.contractStore, ref);
+      const contract = await services.contracts.load(ref);
       assertContractCanPreviewVerdict(contract);
 
       const task = await services.taskStore.get(contract.taskId);
@@ -220,14 +208,11 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         ]);
       }
 
-      const preview = await computeContractVerdictForTask(
-        services.contractStore,
-        services.gitAnchor,
+      const preview = await services.contracts.previewVerdict({
         contract,
         task,
-        undefined,
-        await services.gitAnchor.resolveRepoRoot(process.cwd()),
-      );
+        runtimeRepoRoot: await services.gitAnchor.resolveRepoRoot(process.cwd()),
+      });
 
       output(isJson, {
         contractId: contract.id,
@@ -248,7 +233,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contracts = await listContracts(services.contractStore, {
+      const contracts = await services.contracts.list({
         status: parseContractStatus(opts.status),
         taskId: opts.task,
       });
@@ -265,7 +250,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       await resolveDraftContractActor(ref, opts.session);
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await discardContract(services.taskStore, services.contractStore, ref);
+      const contract = await services.contracts.discard(ref);
       await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
@@ -280,16 +265,17 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (ref: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await showContract(services.contractStore, ref);
+      const contract = await services.contracts.load(ref);
       const reopened = await reopenTaskFlow({
         taskStore: services.taskStore,
         continuationStore: services.taskContinuationStore,
         continuationHistory: services.taskContinuationHistory,
         contractStore: services.contractStore,
+        contracts: services.contracts,
       }, contract.taskId);
       await refreshContractNowMd();
 
-      const payload = reopened.contract ?? await showContract(services.contractStore, contract.id);
+      const payload = reopened.contract ?? await services.contracts.load(contract.id);
       if (emitContractSilentSuccess(isJson, opts, payload)) return;
       output(isJson, payload, formatContractDetail);
     });
@@ -314,7 +300,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
 
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await markContractCriterion(services.contractStore, {
+      const contract = await services.contracts.amend({
+        kind: "markCriterion",
         ref,
         criterionId,
         actorId: await resolveActiveContractActor(ref, opts.session),
@@ -336,7 +323,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (ref: string, text: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await addContractCriterion(services.contractStore, {
+      const contract = await services.contracts.amend({
+        kind: "addCriterion",
         ref,
         text,
         actorId: await resolveActiveContractActor(ref, opts.session),
@@ -356,7 +344,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (ref: string, criterionId: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await removeContractCriterion(services.contractStore, {
+      const contract = await services.contracts.amend({
+        kind: "removeCriterion",
         ref,
         criterionId,
         actorId: await resolveActiveContractActor(ref, opts.session),

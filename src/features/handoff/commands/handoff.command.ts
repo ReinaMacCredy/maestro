@@ -130,7 +130,7 @@ export function registerHandoffCommand(program: Command): void {
         {
           handoffStore: services.handoffStore,
           taskStore: services.taskStore,
-          contractStore: services.contractStore,
+          contracts: services.contracts,
           continuationStore: services.taskContinuationStore,
           continuationHistory: services.taskContinuationHistory,
         },
