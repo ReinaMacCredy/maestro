@@ -8,12 +8,10 @@ import { join } from "node:path";
 import { readdir } from "node:fs/promises";
 import type {
   Assertion,
-  AssertionStorePort,
-  CheckpointStorePort,
   Feature,
-  FeatureStorePort,
   Mission,
-  MissionStorePort,
+  MissionFullState,
+  Missions,
   ReplyStorePort,
 } from "@/features/mission/index.js";
 import { MISSION_ID_PATTERN } from "@/features/mission/index.js";
@@ -41,10 +39,7 @@ export interface CollectBundleSourcesInput {
 }
 
 export interface CollectBundleSourcesDeps {
-  readonly missionStore: MissionStorePort;
-  readonly featureStore: FeatureStorePort;
-  readonly assertionStore: AssertionStorePort;
-  readonly checkpointStore: CheckpointStorePort;
+  readonly missions: Missions;
   readonly replyStore: ReplyStorePort;
   readonly handoffStore: HandoffStorePort;
 }
@@ -76,13 +71,7 @@ export async function collectBundleSources(
   const files: BundleFile[] = [];
   const projectRoot = resolveMaestroProjectRoot(projectDir);
 
-  const mission = await deps.missionStore.get(missionId);
-  if (!mission) {
-    throw new MaestroError(`Mission ${missionId} not found`, [
-      "List missions: maestro mission list",
-      "Check that the mission ID is correct",
-    ]);
-  }
+  const { mission, features, assertions, checkpoints } = await loadBundleMissionState(deps.missions, missionId);
 
   // mission.json
   files.push({
@@ -91,7 +80,6 @@ export async function collectBundleSources(
   });
 
   // features/*.json
-  const features = await deps.featureStore.list(missionId);
   for (const feature of features) {
     files.push({
       path: `${root}/mission/features/${feature.id}.json`,
@@ -100,7 +88,6 @@ export async function collectBundleSources(
   }
 
   // assertions.json (aggregate list)
-  const assertions = await deps.assertionStore.list(missionId);
   files.push({
     path: `${root}/mission/assertions.json`,
     content: stringifyJson(assertions),
@@ -126,7 +113,6 @@ export async function collectBundleSources(
   }
 
   // checkpoints/*.json (via store to tolerate malformed files)
-  const checkpoints = await deps.checkpointStore.list(missionId);
   for (const checkpoint of checkpoints) {
     files.push({
       path: `${root}/mission/checkpoints/${checkpoint.id}.json`,
@@ -214,6 +200,23 @@ export async function collectBundleSources(
     files,
     stats,
   };
+}
+
+async function loadBundleMissionState(
+  missions: Missions,
+  missionId: string,
+): Promise<MissionFullState> {
+  try {
+    return await missions.loadFullState(missionId);
+  } catch (error) {
+    if (error instanceof MaestroError && error.message === `Mission ${missionId} not found`) {
+      throw new MaestroError(`Mission ${missionId} not found`, [
+        "List missions: maestro mission list",
+        "Check that the mission ID is correct",
+      ]);
+    }
+    throw error;
+  }
 }
 
 async function collectMemoryFiles(

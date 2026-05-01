@@ -50,10 +50,7 @@ Examples:
 
       const result = await exportBundle(
         {
-          missionStore: services.missionStore,
-          featureStore: services.featureStore,
-          assertionStore: services.assertionStore,
-          checkpointStore: services.checkpointStore,
+          missions: services.missions,
           replyStore: services.replyStore,
           handoffStore: services.handoffStore,
           archive: services.archive,

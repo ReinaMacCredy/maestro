@@ -7,7 +7,10 @@ import type {
   FeatureStorePort,
   MissionStorePort,
   AssertionStorePort,
+  CheckpointStorePort,
   PrincipleStorePort,
+  Missions,
+  MissionFullState,
   Feature,
   Mission,
   Milestone,
@@ -15,7 +18,7 @@ import type {
   Principle,
   MilestoneProfile,
 } from "@/features/mission";
-import { AGENT_TYPE_PATTERN, parseAgentReport } from "@/features/mission";
+import { AGENT_TYPE_PATTERN, buildMissions, parseAgentReport } from "@/features/mission";
 import {
   recallMemory,
   type CorrectionStorePort,
@@ -70,6 +73,15 @@ export interface AgentPromptStores {
 }
 
 export async function generateAgentPrompt(
+  missions: Missions,
+  baseDir: string,
+  missionId: string,
+  featureId: string,
+  outPath?: string,
+  stores?: AgentPromptStores,
+): Promise<GenerateAgentPromptResult>;
+
+export async function generateAgentPrompt(
   missionStore: MissionStorePort,
   featureStore: FeatureStorePort,
   assertionStore: AssertionStorePort,
@@ -93,28 +105,42 @@ export async function generateAgentPrompt(
 ): Promise<GenerateAgentPromptResult>;
 
 export async function generateAgentPrompt(
-  missionStore: MissionStorePort,
-  featureStore: FeatureStorePort,
-  assertionStore: AssertionStorePort,
+  ...args:
+    | [
+      missions: Missions,
+      baseDir: string,
+      missionId: string,
+      featureId: string,
+      outPath?: string,
+      stores?: AgentPromptStores,
+    ]
+    | [
+      missionStore: MissionStorePort,
+      featureStore: FeatureStorePort,
+      assertionStore: AssertionStorePort,
+      baseDir: string,
+      missionId: string,
+      featureId: string,
+      outPath?: string,
+      storesOrCorrectionStore?: AgentPromptStores | CorrectionStorePort,
+      learningStore?: LearningStorePort,
+    ]
+): Promise<GenerateAgentPromptResult> {
+  const { missions, baseDir, missionId, featureId, outPath, stores } = normalizeGenerateAgentPromptArgs(args);
+  return generateAgentPromptFromMissions(missions, baseDir, missionId, featureId, outPath, stores);
+}
+
+async function generateAgentPromptFromMissions(
+  missions: Missions,
   baseDir: string,
   missionId: string,
   featureId: string,
-  outPath?: string,
-  storesOrCorrectionStore?: AgentPromptStores | CorrectionStorePort,
-  learningStore?: LearningStorePort,
+  outPath: string | undefined,
+  stores: AgentPromptStores | undefined,
 ): Promise<GenerateAgentPromptResult> {
-  const stores = normalizeAgentPromptStores(storesOrCorrectionStore, learningStore);
-  // Verify mission exists
-  const mission = await missionStore.get(missionId);
-  if (!mission) {
-    throw new MaestroError(`Mission ${missionId} not found`, [
-      "List missions: maestro mission list",
-      `Check that mission ID '${missionId}' is correct`,
-    ]);
-  }
+  const { mission, features: allFeatures, assertions } = await loadPromptMissionState(missions, missionId);
 
-  // Get feature
-  const feature = await featureStore.get(missionId, featureId);
+  const feature = allFeatures.find((item) => item.id === featureId);
   if (!feature) {
     throw new MaestroError(`Feature ${featureId} not found in mission ${missionId}`, [
       `List features: maestro feature list --mission ${missionId}`,
@@ -130,15 +156,10 @@ export async function generateAgentPrompt(
     );
   }
 
-  // Get assertions for this feature
-  const assertions = await assertionStore.list(missionId);
   const featureAssertions = assertions.filter((a) => a.featureId === featureId);
 
   // Read skill file
   const skillContent = await readAgentSkill(baseDir, feature.agentType);
-
-  // Load all features for sibling context in prompt
-  const allFeatures = await featureStore.list(missionId);
 
   // Read handoff protocol (agent-base skill) -- optional, don't error if missing
   let handoffProtocol: string | undefined;
@@ -190,6 +211,93 @@ export async function generateAgentPrompt(
     writtenTo: writtenPaths.length > 0 ? writtenPaths : undefined,
   };
 }
+
+function normalizeGenerateAgentPromptArgs(
+  args:
+    | [
+      missions: Missions,
+      baseDir: string,
+      missionId: string,
+      featureId: string,
+      outPath?: string,
+      stores?: AgentPromptStores,
+    ]
+    | [
+      missionStore: MissionStorePort,
+      featureStore: FeatureStorePort,
+      assertionStore: AssertionStorePort,
+      baseDir: string,
+      missionId: string,
+      featureId: string,
+      outPath?: string,
+      storesOrCorrectionStore?: AgentPromptStores | CorrectionStorePort,
+      learningStore?: LearningStorePort,
+    ],
+): {
+  readonly missions: Missions;
+  readonly baseDir: string;
+  readonly missionId: string;
+  readonly featureId: string;
+  readonly outPath?: string;
+  readonly stores?: AgentPromptStores;
+} {
+  const [first] = args;
+  if (isMissions(first)) {
+    const [, baseDir, missionId, featureId, outPath, stores] = args;
+    return { missions: first, baseDir, missionId, featureId, outPath, stores };
+  }
+
+  const [
+    missionStore,
+    featureStore,
+    assertionStore,
+    baseDir,
+    missionId,
+    featureId,
+    outPath,
+    storesOrCorrectionStore,
+    learningStore,
+  ] = args;
+  return {
+    missions: buildMissions(missionStore, featureStore, assertionStore, emptyCheckpointStore),
+    baseDir,
+    missionId,
+    featureId,
+    outPath,
+    stores: normalizeAgentPromptStores(storesOrCorrectionStore, learningStore),
+  };
+}
+
+function isMissions(value: Missions | MissionStorePort): value is Missions {
+  return "loadFullState" in value;
+}
+
+async function loadPromptMissionState(
+  missions: Missions,
+  missionId: string,
+): Promise<MissionFullState> {
+  try {
+    return await missions.loadFullState(missionId);
+  } catch (error) {
+    if (error instanceof MaestroError && error.message === `Mission ${missionId} not found`) {
+      throw new MaestroError(`Mission ${missionId} not found`, [
+        "List missions: maestro mission list",
+        `Check that mission ID '${missionId}' is correct`,
+      ]);
+    }
+    throw error;
+  }
+}
+
+const emptyCheckpointStore: CheckpointStorePort = {
+  get: async () => undefined,
+  save: async () => {
+    throw new Error("checkpoint writes are not used for agent prompt generation");
+  },
+  list: async () => [],
+  getLatest: async () => undefined,
+  load: async () => undefined,
+};
 
 function normalizeAgentPromptStores(
   storesOrCorrectionStore: AgentPromptStores | CorrectionStorePort | undefined,

@@ -18,6 +18,7 @@ import type {
   Mission,
   MissionStorePort,
 } from "@/features/mission/index.js";
+import { buildMissions } from "@/features/mission/index.js";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort, AgentReply } from "@/features/mission/index.js";
 
@@ -132,6 +133,7 @@ async function loadRegisterBundleCommand() {
       featureStore,
       assertionStore,
       checkpointStore,
+      missions: buildMissions(missionStore, featureStore, assertionStore, checkpointStore),
       replyStore,
       handoffStore,
       archive,

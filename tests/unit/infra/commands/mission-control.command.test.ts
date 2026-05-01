@@ -6,6 +6,7 @@ import { FsAssertionStoreAdapter } from "@/features/mission";
 import { FsCheckpointStoreAdapter } from "@/features/mission";
 import { FsFeatureStoreAdapter } from "@/features/mission";
 import { FsMissionStoreAdapter } from "@/features/mission";
+import { buildMissions } from "@/features/mission";
   import {
     createMissionControlSnapshotLoader,
     loadMissionControlSnapshot,
@@ -71,11 +72,16 @@ beforeEach(async () => {
     isRepo: async () => true,
   } satisfies GitPort;
 
+  const missionStore = new FsMissionStoreAdapter(tmpDir);
+  const featureStore = new FsFeatureStoreAdapter(tmpDir);
+  const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+  const checkpointStore = new FsCheckpointStoreAdapter(tmpDir);
   snapshotDeps = {
-    missionStore: new FsMissionStoreAdapter(tmpDir),
-    featureStore: new FsFeatureStoreAdapter(tmpDir),
-    assertionStore: new FsAssertionStoreAdapter(tmpDir),
-    checkpointStore: new FsCheckpointStoreAdapter(tmpDir),
+    missions: buildMissions(missionStore, featureStore, assertionStore, checkpointStore),
+    missionStore,
+    featureStore,
+    assertionStore,
+    checkpointStore,
     config,
     git,
     cwd: tmpDir,

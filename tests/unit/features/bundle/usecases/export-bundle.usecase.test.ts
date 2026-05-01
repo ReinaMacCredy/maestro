@@ -19,6 +19,7 @@ import type {
   Mission,
   MissionStorePort,
 } from "@/features/mission/index.js";
+import { buildMissions } from "@/features/mission/index.js";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort, AgentReply } from "@/features/mission/index.js";
 
@@ -112,11 +113,13 @@ const handoffStore: HandoffStorePort = {
   resolveArtifactPath(relativePath: string) { return join(projectDir, relativePath); },
 };
 
+const missions = buildMissions(missionStore, featureStore, assertionStore, checkpointStore);
+
 describe("exportBundle", () => {
   it("writes a manifest with schema v1 and the current maestro version", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, handoffStore, archive },
+      { missions, replyStore, handoffStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,
@@ -139,7 +142,7 @@ describe("exportBundle", () => {
   it("resolves --out to an absolute path", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, handoffStore, archive },
+      { missions, replyStore, handoffStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,
@@ -154,7 +157,7 @@ describe("exportBundle", () => {
   it("falls back to a timestamped default output name", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, handoffStore, archive },
+      { missions, replyStore, handoffStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,

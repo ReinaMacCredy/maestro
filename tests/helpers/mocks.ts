@@ -10,7 +10,9 @@ import type {
   FeatureStorePort,
   AssertionStorePort,
   CheckpointStorePort,
+  Missions,
 } from "@/features/mission";
+import { buildMissions } from "@/features/mission";
 import type {
   CorrectionStorePort,
   LearningStorePort,
@@ -358,6 +360,22 @@ export function mockCheckpointStore(
     },
     };
   }
+
+export function mockMissions(input: {
+  readonly missionId?: string;
+  readonly missions?: Mission[];
+  readonly features?: Feature[];
+  readonly assertions?: Assertion[];
+  readonly checkpoints?: Checkpoint[];
+} = {}): Missions {
+  const missionId = input.missionId ?? input.missions?.[0]?.id ?? "2026-04-20-001";
+  return buildMissions(
+    mockMissionStore(input.missions ?? []),
+    mockFeatureStore(missionId, input.features ?? []),
+    mockAssertionStore(missionId, input.assertions ?? []),
+    mockCheckpointStore(missionId, input.checkpoints ?? []),
+  );
+}
 
 export function mockCorrectionStore(
   initial: Correction[] = [],

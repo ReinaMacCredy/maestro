@@ -1,9 +1,7 @@
 import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type {
-  AssertionStorePort,
-  FeatureStorePort,
-  MissionStorePort,
+  Missions,
 } from "@/features/mission";
 import type {
   HandoffAgent,
@@ -21,9 +19,7 @@ import { buildHandoffPrompt } from "./build-handoff-prompt.usecase.js";
 const PROMPT_FILE_SIZE_WARN_BYTES = 500_000;
 
 export interface LaunchHandoffDeps {
-  readonly missionStore: MissionStorePort;
-  readonly featureStore: FeatureStorePort;
-  readonly assertionStore: AssertionStorePort;
+  readonly missions: Missions;
   readonly git: GitPort;
   readonly handoffStore: HandoffStorePort;
   readonly launchers: Readonly<Record<HandoffAgent, HandoffLaunchPort>>;
