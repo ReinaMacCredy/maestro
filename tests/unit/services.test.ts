@@ -42,6 +42,7 @@ describe("services composition root", () => {
       sessionDetect: expect.any(Object),
       notesStore: expect.any(Object),
       missionStore: expect.any(Object),
+      missions: expect.any(Object),
       correctionStore: expect.any(Object),
       handoffStore: expect.any(Object),
       handoffLaunchers: {

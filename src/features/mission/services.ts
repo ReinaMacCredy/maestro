@@ -10,6 +10,7 @@ import { FsAssertionStoreAdapter } from "./adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "./adapters/checkpoint-store.adapter.js";
 import { JsonlPrincipleStoreAdapter } from "./adapters/principle-store.adapter.js";
 import { FsReplyStoreAdapter } from "./reply/adapters/fs-reply-store.adapter.js";
+import { buildMissions, type Missions } from "./usecases/missions.usecase.js";
 
 export interface MissionServices {
   readonly missionStore: MissionStorePort;
@@ -18,15 +19,25 @@ export interface MissionServices {
   readonly checkpointStore: CheckpointStorePort;
   readonly principleStore: PrincipleStorePort;
   readonly replyStore: ReplyStorePort;
+  readonly missions: Missions;
 }
 
 export function buildMissionServices(projectDir: string): MissionServices {
+  const missionStore = new FsMissionStoreAdapter(projectDir);
+  const featureStore = new FsFeatureStoreAdapter(projectDir);
+  const assertionStore = new FsAssertionStoreAdapter(projectDir);
+  const checkpointStore = new FsCheckpointStoreAdapter(projectDir);
+  const principleStore = new JsonlPrincipleStoreAdapter(projectDir);
+  const replyStore = new FsReplyStoreAdapter(projectDir);
+  const missions = buildMissions(missionStore, featureStore, assertionStore, checkpointStore);
+
   return {
-    missionStore: new FsMissionStoreAdapter(projectDir),
-    featureStore: new FsFeatureStoreAdapter(projectDir),
-    assertionStore: new FsAssertionStoreAdapter(projectDir),
-    checkpointStore: new FsCheckpointStoreAdapter(projectDir),
-    principleStore: new JsonlPrincipleStoreAdapter(projectDir),
-    replyStore: new FsReplyStoreAdapter(projectDir),
+    missionStore,
+    featureStore,
+    assertionStore,
+    checkpointStore,
+    principleStore,
+    replyStore,
+    missions,
   };
 }
