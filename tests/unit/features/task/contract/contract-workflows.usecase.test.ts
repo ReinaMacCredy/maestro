@@ -318,6 +318,43 @@ describe("ContractWorkflows", () => {
     ).resolves.toMatchObject({ id: "c-000001" });
   });
 
+  it("prepareReopen keeps fail-closed behavior when the closed contract has no commit anchor", async () => {
+    const contract = makeContract({
+      status: "fulfilled",
+      closedAt: "2026-04-20T01:00:00.000Z",
+      closedBy: "agent-a",
+      verdict: {
+        fulfilled: true,
+        computedAt: "2026-04-20T01:00:00.000Z",
+        actualFilesTouched: [],
+        expectedFilesMatched: [],
+        outOfScopeFiles: [],
+        forbiddenTouched: [],
+        filesExpectedUnused: [],
+        unmetCriteria: [],
+        metCriteria: [],
+      },
+      configSnapshot: { ...CONFIG, overlapPolicy: "fail" },
+    });
+    const active = makeContract({ id: "c-000002", taskId: "tsk-000002" });
+    let overlapChecks = 0;
+    const contracts = buildContractWorkflows(
+      mockContractStore([contract, active]),
+      mockTaskStore([makeTask({ contractId: contract.id })]),
+      mockGitAnchor({
+        windowsOverlap: async () => {
+          overlapChecks += 1;
+          return false;
+        },
+      }),
+    );
+
+    await expect(
+      contracts.prepareReopen({ id: "tsk-000001", contractId: "c-000001" }),
+    ).rejects.toBeInstanceOf(MaestroError);
+    expect(overlapChecks).toBe(0);
+  });
+
   it("transferOwnership updates active owners and ignores terminal contracts", async () => {
     const active = makeContract();
     const terminal = makeContract({ id: "c-000002", taskId: "tsk-000002", status: "fulfilled" });

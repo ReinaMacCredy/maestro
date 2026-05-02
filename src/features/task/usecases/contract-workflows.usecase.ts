@@ -494,16 +494,23 @@ async function loadContractForReopen(
   }
 
   if (contract.configSnapshot.overlapPolicy === "fail") {
-    const overlap = await detectContractOverlap(
-      contractStore,
-      gitAnchor,
-      contract,
-      contract.closedAtCommit,
-      contract.repoRoot,
-      isActiveContract,
-    );
-    if (overlap?.otherContractIds.length) {
-      throw buildActiveOverlapError(contract.id, overlap.otherContractIds);
+    if (!contract.claimedAtCommit || !contract.closedAtCommit) {
+      const activeContractIds = await listOtherActiveContractIds(contractStore, contract.id);
+      if (activeContractIds.length > 0) {
+        throw buildActiveOverlapError(contract.id, activeContractIds);
+      }
+    } else {
+      const overlap = await detectContractOverlap(
+        contractStore,
+        gitAnchor,
+        contract,
+        contract.closedAtCommit,
+        contract.repoRoot,
+        isActiveContract,
+      );
+      if (overlap?.otherContractIds.length) {
+        throw buildActiveOverlapError(contract.id, overlap.otherContractIds);
+      }
     }
   }
 
@@ -661,6 +668,16 @@ async function detectContractOverlap(
     otherContractIds: overlapping,
     policy: contract.configSnapshot.overlapPolicy,
   };
+}
+
+async function listOtherActiveContractIds(
+  contractStore: ContractStoreQueryPort,
+  contractId: string,
+): Promise<readonly string[]> {
+  return (await contractStore.all())
+    .filter((candidate) => candidate.id !== contractId && isActiveContract(candidate))
+    .map((candidate) => candidate.id)
+    .sort();
 }
 
 async function listContracts(
