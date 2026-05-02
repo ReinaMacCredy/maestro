@@ -484,23 +484,9 @@ async function loadContractForReopen(
   }
 
   if (contract.configSnapshot.overlapPolicy === "fail") {
-    if (!contract.claimedAtCommit || !contract.closedAtCommit) {
-      const activeContractIds = await listOtherActiveContractIds(contractStore, contract.id);
-      if (activeContractIds.length > 0) {
-        throw buildActiveOverlapError(contract.id, activeContractIds);
-      }
-    } else {
-      const overlap = await detectContractOverlap(
-        contractStore,
-        gitAnchor,
-        contract,
-        contract.closedAtCommit,
-        contract.repoRoot,
-        isActiveContract,
-      );
-      if (overlap?.otherContractIds.length) {
-        throw buildActiveOverlapError(contract.id, overlap.otherContractIds);
-      }
+    const blockingContractIds = await listStrictReopenBlockingContractIds(contractStore, gitAnchor, contract);
+    if (blockingContractIds.length > 0) {
+      throw buildActiveOverlapError(contract.id, blockingContractIds);
     }
   }
 
@@ -685,14 +671,44 @@ async function detectContractOverlap(
   };
 }
 
-async function listOtherActiveContractIds(
+async function listStrictReopenBlockingContractIds(
   contractStore: ContractStoreQueryPort,
-  contractId: string,
+  gitAnchor: GitAnchorPort,
+  contract: Contract,
 ): Promise<readonly string[]> {
-  return (await contractStore.all())
-    .filter((candidate) => candidate.id !== contractId && isActiveContract(candidate))
-    .map((candidate) => candidate.id)
-    .sort();
+  const candidates = (await contractStore.all()).filter((candidate) =>
+    candidate.id !== contract.id && isActiveContract(candidate),
+  );
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  if (!contract.claimedAtCommit || !contract.closedAtCommit) {
+    return candidates.map((candidate) => candidate.id).sort();
+  }
+
+  const overlapConcurrency = 4;
+  const results: (string | undefined)[] = [];
+  for (let i = 0; i < candidates.length; i += overlapConcurrency) {
+    const chunk = candidates.slice(i, i + overlapConcurrency);
+    const chunkResults = await Promise.all(chunk.map(async (candidate) => {
+      const overlaps = await gitAnchor.windowsOverlap({
+        repoRoot: contract.repoRoot,
+        left: {
+          claimedAtCommit: contract.claimedAtCommit,
+          closedAtCommit: contract.closedAtCommit,
+        },
+        right: {
+          claimedAtCommit: candidate.claimedAtCommit,
+          closedAtCommit: candidate.closedAtCommit ?? contract.closedAtCommit,
+        },
+      });
+      return overlaps === false ? undefined : candidate.id;
+    }));
+    results.push(...chunkResults);
+  }
+
+  return results.filter((id): id is string => id !== undefined).sort();
 }
 
 async function listContracts(
