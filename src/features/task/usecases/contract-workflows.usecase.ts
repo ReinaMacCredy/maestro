@@ -171,9 +171,9 @@ export function buildContractWorkflows(
       runtimeRepoRoot,
     ),
 
-    prepareReopen: (task) => loadContractForReopen(contractStore, task),
+    prepareReopen: (task) => loadContractForReopen(contractStore, gitAnchor, task),
 
-    reopenForTask: (task, loaded) => reopenContractForTask(contractStore, task, loaded),
+    reopenForTask: (task, loaded) => reopenContractForTask(contractStore, gitAnchor, task, loaded),
 
     transferOwnership: (taskId, newActor, reason = "claim_reclaim") =>
       transferContractOwnership(contractStore, taskId, newActor, reason),
@@ -221,13 +221,23 @@ async function createContract(
 
   try {
     await taskStore.syncMetadata(task.id, { contractId: contract.id });
-  } catch (error) {
-    await contractStore.delete(contract.id, {
-      taskId: contract.taskId,
-      at: new Date().toISOString(),
-      reason: "task_link_failed",
-    });
-    throw error;
+  } catch (linkError) {
+    try {
+      await contractStore.delete(contract.id, {
+        taskId: contract.taskId,
+        at: new Date().toISOString(),
+        reason: "task_link_failed",
+      });
+    } catch (rollbackError) {
+      if (linkError instanceof Error) {
+        Object.defineProperty(linkError, "rollbackError", {
+          value: rollbackError,
+          enumerable: false,
+          configurable: true,
+        });
+      }
+    }
+    throw linkError;
   }
 
   return contract;
@@ -466,6 +476,7 @@ async function closeContractForTask(
 
 async function loadContractForReopen(
   contractStore: ContractStorePort,
+  gitAnchor: GitAnchorPort,
   task: Pick<Task, "id" | "contractId">,
 ): Promise<Contract | undefined> {
   if (!task.contractId) {
@@ -483,12 +494,16 @@ async function loadContractForReopen(
   }
 
   if (contract.configSnapshot.overlapPolicy === "fail") {
-    const overlapping = (await contractStore.all()).filter((candidate) =>
-      candidate.id !== contract.id
-      && isActiveContract(candidate),
+    const overlap = await detectContractOverlap(
+      contractStore,
+      gitAnchor,
+      contract,
+      contract.closedAtCommit,
+      contract.repoRoot,
+      isActiveContract,
     );
-    if (overlapping.length > 0) {
-      throw buildActiveOverlapError(contract.id, overlapping.map((item) => item.id));
+    if (overlap?.otherContractIds.length) {
+      throw buildActiveOverlapError(contract.id, overlap.otherContractIds);
     }
   }
 
@@ -497,10 +512,11 @@ async function loadContractForReopen(
 
 async function reopenContractForTask(
   contractStore: ContractStorePort,
+  gitAnchor: GitAnchorPort,
   task: Pick<Task, "id" | "contractId">,
   loadedContract?: Contract,
 ): Promise<Contract | undefined> {
-  const contract = loadedContract ?? await loadContractForReopen(contractStore, task);
+  const contract = loadedContract ?? await loadContractForReopen(contractStore, gitAnchor, task);
   if (!contract) {
     return undefined;
   }
@@ -599,6 +615,7 @@ async function detectContractOverlap(
   contract: Contract,
   currentClosedAtCommit: string | undefined,
   runtimeRepoRoot: string,
+  includeCandidate?: (candidate: Contract) => boolean,
 ): Promise<ContractVerdict["overlapDetected"] | undefined> {
   if (!contract.claimedAtCommit || !currentClosedAtCommit) {
     return undefined;
@@ -606,8 +623,9 @@ async function detectContractOverlap(
 
   const candidates = (await contractStore.all()).filter((candidate) =>
     candidate.id !== contract.id
-    && candidate.status !== "draft"
-    && candidate.status !== "discarded",
+    && (includeCandidate
+      ? includeCandidate(candidate)
+      : candidate.status !== "draft" && candidate.status !== "discarded"),
   );
   if (candidates.length === 0) {
     return undefined;
@@ -789,9 +807,9 @@ function findCriterion(contract: Contract, criterionId: string): DoneWhenCriteri
   ]);
 }
 
-function withOwnershipNotes(contract: Contract, verdict: Contract["verdict"]): NonNullable<Contract["verdict"]> {
-  if (!verdict || !contract.ownershipHistory || contract.ownershipHistory.length === 0) {
-    return verdict!;
+function withOwnershipNotes(contract: Contract, verdict: ContractVerdict): ContractVerdict {
+  if (!contract.ownershipHistory || contract.ownershipHistory.length === 0) {
+    return verdict;
   }
 
   const chain = contract.ownershipHistory

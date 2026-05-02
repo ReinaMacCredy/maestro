@@ -10,7 +10,6 @@ import type {
   Assertion,
   Feature,
   Mission,
-  MissionFullState,
   Missions,
   ReplyStorePort,
 } from "@/features/mission/index.js";
@@ -19,7 +18,6 @@ import {
   isHandoffInProject,
   type HandoffStorePort,
 } from "@/features/handoff/index.js";
-import { MaestroError } from "@/shared/errors.js";
 import { readText, dirExists } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
@@ -71,7 +69,7 @@ export async function collectBundleSources(
   const files: BundleFile[] = [];
   const projectRoot = resolveMaestroProjectRoot(projectDir);
 
-  const { mission, features, assertions, checkpoints } = await loadBundleMissionState(deps.missions, missionId);
+  const { mission, features, assertions, checkpoints } = await deps.missions.loadFullState(missionId);
 
   // mission.json
   files.push({
@@ -200,23 +198,6 @@ export async function collectBundleSources(
     files,
     stats,
   };
-}
-
-async function loadBundleMissionState(
-  missions: Missions,
-  missionId: string,
-): Promise<MissionFullState> {
-  try {
-    return await missions.loadFullState(missionId);
-  } catch (error) {
-    if (error instanceof MaestroError && error.message === `Mission ${missionId} not found`) {
-      throw new MaestroError(`Mission ${missionId} not found`, [
-        "List missions: maestro mission list",
-        "Check that the mission ID is correct",
-      ]);
-    }
-    throw error;
-  }
 }
 
 async function collectMemoryFiles(

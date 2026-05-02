@@ -6,14 +6,22 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  generateAgentPrompt,
+  generateAgentPrompt as generateAgentPromptWithMissions,
+  type AgentPromptStores,
   type GenerateAgentPromptResult,
 } from "@/features/agent";
 import { FsMissionStoreAdapter } from "@/features/mission";
 import { FsFeatureStoreAdapter } from "@/features/mission";
 import { FsAssertionStoreAdapter } from "@/features/mission";
+import { FsCheckpointStoreAdapter } from "@/features/mission";
 import { JsonlPrincipleStoreAdapter } from "@/features/mission";
-import { FsCorrectionStoreAdapter, FsLearningStoreAdapter } from "@/features/memory";
+import { buildMissions } from "@/features/mission";
+import {
+  FsCorrectionStoreAdapter,
+  FsLearningStoreAdapter,
+  type CorrectionStorePort,
+  type LearningStorePort,
+} from "@/features/memory";
 import { MaestroError } from "@/shared/errors.js";
 import type { MilestoneInput } from "@/features/mission";
 import type { PrincipleStorePort } from "@/features/mission";
@@ -86,6 +94,67 @@ async function createTestMission(
     missionId: result.mission.id,
     features: result.features.map((f) => f.id),
   };
+}
+
+function buildTestMissions(
+  missionStore: FsMissionStoreAdapter,
+  featureStore: FsFeatureStoreAdapter,
+  assertionStore: FsAssertionStoreAdapter,
+  baseDir: string,
+) {
+  return buildMissions(
+    missionStore,
+    featureStore,
+    assertionStore,
+    new FsCheckpointStoreAdapter(baseDir),
+  );
+}
+
+function normalizePromptStores(
+  storesOrCorrectionStore: AgentPromptStores | CorrectionStorePort | undefined,
+  learningStore: LearningStorePort | undefined,
+): AgentPromptStores | undefined {
+  if (!storesOrCorrectionStore) {
+    return learningStore ? { learningStore } : undefined;
+  }
+
+  if (isAgentPromptStores(storesOrCorrectionStore)) {
+    return storesOrCorrectionStore;
+  }
+
+  return {
+    correctionStore: storesOrCorrectionStore,
+    learningStore,
+  };
+}
+
+function isAgentPromptStores(value: AgentPromptStores | CorrectionStorePort): value is AgentPromptStores {
+  return typeof value === "object" && value !== null && (
+    "correctionStore" in value
+    || "learningStore" in value
+    || "principleStore" in value
+  );
+}
+
+async function generateAgentPrompt(
+  missionStore: FsMissionStoreAdapter,
+  featureStore: FsFeatureStoreAdapter,
+  assertionStore: FsAssertionStoreAdapter,
+  baseDir: string,
+  missionId: string,
+  featureId: string,
+  outPath?: string,
+  storesOrCorrectionStore?: AgentPromptStores | CorrectionStorePort,
+  learningStore?: LearningStorePort,
+): Promise<GenerateAgentPromptResult> {
+  return generateAgentPromptWithMissions(
+    buildTestMissions(missionStore, featureStore, assertionStore, baseDir),
+    baseDir,
+    missionId,
+    featureId,
+    outPath,
+    normalizePromptStores(storesOrCorrectionStore, learningStore),
+  );
 }
 
 describe("generateAgentPrompt", () => {

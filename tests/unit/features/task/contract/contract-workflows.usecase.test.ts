@@ -101,6 +101,38 @@ describe("ContractWorkflows", () => {
     expect(await baseContractStore.get("c-000001")).toBeUndefined();
   });
 
+  it("draft preserves the metadata link error when rollback also fails", async () => {
+    const linkError = new Error("metadata write failed");
+    const rollbackError = new Error("rollback failed");
+    const taskStore = {
+      ...mockTaskStore([makeTask({ status: "pending" })]),
+      syncMetadata: async () => {
+        throw linkError;
+      },
+    };
+    const baseContractStore = mockContractStore();
+    const contractStore = {
+      ...baseContractStore,
+      create: (input: Parameters<typeof baseContractStore.create>[0]) =>
+        baseContractStore.create({ ...input, id: "c-000001" }),
+      delete: async () => {
+        throw rollbackError;
+      },
+    };
+    const contracts = buildContractWorkflows(contractStore, taskStore, mockGitAnchor());
+
+    await expect(contracts.draft({
+      taskId: "tsk-000001",
+      repoRoot: "/repo",
+      intent: "ship it",
+      scope: { filesExpected: ["src/**/*.ts"], filesForbidden: [] },
+      doneWhen: [{ text: "tests pass" }],
+      createdBy: "agent-a",
+      configSnapshot: CONFIG,
+    })).rejects.toBe(linkError);
+    expect((linkError as Error & { rollbackError?: unknown }).rollbackError).toBe(rollbackError);
+  });
+
   it("discard unlinks task metadata on a best-effort basis", async () => {
     const taskStore = {
       ...mockTaskStore([makeTask({ contractId: "c-000001" })]),
@@ -224,10 +256,11 @@ describe("ContractWorkflows", () => {
     expect(closed?.verdict?.notes).toContain("Ownership chain: agent-a -> agent-b");
   });
 
-  it("prepareReopen blocks when fail policy sees another active contract", async () => {
+  it("prepareReopen blocks when fail policy sees another overlapping active contract", async () => {
     const contract = makeContract({
       status: "fulfilled",
       closedAt: "2026-04-20T01:00:00.000Z",
+      closedAtCommit: "head-a",
       closedBy: "agent-a",
       verdict: {
         fulfilled: true,
@@ -246,12 +279,43 @@ describe("ContractWorkflows", () => {
     const contracts = buildContractWorkflows(
       mockContractStore([contract, overlapping]),
       mockTaskStore([makeTask({ contractId: contract.id })]),
-      mockGitAnchor(),
+      mockGitAnchor({ windowsOverlap: async () => true }),
     );
 
     await expect(
       contracts.prepareReopen({ id: "tsk-000001", contractId: "c-000001" }),
     ).rejects.toBeInstanceOf(MaestroError);
+  });
+
+  it("prepareReopen allows unrelated active contracts under fail policy", async () => {
+    const contract = makeContract({
+      status: "fulfilled",
+      closedAt: "2026-04-20T01:00:00.000Z",
+      closedAtCommit: "head-a",
+      closedBy: "agent-a",
+      verdict: {
+        fulfilled: true,
+        computedAt: "2026-04-20T01:00:00.000Z",
+        actualFilesTouched: [],
+        expectedFilesMatched: [],
+        outOfScopeFiles: [],
+        forbiddenTouched: [],
+        filesExpectedUnused: [],
+        unmetCriteria: [],
+        metCriteria: [],
+      },
+      configSnapshot: { ...CONFIG, overlapPolicy: "fail" },
+    });
+    const unrelated = makeContract({ id: "c-000002", taskId: "tsk-000002" });
+    const contracts = buildContractWorkflows(
+      mockContractStore([contract, unrelated]),
+      mockTaskStore([makeTask({ contractId: contract.id })]),
+      mockGitAnchor({ windowsOverlap: async () => false }),
+    );
+
+    await expect(
+      contracts.prepareReopen({ id: "tsk-000001", contractId: "c-000001" }),
+    ).resolves.toMatchObject({ id: "c-000001" });
   });
 
   it("transferOwnership updates active owners and ignores terminal contracts", async () => {

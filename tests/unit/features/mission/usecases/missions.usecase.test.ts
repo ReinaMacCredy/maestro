@@ -13,6 +13,7 @@ import {
   mockAssertionStore,
   mockCheckpointStore,
   mockFeatureStore,
+  mockMissions,
   mockMissionStore,
 } from "../../../../helpers/mocks.js";
 
@@ -135,7 +136,7 @@ describe("Missions", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(MaestroError);
       expect((error as MaestroError).message).toBe("Mission missing not found");
-      expect((error as MaestroError).hints).toContain("List available missions: maestro mission list");
+      expect((error as MaestroError).hints).toContain("List missions: maestro mission list");
     }
   });
 
@@ -179,6 +180,23 @@ describe("Missions", () => {
     await expect(missions.resolveMissionId()).resolves.toBe("mission-002");
   });
 
+  it("resolveMissionId does not rely on store list ordering for fallback", async () => {
+    const older = makeMission("mission-older", "draft", "2026-01-01T00:00:00.000Z");
+    const newest = makeMission("mission-newest", "completed", "2026-01-03T00:00:00.000Z");
+    const missionStore = {
+      ...mockMissionStore([older, newest]),
+      list: async () => [older, newest],
+    };
+    const missions = buildMissions(
+      missionStore,
+      mockFeatureStore(newest.id),
+      mockAssertionStore(newest.id),
+      mockCheckpointStore(newest.id),
+    );
+
+    await expect(missions.resolveMissionId()).resolves.toBe("mission-newest");
+  });
+
   it("loadByMilestone returns feature and assertion slices for one milestone", async () => {
     const mission = makeMission("mission-001");
     const missions = buildMissions(
@@ -197,6 +215,30 @@ describe("Missions", () => {
     await expect(missions.loadByMilestone(mission.id, "m1")).resolves.toEqual({
       features: [makeFeature("f1", "pending", "m1")],
       assertions: [makeAssertion("a-f1", "f1", "m1")],
+    });
+  });
+
+  it("mockMissions isolates read slices by mission id", async () => {
+    const missionOne = makeMission("mission-001");
+    const missionTwo = makeMission("mission-002");
+    const featureOne = { ...makeFeature("f1", "pending"), missionId: missionOne.id };
+    const featureTwo = { ...makeFeature("f2", "pending"), missionId: missionTwo.id };
+    const assertionOne = { ...makeAssertion("a-f1", "f1"), missionId: missionOne.id };
+    const assertionTwo = { ...makeAssertion("a-f2", "f2"), missionId: missionTwo.id };
+    const checkpointOne = { ...makeCheckpoint("checkpoint-1"), missionId: missionOne.id };
+    const checkpointTwo = { ...makeCheckpoint("checkpoint-2"), missionId: missionTwo.id };
+    const missions = mockMissions({
+      missions: [missionOne, missionTwo],
+      features: [featureOne, featureTwo],
+      assertions: [assertionOne, assertionTwo],
+      checkpoints: [checkpointOne, checkpointTwo],
+    });
+
+    await expect(missions.loadFullState(missionTwo.id)).resolves.toMatchObject({
+      mission: missionTwo,
+      features: [featureTwo],
+      assertions: [assertionTwo],
+      checkpoints: [checkpointTwo],
     });
   });
 

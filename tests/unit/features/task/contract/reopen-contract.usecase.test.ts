@@ -108,6 +108,7 @@ describe("reopenContractForTask", () => {
       status: "fulfilled",
       lockedAt: "2026-04-21T00:10:00.000Z",
       lockedBy: "session:codex:a",
+      claimedAtCommit: "base-a",
       closedAt: "2026-04-21T01:00:00.000Z",
       closedAtCommit: "abc123",
       closedBy: "session:codex:a",
@@ -163,9 +164,14 @@ describe("reopenContractForTask", () => {
       status: "locked",
       lockedAt: "2026-04-21T02:00:00.000Z",
       lockedBy: "session:codex:b",
+      claimedAtCommit: "base-b",
     });
 
-    await expect(buildContractWorkflows(store, mockTaskStore(), mockGitAnchor()).reopenForTask({
+    await expect(buildContractWorkflows(
+      store,
+      mockTaskStore(),
+      mockGitAnchor({ windowsOverlap: async () => true }),
+    ).reopenForTask({
       id: fulfilled.taskId,
       contractId: fulfilled.id,
     })).rejects.toThrow("overlaps an active contract in the same repo");

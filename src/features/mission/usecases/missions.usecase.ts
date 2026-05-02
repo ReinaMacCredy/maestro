@@ -5,7 +5,7 @@ import type {
   Milestone,
   Mission,
 } from "../domain/mission-types.js";
-import { MaestroError } from "@/shared/errors.js";
+import { missionNotFound } from "../domain/errors.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { FeatureStorePort } from "../feature/ports/feature-store.port.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
@@ -48,17 +48,13 @@ export function buildMissions(
     async resolveMissionId(explicit) {
       if (explicit) return explicit;
 
-      const ids = await missionStore.listIds();
-      if (ids.length === 0) return undefined;
+      const missions = [...await missionStore.list()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      if (missions.length === 0) return undefined;
 
-      for (const id of ids) {
-        const mission = await missionStore.get(id);
-        if (mission && (mission.status === "executing" || mission.status === "paused")) {
-          return mission.id;
-        }
-      }
+      const active = missions.find((mission) => mission.status === "executing" || mission.status === "paused");
+      if (active) return active.id;
 
-      return ids[0]!;
+      return missions[0]!.id;
     },
 
     async loadFullState(id) {
@@ -70,10 +66,7 @@ export function buildMissions(
       ]);
 
       if (!mission) {
-        throw new MaestroError(`Mission ${id} not found`, [
-          "List available missions: maestro mission list",
-          `Check that mission ID '${id}' is correct`,
-        ]);
+        throw missionNotFound(id);
       }
 
       return { mission, features, assertions, checkpoints };

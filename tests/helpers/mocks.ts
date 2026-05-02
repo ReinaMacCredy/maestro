@@ -373,12 +373,155 @@ export function mockMissions(input: {
   readonly assertions?: Assertion[];
   readonly checkpoints?: Checkpoint[];
 } = {}): Missions {
-  const missionId = input.missionId ?? input.missions?.[0]?.id ?? "2026-04-20-001";
+  const features = new Map((input.features ?? []).map((feature) => [feature.id, feature]));
+  const assertions = new Map((input.assertions ?? []).map((assertion) => [assertion.id, assertion]));
+  const checkpoints = new Map((input.checkpoints ?? []).map((checkpoint) => [checkpoint.id, checkpoint]));
+
+  const featureStore: FeatureStorePort = {
+    get: async (requestedMissionId, featureId) => {
+      const feature = features.get(featureId);
+      return feature?.missionId === requestedMissionId ? feature : undefined;
+    },
+    exists: async (requestedMissionId, featureId) => {
+      const feature = features.get(featureId);
+      return feature?.missionId === requestedMissionId;
+    },
+    create: async (requestedMissionId, createInput, id) => {
+      const now = new Date().toISOString();
+      const feature: Feature = {
+        id,
+        missionId: requestedMissionId,
+        milestoneId: createInput.milestoneId,
+        status: "pending",
+        title: createInput.title,
+        description: createInput.description,
+        agentType: createInput.agentType,
+        verificationSteps: createInput.verificationSteps,
+        dependsOn: createInput.dependsOn ?? [],
+        fulfills: createInput.fulfills ?? [],
+        preconditions: createInput.preconditions,
+        expectedBehavior: createInput.expectedBehavior,
+        createdAt: now,
+        updatedAt: now,
+      };
+      features.set(id, feature);
+      return feature;
+    },
+    update: async (requestedMissionId, featureId, updateInput) => {
+      const existing = features.get(featureId);
+      if (!existing || existing.missionId !== requestedMissionId) return undefined;
+      const updated: Feature = {
+        ...existing,
+        ...(updateInput.status !== undefined ? { status: updateInput.status } : {}),
+        ...(updateInput.report !== undefined ? { report: updateInput.report } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      features.set(featureId, updated);
+      return updated;
+    },
+    list: async (requestedMissionId, filter) => {
+      let all = [...features.values()].filter((feature) => feature.missionId === requestedMissionId);
+      if (filter?.milestoneId) {
+        all = all.filter((feature) => feature.milestoneId === filter.milestoneId);
+      }
+      if (filter?.status) {
+        all = all.filter((feature) => feature.status === filter.status);
+      }
+      return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    getMany: async (requestedMissionId, featureIds) => featureIds
+      .map((id) => features.get(id))
+      .filter((feature): feature is Feature => feature?.missionId === requestedMissionId),
+  };
+
+  const assertionStore: AssertionStorePort = {
+    get: async (requestedMissionId, assertionId) => {
+      const assertion = assertions.get(assertionId);
+      return assertion?.missionId === requestedMissionId ? assertion : undefined;
+    },
+    exists: async (requestedMissionId, assertionId) => {
+      const assertion = assertions.get(assertionId);
+      return assertion?.missionId === requestedMissionId;
+    },
+    create: async (requestedMissionId, createInput, id) => {
+      const now = new Date().toISOString();
+      const assertion: Assertion = {
+        id,
+        missionId: requestedMissionId,
+        milestoneId: createInput.milestoneId,
+        featureId: createInput.featureId,
+        result: "pending",
+        description: createInput.description,
+        surface: createInput.surface ?? "cli",
+        createdAt: now,
+        updatedAt: now,
+      };
+      assertions.set(id, assertion);
+      return assertion;
+    },
+    update: async (requestedMissionId, assertionId, updateInput) => {
+      const existing = assertions.get(assertionId);
+      if (!existing || existing.missionId !== requestedMissionId) return undefined;
+      const updated: Assertion = {
+        ...existing,
+        result: updateInput.result,
+        evidence: updateInput.evidence,
+        waivedReason: updateInput.waivedReason,
+        updatedAt: new Date().toISOString(),
+      };
+      assertions.set(assertionId, updated);
+      return updated;
+    },
+    list: async (requestedMissionId) => [...assertions.values()]
+      .filter((assertion) => assertion.missionId === requestedMissionId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    listByMilestone: async (requestedMissionId, milestoneId) => [...assertions.values()]
+      .filter((assertion) => assertion.missionId === requestedMissionId && assertion.milestoneId === milestoneId),
+    getMany: async (requestedMissionId, assertionIds) => assertionIds
+      .map((id) => assertions.get(id))
+      .filter((assertion): assertion is Assertion => assertion?.missionId === requestedMissionId),
+  };
+
+  const checkpointStore: CheckpointStorePort = {
+    get: async (requestedMissionId, checkpointId) => {
+      const checkpoint = checkpoints.get(checkpointId);
+      return checkpoint?.missionId === requestedMissionId ? checkpoint : undefined;
+    },
+    save: async (requestedMissionId, data) => {
+      const id = `checkpoint-${checkpoints.size + 1}`;
+      const checkpoint: Checkpoint = {
+        id,
+        missionId: requestedMissionId,
+        currentMilestoneId: data.currentMilestoneId,
+        timestamp: data.timestamp,
+        featureStatuses: data.featureStatuses,
+        assertionResults: data.assertionResults,
+      };
+      checkpoints.set(id, checkpoint);
+      return checkpoint;
+    },
+    list: async (requestedMissionId) => [...checkpoints.values()]
+      .filter((checkpoint) => checkpoint.missionId === requestedMissionId)
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+    getLatest: async (requestedMissionId) => {
+      const all = [...checkpoints.values()]
+        .filter((checkpoint) => checkpoint.missionId === requestedMissionId)
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      return all[0];
+    },
+    load: async (requestedMissionId) => {
+      const all = [...checkpoints.values()]
+        .filter((checkpoint) => checkpoint.missionId === requestedMissionId)
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      return all[0];
+    },
+  };
+
   return buildMissions(
     mockMissionStore(input.missions ?? []),
-    mockFeatureStore(missionId, input.features ?? []),
-    mockAssertionStore(missionId, input.assertions ?? []),
-    mockCheckpointStore(missionId, input.checkpoints ?? []),
+    featureStore,
+    assertionStore,
+    checkpointStore,
   );
 }
 
