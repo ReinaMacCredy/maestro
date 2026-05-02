@@ -436,12 +436,7 @@ async function closeContractForTask(
     return undefined;
   }
 
-  const contract = await contractStore.get(task.contractId);
-  if (!contract) {
-    throw new MaestroError(`Contract ${task.contractId} not found for task ${task.id}`, [
-      "Inspect the contract index under .maestro/tasks/contracts/",
-    ]);
-  }
+  const contract = await loadLinkedContractOrThrow(contractStore, task);
   if (contract.status === "discarded") {
     return contract;
   }
@@ -483,12 +478,7 @@ async function loadContractForReopen(
     return undefined;
   }
 
-  const contract = await contractStore.get(task.contractId);
-  if (!contract) {
-    throw new MaestroError(`Contract ${task.contractId} not found for task ${task.id}`, [
-      "Inspect the contract index under .maestro/tasks/contracts/",
-    ]);
-  }
+  const contract = await loadLinkedContractOrThrow(contractStore, task);
   if (!canReopenContract(contract)) {
     return contract;
   }
@@ -560,13 +550,10 @@ async function transferContractOwnership(
     return contract;
   }
 
-  const shouldRecordHistory = contract.lockedBy !== undefined
-    && !(contract.lockedBy === contract.createdBy && contract.createdBy === "user" && (contract.ownershipHistory?.length ?? 0) === 0);
-
   return contractStore.save({
     ...contract,
     lockedBy: newActor,
-    ...(shouldRecordHistory
+    ...(shouldRecordOwnershipTransfer(contract)
       ? {
           ownershipHistory: [
             ...(contract.ownershipHistory ?? []),
@@ -580,6 +567,34 @@ async function transferContractOwnership(
         }
       : {}),
   });
+}
+
+async function loadLinkedContractOrThrow(
+  contractStore: ContractStorePort,
+  task: Pick<Task, "id" | "contractId">,
+): Promise<Contract> {
+  const contractId = task.contractId;
+  if (!contractId) {
+    throw new MaestroError(`Task ${task.id} has no linked contract`);
+  }
+
+  const contract = await contractStore.get(contractId);
+  if (!contract) {
+    throw new MaestroError(`Contract ${contractId} not found for task ${task.id}`, [
+      "Inspect the contract index under .maestro/tasks/contracts/",
+    ]);
+  }
+  return contract;
+}
+
+function shouldRecordOwnershipTransfer(contract: Contract): boolean {
+  return contract.lockedBy !== undefined && !isInitialUserOwnership(contract);
+}
+
+function isInitialUserOwnership(contract: Contract): boolean {
+  return contract.lockedBy === contract.createdBy
+    && contract.createdBy === "user"
+    && (contract.ownershipHistory?.length ?? 0) === 0;
 }
 
 async function computeContractVerdictForTask(

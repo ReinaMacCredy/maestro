@@ -118,7 +118,6 @@ describe("buildHandoffPrompt", () => {
 
     const result = await buildHandoffPrompt({
       missions: mockMissions({
-        missionId: mission.id,
         missions: [mission],
         features: [feature],
         assertions: [assertion],
@@ -187,7 +186,6 @@ describe("buildHandoffPrompt", () => {
 
     const result = await buildHandoffPrompt({
       missions: mockMissions({
-        missionId: mission.id,
         missions: [mission],
         features,
       }),
@@ -205,7 +203,7 @@ describe("buildHandoffPrompt", () => {
 
   it("sanitizes prompt content before rendering markdown sections", async () => {
     const result = await buildHandoffPrompt({
-      missions: mockMissions({ missionId: "2026-04-20-003" }),
+      missions: mockMissions(),
       git: makeGit(["README.md", "src/evil`  file.md"]),
     }, {
       cwd,
@@ -257,7 +255,6 @@ describe("buildHandoffPrompt", () => {
 
     const result = await buildHandoffPrompt({
       missions: mockMissions({
-        missionId: mission.id,
         missions: [mission],
         features: [feature],
       }),

@@ -51,7 +51,7 @@ export function buildMissions(
       const missions = [...await missionStore.list()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       if (missions.length === 0) return undefined;
 
-      const active = missions.find((mission) => mission.status === "executing" || mission.status === "paused");
+      const active = missions.find(isActiveMission);
       if (active) return active.id;
 
       return missions[0]!.id;
@@ -83,7 +83,7 @@ export function buildMissions(
 
     async resolveSingleActionableContext() {
       const missions = await missionStore.list();
-      const mission = missions.find((item) => item.status === "executing" || item.status === "paused")
+      const mission = missions.find(isActiveMission)
         ?? (missions.length === 1 ? missions[0] : undefined);
 
       if (!mission) return undefined;
@@ -103,4 +103,8 @@ export function buildMissions(
       return { mission, milestone, feature, assertions };
     },
   };
+}
+
+function isActiveMission(mission: Mission): boolean {
+  return mission.status === "executing" || mission.status === "paused";
 }

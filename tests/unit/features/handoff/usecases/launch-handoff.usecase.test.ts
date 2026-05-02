@@ -93,7 +93,7 @@ describe("launchHandoff", () => {
     };
 
     const result = await launchHandoff({
-      missions: mockMissions({ missionId: "2026-04-20-001" }),
+      missions: mockMissions(),
       git: makeGit(),
       handoffStore,
       launchers: {
@@ -121,7 +121,7 @@ describe("launchHandoff", () => {
   it("rejects --base without --worktree", async () => {
     await expect(
       launchHandoff({
-        missions: mockMissions({ missionId: "2026-04-20-001" }),
+        missions: mockMissions(),
         git: makeGit(),
         handoffStore: makeHandoffStore(),
         launchers: {
@@ -153,7 +153,7 @@ describe("launchHandoff", () => {
     };
 
     const result = await launchHandoff({
-      missions: mockMissions({ missionId: "2026-04-20-001" }),
+      missions: mockMissions(),
       git: makeGit(),
       handoffStore,
       launchers: {
@@ -183,7 +183,7 @@ describe("launchHandoff", () => {
 
     await expect(
       launchHandoff({
-        missions: mockMissions({ missionId: "2026-04-20-001" }),
+        missions: mockMissions(),
         git: makeGit(),
         handoffStore,
         launchers: {
@@ -215,7 +215,7 @@ describe("launchHandoff", () => {
 
     await expect(
       launchHandoff({
-        missions: mockMissions({ missionId: "2026-04-20-001" }),
+        missions: mockMissions(),
         git: makeGit(),
         handoffStore,
         launchers: {
@@ -261,7 +261,7 @@ describe("launchHandoff", () => {
       };
 
       const result = await launchHandoff({
-        missions: mockMissions({ missionId: "2026-04-20-001" }),
+        missions: mockMissions(),
         git: makeGit(),
         handoffStore,
         launchers: {
@@ -323,7 +323,6 @@ describe("launchHandoff", () => {
       const handoffStore = makeHandoffStore();
       const result = await launchHandoff({
         missions: mockMissions({
-          missionId: mission.id,
           missions: [mission],
           features: [feature],
         }),
@@ -364,7 +363,7 @@ describe("launchHandoff", () => {
     it("throws a MaestroError when --prompt-file does not exist", async () => {
       await expect(
         launchHandoff({
-          missions: mockMissions({ missionId: "2026-04-20-001" }),
+          missions: mockMissions(),
           git: makeGit(),
           handoffStore: makeHandoffStore(),
           launchers: {
@@ -385,7 +384,7 @@ describe("launchHandoff", () => {
       let createWorktreeCalls = 0;
       await expect(
         launchHandoff({
-          missions: mockMissions({ missionId: "2026-04-20-001" }),
+          missions: mockMissions(),
           git: {
             ...makeGit(),
             async createWorktree(_cwd, input) {
@@ -423,7 +422,7 @@ describe("launchHandoff", () => {
       try {
         await expect(
           launchHandoff({
-            missions: mockMissions({ missionId: "2026-04-20-001" }),
+            missions: mockMissions(),
             git: makeGit(),
             handoffStore: makeHandoffStore(),
             launchers: {
@@ -458,7 +457,7 @@ describe("launchHandoff", () => {
       try {
         await expect(
           launchHandoff({
-            missions: mockMissions({ missionId: "2026-04-20-001" }),
+            missions: mockMissions(),
             git: makeGit(),
             handoffStore: makeHandoffStore(),
             launchers: {
@@ -484,7 +483,7 @@ describe("launchHandoff", () => {
 
       await expect(
         launchHandoff({
-          missions: mockMissions({ missionId: "2026-04-20-001" }),
+          missions: mockMissions(),
           git: makeGit(),
           handoffStore: makeHandoffStore(),
           launchers: {
@@ -511,7 +510,7 @@ describe("launchHandoff", () => {
 
       try {
         const result = await launchHandoff({
-          missions: mockMissions({ missionId: "2026-04-20-001" }),
+          missions: mockMissions(),
           git: makeGit(),
           handoffStore: makeHandoffStore(),
           launchers: {

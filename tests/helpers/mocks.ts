@@ -367,7 +367,6 @@ export function mockCheckpointStore(
   }
 
 export function mockMissions(input: {
-  readonly missionId?: string;
   readonly missions?: Mission[];
   readonly features?: Feature[];
   readonly assertions?: Assertion[];
