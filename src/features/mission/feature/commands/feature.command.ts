@@ -123,9 +123,7 @@ export function registerFeatureCommand(program: Command): void {
       }
 
       const result = await generateAgentPrompt(
-        services.missionStore,
-        services.featureStore,
-        services.assertionStore,
+        services.missions,
         process.cwd(),
         opts.mission,
         featureId,

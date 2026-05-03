@@ -4,24 +4,26 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsHandoffStoreAdapter, pickupHandoff } from "@/features/handoff";
 import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
-import { createContract } from "@/features/task/usecases/contract/create-contract.usecase.js";
-import { lockContract } from "@/features/task/usecases/contract/lock-contract.usecase.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import {
   FsTaskContinuationHistoryStoreAdapter,
   FsTaskContinuationStoreAdapter,
   JsonlTaskStoreAdapter,
+  buildContractWorkflows,
   claimTask,
   createTask,
   syncTaskContinuation,
+  type ContractWorkflows,
   updateTask,
 } from "@/features/task";
+import { mockGitAnchor } from "../../../../helpers/mocks.js";
 
 describe("pickupHandoff", () => {
   let tmpDir: string;
   let handoffStore: FsHandoffStoreAdapter;
   let taskStore: JsonlTaskStoreAdapter;
   let contractStore: FsContractStoreAdapter;
+  let contracts: ContractWorkflows;
   let continuationStore: FsTaskContinuationStoreAdapter;
   let continuationHistory: FsTaskContinuationHistoryStoreAdapter;
 
@@ -30,6 +32,7 @@ describe("pickupHandoff", () => {
     handoffStore = new FsHandoffStoreAdapter(tmpDir);
     taskStore = new JsonlTaskStoreAdapter(tmpDir);
     contractStore = new FsContractStoreAdapter(tmpDir);
+    contracts = buildContractWorkflows(contractStore, taskStore, mockGitAnchor());
     continuationStore = new FsTaskContinuationStoreAdapter(tmpDir);
     continuationHistory = new FsTaskContinuationHistoryStoreAdapter(tmpDir);
   });
@@ -43,7 +46,7 @@ describe("pickupHandoff", () => {
       { status: "in_progress" },
       { sessionId: "codex-old-session" },
     )).task;
-    const drafted = await createContract(taskStore, contractStore, {
+    const drafted = await contracts.draft({
       taskId: task.id,
       repoRoot: tmpDir,
       intent: "Keep pickup ownership aligned with the linked task",
@@ -60,7 +63,7 @@ describe("pickupHandoff", () => {
         staleReclaimContractPolicy: "inherit",
       },
     });
-    await lockContract(contractStore, {
+    await contracts.lock({
       ref: drafted.id,
       actorId: "codex-old-session",
       configSnapshot: {
@@ -102,7 +105,7 @@ describe("pickupHandoff", () => {
       {
         handoffStore,
         taskStore,
-        contractStore,
+        contracts,
         continuationStore,
         continuationHistory,
       },
@@ -156,7 +159,7 @@ describe("pickupHandoff", () => {
       {
         handoffStore,
         taskStore,
-        contractStore,
+        contracts,
         continuationStore,
         continuationHistory,
       },
@@ -202,7 +205,7 @@ describe("pickupHandoff", () => {
       {
         handoffStore,
         taskStore,
-        contractStore,
+        contracts,
         continuationStore,
         continuationHistory,
       },
@@ -254,7 +257,7 @@ describe("pickupHandoff", () => {
         {
           handoffStore,
           taskStore,
-          contractStore,
+          contracts,
           continuationStore,
           continuationHistory,
         },
@@ -282,7 +285,7 @@ describe("pickupHandoff", () => {
       { status: "in_progress" },
       { sessionId: "codex-old-session" },
     )).task;
-    const drafted = await createContract(taskStore, contractStore, {
+    const drafted = await contracts.draft({
       taskId: task.id,
       repoRoot: tmpDir,
       intent: "Keep pickup resilient even if contract transfer fails",
@@ -299,7 +302,7 @@ describe("pickupHandoff", () => {
         staleReclaimContractPolicy: "inherit",
       },
     });
-    await lockContract(contractStore, {
+    await contracts.lock({
       ref: drafted.id,
       actorId: "codex-old-session",
       configSnapshot: {
@@ -341,9 +344,9 @@ describe("pickupHandoff", () => {
       {
         handoffStore,
         taskStore,
-        contractStore: {
-          ...contractStore,
-          getByTaskId: async () => {
+        contracts: {
+          ...contracts,
+          transferOwnership: async () => {
             throw new Error("contract store offline");
           },
         },
@@ -390,7 +393,7 @@ describe("pickupHandoff", () => {
       {
         handoffStore,
         taskStore,
-        contractStore,
+        contracts,
         continuationStore,
         continuationHistory,
       },
@@ -432,7 +435,7 @@ describe("pickupHandoff", () => {
         {
           handoffStore,
           taskStore,
-          contractStore,
+          contracts,
           continuationStore,
           continuationHistory,
         },
@@ -477,7 +480,7 @@ describe("pickupHandoff", () => {
       {
         handoffStore,
         taskStore,
-        contractStore,
+        contracts,
         continuationStore,
         continuationHistory,
       },

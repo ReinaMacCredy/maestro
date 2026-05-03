@@ -16,6 +16,7 @@ import type {
   Mission,
   MissionStorePort,
 } from "@/features/mission/index.js";
+import { buildMissions } from "@/features/mission/index.js";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort } from "@/features/mission/index.js";
 import type { AgentReply } from "@/features/mission/index.js";
@@ -258,14 +259,15 @@ function makeDeps({
   assertions = [] as readonly Assertion[],
 } = {}) {
   const mission = buildMission();
+  const missionStore = new FakeMissionStore(new Map([[mission.id, mission]]));
+  const featureStore = new FakeFeatureStore([
+    buildFeature("f1", "m1"),
+    buildFeature("f2", "m2"),
+  ]);
+  const assertionStore = new FakeAssertionStore(assertions);
+  const checkpointStore = new FakeCheckpointStore(checkpoints);
   return {
-    missionStore: new FakeMissionStore(new Map([[mission.id, mission]])),
-    featureStore: new FakeFeatureStore([
-      buildFeature("f1", "m1"),
-      buildFeature("f2", "m2"),
-    ]),
-    assertionStore: new FakeAssertionStore(assertions),
-    checkpointStore: new FakeCheckpointStore(checkpoints),
+    missions: buildMissions(missionStore, featureStore, assertionStore, checkpointStore),
     replyStore: new FakeReplyStore(replies),
     handoffStore: new FakeHandoffStore(handoffs),
   };

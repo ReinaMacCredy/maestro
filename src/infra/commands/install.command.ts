@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { getServices } from "@/services.js";
 import { initMaestro } from "../usecases/init.usecase.js";
-import { injectAgentBlocks } from "@/features/agent";
+import { injectAgentBlocks } from "@/infra/usecases/manage-agents.usecase.js";
 import { formatAgentResults, output } from "@/shared/lib/output.js";
 import { resolveInstallDir } from "../usecases/install-release-binary.usecase.js";
 

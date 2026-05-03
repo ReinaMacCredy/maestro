@@ -10,7 +10,9 @@ import type {
   FeatureStorePort,
   AssertionStorePort,
   CheckpointStorePort,
+  Missions,
 } from "@/features/mission";
+import { buildMissions } from "@/features/mission";
 import type {
   CorrectionStorePort,
   LearningStorePort,
@@ -29,6 +31,11 @@ import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { AgentSession } from "@/features/session";
 import type { NoteEntry } from "@/features/notes";
+import type { Contract, Task } from "@/features/task";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
+import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
+import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
 import type {
   Mission,
   Feature,
@@ -358,6 +365,316 @@ export function mockCheckpointStore(
     },
     };
   }
+
+export function mockMissions(input: {
+  readonly missions?: Mission[];
+  readonly features?: Feature[];
+  readonly assertions?: Assertion[];
+  readonly checkpoints?: Checkpoint[];
+} = {}): Missions {
+  const features = new Map((input.features ?? []).map((feature) => [feature.id, feature]));
+  const assertions = new Map((input.assertions ?? []).map((assertion) => [assertion.id, assertion]));
+  const checkpoints = new Map((input.checkpoints ?? []).map((checkpoint) => [checkpoint.id, checkpoint]));
+
+  const featureStore: FeatureStorePort = {
+    get: async (requestedMissionId, featureId) => {
+      const feature = features.get(featureId);
+      return feature?.missionId === requestedMissionId ? feature : undefined;
+    },
+    exists: async (requestedMissionId, featureId) => {
+      const feature = features.get(featureId);
+      return feature?.missionId === requestedMissionId;
+    },
+    create: async (requestedMissionId, createInput, id) => {
+      const now = new Date().toISOString();
+      const feature: Feature = {
+        id,
+        missionId: requestedMissionId,
+        milestoneId: createInput.milestoneId,
+        status: "pending",
+        title: createInput.title,
+        description: createInput.description,
+        agentType: createInput.agentType,
+        verificationSteps: createInput.verificationSteps,
+        dependsOn: createInput.dependsOn ?? [],
+        fulfills: createInput.fulfills ?? [],
+        preconditions: createInput.preconditions,
+        expectedBehavior: createInput.expectedBehavior,
+        createdAt: now,
+        updatedAt: now,
+      };
+      features.set(id, feature);
+      return feature;
+    },
+    update: async (requestedMissionId, featureId, updateInput) => {
+      const existing = features.get(featureId);
+      if (!existing || existing.missionId !== requestedMissionId) return undefined;
+      const updated: Feature = {
+        ...existing,
+        ...(updateInput.status !== undefined ? { status: updateInput.status } : {}),
+        ...(updateInput.report !== undefined ? { report: updateInput.report } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      features.set(featureId, updated);
+      return updated;
+    },
+    list: async (requestedMissionId, filter) => {
+      let all = [...features.values()].filter((feature) => feature.missionId === requestedMissionId);
+      if (filter?.milestoneId) {
+        all = all.filter((feature) => feature.milestoneId === filter.milestoneId);
+      }
+      if (filter?.status) {
+        all = all.filter((feature) => feature.status === filter.status);
+      }
+      return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    getMany: async (requestedMissionId, featureIds) => featureIds
+      .map((id) => features.get(id))
+      .filter((feature): feature is Feature => feature?.missionId === requestedMissionId),
+  };
+
+  const assertionStore: AssertionStorePort = {
+    get: async (requestedMissionId, assertionId) => {
+      const assertion = assertions.get(assertionId);
+      return assertion?.missionId === requestedMissionId ? assertion : undefined;
+    },
+    exists: async (requestedMissionId, assertionId) => {
+      const assertion = assertions.get(assertionId);
+      return assertion?.missionId === requestedMissionId;
+    },
+    create: async (requestedMissionId, createInput, id) => {
+      const now = new Date().toISOString();
+      const assertion: Assertion = {
+        id,
+        missionId: requestedMissionId,
+        milestoneId: createInput.milestoneId,
+        featureId: createInput.featureId,
+        result: "pending",
+        description: createInput.description,
+        surface: createInput.surface ?? "cli",
+        createdAt: now,
+        updatedAt: now,
+      };
+      assertions.set(id, assertion);
+      return assertion;
+    },
+    update: async (requestedMissionId, assertionId, updateInput) => {
+      const existing = assertions.get(assertionId);
+      if (!existing || existing.missionId !== requestedMissionId) return undefined;
+      const updated: Assertion = {
+        ...existing,
+        result: updateInput.result,
+        evidence: updateInput.evidence,
+        waivedReason: updateInput.waivedReason,
+        updatedAt: new Date().toISOString(),
+      };
+      assertions.set(assertionId, updated);
+      return updated;
+    },
+    list: async (requestedMissionId) => [...assertions.values()]
+      .filter((assertion) => assertion.missionId === requestedMissionId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    listByMilestone: async (requestedMissionId, milestoneId) => [...assertions.values()]
+      .filter((assertion) => assertion.missionId === requestedMissionId && assertion.milestoneId === milestoneId),
+    getMany: async (requestedMissionId, assertionIds) => assertionIds
+      .map((id) => assertions.get(id))
+      .filter((assertion): assertion is Assertion => assertion?.missionId === requestedMissionId),
+  };
+
+  const checkpointStore: CheckpointStorePort = {
+    get: async (requestedMissionId, checkpointId) => {
+      const checkpoint = checkpoints.get(checkpointId);
+      return checkpoint?.missionId === requestedMissionId ? checkpoint : undefined;
+    },
+    save: async (requestedMissionId, data) => {
+      const id = `checkpoint-${checkpoints.size + 1}`;
+      const checkpoint: Checkpoint = {
+        id,
+        missionId: requestedMissionId,
+        currentMilestoneId: data.currentMilestoneId,
+        timestamp: data.timestamp,
+        featureStatuses: data.featureStatuses,
+        assertionResults: data.assertionResults,
+      };
+      checkpoints.set(id, checkpoint);
+      return checkpoint;
+    },
+    list: async (requestedMissionId) => [...checkpoints.values()]
+      .filter((checkpoint) => checkpoint.missionId === requestedMissionId)
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+    getLatest: async (requestedMissionId) => {
+      const all = [...checkpoints.values()]
+        .filter((checkpoint) => checkpoint.missionId === requestedMissionId)
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      return all[0];
+    },
+    load: async (requestedMissionId) => {
+      const all = [...checkpoints.values()]
+        .filter((checkpoint) => checkpoint.missionId === requestedMissionId)
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      return all[0];
+    },
+  };
+
+  return buildMissions(
+    mockMissionStore(input.missions ?? []),
+    featureStore,
+    assertionStore,
+    checkpointStore,
+  );
+}
+
+export function mockTaskStore(initial: readonly Task[] = []): TaskStorePort {
+  const tasks = new Map(initial.map((task) => [task.id, task]));
+
+  return {
+    get: async (id) => tasks.get(id),
+    all: async () => [...tasks.values()],
+    create: async () => {
+      throw new Error("mockTaskStore.create is not implemented");
+    },
+    createBatch: async () => {
+      throw new Error("mockTaskStore.createBatch is not implemented");
+    },
+    update: async (id, patch) => {
+      const existing = tasks.get(id);
+      if (!existing) throw new Error(`Task not found: ${id}`);
+      const updated = {
+        ...existing,
+        ...patch,
+        status: patch.status ?? existing.status,
+        updatedAt: new Date().toISOString(),
+      };
+      tasks.set(id, updated);
+      return { task: updated, autoClaimed: false };
+    },
+    claim: async () => {
+      throw new Error("mockTaskStore.claim is not implemented");
+    },
+    unclaim: async () => {
+      throw new Error("mockTaskStore.unclaim is not implemented");
+    },
+    block: async () => {
+      throw new Error("mockTaskStore.block is not implemented");
+    },
+    unblock: async () => {
+      throw new Error("mockTaskStore.unblock is not implemented");
+    },
+    releaseOwned: async () => [],
+    reopen: async () => {
+      throw new Error("mockTaskStore.reopen is not implemented");
+    },
+    delete: async () => {
+      throw new Error("mockTaskStore.delete is not implemented");
+    },
+    heartbeat: async () => {
+      throw new Error("mockTaskStore.heartbeat is not implemented");
+    },
+    findBatchReceipt: async () => undefined,
+    syncMetadata: async (id, patch) => {
+      const existing = tasks.get(id);
+      if (!existing) throw new Error(`Task not found: ${id}`);
+      const updated = {
+        ...existing,
+        ...(patch.contractId !== undefined
+          ? { contractId: patch.contractId ?? undefined }
+          : {}),
+        ...(patch.claimedAtCommit !== undefined
+          ? { claimedAtCommit: patch.claimedAtCommit ?? undefined }
+          : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      tasks.set(id, updated);
+      return updated;
+    },
+    backfillSlug: async () => {
+      throw new Error("mockTaskStore.backfillSlug is not implemented");
+    },
+    backfillSlugs: async () => {
+      throw new Error("mockTaskStore.backfillSlugs is not implemented");
+    },
+  };
+}
+
+export function mockContractStore(initial: readonly Contract[] = []): ContractStorePort {
+  const contracts = new Map(initial.map((contract) => [contract.id, contract]));
+  const index = initial.map((contract) => ({
+    id: contract.id,
+    taskId: contract.taskId,
+    status: contract.status,
+    at: contract.closedAt ?? contract.discardedAt ?? contract.lockedAt ?? contract.createdAt,
+  }));
+  let nextContractId = initial.length + 1;
+
+  return {
+    get: async (id) => contracts.get(id),
+    getByTaskId: async (taskId) => {
+      for (let i = index.length - 1; i >= 0; i -= 1) {
+        const entry = index[i];
+        if (!entry || entry.taskId !== taskId) continue;
+        return contracts.get(entry.id);
+      }
+      return undefined;
+    },
+    all: async () => [...contracts.values()],
+    readIndex: async () => index,
+    create: async (input) => {
+      const id = input.id ?? `c-${String(nextContractId++).padStart(6, "0")}`;
+      const contract: Contract = {
+        schemaVersion: CONTRACT_SCHEMA_VERSION,
+        id,
+        taskId: input.taskId,
+        repoRoot: input.repoRoot,
+        status: "draft",
+        createdAt: input.createdAt,
+        intent: input.intent,
+        scope: input.scope,
+        doneWhen: input.doneWhen,
+        amendments: [],
+        createdBy: input.createdBy,
+        configSnapshot: input.configSnapshot,
+      };
+      contracts.set(id, contract);
+      index.push({ id, taskId: contract.taskId, status: contract.status, at: contract.createdAt });
+      return contract;
+    },
+    save: async (contract) => {
+      contracts.set(contract.id, contract);
+      index.push({
+        id: contract.id,
+        taskId: contract.taskId,
+        status: contract.status,
+        at: contract.closedAt ?? contract.discardedAt ?? contract.lockedAt ?? new Date().toISOString(),
+      });
+      return contract;
+    },
+    delete: async (id, input) => {
+      const deleted = contracts.delete(id);
+      index.push({
+        id,
+        taskId: input.taskId,
+        status: input.status ?? "discarded",
+        at: input.at,
+        reason: input.reason,
+      });
+      return deleted;
+    },
+  };
+}
+
+export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchorPort {
+  return {
+    resolveRepoRoot: async (cwd) => cwd,
+    resolveHeadCommit: async () => "HEAD",
+    collectTouchedFiles: async () => ({
+      gitAvailable: true,
+      actualFilesTouched: [],
+      closedAtCommit: "HEAD",
+    }),
+    windowsOverlap: async () => false,
+    ...overrides,
+  };
+}
 
 export function mockCorrectionStore(
   initial: Correction[] = [],

@@ -1,12 +1,10 @@
 import { join } from "node:path";
 import type {
   Assertion,
-  AssertionStorePort,
   Feature,
-  FeatureStorePort,
   Milestone,
   Mission,
-  MissionStorePort,
+  Missions,
 } from "@/features/mission";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { GitState } from "@/infra/domain/git-types.js";
@@ -17,9 +15,7 @@ import { fileExists } from "@/shared/lib/fs.js";
 import { sanitizeInlineCodeContent, sanitizeInlinePromptContent } from "@/shared/lib/sanitize.js";
 
 export interface BuildHandoffPromptDeps {
-  readonly missionStore: MissionStorePort;
-  readonly featureStore: FeatureStorePort;
-  readonly assertionStore: AssertionStorePort;
+  readonly missions: Missions;
   readonly git: GitPort;
 }
 
@@ -43,11 +39,7 @@ export async function buildHandoffPrompt(
 ): Promise<BuildHandoffPromptResult> {
   const [gitState, missionContext] = await Promise.all([
     loadGitState(deps.git, input.cwd),
-    resolveMissionContext(
-      deps.missionStore,
-      deps.featureStore,
-      deps.assertionStore,
-    ),
+    deps.missions.resolveSingleActionableContext(),
   ]);
 
   const promptContext = missionContext
@@ -92,37 +84,6 @@ export async function buildHandoffPrompt(
     context,
     prompt: renderHandoffPrompt(context),
   };
-}
-
-async function resolveMissionContext(
-  missionStore: MissionStorePort,
-  featureStore: FeatureStorePort,
-  assertionStore: AssertionStorePort,
-): Promise<{
-  readonly mission: Mission;
-  readonly milestone: Milestone;
-  readonly feature: Feature;
-  readonly assertions: readonly Assertion[];
-} | undefined> {
-  const missions = await missionStore.list();
-  const mission = missions.find((item) => item.status === "executing" || item.status === "paused")
-    ?? (missions.length === 1 ? missions[0] : undefined);
-
-  if (!mission) return undefined;
-
-  const [features, allAssertions] = await Promise.all([
-    featureStore.list(mission.id),
-    assertionStore.list(mission.id),
-  ]);
-  const actionable = features.filter((feature) => feature.status !== "done" && feature.status !== "blocked");
-  if (actionable.length !== 1) return undefined;
-
-  const feature = actionable[0]!;
-  const milestone = mission.milestones.find((item) => item.id === feature.milestoneId);
-  if (!milestone) return undefined;
-
-  const assertions = allAssertions.filter((item) => item.featureId === feature.id);
-  return { mission, milestone, feature, assertions };
 }
 
 async function buildMissionPromptContext(

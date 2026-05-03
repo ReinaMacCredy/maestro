@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import { SUPPORTED_AGENTS, agentConfigPath, agentSkillsRoot } from "@/features/agent";
+import { SUPPORTED_AGENTS, agentConfigPath, agentSkillsRoot } from "@/infra/domain/agents.js";
 
 describe("agent config specs", () => {
   it("ships Claude Code and Codex entries only", () => {

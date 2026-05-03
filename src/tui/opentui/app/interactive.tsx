@@ -444,9 +444,7 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
 
     try {
       const result = await generateAgentPrompt(
-        opts.snapshotDeps.missionStore,
-        opts.snapshotDeps.featureStore,
-        opts.snapshotDeps.assertionStore,
+        opts.snapshotDeps.missions,
         process.cwd(),
         state.snapshot.missionId,
         selected.featureId,

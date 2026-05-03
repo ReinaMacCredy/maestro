@@ -4,12 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
-import {
-  addContractCriterion,
-  markContractCriterion,
-  removeContractCriterion,
-} from "@/features/task/usecases/contract/criteria.usecase.js";
+import { buildContractWorkflows } from "@/features/task/usecases/contract-workflows.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
+import { mockGitAnchor, mockTaskStore } from "../../../../helpers/mocks.js";
 
 function createInput(overrides: Partial<Contract> = {}) {
   return {
@@ -57,7 +54,9 @@ describe("contract criteria usecases", () => {
       lockedBy: "session:codex:a",
     });
 
-    const added = await addContractCriterion(store, {
+    const contracts = buildContractWorkflows(store, mockTaskStore(), mockGitAnchor());
+    const added = await contracts.amend({
+      kind: "addCriterion",
       ref: locked.id,
       actorId: "session:codex:b",
       text: "receipt hint exists",
@@ -67,7 +66,8 @@ describe("contract criteria usecases", () => {
     const addedCriterion = added.doneWhen[1];
     expect(addedCriterion?.id).toMatch(/^dw-[0-9a-f]{6}$/);
 
-    const marked = await markContractCriterion(store, {
+    const marked = await contracts.amend({
+      kind: "markCriterion",
       ref: added.id,
       actorId: "session:codex:b",
       criterionId: addedCriterion!.id,
@@ -83,7 +83,8 @@ describe("contract criteria usecases", () => {
     );
     expect(marked.amendments).toHaveLength(2);
 
-    const unmarked = await markContractCriterion(store, {
+    const unmarked = await contracts.amend({
+      kind: "markCriterion",
       ref: marked.id,
       actorId: "session:codex:b",
       criterionId: addedCriterion!.id,
@@ -95,7 +96,8 @@ describe("contract criteria usecases", () => {
       kind: "manual",
     });
 
-    const removed = await removeContractCriterion(store, {
+    const removed = await contracts.amend({
+      kind: "removeCriterion",
       ref: unmarked.id,
       actorId: "session:codex:b",
       criterionId: addedCriterion!.id,
@@ -114,7 +116,8 @@ describe("contract criteria usecases", () => {
     });
 
     await expect(
-      markContractCriterion(store, {
+      buildContractWorkflows(store, mockTaskStore(), mockGitAnchor()).amend({
+        kind: "markCriterion",
         ref: locked.id,
         actorId: "session:codex:b",
         criterionId: "dw-a1b2c3",
@@ -124,7 +127,8 @@ describe("contract criteria usecases", () => {
     ).rejects.toThrow(MaestroError);
 
     await expect(
-      removeContractCriterion(store, {
+      buildContractWorkflows(store, mockTaskStore(), mockGitAnchor()).amend({
+        kind: "removeCriterion",
         ref: locked.id,
         actorId: "session:codex:b",
         criterionId: "dw-missing",

@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
-import { amendContract } from "@/features/task/usecases/contract/amend-contract.usecase.js";
+import { buildContractWorkflows } from "@/features/task/usecases/contract-workflows.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
+import { mockGitAnchor, mockTaskStore } from "../../../../helpers/mocks.js";
 
 function createInput(overrides: Partial<Contract> = {}) {
   return {
@@ -56,7 +57,9 @@ describe("amendContract", () => {
       lockedBy: "session:codex:a",
     });
 
-    const amended = await amendContract(store, {
+    const contracts = buildContractWorkflows(store, mockTaskStore(), mockGitAnchor());
+    const amended = await contracts.amend({
+      kind: "replace",
       ref: locked.id,
       actorId: "session:codex:b",
       reason: "expanded coverage",
@@ -110,7 +113,8 @@ describe("amendContract", () => {
     const created = await store.create(createInput());
 
     await expect(
-      amendContract(store, {
+      buildContractWorkflows(store, mockTaskStore(), mockGitAnchor()).amend({
+        kind: "replace",
         ref: created.id,
         actorId: "session:codex:a",
         reason: "   ",

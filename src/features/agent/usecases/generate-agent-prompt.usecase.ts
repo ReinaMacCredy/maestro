@@ -4,10 +4,8 @@
  * milestone context, feature verification details, and skill documentation.
  */
 import type {
-  FeatureStorePort,
-  MissionStorePort,
-  AssertionStorePort,
   PrincipleStorePort,
+  Missions,
   Feature,
   Mission,
   Milestone,
@@ -70,51 +68,27 @@ export interface AgentPromptStores {
 }
 
 export async function generateAgentPrompt(
-  missionStore: MissionStorePort,
-  featureStore: FeatureStorePort,
-  assertionStore: AssertionStorePort,
+  missions: Missions,
   baseDir: string,
   missionId: string,
   featureId: string,
   outPath?: string,
   stores?: AgentPromptStores,
-): Promise<GenerateAgentPromptResult>;
-
-export async function generateAgentPrompt(
-  missionStore: MissionStorePort,
-  featureStore: FeatureStorePort,
-  assertionStore: AssertionStorePort,
-  baseDir: string,
-  missionId: string,
-  featureId: string,
-  outPath?: string,
-  correctionStore?: CorrectionStorePort,
-  learningStore?: LearningStorePort,
-): Promise<GenerateAgentPromptResult>;
-
-export async function generateAgentPrompt(
-  missionStore: MissionStorePort,
-  featureStore: FeatureStorePort,
-  assertionStore: AssertionStorePort,
-  baseDir: string,
-  missionId: string,
-  featureId: string,
-  outPath?: string,
-  storesOrCorrectionStore?: AgentPromptStores | CorrectionStorePort,
-  learningStore?: LearningStorePort,
 ): Promise<GenerateAgentPromptResult> {
-  const stores = normalizeAgentPromptStores(storesOrCorrectionStore, learningStore);
-  // Verify mission exists
-  const mission = await missionStore.get(missionId);
-  if (!mission) {
-    throw new MaestroError(`Mission ${missionId} not found`, [
-      "List missions: maestro mission list",
-      `Check that mission ID '${missionId}' is correct`,
-    ]);
-  }
+  return generateAgentPromptFromMissions(missions, baseDir, missionId, featureId, outPath, stores);
+}
 
-  // Get feature
-  const feature = await featureStore.get(missionId, featureId);
+async function generateAgentPromptFromMissions(
+  missions: Missions,
+  baseDir: string,
+  missionId: string,
+  featureId: string,
+  outPath: string | undefined,
+  stores: AgentPromptStores | undefined,
+): Promise<GenerateAgentPromptResult> {
+  const { mission, features: allFeatures, assertions } = await missions.loadFullState(missionId);
+
+  const feature = allFeatures.find((item) => item.id === featureId);
   if (!feature) {
     throw new MaestroError(`Feature ${featureId} not found in mission ${missionId}`, [
       `List features: maestro feature list --mission ${missionId}`,
@@ -130,15 +104,10 @@ export async function generateAgentPrompt(
     );
   }
 
-  // Get assertions for this feature
-  const assertions = await assertionStore.list(missionId);
   const featureAssertions = assertions.filter((a) => a.featureId === featureId);
 
   // Read skill file
   const skillContent = await readAgentSkill(baseDir, feature.agentType);
-
-  // Load all features for sibling context in prompt
-  const allFeatures = await featureStore.list(missionId);
 
   // Read handoff protocol (agent-base skill) -- optional, don't error if missing
   let handoffProtocol: string | undefined;
@@ -189,32 +158,6 @@ export async function generateAgentPrompt(
     agentType: feature.agentType,
     writtenTo: writtenPaths.length > 0 ? writtenPaths : undefined,
   };
-}
-
-function normalizeAgentPromptStores(
-  storesOrCorrectionStore: AgentPromptStores | CorrectionStorePort | undefined,
-  learningStore: LearningStorePort | undefined,
-): AgentPromptStores | undefined {
-  if (!storesOrCorrectionStore) {
-    return learningStore ? { learningStore } : undefined;
-  }
-
-  if (isAgentPromptStores(storesOrCorrectionStore)) {
-    return storesOrCorrectionStore;
-  }
-
-  return {
-    correctionStore: storesOrCorrectionStore,
-    learningStore,
-  };
-}
-
-function isAgentPromptStores(value: AgentPromptStores | CorrectionStorePort): value is AgentPromptStores {
-  return typeof value === "object" && value !== null && (
-    "correctionStore" in value
-    || "learningStore" in value
-    || "principleStore" in value
-  );
 }
 
 /**

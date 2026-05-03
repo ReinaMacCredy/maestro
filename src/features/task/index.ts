@@ -70,7 +70,6 @@ export { listTasks } from "./usecases/list-tasks.usecase.js";
 export { updateTask } from "./usecases/update-task.usecase.js";
 export { claimTask } from "./usecases/claim-task.usecase.js";
 export { unclaimTask } from "./usecases/unclaim-task.usecase.js";
-export { syncTaskMetadata } from "./usecases/sync-task-metadata.usecase.js";
 export {
   blockTasks,
   unblockTasks,
@@ -112,4 +111,14 @@ export type {
 export { registerTaskCommand } from "./commands/task.command.js";
 export { buildTaskServices } from "./services.js";
 export type { TaskServices } from "./services.js";
-export { transferContractOwnership } from "./usecases/contract/transfer-ownership.usecase.js";
+export { buildContractWorkflows } from "./usecases/contract-workflows.usecase.js";
+export type {
+  ContractAmendmentCommand,
+  ContractCriterionDraftInput,
+  ContractVerdictInput,
+  ContractWorkflows,
+  CreateContractInput,
+  EditContractInput,
+  ListContractsFilters,
+  LockContractInput,
+} from "./usecases/contract-workflows.usecase.js";

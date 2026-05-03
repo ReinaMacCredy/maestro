@@ -6,7 +6,6 @@ import type { Command } from "commander";
 import { getServices } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { MissionStorePort } from "@/features/mission";
 import {
   renderDashboard,
   renderPreviewFrame,
@@ -114,6 +113,7 @@ export function registerMissionControlCommand(program: Command): void {
 
       const services = getServices();
         const snapshotDeps = {
+          missions: services.missions,
           missionStore: services.missionStore,
           featureStore: services.featureStore,
           assertionStore: services.assertionStore,
@@ -265,36 +265,12 @@ function getAllApplicableScreens(snapshot: MissionControlSnapshot): PreviewScree
   return getApplicablePreviewScreens(snapshot);
 }
 
-async function resolveMissionIdFromStore(
-  missionStore: MissionStorePort,
-  explicit?: string,
-): Promise<string | undefined> {
-  if (explicit) return explicit;
-
-  const ids = await missionStore.listIds();
-
-  if (ids.length === 0) {
-    return undefined;
-  }
-
-  // Try to find an active mission
-  for (const id of ids) {
-    const m = await missionStore.get(id);
-    if (m && (m.status === "executing" || m.status === "paused")) {
-      return m.id;
-    }
-  }
-
-  // Fall back to newest (first in list, which is sorted newest-first)
-  return ids[0]!;
-}
-
 async function buildMissionSnapshot(
   missionId: string,
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
   options?: SnapshotBuildOptions,
 ) {
-  const mission = await snapshotDeps.missionStore.get(missionId);
+  const mission = await snapshotDeps.missions.get(missionId);
 
   if (!mission) {
     throw new MaestroError(`Mission ${missionId} not found`, [
@@ -320,7 +296,7 @@ export function createMissionControlSnapshotLoader(
   return {
       load: async (options) => {
         if (!explicitMissionId && !resolvedMissionId) {
-          resolvedMissionId = await resolveMissionIdFromStore(cachedSnapshotDeps.missionStore);
+          resolvedMissionId = await cachedSnapshotDeps.missions.resolveMissionId();
         }
 
         return loadMissionControlSnapshot(

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { launchHandoff, type HandoffLaunchPort, type HandoffRecord, type HandoffStorePort } from "@/features/handoff";
 import type { Feature, Mission } from "@/features/mission";
 import type { GitPort } from "@/infra/ports/git.port.js";
-import { mockAssertionStore, mockFeatureStore, mockMissionStore } from "../../../../helpers/mocks.js";
+import { mockMissions } from "../../../../helpers/mocks.js";
 
 function makeHandoffStore(): HandoffStorePort & { readonly updates: HandoffRecord[] } {
   let current: HandoffRecord | undefined;
@@ -93,9 +93,7 @@ describe("launchHandoff", () => {
     };
 
     const result = await launchHandoff({
-      missionStore: mockMissionStore([]),
-      featureStore: mockFeatureStore("2026-04-20-001", []),
-      assertionStore: mockAssertionStore("2026-04-20-001", []),
+      missions: mockMissions(),
       git: makeGit(),
       handoffStore,
       launchers: {
@@ -123,9 +121,7 @@ describe("launchHandoff", () => {
   it("rejects --base without --worktree", async () => {
     await expect(
       launchHandoff({
-        missionStore: mockMissionStore([]),
-        featureStore: mockFeatureStore("2026-04-20-001", []),
-        assertionStore: mockAssertionStore("2026-04-20-001", []),
+        missions: mockMissions(),
         git: makeGit(),
         handoffStore: makeHandoffStore(),
         launchers: {
@@ -157,9 +153,7 @@ describe("launchHandoff", () => {
     };
 
     const result = await launchHandoff({
-      missionStore: mockMissionStore([]),
-      featureStore: mockFeatureStore("2026-04-20-001", []),
-      assertionStore: mockAssertionStore("2026-04-20-001", []),
+      missions: mockMissions(),
       git: makeGit(),
       handoffStore,
       launchers: {
@@ -189,9 +183,7 @@ describe("launchHandoff", () => {
 
     await expect(
       launchHandoff({
-        missionStore: mockMissionStore([]),
-        featureStore: mockFeatureStore("2026-04-20-001", []),
-        assertionStore: mockAssertionStore("2026-04-20-001", []),
+        missions: mockMissions(),
         git: makeGit(),
         handoffStore,
         launchers: {
@@ -223,9 +215,7 @@ describe("launchHandoff", () => {
 
     await expect(
       launchHandoff({
-        missionStore: mockMissionStore([]),
-        featureStore: mockFeatureStore("2026-04-20-001", []),
-        assertionStore: mockAssertionStore("2026-04-20-001", []),
+        missions: mockMissions(),
         git: makeGit(),
         handoffStore,
         launchers: {
@@ -271,9 +261,7 @@ describe("launchHandoff", () => {
       };
 
       const result = await launchHandoff({
-        missionStore: mockMissionStore([]),
-        featureStore: mockFeatureStore("2026-04-20-001", []),
-        assertionStore: mockAssertionStore("2026-04-20-001", []),
+        missions: mockMissions(),
         git: makeGit(),
         handoffStore,
         launchers: {
@@ -334,9 +322,10 @@ describe("launchHandoff", () => {
 
       const handoffStore = makeHandoffStore();
       const result = await launchHandoff({
-        missionStore: mockMissionStore([mission]),
-        featureStore: mockFeatureStore(mission.id, [feature]),
-        assertionStore: mockAssertionStore(mission.id, []),
+        missions: mockMissions({
+          missions: [mission],
+          features: [feature],
+        }),
         git: makeGit(),
         handoffStore,
         launchers: {
@@ -374,9 +363,7 @@ describe("launchHandoff", () => {
     it("throws a MaestroError when --prompt-file does not exist", async () => {
       await expect(
         launchHandoff({
-          missionStore: mockMissionStore([]),
-          featureStore: mockFeatureStore("2026-04-20-001", []),
-          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          missions: mockMissions(),
           git: makeGit(),
           handoffStore: makeHandoffStore(),
           launchers: {
@@ -397,9 +384,7 @@ describe("launchHandoff", () => {
       let createWorktreeCalls = 0;
       await expect(
         launchHandoff({
-          missionStore: mockMissionStore([]),
-          featureStore: mockFeatureStore("2026-04-20-001", []),
-          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          missions: mockMissions(),
           git: {
             ...makeGit(),
             async createWorktree(_cwd, input) {
@@ -437,9 +422,7 @@ describe("launchHandoff", () => {
       try {
         await expect(
           launchHandoff({
-            missionStore: mockMissionStore([]),
-            featureStore: mockFeatureStore("2026-04-20-001", []),
-            assertionStore: mockAssertionStore("2026-04-20-001", []),
+            missions: mockMissions(),
             git: makeGit(),
             handoffStore: makeHandoffStore(),
             launchers: {
@@ -474,9 +457,7 @@ describe("launchHandoff", () => {
       try {
         await expect(
           launchHandoff({
-            missionStore: mockMissionStore([]),
-            featureStore: mockFeatureStore("2026-04-20-001", []),
-            assertionStore: mockAssertionStore("2026-04-20-001", []),
+            missions: mockMissions(),
             git: makeGit(),
             handoffStore: makeHandoffStore(),
             launchers: {
@@ -502,9 +483,7 @@ describe("launchHandoff", () => {
 
       await expect(
         launchHandoff({
-          missionStore: mockMissionStore([]),
-          featureStore: mockFeatureStore("2026-04-20-001", []),
-          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          missions: mockMissions(),
           git: makeGit(),
           handoffStore: makeHandoffStore(),
           launchers: {
@@ -531,9 +510,7 @@ describe("launchHandoff", () => {
 
       try {
         const result = await launchHandoff({
-          missionStore: mockMissionStore([]),
-          featureStore: mockFeatureStore("2026-04-20-001", []),
-          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          missions: mockMissions(),
           git: makeGit(),
           handoffStore: makeHandoffStore(),
           launchers: {

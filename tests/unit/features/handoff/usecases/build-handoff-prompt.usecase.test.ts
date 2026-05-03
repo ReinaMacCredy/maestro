@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildHandoffPrompt } from "@/features/handoff";
 import type { GitPort } from "@/infra/ports/git.port.js";
-import { mockAssertionStore, mockFeatureStore, mockMissionStore } from "../../../../helpers/mocks.js";
+import { mockMissions } from "../../../../helpers/mocks.js";
 import type { Mission, Feature, Assertion } from "@/features/mission";
 
 let cwd: string;
@@ -117,9 +117,11 @@ describe("buildHandoffPrompt", () => {
     await writeFile(join(repliesDir, `${feature.id}.yaml`), "outcome: completed\n");
 
     const result = await buildHandoffPrompt({
-      missionStore: mockMissionStore([mission]),
-      featureStore: mockFeatureStore(mission.id, [feature]),
-      assertionStore: mockAssertionStore(mission.id, [assertion]),
+      missions: mockMissions({
+        missions: [mission],
+        features: [feature],
+        assertions: [assertion],
+      }),
       git: makeGit(["src/features/handoff/commands/handoff.command.ts"]),
     }, {
       cwd,
@@ -183,9 +185,10 @@ describe("buildHandoffPrompt", () => {
     ];
 
     const result = await buildHandoffPrompt({
-      missionStore: mockMissionStore([mission]),
-      featureStore: mockFeatureStore(mission.id, features),
-      assertionStore: mockAssertionStore(mission.id, []),
+      missions: mockMissions({
+        missions: [mission],
+        features,
+      }),
       git: makeGit(["README.md", "src/services.ts"]),
     }, {
       cwd,
@@ -200,9 +203,7 @@ describe("buildHandoffPrompt", () => {
 
   it("sanitizes prompt content before rendering markdown sections", async () => {
     const result = await buildHandoffPrompt({
-      missionStore: mockMissionStore([]),
-      featureStore: mockFeatureStore("2026-04-20-003", []),
-      assertionStore: mockAssertionStore("2026-04-20-003", []),
+      missions: mockMissions(),
       git: makeGit(["README.md", "src/evil`  file.md"]),
     }, {
       cwd,
@@ -253,9 +254,10 @@ describe("buildHandoffPrompt", () => {
     };
 
     const result = await buildHandoffPrompt({
-      missionStore: mockMissionStore([mission]),
-      featureStore: mockFeatureStore(mission.id, [feature]),
-      assertionStore: mockAssertionStore(mission.id, []),
+      missions: mockMissions({
+        missions: [mission],
+        features: [feature],
+      }),
       git: makeGit([]),
     }, {
       cwd,

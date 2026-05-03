@@ -97,6 +97,12 @@ export { JsonlPrincipleStoreAdapter } from "./adapters/principle-store.adapter.j
 
 export { deriveMissionReport, generateMissionReport } from "./usecases/mission-report.usecase.js";
 export type { MissionReport, MilestoneReportProgress } from "./usecases/mission-report.usecase.js";
+export { buildMissions } from "./usecases/missions.usecase.js";
+export type {
+  ActiveMissionContext,
+  MissionFullState,
+  Missions,
+} from "./usecases/missions.usecase.js";
 export {
   createMission,
   listMissions,
@@ -158,5 +164,3 @@ export {
 } from "./reply/usecases/ingest-reply.usecase.js";
 
 export { registerReplyCommand } from "./reply/commands/reply.command.js";
-export { buildReplyServices } from "./reply/services.js";
-export type { ReplyServices } from "./reply/services.js";

@@ -16,6 +16,10 @@ const FEATURE_FILE_GLOBS = [
   "src/features/**/*.cts",
 ] as const;
 
+const COMPOSITION_ROOT_FILES = [
+  "src/services.ts",
+] as const;
+
 const ALLOWED_CROSS_FEATURE: readonly string[] = [
   "src/services.ts",
   "src/index.ts",
@@ -43,6 +47,10 @@ function canonicalizeSpec(fileRelPath: string, spec: string): string {
 
 function isPublicSurfaceImport(subPath: string | undefined): boolean {
   return subPath === undefined || PUBLIC_SURFACE_RE.test(subPath);
+}
+
+function isFeatureRootServicesImport(subPath: string | undefined): boolean {
+  return subPath === "services.js" || subPath === "services.ts";
 }
 
 export function resolveBoundaryCheckRoot(metaUrl: string): string {
@@ -76,6 +84,29 @@ export function findCrossFeatureImportViolation(
   };
 }
 
+export function findCompositionRootImportViolation(
+  fileRelPath: string,
+  spec: string,
+): Violation | undefined {
+  if (toPosixPath(fileRelPath) !== "src/services.ts") return undefined;
+
+  const canonical = canonicalizeSpec(fileRelPath, spec);
+  const match = canonical.match(FEATURE_IMPORT_RE);
+  if (!match) return undefined;
+
+  const otherFeature = match[1];
+  const subPath = match[2];
+
+  if (!otherFeature || isFeatureRootServicesImport(subPath)) return undefined;
+
+  return {
+    file: fileRelPath,
+    ownFeature: "composition-root",
+    importSpec: spec,
+    otherFeature,
+  };
+}
+
 export async function scanFeatureBoundaryViolations(root: string): Promise<Violation[]> {
   const violations: Violation[] = [];
 
@@ -95,6 +126,22 @@ export async function scanFeatureBoundaryViolations(root: string): Promise<Viola
         if (violation) {
           violations.push(violation);
         }
+      }
+    }
+  }
+
+  for (const relPath of COMPOSITION_ROOT_FILES) {
+    const absolutePath = path.join(root, relPath);
+    const file = Bun.file(absolutePath);
+    if (!(await file.exists())) continue;
+
+    const text = await file.text();
+    const imports = transpiler.scanImports(text);
+
+    for (const { path: spec } of imports) {
+      const violation = findCompositionRootImportViolation(relPath, spec);
+      if (violation) {
+        violations.push(violation);
       }
     }
   }

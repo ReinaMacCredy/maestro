@@ -60,9 +60,7 @@ export function registerHandoffCommand(program: Command): void {
       const agent = parseAgent(opts.agent);
       const linkedTask = await resolveLinkedTask(typeof opts.taskId === "string" ? opts.taskId : undefined);
       const result = await launchHandoff({
-        missionStore: services.missionStore,
-        featureStore: services.featureStore,
-        assertionStore: services.assertionStore,
+        missions: services.missions,
         git: services.git,
         handoffStore: services.handoffStore,
         launchers: services.handoffLaunchers,
@@ -132,7 +130,7 @@ export function registerHandoffCommand(program: Command): void {
         {
           handoffStore: services.handoffStore,
           taskStore: services.taskStore,
-          contractStore: services.contractStore,
+          contracts: services.contracts,
           continuationStore: services.taskContinuationStore,
           continuationHistory: services.taskContinuationHistory,
         },
