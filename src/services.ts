@@ -9,6 +9,7 @@ import { buildGraphServices, type GraphServices } from "./features/graph/service
 import { buildTaskServices, type TaskServices } from "./features/task/services.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
 import { buildEvidenceServices, type EvidenceServices } from "./features/evidence/services.js";
+import { buildSpecServices, type SpecServices } from "./features/spec/services.js";
 
 export interface Services extends
   InfraServices,
@@ -21,7 +22,8 @@ export interface Services extends
   GraphServices,
   TaskServices,
   BundleServices,
-  EvidenceServices { }
+  EvidenceServices,
+  SpecServices { }
 
 let instance: Services | undefined;
 
@@ -38,6 +40,7 @@ export function initServices(projectDir: string): Services {
     ...buildTaskServices(projectDir),
     ...buildBundleServices(),
     ...buildEvidenceServices(projectDir),
+    ...buildSpecServices(projectDir),
   };
   return instance;
 }

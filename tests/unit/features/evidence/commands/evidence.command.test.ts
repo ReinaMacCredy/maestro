@@ -11,6 +11,8 @@ import { mockEvidenceStore } from "../../../../helpers/mocks.js";
 import type { Task } from "@/features/task";
 import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
 import type { AgentSession, SessionDetectPort } from "@/features/session";
+import type { SpecStorePort } from "@/features/spec/ports/storage.js";
+import type { Spec } from "@/features/spec/domain/types.js";
 
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
@@ -64,11 +66,21 @@ function fakeSessionDetect(session?: AgentSession): Pick<SessionDetectPort, "det
   };
 }
 
+function mockSpecStore(initial: Spec[] = []): SpecStorePort {
+  const store = new Map(initial.map((s) => [s.mission_id, s]));
+  return {
+    write: async (spec) => { store.set(spec.mission_id, spec); },
+    read: async (missionId) => store.get(missionId),
+    list: async () => [...store.values()].sort((a, b) => a.mission_id.localeCompare(b.mission_id)),
+  };
+}
+
 interface DepsOverrides {
   readonly tasks?: readonly Task[];
   readonly session?: AgentSession;
   readonly noSession?: boolean;
   readonly evidenceStore?: EvidenceStorePort;
+  readonly specStore?: SpecStorePort;
   readonly recordEvidence?: typeof realRecordEvidence;
 }
 
@@ -82,12 +94,14 @@ function evidenceDeps(overrides: DepsOverrides = {}) {
       };
   const tasks = overrides.tasks ?? [makeTask("tsk-aaaaaa")];
   const evidenceStore = overrides.evidenceStore ?? mockEvidenceStore();
+  const specStore = overrides.specStore ?? mockSpecStore();
   return {
     deps: {
       getServices: () => ({
         evidenceStore,
         taskStore: fakeTaskStore(tasks) as TaskStorePort,
         sessionDetect: fakeSessionDetect(session) as SessionDetectPort,
+        specStore,
       }),
       recordEvidence: overrides.recordEvidence ?? realRecordEvidence,
     },
@@ -649,5 +663,176 @@ describe("evidence show", () => {
     ).rejects.toMatchObject({
       message: "Invalid evidence id: not-an-id",
     });
+  });
+
+  // --- L2.0: --criterion enforcement when mission has a Spec ---
+
+  it("requires --criterion when task belongs to a mission that has a Spec with criteria", async () => {
+    captureConsole();
+    const missionId = "2026-05-04-001";
+    const criteria = [
+      { id: "crt-0000000000001-aabbccdd", text: "Alpha" },
+      { id: "crt-0000000000002-bbccddee", text: "Beta" },
+      { id: "crt-0000000000003-ccddeeff", text: "Gamma" },
+    ];
+    const spec: Spec = {
+      schema_version: 1,
+      mission_id: missionId,
+      acceptance_criteria: criteria,
+      non_goals: [],
+      runtime_signals: [],
+      created_at: "2026-05-04T00:00:00.000Z",
+      updated_at: "2026-05-04T00:00:00.000Z",
+    };
+    const task: Task = {
+      ...makeTask("tsk-bbbbbb"),
+      missionId,
+    };
+    const { deps } = evidenceDeps({
+      tasks: [task],
+      specStore: mockSpecStore([spec]),
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-bbbbbb",
+        "--command", "bun test",
+        "--exit", "0",
+      ]),
+    ).rejects.toMatchObject({
+      message: "--criterion required when task's mission has a Spec",
+    });
+  });
+
+  it("error message includes all available criterion ids", async () => {
+    captureConsole();
+    const missionId = "2026-05-04-002";
+    const id1 = "crt-0000000000001-aabbccdd";
+    const id2 = "crt-0000000000002-bbccddee";
+    const id3 = "crt-0000000000003-ccddeeff";
+    const spec: Spec = {
+      schema_version: 1,
+      mission_id: missionId,
+      acceptance_criteria: [
+        { id: id1, text: "Alpha" },
+        { id: id2, text: "Beta" },
+        { id: id3, text: "Gamma" },
+      ],
+      non_goals: [],
+      runtime_signals: [],
+      created_at: "2026-05-04T00:00:00.000Z",
+      updated_at: "2026-05-04T00:00:00.000Z",
+    };
+    const task: Task = { ...makeTask("tsk-cccccc"), missionId };
+    const { deps } = evidenceDeps({
+      tasks: [task],
+      specStore: mockSpecStore([spec]),
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    let thrownError: unknown;
+    try {
+      await program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-cccccc",
+        "--command", "bun test",
+        "--exit", "0",
+      ]);
+    } catch (err) {
+      thrownError = err;
+    }
+
+    expect(thrownError).toBeDefined();
+    const hints = (thrownError as { hints?: string[] }).hints ?? [];
+    expect(hints.length).toBeGreaterThan(0);
+    const allHints = hints.join("\n");
+    expect(allHints).toContain(id1);
+    expect(allHints).toContain(id2);
+    expect(allHints).toContain(id3);
+  });
+
+  it("succeeds when --criterion matches a valid criterion id", async () => {
+    captureConsole();
+    const missionId = "2026-05-04-003";
+    const criterionId = "crt-0000000000001-aabbccdd";
+    const spec: Spec = {
+      schema_version: 1,
+      mission_id: missionId,
+      acceptance_criteria: [{ id: criterionId, text: "Alpha" }],
+      non_goals: [],
+      runtime_signals: [],
+      created_at: "2026-05-04T00:00:00.000Z",
+      updated_at: "2026-05-04T00:00:00.000Z",
+    };
+    const task: Task = { ...makeTask("tsk-dddddd"), missionId };
+    const { deps, evidenceStore } = evidenceDeps({
+      tasks: [task],
+      specStore: mockSpecStore([spec]),
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await program.parseAsync([
+      "node", "maestro", "evidence", "record",
+      "--task", "tsk-dddddd",
+      "--command", "bun test",
+      "--exit", "0",
+      "--criterion", criterionId,
+    ]);
+
+    const rows = await evidenceStore.list({ task_id: "tsk-dddddd" });
+    expect(rows.length).toBe(1);
+    const payload = rows[0]!.payload as { criterion_id?: string };
+    expect(payload.criterion_id).toBe(criterionId);
+  });
+
+  it("accepts evidence record without --criterion when task has no missionId", async () => {
+    captureConsole();
+    // Task without missionId -- current behavior preserved
+    const task = makeTask("tsk-eeeeee");
+    const { deps, evidenceStore } = evidenceDeps({ tasks: [task] });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await program.parseAsync([
+      "node", "maestro", "evidence", "record",
+      "--task", "tsk-eeeeee",
+      "--command", "bun test",
+      "--exit", "0",
+    ]);
+
+    const rows = await evidenceStore.list({ task_id: "tsk-eeeeee" });
+    expect(rows.length).toBe(1);
+  });
+
+  it("accepts evidence record without --criterion when task mission has no Spec", async () => {
+    captureConsole();
+    // Task with a missionId but no spec for that mission
+    const task: Task = { ...makeTask("tsk-ffffff"), missionId: "2026-05-04-999" };
+    const { deps, evidenceStore } = evidenceDeps({
+      tasks: [task],
+      specStore: mockSpecStore([]), // no spec for this mission
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await program.parseAsync([
+      "node", "maestro", "evidence", "record",
+      "--task", "tsk-ffffff",
+      "--command", "bun test",
+      "--exit", "0",
+    ]);
+
+    const rows = await evidenceStore.list({ task_id: "tsk-ffffff" });
+    expect(rows.length).toBe(1);
   });
 });

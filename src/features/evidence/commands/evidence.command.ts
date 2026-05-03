@@ -15,7 +15,7 @@ import type {
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect">;
+  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore">;
   readonly recordEvidence: typeof recordEvidence;
 }
 
@@ -77,7 +77,7 @@ interface RecordOpts {
 }
 
 async function buildRecordInput(
-  services: Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect">,
+  services: Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore">,
   opts: RecordOpts,
 ): Promise<RecordEvidenceInput> {
   const taskId = opts.task;
@@ -86,6 +86,25 @@ async function buildRecordInput(
     throw new MaestroError(`Task not found: ${taskId}`, [
       "Run `maestro task list` to see available tasks",
     ]);
+  }
+
+  // When the task belongs to a Mission that has a Spec with at least one
+  // criterion, --criterion is required and must match a known criterion id.
+  if (task.missionId) {
+    const spec = await services.specStore.read(task.missionId);
+    if (spec && spec.acceptance_criteria.length > 0) {
+      const ids = spec.acceptance_criteria.map((c) => c.id);
+      if (!opts.criterion) {
+        throw new MaestroError("--criterion required when task's mission has a Spec", [
+          `Available: ${ids.join(", ")}`,
+        ]);
+      }
+      if (!ids.includes(opts.criterion)) {
+        throw new MaestroError(`Unknown criterion id: ${opts.criterion}`, [
+          `Available: ${ids.join(", ")}`,
+        ]);
+      }
+    }
   }
 
   const kind = parseKind(opts.kind);

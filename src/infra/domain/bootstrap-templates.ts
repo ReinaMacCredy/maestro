@@ -97,6 +97,10 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 `,
   },
   {
+    path: ".maestro/specs/.gitkeep",
+    content: "",
+  },
+  {
     path: ".maestro/tasks/contract-templates/default.md",
     content: `intent: >
   State what will change and why in 1-3 sentences.

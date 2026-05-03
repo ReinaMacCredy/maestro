@@ -51,6 +51,7 @@ import { registerHandoffCommand } from "./features/handoff/index.js";
 import { registerTaskCommand } from "./features/task/index.js";
 import { registerBundleCommand } from "./features/bundle/index.js";
 import { registerEvidenceCommand } from "./features/evidence/index.js";
+import { registerSpecCommand } from "./features/spec/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -93,6 +94,7 @@ registerReplyCommand(program);
 registerPrincipleCommand(program);
 registerBundleCommand(program);
 registerEvidenceCommand(program);
+registerSpecCommand(program);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,
