@@ -232,4 +232,20 @@ Suggested contents:
 - command transcripts worth preserving
 `,
   },
+  {
+    path: ".maestro/policies/sensitive-paths.yaml",
+    content: `# Default sensitive-path globs for Maestro Trust Verifier.
+# Paths matching these globs trigger checkSensitivePaths findings (advisory at L2,
+# may gate at L7 per Rule 12). Extend or relax for your repo.
+sensitive_paths:
+  - "src/auth/**"
+  - "src/payments/**"
+  - "**/secrets/**"
+  - "package.json"
+  - "bun.lock"
+  - ".github/workflows/**"
+  - "**/migrations/**"
+  - "**/permissions/**"
+`,
+  },
 ];

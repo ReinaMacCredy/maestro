@@ -273,4 +273,30 @@ describe("initMaestro", () => {
         await expect(access(legacyCodexSkillPath)).rejects.toThrow();
       },
     );
+
+  it("creates .maestro/policies/sensitive-paths.yaml on fresh init", async () => {
+    const config = mockConfig();
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    const policiesPath = join(tmpDir, ".maestro", "policies", "sensitive-paths.yaml");
+    expect(result.created).toContain(policiesPath);
+
+    const content = await readFile(policiesPath, "utf8");
+    expect(content).toContain("sensitive_paths");
+    expect(content).toContain("src/auth/**");
+    expect(content).toContain("bun.lock");
+  });
+
+  it("does not overwrite existing .maestro/policies/sensitive-paths.yaml on re-init", async () => {
+    const config = mockConfig();
+    const policiesPath = join(tmpDir, ".maestro", "policies", "sensitive-paths.yaml");
+    await mkdir(join(tmpDir, ".maestro", "policies"), { recursive: true });
+    await writeFile(policiesPath, "sensitive_paths:\n  - \"custom/**\"\n");
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(policiesPath);
+    expect(result.created).not.toContain(policiesPath);
+    expect(await readFile(policiesPath, "utf8")).toBe("sensitive_paths:\n  - \"custom/**\"\n");
+  });
   });
