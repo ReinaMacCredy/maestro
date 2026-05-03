@@ -1,4 +1,9 @@
-export type EvidenceKind = "command" | "manual-note";
+export type EvidenceKind =
+  | "command"
+  | "manual-note"
+  | "verifier"
+  | "contract-amendment"
+  | "contract-amendment-blocked";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -19,15 +24,38 @@ export interface ManualNotePayload {
   readonly criterion_id?: string;
 }
 
+export interface VerifierPayload {
+  readonly check: string;
+  readonly severity: "info" | "warn" | "error";
+  readonly paths: readonly string[];
+  readonly details?: string;
+}
+
+export interface ContractAmendmentPayload {
+  readonly amendmentId: string;
+  readonly addedPaths: readonly string[];
+  readonly removedPaths: readonly string[];
+  readonly reason: string;
+}
+
+export interface ContractAmendmentBlockedPayload {
+  readonly reason: "budget_exhausted" | "forbidden_path" | "validation";
+  readonly attemptedPaths: readonly string[];
+  readonly details?: string;
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
+  readonly verifier: VerifierPayload;
+  readonly "contract-amendment": ContractAmendmentPayload;
+  readonly "contract-amendment-blocked": ContractAmendmentBlockedPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];
 
 export interface EvidenceRow<K extends EvidenceKind = EvidenceKind> {
-  readonly schema_version: 1;
+  readonly schema_version: 2 | 1;
   readonly id: string;
   readonly task_id: string;
   readonly session_id?: string;

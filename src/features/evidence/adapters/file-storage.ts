@@ -22,7 +22,8 @@ import type {
 } from "../ports/storage.js";
 
 const EVIDENCE_DIR = "evidence";
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
+const ACCEPTED_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([1, 2]);
 
 export class FsEvidenceStoreAdapter implements EvidenceStorePort {
   constructor(private readonly baseDir: string) {}
@@ -123,7 +124,8 @@ function isEvidenceRow(value: unknown): value is EvidenceRow {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    v["schema_version"] === CURRENT_SCHEMA_VERSION
+    typeof v["schema_version"] === "number"
+    && ACCEPTED_SCHEMA_VERSIONS.has(v["schema_version"] as number)
     && typeof v["id"] === "string"
     && typeof v["task_id"] === "string"
     && typeof v["kind"] === "string"

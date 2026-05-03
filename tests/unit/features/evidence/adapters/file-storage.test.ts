@@ -36,6 +36,41 @@ function noteRow(overrides: Partial<EvidenceRow<"manual-note">> = {}): EvidenceR
   };
 }
 
+function verifierRow(overrides: Partial<EvidenceRow<"verifier">> = {}): EvidenceRow<"verifier"> {
+  return {
+    schema_version: 2,
+    id: overrides.id ?? generateEvidenceId(),
+    task_id: overrides.task_id ?? "tsk-aaaaaa",
+    session_id: overrides.session_id,
+    kind: "verifier",
+    witness_level: overrides.witness_level ?? "witnessed-by-maestro",
+    created_at: overrides.created_at ?? "2026-05-03T12:00:00.000Z",
+    payload: overrides.payload ?? {
+      check: "no sensitive paths exposed",
+      severity: "warn",
+      paths: ["src/secrets.ts"],
+    },
+  };
+}
+
+function contractAmendmentRow(overrides: Partial<EvidenceRow<"contract-amendment">> = {}): EvidenceRow<"contract-amendment"> {
+  return {
+    schema_version: 2,
+    id: overrides.id ?? generateEvidenceId(),
+    task_id: overrides.task_id ?? "tsk-aaaaaa",
+    session_id: overrides.session_id,
+    kind: "contract-amendment",
+    witness_level: overrides.witness_level ?? "witnessed-by-maestro",
+    created_at: overrides.created_at ?? "2026-05-03T13:00:00.000Z",
+    payload: overrides.payload ?? {
+      amendmentId: "amd-001",
+      addedPaths: ["src/new-module/"],
+      removedPaths: [],
+      reason: "added new module to scope",
+    },
+  };
+}
+
 describe("FsEvidenceStoreAdapter", () => {
   let tmpDir: string;
   let store: FsEvidenceStoreAdapter;
@@ -143,6 +178,86 @@ describe("FsEvidenceStoreAdapter", () => {
       expect(await store.read(futureId)).toBeUndefined();
       const list = await store.list({ task_id: "tsk-aaaaaa" });
       expect(list.map((r) => r.id)).toEqual([present.id]);
+    });
+  });
+
+  describe("schema_version backward compatibility (v1 rows)", () => {
+    it("reads a v1 row stored directly on disk", async () => {
+      const v1Id = generateEvidenceId();
+      const taskDir = join(tmpDir, ".maestro", "evidence", "tsk-aaaaaa");
+      await mkdir(taskDir, { recursive: true });
+      const v1Row = {
+        schema_version: 1,
+        id: v1Id,
+        task_id: "tsk-aaaaaa",
+        kind: "command",
+        witness_level: "witnessed-by-maestro",
+        created_at: "2026-01-01T00:00:00.000Z",
+        payload: { command: "bun test", exit: 0 },
+      };
+      await Bun.write(join(taskDir, `${v1Id}.json`), JSON.stringify(v1Row));
+
+      const result = await store.read(v1Id);
+      expect(result).toEqual(v1Row);
+    });
+
+    it("includes v1 rows in list results", async () => {
+      const v1Id = generateEvidenceId();
+      const taskDir = join(tmpDir, ".maestro", "evidence", "tsk-aaaaaa");
+      await mkdir(taskDir, { recursive: true });
+      await Bun.write(
+        join(taskDir, `${v1Id}.json`),
+        JSON.stringify({
+          schema_version: 1,
+          id: v1Id,
+          task_id: "tsk-aaaaaa",
+          kind: "manual-note",
+          witness_level: "agent-claimed-locally",
+          created_at: "2026-01-01T00:00:00.000Z",
+          payload: { note: "legacy note" },
+        }),
+      );
+
+      const list = await store.list({ task_id: "tsk-aaaaaa" });
+      expect(list.map((r) => r.id)).toContain(v1Id);
+    });
+  });
+
+  describe("schema v2 — new kinds", () => {
+    it("round-trips a verifier-kind row", async () => {
+      const row = verifierRow();
+      await store.append(row);
+      expect(await store.read(row.id)).toEqual(row);
+    });
+
+    it("round-trips a contract-amendment-kind row", async () => {
+      const row = contractAmendmentRow();
+      await store.append(row);
+      expect(await store.read(row.id)).toEqual(row);
+    });
+
+    it("list returns mixed v1 and v2 rows ordered by created_at", async () => {
+      const v1Row = commandRow({
+        task_id: "tsk-aaaaaa",
+        created_at: "2026-05-03T08:00:00.000Z",
+      });
+      const v2Verifier = verifierRow({
+        task_id: "tsk-aaaaaa",
+        created_at: "2026-05-03T09:00:00.000Z",
+      });
+      const v2Amendment = contractAmendmentRow({
+        task_id: "tsk-aaaaaa",
+        created_at: "2026-05-03T10:00:00.000Z",
+      });
+      await store.append(v1Row);
+      await store.append(v2Verifier);
+      await store.append(v2Amendment);
+
+      const list = await store.list({ task_id: "tsk-aaaaaa" });
+      expect(list.map((r) => r.id)).toEqual([v1Row.id, v2Verifier.id, v2Amendment.id]);
+      expect(list[0]?.schema_version).toBe(1);
+      expect(list[1]?.schema_version).toBe(2);
+      expect(list[2]?.schema_version).toBe(2);
     });
   });
 
