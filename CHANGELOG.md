@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.66.0 - L2 — Contract-Required + Scope Check
+
+- New verbs: `maestro contract show/amend/history`, `maestro task verify`,
+  `maestro spec show/edit`.
+- Spec feature: `.maestro/specs/<mission-id>.json` stores AcceptanceCriteria
+  with stable ids; `evidence record` requires `--criterion` when the task's
+  Mission has a Spec.
+- Contract types extended with optional `missionId`, `riskClass`,
+  `amendmentBudget`, `costBudget`. Schema bumped 1→2; v1 fixtures still parse.
+- Versioned contract storage at `.maestro/contracts/<task-id>/v<N>.json`
+  (append-only). `propose/approve/amend` use-cases enforce `amendmentBudget`.
+- Trust Verifier (`src/features/verify/`) with six checks: scope, lockfile
+  parity, generated-file parity (advisory), sensitive paths, commit metadata,
+  secrets in diff. `maestro task verify` runs locally and writes
+  `verifier`-kind Evidence rows.
+- Policy feature with `Owners` loader (`policy_approver`, `ratchet_approver`,
+  `sensitive_waiver`). `maestro init` provisions `policies/owners.yaml` and
+  `policies/sensitive-paths.yaml` with sensible defaults.
+- Evidence schema v2 adds `verifier`, `contract-amendment`, and
+  `contract-amendment-blocked` kinds with typed payloads. Reader is
+  backward-tolerant; v1 rows continue to parse.
+- `maestro-plan` and `maestro-task` skills updated: plans must include
+  `proposed_contract`; agents must amend through the CLI on genuine scope
+  discovery.
+- Compat: tasks without a Contract default to permissive; existing Spec-less
+  Missions keep working; existing v1 contract rows continue to read.
+
 ## 0.65.0 - L1 — Evidence-only logbook
 
 - New verbs: `maestro evidence record/list/show` for recording and inspecting
