@@ -5,9 +5,8 @@ import { getServices, type Services } from "@/services.js";
 import { amendContract } from "../usecases/amend-contract.usecase.js";
 import { getCurrentContract } from "../usecases/get-current-contract.usecase.js";
 import { getContractHistory } from "../usecases/get-contract-history.usecase.js";
+import { generateContractAmendmentId } from "../domain/contract/contract-state.js";
 import type { Contract, ContractAmendment } from "../domain/contract/contract-types.js";
-import type { ContractVersionStorePort } from "../ports/contract-version-store.port.js";
-import type { EvidenceStorePort } from "@/features/evidence/index.js";
 
 interface ContractL2Deps {
   readonly getServices: () => Pick<Services, "contractVersionStore" | "evidenceStore">;
@@ -138,7 +137,6 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
       const removePaths: string[] = opts.removePath ?? [];
       const reason: string = opts.reason;
 
-      // Fetch current version before amend to compute new version number
       const before = await getCurrentContract(services.contractVersionStore, taskId);
       if (before === undefined) {
         throw new MaestroError(`No versioned contract found for task ${taskId}`, [
@@ -146,12 +144,11 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
         ]);
       }
 
-      const amendmentId = generateAmendmentId();
-      const now = new Date().toISOString();
+      const amendmentId = generateContractAmendmentId();
 
       const amendment: ContractAmendment = {
         id: amendmentId,
-        at: now,
+        at: new Date().toISOString(),
         by: "maestro-cli",
         reason,
         before: {
@@ -165,16 +162,16 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
         },
       };
 
-      await deps.amendContract(services.contractVersionStore, services.evidenceStore, {
-        taskId,
-        amendment,
-        addedPaths: addPaths,
-        removedPaths: removePaths,
-      });
-
-      // Determine new version number
-      const history = await getContractHistory(services.contractVersionStore, taskId);
-      const newVersion = history.length;
+      const { newVersion } = await deps.amendContract(
+        services.contractVersionStore,
+        services.evidenceStore,
+        {
+          taskId,
+          amendment,
+          addedPaths: addPaths,
+          removedPaths: removePaths,
+        },
+      );
 
       const result = { amendmentId, newVersion };
       output(isJson, result, () => [
@@ -196,13 +193,6 @@ function applyPathChanges(
     if (!result.includes(p)) result.push(p);
   }
   return result;
-}
-
-function generateAmendmentId(): string {
-  // Must match AMENDMENT_ID_PATTERN: /^a-[0-9a-f]{6}$/
-  const bytes = crypto.getRandomValues(new Uint8Array(3));
-  const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-  return `a-${hex}`;
 }
 
 // ─── history ─────────────────────────────────────────────────────────────────

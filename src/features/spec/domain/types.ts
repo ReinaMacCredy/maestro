@@ -1,15 +1,5 @@
-/**
- * Spec domain types.
- *
- * A Spec is a first-class artifact attached to a Mission. It captures what
- * success means (AcceptanceCriteria), what is explicitly out of scope
- * (NonGoals), and (at L7.1) observable runtime signals that the system emits
- * when the spec is satisfied.
- *
- * The ProofMap (L3.5) joins Evidence rows with AcceptanceCriteria by the
- * stable `AcceptanceCriterion.id`. That id must never change once written.
- */
-
+// AcceptanceCriterion.id is the join key for the ProofMap (L3.5) and must
+// never change once written.
 export interface AcceptanceCriterion {
   readonly id: string;
   readonly text: string;
@@ -19,14 +9,6 @@ export interface NonGoal {
   readonly text: string;
 }
 
-/**
- * Placeholder — populated at L7.1.
- *
- * A RuntimeSignal is an observable event or metric the running system emits
- * that can be used to confirm a criterion is satisfied without manual
- * verification.
- */
-// TODO: populated at L7.1
 export interface RuntimeSignal {
   readonly kind: string;
   readonly source: string;

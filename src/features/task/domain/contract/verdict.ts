@@ -1,3 +1,4 @@
+import { matchGlob, matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
 import type { TaskReceipt } from "../task-types.js";
 import type { GitTouchedFilesResult } from "../../ports/git-anchor.port.js";
@@ -27,15 +28,15 @@ export function computeContractVerdict(
   const storedActualFilesTouched = gitResult.actualFilesTouchedTruncated
     ? actualFilesTouched.slice(0, gitResult.actualFilesTouchedTruncated.stored)
     : actualFilesTouched;
-  const forbiddenTouched = actualFilesTouched.filter((path) => matchesAny(contract.scope.filesForbidden, path));
+  const forbiddenTouched = actualFilesTouched.filter((path) => matchesAnyGlob(contract.scope.filesForbidden, path));
   const expectedFilesMatched = actualFilesTouched.filter((path) =>
-    !matchesAny(contract.scope.filesForbidden, path) && matchesAny(contract.scope.filesExpected, path),
+    !matchesAnyGlob(contract.scope.filesForbidden, path) && matchesAnyGlob(contract.scope.filesExpected, path),
   );
   const outOfScopeFiles = actualFilesTouched.filter((path) =>
-    !matchesAny(contract.scope.filesForbidden, path) && !matchesAny(contract.scope.filesExpected, path),
+    !matchesAnyGlob(contract.scope.filesForbidden, path) && !matchesAnyGlob(contract.scope.filesExpected, path),
   );
   const filesExpectedUnused = contract.scope.filesExpected.filter((pattern) =>
-    !actualFilesTouched.some((path) => matches(pattern, path)),
+    !actualFilesTouched.some((path) => matchGlob(pattern, path)),
   );
 
   const cap = contract.scope.maxFilesTouched ?? contract.configSnapshot.defaultMaxFilesTouched;
@@ -162,10 +163,6 @@ function normalizeReceiptText(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-function matchesAny(patterns: readonly string[], path: string): boolean {
-  return patterns.some((pattern) => matches(pattern, path));
-}
-
 function matchesScope(
   scope: Contract["scope"] | undefined,
   path: string,
@@ -173,22 +170,8 @@ function matchesScope(
   if (!scope) {
     return false;
   }
-  if (matchesAny(scope.filesForbidden, path)) {
+  if (matchesAnyGlob(scope.filesForbidden, path)) {
     return false;
   }
-  return matchesAny(scope.filesExpected, path);
-}
-
-// Verdict computation matches every (pattern × path) pair, so caching the
-// compiled Glob avoids reallocating on every cross-product lookup.
-const globCache = new Map<string, Bun.Glob>();
-
-function matches(pattern: string, path: string): boolean {
-  const normalized = normalizeSlashes(pattern);
-  let glob = globCache.get(normalized);
-  if (!glob) {
-    glob = new Bun.Glob(normalized);
-    globCache.set(normalized, glob);
-  }
-  return glob.match(path);
+  return matchesAnyGlob(scope.filesExpected, path);
 }

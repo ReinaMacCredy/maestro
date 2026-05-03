@@ -50,7 +50,7 @@ describe("checkGeneratedFileParity", () => {
     expect(findings[0].check).toBe("generated-file-parity");
     expect(findings[0].severity).toBe("info");
     expect(findings[0].details).toMatch(/sync:bundled-skills/);
-    expect(findings[0].details).toMatch(/--regenerate/);
+    expect(findings[0].details).toMatch(/verify sync scripts were run/);
   });
 
   it("multiple sync: scripts — all listed in one finding", async () => {

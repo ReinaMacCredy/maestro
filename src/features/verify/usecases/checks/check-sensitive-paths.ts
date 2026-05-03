@@ -1,23 +1,11 @@
 import { join } from "node:path";
 import { parseYaml } from "@/shared/lib/yaml.js";
-import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
+import { matchGlob } from "@/shared/lib/glob-match.js";
+import { readText } from "@/shared/lib/fs.js";
 import type { TrustFinding } from "../../domain/types.js";
 
 interface SensitivePathsYaml {
   readonly paths?: readonly string[];
-}
-
-// Per-pattern Glob cache mirrors the pattern from verdict.ts.
-const globCache = new Map<string, Bun.Glob>();
-
-function matchGlob(pattern: string, path: string): boolean {
-  const normalized = normalizeSlashes(pattern);
-  let glob = globCache.get(normalized);
-  if (!glob) {
-    glob = new Bun.Glob(normalized);
-    globCache.set(normalized, glob);
-  }
-  return glob.match(path);
 }
 
 /**
@@ -30,14 +18,13 @@ export async function checkSensitivePaths(
   projectRoot: string,
 ): Promise<readonly TrustFinding[]> {
   const policyPath = join(projectRoot, ".maestro", "policies", "sensitive-paths.yaml");
-  const file = Bun.file(policyPath);
-  if (!(await file.exists())) {
+  const raw = await readText(policyPath);
+  if (raw === undefined) {
     return [];
   }
 
   let globs: readonly string[];
   try {
-    const raw = await file.text();
     const parsed = parseYaml<SensitivePathsYaml>(raw);
     globs = Array.isArray(parsed?.paths) ? parsed.paths : [];
   } catch {

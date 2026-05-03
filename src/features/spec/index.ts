@@ -16,7 +16,6 @@ export type { CreateSpecInput } from "./usecases/create-spec.usecase.js";
 export { updateSpec } from "./usecases/update-spec.usecase.js";
 export type { UpdateSpecInput } from "./usecases/update-spec.usecase.js";
 export { getSpec } from "./usecases/get-spec.usecase.js";
-export { listAcceptanceCriteria } from "./usecases/list-acceptance-criteria.usecase.js";
 export { registerSpecCommand } from "./commands/spec.command.js";
 export { buildSpecServices } from "./services.js";
 export type { SpecServices } from "./services.js";

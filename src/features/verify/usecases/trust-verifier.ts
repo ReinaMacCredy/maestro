@@ -1,4 +1,4 @@
-import type { Contract } from "@/features/task/domain/contract/contract-types.js";
+import type { Contract } from "@/features/task/index.js";
 import type { GitSignatureProbePort } from "../ports/git-signature.port.js";
 import type { TrustFinding, TrustVerifierResult } from "../domain/types.js";
 import { checkScope } from "./checks/check-scope.js";
@@ -40,12 +40,12 @@ export async function runTrustVerifier(
     metadataFindings,
     secretFindings,
   ] = await Promise.all([
-    Promise.resolve(checkScope(input.diff.changedPaths, input.contract)),
+    checkScope(input.diff.changedPaths, input.contract),
     checkLockfileParity(input.diff.changedPaths, input.projectRoot),
     checkGeneratedFileParity(input.projectRoot),
     checkSensitivePaths(input.diff.changedPaths, input.projectRoot),
     checkCommitMetadata(input.diff.base, input.diff.head, input.projectRoot, deps.gitSignatureProbe),
-    Promise.resolve(checkSecretsInDiff(input.diff.addedLines)),
+    checkSecretsInDiff(input.diff.addedLines),
   ]);
 
   const findings: readonly TrustFinding[] = [

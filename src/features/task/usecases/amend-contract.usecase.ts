@@ -1,4 +1,5 @@
 import { MaestroError } from "@/shared/errors.js";
+import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import type { ContractAmendment } from "../domain/contract/contract-types.js";
@@ -13,11 +14,16 @@ export interface AmendContractInput {
   readonly removedPaths: readonly string[];
 }
 
+export interface AmendContractResult {
+  readonly newVersion: number;
+  readonly amendmentId: string;
+}
+
 export async function amendContract(
   store: ContractVersionStorePort,
   evidenceStore: EvidenceStorePort,
   input: AmendContractInput,
-): Promise<void> {
+): Promise<AmendContractResult> {
   const current = await store.readCurrent(input.taskId);
   if (current === undefined) {
     throw new MaestroError(
@@ -28,7 +34,6 @@ export async function amendContract(
 
   const { amendmentBudget } = current;
   if (amendmentBudget !== undefined) {
-    // Rule: total amendments after this one must be <= maxAmendments
     const existingCount = current.amendments.length;
     if (existingCount >= amendmentBudget.maxAmendments) {
       await recordEvidence(evidenceStore, {
@@ -37,7 +42,7 @@ export async function amendContract(
         witness_level: "witnessed-by-maestro",
         payload: {
           reason: "budget_exhausted",
-          attemptedPaths: input.addedPaths as string[],
+          attemptedPaths: input.addedPaths,
           details: `Amendment budget exhausted: ${existingCount} of ${amendmentBudget.maxAmendments} amendments already used`,
         },
       });
@@ -49,7 +54,6 @@ export async function amendContract(
       );
     }
 
-    // Rule: number of added paths must be <= maxPathsPerAmendment
     if (input.addedPaths.length > amendmentBudget.maxPathsPerAmendment) {
       await recordEvidence(evidenceStore, {
         task_id: input.taskId,
@@ -57,7 +61,7 @@ export async function amendContract(
         witness_level: "witnessed-by-maestro",
         payload: {
           reason: "budget_exhausted",
-          attemptedPaths: input.addedPaths as string[],
+          attemptedPaths: input.addedPaths,
           details: `Too many added paths: ${input.addedPaths.length} exceeds maxPathsPerAmendment (${amendmentBudget.maxPathsPerAmendment})`,
         },
       });
@@ -69,9 +73,8 @@ export async function amendContract(
       );
     }
 
-    // Rule: added paths must not match any forbidden pattern
     if (amendmentBudget.forbiddenAmendmentPaths.length > 0) {
-      const forbidden = await findForbiddenPathMatches(
+      const forbidden = findForbiddenPathMatches(
         input.addedPaths,
         amendmentBudget.forbiddenAmendmentPaths,
       );
@@ -82,7 +85,7 @@ export async function amendContract(
           witness_level: "witnessed-by-maestro",
           payload: {
             reason: "forbidden_path",
-            attemptedPaths: input.addedPaths as string[],
+            attemptedPaths: input.addedPaths,
             details: `Added paths match forbidden patterns: ${forbidden.join(", ")}`,
           },
         });
@@ -97,7 +100,6 @@ export async function amendContract(
     }
   }
 
-  // Success: write new version with the amendment appended
   const versions = await store.history(input.taskId);
   const nextVersion = versions.length + 1;
   await store.write(input.taskId, nextVersion, {
@@ -112,25 +114,23 @@ export async function amendContract(
     witness_level: "witnessed-by-maestro",
     payload: {
       amendmentId: input.amendment.id,
-      addedPaths: input.addedPaths as string[],
-      removedPaths: input.removedPaths as string[],
+      addedPaths: input.addedPaths,
+      removedPaths: input.removedPaths,
       reason: input.amendment.reason,
     },
   });
+
+  return { newVersion: nextVersion, amendmentId: input.amendment.id };
 }
 
-async function findForbiddenPathMatches(
+function findForbiddenPathMatches(
   paths: readonly string[],
   forbiddenPatterns: readonly string[],
-): Promise<string[]> {
+): string[] {
   const matched: string[] = [];
   for (const path of paths) {
-    for (const pattern of forbiddenPatterns) {
-      const glob = new Bun.Glob(pattern);
-      if (glob.match(path)) {
-        matched.push(path);
-        break;
-      }
+    if (matchesAnyGlob(forbiddenPatterns, path)) {
+      matched.push(path);
     }
   }
   return matched;

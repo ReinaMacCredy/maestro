@@ -1,25 +1,6 @@
-import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
-import type { Contract } from "@/features/task/domain/contract/contract-types.js";
+import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
+import type { Contract } from "@/features/task/index.js";
 import type { TrustFinding } from "../../domain/types.js";
-
-// Per-pattern Glob cache mirrors the pattern used in
-// src/features/task/domain/contract/verdict.ts to avoid re-allocating on
-// every cross-product lookup.
-const globCache = new Map<string, Bun.Glob>();
-
-function matchGlob(pattern: string, path: string): boolean {
-  const normalized = normalizeSlashes(pattern);
-  let glob = globCache.get(normalized);
-  if (!glob) {
-    glob = new Bun.Glob(normalized);
-    globCache.set(normalized, glob);
-  }
-  return glob.match(path);
-}
-
-function matchesAny(patterns: readonly string[], path: string): boolean {
-  return patterns.some((p) => matchGlob(p, path));
-}
 
 /**
  * Checks every changed path against the contract scope.
@@ -36,12 +17,12 @@ export function checkScope(
     scope.filesExpected.length === 0 ||
     (scope.filesExpected.length === 1 && scope.filesExpected[0] === "**");
 
-  const forbidden = changedPaths.filter((p) => matchesAny(scope.filesForbidden, p));
+  const forbidden = changedPaths.filter((p) => matchesAnyGlob(scope.filesForbidden, p));
   const outOfScope = allowAll
     ? []
     : changedPaths.filter(
         (p) =>
-          !matchesAny(scope.filesForbidden, p) && !matchesAny(scope.filesExpected, p),
+          !matchesAnyGlob(scope.filesForbidden, p) && !matchesAnyGlob(scope.filesExpected, p),
       );
 
   const findings: TrustFinding[] = [];
