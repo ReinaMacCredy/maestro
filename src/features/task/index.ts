@@ -122,3 +122,12 @@ export type {
   ListContractsFilters,
   LockContractInput,
 } from "./usecases/contract-workflows.usecase.js";
+
+export type { ContractVersionStorePort } from "./ports/contract-version-store.port.js";
+export { FsContractVersionStoreAdapter } from "./adapters/fs-contract-version-store.adapter.js";
+export { proposeContract } from "./usecases/propose-contract.usecase.js";
+export { approveContract } from "./usecases/approve-contract.usecase.js";
+export { amendContract } from "./usecases/amend-contract.usecase.js";
+export type { AmendContractInput } from "./usecases/amend-contract.usecase.js";
+export { getCurrentContract } from "./usecases/get-current-contract.usecase.js";
+export { getContractHistory } from "./usecases/get-contract-history.usecase.js";
