@@ -27,6 +27,10 @@ Shipped skill source tree. Use this file with the repo-root [AGENTS.md](../AGENT
 ## Skill Changes (L1)
 - `maestro-task` (`bundled/maestro-task/SKILL.md`) was updated in L1 to document evidence recording: agents should call `maestro evidence record` after running verification commands, linking evidence to the active task and optionally to a contract criterion.
 
+## Skill Changes (L2)
+- `maestro-plan` (`bundled/maestro-plan/SKILL.md`) was updated in L2 to require a `proposed_contract` in every plan. The plan must include `allowed_files`, `forbidden_paths`, `done_when`, and `amendment_budget`. This contract is not itself an amendment (Rule 6); it is the plan-time proposal that gets locked when the agent claims the task.
+- `maestro-task` (`bundled/maestro-task/SKILL.md`) was updated in L2 with a "Stay in scope; amend on genuine discovery" section. When an agent discovers a file outside the locked contract scope, it must call `maestro contract amend --task <id> --add-path <path> --reason "<why>"` before touching that file. Each amendment consumes from `amendmentBudget` (Rules 3–7). Amendments write a `contract-amended` Evidence row automatically. Use `maestro task verify --task <id>` to run the Trust Verifier locally before completing.
+
 ## Local Gotchas
 
 - Do not hand-edit `src/infra/domain/built-in-skill-templates.ts` or `src/infra/domain/bundled-skill-templates.ts`.

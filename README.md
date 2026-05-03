@@ -606,6 +606,55 @@ maestro evidence show evd-xxxxxx
 
 Evidence rows are linked to a task id and optionally to a contract criterion via `--criterion <id>`. Run `maestro evidence record --help` for the full flag set.
 
+## L2: Contract-Required Workflow
+
+L2 adds a lightweight trust substrate on top of the task and contract system. When L2 is engaged the agent workflow gains three new behaviors:
+
+1. **Plan proposes a contract.** During `maestro-plan`, the plan must include a `proposed_contract` with `allowed_files`, `forbidden_paths`, `done_when` criteria, and an `amendment_budget`. This is not an amendment (Rule 6 — plan-time proposals are exempt); it seeds the contract that gets locked when the agent claims the task.
+
+2. **Agent works within scope; amends on genuine discovery.** When work uncovers a file that lies outside the locked contract scope, the agent must amend before touching it:
+
+   ```bash
+   maestro contract amend --task <id> --add-path src/new-file.ts --reason "discovered at runtime"
+   ```
+
+   Each amendment writes a new versioned contract snapshot and a `contract-amended` Evidence row. The budget defaults are: `max_amendments: 3`, `max_paths_per_amendment: 5`. Amendments are versioned Evidence and never silent edits (Rules 3–7).
+
+3. **Agent verifies before completing.** `maestro task verify` runs the Trust Verifier against the current diff and the locked contract:
+
+   ```bash
+   maestro task verify --task <id>
+   ```
+
+   The verifier runs 6 checks in parallel: scope adherence, lockfile parity, generated-file parity, sensitive-path policy, commit metadata, and secrets-in-diff. Findings are printed with severity (`info`, `warn`, `error`). `error` findings cause a non-zero exit code.
+
+### L2 CLI surface
+
+```bash
+# Versioned contract inspection and amendment
+maestro contract show --task <id>
+maestro contract show --task <id> --version <n>
+maestro contract amend --task <id> --add-path <path> --reason "<why>"
+maestro contract amend --task <id> --remove-path <path> --reason "<why>"
+maestro contract history --task <id>
+
+# Trust Verifier
+maestro task verify --task <id>
+maestro task verify --task <id> --base <git-ref>
+maestro task verify --task <id> --json
+
+# Mission Spec (acceptance criteria and non-goals)
+maestro spec show --mission <id>
+maestro spec edit --mission <id>
+```
+
+### L2 policy files
+
+`maestro init` bootstraps two policy files committed under `.maestro/policies/`:
+
+- `sensitive-paths.yaml` — glob list; paths matching these globs trigger `checkSensitivePaths` findings. See `docs/sensitive-paths-defaults.md` for the 8 default globs and guidance on extending or relaxing them.
+- `owners.yaml` — three role lists (`policy_approver`, `ratchet_approver`, `sensitive_waiver`). See `docs/owners-yaml-format.md` for the schema reference.
+
 ## Common Commands
 
 | Command | Use it when you want to... |

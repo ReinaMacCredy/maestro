@@ -22,6 +22,9 @@ src/
 | Change generic filesystem/shell/yaml helpers | `shared/` | No product-domain logic here |
 | Change Mission Control | `tui/`, `infra/commands/mission-control.command.ts` | Read `tui/README.md` first |
 | Evidence logbook (evidence record/list/show) | `features/evidence/` | `EvidenceKind`, `WitnessLevel`, `EvidenceRow` in `domain/types.ts`; storage adapter under `adapters/file-storage.ts` |
+| Mission Spec (spec show/edit) | `features/spec/` | `Spec`, `AcceptanceCriterion`, `NonGoal` in `domain/types.ts`; commands under `commands/spec.command.ts` |
+| Policy and owners loader | `features/policy/` | `Owners`, `OwnersYaml` in `domain/owners-types.ts`; `loadOwners` use-case reads `.maestro/policies/owners.yaml` |
+| Trust Verifier (task verify) | `features/verify/` | `runTrustVerifier` in `usecases/trust-verifier.ts`; 6 checks under `usecases/checks/`; `TrustFinding`, `TrustVerifierResult` in `domain/types.ts` |
 
 ## CONVENTIONS
 - Cross-feature imports go through `@/features/<name>` only.

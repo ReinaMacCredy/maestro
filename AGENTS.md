@@ -34,6 +34,10 @@ maestro/
 | Release and install behavior | `scripts/build.ts`, `scripts/ci.ts`, `scripts/install-local.ts`, `.github/workflows/` | `ci.ts` is local release-prep, not a harmless smoke script |
 | Daily task loop vs mission workflow | `.maestro/tasks/tasks.jsonl`, `README.md`, `.maestro/MAESTRO.md` | `task` and `mission` are separate systems |
 | Compiled-binary verification | `tests/e2e/`, `tests/helpers/run-compiled-cli.ts` | Distinguish `./dist/maestro` from installed `maestro` |
+| Mission Spec (acceptance criteria, non-goals) | `src/features/spec/` | `spec show/edit --mission <id>`; stored under `.maestro/missions/<id>/spec.json` |
+| Policy and owners loader | `src/features/policy/` | Loads `.maestro/policies/owners.yaml`; three roles: `policy_approver`, `ratchet_approver`, `sensitive_waiver` |
+| Trust Verifier | `src/features/verify/` | Runs 6 checks (scope, lockfile, generated, sensitive-paths, commit-metadata, secrets) against a diff + contract |
+| Versioned contract storage and amendments | `src/features/task/domain/contract/` | `ContractVersionStorePort`; `contract show/amend/history` verbs enforce `amendmentBudget` (Rules 3–7) |
 
 ## CODE STYLE
 - Prefer `interface` for object shapes and `type` for unions/intersections.
@@ -55,6 +59,7 @@ maestro/
 - Repo-tracked behavior changes bump the CLI version. Docs-only/comment-only changes do not.
 - Release publishing on `main` requires manual dispatch or a head commit exactly named `chore(release): v<version>`.
 - The Evidence Recorder (`src/features/evidence/`) logs verifiable outputs for a task as structured rows. Storage goes to `.maestro/evidence/` (gitignored). Evidence rows carry a `WitnessLevel` that tracks how trustworthy the claim is (`witnessed-by-maestro`, `agent-claimed-locally`, etc.).
+- Contract amendments (L2) are versioned Evidence, not silent edits. Each `contract amend` call consumes from `amendmentBudget` (Rules 3–7: budgeted, versioned, never-lower risk, plan-time proposals exempt). The amend use-case enforces the budget and writes a `contract-amended` Evidence row automatically. See `docs/sensitive-paths-defaults.md` for default sensitive-path globs and `docs/owners-yaml-format.md` for the owners schema.
 
 ## ANTI-PATTERNS
 - Deep imports into another feature's `commands/`, `usecases/`, `domain/`, `ports/`, or `adapters/`.
@@ -81,6 +86,28 @@ maestro evidence record --task <id> --command "bun test" --exit 0
 maestro evidence record --task <id> --kind manual-note --note "Verified manually"
 maestro evidence list --task <id>
 maestro evidence show <evidence-id>
+```
+
+## CLI VERBS — CONTRACT (L2)
+```bash
+maestro contract show --task <id>
+maestro contract show --task <id> --version <n>
+maestro contract amend --task <id> --add-path <path> --reason "<why>"
+maestro contract amend --task <id> --remove-path <path> --reason "<why>"
+maestro contract history --task <id>
+```
+
+## CLI VERBS — TASK VERIFY (L2)
+```bash
+maestro task verify --task <id>
+maestro task verify --task <id> --base <git-ref>
+maestro task verify --task <id> --json
+```
+
+## CLI VERBS — SPEC (L2)
+```bash
+maestro spec show --mission <id>
+maestro spec edit --mission <id>
 ```
 
 <!-- gitnexus:start -->
