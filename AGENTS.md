@@ -29,6 +29,7 @@ maestro/
 | Feature boundaries and imports | `src/features/`, `scripts/check-feature-boundaries-lib.ts` | Cross-feature deep imports are forbidden |
 | Mission Control flow | `src/infra/commands/mission-control.command.ts`, `src/tui/README.md`, `src/tui/state/snapshot.ts` | Preview, JSON, and render-check stay read-only |
 | Handoff launch and pickup | `src/features/handoff/`, `src/features/task/` | Handoff packets can resume linked tasks; standalone packets stay prompt-only |
+| Evidence logbook | `src/features/evidence/` | Record, list, and show task evidence rows; storage under `.maestro/evidence/` (gitignored) |
 | Shipped agent skills | `skills/built-in/`, `skills/bundled/`, `scripts/sync-*-skills.ts` | Both template embeds under `src/infra/domain/` are generated |
 | Release and install behavior | `scripts/build.ts`, `scripts/ci.ts`, `scripts/install-local.ts`, `.github/workflows/` | `ci.ts` is local release-prep, not a harmless smoke script |
 | Daily task loop vs mission workflow | `.maestro/tasks/tasks.jsonl`, `README.md`, `.maestro/MAESTRO.md` | `task` and `mission` are separate systems |
@@ -53,6 +54,7 @@ maestro/
 - Treat `./dist/maestro` and installed `maestro` on `PATH` as different artifacts. Verify which binary was exercised.
 - Repo-tracked behavior changes bump the CLI version. Docs-only/comment-only changes do not.
 - Release publishing on `main` requires manual dispatch or a head commit exactly named `chore(release): v<version>`.
+- The Evidence Recorder (`src/features/evidence/`) logs verifiable outputs for a task as structured rows. Storage goes to `.maestro/evidence/` (gitignored). Evidence rows carry a `WitnessLevel` that tracks how trustworthy the claim is (`witnessed-by-maestro`, `agent-claimed-locally`, etc.).
 
 ## ANTI-PATTERNS
 - Deep imports into another feature's `commands/`, `usecases/`, `domain/`, `ports/`, or `adapters/`.
@@ -71,6 +73,14 @@ bun run check:bundled-skills
 bun run test
 ./dist/maestro mission-control --render-check --size 120x40
 bun run release:local
+```
+
+## CLI VERBS — EVIDENCE
+```bash
+maestro evidence record --task <id> --command "bun test" --exit 0
+maestro evidence record --task <id> --kind manual-note --note "Verified manually"
+maestro evidence list --task <id>
+maestro evidence show <evidence-id>
 ```
 
 <!-- gitnexus:start -->

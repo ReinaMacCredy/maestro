@@ -581,6 +581,31 @@ maestro task prune --continuations-only --dry-run
 maestro task prune --all                 # purge both piles
 ```
 
+## Evidence
+
+Maestro has a lightweight logbook for recording verifiable outputs tied to a task. Use it to document commands that ran, their exit codes, and optional manual notes — before or after completing work.
+
+Evidence rows are stored under `.maestro/evidence/` (gitignored, per-machine) and stamped with a `WitnessLevel` that captures how trustworthy the claim is: `witnessed-by-maestro` for Maestro-invoked commands, `agent-claimed-locally` for evidence the agent self-reported, and `agent-claimed-and-not-reproducible` for manual notes.
+
+```bash
+# Record a command run
+maestro evidence record --task tsk-aaaaaa --command "bun test" --exit 0
+
+# Record with duration and optional log path
+maestro evidence record --task tsk-aaaaaa --command "bun run build" --exit 0 --duration 12345 --log ./build.log
+
+# Record a manual note
+maestro evidence record --task tsk-aaaaaa --kind manual-note --note "Verified UI on staging"
+
+# List evidence for a task
+maestro evidence list --task tsk-aaaaaa
+
+# Show one evidence row
+maestro evidence show evd-xxxxxx
+```
+
+Evidence rows are linked to a task id and optionally to a contract criterion via `--criterion <id>`. Run `maestro evidence record --help` for the full flag set.
+
 ## Common Commands
 
 | Command | Use it when you want to... |
@@ -606,6 +631,10 @@ maestro task prune --all                 # purge both piles
 | `maestro task update <id> --current-state "..." --next-action "..." --add-decision "..."` | Refresh the resumable continuation summary for the next agent. |
 | `maestro task reopen <id>` | Move a completed task back to the pending queue and restore its continuation summary. |
 | `maestro task block <id> <blockedTaskIds...>` | Record that one task blocks others. |
+| `maestro evidence record --task <id> --command "bun test" --exit 0` | Log a command run as evidence for a task. |
+| `maestro evidence record --task <id> --kind manual-note --note "..."` | Log a free-form manual note as evidence. |
+| `maestro evidence list --task <id>` | List all evidence rows for a task. |
+| `maestro evidence show <evidence-id>` | Show one evidence row by id. |
 | `maestro principle list` / `principle add` | Inspect or register a behavioral principle. |
 | `maestro bundle export <mission-id> --out ./review.mission.tar.gz` | Package a mission + artifacts as a portable archive. |
 | `maestro bundle inspect <path>` | Print a mission bundle's manifest without extracting. |

@@ -24,6 +24,9 @@ Shipped skill source tree. Use this file with the repo-root [AGENTS.md](../AGENT
 - If no project-local skill exists, runtime falls back to `skills/built-in/{agentType}/SKILL.md`.
 - `maestro install` publishes the bundled skill set from `skills/bundled/` into user-level skill directories.
 
+## Skill Changes (L1)
+- `maestro-task` (`bundled/maestro-task/SKILL.md`) was updated in L1 to document evidence recording: agents should call `maestro evidence record` after running verification commands, linking evidence to the active task and optionally to a contract criterion.
+
 ## Local Gotchas
 
 - Do not hand-edit `src/infra/domain/built-in-skill-templates.ts` or `src/infra/domain/bundled-skill-templates.ts`.

@@ -31,6 +31,12 @@ Use this directory with the repo-root `AGENTS.md`. `.maestro/` is the repo-owned
 - `plans/`, `drafts/`, `wisdom/`, and `archive/` hold useful history, but they are not a substitute for current source verification.
 - Runtime skill lookup prefers `.maestro/skills/{agentType}/SKILL.md` before `skills/built-in/{agentType}/SKILL.md`.
 
+## RUNTIME STATE (GITIGNORED)
+- `.maestro/evidence/` — per-task evidence rows written by `maestro evidence record`. Gitignored; per-machine only.
+- `.maestro/runs/` — per-task run records written by Maestro tooling. Gitignored; per-machine only.
+
+Both directories are created on first use by `maestro init` (or `maestro setup`). Do not commit their contents.
+
 ## ANTI-PATTERNS
 - Do not put secrets or throwaway venting into tasks, notes, or long-lived plan text.
 - Do not treat archived guidance as the current contract without checking source or the current root docs.

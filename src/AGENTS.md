@@ -21,6 +21,7 @@ src/
 | Change product behavior | `features/` | Owning feature first |
 | Change generic filesystem/shell/yaml helpers | `shared/` | No product-domain logic here |
 | Change Mission Control | `tui/`, `infra/commands/mission-control.command.ts` | Read `tui/README.md` first |
+| Evidence logbook (evidence record/list/show) | `features/evidence/` | `EvidenceKind`, `WitnessLevel`, `EvidenceRow` in `domain/types.ts`; storage adapter under `adapters/file-storage.ts` |
 
 ## CONVENTIONS
 - Cross-feature imports go through `@/features/<name>` only.
