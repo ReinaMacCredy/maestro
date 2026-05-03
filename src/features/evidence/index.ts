@@ -13,3 +13,6 @@ export {
 } from "./domain/evidence-id.js";
 export type { EvidenceListFilter, EvidenceStorePort } from "./ports/storage.js";
 export { FsEvidenceStoreAdapter } from "./adapters/file-storage.js";
+export { recordEvidence } from "./usecases/record-evidence.usecase.js";
+export type { RecordEvidenceInput } from "./usecases/record-evidence.usecase.js";
+export { listEvidence } from "./usecases/list-evidence.usecase.js";

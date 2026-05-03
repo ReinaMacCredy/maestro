@@ -31,6 +31,10 @@ import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { AgentSession } from "@/features/session";
 import type { NoteEntry } from "@/features/notes";
+import type {
+  EvidenceRow,
+  EvidenceStorePort,
+} from "@/features/evidence";
 import type { Contract, Task } from "@/features/task";
 import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
@@ -101,6 +105,28 @@ export function mockNotesStore(initial: NoteEntry[] = []): NotesStorePort {
       notes.push(note);
     },
     list: async () => notes,
+  };
+}
+
+export function mockEvidenceStore(initial: EvidenceRow[] = []): EvidenceStorePort {
+  const rows = new Map<string, EvidenceRow>();
+  for (const row of initial) rows.set(row.id, row);
+
+  return {
+    append: async (row) => {
+      rows.set(row.id, row);
+    },
+    read: async (id) => rows.get(id),
+    list: async (filter = {}) => {
+      const out: EvidenceRow[] = [];
+      for (const row of rows.values()) {
+        if (filter.task_id !== undefined && row.task_id !== filter.task_id) continue;
+        if (filter.session_id !== undefined && row.session_id !== filter.session_id) continue;
+        if (filter.kind !== undefined && row.kind !== filter.kind) continue;
+        out.push(row);
+      }
+      return out.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    },
   };
 }
 
