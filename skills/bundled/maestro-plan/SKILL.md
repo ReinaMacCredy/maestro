@@ -115,6 +115,35 @@ Return a compact response in this shape:
 - Do not over-plan beyond the actual complexity of the work.
 - Match the depth of the plan to the risk and scope of the task.
 
+## Propose a contract
+
+Your plan must include `proposed_contract` with `allowed_files`, `forbidden_paths`, `risk_class`, and `amendment_budget`. The human reviews the plan including the contract.
+
+Example:
+
+```yaml
+proposed_contract:
+  allowed_files:
+    - "src/features/auth/**"
+    - "tests/unit/features/auth/**"
+  forbidden_paths:
+    - ".github/workflows/**"
+    - "bun.lock"
+    - "package.json"
+  risk_class: medium
+  amendment_budget:
+    max_amendments: 3
+    max_paths_per_amendment: 5
+    forbidden_amendment_paths:
+      - ".github/workflows/**"
+      - "bun.lock"
+      - "package.json"
+```
+
+`risk_class` is one of `low`, `medium`, `high`, `critical`. Be honest — `critical` for changes to auth, payments, secrets, or deploy infrastructure.
+
+`amendment_budget` caps how many times the agent may expand `allowed_files` after the plan is locked. The agent must call `maestro contract amend --task <id> --add-path <p> --reason <r>` for each genuine scope change; failures are recorded.
+
 ## Persist the plan
 
 When `.maestro/plans/` exists in the cwd or an ancestor (the project uses maestro), write the final approved plan to `.maestro/plans/<slug>.md` before handing off. Approved plans are durable, searchable references future sessions can read.
