@@ -74,13 +74,15 @@ if [[ "$FOREGROUND" != "true" && "$FORCE_BACKGROUND" != "true" ]]; then
   fi
 fi
 
-# Generate unique session directory
-SESSION_ID="$$-$(date +%s)"
-
+# Generate unique session directory.
+# Project-scoped: deterministic per-project subdir, persists across runs.
+# Otherwise: atomically create an unguessable directory under the system temp
+# via mktemp -d, which prevents symlink/race attacks on shared /tmp.
 if [[ -n "$PROJECT_DIR" ]]; then
+  SESSION_ID="$$-$(date +%s)"
   SESSION_DIR="${PROJECT_DIR}/.codex/brainstorm/${SESSION_ID}"
 else
-  SESSION_DIR="/tmp/brainstorm-${SESSION_ID}"
+  SESSION_DIR="$(mktemp -d "${TMPDIR:-/tmp}/brainstorm-XXXXXXXXXX")"
 fi
 
 STATE_DIR="${SESSION_DIR}/state"
