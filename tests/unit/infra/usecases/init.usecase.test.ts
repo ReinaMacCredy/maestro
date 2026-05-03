@@ -274,6 +274,32 @@ describe("initMaestro", () => {
       },
     );
 
+  it("creates .maestro/policies/owners.yaml on fresh init", async () => {
+    const config = mockConfig();
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    const ownersPath = join(tmpDir, ".maestro", "policies", "owners.yaml");
+    expect(result.created).toContain(ownersPath);
+
+    const content = await readFile(ownersPath, "utf8");
+    expect(content).toContain("policy_approver");
+    expect(content).toContain("ratchet_approver");
+    expect(content).toContain("sensitive_waiver");
+  });
+
+  it("does not overwrite existing .maestro/policies/owners.yaml on re-init", async () => {
+    const config = mockConfig();
+    const ownersPath = join(tmpDir, ".maestro", "policies", "owners.yaml");
+    await mkdir(join(tmpDir, ".maestro", "policies"), { recursive: true });
+    await writeFile(ownersPath, "policy_approver:\n  - \"@customowner\"\n");
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(ownersPath);
+    expect(result.created).not.toContain(ownersPath);
+    expect(await readFile(ownersPath, "utf8")).toBe("policy_approver:\n  - \"@customowner\"\n");
+  });
+
   it("creates .maestro/policies/sensitive-paths.yaml on fresh init", async () => {
     const config = mockConfig();
     const result = await initMaestro(config, { global: false, dir: tmpDir });
