@@ -1,7 +1,7 @@
 /**
  * Unit tests for milestone lifecycle usecases
  */
-import { describe, expect, it, beforeEach } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { listMilestones, getMilestoneStatus, sealMilestone } from "@/features/mission/usecases/milestone-lifecycle.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { Mission, Milestone, Feature, Assertion, MissionStatus, MilestoneStatus, FeatureStatus, AssertionResult } from "@/features/mission/domain/mission-types.js";

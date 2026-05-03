@@ -47,7 +47,7 @@ describe("readyTasks", () => {
 
   it("keeps ownership separate from readiness filters", async () => {
     const mine = await createTask(store, { title: "mine" });
-    const unassigned = await createTask(store, { title: "unassigned" });
+    await createTask(store, { title: "unassigned" });
     await claimTask(store, mine.id, { sessionId: "alice" });
 
     expect((await readyTasks(store)).map((t) => t.title)).toEqual(["unassigned"]);

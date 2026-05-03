@@ -463,7 +463,7 @@ describe("task contract completion", () => {
 
     const launched = await runCli(["handoff", "Runtime-safe contract handoff", "--task-id", task.id, "--json"], tmpDir, { env });
     expect(launched.exitCode).toBe(0);
-    const handoff = expectJson<{ id: string }>(launched);
+    expectJson<{ id: string }>(launched);
 
     await writeContractRuntimeNoise();
     await Bun.write(join(tmpDir, "README.md"), "hello\nruntime-safe\n");

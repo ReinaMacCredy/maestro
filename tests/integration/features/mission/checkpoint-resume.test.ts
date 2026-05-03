@@ -4,7 +4,7 @@
  * Fulfills: VAL-CHECKPOINT-001, VAL-CHECKPOINT-002, VAL-CROSS-001
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, writeFile, rm, mkdir, readFile } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -282,11 +282,10 @@ describe("checkpoint save semantics", () => {
     );
 
     // Save second checkpoint
-    const save2 = await run(
+    await run(
       ["checkpoint", "save", "--mission", missionId, "--json"],
       tmpDir,
     );
-    const checkpoint2 = JSON.parse(save2.stdout).checkpoint;
 
     // List checkpoints
     const list = await run(
@@ -507,7 +506,6 @@ describe("checkpoint resume workflow", () => {
       tmpDir,
     );
     expect(save.exitCode).toBe(0);
-    const checkpoint = JSON.parse(save.stdout).checkpoint;
 
     // Load checkpoint (simulating "resume after interruption")
     const load = await run(
@@ -631,11 +629,10 @@ describe("checkpoint with mission lifecycle", () => {
 
     // Checkpoint after seal
     await new Promise((r) => setTimeout(r, 50));
-    const afterSeal = await run(
+    await run(
       ["checkpoint", "save", "--mission", missionId, "--json"],
       tmpDir,
     );
-    const checkpointAfter = JSON.parse(afterSeal.stdout).checkpoint;
 
     // Both checkpoints should exist
     const list = await run(

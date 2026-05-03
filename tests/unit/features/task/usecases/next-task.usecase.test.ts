@@ -6,7 +6,6 @@ import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store
 import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { claimTask } from "@/features/task/usecases/claim-task.usecase.js";
 import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
-import { blockTasks } from "@/features/task/usecases/manage-task-blockers.usecase.js";
 import { nextTask } from "@/features/task/usecases/next-task.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 

@@ -1,7 +1,7 @@
 /**
  * Unit tests for checkpoint lifecycle usecases
  */
-import { describe, expect, it, beforeEach } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
   saveCheckpoint,
   listCheckpoints,

@@ -203,7 +203,7 @@ describe("FsFeatureStoreAdapter", () => {
         discoveredIssues: [],
       };
 
-      const updated = await store.update(missionId, "f1", { report: legacyReport as unknown as AgentReport });
+      await store.update(missionId, "f1", { report: legacyReport as unknown as AgentReport });
       // After round-trip through disk + Zod validation, expect rich format
       const reloaded = await store.get(missionId, "f1");
       expect(reloaded!.report).toEqual(report);

@@ -1,4 +1,4 @@
-import { appendFile, lstat, mkdir, readdir, readlink, rename, rm, stat, symlink } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readlink, rename, rm, stat, symlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 

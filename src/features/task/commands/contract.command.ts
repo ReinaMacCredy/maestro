@@ -837,7 +837,6 @@ async function resolveDraftContractActor(
   ref: string,
   explicitSessionId: string | undefined,
 ): Promise<string> {
-  const services = getServices();
   const task = await resolveContractTask(ref);
   const currentActorId = await resolveOptionalContractActorSessionId(explicitSessionId);
 

@@ -324,7 +324,7 @@ describe("generateAgentPrompt", () => {
         missionStore,
         featureStore,
         assertionStore,
-          tmpDir,
+        tmpDir,
         "2026-03-28-999",
         "f1",
       );

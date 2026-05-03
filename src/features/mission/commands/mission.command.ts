@@ -9,7 +9,6 @@ import {
   createMission,
   expandWorkflowTemplate,
   listMissions,
-  showMission,
   approveMission,
   rejectMission,
   updateMission,

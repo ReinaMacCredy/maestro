@@ -16,7 +16,6 @@ import type {
 } from "../domain/mission-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import {
-  assertMilestoneTransition,
   canTransitionMilestone,
   isTerminalAssertionStatus,
 } from "../domain/mission-state.js";
