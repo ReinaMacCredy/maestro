@@ -123,6 +123,18 @@ Load a project-local template: `maestro task contract new <id> --from default` (
 
 Contract amend/reopen/criteria verbs and verdict semantics live in `./reference/contracts.md`.
 
+## Stay in scope; amend on genuine discovery
+
+Your task has a Contract that locks the files you may touch. Do not modify files outside `allowed_files`. Do not touch any path in `forbidden_paths`.
+
+If you discover during implementation that a path you did not anticipate must change (a generated file regenerates differently, an unmocked dependency is reachable, a test helper needs a tweak), call:
+
+```bash
+maestro contract amend --task <id> --add-path <new-path> --reason "<why>"
+```
+
+This writes a new contract version and an Evidence row of kind `contract-amendment`. If the amendment is rejected (budget exhausted, or the path is in `forbidden_amendment_paths`), an Evidence row of kind `contract-amendment-blocked` is written instead. Do not retry the same amendment — surface it in your handoff or stop and ask.
+
 ## While working, keep resume state fresh
 
 Only on meaningful change:
