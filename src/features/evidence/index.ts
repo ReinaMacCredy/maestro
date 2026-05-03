@@ -16,3 +16,6 @@ export { FsEvidenceStoreAdapter } from "./adapters/file-storage.js";
 export { recordEvidence } from "./usecases/record-evidence.usecase.js";
 export type { RecordEvidenceInput } from "./usecases/record-evidence.usecase.js";
 export { listEvidence } from "./usecases/list-evidence.usecase.js";
+export { buildEvidenceServices } from "./services.js";
+export type { EvidenceServices } from "./services.js";
+export { registerEvidenceCommand } from "./commands/evidence.command.js";
