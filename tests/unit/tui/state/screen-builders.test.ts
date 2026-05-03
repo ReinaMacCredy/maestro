@@ -9,11 +9,14 @@ import {
   buildTaskBoard,
   buildTimelineMilestones,
 } from "@/tui/state/snapshot.js";
+import { buildModalOptions } from "@/tui/app/modal-builders.js";
+import { createInitialState, reduce } from "@/tui/state/reducer.js";
 import type { Feature, Milestone, Principle, PrincipleOutcomeRecord, PrincipleStorePort } from "@/features/mission";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
-import type { MissionControlEvent } from "@/tui/state/types.js";
+import type { MissionControlEvent, MissionControlSnapshot } from "@/tui/state/types.js";
 import type { Task, TaskQueryPort } from "@/features/task";
 import type { AgentReply } from "@/features/mission";
+import type { EvidenceSummary } from "@/tui/state/screen-types.js";
 import { mockConfig, mockGit } from "../../../helpers/mocks.js";
 
 function makeFeature(overrides: Partial<Feature> & { id: string }): Feature {
@@ -478,5 +481,113 @@ describe("buildHomeSnapshot principle effectiveness", () => {
       total: 1,
       recentKickbackExamples: ["h-local: Local kickback"],
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildTaskBoardModal — Evidence section (via buildModalOptions)
+// ---------------------------------------------------------------------------
+
+function makeMinimalSnapshot(taskBoard: MissionControlSnapshot["taskBoard"]): MissionControlSnapshot {
+  return {
+    mode: "home",
+    missionId: "",
+    missionTitle: "",
+    missionStatus: "draft",
+    effectiveStatus: "draft",
+    elapsedMs: 0,
+    featureProgress: { done: 0, total: 0, active: 0 },
+    statusProgress: { completed: 0, total: 0, inFlight: 0, blocked: 0, queued: 0, completionPct: 0 },
+    tokenCounters: null,
+    features: [],
+    milestones: [],
+    activeFeature: null,
+    session: null,
+    configSummary: null,
+    progressLog: [],
+    canPause: false,
+    canResume: false,
+    home: null,
+    taskBoard,
+  } as unknown as MissionControlSnapshot;
+}
+
+describe("buildTaskBoardModal — Evidence section", () => {
+  it("renders Evidence section with rows when recentEvidence is non-empty", () => {
+    const evidence: EvidenceSummary = {
+      id: "evd-0000000000001-aaaaaa",
+      kind: "command",
+      witness_level: "agent-claimed-locally",
+      created_at: "2026-05-03T00:00:01.000Z",
+    };
+    const snapshot = makeMinimalSnapshot({
+      totalCount: 1,
+      columns: {
+        pending: [{
+          id: "tsk-aaaaaa",
+          title: "Test task",
+          status: "pending",
+          priority: 1,
+          assignee: undefined,
+          labels: [],
+          blockedByCount: 0,
+          evidenceCount: 1,
+          recentEvidence: [evidence],
+        }],
+        in_progress: [],
+        completed: [],
+      },
+    });
+
+    const state = createInitialState(snapshot);
+    const taskBoardState = reduce(state, { type: "open-task-board" });
+    const modal = buildModalOptions(taskBoardState);
+
+    expect(modal?.mode).toBe("split");
+    if (!modal || modal.mode !== "split") return;
+
+    const detailItems = modal.detailItems ?? [];
+    const evidenceHeader = detailItems.find((item) => "section" in item && item.section === "Evidence");
+    expect(evidenceHeader).toBeDefined();
+    expect((evidenceHeader as { text: string }).text).toBe("Evidence: 1 recorded");
+
+    const evidenceLine = detailItems.find((item) =>
+      "text" in item && item.text.includes("evd-0000000000001-aaaaaa") === false && item.text.includes("command"),
+    );
+    expect(evidenceLine).toBeDefined();
+  });
+
+  it("renders (no evidence) when recentEvidence is empty", () => {
+    const snapshot = makeMinimalSnapshot({
+      totalCount: 1,
+      columns: {
+        pending: [{
+          id: "tsk-aaaaaa",
+          title: "Test task",
+          status: "pending",
+          priority: 1,
+          assignee: undefined,
+          labels: [],
+          blockedByCount: 0,
+          evidenceCount: 0,
+          recentEvidence: [],
+        }],
+        in_progress: [],
+        completed: [],
+      },
+    });
+
+    const state = createInitialState(snapshot);
+    const taskBoardState = reduce(state, { type: "open-task-board" });
+    const modal = buildModalOptions(taskBoardState);
+
+    expect(modal?.mode).toBe("split");
+    if (!modal || modal.mode !== "split") return;
+
+    const detailItems = modal.detailItems ?? [];
+    const noEvidenceLine = detailItems.find((item) =>
+      "text" in item && item.text === "(no evidence)",
+    );
+    expect(noEvidenceLine).toBeDefined();
   });
 });

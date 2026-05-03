@@ -11,7 +11,15 @@ import type {
   ReplyOutcome,
   ReplyAuthor,
 } from "@/features/mission";
+import type { EvidenceKind, WitnessLevel } from "@/features/evidence";
 import type { MissionControlEvent } from "./types.js";
+
+export interface EvidenceSummary {
+  readonly id: string;
+  readonly kind: EvidenceKind;
+  readonly witness_level: WitnessLevel;
+  readonly created_at: string;
+}
 
 export type InferredAgentStatus = "active" | "waiting" | "completed" | "stale";
 
@@ -52,6 +60,8 @@ export interface TaskBoardItem {
   readonly assignee: string | undefined;
   readonly labels: readonly string[];
   readonly blockedByCount: number;
+  readonly evidenceCount: number;
+  readonly recentEvidence: readonly EvidenceSummary[];
 }
 
 export interface TaskBoardSnapshot {

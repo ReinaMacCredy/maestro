@@ -18,6 +18,7 @@ import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort } from "@/features/handoff";
 import type { TaskQueryPort } from "@/features/task";
+import type { EvidenceStorePort } from "@/features/evidence";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { buildMissionControlEnvironmentSummary } from "./environment-projection.js";
 import { buildMissionControlMemorySnapshot } from "./memory-projection.js";
@@ -46,6 +47,7 @@ export interface SnapshotDeps {
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
+  evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
   cwd: string;
@@ -60,6 +62,7 @@ export interface HomeSnapshotDeps {
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
+  evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
   cwd: string;
@@ -79,7 +82,7 @@ export async function loadSnapshotInput(
     ? resolveMaestroProjectRoot(deps.cwd)
     : undefined;
   const taskBoardPromise = options.includeTaskBoard === true
-    ? buildTaskBoard(deps.taskStore)
+    ? buildTaskBoard(deps.taskStore, deps.evidenceStore)
     : Promise.resolve(undefined);
 
   // Ingest replies FIRST when requested, so the features list below reflects
@@ -153,7 +156,7 @@ export async function loadHomeSnapshotInput(
     ? resolveMaestroProjectRoot(deps.cwd)
     : undefined;
   const taskBoardPromise = options.includeTaskBoard === true
-    ? buildTaskBoard(deps.taskStore)
+    ? buildTaskBoard(deps.taskStore, deps.evidenceStore)
     : Promise.resolve(undefined);
   // Replies in home mode: list without ingest (home mode has no mission to
   // update). Home surface is purely read-only per Mission Control contracts.

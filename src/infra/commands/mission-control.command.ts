@@ -126,6 +126,7 @@ export function registerMissionControlCommand(program: Command): void {
           projectGraphStore: services.projectGraphStore,
           handoffStore: services.handoffStore,
           taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
           replyStore: services.replyStore,
           principleStore: services.principleStore,
           cwd: process.cwd(),

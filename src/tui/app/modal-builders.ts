@@ -509,6 +509,12 @@ function buildTaskBoardModal(
           ...(selected.assignee ? [{ text: `Assignee: ${selected.assignee}` }] : []),
           ...(selected.labels.length > 0 ? [{ text: `Labels: ${selected.labels.join(", ")}` }] : []),
           ...(selected.blockedByCount > 0 ? [{ text: `Blocked by: ${selected.blockedByCount}` }] : []),
+          { text: `Evidence: ${selected.evidenceCount} recorded`, section: "Evidence" },
+          ...(selected.recentEvidence.length > 0
+            ? selected.recentEvidence.map((ev) => ({
+                text: `${ev.created_at}  ${ev.kind}  ${ev.witness_level.slice(0, 24)}`,
+              }))
+            : [{ text: "(no evidence)" }]),
         ]
       : [{ text: "Select a task to view details" }],
     footer: `Tab/[/] columns -- ${buildListOverlayFooter(returnTarget)}`,
