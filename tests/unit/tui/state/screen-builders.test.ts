@@ -551,10 +551,13 @@ describe("buildTaskBoardModal — Evidence section", () => {
     expect(evidenceHeader).toBeDefined();
     expect((evidenceHeader as { text: string }).text).toBe("Evidence: 1 recorded");
 
-    const evidenceLine = detailItems.find((item) =>
-      "text" in item && item.text.includes("evd-0000000000001-aaaaaa") === false && item.text.includes("command"),
+    const hasEvidenceRow = detailItems.some((item) =>
+      "text" in item
+      && item.text.includes("command")
+      && item.text.includes("agent-claimed-locally")
+      && item.text.includes("2026-05-03T00:00:01.000Z"),
     );
-    expect(evidenceLine).toBeDefined();
+    expect(hasEvidenceRow).toBe(true);
   });
 
   it("renders (no evidence) when recentEvidence is empty", () => {

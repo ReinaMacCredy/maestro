@@ -14,21 +14,25 @@ export async function buildTaskBoard(
     TASK_STATUSES.map((status) => [status, [] as TaskBoardItem[]]),
   ) as Record<TaskStatus, TaskBoardItem[]>;
 
-  for (const task of tasks) {
-    let evidenceCount = 0;
-    let recentEvidence: readonly EvidenceSummary[] = [];
+  const evidenceByTask = evidenceStore
+    ? await Promise.all(
+        tasks.map((task) => evidenceStore.list({ task_id: task.id })),
+      )
+    : tasks.map(() => [] as never[]);
 
-    if (evidenceStore !== undefined) {
-      const allEvidence = await evidenceStore.list({ task_id: task.id });
-      evidenceCount = allEvidence.length;
-      // allEvidence is sorted ascending by created_at; reverse + slice 5 for most-recent-first
-      recentEvidence = [...allEvidence].reverse().slice(0, 5).map((row) => ({
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i]!;
+    const allEvidence = evidenceByTask[i]!;
+    // allEvidence is sorted ascending by created_at; slice last 5 then reverse for most-recent-first
+    const recentEvidence: readonly EvidenceSummary[] = allEvidence
+      .slice(-5)
+      .reverse()
+      .map((row) => ({
         id: row.id,
         kind: row.kind,
         witness_level: row.witness_level,
         created_at: row.created_at,
       }));
-    }
 
     const item: TaskBoardItem = {
       id: task.id,
@@ -38,7 +42,7 @@ export async function buildTaskBoard(
       assignee: task.assignee,
       labels: task.labels,
       blockedByCount: task.blockedBy.length,
-      evidenceCount,
+      evidenceCount: allEvidence.length,
       recentEvidence,
     };
     columns[task.status]?.push(item);

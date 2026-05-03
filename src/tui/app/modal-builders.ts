@@ -512,7 +512,7 @@ function buildTaskBoardModal(
           { text: `Evidence: ${selected.evidenceCount} recorded`, section: "Evidence" },
           ...(selected.recentEvidence.length > 0
             ? selected.recentEvidence.map((ev) => ({
-                text: `${ev.created_at}  ${ev.kind}  ${ev.witness_level.slice(0, 24)}`,
+                text: `${ev.created_at}  ${ev.kind}  ${ev.witness_level}`,
               }))
             : [{ text: "(no evidence)" }]),
         ]

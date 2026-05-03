@@ -115,6 +115,7 @@ describe("buildTaskBoard — evidence integration", () => {
     const evidenceStore = mockEvidenceStore([row]);
     const board = await buildTaskBoard(store, evidenceStore);
     const summary = board!.columns.pending[0]!.recentEvidence[0]!;
-    expect(Object.keys(summary)).toEqual(["id", "kind", "witness_level", "created_at"]);
+    expect("payload" in summary).toBe(false);
+    expect(summary.id).toBe("evd-0000000000001-aaaaaa");
   });
 });

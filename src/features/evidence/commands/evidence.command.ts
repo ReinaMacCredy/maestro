@@ -17,7 +17,6 @@ import type { EvidenceListFilter } from "../ports/storage.js";
 interface EvidenceCommandDeps {
   readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect">;
   readonly recordEvidence: typeof recordEvidence;
-  readonly listEvidence?: typeof listEvidence;
 }
 
 const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note"];
@@ -61,7 +60,7 @@ Examples:
 
       const input = await buildRecordInput(services, opts);
       const row = await deps.recordEvidence(services.evidenceStore, input);
-      output(isJson, row, formatRecorded);
+      output(isJson, row, (r) => formatEvidenceRow(r, "Evidence recorded"));
     });
 }
 
@@ -154,9 +153,9 @@ function parseNonNegativeInt(raw: string): number {
   return n;
 }
 
-function formatRecorded(row: EvidenceRow): string[] {
+function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
   const lines = [
-    `[ok] Evidence recorded: ${row.id}`,
+    `[ok] ${label}: ${row.id}`,
     `  Task: ${row.task_id}`,
     `  Kind: ${row.kind}`,
     `  Witness: ${row.witness_level}`,
@@ -177,27 +176,11 @@ function formatRecorded(row: EvidenceRow): string[] {
   return lines;
 }
 
-function formatRow(row: EvidenceRow): string[] {
-  const lines = [
-    `[ok] Evidence: ${row.id}`,
-    `  Task: ${row.task_id}`,
-    `  Kind: ${row.kind}`,
-    `  Witness: ${row.witness_level}`,
-    `  Created: ${row.created_at}`,
-  ];
-  if (row.session_id) lines.push(`  Session: ${row.session_id}`);
-  if (row.kind === "command") {
-    const payload = row.payload as CommandPayload;
-    lines.push(`  Command: ${payload.command}`, `  Exit: ${payload.exit}`);
-    if (payload.duration_ms !== undefined) lines.push(`  Duration: ${payload.duration_ms}ms`);
-    if (payload.log_path !== undefined) lines.push(`  Log: ${payload.log_path}`);
-    if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
-  } else {
-    const payload = row.payload as ManualNotePayload;
-    lines.push(`  Note: ${payload.note}`);
-    if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
-  }
-  return lines;
+function formatEvidenceList(rows: readonly EvidenceRow[]): string[] {
+  if (rows.length === 0) return ["No evidence found."];
+  return rows.map(
+    (row) => `${row.created_at}  ${row.id}  ${row.kind}  ${row.task_id}  ${row.witness_level}`,
+  );
 }
 
 function registerListCommand(parent: Command, root: Command, deps: EvidenceCommandDeps): void {
@@ -218,22 +201,8 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
         ...(opts.kind !== undefined ? { kind: parseKind(opts.kind as string) } : {}),
       };
 
-      const doList = deps.listEvidence ?? listEvidence;
-      const rows = await doList(services.evidenceStore, filter);
-
-      if (isJson) {
-        output(true, rows, () => []);
-        return;
-      }
-
-      if (rows.length === 0) {
-        console.log("No evidence found.");
-        return;
-      }
-
-      for (const row of rows) {
-        console.log(`${row.created_at}  ${row.id}  ${row.kind}  ${row.task_id}  ${row.witness_level}`);
-      }
+      const rows = await listEvidence(services.evidenceStore, filter);
+      output(isJson, rows, formatEvidenceList);
     });
 }
 
@@ -259,6 +228,6 @@ function registerShowCommand(parent: Command, root: Command, deps: EvidenceComma
         ]);
       }
 
-      output(isJson, row, formatRow);
+      output(isJson, row, (r) => formatEvidenceRow(r));
     });
 }
