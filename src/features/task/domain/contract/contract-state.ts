@@ -2,6 +2,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { TASK_ID_PATTERN } from "../task-id.js";
 import { generateTaskId } from "../task-id.js";
 import type {
+  AmendmentBudget,
   AmendmentSnapshot,
   Contract,
   ContractAmendment,
@@ -11,7 +12,9 @@ import type {
   ContractScope,
   ContractStatus,
   ContractVerdict,
+  CostBudget,
   DoneWhenCriterion,
+  RiskClass,
 } from "./contract-types.js";
 import { CONTRACT_SCHEMA_VERSION } from "./contract-types.js";
 
@@ -90,7 +93,7 @@ export function snapshotForAmendment(contract: Contract): AmendmentSnapshot {
 
 export function validateContract(value: unknown): Contract | undefined {
   if (!isRecord(value)) return undefined;
-  if (value.schemaVersion !== CONTRACT_SCHEMA_VERSION) return undefined;
+  if (value.schemaVersion !== CONTRACT_SCHEMA_VERSION && value.schemaVersion !== 1) return undefined;
   if (!isContractId(value.id)) return undefined;
   if (typeof value.taskId !== "string" || !TASK_ID_PATTERN.test(value.taskId)) return undefined;
   if (typeof value.repoRoot !== "string" || value.repoRoot.length === 0) return undefined;
@@ -128,8 +131,21 @@ export function validateContract(value: unknown): Contract | undefined {
     if (!verdict) return undefined;
   }
 
+  if (!isOptionalNonEmptyString(value.missionId)) return undefined;
+  if (!isOptionalRiskClass(value.riskClass)) return undefined;
+
+  const amendmentBudget = value.amendmentBudget === undefined
+    ? undefined
+    : validateAmendmentBudget(value.amendmentBudget);
+  if (value.amendmentBudget !== undefined && !amendmentBudget) return undefined;
+
+  const costBudget = value.costBudget === undefined
+    ? undefined
+    : validateCostBudget(value.costBudget);
+  if (value.costBudget !== undefined && !costBudget) return undefined;
+
   return {
-    schemaVersion: CONTRACT_SCHEMA_VERSION,
+    schemaVersion: value.schemaVersion as 1 | typeof CONTRACT_SCHEMA_VERSION,
     id: value.id,
     taskId: value.taskId,
     repoRoot: value.repoRoot,
@@ -150,6 +166,10 @@ export function validateContract(value: unknown): Contract | undefined {
     closedBy: value.closedBy,
     ownershipHistory,
     configSnapshot,
+    missionId: value.missionId,
+    riskClass: value.riskClass,
+    amendmentBudget,
+    costBudget,
   };
 }
 
@@ -490,4 +510,34 @@ function isOptionalPositiveInteger(value: unknown): value is number | undefined 
 
 function isOptionalBoolean(value: unknown): value is boolean | undefined {
   return value === undefined || typeof value === "boolean";
+}
+
+const RISK_CLASSES = ["low", "medium", "high", "critical"] as const;
+
+function isOptionalRiskClass(value: unknown): value is RiskClass | undefined {
+  return value === undefined || (typeof value === "string" && (RISK_CLASSES as readonly string[]).includes(value));
+}
+
+function validateAmendmentBudget(value: unknown): AmendmentBudget | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!isPositiveInteger(value.maxAmendments)) return undefined;
+  if (!isPositiveInteger(value.maxPathsPerAmendment)) return undefined;
+  if (!isStringArray(value.forbiddenAmendmentPaths)) return undefined;
+  return {
+    maxAmendments: value.maxAmendments,
+    maxPathsPerAmendment: value.maxPathsPerAmendment,
+    forbiddenAmendmentPaths: value.forbiddenAmendmentPaths,
+  };
+}
+
+function validateCostBudget(value: unknown): CostBudget | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!isPositiveInteger(value.maxRetries)) return undefined;
+  if (!isPositiveInteger(value.maxWallClockSeconds)) return undefined;
+  if (!isOptionalPositiveInteger(value.maxTokens)) return undefined;
+  return {
+    maxRetries: value.maxRetries,
+    maxWallClockSeconds: value.maxWallClockSeconds,
+    maxTokens: value.maxTokens,
+  };
 }

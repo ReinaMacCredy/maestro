@@ -1,4 +1,4 @@
-export const CONTRACT_SCHEMA_VERSION = 1;
+export const CONTRACT_SCHEMA_VERSION = 2;
 
 export type ContractStatus =
   | "draft"
@@ -9,6 +9,20 @@ export type ContractStatus =
   | "discarded";
 
 export type ActorId = string;
+
+export type RiskClass = "low" | "medium" | "high" | "critical";
+
+export interface AmendmentBudget {
+  readonly maxAmendments: number;
+  readonly maxPathsPerAmendment: number;
+  readonly forbiddenAmendmentPaths: readonly string[];
+}
+
+export interface CostBudget {
+  readonly maxRetries: number;
+  readonly maxWallClockSeconds: number;
+  readonly maxTokens?: number;
+}
 
 export interface ContractOwnershipTransfer {
   readonly from: ActorId;
@@ -88,7 +102,7 @@ export interface ContractConfigSnapshot {
 }
 
 export interface Contract {
-  readonly schemaVersion: typeof CONTRACT_SCHEMA_VERSION;
+  readonly schemaVersion: 1 | typeof CONTRACT_SCHEMA_VERSION;
   readonly id: string;
   readonly taskId: string;
   readonly repoRoot: string;
@@ -109,6 +123,10 @@ export interface Contract {
   readonly closedBy?: ActorId;
   readonly ownershipHistory?: readonly ContractOwnershipTransfer[];
   readonly configSnapshot: ContractConfigSnapshot;
+  readonly missionId?: string;
+  readonly riskClass?: RiskClass;
+  readonly amendmentBudget?: AmendmentBudget;
+  readonly costBudget?: CostBudget;
 }
 
 export interface CreateContractRecordInput {
@@ -121,6 +139,10 @@ export interface CreateContractRecordInput {
   readonly doneWhen: readonly DoneWhenCriterion[];
   readonly createdBy: ActorId;
   readonly configSnapshot: ContractConfigSnapshot;
+  readonly missionId?: string;
+  readonly riskClass?: RiskClass;
+  readonly amendmentBudget?: AmendmentBudget;
+  readonly costBudget?: CostBudget;
 }
 
 export interface DeleteContractRecordInput {

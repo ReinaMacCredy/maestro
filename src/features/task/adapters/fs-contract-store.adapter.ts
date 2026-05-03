@@ -141,6 +141,10 @@ export class FsContractStoreAdapter implements ContractStorePort {
         amendments: [],
         createdBy: input.createdBy,
         configSnapshot: input.configSnapshot,
+        missionId: input.missionId,
+        riskClass: input.riskClass,
+        amendmentBudget: input.amendmentBudget,
+        costBudget: input.costBudget,
       });
       if (!contract) {
         throw new MaestroError(`Refusing to persist an invalid contract draft for task ${input.taskId}`, [
