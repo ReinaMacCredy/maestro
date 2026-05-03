@@ -31,4 +31,6 @@ export interface GitAnchorPort {
       readonly closedAtCommit?: string;
     };
   }): Promise<boolean | undefined>;
+  collectChangedPaths(repoRoot: string, base: string, head: string): Promise<readonly string[]>;
+  collectAddedLines(repoRoot: string, base: string, head: string): Promise<readonly string[]>;
 }

@@ -698,6 +698,8 @@ export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchor
       closedAtCommit: "HEAD",
     }),
     windowsOverlap: async () => false,
+    collectChangedPaths: async () => [],
+    collectAddedLines: async () => [],
     ...overrides,
   };
 }

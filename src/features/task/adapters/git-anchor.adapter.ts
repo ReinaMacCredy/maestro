@@ -246,6 +246,20 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
     return result.exitCode === 0;
   }
 
+  async collectChangedPaths(repoRoot: string, base: string, head: string): Promise<readonly string[]> {
+    const result = await execArgv(["git", "diff", "--name-only", `${base}..${head}`], { cwd: repoRoot });
+    if (result.exitCode !== 0 || !result.stdout) return [];
+    return splitPaths(result.stdout);
+  }
+
+  async collectAddedLines(repoRoot: string, base: string, head: string): Promise<readonly string[]> {
+    const result = await execArgv(["git", "diff", "--no-color", `${base}..${head}`], { cwd: repoRoot });
+    if (result.exitCode !== 0 || !result.stdout) return [];
+    return result.stdout
+      .split("\n")
+      .filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+  }
+
   private async collectMergeSourcedFiles(cwd: string, anchor: string, head: string): Promise<readonly string[]> {
     const merges = await execArgv(["git", "rev-list", "--merges", `${anchor}..${head}`], { cwd });
     if (merges.exitCode !== 0 || !merges.stdout) {

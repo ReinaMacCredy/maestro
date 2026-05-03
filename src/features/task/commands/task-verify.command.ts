@@ -1,0 +1,160 @@
+import type { Command } from "commander";
+import { MaestroError } from "@/shared/errors.js";
+import { resolveJsonFlag } from "@/shared/lib/output.js";
+import { execArgv } from "@/shared/lib/shell.js";
+import { recordEvidence } from "@/features/evidence/index.js";
+import type { TrustFinding } from "@/features/verify/domain/types.js";
+import { getServices, type Services } from "@/services.js";
+
+interface TaskVerifyDeps {
+  readonly getServices: () => Pick<Services, "contractVersionStore" | "evidenceStore" | "gitAnchor" | "runTrustVerifier">;
+}
+
+export function registerTaskVerifyCommand(
+  taskCmd: Command,
+  program: Command,
+  deps: TaskVerifyDeps = { getServices },
+): void {
+  taskCmd
+    .command("verify")
+    .description("Run the Trust Verifier locally against the current diff and print findings")
+    .requiredOption("--task <id>", "Task id")
+    .option("--base <ref>", "Base git ref for the diff (default: merge-base with main or upstream)")
+    .option("--json", "Output as JSON")
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const taskId: string = opts.task;
+
+      // 1. Resolve current contract
+      const contract = await services.contractVersionStore.readCurrent(taskId);
+      if (contract === undefined) {
+        throw new MaestroError(`No contract proposed for task ${taskId}`, [
+          "Run 'maestro contract amend' or propose via maestro-plan skill",
+        ]);
+      }
+
+      // 2. Resolve base ref
+      const baseRef = typeof opts.base === "string" && opts.base.length > 0
+        ? opts.base
+        : await resolveDefaultBase();
+
+      // 3. Resolve HEAD sha
+      const headResult = await execArgv(["git", "rev-parse", "HEAD"]);
+      const headSha = headResult.exitCode === 0 && headResult.stdout
+        ? headResult.stdout
+        : "HEAD";
+
+      // 4. Build diff
+      const cwd = process.cwd();
+      const [changedPaths, addedLines] = await Promise.all([
+        services.gitAnchor.collectChangedPaths(cwd, baseRef, headSha),
+        services.gitAnchor.collectAddedLines(cwd, baseRef, headSha),
+      ]);
+
+      // 5. Run trust verifier
+      const result = await services.runTrustVerifier({
+        contract,
+        diff: { changedPaths, addedLines, base: baseRef, head: headSha },
+      });
+
+      // 6. Write one verifier-kind Evidence row per finding
+      await Promise.all(
+        result.findings.map((finding) =>
+          recordEvidence(services.evidenceStore, {
+            task_id: taskId,
+            kind: "verifier",
+            witness_level: "agent-claimed-locally",
+            payload: {
+              check: finding.check,
+              severity: finding.severity,
+              paths: finding.paths,
+              details: finding.details,
+            },
+          }),
+        ),
+      );
+
+      // 7. Print output
+      const counts = countBySeverity(result.findings);
+
+      if (isJson) {
+        process.stdout.write(
+          JSON.stringify({ findings: result.findings, counts }) + "\n",
+        );
+      } else {
+        printTextFindings(result.findings, counts);
+      }
+
+      // 8. Exit code
+      const exitCode = deriveExitCode(counts);
+      if (exitCode !== 0) {
+        process.exit(exitCode);
+      }
+    });
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+interface FindingCounts {
+  readonly error: number;
+  readonly warn: number;
+  readonly info: number;
+}
+
+function countBySeverity(findings: readonly TrustFinding[]): FindingCounts {
+  let error = 0;
+  let warn = 0;
+  let info = 0;
+  for (const f of findings) {
+    if (f.severity === "error") error++;
+    else if (f.severity === "warn") warn++;
+    else info++;
+  }
+  return { error, warn, info };
+}
+
+function deriveExitCode(counts: FindingCounts): number {
+  if (counts.error > 0) return 1;
+  if (counts.warn > 0 || counts.info > 0) return 2;
+  return 0;
+}
+
+function printTextFindings(findings: readonly TrustFinding[], counts: FindingCounts): void {
+  const total = findings.length;
+  if (total === 0) {
+    console.log("Trust Verifier: no findings");
+    return;
+  }
+  console.log(
+    `Trust Verifier: ${total} finding${total !== 1 ? "s" : ""} (${counts.error} error${counts.error !== 1 ? "s" : ""}, ${counts.warn} warning${counts.warn !== 1 ? "s" : ""}, ${counts.info} info)`,
+  );
+  for (const finding of findings) {
+    const pathsSuffix = finding.paths.length > 0 ? `: ${finding.paths.join(", ")}` : "";
+    console.log(`  [${finding.severity}] ${finding.check}${pathsSuffix}`);
+    if (finding.details) {
+      console.log(`    ${finding.details}`);
+    }
+  }
+}
+
+async function resolveDefaultBase(): Promise<string> {
+  // Try upstream tracking branch first
+  const upstream = await execArgv(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+  if (upstream.exitCode === 0 && upstream.stdout) {
+    const upstreamRef = upstream.stdout;
+    const mergeBase = await execArgv(["git", "merge-base", "HEAD", upstreamRef]);
+    if (mergeBase.exitCode === 0 && mergeBase.stdout) {
+      return mergeBase.stdout;
+    }
+    return upstreamRef;
+  }
+
+  // Fall back to merge-base with main
+  const mergeBaseMain = await execArgv(["git", "merge-base", "HEAD", "main"]);
+  if (mergeBaseMain.exitCode === 0 && mergeBaseMain.stdout) {
+    return mergeBaseMain.stdout;
+  }
+
+  return "main";
+}
