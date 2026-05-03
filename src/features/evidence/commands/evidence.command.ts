@@ -3,6 +3,8 @@ import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { getServices, type Services } from "@/services.js";
 import { recordEvidence, type RecordEvidenceInput } from "../usecases/record-evidence.usecase.js";
+import { listEvidence } from "../usecases/list-evidence.usecase.js";
+import { isEvidenceId } from "../domain/evidence-id.js";
 import type {
   CommandPayload,
   EvidenceKind,
@@ -10,10 +12,12 @@ import type {
   ManualNotePayload,
   WitnessLevel,
 } from "../domain/types.js";
+import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
   readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect">;
   readonly recordEvidence: typeof recordEvidence;
+  readonly listEvidence?: typeof listEvidence;
 }
 
 const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note"];
@@ -27,6 +31,8 @@ export function registerEvidenceCommand(
     .description("Record and inspect task evidence")
     .option("--json", "Output as JSON");
   registerRecordCommand(evidenceCmd, program, deps);
+  registerListCommand(evidenceCmd, program, deps);
+  registerShowCommand(evidenceCmd, program, deps);
 }
 
 function registerRecordCommand(parent: Command, root: Command, deps: EvidenceCommandDeps): void {
@@ -169,4 +175,90 @@ function formatRecorded(row: EvidenceRow): string[] {
     if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
   }
   return lines;
+}
+
+function formatRow(row: EvidenceRow): string[] {
+  const lines = [
+    `[ok] Evidence: ${row.id}`,
+    `  Task: ${row.task_id}`,
+    `  Kind: ${row.kind}`,
+    `  Witness: ${row.witness_level}`,
+    `  Created: ${row.created_at}`,
+  ];
+  if (row.session_id) lines.push(`  Session: ${row.session_id}`);
+  if (row.kind === "command") {
+    const payload = row.payload as CommandPayload;
+    lines.push(`  Command: ${payload.command}`, `  Exit: ${payload.exit}`);
+    if (payload.duration_ms !== undefined) lines.push(`  Duration: ${payload.duration_ms}ms`);
+    if (payload.log_path !== undefined) lines.push(`  Log: ${payload.log_path}`);
+    if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
+  } else {
+    const payload = row.payload as ManualNotePayload;
+    lines.push(`  Note: ${payload.note}`);
+    if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
+  }
+  return lines;
+}
+
+function registerListCommand(parent: Command, root: Command, deps: EvidenceCommandDeps): void {
+  parent
+    .command("list")
+    .description("List evidence rows")
+    .option("--task <id>", "Filter by task id")
+    .option("--session <id>", "Filter by session id")
+    .option("--kind <kind>", `Filter by kind (${EVIDENCE_KINDS.join("|")})`)
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = deps.getServices();
+      const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
+
+      const filter: EvidenceListFilter = {
+        ...(opts.task !== undefined ? { task_id: opts.task as string } : {}),
+        ...(opts.session !== undefined ? { session_id: opts.session as string } : {}),
+        ...(opts.kind !== undefined ? { kind: parseKind(opts.kind as string) } : {}),
+      };
+
+      const doList = deps.listEvidence ?? listEvidence;
+      const rows = await doList(services.evidenceStore, filter);
+
+      if (isJson) {
+        output(true, rows, () => []);
+        return;
+      }
+
+      if (rows.length === 0) {
+        console.log("No evidence found.");
+        return;
+      }
+
+      for (const row of rows) {
+        console.log(`${row.created_at}  ${row.id}  ${row.kind}  ${row.task_id}  ${row.witness_level}`);
+      }
+    });
+}
+
+function registerShowCommand(parent: Command, root: Command, deps: EvidenceCommandDeps): void {
+  parent
+    .command("show <id>")
+    .description("Show one evidence row by id")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = deps.getServices();
+      const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
+
+      if (!isEvidenceId(id)) {
+        throw new MaestroError(`Invalid evidence id: ${id}`, [
+          "Evidence ids look like 'evd-xxxxxx'",
+        ]);
+      }
+
+      const row = await services.evidenceStore.read(id);
+      if (row === undefined) {
+        throw new MaestroError(`Evidence not found: ${id}`, [
+          "Run `maestro evidence list --task <id>` to see available evidence",
+        ]);
+      }
+
+      output(isJson, row, formatRow);
+    });
 }

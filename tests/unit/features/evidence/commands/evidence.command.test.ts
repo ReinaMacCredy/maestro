@@ -484,3 +484,170 @@ describe("registerEvidenceCommand", () => {
     expect(captured.logs).toContain("  Witness: agent-claimed-locally");
   });
 });
+
+function makeEvidenceRow(
+  overrides: Partial<EvidenceRow> & { id: string },
+): EvidenceRow {
+  return {
+    schema_version: 1,
+    task_id: "tsk-aaaaaa",
+    kind: "command",
+    witness_level: "agent-claimed-locally",
+    created_at: "2026-05-03T00:00:00.000Z",
+    payload: { command: "bun test", exit: 0 },
+    ...overrides,
+  } as EvidenceRow;
+}
+
+describe("evidence list", () => {
+  it("returns rows in chronological order when --task <id> is provided", async () => {
+    const rows = [
+      makeEvidenceRow({ id: "evd-0000000000003-aaaaaa", created_at: "2026-05-03T00:00:03.000Z", task_id: "tsk-aaaaaa" }),
+      makeEvidenceRow({ id: "evd-0000000000001-aaaaaa", created_at: "2026-05-03T00:00:01.000Z", task_id: "tsk-aaaaaa" }),
+      makeEvidenceRow({ id: "evd-0000000000002-aaaaaa", created_at: "2026-05-03T00:00:02.000Z", task_id: "tsk-aaaaaa" }),
+    ];
+    const captured = captureConsole();
+    const store = mockEvidenceStore(rows);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "list", "--task", "tsk-aaaaaa"]);
+
+    expect(captured.logs.length).toBe(3);
+    // First line should have earliest created_at
+    expect(captured.logs[0]).toContain("evd-0000000000001-aaaaaa");
+    expect(captured.logs[1]).toContain("evd-0000000000002-aaaaaa");
+    expect(captured.logs[2]).toContain("evd-0000000000003-aaaaaa");
+  });
+
+  it("filters by --kind manual-note", async () => {
+    const rows = [
+      makeEvidenceRow({ id: "evd-0000000000001-aaaaaa", kind: "command" }),
+      makeEvidenceRow({
+        id: "evd-0000000000002-aaaaaa",
+        kind: "manual-note",
+        payload: { note: "verified" },
+        witness_level: "agent-claimed-and-not-reproducible",
+      }),
+    ];
+    const captured = captureConsole();
+    const store = mockEvidenceStore(rows);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "list", "--kind", "manual-note"]);
+
+    expect(captured.logs.length).toBe(1);
+    expect(captured.logs[0]).toContain("evd-0000000000002-aaaaaa");
+    expect(captured.logs[0]).toContain("manual-note");
+  });
+
+  it("returns all rows when no filters are provided", async () => {
+    const rows = [
+      makeEvidenceRow({ id: "evd-0000000000001-aaaaaa", task_id: "tsk-aaaaaa" }),
+      makeEvidenceRow({ id: "evd-0000000000002-aaaaaa", task_id: "tsk-bbbbbb" }),
+    ];
+    const captured = captureConsole();
+    const store = mockEvidenceStore(rows);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "list"]);
+
+    expect(captured.logs.length).toBe(2);
+  });
+
+  it("--json prints a parseable array", async () => {
+    const rows = [
+      makeEvidenceRow({ id: "evd-0000000000001-aaaaaa" }),
+    ];
+    const captured = captureConsole();
+    const store = mockEvidenceStore(rows);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "list", "--json"]);
+
+    expect(captured.logs.length).toBe(1);
+    const parsed = JSON.parse(captured.logs[0]!) as EvidenceRow[];
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed.length).toBe(1);
+    expect(parsed[0]!.id).toBe("evd-0000000000001-aaaaaa");
+  });
+
+  it("prints 'No evidence found.' when empty", async () => {
+    const captured = captureConsole();
+    const { deps } = evidenceDeps({ evidenceStore: mockEvidenceStore([]) });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "list"]);
+
+    expect(captured.logs).toContain("No evidence found.");
+  });
+});
+
+describe("evidence show", () => {
+  it("shows a row in text mode", async () => {
+    const row = makeEvidenceRow({ id: "evd-0000000000001-aaaaaa" });
+    const captured = captureConsole();
+    const store = mockEvidenceStore([row]);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "show", "evd-0000000000001-aaaaaa"]);
+
+    expect(captured.logs[0]).toMatch(/^\[ok\] Evidence: evd-0000000000001-aaaaaa$/);
+    expect(captured.logs).toContain("  Task: tsk-aaaaaa");
+    expect(captured.logs).toContain("  Kind: command");
+  });
+
+  it("--json prints a parseable row", async () => {
+    const row = makeEvidenceRow({ id: "evd-0000000000001-aaaaaa" });
+    const captured = captureConsole();
+    const store = mockEvidenceStore([row]);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "show", "evd-0000000000001-aaaaaa", "--json"]);
+
+    expect(captured.logs.length).toBe(1);
+    const parsed = JSON.parse(captured.logs[0]!) as EvidenceRow;
+    expect(parsed.id).toBe("evd-0000000000001-aaaaaa");
+    expect(parsed.task_id).toBe("tsk-aaaaaa");
+  });
+
+  it("throws MaestroError for missing id", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps({ evidenceStore: mockEvidenceStore([]) });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync(["node", "maestro", "evidence", "show", "evd-0000000000000-deadbe"]),
+    ).rejects.toMatchObject({
+      message: "Evidence not found: evd-0000000000000-deadbe",
+    });
+  });
+
+  it("throws MaestroError for invalid id pattern", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync(["node", "maestro", "evidence", "show", "not-an-id"]),
+    ).rejects.toMatchObject({
+      message: "Invalid evidence id: not-an-id",
+    });
+  });
+});
