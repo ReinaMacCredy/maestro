@@ -2,7 +2,7 @@
  * Integration tests for mission CLI commands
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -110,7 +110,7 @@ describe("mission CLI commands", () => {
       cwd: tmpDir,
     });
 
-    const [stdout, stderr] = await Promise.all([
+    const [stdout] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
     ]);

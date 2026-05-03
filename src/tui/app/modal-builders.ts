@@ -744,37 +744,6 @@ function buildCorrectionDetailItems(correction: NonNullable<MissionControlSnapsh
   ];
 }
 
-function buildLearningDetailItems(
-  memory: MissionControlSnapshot["memory"],
-  selectedLearning: NonNullable<MissionControlSnapshot["memory"]>["rawLearnings"][number] | undefined,
-): readonly ModalInfoItem[] {
-  if (!memory) {
-    return [{ text: "No learning data available.", tone: "muted" as const }];
-  }
-
-  return [
-    ...(selectedLearning
-      ? [
-          { text: selectedLearning.sessionDate, section: "Selected entry", tone: "accent" as const, style: "block" as const },
-          { text: selectedLearning.branch ?? "no branch" },
-          { text: selectedLearning.content },
-          { text: "" },
-        ]
-      : [{ text: "Choose a raw learning entry.", tone: "muted" as const }]),
-    { text: "Compiled summary", section: "Compiled" },
-    ...(memory.compiledLearnings
-      ? [
-          { text: `Compiled ${memory.compiledLearnings.compiledAt}` },
-          { text: `${memory.compiledLearnings.rawCount} raw entries included` },
-          { text: memory.compiledLearnings.summary },
-        ]
-      : [
-          { text: "Not compiled yet", tone: "muted" as const },
-          { text: `${memory.rawLearnings.length} raw entr${memory.rawLearnings.length === 1 ? "y" : "ies"} waiting` },
-        ]),
-  ];
-}
-
 function buildRatchetDetailItems(
   memory: MissionControlSnapshot["memory"],
   assertion: NonNullable<MissionControlSnapshot["memory"]>["ratchetSuite"]["assertions"][number] | undefined,
@@ -1098,10 +1067,6 @@ function renderActivityBars(counts: readonly number[], marker: string): string {
   return counts
     .map((count) => marker.repeat(Math.max(1, count)).padEnd(6, " "))
     .join(" ");
-}
-
-function firstLine(text: string): string {
-  return text.split("\n").map((line) => line.trim()).find((line) => line.length > 0) ?? "";
 }
 
 function getFeatureActionFooter(modal: Extract<AppState["modal"], { kind: "feature-action" }>): string {

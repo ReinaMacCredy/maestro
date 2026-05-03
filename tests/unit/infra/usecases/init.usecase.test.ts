@@ -25,7 +25,6 @@ describe("initMaestro", () => {
     expect(result.created.length).toBeGreaterThan(0);
     expect(result.bootstrapGenerated).toBe(true);
 
-    const maestroDir = Bun.file(join(tmpDir, ".maestro"));
     // Directory created (ensureDir was called)
     expect(result.created.some((p) => p.includes(".maestro"))).toBe(true);
   });

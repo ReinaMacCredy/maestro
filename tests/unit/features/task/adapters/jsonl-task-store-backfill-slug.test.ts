@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
 import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
-import { MaestroError } from "@/shared/errors.js";
 
 describe("JsonlTaskStoreAdapter.backfillSlug", () => {
   let tmpDir: string;

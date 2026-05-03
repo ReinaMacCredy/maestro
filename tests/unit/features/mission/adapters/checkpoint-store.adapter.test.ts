@@ -44,7 +44,7 @@ describe("FsCheckpointStoreAdapter", () => {
 
     it("persists checkpoint to file with timestamp-based filename", async () => {
       const data = makeCheckpointData();
-      const checkpoint = await store.save(missionId, data);
+      await store.save(missionId, data);
 
       // Verify file exists with timestamp pattern
       const dirPath = join(tmpDir, ".maestro", "missions", missionId, "checkpoints");

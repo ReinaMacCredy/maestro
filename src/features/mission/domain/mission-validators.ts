@@ -382,7 +382,6 @@ export function assertNoDanglingReferences(
 ): void {
   const milestoneIds = new Set(mission.milestones.map((m) => m.id));
   const featureIds = new Set(features.map((f) => f.id));
-  const missionFeatureIds = new Set(mission.features);
 
   // Check all features reference valid milestones
   for (const feature of features) {

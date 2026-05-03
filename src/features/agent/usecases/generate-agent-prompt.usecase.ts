@@ -715,15 +715,6 @@ function appendPrincipleSection(parts: string[], principles: readonly Principle[
   parts.push("");
 }
 
-function renderListField(parts: string[], label: string, items: readonly string[] | undefined): void {
-  if (!items || items.length === 0) return;
-  parts.push(`**${label}:**`);
-  for (const item of items) {
-    parts.push(`- ${delimitContent(item)}`);
-  }
-  parts.push("");
-}
-
 /**
  * Delimit content that might contain control-like text. Unlike
  * `sanitizePromptContent`, the value is emitted inline (no XML wrapper,

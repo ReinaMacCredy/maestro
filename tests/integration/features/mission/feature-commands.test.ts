@@ -481,7 +481,7 @@ describe("feature CLI commands", () => {
       );
 
       // Retry to pending WITHOUT providing a new report
-      const { stdout, exitCode } = await run(
+      const { exitCode } = await run(
         ["feature", "update", "f1", "--mission", missionId, "--status", "pending"],
         tmpDir,
       );
@@ -612,7 +612,7 @@ describe("feature CLI commands", () => {
       const missionId = await createMission(tmpDir);
       await createSkill(tmpDir, "test-skill");
 
-      const { stdout, exitCode } = await run(
+      const { exitCode } = await run(
         ["feature", "prompt", "f1", "--mission", missionId],
         tmpDir,
       );

@@ -260,7 +260,6 @@ export function formatTaskStatusView(
   opts: FormatTaskStatusOptions = {},
 ): string[] {
   const colorOn = opts.color ?? isColorEnabled();
-  const { header, tracks, orphans, tasksById } = projection;
 
   if (opts.compact === false) {
     return formatGroupedTaskStatusView(projection, colorOn);
