@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.65.0 - L1 — Evidence-only logbook
+
+- New verbs: `maestro evidence record/list/show` for recording and inspecting
+  per-task evidence under `.maestro/evidence/`.
+- Mission Control Task Board surfaces evidence count and the most recent rows
+  (read-only).
+- `maestro-task` skill instructs agents to record evidence after verification
+  commands.
+- `maestro init` now adds `.maestro/evidence/` and `.maestro/runs/` to
+  `.gitignore` (idempotent).
+- Compat: additive only; existing data unchanged.
+
 ## 0.58.3 - Handoff scope follow-ups
 
 - Preserve global handoff scope options through `status` and `doctor` legacy

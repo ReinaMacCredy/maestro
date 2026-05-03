@@ -88,7 +88,7 @@ The 7 adoption levels are the shipping plan. Each level is a release with its ow
 
 | Level | Ships | Status | Phase fragments |
 |---|---|---|---|
-| **L1** | Evidence-only logbook: agent records what it did, human reads it | near-term | P9α (Evidence schema), P10α (basic provenance), P11α (diff capture only) |
+| **L1** | Evidence-only logbook: agent records what it did, human reads it | shipped (v0.65.0) | P9α (Evidence schema), P10α (basic provenance), P11α (diff capture only) |
 | **L2** | Contract-required: diff must respect declared scope | next | P5 (Contract on Task; P8 merged in), P11 full (Trust Verifier), P6 partial (plan check) |
 | **L3** | Risk verdict: Maestro produces PASS/FAIL/HUMAN/BLOCK | mid | P14 (Risk engine), P15 (Policy authoring), P12 (Proof Strength → Witness Levels) |
 | **L4** | Autopilot inner loop, no merge: agent runs the loop, human merges | mid | P7 partial, P13 partial (1–2 reviewers), P16 partial (Mission Control), P2 minimal (acceptance-criteria predicate) |
@@ -695,11 +695,15 @@ Sequencing rules:
 
 ### L1 — Evidence-Only Logbook
 
+**Status**: shipped in v0.65.0.
+
 **Goal of level**: Agent records what it did during a task; human reads the record.
 
 **Why now**: existing `maestro task` already has acceptance criteria and claim/complete cycle. L1 is the smallest addition that delivers shipping value.
 
 #### Phase L1.1: Evidence domain types
+
+**Status**: shipped.
 
 - **Goal**: Define TypeScript types for Evidence rows.
 - **Prerequisites**: none.
@@ -715,6 +719,8 @@ Sequencing rules:
 
 #### Phase L1.2: Evidence file-storage adapter
 
+**Status**: shipped.
+
 - **Goal**: Persist Evidence rows to disk under `.maestro/evidence/`.
 - **Prerequisites**: L1.1.
 - **Deliverables**:
@@ -729,6 +735,8 @@ Sequencing rules:
 
 #### Phase L1.3: Evidence use-cases
 
+**Status**: shipped.
+
 - **Goal**: Implement `recordEvidence` and `listEvidence` use-cases.
 - **Prerequisites**: L1.2.
 - **Deliverables**:
@@ -740,6 +748,8 @@ Sequencing rules:
 - **Scope**: small.
 
 #### Phase L1.4: `maestro evidence record` CLI verb
+
+**Status**: shipped. Verb landed at `src/features/evidence/commands/evidence.command.ts` (project convention) rather than the roadmap's `src/infra/commands/evidence-record.command.ts` path.
 
 - **Goal**: Wire the use-case to a CLI command.
 - **Prerequisites**: L1.3.
@@ -757,6 +767,8 @@ Sequencing rules:
 
 #### Phase L1.5: `maestro evidence list` and `evidence show` CLI verbs
 
+**Status**: shipped. Both subcommands live in `src/features/evidence/commands/evidence.command.ts` alongside `evidence record`.
+
 - **Goal**: Read paths for evidence.
 - **Prerequisites**: L1.4.
 - **Deliverables**:
@@ -768,6 +780,8 @@ Sequencing rules:
 - **Scope**: small.
 
 #### Phase L1.6: Mission Control evidence view
+
+**Status**: shipped. Implemented in `src/tui/state/task-board.ts` (`buildTaskBoard` accepts an optional `evidenceStore`) and `src/tui/state/screen-types.ts` (`TaskBoardItem.evidenceCount`, `recentEvidence`); `src/tui/state/snapshot.ts` is a re-export shell, so the per-task projection lives in `task-board.ts` instead.
 
 - **Goal**: Surface evidence in the existing Task view in the TUI.
 - **Prerequisites**: L1.5.
@@ -782,6 +796,8 @@ Sequencing rules:
 
 #### Phase L1.7: `maestro-task` skill update
 
+**Status**: shipped.
+
 - **Goal**: Tell agents to record evidence after verification commands.
 - **Prerequisites**: L1.4.
 - **Deliverables**:
@@ -794,6 +810,8 @@ Sequencing rules:
 
 #### Phase L1.8: `maestro-setup` gitignore additions
 
+**Status**: shipped. There is no `maestro setup` CLI verb in this repo; the gitignore-writing logic lives in `RUNTIME_GITIGNORE_LINES` in `src/infra/usecases/init.usecase.ts`, which `maestro init` already drives.
+
 - **Goal**: New repos and existing repos get `.maestro/evidence/` and `.maestro/runs/` gitignored.
 - **Prerequisites**: independent (parallelizable with L1.7).
 - **Deliverables**:
@@ -805,6 +823,8 @@ Sequencing rules:
 - **Scope**: small.
 
 #### Phase L1.DOCS: Documentation updates
+
+**Status**: shipped.
 
 - **Goal**: Update repo documentation so a new contributor or agent can discover L1 additions without reading source code.
 - **Prerequisites**: L1.1–L1.8.
@@ -824,6 +844,8 @@ Sequencing rules:
 
 #### Phase L1.E2E: L1 end-to-end test
 
+**Status**: shipped. See `tests/e2e/l1-evidence-flow.test.ts`.
+
 - **Goal**: Compiled-binary test of the full L1 flow.
 - **Prerequisites**: L1.1–L1.8.
 - **Deliverables**:
@@ -834,6 +856,8 @@ Sequencing rules:
 - **Scope**: medium.
 
 #### Phase L1.RELEASE: L1 release
+
+**Status**: shipped in v0.65.0.
 
 - **Goal**: Ship L1 to users.
 - **Prerequisites**: L1.E2E.
