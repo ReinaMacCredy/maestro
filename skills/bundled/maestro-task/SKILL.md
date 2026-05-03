@@ -156,6 +156,25 @@ maestro task update <id> --status completed \
 
 `--reason` is persisted verbatim. Short, factual, no secrets. `--strict` blocks completion on a broken contract verdict.
 
+## Evidence
+
+After each verification command (test, build, typecheck, lint), record
+the result so future sessions can see what was actually run:
+
+```bash
+maestro evidence record --task <id> --kind command \
+  --command "bun test" --exit 0
+```
+
+For manual checks that maestro can't witness, use `--kind manual-note`:
+
+```bash
+maestro evidence record --task <id> --kind manual-note \
+  --note "Verified UI on staging at 1280x800"
+```
+
+Recorded evidence appears in `maestro task show` and the Mission Control task detail pane.
+
 ## Discovery
 
 ```bash
