@@ -83,24 +83,22 @@ describe("postPrCheck — conclusion mapping", () => {
 // ─── POST vs PATCH routing ────────────────────────────────────────────────────
 
 describe("postPrCheck — POST vs PATCH routing", () => {
-  it("calls postCheckRun when no existingCheckRunId provided; returns new id", async () => {
+  it("calls postCheckRun when no existingCheckRunId provided", async () => {
     const state: FakePortState = { posted: [], patched: [], nextId: 42 };
-    const result = await postPrCheck(makeArgs(), makeDeps(state));
+    await postPrCheck(makeArgs(), makeDeps(state));
     expect(state.posted).toHaveLength(1);
     expect(state.patched).toHaveLength(0);
-    expect(result.checkRunId).toBe(42);
   });
 
-  it("calls patchCheckRun when existingCheckRunId is provided; returns same id", async () => {
+  it("calls patchCheckRun when existingCheckRunId is provided", async () => {
     const state: FakePortState = { posted: [], patched: [], nextId: 99 };
-    const result = await postPrCheck(
+    await postPrCheck(
       makeArgs("PASS", { existingCheckRunId: 7 }),
       makeDeps(state),
     );
     expect(state.posted).toHaveLength(0);
     expect(state.patched).toHaveLength(1);
     expect(state.patched[0]?.checkRunId).toBe(7);
-    expect(result.checkRunId).toBe(7);
   });
 });
 

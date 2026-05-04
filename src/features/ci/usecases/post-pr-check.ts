@@ -1,4 +1,4 @@
-import type { GithubApiPort } from "../ports/github-api.port.js";
+import type { CheckRunConclusion, GithubApiPort } from "../ports/github-api.port.js";
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
 
 export interface PostPrCheckDeps {
@@ -12,9 +12,7 @@ export interface PostPrCheckArgs {
   readonly existingCheckRunId?: number;
 }
 
-type CheckConclusion = "success" | "failure" | "action_required";
-
-function conclusionFor(decision: VerdictDecision): CheckConclusion {
+function conclusionFor(decision: VerdictDecision): CheckRunConclusion {
   switch (decision) {
     case "PASS":  return "success";
     case "FAIL":  return "failure";
@@ -35,33 +33,22 @@ function buildSummary(verdict: Verdict): string {
 export async function postPrCheck(
   args: PostPrCheckArgs,
   deps: PostPrCheckDeps,
-): Promise<{ checkRunId: number }> {
+): Promise<void> {
   const { verdict, repository, headSha, existingCheckRunId } = args;
 
-  const conclusion = conclusionFor(verdict.decision);
-  const title = `Maestro Verdict: ${verdict.decision}`;
-  const summary = buildSummary(verdict);
-
-  if (existingCheckRunId !== undefined) {
-    await deps.githubApi.patchCheckRun({
-      repository,
-      headSha,
-      name: "Maestro Verify",
-      conclusion,
-      title,
-      summary,
-      checkRunId: existingCheckRunId,
-    });
-    return { checkRunId: existingCheckRunId };
-  }
-
-  const ref = await deps.githubApi.postCheckRun({
+  const input = {
     repository,
     headSha,
     name: "Maestro Verify",
-    conclusion,
-    title,
-    summary,
-  });
-  return { checkRunId: ref.id };
+    conclusion: conclusionFor(verdict.decision),
+    title: `Maestro Verdict: ${verdict.decision}`,
+    summary: buildSummary(verdict),
+  };
+
+  if (existingCheckRunId !== undefined) {
+    await deps.githubApi.patchCheckRun({ ...input, checkRunId: existingCheckRunId });
+    return;
+  }
+
+  await deps.githubApi.postCheckRun(input);
 }

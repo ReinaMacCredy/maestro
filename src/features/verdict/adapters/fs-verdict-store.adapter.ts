@@ -60,7 +60,32 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
 
   async history(taskId: string): Promise<readonly Verdict[]> {
     assertSafeSegment(taskId, "task ID", TASK_ID_PATTERN, "tsk- followed by 6 hex characters");
-    const taskDir = this.taskDir(taskId);
+    const verdicts = await this.readTaskVerdicts(this.taskDir(taskId));
+    return verdicts.sort((a, b) => a.computedAt.localeCompare(b.computedAt));
+  }
+
+  async findByTreeSha(treeSha: string): Promise<readonly Verdict[]> {
+    const baseDir = this.dir();
+    let taskDirs;
+    try {
+      taskDirs = await readdir(baseDir, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    const matches: Verdict[] = [];
+    for (const taskEntry of taskDirs) {
+      if (!taskEntry.isDirectory() || !TASK_ID_PATTERN.test(taskEntry.name)) continue;
+      const verdicts = await this.readTaskVerdicts(join(baseDir, taskEntry.name));
+      for (const verdict of verdicts) {
+        if (verdict.subject?.tree_sha === treeSha) matches.push(verdict);
+      }
+    }
+
+    return matches.sort((a, b) => a.computedAt.localeCompare(b.computedAt));
+  }
+
+  private async readTaskVerdicts(taskDir: string): Promise<Verdict[]> {
     let entries;
     try {
       entries = await readdir(taskDir, { withFileTypes: true });
@@ -81,53 +106,9 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
       }
       if (raw === undefined) continue;
       const verdict = coerceVerdict(raw);
-      if (verdict !== undefined) {
-        verdicts.push(verdict);
-      }
+      if (verdict !== undefined) verdicts.push(verdict);
     }
-
-    // Sort chronologically by computedAt
-    return verdicts.sort((a, b) => a.computedAt.localeCompare(b.computedAt));
-  }
-
-  async findByTreeSha(treeSha: string): Promise<readonly Verdict[]> {
-    const baseDir = join(this.baseDir, MAESTRO_DIR, VERDICTS_DIR);
-    let taskDirs;
-    try {
-      taskDirs = await readdir(baseDir, { withFileTypes: true });
-    } catch {
-      return [];
-    }
-
-    const matches: Verdict[] = [];
-    for (const taskEntry of taskDirs) {
-      if (!taskEntry.isDirectory() || !TASK_ID_PATTERN.test(taskEntry.name)) continue;
-      const taskDir = join(baseDir, taskEntry.name);
-      let entries;
-      try {
-        entries = await readdir(taskDir, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-      for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-        const verdictId = entry.name.slice(0, -".json".length);
-        if (!VERDICT_ID_PATTERN.test(verdictId)) continue;
-        let raw: unknown;
-        try {
-          raw = await readJson<unknown>(join(taskDir, entry.name));
-        } catch {
-          continue;
-        }
-        if (raw === undefined) continue;
-        const verdict = coerceVerdict(raw);
-        if (verdict !== undefined && verdict.subject?.tree_sha === treeSha) {
-          matches.push(verdict);
-        }
-      }
-    }
-
-    return matches.sort((a, b) => a.computedAt.localeCompare(b.computedAt));
+    return verdicts;
   }
 }
 
@@ -150,6 +131,20 @@ function coerceVerdict(value: unknown): Verdict | undefined {
     || v["trustVerifier"] === null
   ) {
     return undefined;
+  }
+
+  // subject is optional; if present it must be an object with a string tree_sha
+  // so findByTreeSha's `=== treeSha` comparison can never silently match a
+  // malformed record.
+  const subject = v["subject"];
+  if (subject !== undefined) {
+    if (
+      typeof subject !== "object"
+      || subject === null
+      || typeof (subject as Record<string, unknown>).tree_sha !== "string"
+    ) {
+      return undefined;
+    }
   }
 
   return value as Verdict;

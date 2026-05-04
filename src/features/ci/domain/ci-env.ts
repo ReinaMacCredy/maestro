@@ -7,6 +7,7 @@ export interface CiEnv {
   readonly eventPath?: string;
   readonly outputPath?: string;
   readonly token?: string;
+  readonly testResultsFile?: string;
 }
 
 export function readCiEnv(
@@ -24,6 +25,7 @@ export function readCiEnv(
   const eventPath = env.GITHUB_EVENT_PATH;
   const outputPath = env.GITHUB_OUTPUT;
   const token = env.GITHUB_TOKEN;
+  const testResultsFile = env.CI_TEST_RESULTS_FILE;
 
   // Parse PR number from GITHUB_REF: refs/pull/<n>/merge or refs/pull/<n>/head
   let pr: number | undefined;
@@ -69,6 +71,7 @@ export function readCiEnv(
     ...(typeof eventPath === "string" && eventPath.length > 0 ? { eventPath } : {}),
     ...(typeof outputPath === "string" && outputPath.length > 0 ? { outputPath } : {}),
     ...(typeof token === "string" && token.length > 0 ? { token } : {}),
+    ...(typeof testResultsFile === "string" && testResultsFile.length > 0 ? { testResultsFile } : {}),
   };
 }
 

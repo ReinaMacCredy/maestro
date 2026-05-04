@@ -1,8 +1,10 @@
+export type CheckRunConclusion = "success" | "failure" | "action_required";
+
 export interface CheckRunInput {
   readonly repository: string;
   readonly headSha: string;
   readonly name: string;
-  readonly conclusion: "success" | "failure" | "action_required" | "neutral";
+  readonly conclusion: CheckRunConclusion;
   readonly title: string;
   readonly summary: string;
 }
