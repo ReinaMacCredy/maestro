@@ -1,10 +1,12 @@
 /**
- * Fake `gh` CLI shim for E2E tests that exercise the CI check-run path.
+ * Fake `gh` CLI shim for E2E tests that exercise the CI check-run path and
+ * auto-merge trigger path.
  *
  * Creates a tmp dir with a Node script named `gh` prepended to $PATH.
  * The script intercepts:
  *   gh api repos/<owner>/<repo>/check-runs          -X POST  --input -
  *   gh api repos/<owner>/<repo>/check-runs/<id>     -X PATCH --input -
+ *   gh pr merge <number> --auto --repo <owner>/<repo> [--merge|--squash|--rebase]
  *
  * State is persisted to a JSON file so tests can assert on it after running
  * the compiled CLI.
@@ -26,8 +28,20 @@ export interface CheckRunRecord {
   readonly body: Record<string, unknown>;
 }
 
+/**
+ * Record of a `gh pr merge --auto` invocation captured by the shim.
+ */
+export interface PrMergeRecord {
+  readonly pr: number;
+  readonly repo?: string;
+  readonly mergeMethod: "merge" | "squash" | "rebase";
+  /** Raw argv slice after `gh pr merge` */
+  readonly args: string[];
+}
+
 export interface FakeGhShimState {
   readonly checkRuns: CheckRunRecord[];
+  readonly prMergeCalls: PrMergeRecord[];
 }
 
 export interface FakeGhShim {
@@ -62,7 +76,6 @@ function buildShimSource(stateFile: string): string {
 "use strict";
 
 const fs = require("node:fs");
-const path = require("node:path");
 
 const STATE_FILE = '${escapedPath}';
 
@@ -70,7 +83,7 @@ function readState() {
   try {
     return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
   } catch {
-    return { checkRuns: [], nextId: 1 };
+    return { checkRuns: [], prMergeCalls: [], nextId: 1 };
   }
 }
 
@@ -87,10 +100,45 @@ function readStdin() {
 }
 
 const args = process.argv.slice(2);
+const subcommand = args[0];
 
-// Expect: api <endpoint> [-X POST|PATCH] [--input -]
-if (args[0] !== "api") {
-  process.stderr.write("fake-gh: unrecognized subcommand: " + args[0] + "\\n");
+// ─── gh pr merge <number> --auto --repo <repo> [--merge|--squash|--rebase] ────
+if (subcommand === "pr" && args[1] === "merge") {
+  const prArgRaw = args[2];
+  const pr = parseInt(prArgRaw, 10);
+  if (!pr || isNaN(pr)) {
+    process.stderr.write("fake-gh: pr merge: missing or invalid PR number\\n");
+    process.exit(1);
+  }
+
+  const mergeArgs = args.slice(2);
+  let repo = undefined;
+  let mergeMethod = "merge";
+
+  for (let i = 0; i < mergeArgs.length; i++) {
+    if (mergeArgs[i] === "--repo" && mergeArgs[i + 1]) {
+      repo = mergeArgs[i + 1];
+      i++;
+    } else if (mergeArgs[i] === "--squash") {
+      mergeMethod = "squash";
+    } else if (mergeArgs[i] === "--rebase") {
+      mergeMethod = "rebase";
+    } else if (mergeArgs[i] === "--merge") {
+      mergeMethod = "merge";
+    }
+  }
+
+  const state = readState();
+  if (!state.prMergeCalls) state.prMergeCalls = [];
+  state.prMergeCalls.push({ pr, repo, mergeMethod, args: mergeArgs });
+  writeState(state);
+  process.stdout.write("Auto-merge enabled for PR #" + pr + "\\n");
+  process.exit(0);
+}
+
+// ─── gh api <endpoint> ─────────────────────────────────────────────────────────
+if (subcommand !== "api") {
+  process.stderr.write("fake-gh: unrecognized subcommand: " + subcommand + "\\n");
   process.exit(1);
 }
 
@@ -194,7 +242,7 @@ export async function createFakeGhShim(): Promise<FakeGhShim> {
   await chmod(shimScript, 0o755);
 
   // Initialise empty state so readState() never throws before first call.
-  await writeFile(stateFile, JSON.stringify({ checkRuns: [], nextId: 1 }, null, 2));
+  await writeFile(stateFile, JSON.stringify({ checkRuns: [], prMergeCalls: [], nextId: 1 }, null, 2));
 
   return {
     binDir,
