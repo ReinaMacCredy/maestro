@@ -7,6 +7,8 @@ import type { EvidenceRow } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/index.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { RunStateStorePort, RunStateDelta } from "@/features/task/ports/run-state-store.port.js";
+import type { RunState } from "@/features/task/domain/run-state.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
@@ -153,12 +155,35 @@ function fakeGitAnchor(changedPaths: string[] = [], addedLines: string[] = []): 
   };
 }
 
+function fakeRunStateStore(
+  state?: RunState,
+): { store: RunStateStorePort; incremented: RunStateDelta[] } {
+  const incremented: RunStateDelta[] = [];
+  const store: RunStateStorePort = {
+    read: async () => state,
+    write: async () => {},
+    increment: async (_taskId, delta) => {
+      incremented.push(delta);
+      return {
+        schemaVersion: 1,
+        taskId: _taskId,
+        retryCount: (state?.retryCount ?? 0) + (delta.retryCount ?? 0),
+        wallClockElapsedSeconds: (state?.wallClockElapsedSeconds ?? 0) + (delta.wallClockElapsedSeconds ?? 0),
+        lastUpdatedAt: new Date().toISOString(),
+      };
+    },
+  };
+  return { store, incremented };
+}
+
 function makeDeps(overrides: Partial<RequestVerdictDeps> = {}): RequestVerdictDeps {
   const fakeVerdictResult = makeVerdict();
   const { store: verdictStore } = fakeVerdictStore();
+  const { store: runStateStore } = fakeRunStateStore();
 
   return {
     contractVersionStore: fakeContractVersionStore(makeContract()),
+    runStateStore,
     evidenceStore: fakeEvidenceStore(),
     verdictStore,
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
@@ -290,5 +315,115 @@ describe("requestVerdict", () => {
     });
     await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
     expect(usedEffective).toBe(true);
+  });
+
+  // ─── L4.4: cost-budget and run-state ─────────────────────────────────────────
+
+  it("run-state at retryCount >= maxRetries produces BLOCK verdict", async () => {
+    const contract = makeContract({
+      costBudget: { maxRetries: 3, maxWallClockSeconds: 3600 },
+    });
+    const runState: RunState = {
+      schemaVersion: 1,
+      taskId: "tsk-aaaaaa",
+      retryCount: 3,
+      wallClockElapsedSeconds: 0,
+      lastUpdatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const { store: runStateStore } = fakeRunStateStore(runState);
+
+    // Override computeRisk to return BLOCK when costBudgetExhausted is true
+    const deps = makeDeps({
+      contractVersionStore: fakeContractVersionStore(contract),
+      runStateStore,
+      riskServices: {
+        computeRisk: (input) => {
+          if (input.costBudgetExhausted === true) {
+            return makeVerdict({ decision: "BLOCK" });
+          }
+          return makeVerdict({ decision: "PASS" });
+        },
+        deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
+      },
+    });
+
+    const result = await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+    expect(result.decision).toBe("BLOCK");
+  });
+
+  it("FAIL verdict triggers runStateStore.increment with retryCount: 1", async () => {
+    const { store: runStateStore, incremented } = fakeRunStateStore();
+    const deps = makeDeps({
+      runStateStore,
+      riskServices: {
+        computeRisk: () => makeVerdict({ decision: "FAIL" }),
+        deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
+      },
+    });
+
+    await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+    expect(incremented).toHaveLength(1);
+    expect(incremented[0]?.retryCount).toBe(1);
+  });
+
+  it("HUMAN verdict triggers runStateStore.increment with retryCount: 1", async () => {
+    const { store: runStateStore, incremented } = fakeRunStateStore();
+    const deps = makeDeps({
+      runStateStore,
+      riskServices: {
+        computeRisk: () => makeVerdict({ decision: "HUMAN" }),
+        deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
+      },
+    });
+
+    await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+    expect(incremented).toHaveLength(1);
+    expect(incremented[0]?.retryCount).toBe(1);
+  });
+
+  it("PASS verdict does NOT trigger runStateStore.increment", async () => {
+    const { store: runStateStore, incremented } = fakeRunStateStore();
+    const deps = makeDeps({
+      runStateStore,
+      riskServices: {
+        computeRisk: () => makeVerdict({ decision: "PASS" }),
+        deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
+      },
+    });
+
+    await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+    expect(incremented).toHaveLength(0);
+  });
+
+  it("BLOCK verdict does NOT trigger runStateStore.increment", async () => {
+    const { store: runStateStore, incremented } = fakeRunStateStore();
+    const deps = makeDeps({
+      runStateStore,
+      riskServices: {
+        computeRisk: () => makeVerdict({ decision: "BLOCK" }),
+        deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
+      },
+    });
+
+    await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+    expect(incremented).toHaveLength(0);
+  });
+
+  it("passes costBudgetExhausted=false to computeRisk when run-state is undefined", async () => {
+    let capturedInput: unknown;
+    const { store: runStateStore } = fakeRunStateStore(undefined);
+    const deps = makeDeps({
+      runStateStore,
+      riskServices: {
+        computeRisk: (input) => {
+          capturedInput = input;
+          return makeVerdict({ decision: "PASS" });
+        },
+        deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
+      },
+    });
+
+    await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+    expect((capturedInput as { costBudgetExhausted?: boolean }).costBudgetExhausted).toBe(false);
   });
 });

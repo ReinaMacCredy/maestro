@@ -54,3 +54,5 @@ feedback.jsonl
 .maestro/policies/.pending-loosenings.json
 # Verdict store — derived, like evidence (re-computable from contract+diff+evidence)
 .maestro/verdicts/
+# Run-state — derived per-task execution counters (retries, wall-clock, tokens)
+.maestro/runs/

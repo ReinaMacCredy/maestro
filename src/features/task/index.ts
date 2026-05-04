@@ -58,6 +58,14 @@ export { FsCandidateStoreAdapter } from "./adapters/fs-candidate-store.adapter.j
 export { FsTaskContinuationStoreAdapter } from "./adapters/fs-task-continuation-store.adapter.js";
 export { FsTaskContinuationHistoryStoreAdapter } from "./adapters/fs-task-continuation-history-store.adapter.js";
 export type { Contract, RiskClass } from "./domain/contract/contract-types.js";
+export type { RunState } from "./domain/run-state.js";
+export type { RunStateStorePort, RunStateDelta } from "./ports/run-state-store.port.js";
+export { FsRunStateStoreAdapter } from "./adapters/fs-run-state-store.adapter.js";
+export {
+  checkCostBudget,
+  type CostBudgetCheck,
+  type CostBudgetExhaustionReason,
+} from "./usecases/check-cost-budget.js";
 
 export { createTask } from "./usecases/create-task.usecase.js";
 export { showTask } from "./usecases/show-task.usecase.js";

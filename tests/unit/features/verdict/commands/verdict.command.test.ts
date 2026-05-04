@@ -5,6 +5,7 @@ import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.j
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
@@ -145,9 +146,24 @@ function fakeRiskServices(verdict: Verdict): RiskServices {
   };
 }
 
+function fakeRunStateStore(): RunStateStorePort {
+  return {
+    read: async () => undefined,
+    write: async () => {},
+    increment: async (_taskId, _delta) => ({
+      schemaVersion: 1,
+      taskId: _taskId,
+      retryCount: 0,
+      wallClockElapsedSeconds: 0,
+      lastUpdatedAt: new Date().toISOString(),
+    }),
+  };
+}
+
 interface ServicesLike {
   verdictStore: VerdictStorePort;
   contractVersionStore: ContractVersionStorePort;
+  runStateStore: RunStateStorePort;
   evidenceStore: EvidenceStorePort;
   getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
@@ -164,6 +180,7 @@ function makeServices(verdict: Verdict, initialVerdicts: Verdict[] = []): Servic
   return {
     verdictStore: fakeVerdictStore(initialVerdicts),
     contractVersionStore: fakeContractVersionStore(makeContract()),
+    runStateStore: fakeRunStateStore(),
     evidenceStore: fakeEvidenceStore(),
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),

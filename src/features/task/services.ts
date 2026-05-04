@@ -5,6 +5,7 @@ import type { TaskContinuationHistoryPort } from "./ports/task-continuation-hist
 import type { ContractStorePort } from "./ports/contract-store.port.js";
 import type { ContractVersionStorePort } from "./ports/contract-version-store.port.js";
 import type { GitAnchorPort } from "./ports/git-anchor.port.js";
+import type { RunStateStorePort } from "./ports/run-state-store.port.js";
 import {
   buildContractWorkflows,
   type ContractWorkflows,
@@ -17,6 +18,7 @@ import { FsNowMdWriterAdapter } from "./adapters/now-md-writer.adapter.js";
 import { FsContractStoreAdapter } from "./adapters/fs-contract-store.adapter.js";
 import { FsContractVersionStoreAdapter } from "./adapters/fs-contract-version-store.adapter.js";
 import { ShellGitAnchorAdapter } from "./adapters/git-anchor.adapter.js";
+import { FsRunStateStoreAdapter } from "./adapters/fs-run-state-store.adapter.js";
 
 export interface TaskServices {
   readonly taskStore: TaskStorePort;
@@ -28,6 +30,7 @@ export interface TaskServices {
   readonly taskContinuationStore: TaskContinuationStorePort;
   readonly taskContinuationHistory: TaskContinuationHistoryPort;
   readonly taskNowMdWriter: FsNowMdWriterAdapter;
+  readonly runStateStore: RunStateStorePort;
 }
 
 export function buildTaskServices(projectDir: string): TaskServices {
@@ -46,5 +49,6 @@ export function buildTaskServices(projectDir: string): TaskServices {
     taskContinuationStore: new FsTaskContinuationStoreAdapter(projectDir),
     taskContinuationHistory: new FsTaskContinuationHistoryStoreAdapter(projectDir),
     taskNowMdWriter: new FsNowMdWriterAdapter(projectDir, contractStore),
+    runStateStore: new FsRunStateStoreAdapter(projectDir),
   };
 }

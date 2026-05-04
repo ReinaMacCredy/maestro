@@ -1,5 +1,7 @@
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
+import { checkCostBudget } from "@/features/task/index.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { PolicyServices } from "@/features/policy/services.js";
@@ -11,6 +13,7 @@ import type { VerdictStorePort } from "../ports/storage.js";
 
 export interface RequestVerdictDeps {
   readonly contractVersionStore: ContractVersionStorePort;
+  readonly runStateStore: RunStateStorePort;
   readonly evidenceStore: EvidenceStorePort;
   readonly verdictStore: VerdictStorePort;
   readonly getEffectiveRiskPolicy: PolicyServices["getEffectiveRiskPolicy"];
@@ -32,6 +35,11 @@ export async function requestVerdict(
   if (contract === undefined) {
     throw new Error(`No contract found for task ${taskId}. Run 'maestro contract amend' first.`);
   }
+
+  // Read current run-state early so cost-budget exhaustion is checked before
+  // any expensive git/policy operations (BLOCK is the first decision step).
+  const runState = await deps.runStateStore.read(taskId);
+  const costBudgetExhausted = checkCostBudget(contract, runState).exhausted;
 
   const baseRef = typeof base === "string" && base.length > 0
     ? base
@@ -70,9 +78,23 @@ export async function requestVerdict(
     releasePolicy,
     derivedRiskClass: derivedRiskResult.class,
     amendmentCount: contract.amendments.length,
+    costBudgetExhausted,
   });
 
   await deps.verdictStore.write(taskId, verdict);
+
+  // Increment retryCount on non-terminal decisions so the cost-budget gate
+  // can BLOCK on the next attempt when maxRetries is reached.
+  // PASS is terminal (done); BLOCK means already exhausted — do not double-count.
+  // Failure here is non-fatal: verdict is already persisted and append-only.
+  if (verdict.decision === "FAIL" || verdict.decision === "HUMAN") {
+    try {
+      await deps.runStateStore.increment(taskId, { retryCount: 1 });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[warn] failed to increment run-state retryCount for ${taskId}: ${msg}\n`);
+    }
+  }
 
   return verdict;
 }
