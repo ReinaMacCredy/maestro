@@ -16,6 +16,7 @@ You are handing off the current task to another session via maestro's native lau
 
 1. `maestro` must be on PATH. If missing, tell the user to install maestro and stop.
 2. For mission/task linkage, the current working tree (or an ancestor) must contain `.maestro/`. Handoffs work outside maestro projects too, but `refs` will be empty.
+3. Before requesting a handoff for task work, run the verification protocol in `maestro-verify`. The receiving session inherits the task's contract and Evidence; hand off after `maestro task verify` is clean and `maestro verdict request` has been run so the receiver can see the current Verdict.
 
 ## What a maestro handoff is
 

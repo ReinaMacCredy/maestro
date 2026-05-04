@@ -86,6 +86,8 @@ For each phase, include:
 - Prefer the cheapest check that can falsify the phase.
 - If later implementation should be test-first, identify the test surfaces up front.
 
+For non-trivial tasks, include a plan file in the hand-off so the executing agent can run `maestro plan check --task <id> --plan-file <path>` before writing code. Use `maestro plan check` per the protocol in `maestro-verify`.
+
 ## Surface risks and cut lines
 
 - Identify what could derail the plan.
