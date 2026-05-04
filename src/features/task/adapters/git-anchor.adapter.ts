@@ -260,6 +260,15 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       .filter((line) => line.startsWith("+") && !line.startsWith("+++"));
   }
 
+  async resolveTreeSha(cwd: string, ref?: string): Promise<string> {
+    const target = ref ?? "HEAD";
+    const result = await execArgv(["git", "rev-parse", `${target}^{tree}`], { cwd });
+    if (result.exitCode !== 0 || !result.stdout) {
+      throw new Error(`Failed to resolve tree SHA for ref "${target}": ${result.stderr || "unknown error"}`);
+    }
+    return result.stdout;
+  }
+
   private async collectMergeSourcedFiles(cwd: string, anchor: string, head: string): Promise<readonly string[]> {
     const merges = await execArgv(["git", "rev-list", "--merges", `${anchor}..${head}`], { cwd });
     if (merges.exitCode !== 0 || !merges.stdout) {

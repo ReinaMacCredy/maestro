@@ -84,6 +84,8 @@ function fakeVerdictStore(verdict: Verdict): VerdictStorePort {
     readLatest: async () => verdict,
     readVersion: async () => verdict,
     history: async () => [verdict],
+    findByTreeSha: async (treeSha) =>
+      verdict.subject?.tree_sha === treeSha ? [verdict] : [],
   };
 }
 
@@ -112,6 +114,7 @@ function fakeGitAnchor(): GitAnchorPort {
     windowsOverlap: async () => false,
     collectChangedPaths: async () => [],
     collectAddedLines: async () => [],
+    resolveTreeSha: async () => "deadbeef1234567890abcdef1234567890abcdef",
   };
 }
 

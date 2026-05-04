@@ -97,8 +97,8 @@ describe("runCiVerify", () => {
     expect(calls[0]?.base).toBe("origin/develop");
   });
 
-  it("env.pr is present but does not affect requestVerdict call directly", async () => {
-    const calls: { taskId: string }[] = [];
+  it("passes pr from args to requestVerdict (args.pr takes precedence over env.pr)", async () => {
+    const calls: { taskId: string; pr?: number }[] = [];
     const expectedVerdict = makeVerdict("PASS");
 
     const deps: RunCiVerifyDeps = {
@@ -106,7 +106,7 @@ describe("runCiVerify", () => {
       evidenceStore: fakeEvidenceStore(),
       verdict: {
         request: async (args, _deps) => {
-          calls.push({ taskId: args.taskId });
+          calls.push({ taskId: args.taskId, pr: args.pr });
           return expectedVerdict;
         },
       },
@@ -115,6 +115,28 @@ describe("runCiVerify", () => {
 
     await runCiVerify({ taskId: "tsk-aaaaaa", pr: 99 }, deps);
     expect(calls[0]?.taskId).toBe("tsk-aaaaaa");
+    // args.pr (99) takes precedence over env.pr (55)
+    expect(calls[0]?.pr).toBe(99);
+  });
+
+  it("passes pr from env.pr when args.pr is not provided", async () => {
+    const calls: { pr?: number }[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ pr: 42 }),
+      evidenceStore: fakeEvidenceStore(),
+      verdict: {
+        request: async (args, _deps) => {
+          calls.push({ pr: args.pr });
+          return expectedVerdict;
+        },
+      },
+      verdictDeps: makeVerdictDeps(),
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
+    expect(calls[0]?.pr).toBe(42);
   });
 
   it("injects CI test results as witnessed-by-ci command evidence when testResultsPath provided", async () => {

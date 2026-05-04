@@ -33,4 +33,5 @@ export interface GitAnchorPort {
   }): Promise<boolean | undefined>;
   collectChangedPaths(repoRoot: string, base: string, head: string): Promise<readonly string[]>;
   collectAddedLines(repoRoot: string, base: string, head: string): Promise<readonly string[]>;
+  resolveTreeSha(cwd: string, ref?: string): Promise<string>;
 }

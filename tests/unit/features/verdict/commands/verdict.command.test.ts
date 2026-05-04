@@ -85,6 +85,8 @@ function fakeVerdictStore(verdicts: Verdict[] = []): VerdictStorePort {
     },
     readVersion: async (_taskId, id) => map.get(id),
     history: async () => [...map.values()].sort((a, b) => a.computedAt.localeCompare(b.computedAt)),
+    findByTreeSha: async (treeSha) =>
+      [...map.values()].filter((v) => v.subject?.tree_sha === treeSha),
   };
 }
 
@@ -105,7 +107,7 @@ function fakeEvidenceStore(): EvidenceStorePort {
   };
 }
 
-function fakeGitAnchor(): GitAnchorPort {
+function fakeGitAnchor(treeSha = "deadbeef1234567890abcdef1234567890abcdef"): GitAnchorPort {
   return {
     resolveRepoRoot: async (cwd) => cwd,
     resolveHeadCommit: async () => "abc1234",
@@ -113,6 +115,7 @@ function fakeGitAnchor(): GitAnchorPort {
     windowsOverlap: async () => false,
     collectChangedPaths: async () => [],
     collectAddedLines: async () => [],
+    resolveTreeSha: async () => treeSha,
   };
 }
 
@@ -175,7 +178,11 @@ interface ServicesLike {
   projectRoot: string;
 }
 
-function makeServices(verdict: Verdict, initialVerdicts: Verdict[] = []): ServicesLike {
+function makeServices(
+  verdict: Verdict,
+  initialVerdicts: Verdict[] = [],
+  treeSha = "deadbeef1234567890abcdef1234567890abcdef",
+): ServicesLike {
   const riskServices = fakeRiskServices(verdict);
   return {
     verdictStore: fakeVerdictStore(initialVerdicts),
@@ -188,7 +195,7 @@ function makeServices(verdict: Verdict, initialVerdicts: Verdict[] = []): Servic
     computeRisk: riskServices.computeRisk,
     deriveRiskClassFromDiff: riskServices.deriveRiskClassFromDiff,
     runTrustVerifier: async () => ({ findings: [] }),
-    gitAnchor: fakeGitAnchor(),
+    gitAnchor: fakeGitAnchor(treeSha),
     projectRoot: "/tmp/test-project",
   };
 }
@@ -254,6 +261,44 @@ describe("verdict show", () => {
     const parsed = JSON.parse(logs.join("")) as Verdict;
     expect(parsed.id).toBe(v1.id);
     expect(parsed.decision).toBe("PASS");
+  });
+
+  // ─── L5.3: --pr filter by tree SHA ────────────────────────────────────────────
+
+  it("--pr finds the matching verdict by tree SHA and PR number", async () => {
+    const treeSha = "aabbccdd1234567890aabbccdd1234567890aabb";
+    // Verdict has subject with matching tree SHA and PR 5
+    const verdict = makeVerdict("PASS", {
+      taskId: "tsk-aaaaaa",
+      subject: { tree_sha: treeSha, pr: 5 },
+    });
+    // gitAnchor.resolveTreeSha returns the same treeSha
+    const services = makeServices(verdict, [verdict], treeSha);
+    const program = makeProgram(services);
+    const { logs } = captureConsole();
+
+    await program.parseAsync(["node", "maestro", "verdict", "show", "--task", "tsk-aaaaaa", "--pr", "5", "--json"]);
+
+    const parsed = JSON.parse(logs.join("")) as Verdict;
+    expect(parsed.id).toBe(verdict.id);
+    expect(parsed.decision).toBe("PASS");
+  });
+
+  it("--pr returns 'no verdict found' when tree SHA does not match any stored verdict", async () => {
+    const storedTreeSha = "0000000000000000000000000000000000000000";
+    const currentTreeSha = "ffffffffffffffffffffffffffffffffffffffff";
+    const verdict = makeVerdict("PASS", {
+      taskId: "tsk-aaaaaa",
+      subject: { tree_sha: storedTreeSha, pr: 5 },
+    });
+    // gitAnchor resolves a DIFFERENT tree SHA than what is stored
+    const services = makeServices(verdict, [verdict], currentTreeSha);
+    const program = makeProgram(services);
+    const { logs } = captureConsole();
+
+    await program.parseAsync(["node", "maestro", "verdict", "show", "--task", "tsk-aaaaaa", "--pr", "5"]);
+
+    expect(logs.join("\n")).toContain("No verdict found for PR 5");
   });
 });
 

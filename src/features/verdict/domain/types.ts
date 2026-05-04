@@ -1,5 +1,10 @@
 import type { RiskClass } from "@/features/task/index.js";
 
+export interface VerdictSubject {
+  readonly pr?: number;
+  readonly tree_sha: string;
+}
+
 export type VerdictDecision = "PASS" | "FAIL" | "HUMAN" | "BLOCK";
 
 export type VerdictCategory =
@@ -33,6 +38,7 @@ export interface Verdict {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly taskId: string;
+  readonly subject?: VerdictSubject;
   readonly contractVersion: number;
   readonly computedAt: string;
   readonly decision: VerdictDecision;

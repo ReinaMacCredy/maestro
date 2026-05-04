@@ -1,5 +1,6 @@
 export type {
   Verdict,
+  VerdictSubject,
   VerdictDecision,
   VerdictCategory,
   VerdictReason,

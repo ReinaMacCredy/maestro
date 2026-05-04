@@ -66,11 +66,37 @@ export function registerVerdictCommand(
     .requiredOption("--task <id>", "Task ID")
     .option("--version <verdictId>", "Show a specific verdict by ID (default: latest)")
     .option("--latest", "Show the latest verdict (default)")
+    // --pr is a query-time filter: when provided alongside --task, the latest
+    // verdict for that task is filtered by tree SHA + PR number. The tree SHA
+    // is resolved from the current HEAD, so this reflects the current worktree
+    // content. Requires --task to scope the search.
+    .option("--pr <number>", "Filter by PR number (finds verdict by current HEAD tree SHA)", parseInt)
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const taskId: string = opts.task;
+
+      // --pr: resolve current tree SHA and find matching verdicts
+      if (typeof opts.pr === "number") {
+        const treeSha = await services.gitAnchor.resolveTreeSha(process.cwd());
+        const matches = await services.verdictStore.findByTreeSha(treeSha);
+        const filtered = matches.filter(
+          (v) => v.subject?.pr === opts.pr && v.taskId === taskId,
+        );
+        if (filtered.length === 0) {
+          console.log(`No verdict found for PR ${opts.pr} at tree SHA ${treeSha}`);
+          return;
+        }
+        // Return the latest match (highest computedAt)
+        const verdict = filtered[filtered.length - 1];
+        if (isJson) {
+          console.log(JSON.stringify(verdict, null, 2));
+        } else {
+          printVerdict(verdict!);
+        }
+        return;
+      }
 
       let verdict: Verdict | undefined;
 

@@ -27,6 +27,7 @@ function makeVerdict(overrides: Partial<Verdict> = {}): Verdict {
       warns: 0,
       infos: 0,
     },
+    subject: overrides.subject,
   };
 }
 
@@ -139,6 +140,51 @@ describe("FsVerdictStoreAdapter", () => {
 
       const list = await store.history("tsk-aaaaaa");
       expect(list.map((v) => v.id)).toEqual([real.id]);
+    });
+  });
+
+  describe("findByTreeSha", () => {
+    it("returns an empty array when no verdicts directory exists", async () => {
+      const result = await store.findByTreeSha("abc123");
+      expect(result).toEqual([]);
+    });
+
+    it("returns verdicts whose subject.tree_sha matches", async () => {
+      const treeSha = "aabbccdd1234567890aabbccdd1234567890aabb";
+      const match = makeVerdict({
+        taskId: "tsk-aaaaaa",
+        subject: { tree_sha: treeSha, pr: 1 },
+      });
+      const noMatch = makeVerdict({
+        taskId: "tsk-aaaaaa",
+        subject: { tree_sha: "0000000000000000000000000000000000000000" },
+      });
+      await store.write("tsk-aaaaaa", match);
+      await store.write("tsk-aaaaaa", noMatch);
+
+      const result = await store.findByTreeSha(treeSha);
+      expect(result.map((v) => v.id)).toEqual([match.id]);
+    });
+
+    it("returns verdicts across multiple tasks with matching tree SHA", async () => {
+      const treeSha = "1111111111111111111111111111111111111111";
+      const v1 = makeVerdict({ taskId: "tsk-aaaaaa", subject: { tree_sha: treeSha } });
+      const v2 = makeVerdict({ taskId: "tsk-bbbbbb", subject: { tree_sha: treeSha } });
+      await store.write("tsk-aaaaaa", v1);
+      await store.write("tsk-bbbbbb", v2);
+
+      const result = await store.findByTreeSha(treeSha);
+      const ids = result.map((v) => v.id).sort();
+      expect(ids).toContain(v1.id);
+      expect(ids).toContain(v2.id);
+    });
+
+    it("returns empty for verdicts without a subject field (v1 legacy rows)", async () => {
+      const legacy = makeVerdict({ taskId: "tsk-aaaaaa" }); // no subject
+      await store.write("tsk-aaaaaa", legacy);
+
+      const result = await store.findByTreeSha("anytreeshavalue");
+      expect(result).toEqual([]);
     });
   });
 });

@@ -8,7 +8,7 @@ import type { PolicyServices } from "@/features/policy/services.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
 import type { RiskServices } from "@/features/risk/services.js";
 import type { VerifyServices } from "@/features/verify/services.js";
-import type { Verdict } from "../domain/types.js";
+import type { Verdict, VerdictSubject } from "../domain/types.js";
 import type { VerdictStorePort } from "../ports/storage.js";
 
 export interface RequestVerdictDeps {
@@ -26,7 +26,7 @@ export interface RequestVerdictDeps {
 }
 
 export async function requestVerdict(
-  args: { readonly taskId: string; readonly base?: string },
+  args: { readonly taskId: string; readonly base?: string; readonly pr?: number },
   deps: RequestVerdictDeps,
 ): Promise<Verdict> {
   const { taskId, base } = args;
@@ -70,7 +70,7 @@ export async function requestVerdict(
     riskPolicy,
   );
 
-  const verdict = deps.riskServices.computeRisk({
+  const rawVerdict = deps.riskServices.computeRisk({
     contract,
     trustFindings: verifierResult.findings,
     evidenceRows: evidenceRows as Parameters<RiskServices["computeRisk"]>[0]["evidenceRows"],
@@ -82,6 +82,12 @@ export async function requestVerdict(
     costBudgetExhausted,
     matchedRiskPolicySignal: derivedRiskResult.matchedRow.signal,
   });
+
+  // Stamp subject with tree SHA so verdicts are bound to diff content,
+  // not a specific commit hash. Squash survives; force-push invalidates.
+  const treeSha = await deps.gitAnchor.resolveTreeSha(cwd);
+  const subject: VerdictSubject = { tree_sha: treeSha, ...(args.pr !== undefined ? { pr: args.pr } : {}) };
+  const verdict: Verdict = { ...rawVerdict, subject };
 
   await deps.verdictStore.write(taskId, verdict);
 

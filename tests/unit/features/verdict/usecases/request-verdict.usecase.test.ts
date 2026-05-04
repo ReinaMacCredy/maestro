@@ -132,6 +132,7 @@ function fakeVerdictStore(): { store: VerdictStorePort; written: Verdict[] } {
     readLatest: async () => written[written.length - 1],
     readVersion: async (_taskId, id) => written.find((v) => v.id === id),
     history: async () => [...written],
+    findByTreeSha: async (treeSha) => written.filter((v) => v.subject?.tree_sha === treeSha),
   };
   return { store, written };
 }
@@ -144,7 +145,7 @@ function fakeEvidenceStore(rows: EvidenceRow[] = []): EvidenceStorePort {
   };
 }
 
-function fakeGitAnchor(changedPaths: string[] = [], addedLines: string[] = []): GitAnchorPort {
+function fakeGitAnchor(changedPaths: string[] = [], addedLines: string[] = [], treeSha = "deadbeef1234567890abcdef1234567890abcdef"): GitAnchorPort {
   return {
     resolveRepoRoot: async (cwd) => cwd,
     resolveHeadCommit: async () => "abc1234",
@@ -152,6 +153,7 @@ function fakeGitAnchor(changedPaths: string[] = [], addedLines: string[] = []): 
     windowsOverlap: async () => false,
     collectChangedPaths: async () => changedPaths,
     collectAddedLines: async () => addedLines,
+    resolveTreeSha: async () => treeSha,
   };
 }
 
@@ -407,6 +409,35 @@ describe("requestVerdict", () => {
 
     await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
     expect(incremented).toHaveLength(0);
+  });
+
+  // ─── L5.3: subject stamping ───────────────────────────────────────────────────
+
+  it("stamps subject.tree_sha matching the gitAnchor stub return value", async () => {
+    const expectedTreeSha = "1a2b3c4d5e6f1a2b3c4d5e6f1a2b3c4d5e6f1a2b";
+    const { store: verdictStore, written } = fakeVerdictStore();
+    const deps = makeDeps({
+      verdictStore,
+      gitAnchor: fakeGitAnchor([], [], expectedTreeSha),
+    });
+    await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+    expect(written[0]?.subject?.tree_sha).toBe(expectedTreeSha);
+  });
+
+  it("stamps subject.pr when pr is passed in args", async () => {
+    const { store: verdictStore, written } = fakeVerdictStore();
+    const deps = makeDeps({ verdictStore });
+    await requestVerdict({ taskId: "tsk-aaaaaa", pr: 77 }, deps);
+    expect(written[0]?.subject?.pr).toBe(77);
+  });
+
+  it("omits subject.pr when pr is not passed", async () => {
+    const { store: verdictStore, written } = fakeVerdictStore();
+    const deps = makeDeps({ verdictStore });
+    await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+    expect(written[0]?.subject?.pr).toBeUndefined();
+    // tree_sha is always present
+    expect(typeof written[0]?.subject?.tree_sha).toBe("string");
   });
 
   it("passes costBudgetExhausted=false to computeRisk when run-state is undefined", async () => {

@@ -5,4 +5,5 @@ export interface VerdictStorePort {
   readLatest(taskId: string): Promise<Verdict | undefined>;
   readVersion(taskId: string, verdictId: string): Promise<Verdict | undefined>;
   history(taskId: string): Promise<readonly Verdict[]>;
+  findByTreeSha(treeSha: string): Promise<readonly Verdict[]>;
 }
