@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.67.0 - L3 — Risk Verdict + Policy + Witness Levels
+
+- New verbs: `maestro verdict show`, `maestro verdict request`,
+  `maestro policy check`, `maestro policy pending`, `maestro task proof`.
+- New artifact: `Verdict` (`PASS` | `FAIL` | `HUMAN` | `BLOCK`) stored under
+  `.maestro/verdicts/<task-id>/<verdict-id>.json` (gitignored, derived).
+  `verdict request` exit codes: 0 PASS, 1 FAIL, 2 HUMAN, 3 BLOCK.
+- New policy files (provisioned by `maestro init`):
+  `.maestro/policies/risk.yaml` (Signal → Derived class table — risk.yaml
+  absent falls back to the canonical ROADMAP-default policy),
+  `.maestro/policies/autopilot.yaml` (per-class auto-merge + required witness
+  level), `.maestro/policies/release.yaml`.
+- Risk Engine (`src/features/risk/`): `deriveRiskClassFromDiff` is
+  deterministic; `effectiveRiskClass = max(contract.riskClass, derived)` —
+  per Rule 1, the agent can only raise the class, never lower it.
+- ProofMap (`src/features/verify/usecases/proof-map.ts`): joins Spec
+  acceptance criteria with Evidence rows on `criterion_id` and reports
+  uncovered criteria.
+- Asymmetric policy editing (Rule 9): tightenings (raises required witness,
+  narrows scope, disables auto-merge) take effect at commit time; loosenings
+  (lowers witness, widens scope, enables auto-merge) are pending for 30 days
+  from commit time. `policy pending` lists currently-pending loosenings.
+  `.maestro/policies/.pending-loosenings.json` is a gitignored derived cache.
+- Evidence schema bumped 2 → 3; reader still accepts {1, 2, 3}. v1 rows
+  missing `witness_level` are synthesized to `agent-claimed-locally` on read;
+  v2 and v3 rows must carry the field.
+- Skill updates: `maestro-plan` is risk-class-aware (proposing `low` for
+  sensitive-path / manifest / CI / policy diffs is futile);
+  `maestro-task` runs `task verify` + `verdict request` before claiming
+  complete and routes FAIL/HUMAN/BLOCK appropriately.
+- Compat: additive — existing contracts and evidence unchanged; `risk.yaml`
+  absent falls back to the ROADMAP-default policy. BLOCK on cost-budget
+  exists in the engine but the input is not wired in L3 (lands at L4.4).
+
 ## 0.66.0 - L2 — Contract-Required + Scope Check
 
 - New verbs: `maestro contract show/amend/history`, `maestro task verify`,
