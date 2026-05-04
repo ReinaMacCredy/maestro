@@ -41,6 +41,10 @@ maestro/
 | Versioned contract storage and amendments | `src/features/task/domain/contract/` | `ContractVersionStorePort`; `contract show/amend/history` verbs enforce `amendmentBudget` (Rules 3–7) |
 | Risk Engine (L3) | `src/features/risk/` | `computeRisk` and `deriveRiskClassFromDiff` implement the deterministic signal-to-risk-class mapping; `risk-class-order.ts` compares levels |
 | Verdict types, store, and commands (L3) | `src/features/verdict/` | `Verdict` domain types, file-system store adapter, `verdict request` use-case (decision tree: PASS/FAIL/HUMAN/BLOCK), `verdict show` and `verdict request` commands |
+| Plan-check use-case + CLI (L4) | `src/features/plan/` | `checkPlan` use-case at `usecases/check-plan.ts`; three deterministic checks: `scope-widens`, `missing-proof`, `risk-class-too-low`; `plan-check.command.ts` registers the `plan check` verb |
+| Cost-budget run-state + budget verb (L4) | `src/features/task/adapters/fs-run-state-store.adapter.ts`, `src/features/task/usecases/check-cost-budget.ts` | `RunState` persisted under `.maestro/runs/<task-id>/state.json` (gitignored); `checkCostBudget` short-circuits Risk Engine to BLOCK when exhausted (Rule 11); `retryCount` auto-increments on FAIL/HUMAN |
+| AI Reviewer + Threat-Model Risk Engine wiring (L4) | `src/features/risk/usecases/compute-risk.ts` | Applies `ai-review` error-severity raises (Rule 1 — raises only; security-reviewer error always lifts to `critical`); adds `threat-model-required` predicate (Edge Case 12) consumed by the Verdict use-case |
+| Mission Control autopilot view (L4) | `src/tui/state/autopilot-screen.ts` | Mission-mode only read model; consumed by Mission Control preview/render paths |
 
 ## CODE STYLE
 - Prefer `interface` for object shapes and `type` for unions/intersections.
@@ -55,13 +59,14 @@ maestro/
 - Keep `src/index.ts` and `src/services.ts` thin. Put behavior in the owning feature or infra use case.
 - Cross-feature imports go through `@/features/<name>` public surfaces only.
 - `skills/built-in/` is the source of truth for project-level shipped skills. Sync it into `src/infra/domain/built-in-skill-templates.ts`; do not hand-edit the generated embed file.
-- `skills/bundled/` is the source of truth for the global maestro skill bundle (`maestro-brainstorm`, `maestro-plan`, `maestro-task`, `maestro-mission`, `maestro-handoff`, `maestro-setup`). Sync it into `src/infra/domain/bundled-skill-templates.ts` via `bun run sync:bundled-skills`; `bun run check:bundled-skills` enforces parity. `maestro install` installs these into `~/.claude/skills/` and `~/.codex/skills/`.
+- `skills/bundled/` is the source of truth for the global maestro skill bundle (`maestro-brainstorm`, `maestro-plan`, `maestro-task`, `maestro-mission`, `maestro-handoff`, `maestro-setup`, `maestro-verify`). 7 bundled skills total as of L4.5. Sync into `src/infra/domain/bundled-skill-templates.ts` via `bun run sync:bundled-skills`; `bun run check:bundled-skills` enforces parity. `maestro install` installs these into `~/.claude/skills/` and `~/.codex/skills/`.
+- `maestro-verify` (`skills/bundled/maestro-verify/SKILL.md`) is the canonical verification protocol. It documents the pre-claim ritual, witness levels, Trust Verifier scope, ProofMap, plan-check, verdict semantics, cost-budget monitoring, AI Reviewer protocol, and threat-model production. All other skills that reference verification protocol cross-reference this skill.
 - When adding a new agent-facing feature or changing related agent behavior, update the relevant `skills/bundled/maestro-*/SKILL.md` in the same change so the installed skills stay current. The per-project `.maestro/AGENTS.md` template in `src/infra/domain/bootstrap-templates.ts` still governs project bootstrap content.
 - `buildSnapshot()` and `buildHomeSnapshot()` are read models. Preview, JSON, and render-check paths must remain inspection-only.
 - Treat `./dist/maestro` and installed `maestro` on `PATH` as different artifacts. Verify which binary was exercised.
 - Repo-tracked behavior changes bump the CLI version. Docs-only/comment-only changes do not.
 - Release publishing on `main` requires manual dispatch or a head commit exactly named `chore(release): v<version>`.
-- The Evidence Recorder (`src/features/evidence/`) logs verifiable outputs for a task as structured rows. Storage goes to `.maestro/evidence/` (gitignored). Evidence rows carry a `WitnessLevel` that tracks how trustworthy the claim is. The 4-level ladder, strongest to weakest: `witnessed-by-maestro` (Maestro itself ran the command), `witnessed-by-ci` (a trusted CI gate ran and posted the result), `agent-claimed-locally` (the agent self-reported a local run; default for schema v1 rows), `agent-claimed-and-not-reproducible` (manual notes only). The Risk Engine uses the witness level to decide whether evidence clears the autopilot policy threshold for a given risk class. See `docs/witness-levels.md`.
+- The Evidence Recorder (`src/features/evidence/`) logs verifiable outputs for a task as structured rows. Storage goes to `.maestro/evidence/` (gitignored); derived run-state goes to `.maestro/runs/<task-id>/state.json` (also gitignored). Evidence rows carry a `WitnessLevel` that tracks how trustworthy the claim is. The 4-level ladder, strongest to weakest: `witnessed-by-maestro` (Maestro itself ran the command), `witnessed-by-ci` (a trusted CI gate ran and posted the result), `agent-claimed-locally` (the agent self-reported a local run; default for schema v1 rows), `agent-claimed-and-not-reproducible` (manual notes only). The Risk Engine uses the witness level to decide whether evidence clears the autopilot policy threshold for a given risk class. See `docs/witness-levels.md`. L4 added three new evidence kinds: `plan-check` (plan file checked against contract and spec before coding), `ai-review` (reviewer LLM findings; `bug | security | architecture` — consumed by Risk Engine per Rule 1, raises only), and `threat-model` (structured threat analysis required when diff intersects security-relevant paths; see `docs/threat-model-format.md` for schema and examples).
 - Contract amendments (L2) are versioned Evidence, not silent edits. Each `contract amend` call consumes from `amendmentBudget` (Rules 3–7: budgeted, versioned, never-lower risk, plan-time proposals exempt). The amend use-case enforces the budget and writes a `contract-amended` Evidence row automatically. See `docs/sensitive-paths-defaults.md` for default sensitive-path globs and `docs/owners-yaml-format.md` for the owners schema.
 - Verdict semantics (L3): `PASS` — all acceptance criteria met with evidence at or above the required witness level; `FAIL` — evidence present but below the required level or a criterion unmet; `HUMAN` — criteria met but autopilot policy requires human review for this risk class; `BLOCK` — a blocker condition is active (broken contract, critical risk class with no human signoff, or pending loosening in the soak window). The Risk Engine derives risk class from diff signals and takes the higher of agent-proposed vs Maestro-derived (Rule 1: LLM can never lower the derived class). See `docs/risk-class-derivation.md` and `docs/policy-format.md`.
 - Asymmetric policy editing (L3): policy tightenings take effect immediately; loosenings soak for 30 days before becoming effective. Pending loosenings accumulate in `.maestro/policies/.pending-loosenings.json` (gitignored). Use `maestro policy pending` to inspect.
@@ -89,6 +94,8 @@ bun run release:local
 ```bash
 maestro evidence record --task <id> --command "bun test" --exit 0
 maestro evidence record --task <id> --kind manual-note --note "Verified manually"
+maestro evidence record --task <id> --kind ai-review --reviewer <bug|security|architecture> --findings <inline-json-or-path> --confidence <0-1>
+maestro evidence record --task <id> --kind threat-model --threat-model-file <path>
 maestro evidence list --task <id>
 maestro evidence show <evidence-id>
 ```
@@ -136,6 +143,22 @@ maestro policy pending
 maestro task proof --task <id>
 maestro task proof --task <id> --json
 ```
+
+## CLI VERBS — PLAN (L4)
+```bash
+maestro plan check --task <id> --plan-file <path>
+maestro plan check --task <id> --plan-file <path> --json
+```
+
+Exit code is always 0; agents react to findings in the output. A clean plan-check does not guarantee a passing verdict — it confirms the plan is internally consistent before coding starts.
+
+## CLI VERBS — TASK BUDGET (L4)
+```bash
+maestro task budget --task <id>
+maestro task budget --task <id> --json
+```
+
+Exit code is always 0; the verb is read-only. Once any budget limit is exceeded, the next `verdict request` returns `BLOCK` (exit 3).
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

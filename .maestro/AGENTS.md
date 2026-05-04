@@ -52,12 +52,17 @@ sensitive_waiver: []     # signs off on changes to sensitive paths (L5+)
 At L2, the file must be present and parseable. Role lists may be empty (defaults to "any maintainer"). The `gh` CLI is used at higher levels to resolve role membership; at L2, role lookup is raw list comparison only. See `docs/owners-yaml-format.md` for the full schema reference.
 
 ## RUNTIME STATE (GITIGNORED)
-- `.maestro/evidence/` — per-task evidence rows written by `maestro evidence record`. Gitignored; per-machine only.
-- `.maestro/runs/` — per-task run records written by Maestro tooling. Gitignored; per-machine only.
+- `.maestro/evidence/` — per-task evidence rows written by `maestro evidence record`. Gitignored; per-machine only. Evidence kinds in use at L4:
+  - `command` — a command was run; captures exit code, duration, optional log path.
+  - `manual-note` — free-form text note; weakest witness level (`agent-claimed-and-not-reproducible`).
+  - `plan-check` — result of `maestro plan check`; captures plan file SHA, findings (`scope-widens`, `missing-proof`, `risk-class-too-low`), and declared risk class.
+  - `ai-review` — structured findings from a reviewer LLM pass; captures reviewer kind (`bug | security | architecture`), findings array, and confidence score. Risk Engine applies Rule 1 (raises only).
+  - `threat-model` — structured threat analysis file; captures assets, threat categories, mitigations, and residual risk. Required when diff intersects security-relevant paths (Edge Case 12).
+- `.maestro/runs/<task-id>/state.json` — per-task run-state written by the verdict and budget systems. Gitignored; per-machine only. Holds `retryCount`, `wallClockElapsedSeconds`, optional `tokensUsed`, and `exhausted` flag. Written by the `verdict request` use-case and read by `maestro task budget`.
 - `.maestro/verdicts/` — per-task verdict history written by `maestro verdict request`. Gitignored; derived state, not source of truth. One subfolder per task id; one JSON per verdict version.
 - `.maestro/policies/.pending-loosenings.json` — gitignored derived cache of in-soak policy loosenings. Written by `maestro policy check` and read by `maestro policy pending`.
 
-Both `evidence/` and `runs/` are created on first use by `maestro init` (or `maestro setup`). Do not commit their contents or any gitignored policy cache.
+`evidence/`, `runs/`, and `verdicts/` are created on first use by `maestro init` (or `maestro setup`). Do not commit their contents or any gitignored policy cache.
 
 All other directories under `.maestro/` (including `contracts/`, `policies/`, `specs/`, `tasks/`) are committed and repo-tracked.
 

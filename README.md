@@ -719,6 +719,97 @@ maestro policy pending
 
 See `docs/policy-format.md` for the schema reference for all five policy files.
 
+## L4: Autopilot Inner Loop (No Merge)
+
+L4 closes the inner agent loop: the agent runs plan, implement, verify, and verdict steps without human intervention; humans still review and merge. The verify-verdict-fix/handoff/stop cycle is enforced by the tools, not by convention.
+
+### The pre-claim ritual (L4.2)
+
+Before claiming any non-trivial task done, the agent runs this ordered loop:
+
+1. **Plan** — write a plan file and run `maestro plan check` to catch problems before code is written.
+2. **Implement** — write code and record evidence after each verification command.
+3. **Verify** — run `maestro task verify` and address every `error` finding.
+4. **ProofMap** — run `maestro task proof` and confirm every acceptance criterion is covered.
+5. **Verdict** — run `maestro verdict request` and branch on the exit code.
+
+The canonical source for this ritual is the `maestro-verify` skill (see below).
+
+### Plan-check (L4.1)
+
+`maestro plan check` evaluates a plan file against the locked contract and spec before any code is written. It catches three classes of problems:
+
+- **`scope-widens`** — the plan intends to touch files outside `contract.scope.filesExpected`. Resolve by narrowing the intended files or amending the contract before coding.
+- **`missing-proof`** — an acceptance criterion from the Spec has no entry in the plan's `proofSet`. Every criterion needs a planned proof strategy.
+- **`risk-class-too-low`** — the plan's declared `riskClass` is lower than what the intended file set triggers. Raise it to match (Rule 1 plan-time gate).
+
+The verb always exits 0. Findings in the output must be resolved before implementation begins. A clean plan-check does not guarantee a passing verdict; it means the plan is internally consistent.
+
+```bash
+maestro plan check --task <id> --plan-file ./plan.yaml
+maestro plan check --task <id> --plan-file ./plan.yaml --json
+```
+
+### AI Reviewer Evidence (L4.3)
+
+Agents can record reviewer findings as structured evidence via `maestro evidence record --kind ai-review`. Three reviewer kinds are available: `bug` (correctness, edge cases, regressions), `security` (auth, input validation, secrets, injection), and `architecture` (boundary violations, coupling, abstraction misuse).
+
+**Rule 1 applies:** any `error`-severity finding raises the effective risk class by one notch. A `security`-reviewer `error` always lifts to `critical`. A clean review (zero `error` findings) never lowers the deterministic baseline derived from diff signals.
+
+See `docs/ai-reviewer-protocol.md` for the finding schema, confidence semantics, and recording guidance.
+
+### Threat-Model Evidence (L4.3a)
+
+When the diff intersects security-relevant sensitive paths, the Verdict is `HUMAN` with reason `threat-model-required` unless a `threat-model` Evidence row is present (Edge Case 12). Produce the threat-model document and record it before requesting a verdict:
+
+```bash
+maestro evidence record --task <id> --kind threat-model \
+  --threat-model-file ./threat-model.json
+```
+
+See `docs/threat-model-format.md` for the schema (assets, threatCategories, mitigations, residualRisk) and examples.
+
+### Cost Budgets (L4.4)
+
+Contracts can declare cost limits: `maxRetries`, `maxWallClockSeconds`, and `maxTokens`. When any limit is exceeded, run-state at `.maestro/runs/<task-id>/state.json` (gitignored) is marked exhausted and the next `verdict request` returns `BLOCK` (exit 3) with reason `cost-budget-exhausted`. Check consumption at any time:
+
+```bash
+maestro task budget --task <id>
+maestro task budget --task <id> --json
+```
+
+`retryCount` increments automatically on each `FAIL` or `HUMAN` verdict.
+
+### Mission Control autopilot view (L4.6)
+
+In mission mode, Mission Control gains an `autopilot` screen that projects the current verify/verdict state across all active tasks in the mission. Use `maestro mission-control --preview autopilot --size 120x40 --format plain` to inspect it non-interactively.
+
+### maestro-verify skill (L4.5)
+
+`maestro-verify` is a new bundled skill (7th in the bundle) that is the canonical source for the verification protocol. `maestro-task`, `maestro-plan`, and `maestro-handoff` cross-reference it. When in doubt about verification steps, read `maestro-verify`.
+
+### L4 CLI surface
+
+```bash
+# Plan-check
+maestro plan check --task <id> --plan-file <path>
+maestro plan check --task <id> --plan-file <path> --json
+
+# Cost-budget inspection (read-only, always exits 0)
+maestro task budget --task <id>
+maestro task budget --task <id> --json
+
+# AI Reviewer evidence
+maestro evidence record --task <id> --kind ai-review \
+  --reviewer <bug|security|architecture> \
+  --findings '<inline-json-or-path>' \
+  --confidence <0-1>
+
+# Threat-model evidence
+maestro evidence record --task <id> --kind threat-model \
+  --threat-model-file <path>
+```
+
 ## Common Commands
 
 | Command | Use it when you want to... |

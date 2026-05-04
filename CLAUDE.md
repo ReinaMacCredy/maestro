@@ -3,7 +3,9 @@
 
 ## The skill bundle is the spec
 
-`skills/bundled/` (the 6 `maestro-*` skills installed to `~/.claude/skills/` and `~/.codex/skills/` by `maestro install`) is the **source of truth** for maestro's agent-facing CLI. The CLI must match what those skills describe.
+`skills/bundled/` (the 7 `maestro-*` skills installed to `~/.claude/skills/` and `~/.codex/skills/` by `maestro install`) is the **source of truth** for maestro's agent-facing CLI. The CLI must match what those skills describe.
+
+`maestro-verify` is the canonical verification protocol. It is the single source of truth for the pre-claim ritual, witness levels, plan-check, AI Reviewer protocol, threat-model production, and cost-budget monitoring. Other skills (`maestro-task`, `maestro-plan`, `maestro-handoff`) cross-reference it. When verification behavior is unclear, read `maestro-verify` first.
 
 - **When the CLI diverges from a skill, fix the CLI.** Do not "document around" the mismatch in the skill. The skills are what agents read; they must stay clean and authoritative.
 - **Never edit a skill to match surprising CLI behavior.** If a skill needs to change (new section, new flag, renamed verb, semantic shift), stop and ask the user first. Skill content is behavioral contract, not scratch space.

@@ -35,6 +35,12 @@ Shipped skill source tree. Use this file with the repo-root [AGENTS.md](../AGENT
 - `maestro-plan` (`bundled/maestro-plan/SKILL.md`) was updated in L3 to be risk-class-aware. Plans must propose a `risk_class` (`low | medium | high | critical`). The Risk Engine derives a class from diff signals and takes the higher of agent-proposed vs Maestro-derived; agents cannot lower the derived class (Rule 1). See `docs/risk-class-derivation.md` for the signal-to-class mapping table.
 - `maestro-task` (`bundled/maestro-task/SKILL.md`) was updated in L3 to require `maestro task verify --task <id>` followed by `maestro verdict request --task <id>` before an agent claims complete. An exit code of 0 (PASS) allows completion; 1 (FAIL), 2 (HUMAN), or 3 (BLOCK) must be resolved first. Agents should also call `maestro task proof --task <id>` to confirm acceptance-criterion coverage before requesting a verdict.
 
+## Skill Changes (L4)
+- **New skill: `maestro-verify`** (`bundled/maestro-verify/SKILL.md`) ships as the canonical verification protocol. It documents the full pre-claim ritual (plan → implement → verify → ProofMap → verdict → branch on exit code), witness levels, Trust Verifier scope, plan-check, verdict semantics, cost-budget monitoring, AI Reviewer protocol (Rule 1 veto-only), and threat-model production. Total bundled skills: 7 (was 6).
+- `maestro-task` (`bundled/maestro-task/SKILL.md`) was sharpened in L4.2 to include the self-check loop (verify → verdict → fix/handoff/stop) and cross-references `maestro-verify` for the full protocol.
+- `maestro-plan` (`bundled/maestro-plan/SKILL.md`) was updated in L4 to cross-reference `maestro-verify` for the plan-check step (`maestro plan check --task <id> --plan-file <path>`) which catches `scope-widens`, `missing-proof`, and `risk-class-too-low` before coding starts.
+- `maestro-handoff` (`bundled/maestro-handoff/SKILL.md`) cross-references `maestro-verify` for the handoff gate protocol.
+
 ## Local Gotchas
 
 - Do not hand-edit `src/infra/domain/built-in-skill-templates.ts` or `src/infra/domain/bundled-skill-templates.ts`.
