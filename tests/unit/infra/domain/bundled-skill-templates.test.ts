@@ -80,6 +80,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
       "maestro-qa",
       "maestro-setup",
       "maestro-task",
+      "maestro-verify",
     ]);
   });
 
