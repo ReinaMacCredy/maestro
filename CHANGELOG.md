@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.69.0 - L5 — CI Is the Authoritative Verifier
+
+- New verb: `maestro ci verify [--pr <n>] [--task <id>] [--base <ref>]
+  [--json]`. Reads CI env (`GITHUB_ACTIONS`, `GITHUB_REPOSITORY`,
+  `GITHUB_REF`, `GITHUB_SHA`, `GITHUB_BASE_REF`, `GITHUB_EVENT_PATH`,
+  `GITHUB_OUTPUT`, `GITHUB_TOKEN`); flags override. Runs Trust Verifier,
+  ingests CI job results as `witnessed-by-ci` Evidence, computes the
+  Verdict via the existing `requestVerdict` use-case, writes
+  `verdict_id`, `verdict_decision`, `effective_risk_class` to
+  `$GITHUB_OUTPUT`, and (in GitHub Actions with a token) posts a
+  GitHub Check via `gh api`. Exit codes: 0 PASS / 1 FAIL / 2 HUMAN /
+  3 BLOCK — same as `verdict request`.
+- New feature dir `src/features/ci/`: `readCiEnv` (env parser),
+  `runCiVerify` (use-case), `postPrCheck` (gh-api poster), minimal
+  `GithubApiPort` with a `gh-cli` adapter (`postCheckRun`,
+  `patchCheckRun` only — no comment APIs in trimmed L5).
+- Verdict identity by tree SHA (edge case 27): `Verdict.subject =
+  { pr?, tree_sha }`, where `tree_sha` is `git rev-parse HEAD^{tree}`.
+  Squash with identical content survives; force-push to a different
+  tree invalidates. Backward-compatible: existing v1 verdicts without
+  `subject` still parse. `GitAnchorPort` gains
+  `resolveTreeSha(cwd, ref?)`. `maestro verdict show --pr <n>` finds
+  verdicts by current `HEAD^{tree}` match.
+- New skill asset
+  `skills/bundled/maestro-setup/reference/github-workflow/maestro-verify.yml.template`:
+  starter GitHub Actions workflow that installs the maestro binary
+  via curl-extract and runs `maestro ci verify` on every
+  `pull_request`. Permissions: `pull-requests: write`, `checks: write`,
+  `contents: read`. The `maestro-setup` skill installs it into
+  `.github/workflows/` when `.github/` exists; non-interactive
+  otherwise. No new CLI verb — setup is skill-first.
+- New reference doc `docs/ci-integration.md`: workflow template
+  usage, env contract, witness-by-ci ingestion, PR check status
+  semantics, verdict tree-SHA identity, troubleshooting.
+
+Compat: additive. No breaking changes to existing CLI verbs, data
+formats, evidence kinds, policies, or skill APIs. The trimmed L5
+ships `ci verify` + tree-SHA verdict identity + PR check status
+only. Deferred to v0.69.x patches as friction is observed: PR
+comment with rendered evidence packet, `maestro pr publish`, flake
+tracking, override flow, review checklist, handoff packet
+`open_hypotheses` + `ruled_out_approaches`.
+
 ## 0.68.0 - L4 — Autopilot Inner Loop (No Merge)
 
 - New verbs: `maestro plan check`, `maestro task budget`,
