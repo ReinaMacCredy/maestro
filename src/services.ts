@@ -12,6 +12,7 @@ import { buildEvidenceServices, type EvidenceServices } from "./features/evidenc
 import { buildSpecServices, type SpecServices } from "./features/spec/services.js";
 import { buildPolicyServices, type PolicyServices } from "./features/policy/services.js";
 import { buildVerifyServices, type VerifyServices } from "./features/verify/services.js";
+import { buildRiskServices, type RiskServices } from "./features/risk/services.js";
 
 export interface Services extends
   InfraServices,
@@ -27,7 +28,8 @@ export interface Services extends
   EvidenceServices,
   SpecServices,
   PolicyServices,
-  VerifyServices { }
+  VerifyServices,
+  RiskServices { }
 
 let instance: Services | undefined;
 
@@ -47,6 +49,7 @@ export function initServices(projectDir: string): Services {
     ...buildSpecServices(projectDir),
     ...buildPolicyServices(projectDir),
     ...buildVerifyServices(projectDir),
+    ...buildRiskServices(),
   };
   return instance;
 }
