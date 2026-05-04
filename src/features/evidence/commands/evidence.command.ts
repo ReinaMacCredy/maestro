@@ -5,18 +5,20 @@ import { getServices, type Services } from "@/services.js";
 import { recordEvidence, type RecordEvidenceInput } from "../usecases/record-evidence.usecase.js";
 import { listEvidence } from "../usecases/list-evidence.usecase.js";
 import { isEvidenceId } from "../domain/evidence-id.js";
-import { readFileSync } from "node:fs";
-import type {
-  AIReviewFinding,
-  AIReviewPayload,
-  AIReviewerKind,
-  CommandPayload,
-  EvidenceKind,
-  EvidenceRow,
-  ManualNotePayload,
-  PlanCheckPayload,
-  ThreatModelPayload,
-  WitnessLevel,
+import { readText } from "@/shared/lib/fs.js";
+import {
+  WITNESS_LEVEL_ORDER,
+  isWitnessLevel,
+  type AIReviewFinding,
+  type AIReviewPayload,
+  type AIReviewerKind,
+  type CommandPayload,
+  type EvidenceKind,
+  type EvidenceRow,
+  type ManualNotePayload,
+  type PlanCheckPayload,
+  type ThreatModelPayload,
+  type WitnessLevel,
 } from "../domain/types.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
@@ -172,7 +174,7 @@ async function buildRecordInput(
         "Pass a decimal value between 0 and 1 (e.g. 0.8)",
       ]);
     }
-    const findings = parseFindings(opts.findings, taskId);
+    const findings = await parseFindings(opts.findings, taskId);
     const payload: AIReviewPayload = {
       reviewer: opts.reviewer as AIReviewerKind,
       findings,
@@ -184,7 +186,7 @@ async function buildRecordInput(
       ...(sessionId !== undefined ? { session_id: sessionId } : {}),
       kind: "ai-review",
       payload,
-      witness_level: "agent-claimed-locally" satisfies WitnessLevel,
+      witness_level: parseWitnessLevel(opts.witness, "agent-claimed-locally"),
     };
   }
 
@@ -194,7 +196,7 @@ async function buildRecordInput(
         `maestro evidence record --task ${taskId} --kind threat-model --threat-model-file ./threat-model.json`,
       ]);
     }
-    const payload = parseThreatModelFile(opts.threatModelFile, taskId, opts.criterion);
+    const payload = await parseThreatModelFile(opts.threatModelFile, taskId, opts.criterion);
     const witnessLevel = parseWitnessLevel(opts.witness, "agent-claimed-locally");
     return {
       task_id: taskId,
@@ -235,7 +237,7 @@ function parseKind(value: string | undefined): EvidenceKind {
 
 const VALID_SEVERITIES = new Set(["info", "warn", "error"]);
 
-function parseFindings(raw: string, taskId: string): readonly AIReviewFinding[] {
+async function parseFindings(raw: string, taskId: string): Promise<readonly AIReviewFinding[]> {
   let parsed: unknown;
   if (raw.trimStart().startsWith("[") || raw.trimStart().startsWith("{")) {
     try {
@@ -246,11 +248,8 @@ function parseFindings(raw: string, taskId: string): readonly AIReviewFinding[] 
       ]);
     }
   } else {
-    // Treat as a file path
-    let fileContent: string;
-    try {
-      fileContent = readFileSync(raw, "utf8");
-    } catch {
+    const fileContent = await readText(raw);
+    if (fileContent === undefined) {
       throw new MaestroError(`--findings: could not read file: ${raw}`, [
         `maestro evidence record --task ${taskId} --kind ai-review --reviewer security --findings ./findings.json`,
       ]);
@@ -307,15 +306,13 @@ function parseNonNegativeInt(raw: string): number {
 
 const VALID_RESIDUAL_RISKS = new Set(["low", "medium", "high"]);
 
-function parseThreatModelFile(
+async function parseThreatModelFile(
   filePath: string,
   taskId: string,
   criterion?: string,
-): ThreatModelPayload {
-  let fileContent: string;
-  try {
-    fileContent = readFileSync(filePath, "utf8");
-  } catch {
+): Promise<ThreatModelPayload> {
+  const fileContent = await readText(filePath);
+  if (fileContent === undefined) {
     throw new MaestroError(`--threat-model-file: could not read file: ${filePath}`, [
       `maestro evidence record --task ${taskId} --kind threat-model --threat-model-file ./threat-model.json`,
     ]);
@@ -388,22 +385,15 @@ function parseThreatModelFile(
   };
 }
 
-const VALID_WITNESS_LEVELS: readonly WitnessLevel[] = [
-  "agent-claimed-and-not-reproducible",
-  "agent-claimed-locally",
-  "witnessed-by-ci",
-  "witnessed-by-maestro",
-];
-
 function parseWitnessLevel(raw: string | undefined, fallback: WitnessLevel): WitnessLevel {
   if (raw === undefined) return fallback;
-  if (!VALID_WITNESS_LEVELS.includes(raw as WitnessLevel)) {
+  if (!isWitnessLevel(raw)) {
     throw new MaestroError(
       `Invalid --witness level: ${raw}`,
-      [`Valid levels: ${VALID_WITNESS_LEVELS.join(", ")}`],
+      [`Valid levels: ${WITNESS_LEVEL_ORDER.join(", ")}`],
     );
   }
-  return raw as WitnessLevel;
+  return raw;
 }
 
 function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
@@ -445,7 +435,7 @@ function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
     lines.push(`  Mitigations: ${payload.mitigations.length}`);
     if (payload.source_file !== undefined) lines.push(`  Source: ${payload.source_file}`);
     if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
-  } else {
+  } else if (row.kind === "manual-note") {
     const payload = row.payload as ManualNotePayload;
     lines.push(`  Note: ${payload.note}`);
     if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);

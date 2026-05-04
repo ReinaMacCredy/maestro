@@ -17,7 +17,8 @@ export type VerdictReasonCode =
   | "effective-risk-critical"
   | "evidence-witness-level-insufficient"
   | "auto-merge-not-allowed"
-  | "all-checks-passed";
+  | "all-checks-passed"
+  | "threat-model-required";
 
 export interface VerdictReason {
   readonly category: VerdictCategory;

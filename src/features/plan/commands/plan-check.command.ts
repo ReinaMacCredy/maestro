@@ -35,7 +35,6 @@ export function registerPlanCheckCommand(
       const taskId: string = opts.task;
       const planFilePath: string = opts.planFile;
 
-      // Load the plan file
       const planText = await readText(planFilePath);
       if (planText === undefined) {
         throw new MaestroError(`Plan file not found: ${planFilePath}`, [
@@ -44,11 +43,8 @@ export function registerPlanCheckCommand(
       }
 
       const plan = parseYaml<PlanInput>(planText);
-
-      // Compute plan file SHA-256
       const planFileSha = createHash("sha256").update(planText).digest("hex");
 
-      // Load the contract
       const contract = await services.contractVersionStore.readCurrent(taskId);
       if (contract === undefined) {
         throw new MaestroError(`No contract found for task: ${taskId}`, [
@@ -56,15 +52,12 @@ export function registerPlanCheckCommand(
         ]);
       }
 
-      // Load spec if the contract references a mission
       const spec = contract.missionId !== undefined
         ? await services.specStore.read(contract.missionId)
         : undefined;
 
-      // Derive risk class from the plan's intended files
       const derived = deriveRiskClassFromDiff({ changedPaths: plan.intendedFiles });
 
-      // Run the plan check
       const result: PlanCheckResult = checkPlan({
         plan,
         contract,
@@ -72,7 +65,6 @@ export function registerPlanCheckCommand(
         derivedRiskClass: derived.class,
       });
 
-      // Record an evidence row of kind "plan-check"
       const evidencePayload: PlanCheckPayload = {
         planFileSha,
         findings: result.findings.map((f) => ({
@@ -91,13 +83,11 @@ export function registerPlanCheckCommand(
         witness_level: "agent-claimed-locally",
       });
 
-      // Output findings
       if (isJson) {
         console.log(JSON.stringify(result, null, 2));
       } else {
         printFindings(result);
       }
-      // Exit code always 0 — agents react to findings
     });
 }
 

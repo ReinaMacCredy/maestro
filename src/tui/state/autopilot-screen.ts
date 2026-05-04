@@ -1,8 +1,9 @@
-import type { VerdictStorePort } from "@/features/verdict";
-import type { RunStateStorePort } from "@/features/task";
-import type { TaskQueryPort } from "@/features/task";
-import type { ContractVersionStorePort } from "@/features/task";
-import type { VerdictDecision } from "@/features/verdict";
+import type { VerdictDecision, VerdictStorePort } from "@/features/verdict";
+import type {
+  ContractVersionStorePort,
+  RunStateStorePort,
+  TaskQueryPort,
+} from "@/features/task";
 
 export interface AutopilotTaskRow {
   readonly taskId: string;

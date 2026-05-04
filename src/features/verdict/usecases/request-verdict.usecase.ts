@@ -41,10 +41,11 @@ export async function requestVerdict(
   const runState = await deps.runStateStore.read(taskId);
   const costBudgetExhausted = checkCostBudget(contract, runState).exhausted;
 
-  const baseRef = typeof base === "string" && base.length > 0
-    ? base
-    : await resolveDefaultBase();
-  const headSha = await resolveHeadSha();
+  const hasExplicitBase = typeof base === "string" && base.length > 0;
+  const [baseRef, headSha] = await Promise.all([
+    hasExplicitBase ? Promise.resolve(base as string) : resolveDefaultBase(),
+    resolveHeadSha(),
+  ]);
 
   const cwd = process.cwd();
 
