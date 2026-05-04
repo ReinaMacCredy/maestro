@@ -13,6 +13,7 @@ import { buildSpecServices, type SpecServices } from "./features/spec/services.j
 import { buildPolicyServices, type PolicyServices } from "./features/policy/services.js";
 import { buildVerifyServices, type VerifyServices } from "./features/verify/services.js";
 import { buildRiskServices, type RiskServices } from "./features/risk/services.js";
+import { buildVerdictServices, type VerdictServices } from "./features/verdict/services.js";
 
 export interface Services extends
   InfraServices,
@@ -29,11 +30,15 @@ export interface Services extends
   SpecServices,
   PolicyServices,
   VerifyServices,
-  RiskServices { }
+  RiskServices,
+  VerdictServices {
+  readonly projectRoot: string;
+}
 
 let instance: Services | undefined;
 
 export function initServices(projectDir: string): Services {
+  const policyServices = buildPolicyServices(projectDir);
   instance = {
     ...buildInfraServices(projectDir),
     ...buildSessionServices(),
@@ -47,9 +52,15 @@ export function initServices(projectDir: string): Services {
     ...buildBundleServices(),
     ...buildEvidenceServices(projectDir),
     ...buildSpecServices(projectDir),
-    ...buildPolicyServices(projectDir),
+    ...policyServices,
     ...buildVerifyServices(projectDir),
-    ...buildRiskServices(),
+    ...buildRiskServices({
+      getEffectiveRiskPolicy: policyServices.getEffectiveRiskPolicy,
+      getEffectiveAutopilotPolicy: policyServices.getEffectiveAutopilotPolicy,
+      getEffectiveReleasePolicy: policyServices.getEffectiveReleasePolicy,
+    }),
+    ...buildVerdictServices(projectDir),
+    projectRoot: projectDir,
   };
   return instance;
 }

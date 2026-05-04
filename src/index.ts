@@ -53,6 +53,8 @@ import { registerBundleCommand } from "./features/bundle/index.js";
 import { registerEvidenceCommand } from "./features/evidence/index.js";
 import { registerSpecCommand } from "./features/spec/index.js";
 import { registerContractL2Command } from "./features/task/commands/contract-l2.command.js";
+import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
+import { registerVerdictCommand } from "./features/verdict/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -97,6 +99,8 @@ registerBundleCommand(program);
 registerEvidenceCommand(program);
 registerSpecCommand(program);
 registerContractL2Command(program);
+registerPolicyCommand(program);
+registerVerdictCommand(program);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,

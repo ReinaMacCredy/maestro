@@ -14,3 +14,20 @@ export type {
   AutopilotPolicy,
   ReleasePolicy,
 } from "./domain/policy-types.js";
+export {
+  classifyPolicyEdit,
+} from "./usecases/classify-policy-edit.usecase.js";
+export type {
+  PolicyEdit,
+  PolicyEditClassification,
+} from "./usecases/classify-policy-edit.usecase.js";
+export {
+  detectPendingLoosenings,
+  buildDetectPendingLoosenings,
+  LOOSENING_SOAK_DAYS,
+} from "./usecases/detect-pending-loosenings.usecase.js";
+export type {
+  PendingLoosening,
+} from "./usecases/detect-pending-loosenings.usecase.js";
+export { buildEffectivePolicyServices } from "./usecases/effective-policy.usecase.js";
+export { registerPolicyCommand } from "./commands/policy.command.js";

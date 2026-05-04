@@ -51,3 +51,6 @@ feedback.jsonl
 
 # Maestro runtime state
 .maestro/sessions/
+.maestro/policies/.pending-loosenings.json
+# Verdict store — derived, like evidence (re-computable from contract+diff+evidence)
+.maestro/verdicts/
