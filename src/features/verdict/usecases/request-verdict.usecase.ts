@@ -79,6 +79,7 @@ export async function requestVerdict(
     derivedRiskClass: derivedRiskResult.class,
     amendmentCount: contract.amendments.length,
     costBudgetExhausted,
+    matchedRiskPolicySignal: derivedRiskResult.matchedRow.signal,
   });
 
   await deps.verdictStore.write(taskId, verdict);

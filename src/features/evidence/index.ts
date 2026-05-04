@@ -9,6 +9,9 @@ export type {
   AIReviewFinding,
   AIReviewPayload,
   PlanCheckPayload,
+  ThreatModelResidualRisk,
+  ThreatModelMitigation,
+  ThreatModelPayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,

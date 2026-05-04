@@ -1,0 +1,9 @@
+{
+  "assets": ["session tokens", "password hashes"],
+  "threatCategories": ["spoofing", "tampering", "info-disclosure"],
+  "mitigations": [
+    { "threat": "session-fixation", "mitigation": "rotate token on login" },
+    { "threat": "weak-hashing",     "mitigation": "argon2id with workfactor 3" }
+  ],
+  "residualRisk": "low"
+}

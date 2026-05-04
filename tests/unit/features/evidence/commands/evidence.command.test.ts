@@ -7,7 +7,9 @@ import {
   type EvidenceStorePort,
   type RecordEvidenceInput,
   type AIReviewPayload,
+  type ThreatModelPayload,
 } from "@/features/evidence";
+import { join } from "node:path";
 import { mockEvidenceStore } from "../../../../helpers/mocks.js";
 import type { Task } from "@/features/task";
 import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
@@ -1043,5 +1045,170 @@ describe("evidence record --kind ai-review", () => {
       const payload = received!.payload as AIReviewPayload;
       expect(payload.reviewer).toBe(reviewer);
     }
+  });
+});
+
+// --- L4.3a: threat-model Evidence kind ---
+
+const FIXTURES_DIR = join(import.meta.dir, "../../../../fixtures/threat-models");
+
+describe("evidence record --kind threat-model", () => {
+  it("records a threat-model row with all payload fields from a JSON file", async () => {
+    captureConsole();
+    let received: RecordEvidenceInput | undefined;
+    const { deps, evidenceStore } = evidenceDeps({
+      recordEvidence: async (store, input) => {
+        received = input;
+        return realRecordEvidence(store, input);
+      },
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync([
+      "node", "maestro", "evidence", "record",
+      "--task", "tsk-aaaaaa",
+      "--kind", "threat-model",
+      "--threat-model-file", join(FIXTURES_DIR, "minimal.json"),
+    ]);
+
+    expect(received).toBeDefined();
+    expect(received!.kind).toBe("threat-model");
+    expect(received!.witness_level).toBe("agent-claimed-locally");
+    const payload = received!.payload as ThreatModelPayload;
+    expect(payload.assets).toEqual(["session tokens", "password hashes"]);
+    expect(payload.threatCategories).toEqual(["spoofing", "tampering", "info-disclosure"]);
+    expect(payload.mitigations).toHaveLength(2);
+    expect(payload.mitigations[0]).toEqual({ threat: "session-fixation", mitigation: "rotate token on login" });
+    expect(payload.residualRisk).toBe("low");
+    expect(payload.source_file).toBe(join(FIXTURES_DIR, "minimal.json"));
+
+    const rows = await evidenceStore.list({ task_id: "tsk-aaaaaa" });
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.kind).toBe("threat-model");
+  });
+
+  it("accepts a YAML threat-model file", async () => {
+    captureConsole();
+    let received: RecordEvidenceInput | undefined;
+    const { deps } = evidenceDeps({
+      recordEvidence: async (store, input) => {
+        received = input;
+        return realRecordEvidence(store, input);
+      },
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync([
+      "node", "maestro", "evidence", "record",
+      "--task", "tsk-aaaaaa",
+      "--kind", "threat-model",
+      "--threat-model-file", join(FIXTURES_DIR, "minimal.yaml"),
+    ]);
+
+    expect(received!.kind).toBe("threat-model");
+    const payload = received!.payload as ThreatModelPayload;
+    expect(payload.assets).toEqual(["session tokens", "password hashes"]);
+    expect(payload.residualRisk).toBe("low");
+    expect(payload.mitigations).toHaveLength(2);
+  });
+
+  it("errors when --threat-model-file is missing for --kind threat-model", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "threat-model",
+      ]),
+    ).rejects.toMatchObject({
+      message: "--kind threat-model requires --threat-model-file",
+    });
+  });
+
+  it("errors when threat-model file has wrong type for assets field", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+    const { writeFileSync, mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "tm-test-"));
+    const malformed = join(dir, "bad.json");
+    writeFileSync(malformed, JSON.stringify({
+      assets: "not-an-array",
+      threatCategories: [],
+      mitigations: [],
+      residualRisk: "low",
+    }));
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "threat-model",
+        "--threat-model-file", malformed,
+      ]),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('"assets"'),
+    });
+  });
+
+  it("errors when threat-model file is missing required field mitigations", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+    const { writeFileSync, mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "tm-test-"));
+    const malformed = join(dir, "no-mitigations.json");
+    writeFileSync(malformed, JSON.stringify({
+      assets: ["session tokens"],
+      threatCategories: ["spoofing"],
+      residualRisk: "medium",
+    }));
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "threat-model",
+        "--threat-model-file", malformed,
+      ]),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('"mitigations"'),
+    });
+  });
+
+  it("--witness witnessed-by-ci sets the witness level on the row", async () => {
+    captureConsole();
+    let received: RecordEvidenceInput | undefined;
+    const { deps } = evidenceDeps({
+      recordEvidence: async (store, input) => {
+        received = input;
+        return realRecordEvidence(store, input);
+      },
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync([
+      "node", "maestro", "evidence", "record",
+      "--task", "tsk-aaaaaa",
+      "--kind", "threat-model",
+      "--threat-model-file", join(FIXTURES_DIR, "minimal.json"),
+      "--witness", "witnessed-by-ci",
+    ]);
+
+    expect(received!.witness_level).toBe("witnessed-by-ci");
   });
 });

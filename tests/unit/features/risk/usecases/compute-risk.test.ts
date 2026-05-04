@@ -1,8 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { computeRisk, applyAIReviewerRiskRaise } from "@/features/risk/usecases/compute-risk.js";
+import { computeRisk, applyAIReviewerRiskRaise, requiresThreatModel, hasThreatModelEvidence } from "@/features/risk/usecases/compute-risk.js";
 import type { ComputeRiskInput } from "@/features/risk/usecases/compute-risk.js";
 import type { Contract, RiskClass } from "@/features/task/index.js";
-import type { EvidenceRow } from "@/features/evidence/index.js";
+import type { EvidenceRow, ThreatModelPayload } from "@/features/evidence/index.js";
 import type { AIReviewPayload } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/index.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
@@ -487,5 +487,138 @@ describe("computeRisk: ai-review integration (Rule 1)", () => {
     );
     expect(verdict.effectiveRiskClass).toBe("medium");
     expect(verdict.decision).toBe("PASS");
+  });
+});
+
+// --- L4.3a: threat-model Evidence predicates ---
+
+function makeThreatModelRow(
+  payload: Partial<ThreatModelPayload> = {},
+  overrides: Partial<EvidenceRow<"threat-model">> = {},
+): EvidenceRow<"threat-model"> {
+  return {
+    schema_version: 3,
+    id: `ev-${Math.random().toString(36).slice(2, 8)}`,
+    task_id: "task-001",
+    kind: "threat-model",
+    witness_level: "agent-claimed-locally",
+    created_at: "2026-01-01T00:00:00.000Z",
+    payload: {
+      assets: [],
+      threatCategories: [],
+      mitigations: [],
+      residualRisk: "low",
+      ...payload,
+    },
+    ...overrides,
+  };
+}
+
+describe("requiresThreatModel", () => {
+  it("returns true when derived class is critical AND signal is diff-intersects-sensitive-security", () => {
+    expect(requiresThreatModel("critical", "diff-intersects-sensitive-security")).toBe(true);
+  });
+
+  it("returns false when derived class is critical but signal is not security-related", () => {
+    expect(requiresThreatModel("critical", "diff-modifies-dependency-manifests")).toBe(false);
+    expect(requiresThreatModel("critical", "diff-modifies-ci-workflows")).toBe(false);
+    expect(requiresThreatModel("critical", "diff-source-only")).toBe(false);
+  });
+
+  it("returns false when signal matches but class is not critical", () => {
+    expect(requiresThreatModel("high", "diff-intersects-sensitive-security")).toBe(false);
+    expect(requiresThreatModel("medium", "diff-intersects-sensitive-security")).toBe(false);
+    expect(requiresThreatModel("low", "diff-intersects-sensitive-security")).toBe(false);
+  });
+
+  it("returns false when signal is undefined", () => {
+    expect(requiresThreatModel("critical", undefined)).toBe(false);
+  });
+});
+
+describe("hasThreatModelEvidence", () => {
+  it("returns true when any row has kind threat-model", () => {
+    const rows: EvidenceRow[] = [makeEvidenceRow(), makeThreatModelRow()];
+    expect(hasThreatModelEvidence(rows)).toBe(true);
+  });
+
+  it("returns true even for empty-content threat-model row (schema-valid presence)", () => {
+    const rows: EvidenceRow[] = [makeThreatModelRow({ assets: [], threatCategories: [], mitigations: [] })];
+    expect(hasThreatModelEvidence(rows)).toBe(true);
+  });
+
+  it("returns false when no threat-model rows exist", () => {
+    const rows: EvidenceRow[] = [makeEvidenceRow()];
+    expect(hasThreatModelEvidence(rows)).toBe(false);
+  });
+
+  it("returns false for empty evidence list", () => {
+    expect(hasThreatModelEvidence([])).toBe(false);
+  });
+});
+
+describe("computeRisk: threat-model-required gate (Edge Case 12)", () => {
+  it("critical diff on security-sensitive paths + no threat-model evidence → HUMAN with threat-model-required reason", () => {
+    const verdict = computeRisk(
+      makeInput({
+        contract: makeContract({ riskClass: "medium" }),
+        derivedRiskClass: "critical",
+        matchedRiskPolicySignal: "diff-intersects-sensitive-security",
+        evidenceRows: [makeEvidenceRow({ witness_level: "witnessed-by-maestro" })],
+      }),
+    );
+    expect(verdict.decision).toBe("HUMAN");
+    const threatModelReason = verdict.reasons.find((r) => r.code === "threat-model-required");
+    expect(threatModelReason).toBeDefined();
+    expect(threatModelReason?.category).toBe("policy");
+  });
+
+  it("critical diff on security-sensitive paths + schema-valid empty threat-model evidence → no threat-model-required reason", () => {
+    const verdict = computeRisk(
+      makeInput({
+        contract: makeContract({ riskClass: "medium" }),
+        derivedRiskClass: "critical",
+        matchedRiskPolicySignal: "diff-intersects-sensitive-security",
+        evidenceRows: [
+          makeEvidenceRow({ witness_level: "witnessed-by-maestro" }),
+          makeThreatModelRow(),
+        ],
+      }),
+    );
+    // Verdict may still be HUMAN (critical always is), but the threat-model-required reason must be absent.
+    expect(verdict.decision).toBe("HUMAN");
+    const threatModelReason = verdict.reasons.find((r) => r.code === "threat-model-required");
+    expect(threatModelReason).toBeUndefined();
+  });
+
+  it("critical diff but non-security signal (e.g. dependency manifests) + no threat-model → no threat-model-required reason", () => {
+    const verdict = computeRisk(
+      makeInput({
+        contract: makeContract({ riskClass: "medium" }),
+        derivedRiskClass: "critical",
+        matchedRiskPolicySignal: "diff-modifies-dependency-manifests",
+        evidenceRows: [makeEvidenceRow({ witness_level: "witnessed-by-maestro" })],
+      }),
+    );
+    expect(verdict.decision).toBe("HUMAN");
+    const threatModelReason = verdict.reasons.find((r) => r.code === "threat-model-required");
+    expect(threatModelReason).toBeUndefined();
+  });
+
+  it("medium risk diff touching src/foo.ts → no threat-model rule applies; threat-model evidence is harmless", () => {
+    const verdict = computeRisk(
+      makeInput({
+        contract: makeContract({ riskClass: "medium" }),
+        derivedRiskClass: "medium",
+        matchedRiskPolicySignal: "diff-source-only",
+        evidenceRows: [
+          makeEvidenceRow({ witness_level: "witnessed-by-maestro" }),
+          makeThreatModelRow(),
+        ],
+      }),
+    );
+    expect(verdict.decision).toBe("PASS");
+    const threatModelReason = verdict.reasons.find((r) => r.code === "threat-model-required");
+    expect(threatModelReason).toBeUndefined();
   });
 });

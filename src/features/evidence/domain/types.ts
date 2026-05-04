@@ -5,7 +5,8 @@ export type EvidenceKind =
   | "contract-amendment"
   | "contract-amendment-blocked"
   | "ai-review"
-  | "plan-check";
+  | "plan-check"
+  | "threat-model";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -98,6 +99,22 @@ export interface PlanCheckPayload {
   readonly warnCount: number;
 }
 
+export type ThreatModelResidualRisk = "low" | "medium" | "high";
+
+export interface ThreatModelMitigation {
+  readonly threat: string;
+  readonly mitigation: string;
+}
+
+export interface ThreatModelPayload {
+  readonly assets: readonly string[];
+  readonly threatCategories: readonly string[];
+  readonly mitigations: readonly ThreatModelMitigation[];
+  readonly residualRisk: ThreatModelResidualRisk;
+  readonly criterion_id?: string;
+  readonly source_file?: string;
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -106,6 +123,7 @@ interface EvidencePayloadByKind {
   readonly "contract-amendment-blocked": ContractAmendmentBlockedPayload;
   readonly "ai-review": AIReviewPayload;
   readonly "plan-check": PlanCheckPayload;
+  readonly "threat-model": ThreatModelPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

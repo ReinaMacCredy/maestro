@@ -15,6 +15,7 @@ import type {
   EvidenceRow,
   ManualNotePayload,
   PlanCheckPayload,
+  ThreatModelPayload,
   WitnessLevel,
 } from "../domain/types.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
@@ -25,7 +26,7 @@ interface EvidenceCommandDeps {
   readonly recordEvidence: typeof recordEvidence;
 }
 
-const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note", "ai-review", "plan-check"];
+const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note", "ai-review", "plan-check", "threat-model"];
 const AI_REVIEWER_KINDS: readonly AIReviewerKind[] = ["bug", "security", "architecture"];
 
 export function registerEvidenceCommand(
@@ -51,6 +52,7 @@ Examples:
   maestro evidence record --task tsk-aaaaaa --command "bun run build" --exit 0 --duration 12345 --log ./build.log
   maestro evidence record --task tsk-aaaaaa --kind manual-note --note "Verified UI on staging"
   maestro evidence record --task tsk-aaaaaa --kind ai-review --reviewer security --findings '[{"severity":"error","message":"SQL injection"}]' --confidence 0.9
+  maestro evidence record --task tsk-aaaaaa --kind threat-model --threat-model-file ./threat-model.json
 `)
     .requiredOption("--task <id>", "Task this evidence belongs to")
     .option("--kind <kind>", `Evidence kind (${EVIDENCE_KINDS.join("|")})`, "command")
@@ -63,6 +65,8 @@ Examples:
     .option("--reviewer <kind>", `Reviewer kind for --kind ai-review (${AI_REVIEWER_KINDS.join("|")})`)
     .option("--findings <json>", "JSON array of findings or path to a JSON/YAML file (with --kind ai-review)")
     .option("--confidence <n>", "Confidence score 0-1 for --kind ai-review (default 0.5)", parseFloat)
+    .option("--threat-model-file <path>", "Path to a JSON or YAML threat-model file (with --kind threat-model)")
+    .option("--witness <level>", "Override witness level (default: agent-claimed-locally)")
     .option("--session <id>", "Override session id (default: detected session)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -87,6 +91,8 @@ interface RecordOpts {
   readonly reviewer?: string;
   readonly findings?: string;
   readonly confidence?: number;
+  readonly threatModelFile?: string;
+  readonly witness?: string;
   readonly session?: string;
 }
 
@@ -179,6 +185,23 @@ async function buildRecordInput(
       kind: "ai-review",
       payload,
       witness_level: "agent-claimed-locally" satisfies WitnessLevel,
+    };
+  }
+
+  if (kind === "threat-model") {
+    if (typeof opts.threatModelFile !== "string" || opts.threatModelFile.length === 0) {
+      throw new MaestroError("--kind threat-model requires --threat-model-file", [
+        `maestro evidence record --task ${taskId} --kind threat-model --threat-model-file ./threat-model.json`,
+      ]);
+    }
+    const payload = parseThreatModelFile(opts.threatModelFile, taskId, opts.criterion);
+    const witnessLevel = parseWitnessLevel(opts.witness, "agent-claimed-locally");
+    return {
+      task_id: taskId,
+      ...(sessionId !== undefined ? { session_id: sessionId } : {}),
+      kind: "threat-model",
+      payload,
+      witness_level: witnessLevel,
     };
   }
 
@@ -282,6 +305,107 @@ function parseNonNegativeInt(raw: string): number {
   return n;
 }
 
+const VALID_RESIDUAL_RISKS = new Set(["low", "medium", "high"]);
+
+function parseThreatModelFile(
+  filePath: string,
+  taskId: string,
+  criterion?: string,
+): ThreatModelPayload {
+  let fileContent: string;
+  try {
+    fileContent = readFileSync(filePath, "utf8");
+  } catch {
+    throw new MaestroError(`--threat-model-file: could not read file: ${filePath}`, [
+      `maestro evidence record --task ${taskId} --kind threat-model --threat-model-file ./threat-model.json`,
+    ]);
+  }
+
+  let raw: unknown;
+  try {
+    raw = parseYaml<unknown>(fileContent);
+  } catch {
+    throw new MaestroError(`--threat-model-file: could not parse file as JSON/YAML: ${filePath}`, [
+      "Ensure the file contains a valid JSON or YAML object matching the ThreatModelPayload schema",
+    ]);
+  }
+
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new MaestroError(`--threat-model-file: expected a top-level object, got ${Array.isArray(raw) ? "array" : typeof raw}`, [
+      "The threat-model file must be a JSON or YAML object",
+    ]);
+  }
+
+  const obj = raw as Record<string, unknown>;
+
+  if (!Array.isArray(obj["assets"]) || !(obj["assets"] as unknown[]).every((v) => typeof v === "string")) {
+    throw new MaestroError(`--threat-model-file: field "assets" must be a string array`, [
+      "Example: assets: [\"session tokens\", \"password hashes\"]",
+    ]);
+  }
+
+  if (!Array.isArray(obj["threatCategories"]) || !(obj["threatCategories"] as unknown[]).every((v) => typeof v === "string")) {
+    throw new MaestroError(`--threat-model-file: field "threatCategories" must be a string array`, [
+      "Example: threatCategories: [\"spoofing\", \"tampering\"]",
+    ]);
+  }
+
+  if (!Array.isArray(obj["mitigations"])) {
+    throw new MaestroError(`--threat-model-file: field "mitigations" must be an array`, [
+      "Example: mitigations: [{threat: \"session-fixation\", mitigation: \"rotate token on login\"}]",
+    ]);
+  }
+  for (let i = 0; i < (obj["mitigations"] as unknown[]).length; i++) {
+    const m = (obj["mitigations"] as unknown[])[i] as Record<string, unknown>;
+    if (typeof m !== "object" || m === null || Array.isArray(m)) {
+      throw new MaestroError(`--threat-model-file: mitigations[${i}] must be an object`, []);
+    }
+    if (typeof m["threat"] !== "string" || (m["threat"] as string).length === 0) {
+      throw new MaestroError(`--threat-model-file: mitigations[${i}].threat must be a non-empty string`, []);
+    }
+    if (typeof m["mitigation"] !== "string" || (m["mitigation"] as string).length === 0) {
+      throw new MaestroError(`--threat-model-file: mitigations[${i}].mitigation must be a non-empty string`, []);
+    }
+  }
+
+  if (!VALID_RESIDUAL_RISKS.has(obj["residualRisk"] as string)) {
+    throw new MaestroError(
+      `--threat-model-file: field "residualRisk" must be one of: low, medium, high (got: ${obj["residualRisk"]})`,
+      [],
+    );
+  }
+
+  return {
+    assets: obj["assets"] as string[],
+    threatCategories: obj["threatCategories"] as string[],
+    mitigations: (obj["mitigations"] as Array<Record<string, string>>).map((m) => ({
+      threat: m["threat"] as string,
+      mitigation: m["mitigation"] as string,
+    })),
+    residualRisk: obj["residualRisk"] as "low" | "medium" | "high",
+    ...(criterion !== undefined ? { criterion_id: criterion } : {}),
+    source_file: filePath,
+  };
+}
+
+const VALID_WITNESS_LEVELS: readonly WitnessLevel[] = [
+  "agent-claimed-and-not-reproducible",
+  "agent-claimed-locally",
+  "witnessed-by-ci",
+  "witnessed-by-maestro",
+];
+
+function parseWitnessLevel(raw: string | undefined, fallback: WitnessLevel): WitnessLevel {
+  if (raw === undefined) return fallback;
+  if (!VALID_WITNESS_LEVELS.includes(raw as WitnessLevel)) {
+    throw new MaestroError(
+      `Invalid --witness level: ${raw}`,
+      [`Valid levels: ${VALID_WITNESS_LEVELS.join(", ")}`],
+    );
+  }
+  return raw as WitnessLevel;
+}
+
 function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
   const lines = [
     `[ok] ${label}: ${row.id}`,
@@ -313,6 +437,14 @@ function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
     for (const f of payload.findings) {
       lines.push(`  [${f.severity}] ${f.check}: ${f.message}`);
     }
+  } else if (row.kind === "threat-model") {
+    const payload = row.payload as ThreatModelPayload;
+    lines.push(`  Residual Risk: ${payload.residualRisk}`);
+    lines.push(`  Assets: ${payload.assets.length}`);
+    lines.push(`  Threat Categories: ${payload.threatCategories.length}`);
+    lines.push(`  Mitigations: ${payload.mitigations.length}`);
+    if (payload.source_file !== undefined) lines.push(`  Source: ${payload.source_file}`);
+    if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
   } else {
     const payload = row.payload as ManualNotePayload;
     lines.push(`  Note: ${payload.note}`);

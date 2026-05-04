@@ -18,6 +18,7 @@ export interface ComputeRiskInput {
   readonly amendmentCount: number;
   readonly blockedAmendments?: number;
   readonly costBudgetExhausted?: boolean;
+  readonly matchedRiskPolicySignal?: string;
 }
 
 /**
@@ -47,6 +48,7 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     derivedRiskClass,
     amendmentCount,
     costBudgetExhausted,
+    matchedRiskPolicySignal,
   } = input;
 
   const proposedRiskClass: RiskClass = contract.riskClass ?? "medium";
@@ -108,7 +110,16 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
   }
 
   // 4. HUMAN if effectiveRiskClass is critical (Rule 12).
+  //    Also collect threat-model-required reason when the diff is security-path-related
+  //    and no threat-model evidence is present (Edge Case 12).
   if (effectiveRiskClass === "critical") {
+    if (requiresThreatModel(derivedRiskClass, matchedRiskPolicySignal) && !hasThreatModelEvidence(evidenceRows)) {
+      reasons.push({
+        category: "policy",
+        code: "threat-model-required",
+        message: "Diff intersects security-relevant sensitive paths with critical risk class; a threat-model Evidence row is required.",
+      });
+    }
     reasons.push({
       category: "risk",
       code: "effective-risk-critical",
@@ -181,6 +192,29 @@ export function applyAIReviewerRiskRaise(
     }
   }
   return current;
+}
+
+/**
+ * Returns true when the derived risk class is critical AND the matched policy
+ * signal is security-path-related (Edge Case 12).
+ *
+ * The only signal that means "this diff touches security-relevant sensitive
+ * paths" is "diff-intersects-sensitive-security" from derive-risk-class.ts.
+ */
+export function requiresThreatModel(
+  derivedRiskClass: RiskClass,
+  matchedSignal: string | undefined,
+): boolean {
+  return derivedRiskClass === "critical" && matchedSignal === "diff-intersects-sensitive-security";
+}
+
+/**
+ * Returns true if any evidence row has kind "threat-model".
+ * Per Rule 1, schema-valid presence is necessary but not sufficient —
+ * empty-content rows still clear this predicate.
+ */
+export function hasThreatModelEvidence(evidenceRows: readonly EvidenceRow[]): boolean {
+  return evidenceRows.some((r) => r.kind === "threat-model");
 }
 
 function buildVerdict(
