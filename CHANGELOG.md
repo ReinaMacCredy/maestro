@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.68.0 - L4 — Autopilot Inner Loop (No Merge)
+
+- New verbs: `maestro plan check`, `maestro task budget`,
+  `maestro evidence record --kind ai-review`,
+  `maestro evidence record --kind threat-model`.
+- New feature dir `src/features/plan/`: `checkPlan(plan, contract, spec,
+  derived)` produces deterministic findings — `scope-widens` (plan touches
+  files outside `contract.scope.filesExpected`), `missing-proof` (a Spec
+  acceptance criterion has no proof entry), `risk-class-too-low` (plan's
+  `riskClass` is below the deriver's class for the planned files, per
+  Rule 1 plan-time gate). The `plan check` verb records a `plan-check`
+  Evidence row and never blocks (exit 0 always).
+- New Evidence kinds: `plan-check`, `ai-review`, `threat-model`.
+  Risk Engine now consumes `ai-review` per Rule 1 (LLM veto-only): any
+  error-severity reviewer finding raises `effectiveRiskClass` by one notch;
+  a `security`-reviewer error always lifts to `critical`; a clean
+  ai-review never lowers the deterministic baseline. Risk Engine also
+  applies the `threat-model-required` predicate (Edge Case 12) — when
+  `derivedRiskClass === "critical"` and the matched policy signal is
+  `diff-intersects-sensitive-security`, a `threat-model` Evidence row is
+  required to clear that reason; presence + schema validity is necessary
+  but not sufficient.
+- Cost-budget enforcement (Rule 11): run-state at
+  `.maestro/runs/<task-id>/state.json` (gitignored, derived) tracks
+  `retryCount`, `wallClockElapsedSeconds`, `tokensUsed?`. The Risk Engine
+  short-circuits to BLOCK with reason `cost-budget-exhausted` when any
+  limit is exceeded. `request-verdict` increments `retryCount` by 1 on
+  FAIL/HUMAN verdicts; PASS and BLOCK do not increment. Wall-clock and
+  token deltas are the agent runtime's responsibility.
+- New bundled skill `maestro-verify` (canonical verification protocol);
+  `maestro install` now installs 7 bundled skills (was 6). The
+  `maestro-task`, `maestro-plan`, and `maestro-handoff` skills cross-
+  reference `maestro-verify` at their verification points instead of
+  duplicating the detail.
+- Mission Control: new `autopilot` screen (mission-mode only) projects
+  `{taskId, intent, latestVerdict.decision, retryCount/maxRetries,
+  wallClockElapsed/maxWallClockSeconds, lastUpdatedAt}` from existing
+  stores. Read-only — no mutation, no Evidence recording, no verdict
+  invocation. `mission-control --render-check` now covers 14 screens.
+- New docs: `docs/ai-reviewer-protocol.md` (schema for bug/security/
+  architecture reviewers; confidence semantics; recording guidance) and
+  `docs/threat-model-format.md` (ThreatModelPayload schema + JSON/YAML
+  examples).
+- Compat: additive — existing contracts, evidence, verdicts, and
+  policies unchanged. The L3 `costBudgetExhausted` Risk Engine input
+  (declared but unwired in L3) is now supplied by `request-verdict`.
+
 ## 0.67.0 - L3 — Risk Verdict + Policy + Witness Levels
 
 - New verbs: `maestro verdict show`, `maestro verdict request`,

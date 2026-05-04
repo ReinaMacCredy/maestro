@@ -91,7 +91,7 @@ The 7 adoption levels are the shipping plan. Each level is a release with its ow
 | **L1** | Evidence-only logbook: agent records what it did, human reads it | shipped (v0.65.0) | P9α (Evidence schema), P10α (basic provenance), P11α (diff capture only) |
 | **L2** | Contract-required: diff must respect declared scope | shipped (v0.66.0) | P5 (Contract on Task; P8 merged in), P11 full (Trust Verifier), P6 partial (plan check) |
 | **L3** | Risk verdict: Maestro produces PASS/FAIL/HUMAN/BLOCK | shipped (v0.67.0) | P14 (Risk engine), P15 (Policy authoring), P12 (Proof Strength → Witness Levels) |
-| **L4** | Autopilot inner loop, no merge: agent runs the loop, human merges | mid | P7 partial, P13 partial (1–2 reviewers), P16 partial (Mission Control), P2 minimal (acceptance-criteria predicate) |
+| **L4** | Autopilot inner loop, no merge: agent runs the loop, human merges | shipped (v0.68.0) | P7 partial, P13 partial (1–2 reviewers), P16 partial (Mission Control), P2 minimal (acceptance-criteria predicate) |
 | **L5** | **Auto-PR with full evidence packet — terminal default** | **headline** | P18 (CI/PR gate), P17 (Human Review UX) |
 | L6 | Auto-merge for declared safe scope | advanced optional; **requires L7-minimum (L7.1+L7.2+L7.5) shipped in same release** | P19, P20, P13 full, P4 (Spec Quality as gate threshold) |
 | L7 | Deploy + monitor + learn | advanced optional; L7 capabilities are **independently reachable from L5** without L6; only the L7-minimum subset is *coupled* to L6 | P21, P22, P23, P24, P25 |
