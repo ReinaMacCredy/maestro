@@ -810,6 +810,15 @@ maestro evidence record --task <id> --kind threat-model \
   --threat-model-file <path>
 ```
 
+## Quick Start: L5 (CI is the authoritative verifier)
+
+1. Bootstrap your repo with `maestro setup` — the maestro-setup skill installs `.github/workflows/maestro-verify.yml` from its bundled template (when `.github/` exists).
+2. Pin the Maestro binary version in the workflow (default: latest tagged release).
+3. Open a PR. GitHub Actions runs `maestro ci verify`, which runs Trust Verifier, ingests CI job results as `witnessed-by-ci` Evidence, computes the Verdict, and posts a GitHub Check.
+4. Merge when the check is green. Use `maestro verdict show --pr <n>` locally to inspect the latest verdict for a PR (looked up by current HEAD tree SHA).
+
+See `docs/ci-integration.md` for the full reference (workflow template, env contract, witness ingestion, troubleshooting).
+
 ## Common Commands
 
 | Command | Use it when you want to... |

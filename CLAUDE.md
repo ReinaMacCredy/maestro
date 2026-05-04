@@ -11,6 +11,8 @@
 - **Never edit a skill to match surprising CLI behavior.** If a skill needs to change (new section, new flag, renamed verb, semantic shift), stop and ask the user first. Skill content is behavioral contract, not scratch space.
 - **Skill drafts belong in conversation, not in files.** Adjustments go through user approval before landing in `skills/bundled/`.
 
+Local Maestro is advisory; CI Maestro is authoritative. The PR check status posted by `maestro ci verify` is the merge gate — see `docs/ci-integration.md`.
+
 ## Always release + link locally when testing
 
 Every test/verification loop:

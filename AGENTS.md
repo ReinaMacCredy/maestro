@@ -37,6 +37,7 @@ maestro/
 | Mission Spec (acceptance criteria, non-goals) | `src/features/spec/` | `spec show/edit --mission <id>`; stored under `.maestro/missions/<id>/spec.json` |
 | Policy and owners loader | `src/features/policy/` | Loads `.maestro/policies/owners.yaml`; three roles: `policy_approver`, `ratchet_approver`, `sensitive_waiver`. Extended in L3 with `RiskPolicy`, `AutopilotPolicy`, `ReleasePolicy` loaders, asymmetric edit classifier, and effective-policy use-case. |
 | Trust Verifier | `src/features/verify/` | Runs 6 checks (scope, lockfile, generated, sensitive-paths, commit-metadata, secrets) against a diff + contract |
+| `maestro ci verify` (L5)               | `src/features/ci/` | Reads CI env (`GITHUB_*`), resolves PR + diff, runs Trust Verifier, ingests CI job results as `witnessed-by-ci` Evidence, computes Verdict via existing request-verdict use-case. Posts a GitHub Check (success/failure/action_required) per verdict decision. |
 | ProofMap builder (L3) | `src/features/verify/usecases/proof-map.ts` | Joins `Spec.acceptance_criteria` with Evidence rows to produce a per-criterion coverage map |
 | Versioned contract storage and amendments | `src/features/task/domain/contract/` | `ContractVersionStorePort`; `contract show/amend/history` verbs enforce `amendmentBudget` (Rules 3–7) |
 | Risk Engine (L3) | `src/features/risk/` | `computeRisk` and `deriveRiskClassFromDiff` implement the deterministic signal-to-risk-class mapping; `risk-class-order.ts` compares levels |
@@ -70,6 +71,7 @@ maestro/
 - Contract amendments (L2) are versioned Evidence, not silent edits. Each `contract amend` call consumes from `amendmentBudget` (Rules 3–7: budgeted, versioned, never-lower risk, plan-time proposals exempt). The amend use-case enforces the budget and writes a `contract-amended` Evidence row automatically. See `docs/sensitive-paths-defaults.md` for default sensitive-path globs and `docs/owners-yaml-format.md` for the owners schema.
 - Verdict semantics (L3): `PASS` — all acceptance criteria met with evidence at or above the required witness level; `FAIL` — evidence present but below the required level or a criterion unmet; `HUMAN` — criteria met but autopilot policy requires human review for this risk class; `BLOCK` — a blocker condition is active (broken contract, critical risk class with no human signoff, or pending loosening in the soak window). The Risk Engine derives risk class from diff signals and takes the higher of agent-proposed vs Maestro-derived (Rule 1: LLM can never lower the derived class). See `docs/risk-class-derivation.md` and `docs/policy-format.md`.
 - Asymmetric policy editing (L3): policy tightenings take effect immediately; loosenings soak for 30 days before becoming effective. Pending loosenings accumulate in `.maestro/policies/.pending-loosenings.json` (gitignored). Use `maestro policy pending` to inspect.
+- CI is the authoritative verifier. Local Maestro is advisory; the GitHub check status posted by `maestro ci verify` is the merge gate. Verdicts are bound to (pr, tree_sha) so squashes survive but force-push to a different tree invalidates them.
 
 ## ANTI-PATTERNS
 - Deep imports into another feature's `commands/`, `usecases/`, `domain/`, `ports/`, or `adapters/`.
@@ -126,11 +128,14 @@ maestro spec edit --mission <id>
 ```bash
 maestro verdict show --task <id>
 maestro verdict show --task <id> --version <id>
+maestro verdict show --task <id> --pr <number>
 maestro verdict request --task <id>
 maestro verdict request --task <id> --json
 ```
 
 Exit codes for `verdict request`: 0 = PASS, 1 = FAIL, 2 = HUMAN, 3 = BLOCK.
+
+L5 added `--pr <n>` to filter by PR — finds verdict by current HEAD tree SHA, so squashed commits with identical content retain their verdict and force-pushes to a different tree return no match.
 
 ## CLI VERBS — POLICY (L3)
 ```bash
@@ -159,6 +164,17 @@ maestro task budget --task <id> --json
 ```
 
 Exit code is always 0; the verb is read-only. Once any budget limit is exceeded, the next `verdict request` returns `BLOCK` (exit 3).
+
+## CLI VERBS — CI (L5)
+```bash
+maestro ci verify [--pr <n>] [--task <id>] [--base <ref>] [--json]
+```
+
+Reads CI env (`GITHUB_ACTIONS`, `GITHUB_REPOSITORY`, `GITHUB_REF`, `GITHUB_SHA`, `GITHUB_BASE_REF`, `GITHUB_EVENT_PATH`, `GITHUB_OUTPUT`, `GITHUB_TOKEN`) by default; flags override. Runs Trust Verifier, ingests any CI job-result file as `witnessed-by-ci` Evidence, computes the Verdict, writes `verdict_id`, `verdict_decision`, `effective_risk_class` to `$GITHUB_OUTPUT`, and (when running in GitHub Actions with a token) posts a GitHub Check via `gh api`.
+
+Exit codes: 0 PASS / 1 FAIL / 2 HUMAN / 3 BLOCK.
+
+See `docs/ci-integration.md` for the full reference: workflow template, env contract, witness ingestion, PR check semantics, verdict tree-SHA identity, and troubleshooting.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

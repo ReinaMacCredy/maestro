@@ -31,6 +31,7 @@ src/
 | Plan-check use-case + CLI (L4) | `features/plan/` | New feature added in L4.1. `checkPlan` in `usecases/check-plan.ts` runs three deterministic checks (`scope-widens`, `missing-proof`, `risk-class-too-low`); `commands/plan-check.command.ts` registers `maestro plan check`. Records a `plan-check` Evidence row on each run. |
 | Cost-budget run-state (L4) | `features/task/` | Extended in L4.4 with `RunState`, `RunStateStorePort`, `FsRunStateStoreAdapter` (`adapters/fs-run-state-store.adapter.ts`), `checkCostBudget` use-case, and the `task budget` command. Run-state persisted under `.maestro/runs/<task-id>/state.json` (gitignored). |
 | Mission Control autopilot view (L4) | `tui/state/autopilot-screen.ts` | New read model added in L4.6 for the autopilot screen in Mission Control (mission-mode only). |
+| `maestro ci verify` (L5) | `features/ci/` | `maestro ci verify` CLI verb, GitHub Actions env reader (`readCiEnv`), GitHub API port + gh-cli adapter, post-PR-check use-case. |
 
 ## CONVENTIONS
 - Cross-feature imports go through `@/features/<name>` only.
