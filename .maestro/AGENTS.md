@@ -25,8 +25,9 @@ Use this directory with the repo-root `AGENTS.md`. `.maestro/` is the repo-owned
 | Task contracts | `tasks/contracts/` | Per-task intent/scope/verdict files with append-only `index.jsonl` history |
 | Contract draft templates | `tasks/contract-templates/` | Repo-local YAML seeds for `maestro task contract new <id> --from <name>` |
 | Versioned contract store (L2) | `contracts/` | One subdirectory per task id; each version stored as `v<n>.json`; `current.json` symlink or copy |
-| Policy files (L2) | `policies/` | `owners.yaml` (three roles) and `sensitive-paths.yaml` (glob list); both repo-tracked |
+| Policy files (L2 + L3) | `policies/` | `owners.yaml`, `sensitive-paths.yaml`, `risk.yaml`, `autopilot.yaml`, `release.yaml`; all repo-tracked. `risk.yaml` absent means ROADMAP-default risk policy applies. |
 | Mission specs (L2) | `specs/` | Per-mission `spec.json` files; managed via `maestro spec show/edit --mission <id>` |
+| Verdict store (L3) | `verdicts/` | Gitignored. One folder per task id (`verdicts/<taskId>/`), one JSON file per verdict version. Derived; not source of truth. |
 | Local planning corpus | `plans/`, `drafts/`, `wisdom/`, `archive/` | Reference material, not automatically current product truth |
 | Retrieval/memory data | `retrieval-index.json`, `feedback.jsonl` | Generated/supporting artifacts |
 | Repo config | `config.yaml`, `settings.json` | Project-local Maestro settings |
@@ -53,8 +54,10 @@ At L2, the file must be present and parseable. Role lists may be empty (defaults
 ## RUNTIME STATE (GITIGNORED)
 - `.maestro/evidence/` — per-task evidence rows written by `maestro evidence record`. Gitignored; per-machine only.
 - `.maestro/runs/` — per-task run records written by Maestro tooling. Gitignored; per-machine only.
+- `.maestro/verdicts/` — per-task verdict history written by `maestro verdict request`. Gitignored; derived state, not source of truth. One subfolder per task id; one JSON per verdict version.
+- `.maestro/policies/.pending-loosenings.json` — gitignored derived cache of in-soak policy loosenings. Written by `maestro policy check` and read by `maestro policy pending`.
 
-Both directories are created on first use by `maestro init` (or `maestro setup`). Do not commit their contents.
+Both `evidence/` and `runs/` are created on first use by `maestro init` (or `maestro setup`). Do not commit their contents or any gitignored policy cache.
 
 All other directories under `.maestro/` (including `contracts/`, `policies/`, `specs/`, `tasks/`) are committed and repo-tracked.
 

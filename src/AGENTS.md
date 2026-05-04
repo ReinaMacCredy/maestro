@@ -23,8 +23,11 @@ src/
 | Change Mission Control | `tui/`, `infra/commands/mission-control.command.ts` | Read `tui/README.md` first |
 | Evidence logbook (evidence record/list/show) | `features/evidence/` | `EvidenceKind`, `WitnessLevel`, `EvidenceRow` in `domain/types.ts`; storage adapter under `adapters/file-storage.ts` |
 | Mission Spec (spec show/edit) | `features/spec/` | `Spec`, `AcceptanceCriterion`, `NonGoal` in `domain/types.ts`; commands under `commands/spec.command.ts` |
-| Policy and owners loader | `features/policy/` | `Owners`, `OwnersYaml` in `domain/owners-types.ts`; `loadOwners` use-case reads `.maestro/policies/owners.yaml` |
+| Policy and owners loader | `features/policy/` | `Owners`, `OwnersYaml` in `domain/owners-types.ts`; `loadOwners` use-case reads `.maestro/policies/owners.yaml`. Extended in L3: `RiskPolicy`, `AutopilotPolicy`, `ReleasePolicy` types and loaders; asymmetric edit classifier (`classify-policy-edit.usecase.ts`); effective-policy use-case; `policy check` and `policy pending` commands. |
 | Trust Verifier (task verify) | `features/verify/` | `runTrustVerifier` in `usecases/trust-verifier.ts`; 6 checks under `usecases/checks/`; `TrustFinding`, `TrustVerifierResult` in `domain/types.ts` |
+| ProofMap builder (L3) | `features/verify/usecases/proof-map.ts` | Joins `Spec.acceptance_criteria` with Evidence rows; called by `maestro task proof --task <id>` |
+| Risk Engine (L3) | `features/risk/` | `computeRisk` in `usecases/compute-risk.ts`; `deriveRiskClassFromDiff` in `usecases/derive-risk-class.ts` (signal-to-class mapping per ROADMAP table); `risk-class-order.ts` for level comparison |
+| Verdict (L3) | `features/verdict/` | Domain types in `domain/`; file-system store adapter in `adapters/`; `verdict-id.ts` under `usecases/`; `verdict show` and `verdict request` commands (exit 0 PASS, 1 FAIL, 2 HUMAN, 3 BLOCK) |
 
 ## CONVENTIONS
 - Cross-feature imports go through `@/features/<name>` only.

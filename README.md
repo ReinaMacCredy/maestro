@@ -655,6 +655,70 @@ maestro spec edit --mission <id>
 - `sensitive-paths.yaml` — glob list; paths matching these globs trigger `checkSensitivePaths` findings. See `docs/sensitive-paths-defaults.md` for the 8 default globs and guidance on extending or relaxing them.
 - `owners.yaml` — three role lists (`policy_approver`, `ratchet_approver`, `sensitive_waiver`). See `docs/owners-yaml-format.md` for the schema reference.
 
+## L3: Risk Verdict
+
+L3 adds a deterministic verdict layer on top of the L2 trust substrate. After running `maestro task verify`, an agent requests a verdict that produces one of four outcomes:
+
+| Verdict | Meaning |
+|---|---|
+| `PASS` | All acceptance criteria are met with evidence at or above the required witness level for the effective risk class. Completion is unblocked. |
+| `FAIL` | Evidence is present but insufficient: a criterion is unmet, or the evidence witness level is below the autopilot policy threshold. |
+| `HUMAN` | Criteria are met but the effective risk class or autopilot policy requires a human reviewer before the task can be sealed. |
+| `BLOCK` | A hard blocker is active: broken contract, `critical` risk class with no human signoff, or a policy loosening still in its 30-day soak window. |
+
+### Witness Levels
+
+Every Evidence row carries a `witness_level` that captures how trustworthy the claim is. The ladder, strongest to weakest:
+
+1. `witnessed-by-maestro` — Maestro itself ran the command and captured the result.
+2. `witnessed-by-ci` — A trusted CI gate ran the command and posted the result back. (Full wiring lands at L4.)
+3. `agent-claimed-locally` — The agent self-reported a local run; Maestro did not observe it. Default for schema v1 evidence rows.
+4. `agent-claimed-and-not-reproducible` — A manual note; cannot be reproduced. Weakest level.
+
+The Risk Engine demotes `PASS` to `HUMAN` if any evidence row's witness level is below the threshold required by the effective autopilot policy for the derived risk class.
+
+See `docs/witness-levels.md` for the full reference.
+
+### Risk Class
+
+The Risk Engine derives a risk class from deterministic diff signals and takes the higher of agent-proposed vs Maestro-derived (Rule 1: an agent can never lower the derived class). The four levels are `low`, `medium`, `high`, and `critical`. See `docs/risk-class-derivation.md` for the signal-to-class mapping table.
+
+### ProofMap
+
+`maestro task proof --task <id>` produces a per-criterion coverage map: for each acceptance criterion in the linked Spec, it shows which Evidence rows satisfy it and at what witness level.
+
+### Asymmetric Policy Editing
+
+Policy tightenings (stricter rules, lower budgets) take effect immediately. Policy loosenings (relaxed rules, higher budgets) soak for 30 days before becoming effective. Pending loosenings accumulate in `.maestro/policies/.pending-loosenings.json` (gitignored). Use `maestro policy pending` to inspect.
+
+### L3 CLI surface
+
+```bash
+# Verdict
+maestro verdict request --task <id>           # exit 0=PASS 1=FAIL 2=HUMAN 3=BLOCK
+maestro verdict request --task <id> --json
+maestro verdict show --task <id>
+maestro verdict show --task <id> --version <id>
+
+# ProofMap
+maestro task proof --task <id>
+maestro task proof --task <id> --json
+
+# Policy inspection
+maestro policy check --task <id>
+maestro policy pending
+```
+
+### L3 policy files
+
+`maestro init` bootstraps three additional policy files committed under `.maestro/policies/`:
+
+- `risk.yaml` — extends or tightens the ROADMAP-default signal-to-class mapping. Absent means ROADMAP defaults apply.
+- `autopilot.yaml` — per-risk-class required witness level and auto-pass eligibility.
+- `release.yaml` — release-gate rules (e.g., minimum witness level required before a release commit is stamped).
+
+See `docs/policy-format.md` for the schema reference for all five policy files.
+
 ## Common Commands
 
 | Command | Use it when you want to... |
