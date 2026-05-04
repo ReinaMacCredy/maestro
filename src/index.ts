@@ -57,6 +57,7 @@ import { registerPolicyCommand } from "./features/policy/commands/policy.command
 import { registerVerdictCommand } from "./features/verdict/index.js";
 import { registerPlanCheckCommand } from "./features/plan/index.js";
 import { registerCiVerifyCommand } from "./features/ci/index.js";
+import { registerReviewCommand } from "./features/review/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -113,6 +114,8 @@ const ciCmd = program
   .command("ci")
   .description("CI integration — runs the verdict pipeline in CI mode");
 registerCiVerifyCommand(ciCmd, program);
+
+registerReviewCommand(program);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,

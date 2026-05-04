@@ -6,7 +6,8 @@ export type EvidenceKind =
   | "contract-amendment-blocked"
   | "ai-review"
   | "plan-check"
-  | "threat-model";
+  | "threat-model"
+  | "review-ack";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -115,6 +116,12 @@ export interface ThreatModelPayload {
   readonly source_file?: string;
 }
 
+export interface ReviewAckPayload {
+  readonly verdictId: string;
+  readonly ackedBy: string;
+  readonly criteria: readonly string[];
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -124,6 +131,7 @@ interface EvidencePayloadByKind {
   readonly "ai-review": AIReviewPayload;
   readonly "plan-check": PlanCheckPayload;
   readonly "threat-model": ThreatModelPayload;
+  readonly "review-ack": ReviewAckPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

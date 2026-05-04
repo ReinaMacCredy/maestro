@@ -12,6 +12,7 @@ export type {
   ThreatModelResidualRisk,
   ThreatModelMitigation,
   ThreatModelPayload,
+  ReviewAckPayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,

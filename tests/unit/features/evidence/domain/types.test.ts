@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type {
   EvidenceRow,
   WitnessLevel,
+  ReviewAckPayload,
 } from "@/features/evidence/domain/types.js";
 
 describe("evidence domain types", () => {
@@ -66,5 +67,30 @@ describe("evidence domain types", () => {
     ] satisfies WitnessLevel[];
 
     expect(levels).toHaveLength(4);
+  });
+
+  it("round-trips a review-ack kind row", () => {
+    const payload: ReviewAckPayload = {
+      verdictId: "vrd-abc123",
+      ackedBy: "alice",
+      criteria: ["All tests pass", "No critical findings"],
+    };
+
+    const row: EvidenceRow<"review-ack"> = {
+      schema_version: 3,
+      id: "evd-000010",
+      task_id: "tsk-a1b2c3",
+      kind: "review-ack",
+      witness_level: "agent-claimed-locally",
+      created_at: "2026-05-05T08:00:00.000Z",
+      payload,
+    };
+
+    expect(row.kind).toBe("review-ack");
+    expect(row.payload.verdictId).toBe("vrd-abc123");
+    expect(row.payload.ackedBy).toBe("alice");
+    expect(row.payload.criteria).toHaveLength(2);
+    expect(row.payload.criteria[0]).toBe("All tests pass");
+    expect(row.witness_level).toBe("agent-claimed-locally");
   });
 });
