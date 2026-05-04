@@ -168,6 +168,16 @@ maestro task update <id> --status completed \
 
 `--reason` is persisted verbatim. Short, factual, no secrets. `--strict` blocks completion on a broken contract verdict.
 
+## Before claiming the task complete
+
+1. **Run the Trust Verifier**: `maestro task verify --task <id>`. Address every error finding before proceeding.
+2. **Confirm criterion coverage**: `maestro task proof --task <id>`. Every Spec acceptance criterion must have at least one Evidence row.
+3. **Request a verdict**: `maestro verdict request --task <id>`.
+    - **PASS** (exit 0): proceed to ship.
+    - **FAIL** (exit 1): fix the findings; re-run `task verify` and `verdict request`.
+    - **HUMAN** (exit 2): hand off via `maestro handoff create`. Do not retry.
+    - **BLOCK** (exit 3): stop. Report the situation to the user.
+
 ## Evidence
 
 After each verification command (test, build, typecheck, lint), record

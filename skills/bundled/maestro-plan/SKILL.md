@@ -179,6 +179,23 @@ When `.maestro/plans/` exists in the cwd or an ancestor (the project uses maestr
 
 Skip this section entirely when no maestro project is detected.
 
+## Risk class is independently verified
+
+When the user approves your plan, the proposed Contract becomes Contract v1. Maestro independently re-derives a `risk_class` from the diff and uses `max(your_proposed, derived)` as the effective class — per Rule 1, you can only **raise** the class, never lower it.
+
+Plan accordingly:
+
+- Diffs intersecting `auth/**`, `secrets/**`, `permissions/**`, `payments/**`, or any path matching the project's `policies/sensitive-paths.yaml` → `critical`.
+- Diffs modifying dependency manifests (`package.json`, `bun.lock`, `Cargo.toml`, `requirements.txt`, `pyproject.toml`, etc.) → `high`.
+- Diffs including database migration files (paths matching `policies/migration_paths`) → `high`.
+- Diffs modifying CI workflow files (`.github/workflows/**`, `.circleci/**`, `.gitlab-ci.yml`) → `high`.
+- Diffs modifying `.maestro/policies/**`, `.maestro/ratchets/**`, or `owners.yaml` → `high`.
+- Diffs modifying build configuration (`tsconfig*.json`, `bunfig.toml`, `vite.config.*`, etc.) → `medium`.
+- Any source code change under `src/`, `lib/`, `app/`, or similar not matched above → `medium`.
+- Docs-only, comment-only, or formatting-only → `low`.
+
+Proposing `low` for any of the above is futile — Maestro will raise it and the verdict will route to a human.
+
 ## Hand off cleanly
 
 - If `.maestro/` is present in the cwd or an ancestor (maestro project), hand off to `maestro-task`. Emit the phased plan as task-batch JSON matching `maestro task plan --schema`: each phase becomes a task with `name`, `title`, `description`, and `blockedBy` wiring the phase dependencies. `maestro-task` runs `maestro task plan --file -` and claims the first task via `--start <name>`.
