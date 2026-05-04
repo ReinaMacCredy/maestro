@@ -56,7 +56,7 @@ The central warning still applies:
 Maestro will perfectly verify a wrongly-defined thing.
 ```
 
-You cannot escape this with more LLM judgment — the same model class produces and judges the spec. The structural escapes are: (a) LLM signals are veto-only (Rule 1); (b) deterministic gates the LLM cannot influence (Rule 2); (c) cheap revert via L7 mechanisms; (d) ratchet-encoded historical patterns (Phase 25b). The risk is contained, not eliminated. L6 without L7 is structurally invalid.
+You cannot escape this with more LLM judgment — the same model class produces and judges the spec. The structural escapes are: (a) LLM signals are veto-only (Rule 1); (b) deterministic gates the LLM cannot influence (Rule 2); (c) cheap revert via L7 mechanisms; (d) ratchet-encoded historical patterns (Phase 25b). The risk is contained, not eliminated.
 
 ## Architecture
 
@@ -92,17 +92,14 @@ The 7 adoption levels are the shipping plan. Each level is a release with its ow
 | **L2** | Contract-required: diff must respect declared scope | shipped (v0.66.0) | P5 (Contract on Task; P8 merged in), P11 full (Trust Verifier), P6 partial (plan check) |
 | **L3** | Risk verdict: Maestro produces PASS/FAIL/HUMAN/BLOCK | shipped (v0.67.0) | P14 (Risk engine), P15 (Policy authoring), P12 (Proof Strength → Witness Levels) |
 | **L4** | Autopilot inner loop, no merge: agent runs the loop, human merges | shipped (v0.68.0) | P7 partial, P13 partial (1–2 reviewers), P16 partial (Mission Control), P2 minimal (acceptance-criteria predicate) |
-| **L5** | **Auto-PR with full evidence packet — terminal default** | **headline** | P18 (CI/PR gate), P17 (Human Review UX) |
-| L6 | Auto-merge for declared safe scope | advanced optional; **requires L7-minimum (L7.1+L7.2+L7.5) shipped in same release** | P19, P20, P13 full, P4 (Spec Quality as gate threshold) |
-| L7 | Deploy + monitor + learn | advanced optional; L7 capabilities are **independently reachable from L5** without L6; only the L7-minimum subset is *coupled* to L6 | P21, P22, P23, P24, P25 |
+| **L5** | **CI is the authoritative verifier — terminal default** | **headline** | P18 (CI/PR gate), P17 (Human Review UX) |
+| L6 | Auto-merge for declared safe scope | advanced optional; ship after L5 is in production and teams ask for auto-merge | P19, P20, P13 full, P4 (Spec Quality as gate threshold) |
+| L7 | Deploy safety: gate, runtime signal ingestion, witnessed rollback | advanced optional; ship when teams need a deploy gate | P21, P22, P23, P24, P25 |
+| L8 | Learning loop: autopsy → ratchet → sunset | future, signal-driven; not on the active roadmap | (deferred phases parked in §L8) |
 
 L5 is the default journey. L6 and L7 are opt-in advanced levels with honest scope acknowledgment: in a typical repo, L6 covers ~5–15% of merged PRs.
 
-**Coupling clarification (resolves the "decoupled vs structurally invalid" question):**
-
-- L7 *capabilities* (runtime monitoring, autopsy, ratchet proposals) are independently reachable from L5 — teams can build them without ever shipping L6.
-- L6 specifically *requires* the L7-minimum subset — Phase L7.1 (deployment safety contract additions), L7.2 (feature-flag/canary scaffolding), L7.5 (witnessed rollback) — to ship in the same release as L6. Without that subset, L6 has no answer to "what catches the wrongly-defined-thing that auto-merged?".
-- Saying L6 is "structurally invalid" without L7 means: invalid without the L7-minimum subset. Not invalid without all of L7.
+**On L6/L7 independence (post-trim):** L5 is the headline product — most teams stop here. L6 (auto-merge) and L7 (deploy safety) are independent advanced levels: each can ship without the other. L6.1's eligibility predicate already handles "no witnessed rollback" by returning ineligible-with-reason, so L6 does not require L7 to ship. Teams that want auto-merge to be eligible for deploy-gated PRs should ship the relevant L7 phases first, but that is a deployment-pipeline decision, not a coupling baked into the levels.
 
 ## The Twelve Invariant Rules
 
@@ -405,7 +402,7 @@ Guided     : human approves spec, contract, plan, and risky steps.
 Verified   : agent works automatically; completion requires strong proof
              (witness levels 1 or 2 on every gating signal).
 Autopilot  : agent runs the inner loop; humans merge (L4–L5).
-Auto-merge : declared safe scope auto-merges (L6 only; requires L7 minimum in same release).
+Auto-merge : declared safe scope auto-merges (L6; advanced optional).
 Auto-deploy: declared safe scope auto-deploys with witnessed rollback (L7 only).
 ```
 
@@ -595,8 +592,8 @@ P28 [removed]                          Adoption is P27, not the last phase
 The biggest residual edge case (#1, #2) is *not solved* — it is contained:
 - L1–L4: humans gate every merge. The wrongly-defined thing fails human review or doesn't.
 - L5: humans gate every merge with full evidence packet. Same.
-- L6 (auto-merge): Rules 1+2 require deterministic gates the LLM didn't influence. Eligible scope is narrow. Most teams will not enable L6.
-- L7 (auto-deploy): runtime signals + canary + witnessed rollback + autopsy + ratchet are the only structural answer to "we shipped a wrong thing." L6 without L7 is structurally invalid.
+- L6 (auto-merge): Rules 1+2 require deterministic gates the LLM didn't influence. Eligible scope is narrow. Most teams will not enable L6. Advanced optional.
+- L7 (deploy safety): runtime signals + canary + witnessed rollback are the structural answer to "we shipped a wrong thing." Advanced optional; independent of L6.
 
 ## Compatibility With Current Maestro
 
@@ -1353,166 +1350,93 @@ Sequencing rules:
 
 ---
 
-### L5 — Auto-PR With Full Evidence Packet (Terminal Default)
+### L5 — CI Is the Authoritative Verifier
 
-**Goal of level**: Maestro opens a PR with the full evidence packet as the body. CI Maestro re-runs Trust Verifier authoritatively. The PR check status is the merge gate.
+**Goal of level**: CI runs maestro on every PR; the GitHub check status is the merge gate. Local maestro is advisory; CI maestro is authoritative. *Most teams stop here.*
 
-#### Phase L5.1: GitHub Action wrapper
+#### Phase L5.1: Workflow template
 
-- **Goal**: Single-step CI integration.
+- **Goal**: Single-step CI integration via `maestro setup`.
 - **Prerequisites**: L4 shipped.
 - **Deliverables**:
-  - `.github/actions/setup-maestro/action.yml` (composite action) installs the maestro binary at a pinned version.
-  - Sample workflow `.github/workflows/maestro-verify.yml.template` shipped via `maestro setup`.
+  - `.github/workflows/maestro-verify.yml.template` shipped via `maestro setup`. Plain GitHub Actions YAML; no composite-action wrapper (a curl-extract step is sufficient for a single-binary CLI).
 - **Acceptance criteria**:
-  - Test repo using the action passes verify on a clean diff.
-- **Scope**: medium.
+  - Template parses as valid YAML; `maestro setup` installs it.
+- **Scope**: small.
 
 #### Phase L5.2: `maestro ci verify` CLI verb
 
-- **Goal**: CI-mode verification.
+- **Goal**: CI-mode verification with authoritative verdict.
 - **Prerequisites**: L5.1.
 - **Deliverables**:
-  - `maestro ci verify --pr <number>` (or auto-detected from CI env vars).
-  - Resolves the diff, reads committed contracts/policies/ratchets, runs Trust Verifier, ingests CI job results from environment as `witnessed-by-ci` Evidence.
-  - Writes Verdict to stdout and to `$GITHUB_OUTPUT` (or equivalent).
+  - `maestro ci verify [--pr <n>] [--task <id>] [--base <ref>] [--json]`. Reads CI env (`GITHUB_*`), resolves PR + diff, runs Trust Verifier, ingests CI job results as `witnessed-by-ci` Evidence, computes verdict via existing `requestVerdict` use-case.
+  - Writes verdict id, decision, effective_risk_class to `$GITHUB_OUTPUT` if set.
+  - Exit codes: 0 PASS / 1 FAIL / 2 HUMAN / 3 BLOCK (same as `verdict request`).
 - **Acceptance criteria**:
   - Runs cleanly in a GitHub Actions environment; produces a Verdict.
-- **Scope**: large.
+- **Scope**: medium.
 
 #### Phase L5.3: Verdict identity by tree SHA (edge case 27)
 
 - **Goal**: Verdicts survive squash; force-push invalidates.
 - **Prerequisites**: L5.2.
 - **Deliverables**:
-  - `Verdict.subject = { pr: <number>, tree_sha: <sha> }` not commit_sha.
+  - `Verdict.subject = { pr?: number, tree_sha: string }`. Backward-tolerant: existing v1 verdicts without `subject` still parse.
+  - `GitAnchorPort.resolveTreeSha(cwd, ref?)` via `git rev-parse <ref>^{tree}`.
   - `maestro verdict show --pr N` finds verdicts by tree SHA at the current PR head.
 - **Acceptance criteria**:
   - Test: same content squashed into a different commit retains the verdict; force-push to a different tree invalidates.
-- **Scope**: medium.
-
-#### Phase L5.4: PR check + comment
-
-- **Goal**: Authoritative PR-check status with verdict comment.
-- **Prerequisites**: L5.2.
-- **Deliverables**:
-  - `maestro ci verify` posts a GitHub Check (success/failure/neutral) with the verdict.
-  - Posts a comment with the evidence packet summary: contract version, witness-level breakdown, findings, ratchet rules consulted.
-  - Updates the comment on subsequent runs (one comment per PR).
-- **Acceptance criteria**:
-  - Test against a fixture PR (in a sandbox repo): check appears, comment appears with the expected sections.
-- **Scope**: large.
-
-#### Phase L5.5: Per-test flake tracking (Rule 8)
-
-- **Goal**: Track per-test pass/fail history; downgrade flaky greens.
-- **Prerequisites**: L5.2.
-- **Deliverables**:
-  - `.maestro/runs/flake-history.json` (gitignored, restored from CI cache or artifact).
-  - Risk Engine consults flake history when classifying CI green Evidence.
-  - Threshold configurable in `policies/risk.yaml`; default `flake_rate > 0.05` downgrades.
-  - **Cold-cache behavior** (explicit, per audit): when `flake-history.json` is absent or a test has fewer than `min_runs_before_flake_judgment` (default 10) recorded runs, treat that test's CI green as `agent-claimed-locally` (downgrade-by-default). The cache must build up a baseline before strong-witness can be claimed. Once history accumulates ≥ `min_runs_before_flake_judgment`, the threshold rule applies normally.
-  - **Cache-restore failure**: if the CI cache restore fails (network error, expired key), Maestro emits an Evidence row of `kind=flake-cache-miss` and falls back to cold-cache behavior; never silently upgrades.
-- **Acceptance criteria**:
-  - Test: a fixture with 20 runs of a flaky test correctly downgrades a green run.
-  - Test: a brand-new test (zero history) is downgraded; a test with 9 runs is downgraded; a test with 10+ runs and 0 fails is at full strength.
-  - Test (boundary): exactly `min_runs_before_flake_judgment` runs (default 10), all green — `flake_rate` is 0.0, which is below the threshold, so the test is at full witness strength (not downgraded). This explicitly covers the off-by-one: 9 runs → downgraded; 10 runs → full strength.
-  - Test: simulated cache-restore failure produces a `flake-cache-miss` Evidence row and downgrades all runs in that CI invocation.
-- **Scope**: large.
-
-#### Phase L5.6: Phase 17 minimum interaction surface
-
-- **Goal**: Rubber-stamp mitigation (edge case 15).
-- **Prerequisites**: L5.4.
-- **Deliverables**:
-  - For high-risk verdicts (Verdict says HUMAN with risk_class >= medium), the PR comment includes "review checklist" — specific items the reviewer must explicitly acknowledge.
-  - Maestro tracks acknowledgments via PR-comment interactions or via a dedicated `maestro review ack <id>` CLI verb.
-  - Auto-merge eligibility (later, L6) requires acknowledgments to be present for high-risk verdicts.
-- **Acceptance criteria**:
-  - Test: a high-risk verdict produces a checklist; an unacknowledged checklist blocks auto-merge.
-- **Scope**: medium.
-
-#### Phase L5.6a: Override verb and `owners.yaml` CI integration
-
-- **Goal**: Make `maestro verdict override` operative at L5 so teams have a sanctioned, audited escalation path without waiting for L7.9.
-- **Prerequisites**: L5.6 (override requires the high-risk checklist surface to be present), L2.0b (`owners.yaml` stub).
-- **Deliverables**:
-  - CLI verb: `maestro verdict override --pr <number> --reason <str>` checks whether the invoking user is listed in `owners.yaml` under `sensitive_waiver`; if not, rejects with `not-authorized`.
-  - On successful authorization, writes an Evidence row of `kind=verdict-override` with witness level `agent-claimed-and-not-reproducible` (override is a human judgment bypassing deterministic gates).
-  - CI Maestro ingests override Evidence and reflects it in the PR check status as "verdict overridden by `<user>`" alongside the original BLOCK reasons. The original verdict is not rewritten.
-  - `owners.yaml` role check at override time uses the base-branch version of `owners.yaml` per Rule 12.
-- **Acceptance criteria**:
-  - Test: a user in `sensitive_waiver` can override; a user not in the list is rejected with a clear error.
-  - Test: the override Evidence row is present in `evidence list`; `verdict show` reflects the override alongside the original BLOCK.
-  - Update the Override section of this document to reference L5.6a as the implementing phase.
-- **Scope**: medium.
-
-#### Phase L5.7: `maestro pr publish` CLI verb
-
-- **Goal**: Open a PR with the evidence packet as the body.
-- **Prerequisites**: L5.4.
-- **Deliverables**:
-  - `maestro pr publish --task <id> [--draft]` opens a PR via `gh` CLI; body includes packet summary + link to the verdict.
-- **Acceptance criteria**:
-  - Test against a sandbox repo with `gh` available.
-- **Scope**: medium.
-
-#### Phase L5.8: `maestro-handoff` skill update for full packet
-
-- **Goal**: Handoff carries everything per HandoffPacket schema.
-- **Prerequisites**: L5.7.
-- **Deliverables**:
-  - Update skill to include `open_hypotheses` and `ruled_out_approaches` as required fields.
-  - Sync.
-- **Acceptance criteria**:
-  - `bun run check:bundled-skills` passes.
 - **Scope**: small.
+
+#### Phase L5.4: PR check status via `gh api`
+
+- **Goal**: Post a GitHub Check reflecting the verdict decision.
+- **Prerequisites**: L5.2.
+- **Deliverables**:
+  - `maestro ci verify` posts a GitHub Check (success/failure/action_required) with a 1-paragraph summary of the verdict reasons. Subsequent runs PATCH the same check (one check per (PR, tree_sha)).
+  - `GithubApiPort` with a minimal gh-cli adapter (`postCheckRun`, `patchCheckRun` only).
+  - **No PR comment** in trimmed L5 — defer to a v0.69.x patch when there is friction signal.
+- **Acceptance criteria**:
+  - Unit tests cover all verdict-to-conclusion mappings; check appears on the PR (E2E deferred to L5.E2E).
+- **Scope**: small-medium.
 
 #### Phase L5.DOCS: Documentation updates
 
-- **Goal**: Reflect CI integration, GitHub Action setup, override flow, tree-SHA verdict identity, and HandoffPacket schema in repo docs.
-- **Prerequisites**: L5.1–L5.8.
+- **Goal**: Reflect CI integration, workflow template, and tree-SHA verdict identity in repo docs.
+- **Prerequisites**: L5.1–L5.4.
 - **Deliverables**:
-  - **`AGENTS.md` (root)** — add `ci verify`, `pr publish`, `verdict override` to Commands; document that CI is the authoritative verifier; cross-reference Rule 12.
-  - **`README.md`** — major rewrite to position L5 as the headline product; add "Quick Start: L5" walkthrough (clone repo, `maestro setup`, add the GitHub Action workflow, push a PR, observe verdict).
-  - **`src/AGENTS.md`** — document new feature directories: `src/features/ci/`, `src/features/pr/`, `src/features/override/`.
-  - **`skills/AGENTS.md`** — reflect `maestro-handoff` skill update with HandoffPacket schema.
-  - **New file `docs/ci-integration.md`** — full reference: GitHub Action setup, environment variables, secrets handling, witness-by-ci ingestion, PR check status semantics, comment format.
-  - **New file `docs/handoff-packet.md`** — schema reference; example packet; what `open_hypotheses` and `ruled_out_approaches` should contain.
-  - **New file `docs/override-flow.md`** — when to override, who can override (per `owners.yaml`), audit trail, no-silent-pass guarantees.
-  - **`CLAUDE.md`** — add note about local Maestro being advisory, CI being authoritative.
-  - Update root `AGENTS.md` AGENTS-hierarchy block to include any new generated children.
-  - Run `bun run init-deep`.
+  - **`AGENTS.md` (root)** — add `ci verify` to Commands; add Conventions note that CI is the authoritative verifier, local Maestro is advisory; cross-reference Rule 12.
+  - **`README.md`** — add "Quick Start: L5" section (clone repo, `maestro setup`, push a PR, observe verdict check status).
+  - **`src/AGENTS.md`** — document `src/features/ci/`.
+  - **New file `docs/ci-integration.md`** — full reference: workflow template usage, env contract, witness-by-ci ingestion, PR check status semantics, troubleshooting. Linked from README, AGENTS.md, and the workflow template header comment.
+  - **`CLAUDE.md`** — add: "Local Maestro is advisory; CI Maestro is authoritative. The PR check status is the merge gate."
 - **Acceptance criteria**:
-  - The "Quick Start: L5" walkthrough in `README.md` works end-to-end on a fresh repo with the GitHub Action template applied.
-  - `docs/ci-integration.md` is linked from `README.md`, `AGENTS.md`, and the GitHub Action template.
-  - `docs/handoff-packet.md` schema matches the ROADMAP HandoffPacket schema verbatim.
-- **Scope**: large.
+  - `docs/ci-integration.md` linked from README, AGENTS.md, and the workflow template (3 places).
+- **Scope**: medium.
 
 #### Phase L5.E2E: L5 end-to-end test
 
-- **Goal**: Compiled-binary test of the full L5 auto-PR flow against a fixture remote.
-- **Prerequisites**: L5.1–L5.8.
+- **Goal**: Compiled-binary test of the full L5 ci-verify flow against a fake `gh` shim.
+- **Prerequisites**: L5.1–L5.4, L5.DOCS.
 - **Deliverables**:
-  - `tests/e2e/l5-auto-pr-flow.test.ts`: end-to-end run that initializes a fixture repo, runs L1–L4 setup, claims a task with a Contract, makes a diff, runs `maestro pr publish`, simulates CI executing `maestro ci verify`, asserts the PR check + comment + tree-SHA-bound verdict appear correctly. Exercise: clean PASS path, FAIL path with re-run, HUMAN path with checklist (L5.6), force-push invalidating prior verdict, squash preserving verdict.
+  - `tests/e2e/l5-ci-verify-flow.test.ts`: scenarios covering clean PASS with check posted; tree-SHA invariant under squash; force-push invalidation; FAIL with re-run (check PATCHed, not duplicated).
+  - `tests/helpers/fake-gh-shim.ts`: Node-based `gh` mock prepended to `$PATH`; intercepts `api check-runs POST/PATCH`.
   - Fixture data in `tests/fixtures/l5/`.
 - **Acceptance criteria**:
-  - Test passes against `./dist/maestro` with a fake `gh` CLI shim.
-  - Each scenario asserts the expected witness levels on every Evidence row.
-- **Scope**: large.
+  - Test passes against `./dist/maestro` with the fake `gh` shim.
+- **Scope**: medium.
 
 #### Phase L5.RELEASE: L5 release
 
-- **Goal**: Ship L5 — the terminal default product.
+- **Goal**: Ship trimmed L5.
 - **Prerequisites**: L5.E2E.
 - **Deliverables**:
-  - Major version bump (L5 introduces CI integration, the first cross-system surface).
-  - CHANGELOG entry positioning L5 as the headline product: "L5 is the recommended default. Most teams will stop here."
+  - Feature version bump (trimmed L5 is additive — no breaking changes to existing CLI verbs, data formats, or skill APIs).
+  - CHANGELOG entry: "L5 — CI is the authoritative verifier. New verb: `maestro ci verify`. Verdict identity now binds to (pr, tree_sha)."
   - Update ROADMAP.md compat table to mark L5 as shipped.
-  - Migration guide for L4 users describing how to enable CI integration.
   - Run `bun run release:local`; verify installed `maestro --version` matches.
 - **Acceptance criteria**:
-  - Same release-prep as L1.RELEASE plus a published GitHub Action release.
+  - Same release-prep as L1.RELEASE.
 - **Scope**: medium.
 
 > L5 is the terminal default product. Most teams will stop here.
@@ -1523,17 +1447,18 @@ Sequencing rules:
 
 **Goal of level**: Auto-merge PRs whose Verdict is PASS, all gating signals are witnessed-by-maestro or witnessed-by-ci, no sensitive paths touched, no LLM signal raised risk above the auto-pass threshold.
 
-> **L6 cannot ship without minimum-viable L7 in the same release.** Build L7.1, L7.2, L7.5 (rollback witnessed) in parallel.
+> *L6 is advanced optional. Ship only when teams ask for auto-merge after L5 is in production.*
 
-#### Phase L6.1: Auto-merge gate logic
+#### Phase L6.1: Auto-merge gate predicates
 
 - **Goal**: Implement the deterministic predicates that gate auto-merge.
-- **Prerequisites**: L5 shipped, L7.1 + L7.2 + L7.5 in progress.
+- **Prerequisites**: L5 shipped.
 - **Deliverables**:
-  - `src/features/merge/usecases/auto-merge-eligible.ts`: returns boolean + itemized reason list.
-  - Predicates: Verdict is PASS; all evidence at witness level 1 or 2 for gating signals; no `forbidden_paths` touched; no sensitive paths touched without explicit waiver; rollback witnessed (Rule 10); high-risk checklist acknowledged (L5.6).
+  - `src/features/merge/usecases/auto-merge-eligible.ts`: returns `{ eligible, reasons[] }`.
+  - Predicates: Verdict is PASS; all evidence at witness level 1 or 2 for gating signals; no `forbidden_paths` touched; no sensitive paths touched without explicit waiver; rollback witnessed (Rule 10); high-risk checklist acknowledged (L6.4).
 - **Acceptance criteria**:
   - Each predicate testable in isolation; combined gate testable.
+  - Returns ineligible with reason `rollback-not-witnessed` when rollback Evidence is absent (L6 ships standalone; teams that want eligible PRs ship L7 deploy phases first).
 - **Scope**: medium.
 
 #### Phase L6.2: `maestro merge auto` CLI verb
@@ -1541,84 +1466,95 @@ Sequencing rules:
 - **Goal**: Trigger auto-merge when eligible.
 - **Prerequisites**: L6.1.
 - **Deliverables**:
-  - `maestro merge auto --pr <number>`: if eligible, calls `gh pr merge --auto`; otherwise emits the disqualifying reasons.
+  - `maestro merge auto --pr <number>`: if eligible, calls `gh pr merge --auto`; otherwise prints disqualifying reasons.
 - **Acceptance criteria**:
-  - Test against a sandbox repo with `gh` available.
+  - Test: eligible PR triggers merge; ineligible PR prints reasons and exits non-zero.
 - **Scope**: small.
 
-#### Phase L6.3: Spec Quality Score as gate threshold (Phase 4)
+#### Phase L6.3: Spec Quality Score (deterministic only)
 
-- **Goal**: Specs below threshold disable auto-merge per Rule 1 framing.
+- **Goal**: Specs below threshold disable auto-merge.
 - **Prerequisites**: L4 (Spec structured slots).
 - **Deliverables**:
-  - `src/features/spec/usecases/score-spec.ts`: deterministic checklist (required slots present) + LLM-extracted refinement (within threshold range).
+  - `src/features/spec/usecases/score-spec.ts`: deterministic required-slots-present checklist only. Drop LLM-extracted refinement half — speculative.
   - Auto-merge eligibility includes `spec.score >= threshold`.
 - **Acceptance criteria**:
   - A Spec missing `non_goals` or `user_visible_behavior` scores below threshold; auto-merge disabled.
-  - A Spec missing only `runtime_signals` does NOT score below threshold at L6 (only at L7, where `required_spec_slots_l7` adds `runtime_signals` and `rollback_expectations`).
+- **Scope**: small.
+
+#### Phase L6.4: Review checklist for HUMAN verdicts (absorbed from L5.6)
+
+- **Goal**: Rubber-stamp mitigation (edge case 15). Lands here with auto-merge as the consumer.
+- **Prerequisites**: L6.1.
+- **Deliverables**:
+  - For high-risk verdicts (Verdict says HUMAN with risk_class >= medium), the PR check summary includes a review checklist — specific items the reviewer must explicitly acknowledge.
+  - Maestro tracks acknowledgments via a dedicated `maestro review ack <id>` CLI verb.
+  - Auto-merge eligibility (L6.1) requires acknowledgments to be present for high-risk verdicts.
+- **Acceptance criteria**:
+  - Test: a high-risk verdict produces a checklist; an unacknowledged checklist blocks auto-merge.
 - **Scope**: medium.
 
-#### Phase L6.4: Full AI Reviewer pipeline (Phase 13)
+#### Phase L6.5: `maestro verdict override` (absorbed from L5.6a)
 
-- **Goal**: All 7 reviewer kinds (bug, security, architecture, test coverage, spec compliance, migration, dependency) supported as Evidence sources.
-- **Prerequisites**: L4.3.
+- **Goal**: `sensitive_waiver` escape hatch with full audit trail.
+- **Prerequisites**: L6.4, L2.0b (`owners.yaml` stub).
 - **Deliverables**:
-  - Reviewer kind enum expanded; per-reviewer evidence schemas.
-  - `maestro-verify` skill documents how the agent runtime should produce each reviewer kind.
+  - CLI verb: `maestro verdict override --pr <number> --reason <str>` checks whether the invoking user is listed in `owners.yaml` under `sensitive_waiver`; if not, rejects with `not-authorized`.
+  - On successful authorization, writes an Evidence row of `kind=verdict-override` with witness level `agent-claimed-and-not-reproducible`.
+  - CI Maestro ingests override Evidence and reflects it in the PR check status as "verdict overridden by `<user>`" alongside the original BLOCK reasons. The original verdict is not rewritten.
+  - `owners.yaml` role check at override time uses the base-branch version per Rule 12.
 - **Acceptance criteria**:
-  - Each reviewer kind has a sample evidence row in `tests/fixtures/`.
+  - Test: a user in `sensitive_waiver` can override; a user not in the list is rejected.
+  - Test: override Evidence row is present in `evidence list`; `verdict show` reflects the override alongside the original BLOCK.
 - **Scope**: medium.
 
 #### Phase L6.DOCS: Documentation updates
 
-- **Goal**: Reflect auto-merge eligibility, the L7-minimum coupling, full reviewer pipeline, and Spec quality threshold in repo docs. Honest scope acknowledgment about narrow eligible PRs.
-- **Prerequisites**: L6.1, L6.2, L6.3, L6.4, L7.1, L7.2, L7.5.
+- **Goal**: Reflect auto-merge eligibility, review checklist, override flow, and Spec quality threshold in repo docs. Honest scope acknowledgment about narrow eligible PRs.
+- **Prerequisites**: L6.1–L6.5.
 - **Deliverables**:
-  - **`AGENTS.md` (root)** — add `merge auto` to Commands; add a Conventions note that L6 is opt-in via `policies/autopilot.yaml` profile.
-  - **`README.md`** — add "L6: Auto-Merge for Declared Safe Scope" section with the honest scope acknowledgment ("typically 5–15% of merged PRs"); explicit statement that L6 ships only with L7-minimum.
+  - **`AGENTS.md` (root)** — add `merge auto`, `verdict override`, `review ack` to Commands; add Conventions note that L6 is opt-in via `policies/autopilot.yaml` profile.
+  - **`README.md`** — add "L6: Auto-Merge for Declared Safe Scope" section with honest scope acknowledgment ("typically 5–15% of merged PRs").
   - **`src/AGENTS.md`** — document `src/features/merge/`.
-  - **`skills/AGENTS.md`** — reflect `maestro-verify` skill update for deterministic gates.
-  - **New file `docs/auto-merge-eligibility.md`** — full enumeration of eligibility predicates; copy of the relevant Default Values table; troubleshooting guide ("why isn't my PR auto-merging?").
-  - **New file `docs/full-reviewer-pipeline.md`** — schema and guidance for all 7 reviewer kinds.
+  - **New file `docs/auto-merge-eligibility.md`** — full enumeration of eligibility predicates; troubleshooting guide ("why isn't my PR auto-merging?").
+  - **New file `docs/override-flow.md`** — when to override, who can override (per `owners.yaml`), audit trail, no-silent-pass guarantees.
   - **`CLAUDE.md`** — note about Spec quality threshold gating L6.
-  - Run `bun run init-deep`.
 - **Acceptance criteria**:
   - `docs/auto-merge-eligibility.md` lists every predicate from the Default Values "Auto-merge eligibility (L6)" block.
-  - The README L6 section explicitly states "L6 ships only with L7-minimum" and links to the L7 capability docs.
 - **Scope**: medium.
 
 #### Phase L6.E2E: L6 end-to-end test
 
 - **Goal**: Compiled-binary test of the full L6 auto-merge flow.
-- **Prerequisites**: L6.1, L6.2, L6.3, L6.4, **AND L7.1, L7.2, L7.5 (the L7-minimum subset).** L6.E2E does not pass until all six prerequisite phases are merged.
+- **Prerequisites**: L6.1–L6.5, L6.DOCS.
 - **Deliverables**:
-  - `tests/e2e/l6-auto-merge-flow.test.ts`: scenarios covering eligible auto-merge (low-risk, all evidence at witness level 1 or 2, witnessed rollback present); ineligible due to risk class; ineligible due to weak evidence; ineligible due to missing rollback (Rule 10); ineligible due to overridden BLOCK; ineligible due to PR self-weakening attempt (Rule 12).
+  - `tests/e2e/l6-auto-merge-flow.test.ts`: scenarios covering eligible auto-merge (low-risk, all evidence at witness level 1 or 2, witnessed rollback present); ineligible due to risk class; ineligible due to weak evidence; ineligible due to missing rollback (Rule 10); ineligible due to PR self-weakening attempt (Rule 12); override flow (authorized and rejected).
   - Each ineligibility produces the correct itemized reason.
 - **Acceptance criteria**:
   - Test passes against `./dist/maestro`.
-  - Auto-merge does not fire for any of the 6 ineligible scenarios.
+  - Auto-merge does not fire for any of the ineligible scenarios.
 - **Scope**: large.
 
 #### Phase L6.RELEASE: L6 release
 
-- **Goal**: Ship L6 plus L7-minimum subset in the same release.
-- **Prerequisites**: L6.E2E (which depends on L7.1+L7.2+L7.5).
+- **Goal**: Ship L6.
+- **Prerequisites**: L6.E2E.
 - **Deliverables**:
-  - Single release bundle containing L6 + L7.1 + L7.2 + L7.5.
-  - Major version bump (L6 changes default behavior in opt-in repos).
-  - CHANGELOG entry explicitly listing the L7-minimum subset and noting "L6 cannot ship without L7-minimum per ROADMAP coupling clarification."
+  - Feature version bump (L6 is fully opt-in; no breaking changes).
+  - CHANGELOG entry describing the 5 L6 phases; explicit note that L6 is advanced optional.
   - Compat: L6 is fully opt-in via `policies/autopilot.yaml` profile; existing repos at L5 are unaffected unless they explicitly enable L6.
+  - Run `bun run release:local`; verify installed `maestro --version` matches.
 - **Acceptance criteria**:
-  - Same release-prep as L1; release notes call out the L7-minimum coupling.
+  - Same release-prep as L1.
 - **Scope**: small.
 
 ---
 
-### L7 — Deploy + Monitor + Learn (Advanced Optional)
+### L7 — Deploy Safety (Advanced Optional)
 
 > L7 capabilities are reachable from L5. Building L7 phases does not require shipping L6 first.
 
-#### Phase L7.1: Deployment safety contract additions
+#### Phase L7.1: `Spec.runtime_signals` schema
 
 - **Goal**: `Spec.runtime_signals: [...]` declares which metrics matter.
 - **Deliverables**:
@@ -1626,7 +1562,7 @@ Sequencing rules:
   - Spec without `runtime_signals` is `agent-claimed-and-not-reproducible` for L7 purposes; default verdict for runtime check is `suspicious`.
 - **Scope**: small.
 
-#### Phase L7.2: Feature-flag and canary scaffolding
+#### Phase L7.2: `maestro deploy gate` CLI
 
 - **Goal**: Deploy gates for safe rollout.
 - **Deliverables**:
@@ -1634,21 +1570,13 @@ Sequencing rules:
   - Emits Evidence of `kind=deploy-readiness`.
 - **Scope**: medium.
 
-#### Phase L7.3: Runtime monitor adapter (pluggable)
+#### Phase L7.3: Runtime monitor port + ONE reference adapter
 
 - **Goal**: Ingest signals from monitoring services as Evidence.
 - **Deliverables**:
-  - Pluggable adapter port; reference impls for Datadog, Sentry, generic Prometheus.
+  - Pluggable adapter port plus ONE reference implementation (pick the monitoring backend most teams use; defer additional adapters to demand-driven patches).
   - `maestro runtime check --change <id>` queries the adapter and writes `kind=runtime-signal` Evidence.
-- **Scope**: large.
-
-#### Phase L7.4: Autopsy generator (Phase 24)
-
-- **Goal**: Failure events emit RatchetProposal artifacts.
-- **Deliverables**:
-  - `maestro autopsy run --incident <id>` walks: Spec, Contract, Plan, Evidence, Verdict, Runtime signals; emits a `RatchetProposal` to `.maestro/ratchets/proposed/`.
-  - Proposal contains: triggering incident ref, suggested rule (path glob + condition + effect), narrowing/broadening notes, confidence.
-- **Scope**: large.
+- **Scope**: medium.
 
 #### Phase L7.5: Witnessed rollback (Rule 10)
 
@@ -1658,102 +1586,70 @@ Sequencing rules:
   - Sample CI workflow that exercises rollback in a staging environment.
 - **Scope**: medium.
 
-#### Phase L7.6: `maestro ratchet` CLI verbs
-
-- **Goal**: Review, approve, sunset, export, import ratchet proposals.
-- **Deliverables**:
-  - `ratchet list [--proposed|--approved|--sunset]`.
-  - `ratchet review <id>` (interactive), `ratchet approve <id> --approver <name>`, `ratchet reject <id> --reason <r>`.
-  - `ratchet sunset` runs the periodic sunset check (intended to run via cron or CI cadence). `ratchet sunset` computes expiry from immutable `effective_from` + current configured `ratchet_sunset_days`, not from a stored `sunset_at` field. Old ratchet files with a stored `sunset_at` are migrated by ignoring the stored field and re-deriving.
-  - `ratchet export --to <file>`, `ratchet import --from <file> --review`.
-- **Scope**: large.
-
-#### Phase L7.7: N≥2 broad-promotion guard (§25b)
-
-- **Goal**: Single-incident proposals can only be narrow; broad scope requires N≥2.
-- **Deliverables**:
-  - Autopsy classifies proposed scope as narrow vs broad based on glob breadth.
-  - Promotion of a broad proposal requires `--with-incidents <id1>,<id2>...` where each id resolves to an incident matching the pattern.
-- **Scope**: medium.
-
-#### Phase L7.8: Sunset and decay machinery
-
-- **Goal**: Promoted rules carry sunset; expired rules downgrade to soft.
-- **Deliverables**:
-  - Rule schema has `effective_from`, `state: "active" | "soft" | "deleted"`. There is no stored `sunset_at` field.
-  - **Computed sunset:** `sunset_at` is computed as `effective_from + policies/risk.yaml:ratchet_sunset_days`, not stored. Storing a custom `sunset_at` in a ratchet file is forbidden; if a rule needs a non-default sunset, the per-repo `ratchet_sunset_days` (or a per-rule `sunset_days_override`) must be set in committed policy, where it is subject to Rule 9 asymmetric editing (loosening = shorter sunset = 30-day soak). Reducing `ratchet_sunset_days` (globally or via per-rule override) counts as loosening per Rule 9 and soaks 30 days. Increasing it is tightening and applies immediately.
-  - `ratchet sunset` flips expired rules to soft; further inactivity flips to deleted.
-- **Scope**: medium.
-
 #### Phase L7.9: `owners.yaml` decision authority (edge case 31)
 
-- **Goal**: Roles for approvals.
+- **Goal**: Roles for approvals (most already in place from L3 + L5/L6; this phase adds any remaining L7-specific role checks).
 - **Deliverables**:
   - `policies/owners.yaml` schema: `policy_approver`, `ratchet_approver`, `sensitive_waiver` lists.
-  - CI Maestro checks PR author against required role; if missing, BLOCK with reason `not-authorized`.
-- **Scope**: medium.
-
-#### Phase L7.10: Cross-task conflict detection (edge case 26)
-
-- **Goal**: Surface multi-PR/multi-task overlapping diffs.
-- **Deliverables**:
-  - `maestro ci verify` checks open PRs/tasks for overlapping changed paths; emits `kind=cross-task-conflict` Evidence; risk-raising.
-- **Scope**: medium.
-
-#### Phase L7.11: Trust Benchmark corpus (Phase 26)
-
-- **Goal**: Test Maestro itself against known good/bad PRs.
-- **Deliverables**:
-  - `tests/e2e/trust-benchmark/` corpus of 20+ scenarios from edge case list.
-  - CI runs the benchmark on every Maestro release.
-- **Scope**: large.
+  - CI Maestro checks PR author against required role for deploy-gate operations; if missing, BLOCK with reason `not-authorized`.
+- **Scope**: small.
 
 #### Phase L7.DOCS: Documentation updates
 
-- **Goal**: Reflect deploy gate, runtime monitoring, autopsy, ratchet workflow, and cross-task conflict detection in repo docs.
-- **Prerequisites**: L7.1–L7.11.
+- **Goal**: Reflect deploy gate, runtime monitoring, and witnessed rollback in repo docs.
+- **Prerequisites**: L7.1–L7.5, L7.9.
 - **Deliverables**:
-  - **`AGENTS.md` (root)** — add `deploy gate`, `runtime check`, `autopsy run`, `ratchet list/review/approve/reject/sunset/export/import` to Commands.
-  - **`README.md`** — add "L7: Deploy + Monitor + Learn" section; clarify that L7 capabilities (runtime, autopsy, ratchet) are reachable from L5 — they are not gated on L6.
-  - **`src/AGENTS.md`** — document `src/features/deploy/`, `src/features/runtime/`, `src/features/autopsy/`, `src/features/ratchet/`.
+  - **`AGENTS.md` (root)** — add `deploy gate`, `runtime check` to Commands.
+  - **`README.md`** — add "L7: Deploy Safety" section; clarify that L7 is reachable from L5 — not gated on L6.
+  - **`src/AGENTS.md`** — document `src/features/deploy/`, `src/features/runtime/`.
   - **`skills/AGENTS.md`** — reflect `maestro-verify` skill update for L7 (runtime signals, witnessed rollback).
-  - **New file `docs/runtime-monitoring.md`** — adapter port reference; per-provider integration guides (Datadog, Sentry, Prometheus); guidance on declaring `Spec.runtime_signals`.
-  - **New file `docs/ratchet-format.md`** — full schema reference for Policy with sunset metadata; export/import format; promotion lifecycle.
-  - **New file `docs/autopsy-format.md`** — what an autopsy report contains; how RatchetProposals are derived; example proposals.
   - **New file `docs/deploy-gate.md`** — `kind=deploy-readiness` Evidence schema; canary plan format; rollback witness expectations.
-  - **`CLAUDE.md`** — note about L7 capabilities, witnessed rollback (Rule 10), and runtime signal declarations.
-  - Run `bun run init-deep`.
+  - **New file `docs/runtime-monitoring.md`** — adapter port reference; reference provider integration guide; guidance on declaring `Spec.runtime_signals`.
+  - **`CLAUDE.md`** — note about deploy gate, witnessed rollback (Rule 10), and runtime signal declarations.
 - **Acceptance criteria**:
-  - All four new `docs/*.md` files exist and are linked from `AGENTS.md` or `README.md`.
-  - `docs/ratchet-format.md` schema matches the §"Learning Layer: Memory and Ratchet" section verbatim.
+  - Both new `docs/*.md` files exist and are linked from `AGENTS.md` or `README.md`.
   - The README correctly states L7 is reachable from L5 (not gated on L6).
-- **Scope**: large.
+- **Scope**: medium.
 
 #### Phase L7.E2E: L7 end-to-end test
 
-- **Goal**: Compiled-binary test of the full L7 deploy + monitor + learn flow.
-- **Prerequisites**: L7.1–L7.11 + L7.DOCS.
+- **Goal**: Compiled-binary test of the full L7 deploy safety flow.
+- **Prerequisites**: L7.1–L7.5, L7.9, L7.DOCS.
 - **Deliverables**:
-  - `tests/e2e/l7-deploy-monitor-learn.test.ts`: scenarios covering deploy-readiness Evidence; runtime signal ingestion (using a mock monitor adapter); witnessed rollback (CI fixture); autopsy generating a RatchetProposal from a fixture incident; ratchet review/approve flow; sunset machinery flipping a rule to soft after configured time; cross-task conflict detection on overlapping PRs; trust benchmark corpus run.
+  - `tests/e2e/l7-deploy-safety.test.ts`: scenarios covering deploy-readiness Evidence; runtime signal ingestion (using a mock monitor adapter); witnessed rollback (CI fixture); `not-authorized` BLOCK when PR author lacks required role.
   - Each scenario asserts the corresponding Evidence kinds are written and the verdicts match expectations.
 - **Acceptance criteria**:
   - Test passes against `./dist/maestro` with mock CI and monitor adapters.
-  - Trust benchmark corpus runs end-to-end without false positives or false negatives on the seeded scenarios.
-- **Scope**: large.
+- **Scope**: medium.
 
 #### Phase L7.RELEASE: L7 release
 
-- **Goal**: Ship L7 — deploy, monitor, and learn capabilities.
+- **Goal**: Ship L7 — deploy safety capabilities.
 - **Prerequisites**: L7.E2E.
 - **Deliverables**:
-  - Major version bump (L7 introduces the runtime monitoring + ratchet machinery, which are significant capability surfaces).
-  - CHANGELOG entry describing all eleven L7 phases plus the trust benchmark.
+  - Feature version bump (L7 is advanced optional; no breaking changes to existing verbs or data formats).
+  - CHANGELOG entry describing the 5 L7 phases.
   - Update ROADMAP.md compat table to mark L7 as shipped.
   - Run `bun run release:local`; verify installed `maestro --version` matches.
 - **Acceptance criteria**:
-  - Same release-prep as L1.RELEASE plus benchmark corpus published.
+  - Same release-prep as L1.
   - Release notes call out that L7 is advanced optional and reachable from L5.
-- **Scope**: medium.
+- **Scope**: small.
+
+---
+
+### L8 — Learning Loop (Future, signal-driven)
+
+Autopsy → RatchetProposal → human review → sunset is a research feature. Build when teams ask maestro to learn from their incidents. Until then, this is intentionally not on the roadmap. The phases below are a parking lot for future planners.
+
+**Deferred phases:**
+
+- **L7.4 / Autopsy generator**: `maestro autopsy run --incident <id>` walks Spec, Contract, Plan, Evidence, Verdict, Runtime signals and emits a `RatchetProposal`. Speculative until incidents accumulate and teams request it.
+- **L7.6 / `maestro ratchet` review/approve/sunset/export/import CLI**: `ratchet list`, `ratchet review`, `ratchet approve`, `ratchet reject`, `ratchet sunset`, `ratchet export`, `ratchet import`. No proposals to manage until the autopsy generator ships.
+- **L7.7 / N≥2 broad-promotion guard**: single-incident proposals can only be narrow; broad scope requires N≥2 corroborating incidents. Depends on autopsy generator and ratchet CLI.
+- **L7.8 / Sunset and decay machinery**: rule schema adds `effective_from`, `state: "active" | "soft" | "deleted"`; computed sunset from `effective_from + ratchet_sunset_days`. Depends on ratchet CLI.
+- **L7.10 / Cross-task conflict detection** (edge case 26): `maestro ci verify` detects overlapping changed paths across open PRs/tasks; emits `kind=cross-task-conflict` Evidence; risk-raising. Speculative until users hit it.
+- **L7.11 / Trust Benchmark corpus** (Phase 26, edge case 29): `tests/e2e/trust-benchmark/` corpus of 20+ scenarios from the edge case list; CI runs the benchmark on every release. Large surface; ship when stability matters more than feature surface.
 
 ---
 
@@ -1791,9 +1687,10 @@ L1 done = evidence record/list/show works; maestro-task agent records evidence; 
 L2 done = Spec domain types and storage; Evidence kinds expanded (verifier, contract-amendment, contract-amendment-blocked); owners.yaml scaffolded; contracts versioned; trust verifier enforces scope; amendments follow Rules 3-7; L1.4 validates --criterion against Spec; docs/sensitive-paths-defaults.md and docs/owners-yaml-format.md shipped (L2.DOCS); E2E green.
 L3 done = verdicts produced; policies parsed; witness levels live; ProofMap works; Rule 9 asymmetric editing in place; docs/witness-levels.md, docs/risk-class-derivation.md, docs/policy-format.md shipped (L3.DOCS); E2E green.
 L4 done = plan-check; self-check loop; cost budget enforced; maestro-verify skill shipped; AI reviewer integration; docs/threat-model-format.md, docs/ai-reviewer-protocol.md shipped (L4.DOCS); E2E green.
-L5 done = GitHub Action; CI verify; PR check + comment; tree-SHA verdicts; flake tracking; rubber-stamp mitigation; full handoff packet; docs/ci-integration.md, docs/handoff-packet.md, docs/override-flow.md, README "Quick Start: L5" walkthrough (L5.DOCS); E2E green.
-L6 done = auto-merge gate; deterministic predicates; spec quality threshold; full reviewer pipeline; docs/auto-merge-eligibility.md, docs/full-reviewer-pipeline.md (L6.DOCS); ALWAYS shipped with L7.1+L7.2+L7.5; E2E green.
-L7 done = deploy gate; runtime monitor; autopsy; ratchet review/sunset; owners.yaml; trust benchmark; docs/runtime-monitoring.md, docs/ratchet-format.md, docs/autopsy-format.md, docs/deploy-gate.md (L7.DOCS); E2E green.
+L5 done = workflow template via `maestro setup`; `maestro ci verify` (CI-mode verification, witnessed-by-ci Evidence, verdict to $GITHUB_OUTPUT); tree-SHA verdict identity; PR check status via `gh api` (no comment); docs/ci-integration.md, README "Quick Start: L5" walkthrough (L5.DOCS); E2E green.
+L6 done = auto-merge gate predicates; `maestro merge auto`; deterministic Spec Quality Score; review checklist for HUMAN verdicts; `maestro verdict override`; docs/auto-merge-eligibility.md, docs/override-flow.md (L6.DOCS); E2E green. Advanced optional — ship only when teams request auto-merge post-L5.
+L7 done = `Spec.runtime_signals` schema; `maestro deploy gate`; runtime monitor port + 1 reference adapter; witnessed rollback (Rule 10); `owners.yaml` deploy-gate roles; docs/deploy-gate.md, docs/runtime-monitoring.md (L7.DOCS); E2E green.
+L8 deferred / signal-driven = autopsy generator; ratchet review/approve/sunset/export/import CLI; N≥2 broad-promotion guard; sunset + decay machinery; cross-task conflict detection; trust benchmark corpus. Build when teams ask maestro to learn from incidents.
 ```
 
 ## Glossary
@@ -1805,16 +1702,16 @@ L7 done = deploy gate; runtime monitor; autopsy; ratchet review/sunset; owners.y
 - **Evidence** — typed record of something that happened, with a witness level. Polymorphic by `kind`. Full `kind` enumeration:
   - `command` — agent ran a command (test/build/lint/etc.); payload includes command, exit, duration, log path. Introduced at L1.
   - `verifier` — Trust Verifier output (scope, parity, secrets, etc.); payload includes findings list. Introduced at L2.
-  - `ai-review` — output of an AI reviewer (bug/security/architecture/test-coverage/spec-compliance/migration/dependency); payload includes reviewer kind, findings, confidence. Introduced at L4 (1–2 reviewers); expanded at L6 (all 7).
+  - `ai-review` — output of an AI reviewer (bug/security/architecture); payload includes reviewer kind, findings, confidence. Introduced at L4 (bug/security/architecture reviewers). Additional reviewer kinds (test-coverage/spec-compliance/migration/dependency) deferred to L8/signal-driven.
   - `contract-amendment` — successful contract amendment (Rule 3); payload includes original/new contract versions, paths added/removed, reason. Introduced at L2.
   - `contract-amendment-blocked` — failed amendment attempt (Rule 7); payload includes attempted paths, blocking rule, reason, what-agent-did-next. Introduced at L2.
   - `plan-check` — plan-versus-contract validation (Phase L4.1); payload includes plan ref and findings. Introduced at L4.
   - `runtime-signal` — ingested production metric matching a `Spec.runtime_signals` entry; payload includes signal name, value, threshold. Introduced at L7.
   - `deploy-readiness` — deploy gate output (Phase L7.2); payload includes flag/canary/rollback/owner check results. Introduced at L7.
   - `rollback-exercised` — Witnessed rollback execution in CI (Rule 10); payload includes CI run id, exit code, log hash. Introduced at L7.
-  - `verdict-override` — explicit `sensitive_waiver` action (Override section); payload includes overrider, reason, original BLOCK reasons. Always witness level 4. Introduced at L5.
-  - `cross-task-conflict` — overlapping changed paths across open PRs/tasks (edge case 26); payload includes conflicting task ids and paths. Introduced at L7.
-  - `flake-cache-miss` — CI cache restore failure for flake history (Phase L5.5); payload includes cache key. Introduced at L5.
+  - `verdict-override` — explicit `sensitive_waiver` action (Override section); payload includes overrider, reason, original BLOCK reasons. Always witness level 4. Introduced at L6 (Phase L6.5).
+  - `cross-task-conflict` — overlapping changed paths across open PRs/tasks (edge case 26); payload includes conflicting task ids and paths. Deferred to L8.
+  - `flake-cache-miss` — CI cache restore failure for flake history; payload includes cache key. Deferred (flake tracking deferred to L8/signal-driven).
   - `threat-model` — declared threat model addressing security-relevant changes (edge case 12 mitigation); payload includes `assets`, `threat_categories`, `mitigations` (list of `{ threat, mitigation }`), `residual_risk`. CLI: `maestro evidence record --kind threat-model --threat-model-file <path>`. Introduced at L4 (Phase L4.3a).
   - `manual-note` — free-form human note attached to a task. Always witness level 4. Available from L1.
 - **Verdict** — Maestro's decision: `PASS` / `FAIL` / `HUMAN` / `BLOCK`. References evidence rows and policy versions used.
@@ -1847,14 +1744,14 @@ L7 done = deploy gate; runtime monitor; autopsy; ratchet review/sunset; owners.y
 ### Rules → Phases that implement them
 
 ```text
-Rule 1   (LLM veto-only)              → P13 (AI Reviewer pipeline), P14 (Risk Engine), L4.3, L6.4
+Rule 1   (LLM veto-only)              → P13 (AI Reviewer pipeline), P14 (Risk Engine), L4.3
 Rule 2   (deterministic gates)        → P14, P19, P20, L6.1, L6.3
 Rule 3   (amendments are Evidence)    → P5, L2.2, L2.4
 Rule 4   (amendment budget)           → P5, L2.2, L2.4
 Rule 5   (count raises risk)          → P14, L3.4
 Rule 6   (plan-time proposed)         → P6, L4.1
 Rule 7   (blocked are Evidence)       → P5, L2.2
-Rule 8   (flake downgrades)           → P14, L5.5
+Rule 8   (flake downgrades)           → P14; L5.5 deferred to L8/signal-driven
 Rule 9   (asymmetric editing)         → P15, L3.6
 Rule 10  (witnessed rollback)         → P21, L7.5
 Rule 11  (cost budget)                → P5, L4.4
@@ -1864,13 +1761,13 @@ Rule 12  (no self-weakening)          → P18, L5.2
 ### Edge cases → Mitigations
 
 ```text
-1, 2  (intent wrong)                  → Rules 1, 2; L1–L4 humans; L7 runtime; L7.4 autopsy
+1, 2  (intent wrong)                  → Rules 1, 2; L1–L4 humans; L7 runtime; L8 autopsy (deferred)
 3     (shallow tests)                 → ProofMap (L3.5), witness levels
 4     (reviewers all wrong)           → Rule 1
 5     (out-of-scope harmless)         → L2.3 trust verifier scope check; Rule 5
 6     (generated drift)               → L2.3 generated-file parity
-7     (flaky tests)                   → Rule 8; L5.5
-8     (local pass / CI fail)          → Witness levels; CI authoritative
+7     (flaky tests)                   → Rule 8; flake tracking deferred to L8/signal-driven
+8     (local pass / CI fail)          → Witness levels; CI authoritative (L5)
 9     (sensitive path)                → forbidden_paths; sensitive-paths.yaml
 10    (dependency out of scope)       → lockfile parity (L2.3)
 11    (migration no rollback)         → Rule 10; L7.5
@@ -1883,10 +1780,10 @@ Rule 12  (no self-weakening)          → P18, L5.2
                                          security_changes_require_threat_model: true (default).
 13    (gaming criteria)               → Rule 7; L2.2
 14    (long-task drift)               → Rules 4, 5, 11
-15    (rubber-stamp)                  → P17; L5.6 (minimum interaction surface)
+15    (rubber-stamp)                  → P17; L6.4 (review checklist for HUMAN verdicts)
 16    (business regression invisible) → L7.1, L7.3 (declared runtime_signals)
 17    (policy loosened too fast)      → Rule 9
-18    (rule too broad)                → §25b N≥2; sunset; L7.7
+18    (rule too broad)                → §25b N≥2; sunset; L8 (deferred)
 19    (agent crash)                   → packet recovery; HandoffPacket
 20    (handoff loses context)         → HandoffPacket schema (open_hypotheses, ruled_out_approaches)
 21    (spec contradictory)            → L4+ structured slots; ratchet-grown library
@@ -1894,10 +1791,10 @@ Rule 12  (no self-weakening)          → P18, L5.2
 23    (proof not tied)                → ProofMap (L3.5)
 24    (high confidence weak evidence) → Rule 1; witness levels
 25    (rollback unsafe)               → Rule 10
-26    (concurrent edits)              → L7.10 cross-task conflict
+26    (concurrent edits)              → L8 cross-task conflict detection (deferred)
 27    (rebase/squash)                 → tree SHA verdict identity (L5.3)
 28    (schema evolution)              → schema_version field; X.1 migration framework
-29    (Maestro bugs)                  → P26; L7.11 trust benchmark corpus
+29    (Maestro bugs)                  → P26; L8 trust benchmark corpus (deferred)
 30    (cost runaway)                  → Rule 11; L4.4
 31    (decision authority)            → owners.yaml; L7.9
 32    (PR self-weakening)             → Rule 12; L5.2 base-branch reading
@@ -1912,17 +1809,16 @@ L2.3          Implements parts of Rule 2 (deterministic gates: scope, parity).
 L3.4          Implements Rule 1 (LLM veto-only) and Rule 5 (amendment risk).
 L3.6          Implements Rule 9 (asymmetric policy editing).
 L4.4          Implements Rule 11 (cost budget).
-L5.2          Implements Rule 12 (base-branch policy reading).
-L5.3          Implements edge case 27 mitigation (tree SHA).
-L5.5          Implements Rule 8 (flake-rate downgrades).
-L5.6          Implements edge case 15 mitigation (rubber-stamp).
+L5.2          Implements Rule 12 (base-branch policy reading); CI authoritative verifier.
+L5.3          Implements edge case 27 mitigation (tree SHA verdict identity).
+L5.5 deferred → L8; Rule 8 (flake-rate downgrades) not implemented until flake patterns observed.
 L6.1, L6.3    Implements Rule 2 (deterministic gates) at merge level.
+L6.4          Implements edge case 15 mitigation (rubber-stamp; review checklist for HUMAN verdicts).
+L6.5          Implements verdict-override escape hatch (sensitive_waiver).
 L7.5          Implements Rule 10 (witnessed rollback).
-L7.7          Implements §25b N≥2 broad-promotion guard.
-L7.8          Implements §25b sunset.
 L7.9          Implements edge case 31 (decision authority).
-L7.10         Implements edge case 26 (cross-task conflict).
-L7.11         Implements edge case 29 (Maestro bugs) and Phase 26 (Trust Benchmark).
+L8 deferred   Implements §25b N≥2 broad-promotion guard (was L7.7); §25b sunset (was L7.8);
+              edge case 26 cross-task conflict (was L7.10); edge case 29 Trust Benchmark (was L7.11).
 ```
 
 ## Repository Topology
