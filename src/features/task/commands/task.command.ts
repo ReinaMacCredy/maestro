@@ -90,6 +90,7 @@ import {
 } from "../usecases/group-tasks-by-track.usecase.js";
 import { registerContractCommand } from "./contract.command.js";
 import { registerTaskVerifyCommand } from "./task-verify.command.js";
+import { registerTaskProofCommand } from "./task-proof.command.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
 
 interface ContinuationEditInput {
@@ -130,6 +131,7 @@ Typical loop:
   registerClaimCommand(taskCmd, program);
   registerContractCommand(taskCmd, program);
   registerTaskVerifyCommand(taskCmd, program);
+  registerTaskProofCommand(taskCmd, program);
   registerUnclaimCommand(taskCmd, program);
   registerReleaseOwnedCommand(taskCmd, program);
   registerBlockCommand(taskCmd, program);

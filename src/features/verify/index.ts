@@ -3,3 +3,5 @@ export type { TrustVerifierInput, TrustVerifierDeps } from "./usecases/trust-ver
 export { runTrustVerifier } from "./usecases/trust-verifier.js";
 export { buildVerifyServices } from "./services.js";
 export type { VerifyServices } from "./services.js";
+export { buildProofMap } from "./usecases/proof-map.js";
+export type { ProofMap, ProofMapEntry, ProofMapEvidence } from "./usecases/proof-map.js";
