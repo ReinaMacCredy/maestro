@@ -52,13 +52,9 @@ export function autoMergeEligible(input: AutoMergeEligibleInput): EligibilityRes
   }
 
   // 3. evidence-witness-too-weak
-  // Gating evidence must be witnessed-by-ci (level 2) or witnessed-by-maestro (level 1).
-  // Both "witnessed-by-ci" and "witnessed-by-maestro" satisfy the threshold.
-  // "agent-claimed-locally" and "agent-claimed-and-not-reproducible" do not.
   const weakEvidenceIds: string[] = [];
   for (const row of evidenceRows) {
     if (!GATING_KINDS.has(row.kind)) continue;
-    // compareWitnessLevel returns -1 if row.witness_level < "witnessed-by-ci"
     if (compareWitnessLevel(row.witness_level, "witnessed-by-ci") < 0) {
       weakEvidenceIds.push(row.id);
     }
@@ -71,26 +67,24 @@ export function autoMergeEligible(input: AutoMergeEligibleInput): EligibilityRes
     });
   }
 
-  // 4. forbidden-paths-touched
+  // 4 + 5. forbidden-paths-touched, sensitive-paths-untouched-without-waiver
   const forbidden = contract.scope.filesForbidden;
-  const forbiddenTouched = changedPaths.filter((p) => matchesAnyGlob(forbidden, p));
+  const forbiddenTouched: string[] = [];
+  const sensitiveTouched: string[] = [];
+  for (const p of changedPaths) {
+    if (matchesAnyGlob(forbidden, p)) forbiddenTouched.push(p);
+    if (sensitiveGlobs.length > 0 && matchesAnyGlob(sensitiveGlobs, p)) {
+      sensitiveTouched.push(p);
+    }
+  }
   if (forbiddenTouched.length > 0) {
     reasons.push({
       code: "forbidden-paths-touched",
       message: `${forbiddenTouched.length} changed path(s) match contract forbidden paths: ${forbiddenTouched.join(", ")}.`,
     });
   }
-
-  // 5. sensitive-paths-untouched-without-waiver
-  // Fail if changedPaths intersect sensitive globs AND no verdict-override evidence row exists.
-  // "verdict-override" is not yet in the EvidenceKind union (lands at L6.5); read via string comparison.
-  const sensitiveTouched = sensitiveGlobs.length > 0
-    ? changedPaths.filter((p) => matchesAnyGlob(sensitiveGlobs, p))
-    : [];
   if (sensitiveTouched.length > 0) {
-    const hasWaiver = evidenceRows.some(
-      (row) => (row.kind as string) === "verdict-override",
-    );
+    const hasWaiver = evidenceRows.some((row) => row.kind === "verdict-override");
     if (!hasWaiver) {
       reasons.push({
         code: "sensitive-paths-untouched-without-waiver",

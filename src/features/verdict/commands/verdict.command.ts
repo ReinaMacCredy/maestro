@@ -4,19 +4,15 @@ import type { Command } from "commander";
 import { resolveJsonFlag, output } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { getServices, type Services } from "@/services.js";
-import { parseYaml } from "@/shared/lib/yaml.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { EvidenceStorePort, VerdictOverridePayload } from "@/features/evidence/index.js";
-import type { Owners, OwnersYaml } from "@/features/policy/index.js";
+import { parseOwners, OWNERS_REL_PATH } from "@/features/policy/index.js";
+import type { Owners } from "@/features/policy/index.js";
+import { resolveDefaultBase } from "@/shared/lib/git-base.js";
 import type { Verdict } from "../domain/types.js";
 import { exitCodeForDecision, printVerdict } from "../presentation.js";
 import { requestVerdict } from "../usecases/request-verdict.usecase.js";
 
-const OWNERS_REL_PATH = ".maestro/policies/owners.yaml";
-
-/**
- * Load all verdict-override Evidence rows for a task, filtered to the given verdictId.
- */
 async function loadVerdictOverrides(
   evidenceStore: EvidenceStorePort,
   taskId: string,
@@ -28,10 +24,7 @@ async function loadVerdictOverrides(
     .map((r) => r.payload as VerdictOverridePayload);
 }
 
-/**
- * Load owners.yaml from a given base git ref using `git show`.
- * Rule 12: always load from base, not PR head, so self-promotion is rejected.
- */
+// Rule 12: always load owners from base, not PR head, so self-promotion is rejected.
 function loadOwnersFromBase(base: string, projectRoot: string): Owners {
   let text: string;
   try {
@@ -46,29 +39,7 @@ function loadOwnersFromBase(base: string, projectRoot: string): Owners {
       ["Run 'maestro init' to scaffold it, or check the base ref is correct"],
     );
   }
-
-  let raw: OwnersYaml;
-  try {
-    raw = parseYaml<OwnersYaml>(text) ?? {};
-  } catch {
-    throw new MaestroError("owners.yaml malformed at base ref", ["YAML parse error"]);
-  }
-
-  function toRole(field: unknown, name: string): readonly string[] {
-    if (field === undefined || field === null) return [];
-    if (!Array.isArray(field) || !field.every((v) => typeof v === "string")) {
-      throw new MaestroError("owners.yaml malformed at base ref", [
-        `Expected '${name}' to be a list of strings`,
-      ]);
-    }
-    return field as string[];
-  }
-
-  return {
-    policyApprovers: toRole(raw.policy_approver, "policy_approver"),
-    ratchetApprovers: toRole(raw.ratchet_approver, "ratchet_approver"),
-    sensitiveWaivers: toRole(raw.sensitive_waiver, "sensitive_waiver"),
-  };
+  return parseOwners(text);
 }
 
 interface VerdictCommandDeps {
@@ -246,7 +217,7 @@ Examples:
     .requiredOption("--pr <number>", "PR number this override applies to", parseInt)
     .requiredOption("--reason <text>", "Reason for the override (free text, audit trail)")
     .option("--verdict <id>", "Verdict ID to override (default: latest for the task)")
-    .option("--base <ref>", "Base git ref for loading owners.yaml (default: main)")
+    .option("--base <ref>", "Base git ref for loading owners.yaml (default: merge-base with upstream or main)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
@@ -255,7 +226,7 @@ Examples:
       const reason: string = opts.reason;
       const base: string = typeof opts.base === "string" && opts.base.length > 0
         ? opts.base
-        : "main";
+        : await resolveDefaultBase();
 
       // Load owners from base branch (Rule 12 — not from PR head)
       const loadOwnersFn = deps.loadOwnersFromBase ?? loadOwnersFromBase;

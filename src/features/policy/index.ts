@@ -1,5 +1,5 @@
 export type { Owners, OwnersYaml } from "./domain/owners-types.js";
-export { loadOwners } from "./usecases/load-owners.usecase.js";
+export { loadOwners, parseOwners, OWNERS_REL_PATH } from "./usecases/load-owners.usecase.js";
 export { loadRiskPolicy } from "./usecases/load-risk-policy.usecase.js";
 export { loadAutopilotPolicy } from "./usecases/load-autopilot-policy.usecase.js";
 export { loadReleasePolicy } from "./usecases/load-release-policy.usecase.js";
