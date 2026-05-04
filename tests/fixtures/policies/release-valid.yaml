@@ -1,0 +1,5 @@
+kind: release
+id: release-policy-custom
+version: "1"
+require_signed_commits: true
+require_proof_map_complete: true
