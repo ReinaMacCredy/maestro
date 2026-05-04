@@ -1,4 +1,4 @@
-import type { GithubApiPort, CheckRunInput, CheckRunRef } from "../ports/github-api.port.js";
+import type { GithubApiPort, CheckRunInput, CheckRunRef, TriggerAutoMergeInput } from "../ports/github-api.port.js";
 
 function buildCheckRunPayload(
   input: CheckRunInput,
@@ -100,6 +100,26 @@ export class GhCliAdapter implements GithubApiPort {
       const stderrTail = result.stderr.slice(-500);
       throw new Error(
         `gh api patchCheckRun failed (exit ${result.exitCode}): ${stderrTail}`,
+      );
+    }
+  };
+
+  readonly triggerAutoMerge = async (input: TriggerAutoMergeInput): Promise<void> => {
+    const args: string[] = ["pr", "merge", String(input.pr), "--auto", "--repo", input.repository];
+    if (input.mergeMethod === "squash") {
+      args.push("--squash");
+    } else if (input.mergeMethod === "rebase") {
+      args.push("--rebase");
+    } else {
+      args.push("--merge");
+    }
+
+    const result = spawnGh(args, "");
+
+    if (result.exitCode !== 0) {
+      const stderrTail = result.stderr.slice(-500);
+      throw new Error(
+        `gh pr merge --auto failed (exit ${result.exitCode}): ${stderrTail}`,
       );
     }
   };

@@ -3,3 +3,4 @@ export {
   autoMergeEligible,
 } from "./usecases/auto-merge-eligible.usecase.js";
 export type { AutoMergeEligibleInput } from "./usecases/auto-merge-eligible.usecase.js";
+export { registerMergeAutoCommand } from "./commands/merge-auto.command.js";

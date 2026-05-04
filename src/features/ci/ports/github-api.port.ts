@@ -13,7 +13,14 @@ export interface CheckRunRef {
   readonly id: number;
 }
 
+export interface TriggerAutoMergeInput {
+  readonly repository: string;
+  readonly pr: number;
+  readonly mergeMethod?: "merge" | "squash" | "rebase";
+}
+
 export interface GithubApiPort {
   readonly postCheckRun: (input: CheckRunInput) => Promise<CheckRunRef>;
   readonly patchCheckRun: (input: CheckRunInput & { readonly checkRunId: number }) => Promise<void>;
+  readonly triggerAutoMerge: (input: TriggerAutoMergeInput) => Promise<void>;
 }

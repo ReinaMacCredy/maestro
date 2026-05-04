@@ -116,9 +116,70 @@ describe("GhCliAdapter — patchCheckRun", () => {
 });
 
 describe("GhCliAdapter — interface conformance", () => {
-  it("implements GithubApiPort (has postCheckRun and patchCheckRun)", () => {
+  it("implements GithubApiPort (has postCheckRun, patchCheckRun, and triggerAutoMerge)", () => {
     const adapter = new GhCliAdapter();
     expect(typeof adapter.postCheckRun).toBe("function");
     expect(typeof adapter.patchCheckRun).toBe("function");
+    expect(typeof adapter.triggerAutoMerge).toBe("function");
+  });
+});
+
+describe("GhCliAdapter — triggerAutoMerge", () => {
+  it("resolves without error when gh exits 0 (default merge method)", async () => {
+    const adapter = new GhCliAdapter();
+    await expect(
+      adapter.triggerAutoMerge({
+        repository: "owner/repo",
+        pr: 42,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("resolves without error when gh exits 0 (squash method)", async () => {
+    const adapter = new GhCliAdapter();
+    await expect(
+      adapter.triggerAutoMerge({
+        repository: "owner/repo",
+        pr: 42,
+        mergeMethod: "squash",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("resolves without error when gh exits 0 (rebase method)", async () => {
+    const adapter = new GhCliAdapter();
+    await expect(
+      adapter.triggerAutoMerge({
+        repository: "owner/repo",
+        pr: 42,
+        mergeMethod: "rebase",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("throws a descriptive error when gh exits non-zero", async () => {
+    const failBinDir = await mkdtemp(join(tmpdir(), "maestro-gh-fail-auto-"));
+    const failBin = join(failBinDir, "gh");
+    await writeFile(
+      failBin,
+      "#!/bin/sh\nprintf 'error: pull request is not open\\n' >&2\nexit 1\n",
+      "utf8",
+    );
+    await chmod(failBin, 0o755);
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${failBinDir}:${originalPath}`;
+
+    try {
+      const adapter = new GhCliAdapter();
+      await expect(
+        adapter.triggerAutoMerge({
+          repository: "owner/repo",
+          pr: 99,
+        }),
+      ).rejects.toThrow(/gh pr merge --auto failed.*exit 1/);
+    } finally {
+      process.env.PATH = savedPath;
+      await rm(failBinDir, { recursive: true, force: true });
+    }
   });
 });

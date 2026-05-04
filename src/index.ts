@@ -58,6 +58,7 @@ import { registerVerdictCommand } from "./features/verdict/index.js";
 import { registerPlanCheckCommand } from "./features/plan/index.js";
 import { registerCiVerifyCommand } from "./features/ci/index.js";
 import { registerReviewCommand } from "./features/review/index.js";
+import { registerMergeAutoCommand } from "./features/merge/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -116,6 +117,11 @@ const ciCmd = program
 registerCiVerifyCommand(ciCmd, program);
 
 registerReviewCommand(program);
+
+const mergeCmd = program
+  .command("merge")
+  .description("Merge controls — auto-merge eligibility and trigger");
+registerMergeAutoCommand(mergeCmd, program);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,
