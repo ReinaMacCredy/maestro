@@ -1,0 +1,52 @@
+# .github/workflows/maestro-verify.yml
+#
+# Maestro CI verification — installs the maestro binary and runs `maestro ci
+# verify` on every pull request. The GitHub Check posted by this job is the
+# authoritative merge gate.
+#
+# Customize:
+#   - Pin MAESTRO_VERSION to a release you trust.
+#   - Adjust the runs-on label if your org uses self-hosted runners.
+#   - Add concurrency / timeout-minutes if needed.
+#
+# See https://github.com/<your-org>/maestro/blob/main/docs/ci-integration.md
+# for the full reference.
+
+name: Maestro Verify
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+env:
+  MAESTRO_VERSION: 0.69.0   # Pin to a known release.
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install maestro
+        run: |
+          set -euo pipefail
+          curl -L --fail \
+            "https://github.com/<your-org>/maestro/releases/download/v${MAESTRO_VERSION}/maestro-${MAESTRO_VERSION}-linux-x64.tar.gz" \
+            -o /tmp/maestro.tar.gz
+          mkdir -p /tmp/maestro
+          tar -xzf /tmp/maestro.tar.gz -C /tmp/maestro
+          sudo install -m 0755 /tmp/maestro/maestro /usr/local/bin/maestro
+          maestro --version
+
+      - name: Verify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          maestro ci verify
