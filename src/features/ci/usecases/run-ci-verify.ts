@@ -91,16 +91,18 @@ export async function runCiVerify(
     deps.prCheck !== undefined
   ) {
     // Look up any verdict-override Evidence rows for the audit summary.
-    // Conclusion mapping is unchanged — override is auxiliary, not a gate flip.
+    // Filter is by task only: ci verify creates a fresh verdict.id on every
+    // run, so override rows recorded against an earlier verdict would never
+    // match an id-based filter. The latest override for the task is what the
+    // PR check should reflect. Conclusion mapping is unchanged — override is
+    // auxiliary, not a gate flip.
     let overrides: readonly VerdictOverridePayload[] | undefined;
     try {
       const overrideRows = await deps.evidenceStore.list({
         task_id: taskId,
         kind: "verdict-override",
       });
-      overrides = overrideRows
-        .filter((r) => (r.payload as VerdictOverridePayload).verdictId === verdict.id)
-        .map((r) => r.payload as VerdictOverridePayload);
+      overrides = overrideRows.map((r) => r.payload as VerdictOverridePayload);
     } catch {
       // non-fatal — overrides are auxiliary audit; proceed without them
     }

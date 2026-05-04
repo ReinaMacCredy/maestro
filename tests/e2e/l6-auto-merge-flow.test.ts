@@ -663,16 +663,24 @@ describe("L6 auto-merge flow (compiled binary)", () => {
       const rows = expectJson<Array<{ kind: string }>>(listResult);
       expect(rows.some((r) => r.kind === "verdict-override")).toBe(true);
 
-      // The PR check (already posted by ci verify above) must have conclusion=success.
-      // Override conclusion is UNCHANGED by the override evidence (it's audit-only).
-      // NOTE: a known production limitation means the PR check summary does NOT include
-      // "Verdict overridden by …" text — ci verify always creates a new verdict ID,
-      // so the override (recorded with the old verdict ID) is not picked up by the
-      // subsequent ci verify run. See production bug note in the L6.E2E final report.
+      // Run ci verify AGAIN — this time the override Evidence row exists, so
+      // run-ci-verify should look it up by task and pass it to postPrCheck for
+      // summary rendering. Conclusion stays mapped from verdict (success here).
+      const ciResult2 = await runCompiled(
+        ["ci", "verify", "--task", taskId, "--pr", "1", "--base", "HEAD~1", "--json"],
+        dir,
+        { env: ciEnv },
+      );
+      expect(ciResult2.exitCode).toBe(0);
+
       const state = shim.readState();
-      expect(state.checkRuns.length).toBeGreaterThanOrEqual(1);
+      expect(state.checkRuns.length).toBeGreaterThanOrEqual(2);
       const lastRun = state.checkRuns[state.checkRuns.length - 1]!;
       expect(lastRun.conclusion).toBe("success");
+      const summary = lastRun.output?.summary ?? "";
+      expect(summary).toContain("Verdict overridden by");
+      expect(summary).toContain(currentUser);
+      expect(summary).toContain("Authorized override for L6 e2e test");
     },
     SLOW_CLI_TIMEOUT_MS,
   );
