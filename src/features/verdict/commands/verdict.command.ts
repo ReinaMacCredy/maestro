@@ -1,10 +1,75 @@
+import os from "node:os";
+import { execFileSync } from "node:child_process";
 import type { Command } from "commander";
-import { resolveJsonFlag } from "@/shared/lib/output.js";
+import { resolveJsonFlag, output } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { getServices, type Services } from "@/services.js";
+import { parseYaml } from "@/shared/lib/yaml.js";
+import { recordEvidence } from "@/features/evidence/index.js";
+import type { EvidenceStorePort, VerdictOverridePayload } from "@/features/evidence/index.js";
+import type { Owners, OwnersYaml } from "@/features/policy/index.js";
 import type { Verdict } from "../domain/types.js";
 import { exitCodeForDecision, printVerdict } from "../presentation.js";
 import { requestVerdict } from "../usecases/request-verdict.usecase.js";
+
+const OWNERS_REL_PATH = ".maestro/policies/owners.yaml";
+
+/**
+ * Load all verdict-override Evidence rows for a task, filtered to the given verdictId.
+ */
+async function loadVerdictOverrides(
+  evidenceStore: EvidenceStorePort,
+  taskId: string,
+  verdictId: string,
+): Promise<readonly VerdictOverridePayload[]> {
+  const rows = await evidenceStore.list({ task_id: taskId, kind: "verdict-override" });
+  return rows
+    .filter((r) => (r.payload as VerdictOverridePayload).verdictId === verdictId)
+    .map((r) => r.payload as VerdictOverridePayload);
+}
+
+/**
+ * Load owners.yaml from a given base git ref using `git show`.
+ * Rule 12: always load from base, not PR head, so self-promotion is rejected.
+ */
+function loadOwnersFromBase(base: string, projectRoot: string): Owners {
+  let text: string;
+  try {
+    text = execFileSync(
+      "git",
+      ["show", `${base}:${OWNERS_REL_PATH}`],
+      { cwd: projectRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
+    ).trim();
+  } catch {
+    throw new MaestroError(
+      `owners.yaml not found at ${base}:${OWNERS_REL_PATH}`,
+      ["Run 'maestro init' to scaffold it, or check the base ref is correct"],
+    );
+  }
+
+  let raw: OwnersYaml;
+  try {
+    raw = parseYaml<OwnersYaml>(text) ?? {};
+  } catch {
+    throw new MaestroError("owners.yaml malformed at base ref", ["YAML parse error"]);
+  }
+
+  function toRole(field: unknown, name: string): readonly string[] {
+    if (field === undefined || field === null) return [];
+    if (!Array.isArray(field) || !field.every((v) => typeof v === "string")) {
+      throw new MaestroError("owners.yaml malformed at base ref", [
+        `Expected '${name}' to be a list of strings`,
+      ]);
+    }
+    return field as string[];
+  }
+
+  return {
+    policyApprovers: toRole(raw.policy_approver, "policy_approver"),
+    ratchetApprovers: toRole(raw.ratchet_approver, "ratchet_approver"),
+    sensitiveWaivers: toRole(raw.sensitive_waiver, "sensitive_waiver"),
+  };
+}
 
 interface VerdictCommandDeps {
   readonly getServices: () => Pick<
@@ -22,11 +87,19 @@ interface VerdictCommandDeps {
     | "gitAnchor"
     | "projectRoot"
   >;
+  readonly getUsername?: () => string;
+  readonly loadOwnersFromBase?: (base: string, projectRoot: string) => Owners;
+  readonly recordEvidence?: typeof recordEvidence;
 }
 
 export function registerVerdictCommand(
   program: Command,
-  deps: VerdictCommandDeps = { getServices },
+  deps: VerdictCommandDeps = {
+    getServices,
+    getUsername: () => os.userInfo().username,
+    loadOwnersFromBase,
+    recordEvidence,
+  },
 ): void {
   const verdictCmd = program
     .command("verdict")
@@ -61,11 +134,16 @@ export function registerVerdictCommand(
           return;
         }
         // Return the latest match (highest computedAt)
-        const verdict = filtered[filtered.length - 1];
+        const verdict = filtered[filtered.length - 1]!;
         if (isJson) {
           console.log(JSON.stringify(verdict, null, 2));
         } else {
-          printVerdict(verdict!);
+          const overrides = await loadVerdictOverrides(
+            services.evidenceStore,
+            taskId,
+            verdict.id,
+          );
+          printVerdict(verdict, overrides);
         }
         return;
       }
@@ -90,7 +168,12 @@ export function registerVerdictCommand(
       if (isJson) {
         console.log(JSON.stringify(verdict, null, 2));
       } else {
-        printVerdict(verdict);
+        const overrides = await loadVerdictOverrides(
+          services.evidenceStore,
+          taskId,
+          verdict.id,
+        );
+        printVerdict(verdict, overrides);
       }
     });
 
@@ -135,5 +218,96 @@ export function registerVerdictCommand(
       if (exitCode !== 0) {
         process.exit(exitCode);
       }
+    });
+
+  verdictCmd
+    .command("override")
+    .description("Record a verdict override with audit trail (requires sensitive_waiver authorization)")
+    .addHelpText(
+      "after",
+      `
+Authorization: the invoking user (whoami) must be listed in owners.yaml
+under 'sensitive_waiver'. owners.yaml is loaded from the BASE branch, not
+the PR head, so self-promotion on the PR branch is rejected (Rule 12).
+
+The original Verdict is NOT rewritten. The override is recorded as an
+append-only Evidence row at witness level 'agent-claimed-and-not-reproducible'.
+CI will still reflect the original verdict conclusion (a BLOCKed PR
+remains blocked), but the override is surfaced in the PR check summary.
+
+Examples:
+  maestro verdict override --task tsk-aaaaaa --pr 42 \\
+    --reason "Emergency hotfix, approved by on-call lead"
+  maestro verdict override --task tsk-aaaaaa --pr 42 \\
+    --verdict vrd-bbbbbb --reason "Manual sign-off after review"
+`,
+    )
+    .requiredOption("--task <id>", "Task ID")
+    .requiredOption("--pr <number>", "PR number this override applies to", parseInt)
+    .requiredOption("--reason <text>", "Reason for the override (free text, audit trail)")
+    .option("--verdict <id>", "Verdict ID to override (default: latest for the task)")
+    .option("--base <ref>", "Base git ref for loading owners.yaml (default: main)")
+    .option("--json", "Output as JSON")
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const taskId: string = opts.task;
+      const reason: string = opts.reason;
+      const base: string = typeof opts.base === "string" && opts.base.length > 0
+        ? opts.base
+        : "main";
+
+      // Load owners from base branch (Rule 12 — not from PR head)
+      const loadOwnersFn = deps.loadOwnersFromBase ?? loadOwnersFromBase;
+      const owners = loadOwnersFn(base, services.projectRoot);
+
+      // Authorization check: invoking user must be in sensitive_waiver
+      const getUser = deps.getUsername ?? (() => os.userInfo().username);
+      const invoker = getUser();
+      if (!owners.sensitiveWaivers.includes(invoker)) {
+        console.error(`not-authorized: ${invoker} is not in owners.yaml sensitive_waiver (loaded from ${base})`);
+        process.exit(1);
+      }
+
+      // Resolve verdict ID: use supplied --verdict or fall back to latest
+      let verdictId: string;
+      if (typeof opts.verdict === "string" && opts.verdict.length > 0) {
+        verdictId = opts.verdict;
+      } else {
+        const latest = await services.verdictStore.readLatest(taskId);
+        if (latest === undefined) {
+          throw new MaestroError(`No verdict found for task ${taskId}`, [
+            "Run 'maestro verdict request --task <id>' first",
+          ]);
+        }
+        verdictId = latest.id;
+      }
+
+      const payload: VerdictOverridePayload = {
+        verdictId,
+        overriddenBy: invoker,
+        reason,
+      };
+
+      const recordFn = deps.recordEvidence ?? recordEvidence;
+      const row = await recordFn(services.evidenceStore, {
+        task_id: taskId,
+        kind: "verdict-override",
+        payload,
+        witness_level: "agent-claimed-and-not-reproducible",
+      });
+
+      output(isJson, row, (r) => [
+        `[ok] Verdict override recorded: ${r.id}`,
+        `  Task:      ${r.task_id}`,
+        `  Verdict:   ${payload.verdictId}`,
+        `  By:        ${payload.overriddenBy}`,
+        `  Reason:    ${payload.reason}`,
+        `  Witness:   ${r.witness_level}`,
+        `  Created:   ${r.created_at}`,
+        "",
+        "Note: the original verdict conclusion is unchanged. This override",
+        "is an audit record only. CI gate status is not affected.",
+      ]);
     });
 }

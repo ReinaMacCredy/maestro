@@ -8,7 +8,8 @@ export type EvidenceKind =
   | "plan-check"
   | "threat-model"
   | "review-ack"
-  | "rollback-exercised";
+  | "rollback-exercised"
+  | "verdict-override";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -132,6 +133,18 @@ export interface RollbackExercisedPayload {
   readonly exit: number;
 }
 
+/**
+ * Payload for verdict-override evidence (L6.5).
+ * Append-only audit record. The original Verdict is NOT rewritten.
+ * Authorization: invoking user must be in owners.yaml `sensitive_waiver`
+ * (loaded from base branch, not PR head — Rule 12).
+ */
+export interface VerdictOverridePayload {
+  readonly verdictId: string;
+  readonly overriddenBy: string;
+  readonly reason: string;
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -143,6 +156,7 @@ interface EvidencePayloadByKind {
   readonly "threat-model": ThreatModelPayload;
   readonly "review-ack": ReviewAckPayload;
   readonly "rollback-exercised": RollbackExercisedPayload;
+  readonly "verdict-override": VerdictOverridePayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

@@ -4,6 +4,7 @@ import type { PostPrCheckArgs, PostPrCheckDeps } from "@/features/ci/usecases/po
 import type { GithubApiPort, CheckRunInput } from "@/features/ci/ports/github-api.port.js";
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
+import type { VerdictOverridePayload } from "@/features/evidence/index.js";
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -143,5 +144,79 @@ describe("postPrCheck — payload content", () => {
     );
     expect(state.posted[0]?.repository).toBe("org/myrepo");
     expect(state.posted[0]?.headSha).toBe("deadbeef");
+  });
+});
+
+// ─── Override summary rendering ───────────────────────────────────────────────
+
+describe("postPrCheck — override summary rendering", () => {
+  it("summary includes override line when override is present", async () => {
+    const state: FakePortState = { posted: [], patched: [], nextId: 1 };
+    const override: VerdictOverridePayload = {
+      verdictId: generateVerdictId(),
+      overriddenBy: "alice",
+      reason: "Emergency hotfix approved by on-call lead",
+    };
+    await postPrCheck(
+      { verdict: makeVerdict("BLOCK"), repository: "owner/repo", headSha: "abc", overrides: [override] },
+      makeDeps(state),
+    );
+    const summary = state.posted[0]?.summary ?? "";
+    expect(summary).toContain("Verdict overridden by alice: Emergency hotfix approved by on-call lead");
+  });
+
+  it("conclusion is unchanged (BLOCK → failure) when override is present", async () => {
+    const state: FakePortState = { posted: [], patched: [], nextId: 1 };
+    const override: VerdictOverridePayload = {
+      verdictId: generateVerdictId(),
+      overriddenBy: "bob",
+      reason: "Waiver granted",
+    };
+    await postPrCheck(
+      { verdict: makeVerdict("BLOCK"), repository: "owner/repo", headSha: "abc", overrides: [override] },
+      makeDeps(state),
+    );
+    expect(state.posted[0]?.conclusion).toBe("failure");
+  });
+
+  it("conclusion is unchanged (HUMAN → action_required) when override is present", async () => {
+    const state: FakePortState = { posted: [], patched: [], nextId: 1 };
+    const override: VerdictOverridePayload = {
+      verdictId: generateVerdictId(),
+      overriddenBy: "carol",
+      reason: "Reviewed manually",
+    };
+    await postPrCheck(
+      { verdict: makeVerdict("HUMAN"), repository: "owner/repo", headSha: "abc", overrides: [override] },
+      makeDeps(state),
+    );
+    expect(state.posted[0]?.conclusion).toBe("action_required");
+  });
+
+  it("summary without overrides is unchanged when overrides is undefined", async () => {
+    const state1: FakePortState = { posted: [], patched: [], nextId: 1 };
+    const state2: FakePortState = { posted: [], patched: [], nextId: 1 };
+    const verdict = makeVerdict("PASS", { reasons: [{ category: "policy", code: "all-checks-passed", message: "All good" }] });
+
+    await postPrCheck({ verdict, repository: "owner/repo", headSha: "abc" }, makeDeps(state1));
+    await postPrCheck({ verdict, repository: "owner/repo", headSha: "abc", overrides: undefined }, makeDeps(state2));
+
+    expect(state1.posted[0]?.summary).toBe(state2.posted[0]?.summary);
+    expect(state1.posted[0]?.summary).not.toContain("overridden");
+  });
+
+  it("multiple overrides each appear as a separate line in summary", async () => {
+    const state: FakePortState = { posted: [], patched: [], nextId: 1 };
+    const overrides: VerdictOverridePayload[] = [
+      { verdictId: generateVerdictId(), overriddenBy: "alice", reason: "First override" },
+      { verdictId: generateVerdictId(), overriddenBy: "bob", reason: "Second override" },
+    ];
+    await postPrCheck(
+      { verdict: makeVerdict("BLOCK"), repository: "owner/repo", headSha: "abc", overrides },
+      makeDeps(state),
+    );
+    const summary = state.posted[0]?.summary ?? "";
+    expect(summary).toContain("Verdict overridden by alice: First override");
+    expect(summary).toContain("Verdict overridden by bob: Second override");
   });
 });

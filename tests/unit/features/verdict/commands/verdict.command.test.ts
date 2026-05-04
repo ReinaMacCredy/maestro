@@ -7,6 +7,7 @@ import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
+import type { EvidenceRow, VerdictOverridePayload } from "@/features/evidence/index.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { RiskServices } from "@/features/risk/services.js";
@@ -99,11 +100,16 @@ function fakeContractVersionStore(contract?: Contract): ContractVersionStorePort
   };
 }
 
-function fakeEvidenceStore(): EvidenceStorePort {
+function fakeEvidenceStore(initial: EvidenceRow[] = []): EvidenceStorePort {
+  const rows = [...initial];
   return {
-    append: async () => {},
-    read: async () => undefined,
-    list: async () => [],
+    append: async (row) => { rows.push(row); },
+    read: async (id) => rows.find((r) => r.id === id),
+    list: async (filter = {}) => rows.filter((r) => {
+      if (filter.task_id !== undefined && r.task_id !== filter.task_id) return false;
+      if (filter.kind !== undefined && r.kind !== filter.kind) return false;
+      return true;
+    }),
   };
 }
 
@@ -182,13 +188,14 @@ function makeServices(
   verdict: Verdict,
   initialVerdicts: Verdict[] = [],
   treeSha = "deadbeef1234567890abcdef1234567890abcdef",
+  evidenceRows: EvidenceRow[] = [],
 ): ServicesLike {
   const riskServices = fakeRiskServices(verdict);
   return {
     verdictStore: fakeVerdictStore(initialVerdicts),
     contractVersionStore: fakeContractVersionStore(makeContract()),
     runStateStore: fakeRunStateStore(),
-    evidenceStore: fakeEvidenceStore(),
+    evidenceStore: fakeEvidenceStore(evidenceRows),
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     getEffectiveReleasePolicy: async () => makeReleasePolicy(),
@@ -299,6 +306,44 @@ describe("verdict show", () => {
     await program.parseAsync(["node", "maestro", "verdict", "show", "--task", "tsk-aaaaaa", "--pr", "5"]);
 
     expect(logs.join("\n")).toContain("No verdict found for PR 5");
+  });
+
+  it("shows override lines when verdict-override Evidence rows exist for the verdict", async () => {
+    const verdict = makeVerdict("BLOCK");
+    const overridePayload: VerdictOverridePayload = {
+      verdictId: verdict.id,
+      overriddenBy: "alice",
+      reason: "Emergency hotfix approved",
+    };
+    const overrideRow: EvidenceRow = {
+      schema_version: 3,
+      id: "evd-override01",
+      task_id: verdict.taskId,
+      kind: "verdict-override",
+      witness_level: "agent-claimed-and-not-reproducible",
+      created_at: "2026-05-05T10:00:00.000Z",
+      payload: overridePayload,
+    };
+    const services = makeServices(verdict, [verdict], "deadbeef1234567890abcdef1234567890abcdef", [overrideRow]);
+    const program = makeProgram(services);
+    const { logs } = captureConsole();
+
+    await program.parseAsync(["node", "maestro", "verdict", "show", "--task", "tsk-aaaaaa"]);
+
+    const output = logs.join("\n");
+    expect(output).toContain("Overrides (1)");
+    expect(output).toContain("Overridden by alice: Emergency hotfix approved");
+  });
+
+  it("does not show override section when no overrides exist", async () => {
+    const verdict = makeVerdict("PASS");
+    const services = makeServices(verdict, [verdict]);
+    const program = makeProgram(services);
+    const { logs } = captureConsole();
+
+    await program.parseAsync(["node", "maestro", "verdict", "show", "--task", "tsk-aaaaaa"]);
+
+    expect(logs.join("\n")).not.toContain("Overrides");
   });
 });
 

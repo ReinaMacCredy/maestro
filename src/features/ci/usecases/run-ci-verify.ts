@@ -2,7 +2,7 @@ import { appendFile } from "node:fs/promises";
 import { readJson } from "@/shared/lib/fs.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import { recordEvidence } from "@/features/evidence/index.js";
-import type { CommandPayload } from "@/features/evidence/domain/types.js";
+import type { CommandPayload, VerdictOverridePayload } from "@/features/evidence/domain/types.js";
 import { requestVerdict } from "@/features/verdict/index.js";
 import type { RequestVerdictDeps } from "@/features/verdict/index.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
@@ -90,11 +90,27 @@ export async function runCiVerify(
     deps.env.headSha !== undefined &&
     deps.prCheck !== undefined
   ) {
+    // Look up any verdict-override Evidence rows for the audit summary.
+    // Conclusion mapping is unchanged — override is auxiliary, not a gate flip.
+    let overrides: readonly VerdictOverridePayload[] | undefined;
+    try {
+      const overrideRows = await deps.evidenceStore.list({
+        task_id: taskId,
+        kind: "verdict-override",
+      });
+      overrides = overrideRows
+        .filter((r) => (r.payload as VerdictOverridePayload).verdictId === verdict.id)
+        .map((r) => r.payload as VerdictOverridePayload);
+    } catch {
+      // non-fatal — overrides are auxiliary audit; proceed without them
+    }
+
     await postPrCheck(
       {
         verdict,
         repository: deps.env.repository,
         headSha: deps.env.headSha,
+        overrides: overrides !== undefined && overrides.length > 0 ? overrides : undefined,
       },
       deps.prCheck,
     );

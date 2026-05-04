@@ -14,6 +14,7 @@ export type {
   ThreatModelPayload,
   ReviewAckPayload,
   RollbackExercisedPayload,
+  VerdictOverridePayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,

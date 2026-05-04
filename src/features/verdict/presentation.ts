@@ -1,4 +1,5 @@
 import type { Verdict, VerdictDecision } from "./domain/types.js";
+import type { VerdictOverridePayload } from "@/features/evidence/index.js";
 
 export function exitCodeForDecision(decision: VerdictDecision): number {
   switch (decision) {
@@ -9,7 +10,10 @@ export function exitCodeForDecision(decision: VerdictDecision): number {
   }
 }
 
-export function printVerdict(verdict: Verdict): void {
+export function printVerdict(
+  verdict: Verdict,
+  overrides?: readonly VerdictOverridePayload[],
+): void {
   console.log(`Decision:   ${verdict.decision}`);
   console.log(`Risk:       ${verdict.effectiveRiskClass}${verdict.proposedRiskClass !== undefined ? ` (proposed: ${verdict.proposedRiskClass})` : ""}`);
   console.log(`ComputedAt: ${verdict.computedAt}`);
@@ -27,4 +31,10 @@ export function printVerdict(verdict: Verdict): void {
     console.log(`Policies consulted: ${policyNames}`);
   }
   console.log(`Trust verifier: ${verdict.trustVerifier.findingsCount} findings (${verdict.trustVerifier.errors} errors, ${verdict.trustVerifier.warns} warns, ${verdict.trustVerifier.infos} infos)`);
+  if (overrides !== undefined && overrides.length > 0) {
+    console.log(`Overrides (${overrides.length}):`);
+    for (const ov of overrides) {
+      console.log(`  Overridden by ${ov.overriddenBy}: ${ov.reason}`);
+    }
+  }
 }

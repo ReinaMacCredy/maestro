@@ -1,5 +1,6 @@
 import type { CheckRunConclusion, GithubApiPort } from "../ports/github-api.port.js";
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
+import type { VerdictOverridePayload } from "@/features/evidence/index.js";
 
 export interface PostPrCheckDeps {
   readonly githubApi: GithubApiPort;
@@ -10,6 +11,8 @@ export interface PostPrCheckArgs {
   readonly repository: string;
   readonly headSha: string;
   readonly existingCheckRunId?: number;
+  /** Override rows for this verdict, if any. Appended to summary — does NOT change conclusion. */
+  readonly overrides?: readonly VerdictOverridePayload[];
 }
 
 function conclusionFor(decision: VerdictDecision): CheckRunConclusion {
@@ -21,20 +24,30 @@ function conclusionFor(decision: VerdictDecision): CheckRunConclusion {
   }
 }
 
-function buildSummary(verdict: Verdict): string {
+function buildSummary(
+  verdict: Verdict,
+  overrides?: readonly VerdictOverridePayload[],
+): string {
   const riskLine = `Effective risk class: ${verdict.effectiveRiskClass}.`;
-  if (verdict.reasons.length === 0) {
-    return riskLine;
+  const reasonPart = verdict.reasons.length === 0
+    ? riskLine
+    : `${riskLine}\n${verdict.reasons.map((r) => `- ${r.message}`).join("\n")}`;
+
+  if (overrides === undefined || overrides.length === 0) {
+    return reasonPart;
   }
-  const reasonLines = verdict.reasons.map((r) => `- ${r.message}`).join("\n");
-  return `${riskLine}\n${reasonLines}`;
+
+  const overrideLines = overrides
+    .map((ov) => `Verdict overridden by ${ov.overriddenBy}: ${ov.reason}`)
+    .join("\n");
+  return `${reasonPart}\n${overrideLines}`;
 }
 
 export async function postPrCheck(
   args: PostPrCheckArgs,
   deps: PostPrCheckDeps,
 ): Promise<void> {
-  const { verdict, repository, headSha, existingCheckRunId } = args;
+  const { verdict, repository, headSha, existingCheckRunId, overrides } = args;
 
   const input = {
     repository,
@@ -42,7 +55,7 @@ export async function postPrCheck(
     name: "Maestro Verify",
     conclusion: conclusionFor(verdict.decision),
     title: `Maestro Verdict: ${verdict.decision}`,
-    summary: buildSummary(verdict),
+    summary: buildSummary(verdict, overrides),
   };
 
   if (existingCheckRunId !== undefined) {
