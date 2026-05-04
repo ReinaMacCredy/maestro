@@ -1,5 +1,86 @@
 # Changelog
 
+## 0.70.0 - L6 — Auto-Merge for Declared Safe Scope (advanced optional, trimmed)
+
+Honest framing: L6 is opt-in and applies to roughly 5–15% of merged
+PRs. Eligible PRs require all of:
+- PASS verdict
+- `policies/autopilot.yaml.autoMergeAllowed.<risk-class>=true` (the
+  `autoMergeAllowed` field has existed since L3 — L6 just consumes
+  it; default is `false` for every class)
+- all gating Evidence (kinds: `command`, `verifier`, `ai-review`,
+  `threat-model`, `plan-check`) at `witnessed-by-ci` or stronger
+- no sensitive-path edits without an `owners.yaml` `sensitive_waiver`
+- rollback witnessed (`kind=rollback-exercised` Evidence at
+  `witnessed-by-ci`; producer ships at L7.5)
+- HUMAN-at-risk-≥-medium verdicts: `review-ack` Evidence present
+- Spec score = 1.0 when a Spec is associated with the task
+
+### New verbs
+
+- `maestro merge auto --pr <n> [--task <id>] [--base <ref>] [--json]`
+  — runs the 8-predicate eligibility gate; if eligible, calls
+  `gh pr merge --auto`. Exit 0 eligible+triggered, 1 ineligible
+  (with itemised reasons), 2 invocation/usage error.
+- `maestro verdict override --task <id> --pr <n> --reason "<text>"
+  [--verdict <id>]` — auxiliary audit-trail override. Authorization:
+  invoking `whoami` must appear in the **base-branch** version of
+  `.maestro/policies/owners.yaml` under `sensitive_waiver` (Rule 12).
+  Writes a `verdict-override` Evidence row at
+  `agent-claimed-and-not-reproducible`. The original Verdict is
+  **not** rewritten — overrides are append-only Evidence. CI
+  Maestro reflects the latest override in the PR check summary
+  ("Verdict overridden by …"); conclusion mapping is unchanged
+  (a BLOCK-overridden verdict still posts `failure`).
+- `maestro review ack --task <id> --verdict <id> --criterion "<text>"
+  [--criterion "<text>" …]` — explicit reviewer acknowledgement of
+  checklist items. One Evidence row per invocation, kind `review-ack`,
+  witness `agent-claimed-locally`. Consumed by predicate 7 of
+  auto-merge eligibility.
+
+### New EvidenceKinds
+
+- `review-ack` — payload `{verdictId, ackedBy, criteria[]}`. Witness
+  default `agent-claimed-locally`.
+- `verdict-override` — payload `{verdictId, overriddenBy, reason}`.
+  Witness `agent-claimed-and-not-reproducible`.
+- `rollback-exercised` — payload `{command, exit}`. **Declaration
+  only** in L6 (read by predicate 6). Producer ships at L7.5.
+
+### New use-cases
+
+- `src/features/merge/usecases/auto-merge-eligible.usecase.ts` — the
+  8-predicate gate, deterministic, never short-circuits, returns
+  `{ eligible, reasons[] }` with the full failure list.
+- `src/features/spec/usecases/score-spec.usecase.ts` — pure
+  `scoreSpec(spec)` deterministic checklist over required slots
+  (`acceptance_criteria.length >= 1`, `non_goals.length >= 1`).
+  No LLM-extracted half. The roadmap-mentioned
+  `user_visible_behavior` slot is intentionally not added — the
+  current Spec schema does not have it; adding one is a v2 schema
+  bump.
+
+### Limitations / honest framing
+
+- `verdict override` authorization uses local `whoami`; no
+  GitHub-author identity check yet (L7.9 territory).
+- Spec-score threshold not configurable at L6 (defer to v0.70.x
+  patch when teams ask).
+- Full 7-reviewer pipeline pre-enumeration intentionally cut from
+  L6.4. Reviewer kinds ship as agents emit them.
+- The L7 deploy phases are not required to ship L6: predicate 6
+  (`rollback-not-witnessed`) just becomes a normal ineligibility
+  reason for teams that haven't shipped L7.5. That's the deliberate
+  L6 ↔ L7 hand-off.
+
+### Compat
+
+Fully additive. Existing repos at L5 are unaffected unless they
+explicitly enable `policies/autopilot.yaml.autoMergeAllowed.<class>`.
+EvidenceKind union widened with `review-ack`, `verdict-override`, and
+`rollback-exercised` — backward-tolerant readers continue to skip
+unknown kinds.
+
 ## 0.69.0 - L5 — CI Is the Authoritative Verifier
 
 - New verb: `maestro ci verify [--pr <n>] [--task <id>] [--base <ref>]

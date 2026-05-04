@@ -92,8 +92,8 @@ The 7 adoption levels are the shipping plan. Each level is a release with its ow
 | **L2** | Contract-required: diff must respect declared scope | shipped (v0.66.0) | P5 (Contract on Task; P8 merged in), P11 full (Trust Verifier), P6 partial (plan check) |
 | **L3** | Risk verdict: Maestro produces PASS/FAIL/HUMAN/BLOCK | shipped (v0.67.0) | P14 (Risk engine), P15 (Policy authoring), P12 (Proof Strength → Witness Levels) |
 | **L4** | Autopilot inner loop, no merge: agent runs the loop, human merges | shipped (v0.68.0) | P7 partial, P13 partial (1–2 reviewers), P16 partial (Mission Control), P2 minimal (acceptance-criteria predicate) |
-| **L5** | **CI is the authoritative verifier — terminal default** | **headline** | P18 (CI/PR gate), P17 (Human Review UX) |
-| L6 | Auto-merge for declared safe scope | advanced optional; ship after L5 is in production and teams ask for auto-merge | P19, P20, P13 full, P4 (Spec Quality as gate threshold) |
+| **L5** | **CI is the authoritative verifier — terminal default** | shipped (v0.69.0) | P18 (CI/PR gate), P17 (Human Review UX) |
+| L6 | Auto-merge for declared safe scope | shipped (v0.70.0, trimmed); full 7-reviewer pipeline deferred | P19, P20, P13 full, P4 (Spec Quality as gate threshold) |
 | L7 | Deploy safety: gate, runtime signal ingestion, witnessed rollback | advanced optional; ship when teams need a deploy gate | P21, P22, P23, P24, P25 |
 | L8 | Learning loop: autopsy → ratchet → sunset | future, signal-driven; not on the active roadmap | (deferred phases parked in §L8) |
 
