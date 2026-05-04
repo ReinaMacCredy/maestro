@@ -56,6 +56,7 @@ import { registerContractL2Command } from "./features/task/commands/contract-l2.
 import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
 import { registerVerdictCommand } from "./features/verdict/index.js";
 import { registerPlanCheckCommand } from "./features/plan/index.js";
+import { registerCiVerifyCommand } from "./features/ci/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -107,6 +108,11 @@ const planCmd = program
   .command("plan")
   .description("Plan-time checks for agent tasks");
 registerPlanCheckCommand(planCmd, program);
+
+const ciCmd = program
+  .command("ci")
+  .description("CI integration — runs the verdict pipeline in CI mode");
+registerCiVerifyCommand(ciCmd, program);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,
