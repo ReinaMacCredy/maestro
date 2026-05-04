@@ -21,6 +21,7 @@ interface CiVerifyCommandDeps {
     | "runTrustVerifier"
     | "gitAnchor"
     | "projectRoot"
+    | "githubApi"
   >;
 }
 
@@ -93,6 +94,7 @@ export function registerCiVerifyCommand(
             gitAnchor: services.gitAnchor,
             projectRoot: services.projectRoot,
           },
+          prCheck: { githubApi: services.githubApi },
         },
       );
 

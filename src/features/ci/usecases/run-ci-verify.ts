@@ -6,6 +6,8 @@ import { requestVerdict } from "@/features/verdict/index.js";
 import type { RequestVerdictDeps } from "@/features/verdict/index.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
 import type { CiEnv } from "../domain/ci-env.js";
+import { postPrCheck } from "./post-pr-check.js";
+import type { PostPrCheckDeps } from "./post-pr-check.js";
 
 export interface TestResultPayload {
   readonly passed: number;
@@ -21,6 +23,7 @@ export interface RunCiVerifyDeps {
   readonly evidenceStore: EvidenceStorePort;
   readonly verdict: { readonly request: typeof requestVerdict };
   readonly verdictDeps: RequestVerdictDeps;
+  readonly prCheck?: PostPrCheckDeps;
   readonly readTestResults?: (path: string) => Promise<TestResultPayload | undefined>;
   readonly writeOutput?: (key: string, value: string) => Promise<void>;
   readonly now?: () => Date;
@@ -67,8 +70,9 @@ export async function runCiVerify(
     }
   }
 
+  const resolvedPr = args.pr ?? deps.env.pr;
   const verdict = await deps.verdict.request(
-    { taskId, base: resolvedBase },
+    { taskId, base: resolvedBase, pr: resolvedPr },
     deps.verdictDeps,
   );
 
@@ -79,6 +83,29 @@ export async function runCiVerify(
     await writeOutput("verdict_id", verdict.id);
     await writeOutput("verdict_decision", verdict.decision);
     await writeOutput("effective_risk_class", verdict.effectiveRiskClass);
+  }
+
+  // Post GitHub Check Run if running in GitHub Actions on a PR
+  // No persistance of checkRunId between runs yet; each run POSTs a new check.
+  // Persistence will follow when there is a real friction signal (e.g., duplicate
+  // checks appearing on the PR). For now, re-running creates a new check run with
+  // the same name; GitHub displays the latest one as the active check.
+  if (
+    deps.env.provider === "github-actions" &&
+    deps.env.pr !== undefined &&
+    deps.env.token !== undefined &&
+    deps.env.repository !== undefined &&
+    deps.env.headSha !== undefined &&
+    deps.prCheck !== undefined
+  ) {
+    await postPrCheck(
+      {
+        verdict,
+        repository: deps.env.repository,
+        headSha: deps.env.headSha,
+      },
+      deps.prCheck,
+    );
   }
 
   return verdict;
