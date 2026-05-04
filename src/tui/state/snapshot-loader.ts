@@ -17,8 +17,10 @@ import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort } from "@/features/handoff";
-import type { TaskQueryPort } from "@/features/task";
+import type { TaskQueryPort, RunStateStorePort, ContractVersionStorePort } from "@/features/task";
 import type { EvidenceStorePort } from "@/features/evidence";
+import type { VerdictStorePort } from "@/features/verdict";
+import { buildAutopilotSnapshot } from "./autopilot-screen.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { buildMissionControlEnvironmentSummary } from "./environment-projection.js";
 import { buildMissionControlMemorySnapshot } from "./memory-projection.js";
@@ -50,6 +52,9 @@ export interface SnapshotDeps {
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
+  verdictStore?: VerdictStorePort;
+  runStateStore?: RunStateStorePort;
+  contractVersionStore?: ContractVersionStorePort;
   cwd: string;
 }
 
@@ -84,6 +89,22 @@ export async function loadSnapshotInput(
   const taskBoardPromise = options.includeTaskBoard === true
     ? buildTaskBoard(deps.taskStore, deps.evidenceStore)
     : Promise.resolve(undefined);
+  const autopilotPromise = (
+    deps.taskStore !== undefined
+    && deps.verdictStore !== undefined
+    && deps.runStateStore !== undefined
+    && deps.contractVersionStore !== undefined
+  )
+    ? buildAutopilotSnapshot(
+        {
+          taskStore: deps.taskStore,
+          verdictStore: deps.verdictStore,
+          runStateStore: deps.runStateStore,
+          contractVersionStore: deps.contractVersionStore,
+        },
+        missionId,
+      )
+    : Promise.resolve(undefined);
 
   // Ingest replies FIRST when requested, so the features list below reflects
   // post-ingest state (advanced/kicked-back). Without this the inbox appears
@@ -111,6 +132,7 @@ export async function loadSnapshotInput(
     gitState,
     memorySnapshot,
     taskBoard,
+    autopilot,
   ] = await Promise.all([
     deps.missions.loadFullState(missionId),
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
@@ -124,6 +146,7 @@ export async function loadSnapshotInput(
       cwd: deps.cwd,
     }),
     taskBoardPromise,
+    autopilotPromise,
   ]);
 
   // Principle effectiveness piggybacks on includeReplies because the reply
@@ -145,6 +168,7 @@ export async function loadSnapshotInput(
     taskBoard,
     replies: ingest.replies,
     principleEffectiveness,
+    autopilot,
   };
 }
 

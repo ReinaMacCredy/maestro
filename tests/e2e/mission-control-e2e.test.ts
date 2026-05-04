@@ -101,10 +101,10 @@ describe("mission-control E2E", () => {
 
     const renderCheck = parseRenderCheck(result.stdout);
     expect(renderCheck.summary).toEqual({
-      total: 13,
+      total: 14,
       passed: 10,
       failed: 0,
-      skipped: 3,
+      skipped: 4,
     });
     expect(renderCheck.screens.map((screen) => [screen.screen, screen.status])).toEqual([
       ["dashboard", "pass"],
@@ -120,6 +120,7 @@ describe("mission-control E2E", () => {
       ["timeline", "skip"],
       ["principles", "pass"],
       ["help", "pass"],
+      ["autopilot", "skip"],
     ]);
   }, SLOW_CLI_TIMEOUT_MS);
 
@@ -143,8 +144,8 @@ describe("mission-control E2E", () => {
 
     const renderCheck = parseRenderCheck(renderCheckResult.stdout);
     expect(renderCheck.summary).toEqual({
-      total: 13,
-      passed: 13,
+      total: 14,
+      passed: 14,
       failed: 0,
       skipped: 0,
     });
@@ -179,10 +180,11 @@ describe("mission-control E2E", () => {
       "timeline",
       "principles",
       "help",
+      "autopilot",
     ]) {
       expect(preview.stdout).toContain(`--- ${screen} ---`);
     }
-    expect(preview.stdout).toContain("--- rendered 13 screens ---");
+    expect(preview.stdout).toContain("--- rendered 14 screens ---");
     expect(preview.stdout).toContain("Mission Control E2E Test");
     expect(preview.stdout).toContain("f1 Feature 1");
     expect(preview.stdout).not.toContain("undefined");

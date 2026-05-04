@@ -22,6 +22,7 @@ export {
   buildTimelineMilestones,
 } from "./projection.js";
 export { buildTaskBoard } from "./task-board.js";
+export { buildAutopilotSnapshot } from "./autopilot-screen.js";
 export {
   buildPrincipleEffectivenessRows,
   buildReplyInbox,

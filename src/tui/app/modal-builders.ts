@@ -232,6 +232,10 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
         return buildHelpModal(state, returnTarget);
       }
 
+      if (state.modal.kind === "autopilot") {
+        return buildAutopilotModal(state as AutopilotModalState, returnTarget);
+      }
+
   return undefined;
 }
 
@@ -353,6 +357,7 @@ type EventStreamModalState = AppState & { modal: Extract<AppState["modal"], { ki
 type TaskBoardModalState = AppState & { modal: Extract<AppState["modal"], { kind: "task-board" }> };
 type TimelineModalState = AppState & { modal: Extract<AppState["modal"], { kind: "timeline" }> };
 type PrincipleReviewModalState = AppState & { modal: Extract<AppState["modal"], { kind: "principle-review" }> };
+type AutopilotModalState = AppState & { modal: Extract<AppState["modal"], { kind: "autopilot" }> };
 
 function buildAgentGridModal(
   state: AgentGridModalState,
@@ -654,6 +659,49 @@ function buildHelpModal(
     footer: "Press any key to dismiss",
     returnTarget,
     renderSpec: buildOverlayRenderSpec("help"),
+  };
+}
+
+function buildAutopilotModal(
+  state: AutopilotModalState,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  const tasks = state.snapshot.autopilot?.tasks ?? [];
+  const selected = tasks[state.modal.selectedIndex];
+
+  return {
+    mode: "split",
+    title: "Autopilot",
+    eyebrow: "Per-task verdict, retry, and wall-clock status.",
+    items: tasks.length > 0
+      ? tasks.map((task) => ({
+          label: task.taskId,
+          detail: task.latestVerdict?.decision ?? "no verdict",
+          hint: task.intent.length > 20 ? `${task.intent.slice(0, 20)}…` : task.intent,
+        }))
+      : [{ label: "No tasks for this mission", selectable: false, tone: "muted" as const }],
+    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, tasks.length - 1)),
+    detailItems: selected
+      ? [
+          { text: selected.intent, section: "Intent" },
+          { text: `Task: ${selected.taskId}`, tone: "muted" as const },
+          { text: "", section: "Verdict" },
+          { text: selected.latestVerdict
+              ? `${selected.latestVerdict.decision}  at ${selected.latestVerdict.at}`
+              : "(none yet)" },
+          { text: "", section: "Budget" },
+          { text: selected.maxRetries !== undefined
+              ? `Retries: ${selected.retryCount}/${selected.maxRetries}`
+              : `Retries: ${selected.retryCount}` },
+          { text: selected.maxWallClockSeconds !== undefined
+              ? `Wall-clock: ${selected.wallClockElapsedSeconds}s/${selected.maxWallClockSeconds}s`
+              : `Wall-clock: ${selected.wallClockElapsedSeconds}s` },
+          ...(selected.lastUpdatedAt ? [{ text: `Updated: ${selected.lastUpdatedAt}`, tone: "muted" as const }] : []),
+        ]
+      : [{ text: "Select a task to view autopilot details" }],
+    footer: buildListOverlayFooter(returnTarget),
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("autopilot"),
   };
 }
 

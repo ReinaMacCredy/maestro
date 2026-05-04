@@ -25,6 +25,7 @@ import type {
   TaskBoardSnapshot,
   TimelineMilestoneEntry,
 } from "./screen-types.js";
+import type { AutopilotSnapshot } from "./autopilot-screen.js";
 
 export type MissionControlMode = "mission" | "home";
 export type LeftPaneMode = "overview" | "preview";
@@ -228,6 +229,9 @@ export interface MissionControlSnapshot {
   replyInbox?: readonly ReplyInboxEntry[];
   principleEffectiveness?: readonly PrincipleEffectivenessRow[];
 
+  // Autopilot (mission mode only)
+  autopilot?: AutopilotSnapshot;
+
   // Home mode
   home: MissionControlHomeState | null;
 }
@@ -299,3 +303,4 @@ export type {
   TaskBoardItem,
   TimelineMilestoneEntry,
 } from "./screen-types.js";
+export type { AutopilotSnapshot, AutopilotTaskRow } from "./autopilot-screen.js";

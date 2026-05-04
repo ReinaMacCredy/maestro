@@ -61,6 +61,7 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   principles: "principles",
   principle: "principles",
   help: "help",
+  autopilot: "autopilot",
 };
 
 export function registerMissionControlCommand(program: Command): void {
@@ -129,6 +130,9 @@ export function registerMissionControlCommand(program: Command): void {
           evidenceStore: services.evidenceStore,
           replyStore: services.replyStore,
           principleStore: services.principleStore,
+          verdictStore: services.verdictStore,
+          runStateStore: services.runStateStore,
+          contractVersionStore: services.contractVersionStore,
           cwd: process.cwd(),
         };
         const snapshotLoader = createMissionControlSnapshotLoader(
