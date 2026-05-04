@@ -19,3 +19,5 @@ export { getSpec } from "./usecases/get-spec.usecase.js";
 export { registerSpecCommand } from "./commands/spec.command.js";
 export { buildSpecServices } from "./services.js";
 export type { SpecServices } from "./services.js";
+export { scoreSpec } from "./usecases/score-spec.usecase.js";
+export type { SpecScoreResult } from "./usecases/score-spec.usecase.js";
