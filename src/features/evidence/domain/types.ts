@@ -7,7 +7,8 @@ export type EvidenceKind =
   | "ai-review"
   | "plan-check"
   | "threat-model"
-  | "review-ack";
+  | "review-ack"
+  | "rollback-exercised";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -122,6 +123,15 @@ export interface ReviewAckPayload {
   readonly criteria: readonly string[];
 }
 
+/**
+ * Payload for rollback-exercised evidence.
+ * Declaration only — the producer ships at L7.5.
+ */
+export interface RollbackExercisedPayload {
+  readonly command: string;
+  readonly exit: number;
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -132,6 +142,7 @@ interface EvidencePayloadByKind {
   readonly "plan-check": PlanCheckPayload;
   readonly "threat-model": ThreatModelPayload;
   readonly "review-ack": ReviewAckPayload;
+  readonly "rollback-exercised": RollbackExercisedPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];
