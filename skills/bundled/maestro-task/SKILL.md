@@ -170,13 +170,33 @@ maestro task update <id> --status completed \
 
 ## Before claiming the task complete
 
-1. **Run the Trust Verifier**: `maestro task verify --task <id>`. Address every error finding before proceeding.
-2. **Confirm criterion coverage**: `maestro task proof --task <id>`. Every Spec acceptance criterion must have at least one Evidence row.
-3. **Request a verdict**: `maestro verdict request --task <id>`.
-    - **PASS** (exit 0): proceed to ship.
-    - **FAIL** (exit 1): fix the findings; re-run `task verify` and `verdict request`.
-    - **HUMAN** (exit 2): hand off via `maestro handoff create`. Do not retry.
-    - **BLOCK** (exit 3): stop. Report the situation to the user.
+Run this loop before marking any task done:
+
+1. `maestro task verify --task <id>` — Trust Verifier (scope, lockfile,
+   generated, sensitive-paths, commit-metadata, secrets). Address every
+   error finding before proceeding.
+
+2. `maestro task proof --task <id>` — confirm criterion coverage. Every
+   Spec acceptance criterion must have at least one Evidence row.
+
+3. `maestro verdict request --task <id>` — produces a Verdict.
+
+4. Branch on the verdict's exit code:
+   - **0 PASS** — claim the task done.
+   - **1 FAIL** — fix the cited findings, then loop back to step 1.
+   - **2 HUMAN** — run `maestro handoff create` and stop. A human must
+     approve before the task can complete.
+   - **3 BLOCK** — stop. The task is blocked (typically cost-budget
+     exhaustion). Surface the BLOCK reason to the user; do not retry
+     without their guidance.
+
+If retries are accumulating, run `maestro task budget --task <id>` to
+see the current cost-budget consumption. Once retries reach the
+contract's `maxRetries`, the next `verdict request` will return BLOCK.
+
+See the `maestro-verify` skill for the canonical verification protocol
+(witness levels, ProofMap, plan-check, AI Reviewer protocol,
+threat-model production).
 
 ## Evidence
 
