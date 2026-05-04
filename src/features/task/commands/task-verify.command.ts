@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
-import { execArgv } from "@/shared/lib/shell.js";
+import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/domain/types.js";
 import { getServices, type Services } from "@/services.js";
@@ -34,16 +34,10 @@ export function registerTaskVerifyCommand(
         ]);
       }
 
-      // 2. Resolve base ref
       const baseRef = typeof opts.base === "string" && opts.base.length > 0
         ? opts.base
         : await resolveDefaultBase();
-
-      // 3. Resolve HEAD sha
-      const headResult = await execArgv(["git", "rev-parse", "HEAD"]);
-      const headSha = headResult.exitCode === 0 && headResult.stdout
-        ? headResult.stdout
-        : "HEAD";
+      const headSha = await resolveHeadSha();
 
       // 4. Build diff
       const cwd = process.cwd();
@@ -138,23 +132,3 @@ function printTextFindings(findings: readonly TrustFinding[], counts: FindingCou
   }
 }
 
-async function resolveDefaultBase(): Promise<string> {
-  // Try upstream tracking branch first
-  const upstream = await execArgv(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
-  if (upstream.exitCode === 0 && upstream.stdout) {
-    const upstreamRef = upstream.stdout;
-    const mergeBase = await execArgv(["git", "merge-base", "HEAD", upstreamRef]);
-    if (mergeBase.exitCode === 0 && mergeBase.stdout) {
-      return mergeBase.stdout;
-    }
-    return upstreamRef;
-  }
-
-  // Fall back to merge-base with main
-  const mergeBaseMain = await execArgv(["git", "merge-base", "HEAD", "main"]);
-  if (mergeBaseMain.exitCode === 0 && mergeBaseMain.stdout) {
-    return mergeBaseMain.stdout;
-  }
-
-  return "main";
-}

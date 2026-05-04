@@ -4,7 +4,7 @@
  * The 13-digit decimal timestamp keeps lexical sort aligned with chronological
  * sort up to year ~5138. 8 hex (32 bits) gives very low collision odds when
  * criteria are created in bursts. Ids are stable: once written to storage they
- * must never change so the ProofMap (L3.5) can join on them reliably.
+ * must never change so the ProofMap can join on them reliably.
  */
 import { randomBytes } from "node:crypto";
 

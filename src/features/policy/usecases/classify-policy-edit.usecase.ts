@@ -1,15 +1,13 @@
 import { parseYaml } from "@/shared/lib/yaml.js";
 import { MaestroError } from "@/shared/errors.js";
+import { WITNESS_LEVEL_ORDER } from "@/features/evidence/index.js";
+import { RISK_CLASS_ORDER } from "@/features/risk/index.js";
 import type { PolicyKind } from "../domain/policy-types.js";
 
 export interface PolicyEdit {
-  /** Human-readable description, e.g. "raised required witness for high from agent-claimed-locally to witnessed-by-maestro" */
   readonly description: string;
-  /** Dotted-path into the YAML, e.g. "requiredWitnessLevel.high" */
   readonly path?: string;
-  /** The value before the edit (for reversal) */
   readonly oldValue?: unknown;
-  /** The value after the edit */
   readonly newValue?: unknown;
 }
 
@@ -18,25 +16,12 @@ export interface PolicyEditClassification {
   readonly loosenings: readonly PolicyEdit[];
 }
 
-// WitnessLevel ladder: higher index = stronger/more restrictive
-const WITNESS_LEVEL_ORDER = [
-  "agent-claimed-and-not-reproducible",
-  "agent-claimed-locally",
-  "witnessed-by-ci",
-  "witnessed-by-maestro",
-] as const;
-type WitnessLevel = (typeof WITNESS_LEVEL_ORDER)[number];
-
 function witnessLevelScore(level: string): number {
-  return WITNESS_LEVEL_ORDER.indexOf(level as WitnessLevel);
+  return (WITNESS_LEVEL_ORDER as readonly string[]).indexOf(level);
 }
 
-// Risk class ladder: higher index = more restrictive
-const RISK_CLASS_ORDER = ["low", "medium", "high", "critical"] as const;
-type RiskClass = (typeof RISK_CLASS_ORDER)[number];
-
 function riskClassScore(cls: string): number {
-  return RISK_CLASS_ORDER.indexOf(cls as RiskClass);
+  return (RISK_CLASS_ORDER as readonly string[]).indexOf(cls);
 }
 
 function parseOrEmpty<T>(yaml: string): T {
@@ -139,8 +124,6 @@ interface AutopilotYaml {
   readonly required_witness_level?: Record<string, string>;
 }
 
-const RISK_CLASSES = ["low", "medium", "high", "critical"] as const;
-
 function classifyAutopilotEdit(oldYaml: string, newYaml: string): PolicyEditClassification {
   const oldParsed = parseOrEmpty<AutopilotYaml>(oldYaml);
   const newParsed = parseOrEmpty<AutopilotYaml>(newYaml);
@@ -153,7 +136,7 @@ function classifyAutopilotEdit(oldYaml: string, newYaml: string): PolicyEditClas
   const oldWitness = (oldParsed?.required_witness_level ?? {}) as Record<string, string>;
   const newWitness = (newParsed?.required_witness_level ?? {}) as Record<string, string>;
 
-  for (const cls of RISK_CLASSES) {
+  for (const cls of RISK_CLASS_ORDER) {
     // autoMergeAllowed: false→true is loosening; true→false is tightening
     const oldMergeVal = oldMerge[cls] ?? false;
     const newMergeVal = newMerge[cls] ?? false;

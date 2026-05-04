@@ -146,12 +146,6 @@ async function writeMediumPermissiveAutopilot(dir: string): Promise<void> {
   );
 }
 
-/**
- * Write a sensitive-paths policy using the `paths:` key that the verdict
- * usecase's `loadSensitivePathsGlobs` reads. (The bootstrap template writes
- * `sensitive_paths:` which the loader does NOT read — the loader looks for
- * the top-level `paths:` key.)
- */
 async function writeSensitivePaths(dir: string, globs: string[]): Promise<void> {
   const policyDir = join(dir, ".maestro", "policies");
   await mkdir(policyDir, { recursive: true });
@@ -293,7 +287,6 @@ describe("L3 verdict flow (compiled binary)", () => {
       tempDirs.push(dir);
 
       await writeMediumPermissiveAutopilot(dir);
-      // The verdict usecase's loadSensitivePathsGlobs reads the `paths:` key.
       await writeSensitivePaths(dir, ["src/auth/**"]);
 
       const taskId = await createTask(dir, "HUMAN scenario");

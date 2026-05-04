@@ -1,4 +1,4 @@
-// AcceptanceCriterion.id is the join key for the ProofMap (L3.5) and must
+// AcceptanceCriterion.id is the join key for the ProofMap and must
 // never change once written.
 export interface AcceptanceCriterion {
   readonly id: string;

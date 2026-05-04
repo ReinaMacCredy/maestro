@@ -54,11 +54,7 @@ export function initServices(projectDir: string): Services {
     ...buildSpecServices(projectDir),
     ...policyServices,
     ...buildVerifyServices(projectDir),
-    ...buildRiskServices({
-      getEffectiveRiskPolicy: policyServices.getEffectiveRiskPolicy,
-      getEffectiveAutopilotPolicy: policyServices.getEffectiveAutopilotPolicy,
-      getEffectiveReleasePolicy: policyServices.getEffectiveReleasePolicy,
-    }),
+    ...buildRiskServices(),
     ...buildVerdictServices(projectDir),
     projectRoot: projectDir,
   };

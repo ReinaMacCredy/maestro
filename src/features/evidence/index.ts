@@ -7,6 +7,11 @@ export type {
   EvidenceRow,
 } from "./domain/types.js";
 export {
+  WITNESS_LEVEL_ORDER,
+  isWitnessLevel,
+  compareWitnessLevel,
+} from "./domain/types.js";
+export {
   EVIDENCE_ID_PATTERN,
   generateEvidenceId,
   isEvidenceId,

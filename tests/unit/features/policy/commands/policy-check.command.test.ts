@@ -109,9 +109,9 @@ function makeReleasePolicy(overrides: Partial<ReleasePolicy> = {}): ReleasePolic
 
 interface ServicesLike {
   contractVersionStore: ContractVersionStorePort;
-  getRiskPolicy: () => Promise<RiskPolicy>;
-  getAutopilotPolicy: () => Promise<AutopilotPolicy>;
-  getReleasePolicy: () => Promise<ReleasePolicy>;
+  getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
+  getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
+  getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
   deriveRiskClassFromDiff: RiskServices["deriveRiskClassFromDiff"];
   gitAnchor: GitAnchorPort;
   projectRoot: string;
@@ -120,9 +120,9 @@ interface ServicesLike {
 function makeServices(overrides: Partial<ServicesLike> = {}): ServicesLike {
   return {
     contractVersionStore: fakeContractVersionStore(makeContract()),
-    getRiskPolicy: async () => makeRiskPolicy(),
-    getAutopilotPolicy: async () => makeAutopilotPolicy(),
-    getReleasePolicy: async () => makeReleasePolicy(),
+    getEffectiveRiskPolicy: async () => makeRiskPolicy(),
+    getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
+    getEffectiveReleasePolicy: async () => makeReleasePolicy(),
     deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only", description: "Source only" } }),
     gitAnchor: fakeGitAnchor(),
     projectRoot: "/tmp/test-project",
@@ -195,7 +195,7 @@ describe("policy check", () => {
 
   it("shows release rules in text output", async () => {
     const services = makeServices({
-      getReleasePolicy: async () => makeReleasePolicy({ requireSignedCommits: true }),
+      getEffectiveReleasePolicy: async () => makeReleasePolicy({ requireSignedCommits: true }),
     });
     const program = makeProgram(services);
     const { logs } = captureConsole();

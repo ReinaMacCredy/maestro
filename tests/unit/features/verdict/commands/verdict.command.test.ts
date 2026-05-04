@@ -142,11 +142,6 @@ function fakeRiskServices(verdict: Verdict): RiskServices {
   return {
     computeRisk: () => verdict,
     deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
-    getEffectivePolicies: async () => ({
-      riskPolicy: makeRiskPolicy(),
-      autopilotPolicy: makeAutopilotPolicy(),
-      releasePolicy: makeReleasePolicy(),
-    }),
   };
 }
 
@@ -154,15 +149,11 @@ interface ServicesLike {
   verdictStore: VerdictStorePort;
   contractVersionStore: ContractVersionStorePort;
   evidenceStore: EvidenceStorePort;
-  getRiskPolicy: () => Promise<RiskPolicy>;
-  getAutopilotPolicy: () => Promise<AutopilotPolicy>;
-  getReleasePolicy: () => Promise<ReleasePolicy>;
   getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
   computeRisk: RiskServices["computeRisk"];
   deriveRiskClassFromDiff: RiskServices["deriveRiskClassFromDiff"];
-  getEffectivePolicies: RiskServices["getEffectivePolicies"];
   runTrustVerifier: (input: unknown) => Promise<{ findings: [] }>;
   gitAnchor: GitAnchorPort;
   projectRoot: string;
@@ -174,15 +165,11 @@ function makeServices(verdict: Verdict, initialVerdicts: Verdict[] = []): Servic
     verdictStore: fakeVerdictStore(initialVerdicts),
     contractVersionStore: fakeContractVersionStore(makeContract()),
     evidenceStore: fakeEvidenceStore(),
-    getRiskPolicy: async () => makeRiskPolicy(),
-    getAutopilotPolicy: async () => makeAutopilotPolicy(),
-    getReleasePolicy: async () => makeReleasePolicy(),
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     getEffectiveReleasePolicy: async () => makeReleasePolicy(),
     computeRisk: riskServices.computeRisk,
     deriveRiskClassFromDiff: riskServices.deriveRiskClassFromDiff,
-    getEffectivePolicies: riskServices.getEffectivePolicies,
     runTrustVerifier: async () => ({ findings: [] }),
     gitAnchor: fakeGitAnchor(),
     projectRoot: "/tmp/test-project",

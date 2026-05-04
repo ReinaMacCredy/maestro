@@ -1,14 +1,15 @@
 import { join } from "node:path";
 import { readText } from "@/shared/lib/fs.js";
-import { parseYaml } from "@/shared/lib/yaml.js";
+import { parsePolicyYaml } from "@/shared/lib/yaml.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { RiskClass } from "@/features/task/index.js";
+import { RISK_CLASS_ORDER } from "@/features/risk/index.js";
 import type { RiskPolicy, RiskPolicyRow } from "../domain/policy-types.js";
 import { DEFAULT_RISK_POLICY } from "../domain/risk-policy-defaults.js";
 
 const RISK_POLICY_REL_PATH = ".maestro/policies/risk.yaml";
 
-const VALID_RISK_CLASSES = new Set<string>(["low", "medium", "high", "critical"]);
+const VALID_RISK_CLASSES = new Set<string>(RISK_CLASS_ORDER);
 
 interface RiskPolicyRowYaml {
   readonly signal?: unknown;
@@ -47,7 +48,7 @@ function validateRow(row: unknown, index: number): RiskPolicyRow {
     throw new MaestroError(
       `risk.yaml malformed at row ${index}: unknown derived_class '${String(r.derived_class)}'`,
       [
-        `unknown derived_class '${String(r.derived_class)}' — must be one of: low, medium, high, critical`,
+        `unknown derived_class '${String(r.derived_class)}' — must be one of: ${RISK_CLASS_ORDER.join(", ")}`,
       ],
     );
   }
@@ -67,24 +68,7 @@ export async function loadRiskPolicy(projectRoot: string): Promise<RiskPolicy> {
     return DEFAULT_RISK_POLICY;
   }
 
-  let raw: RiskPolicyYaml;
-  try {
-    raw = parseYaml<RiskPolicyYaml>(text) ?? {};
-  } catch (err: unknown) {
-    const yamlErr = err as { linePos?: Array<{ line: number }> };
-    const line = yamlErr.linePos?.[0]?.line;
-    const lineInfo = line !== undefined ? ` at line ${line}` : "";
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new MaestroError(`risk.yaml malformed${lineInfo}: ${msg}`, [
-      "Fix the YAML syntax and re-run",
-    ]);
-  }
-
-  if (typeof raw !== "object" || Array.isArray(raw)) {
-    throw new MaestroError("risk.yaml malformed: expected top-level object", [
-      `Got ${Array.isArray(raw) ? "array" : typeof raw}`,
-    ]);
-  }
+  const raw = parsePolicyYaml<RiskPolicyYaml>(text, "risk.yaml");
 
   if (!Array.isArray(raw.rows)) {
     throw new MaestroError("risk.yaml malformed: missing or invalid 'rows' array", [

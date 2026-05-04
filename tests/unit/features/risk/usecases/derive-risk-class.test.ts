@@ -6,7 +6,6 @@ import type { RiskPolicy } from "@/features/policy/index.js";
 function makeInput(changedPaths: string[], overrides?: Partial<DerivedRiskInput>): DerivedRiskInput {
   return {
     changedPaths,
-    addedLines: [],
     ...overrides,
   };
 }

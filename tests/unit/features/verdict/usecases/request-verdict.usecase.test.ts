@@ -155,23 +155,18 @@ function fakeGitAnchor(changedPaths: string[] = [], addedLines: string[] = []): 
 
 function makeDeps(overrides: Partial<RequestVerdictDeps> = {}): RequestVerdictDeps {
   const fakeVerdictResult = makeVerdict();
-  const { store: verdictStore, written } = fakeVerdictStore();
+  const { store: verdictStore } = fakeVerdictStore();
 
   return {
     contractVersionStore: fakeContractVersionStore(makeContract()),
     evidenceStore: fakeEvidenceStore(),
     verdictStore,
-    getRiskPolicy: async () => makeRiskPolicy(),
-    getAutopilotPolicy: async () => makeAutopilotPolicy(),
-    getReleasePolicy: async () => makeReleasePolicy(),
+    getEffectiveRiskPolicy: async () => makeRiskPolicy(),
+    getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
+    getEffectiveReleasePolicy: async () => makeReleasePolicy(),
     riskServices: {
       computeRisk: () => fakeVerdictResult,
       deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
-      getEffectivePolicies: async () => ({
-        riskPolicy: makeRiskPolicy(),
-        autopilotPolicy: makeAutopilotPolicy(),
-        releasePolicy: makeReleasePolicy(),
-      }),
     },
     runTrustVerifier: async () => ({ findings: [] }),
     gitAnchor: fakeGitAnchor(),
@@ -253,11 +248,6 @@ describe("requestVerdict", () => {
           return expectedVerdict;
         },
         deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),
-        getEffectivePolicies: async () => ({
-          riskPolicy: makeRiskPolicy(),
-          autopilotPolicy: makeAutopilotPolicy(),
-          releasePolicy: makeReleasePolicy(),
-        }),
       },
     });
 
@@ -283,11 +273,6 @@ describe("requestVerdict", () => {
       riskServices: {
         computeRisk: () => expectedVerdict,
         deriveRiskClassFromDiff: () => ({ class: "high", matchedRow: { signal: "diff-modifies-ci-workflows" } }),
-        getEffectivePolicies: async () => ({
-          riskPolicy: makeRiskPolicy(),
-          autopilotPolicy: makeAutopilotPolicy(),
-          releasePolicy: makeReleasePolicy(),
-        }),
       },
     });
     const result = await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
@@ -295,32 +280,15 @@ describe("requestVerdict", () => {
     expect(result.decision).toBe("HUMAN");
   });
 
-  it("prefers effective policy getters when available", async () => {
+  it("uses effective policy getters", async () => {
     let usedEffective = false;
     const deps = makeDeps({
       getEffectiveRiskPolicy: async () => {
         usedEffective = true;
         return makeRiskPolicy({ id: "effective-risk" });
       },
-      getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
-      getEffectiveReleasePolicy: async () => makeReleasePolicy(),
     });
     await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
     expect(usedEffective).toBe(true);
-  });
-
-  it("falls back to raw policy getters when effective getters are not provided", async () => {
-    let usedRaw = false;
-    const deps = makeDeps({
-      getEffectiveRiskPolicy: undefined,
-      getEffectiveAutopilotPolicy: undefined,
-      getEffectiveReleasePolicy: undefined,
-      getRiskPolicy: async () => {
-        usedRaw = true;
-        return makeRiskPolicy();
-      },
-    });
-    await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
-    expect(usedRaw).toBe(true);
   });
 });

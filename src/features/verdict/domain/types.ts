@@ -10,9 +10,18 @@ export type VerdictCategory =
   | "amendment"
   | "cost-budget";
 
+export type VerdictReasonCode =
+  | "cost-budget-exhausted"
+  | "trust-findings-error"
+  | "amendment-budget-high"
+  | "effective-risk-critical"
+  | "evidence-witness-level-insufficient"
+  | "auto-merge-not-allowed"
+  | "all-checks-passed";
+
 export interface VerdictReason {
   readonly category: VerdictCategory;
-  readonly code: string;
+  readonly code: VerdictReasonCode;
   readonly message: string;
   readonly evidenceIds?: readonly string[];
   readonly findingChecks?: readonly string[];

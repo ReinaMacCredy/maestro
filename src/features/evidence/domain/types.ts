@@ -11,6 +11,31 @@ export type WitnessLevel =
   | "agent-claimed-locally"
   | "agent-claimed-and-not-reproducible";
 
+/**
+ * Witness-level ladder, weakest to strongest. Higher index = more trustworthy.
+ * Sole source of truth for witness-level ordering across the codebase.
+ */
+export const WITNESS_LEVEL_ORDER: readonly WitnessLevel[] = [
+  "agent-claimed-and-not-reproducible",
+  "agent-claimed-locally",
+  "witnessed-by-ci",
+  "witnessed-by-maestro",
+];
+
+const WITNESS_LEVEL_SET = new Set<string>(WITNESS_LEVEL_ORDER);
+
+export function isWitnessLevel(value: unknown): value is WitnessLevel {
+  return typeof value === "string" && WITNESS_LEVEL_SET.has(value);
+}
+
+export function compareWitnessLevel(a: WitnessLevel, b: WitnessLevel): -1 | 0 | 1 {
+  const ai = WITNESS_LEVEL_ORDER.indexOf(a);
+  const bi = WITNESS_LEVEL_ORDER.indexOf(b);
+  if (ai < bi) return -1;
+  if (ai > bi) return 1;
+  return 0;
+}
+
 export interface CommandPayload {
   readonly command: string;
   readonly exit: number;

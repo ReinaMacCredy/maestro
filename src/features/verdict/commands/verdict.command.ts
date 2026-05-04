@@ -11,15 +11,11 @@ interface VerdictCommandDeps {
     | "verdictStore"
     | "contractVersionStore"
     | "evidenceStore"
-    | "getRiskPolicy"
-    | "getAutopilotPolicy"
-    | "getReleasePolicy"
     | "getEffectiveRiskPolicy"
     | "getEffectiveAutopilotPolicy"
     | "getEffectiveReleasePolicy"
     | "computeRisk"
     | "deriveRiskClassFromDiff"
-    | "getEffectivePolicies"
     | "runTrustVerifier"
     | "gitAnchor"
     | "projectRoot"
@@ -116,16 +112,12 @@ export function registerVerdictCommand(
           contractVersionStore: services.contractVersionStore,
           evidenceStore: services.evidenceStore,
           verdictStore: services.verdictStore,
-          getRiskPolicy: services.getRiskPolicy,
-          getAutopilotPolicy: services.getAutopilotPolicy,
-          getReleasePolicy: services.getReleasePolicy,
           getEffectiveRiskPolicy: services.getEffectiveRiskPolicy,
           getEffectiveAutopilotPolicy: services.getEffectiveAutopilotPolicy,
           getEffectiveReleasePolicy: services.getEffectiveReleasePolicy,
           riskServices: {
             computeRisk: services.computeRisk,
             deriveRiskClassFromDiff: services.deriveRiskClassFromDiff,
-            getEffectivePolicies: services.getEffectivePolicies,
           },
           runTrustVerifier: services.runTrustVerifier,
           gitAnchor: services.gitAnchor,

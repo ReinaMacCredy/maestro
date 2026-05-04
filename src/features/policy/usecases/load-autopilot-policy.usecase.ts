@@ -1,21 +1,17 @@
 import { join } from "node:path";
 import { readText } from "@/shared/lib/fs.js";
-import { parseYaml } from "@/shared/lib/yaml.js";
+import { parsePolicyYaml } from "@/shared/lib/yaml.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { WitnessLevel } from "@/features/evidence/index.js";
+import {
+  WITNESS_LEVEL_ORDER,
+  isWitnessLevel,
+  type WitnessLevel,
+} from "@/features/evidence/index.js";
+import { RISK_CLASS_ORDER } from "@/features/risk/index.js";
+import type { RiskClass } from "@/features/task/index.js";
 import type { AutopilotPolicy } from "../domain/policy-types.js";
 
 const AUTOPILOT_POLICY_REL_PATH = ".maestro/policies/autopilot.yaml";
-
-const VALID_RISK_CLASSES = ["low", "medium", "high", "critical"] as const;
-type RiskClassKey = (typeof VALID_RISK_CLASSES)[number];
-
-const VALID_WITNESS_LEVELS = new Set<string>([
-  "witnessed-by-maestro",
-  "witnessed-by-ci",
-  "agent-claimed-locally",
-  "agent-claimed-and-not-reproducible",
-]);
 
 const DISABLED_DEFAULTS: AutopilotPolicy = {
   kind: "autopilot",
@@ -35,10 +31,6 @@ const DISABLED_DEFAULTS: AutopilotPolicy = {
   },
 };
 
-function isWitnessLevel(val: unknown): val is WitnessLevel {
-  return typeof val === "string" && VALID_WITNESS_LEVELS.has(val);
-}
-
 interface AutopilotPolicyYaml {
   readonly kind?: unknown;
   readonly id?: unknown;
@@ -47,20 +39,29 @@ interface AutopilotPolicyYaml {
   readonly required_witness_level?: unknown;
 }
 
+function assertKnownClassKey(key: string, fieldName: string): asserts key is RiskClass {
+  if (!(RISK_CLASS_ORDER as readonly string[]).includes(key)) {
+    throw new MaestroError(
+      `autopilot.yaml malformed: unknown risk class key '${key}' in '${fieldName}'`,
+      [`Valid keys are: ${RISK_CLASS_ORDER.join(", ")}`],
+    );
+  }
+}
+
 function parseBooleanMap(
   raw: unknown,
   fieldName: string,
-): Record<RiskClassKey, boolean> {
+): Record<RiskClass, boolean> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw new MaestroError(`autopilot.yaml malformed: '${fieldName}' must be an object`, [
-      `Expected an object with keys: ${VALID_RISK_CLASSES.join(", ")}`,
+      `Expected an object with keys: ${RISK_CLASS_ORDER.join(", ")}`,
     ]);
   }
 
   const obj = raw as Record<string, unknown>;
-  const result = {} as Record<RiskClassKey, boolean>;
+  const result = {} as Record<RiskClass, boolean>;
 
-  for (const key of VALID_RISK_CLASSES) {
+  for (const key of RISK_CLASS_ORDER) {
     const val = obj[key];
     if (val === undefined) {
       result[key] = false;
@@ -74,14 +75,8 @@ function parseBooleanMap(
     }
   }
 
-  // Check for unknown class keys
   for (const key of Object.keys(obj)) {
-    if (!VALID_RISK_CLASSES.includes(key as RiskClassKey)) {
-      throw new MaestroError(
-        `autopilot.yaml malformed: unknown risk class key '${key}' in '${fieldName}'`,
-        [`Valid keys are: ${VALID_RISK_CLASSES.join(", ")}`],
-      );
-    }
+    assertKnownClassKey(key, fieldName);
   }
 
   return result;
@@ -90,17 +85,17 @@ function parseBooleanMap(
 function parseWitnessMap(
   raw: unknown,
   fieldName: string,
-): Record<RiskClassKey, WitnessLevel> {
+): Record<RiskClass, WitnessLevel> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw new MaestroError(`autopilot.yaml malformed: '${fieldName}' must be an object`, [
-      `Expected an object with keys: ${VALID_RISK_CLASSES.join(", ")}`,
+      `Expected an object with keys: ${RISK_CLASS_ORDER.join(", ")}`,
     ]);
   }
 
   const obj = raw as Record<string, unknown>;
-  const result = {} as Record<RiskClassKey, WitnessLevel>;
+  const result = {} as Record<RiskClass, WitnessLevel>;
 
-  for (const key of VALID_RISK_CLASSES) {
+  for (const key of RISK_CLASS_ORDER) {
     const val = obj[key];
     if (val === undefined) {
       result[key] = "witnessed-by-maestro";
@@ -109,19 +104,13 @@ function parseWitnessMap(
     } else {
       throw new MaestroError(
         `autopilot.yaml malformed: '${fieldName}.${key}' is not a valid WitnessLevel: '${String(val)}'`,
-        [`Valid values: ${Array.from(VALID_WITNESS_LEVELS).join(", ")}`],
+        [`Valid values: ${WITNESS_LEVEL_ORDER.join(", ")}`],
       );
     }
   }
 
-  // Check for unknown class keys
   for (const key of Object.keys(obj)) {
-    if (!VALID_RISK_CLASSES.includes(key as RiskClassKey)) {
-      throw new MaestroError(
-        `autopilot.yaml malformed: unknown risk class key '${key}' in '${fieldName}'`,
-        [`Valid keys are: ${VALID_RISK_CLASSES.join(", ")}`],
-      );
-    }
+    assertKnownClassKey(key, fieldName);
   }
 
   return result;
@@ -135,24 +124,7 @@ export async function loadAutopilotPolicy(projectRoot: string): Promise<Autopilo
     return DISABLED_DEFAULTS;
   }
 
-  let raw: AutopilotPolicyYaml;
-  try {
-    raw = parseYaml<AutopilotPolicyYaml>(text) ?? {};
-  } catch (err: unknown) {
-    const yamlErr = err as { linePos?: Array<{ line: number }> };
-    const line = yamlErr.linePos?.[0]?.line;
-    const lineInfo = line !== undefined ? ` at line ${line}` : "";
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new MaestroError(`autopilot.yaml malformed${lineInfo}: ${msg}`, [
-      "Fix the YAML syntax and re-run",
-    ]);
-  }
-
-  if (typeof raw !== "object" || Array.isArray(raw)) {
-    throw new MaestroError("autopilot.yaml malformed: expected top-level object", [
-      `Got ${Array.isArray(raw) ? "array" : typeof raw}`,
-    ]);
-  }
+  const raw = parsePolicyYaml<AutopilotPolicyYaml>(text, "autopilot.yaml");
 
   const autoMergeAllowed =
     raw.auto_merge_allowed !== undefined

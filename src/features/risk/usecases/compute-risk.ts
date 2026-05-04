@@ -1,10 +1,11 @@
 import type { Contract, RiskClass } from "@/features/task/index.js";
-import type { EvidenceRow, WitnessLevel } from "@/features/evidence/index.js";
+import type { EvidenceRow } from "@/features/evidence/index.js";
+import { compareWitnessLevel } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/index.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { Verdict, VerdictReason } from "@/features/verdict/index.js";
 import { generateVerdictId } from "@/features/verdict/index.js";
-import { compareRiskClass, maxRiskClass } from "./risk-class-order.js";
+import { maxRiskClass } from "./risk-class-order.js";
 
 export interface ComputeRiskInput {
   readonly contract: Contract;
@@ -18,29 +19,6 @@ export interface ComputeRiskInput {
   readonly blockedAmendments?: number;
   readonly costBudgetExhausted?: boolean;
 }
-
-// --- WitnessLevel ladder ---
-
-const WITNESS_LEVEL_ORDER: readonly WitnessLevel[] = [
-  "agent-claimed-and-not-reproducible",
-  "agent-claimed-locally",
-  "witnessed-by-ci",
-  "witnessed-by-maestro",
-];
-
-function witnessLevelScore(level: WitnessLevel): number {
-  return WITNESS_LEVEL_ORDER.indexOf(level);
-}
-
-function compareWitnessLevel(a: WitnessLevel, b: WitnessLevel): -1 | 0 | 1 {
-  const ai = witnessLevelScore(a);
-  const bi = witnessLevelScore(b);
-  if (ai < bi) return -1;
-  if (ai > bi) return 1;
-  return 0;
-}
-
-// --- Verdict computation ---
 
 /**
  * Produces a Verdict from contract + trust-verifier findings + evidence +
@@ -186,7 +164,7 @@ function buildVerdict(
     schemaVersion: 1,
     id: generateVerdictId(),
     taskId: contract.taskId,
-    contractVersion: 1,
+    contractVersion: contract.amendments.length + 1,
     computedAt: new Date().toISOString(),
     decision,
     proposedRiskClass,

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readJson, writeJson } from "@/shared/lib/fs.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { PolicyKind } from "../domain/policy-types.js";
 import { classifyPolicyEdit } from "./classify-policy-edit.usecase.js";
@@ -10,12 +10,10 @@ export type { PolicyEdit };
 
 export interface PendingLoosening {
   readonly commitSha: string;
-  readonly commitTime: string;       // ISO
-  readonly effectiveAt: string;      // ISO; commitTime + 30 days
-  /** The complete YAML content before this loosening, for reversal */
-  readonly oldYaml: string;
+  readonly commitTime: string;
+  readonly effectiveAt: string;
   readonly kind: PolicyKind;
-  readonly file: string;             // e.g. ".maestro/policies/risk.yaml"
+  readonly file: string;
   readonly edit: PolicyEdit;
 }
 
@@ -133,18 +131,11 @@ function getFileAtParent(sha: string, file: string, projectRoot: string): string
 }
 
 async function readCache(projectRoot: string): Promise<CacheFile | undefined> {
-  try {
-    const raw = await readFile(join(projectRoot, CACHE_REL_PATH), "utf8");
-    return JSON.parse(raw) as CacheFile;
-  } catch {
-    return undefined;
-  }
+  return readJson<CacheFile>(join(projectRoot, CACHE_REL_PATH));
 }
 
 async function writeCache(projectRoot: string, cache: CacheFile): Promise<void> {
-  const dir = join(projectRoot, ".maestro", "policies");
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(projectRoot, CACHE_REL_PATH), JSON.stringify(cache, null, 2), "utf8");
+  await writeJson(join(projectRoot, CACHE_REL_PATH), cache);
 }
 
 async function recomputeLoosenings(projectRoot: string): Promise<readonly PendingLoosening[]> {
@@ -191,7 +182,6 @@ async function recomputeLoosenings(projectRoot: string): Promise<readonly Pendin
           commitSha: sha,
           commitTime: commitTimeIso,
           effectiveAt: effectiveAtIso,
-          oldYaml,
           kind,
           file,
           edit,

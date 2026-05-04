@@ -1,4 +1,10 @@
-export type { Verdict, VerdictDecision, VerdictCategory, VerdictReason } from "./domain/types.js";
+export type {
+  Verdict,
+  VerdictDecision,
+  VerdictCategory,
+  VerdictReason,
+  VerdictReasonCode,
+} from "./domain/types.js";
 export {
   VERDICT_ID_PATTERN,
   generateVerdictId,

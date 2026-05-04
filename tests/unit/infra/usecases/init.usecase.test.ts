@@ -308,7 +308,7 @@ describe("initMaestro", () => {
     expect(result.created).toContain(policiesPath);
 
     const content = await readFile(policiesPath, "utf8");
-    expect(content).toContain("sensitive_paths");
+    expect(content).toContain("paths:");
     expect(content).toContain("src/auth/**");
     expect(content).toContain("bun.lock");
   });
@@ -317,13 +317,13 @@ describe("initMaestro", () => {
     const config = mockConfig();
     const policiesPath = join(tmpDir, ".maestro", "policies", "sensitive-paths.yaml");
     await mkdir(join(tmpDir, ".maestro", "policies"), { recursive: true });
-    await writeFile(policiesPath, "sensitive_paths:\n  - \"custom/**\"\n");
+    await writeFile(policiesPath, "paths:\n  - \"custom/**\"\n");
 
     const result = await initMaestro(config, { global: false, dir: tmpDir });
 
     expect(result.skipped).toContain(policiesPath);
     expect(result.created).not.toContain(policiesPath);
-    expect(await readFile(policiesPath, "utf8")).toBe("sensitive_paths:\n  - \"custom/**\"\n");
+    expect(await readFile(policiesPath, "utf8")).toBe("paths:\n  - \"custom/**\"\n");
   });
 
   it("creates .maestro/policies/risk.yaml on fresh init", async () => {

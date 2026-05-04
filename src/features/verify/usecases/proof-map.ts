@@ -30,15 +30,23 @@ export function buildProofMap(args: {
   if (!args.spec) {
     return { taskId: args.taskId, entries: [], uncoveredCount: 0 };
   }
+
+  const evidenceByCriterion = new Map<string, ProofMapEvidence[]>();
+  for (const row of args.evidenceRows) {
+    const criterionId = extractCriterionId(row);
+    if (criterionId === undefined) continue;
+    const list = evidenceByCriterion.get(criterionId) ?? [];
+    list.push({
+      id: row.id,
+      kind: row.kind,
+      witnessLevel: row.witness_level,
+      createdAt: row.created_at,
+    });
+    evidenceByCriterion.set(criterionId, list);
+  }
+
   const entries: ProofMapEntry[] = args.spec.acceptance_criteria.map((c) => {
-    const evidence = args.evidenceRows
-      .filter((row) => extractCriterionId(row) === c.id)
-      .map((row) => ({
-        id: row.id,
-        kind: row.kind,
-        witnessLevel: row.witness_level,
-        createdAt: row.created_at,
-      }));
+    const evidence = evidenceByCriterion.get(c.id) ?? [];
     return {
       criterionId: c.id,
       criterionText: c.text,

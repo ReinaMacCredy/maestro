@@ -12,19 +12,9 @@
  */
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "../domain/policy-types.js";
 import type { PendingLoosening } from "./detect-pending-loosenings.usecase.js";
-
-// We import the raw loaders for the reversal re-parse step.
-// The actual policy parsing logic already lives there, so we reuse it.
-// Since we have raw YAML strings from git history, we create tiny in-memory
-// temp-style calls by calling the loaders with an injected readText override.
-//
-// To keep this simple and avoid touching other loaders, we do a targeted
-// property-level revert per edit path. The PolicyEdit.path encodes where the
-// change happened, and oldValue encodes the pre-loosening value.
 import type { WitnessLevel } from "@/features/evidence/index.js";
-
-type RiskClass = "low" | "medium" | "high" | "critical";
-const RISK_CLASSES: readonly RiskClass[] = ["low", "medium", "high", "critical"];
+import type { RiskClass } from "@/features/task/index.js";
+import { RISK_CLASS_ORDER } from "@/features/risk/index.js";
 
 function revertRiskPolicyLoosening(
   policy: RiskPolicy,
@@ -83,7 +73,7 @@ function revertAutopilotPolicyLoosening(
   const mergeMatch = /^autoMergeAllowed\.(\w+)$/.exec(edit.path);
   if (mergeMatch) {
     const cls = mergeMatch[1] as RiskClass;
-    if (!RISK_CLASSES.includes(cls)) return policy;
+    if (!(RISK_CLASS_ORDER as readonly string[]).includes(cls)) return policy;
     return {
       ...policy,
       autoMergeAllowed: {
@@ -97,7 +87,7 @@ function revertAutopilotPolicyLoosening(
   const witnessMatch = /^requiredWitnessLevel\.(\w+)$/.exec(edit.path);
   if (witnessMatch) {
     const cls = witnessMatch[1] as RiskClass;
-    if (!RISK_CLASSES.includes(cls)) return policy;
+    if (!(RISK_CLASS_ORDER as readonly string[]).includes(cls)) return policy;
     const oldLevel = edit.oldValue as WitnessLevel;
     if (!oldLevel) return policy;
     return {

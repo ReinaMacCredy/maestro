@@ -45,10 +45,8 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
   }
 
   async readLatest(taskId: string): Promise<Verdict | undefined> {
-    const all = await this.history(taskId);
-    if (all.length === 0) return undefined;
-    // history() returns chronological order; last is most recent
-    return all[all.length - 1];
+    const verdicts = await this.history(taskId);
+    return verdicts.length > 0 ? verdicts[verdicts.length - 1] : undefined;
   }
 
   async readVersion(taskId: string, verdictId: string): Promise<Verdict | undefined> {
