@@ -46,6 +46,8 @@ maestro/
 | Cost-budget run-state + budget verb (L4) | `src/features/task/adapters/fs-run-state-store.adapter.ts`, `src/features/task/usecases/check-cost-budget.ts` | `RunState` persisted under `.maestro/runs/<task-id>/state.json` (gitignored); `checkCostBudget` short-circuits Risk Engine to BLOCK when exhausted (Rule 11); `retryCount` auto-increments on FAIL/HUMAN |
 | AI Reviewer + Threat-Model Risk Engine wiring (L4) | `src/features/risk/usecases/compute-risk.ts` | Applies `ai-review` error-severity raises (Rule 1 — raises only; security-reviewer error always lifts to `critical`); adds `threat-model-required` predicate (Edge Case 12) consumed by the Verdict use-case |
 | Mission Control autopilot view (L4) | `src/tui/state/autopilot-screen.ts` | Mission-mode only read model; consumed by Mission Control preview/render paths |
+| Auto-merge eligibility + `merge auto` | `src/features/merge/` | 8 deterministic predicates; opt-in via `autopilot.yaml`; see `docs/auto-merge-eligibility.md` |
+| Review acknowledgement + `review ack` | `src/features/review/` | Records `review-ack` Evidence at `agent-claimed-locally`; required for HUMAN verdicts at `>=medium` risk |
 
 ## CODE STYLE
 - Prefer `interface` for object shapes and `type` for unions/intersections.
@@ -72,6 +74,7 @@ maestro/
 - Verdict semantics (L3): `PASS` — all acceptance criteria met with evidence at or above the required witness level; `FAIL` — evidence present but below the required level or a criterion unmet; `HUMAN` — criteria met but autopilot policy requires human review for this risk class; `BLOCK` — a blocker condition is active (broken contract, critical risk class with no human signoff, or pending loosening in the soak window). The Risk Engine derives risk class from diff signals and takes the higher of agent-proposed vs Maestro-derived (Rule 1: LLM can never lower the derived class). See `docs/risk-class-derivation.md` and `docs/policy-format.md`.
 - Asymmetric policy editing (L3): policy tightenings take effect immediately; loosenings soak for 30 days before becoming effective. Pending loosenings accumulate in `.maestro/policies/.pending-loosenings.json` (gitignored). Use `maestro policy pending` to inspect.
 - CI is the authoritative verifier. Local Maestro is advisory; the GitHub check status posted by `maestro ci verify` is the merge gate. Verdicts are bound to (pr, tree_sha) so squashes survive but force-push to a different tree invalidates them.
+- L6 auto-merge is opt-in via `policies/autopilot.yaml`. The `autoMergeAllowed.<risk-class>` field already existed from L3; L6 is the first layer that consumes it. All classes default to `false`. Set `autoMergeAllowed.<class>: true` only for risk classes your team has approved for automated merging. L6 also adds `review-ack` evidence (recorded via `maestro review ack`) and `verdict-override` evidence (recorded via `maestro verdict override`) — both consumed by the auto-merge eligibility gate. See `docs/auto-merge-eligibility.md`.
 
 ## ANTI-PATTERNS
 - Deep imports into another feature's `commands/`, `usecases/`, `domain/`, `ports/`, or `adapters/`.
@@ -175,6 +178,31 @@ Reads CI env (`GITHUB_ACTIONS`, `GITHUB_REPOSITORY`, `GITHUB_REF`, `GITHUB_SHA`,
 Exit codes: 0 PASS / 1 FAIL / 2 HUMAN / 3 BLOCK.
 
 See `docs/ci-integration.md` for the full reference: workflow template, env contract, witness ingestion, PR check semantics, verdict tree-SHA identity, and troubleshooting.
+
+## CLI VERBS — MERGE AUTO (L6)
+```bash
+maestro merge auto --pr <number> --task <id> [--base <ref>] [--repo <owner/name>] [--json]
+```
+
+Runs 8 eligibility predicates. Exits 0 and triggers `gh pr merge --auto` if all pass; exits 1 and prints failing codes if any fail. Requires `autoMergeAllowed.<riskClass>: true` in `autopilot.yaml`.
+
+See `docs/auto-merge-eligibility.md` for the full predicate reference and troubleshooting.
+
+## CLI VERBS — VERDICT OVERRIDE (L6)
+```bash
+maestro verdict override --task <id> --pr <number> --reason "<text>" [--verdict <id>] [--base <ref>] [--json]
+```
+
+Records a `verdict-override` Evidence row at `agent-claimed-and-not-reproducible`. Requires the invoking user to be in `owners.yaml.sensitive_waiver` (loaded from the base branch — Rule 12). Does not change the PR check conclusion; override is an audit record only.
+
+See `docs/override-flow.md` for authorization rules, audit trail semantics, and no-silent-pass guarantees.
+
+## CLI VERBS — REVIEW ACK (L6)
+```bash
+maestro review ack --task <id> --verdict <id> --criterion "<text>" [--criterion "<text>" ...] [--json]
+```
+
+Records a `review-ack` Evidence row at `agent-claimed-locally`. Required when the verdict is `HUMAN` at `>=medium` risk before `maestro merge auto` can succeed. The `--criterion` flag is repeatable.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

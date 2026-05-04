@@ -32,6 +32,8 @@ src/
 | Cost-budget run-state (L4) | `features/task/` | Extended in L4.4 with `RunState`, `RunStateStorePort`, `FsRunStateStoreAdapter` (`adapters/fs-run-state-store.adapter.ts`), `checkCostBudget` use-case, and the `task budget` command. Run-state persisted under `.maestro/runs/<task-id>/state.json` (gitignored). |
 | Mission Control autopilot view (L4) | `tui/state/autopilot-screen.ts` | New read model added in L4.6 for the autopilot screen in Mission Control (mission-mode only). |
 | `maestro ci verify` (L5) | `features/ci/` | `maestro ci verify` CLI verb, GitHub Actions env reader (`readCiEnv`), GitHub API port + gh-cli adapter, post-PR-check use-case. |
+| Auto-merge eligibility + `merge auto` (L6) | `features/merge/` | `usecases/auto-merge-eligible.usecase.ts` runs 8 deterministic predicates; `commands/merge-auto.command.ts` registers `merge auto`; `domain/eligibility-types.ts` defines reason codes. Consumed `autoMergeAllowed` from `AutopilotPolicy` (field existed since L3). |
+| Review acknowledgement + `review ack` (L6) | `features/review/` | `commands/review-ack.command.ts` registers `review ack`; records `review-ack` Evidence at `agent-claimed-locally`; required by eligibility gate when verdict is `HUMAN` at `>=medium` risk. |
 
 ## CONVENTIONS
 - Cross-feature imports go through `@/features/<name>` only.

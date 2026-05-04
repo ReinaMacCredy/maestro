@@ -13,6 +13,8 @@
 
 Local Maestro is advisory; CI Maestro is authoritative. The PR check status posted by `maestro ci verify` is the merge gate — see `docs/ci-integration.md`.
 
+Auto-merge (`maestro merge auto`) requires a `PASS` verdict, a Spec quality score of 1.0 (when a Spec is associated with the task), and `autoMergeAllowed.<riskClass>: true` in `policies/autopilot.yaml`. See `docs/auto-merge-eligibility.md` for the full 8-predicate reference.
+
 ## Always release + link locally when testing
 
 Every test/verification loop:

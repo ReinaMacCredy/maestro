@@ -819,6 +819,56 @@ maestro evidence record --task <id> --kind threat-model \
 
 See `docs/ci-integration.md` for the full reference (workflow template, env contract, witness ingestion, troubleshooting).
 
+## L6: Auto-Merge for Declared Safe Scope
+
+L6 adds a deterministic auto-merge gate on top of the CI verdict layer. When all 8 eligibility predicates pass, `maestro merge auto` triggers `gh pr merge --auto` without further human intervention. Auto-merge applies to roughly 5–15% of merged PRs in practice — only those where the diff is small-scope, fully CI-witnessed, and the autopilot policy explicitly opts in for the relevant risk class.
+
+### Opt-in
+
+Auto-merge is disabled for all risk classes by default. Opt in per class in `.maestro/policies/autopilot.yaml`:
+
+```yaml
+autoMergeAllowed:
+  low: true
+  medium: true
+  high: false
+  critical: false
+```
+
+The `autoMergeAllowed` field existed from L3. L6 is the first layer that consumes it.
+
+### Eligibility predicates
+
+All 8 must pass for `merge auto` to trigger. In canonical check order:
+
+| Code | Condition |
+|---|---|
+| `verdict-not-pass` | Verdict decision must be `PASS` |
+| `auto-merge-class-disabled` | `autoMergeAllowed.<riskClass>` must be `true` in `autopilot.yaml` |
+| `evidence-witness-too-weak` | All gating evidence rows must be at `witnessed-by-ci` or stronger |
+| `forbidden-paths-touched` | Diff must not intersect `contract.scope.filesForbidden` |
+| `sensitive-paths-untouched-without-waiver` | If diff touches sensitive paths, a `verdict-override` waiver must exist |
+| `rollback-not-witnessed` | A `rollback-exercised` Evidence row at `witnessed-by-ci` must exist (producer ships at L7.5) |
+| `review-ack-missing` | HUMAN verdicts at `>=medium` risk require a `review-ack` Evidence row |
+| `spec-score-below-threshold` | If a Spec is linked, its quality score must be 1.0 |
+
+### CLI shapes
+
+```bash
+# Check eligibility and trigger if eligible
+maestro merge auto --pr <number> --task <id> [--base <ref>] [--repo <owner/name>] [--json]
+
+# Record override waiver (requires sensitive_waiver authorization in owners.yaml)
+maestro verdict override --task <id> --pr <number> --reason "<text>" [--verdict <id>] [--base <ref>]
+
+# Record human review acknowledgement (for HUMAN verdicts at >=medium risk)
+maestro review ack --task <id> --verdict <id> --criterion "<text>" [--criterion "<text>" ...]
+```
+
+Exit codes for `merge auto`: 0 = eligible and triggered, 1 = ineligible (reasons printed).
+
+See `docs/auto-merge-eligibility.md` for the full predicate reference and "Why isn't my PR auto-merging?" troubleshooting. See `docs/override-flow.md` for override authorization, audit trail, and no-silent-pass guarantees.
+
 ## Common Commands
 
 | Command | Use it when you want to... |
