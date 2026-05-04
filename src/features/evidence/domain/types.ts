@@ -3,7 +3,8 @@ export type EvidenceKind =
   | "manual-note"
   | "verifier"
   | "contract-amendment"
-  | "contract-amendment-blocked";
+  | "contract-amendment-blocked"
+  | "ai-review";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -69,12 +70,29 @@ export interface ContractAmendmentBlockedPayload {
   readonly details?: string;
 }
 
+export type AIReviewerKind = "bug" | "security" | "architecture";
+
+export interface AIReviewFinding {
+  readonly severity: "info" | "warn" | "error";
+  readonly message: string;
+  readonly paths?: readonly string[];
+  readonly suggestion?: string;
+}
+
+export interface AIReviewPayload {
+  readonly reviewer: AIReviewerKind;
+  readonly findings: readonly AIReviewFinding[];
+  readonly confidence: number;
+  readonly criterion_id?: string;
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
   readonly verifier: VerifierPayload;
   readonly "contract-amendment": ContractAmendmentPayload;
   readonly "contract-amendment-blocked": ContractAmendmentBlockedPayload;
+  readonly "ai-review": AIReviewPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

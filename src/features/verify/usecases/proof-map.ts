@@ -64,7 +64,7 @@ export function buildProofMap(args: {
 }
 
 function extractCriterionId(row: EvidenceRow): string | undefined {
-  if (row.kind === "command" || row.kind === "manual-note") {
+  if (row.kind === "command" || row.kind === "manual-note" || row.kind === "ai-review") {
     return (row.payload as { criterion_id?: string }).criterion_id;
   }
   return undefined;

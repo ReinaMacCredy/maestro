@@ -6,6 +6,7 @@ import {
   type EvidenceRow,
   type EvidenceStorePort,
   type RecordEvidenceInput,
+  type AIReviewPayload,
 } from "@/features/evidence";
 import { mockEvidenceStore } from "../../../../helpers/mocks.js";
 import type { Task } from "@/features/task";
@@ -834,5 +835,213 @@ describe("evidence show", () => {
 
     const rows = await evidenceStore.list({ task_id: "tsk-ffffff" });
     expect(rows.length).toBe(1);
+  });
+});
+
+// --- L4.3: ai-review Evidence kind ---
+
+describe("evidence record --kind ai-review", () => {
+  it("records an ai-review row with inline JSON findings", async () => {
+    captureConsole();
+    let received: RecordEvidenceInput | undefined;
+    const { deps, evidenceStore } = evidenceDeps({
+      recordEvidence: async (store, input) => {
+        received = input;
+        return realRecordEvidence(store, input);
+      },
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync([
+      "node", "maestro", "evidence", "record",
+      "--task", "tsk-aaaaaa",
+      "--kind", "ai-review",
+      "--reviewer", "security",
+      "--findings", '[{"severity":"error","message":"SQL injection risk"}]',
+      "--confidence", "0.9",
+    ]);
+
+    expect(received).toBeDefined();
+    expect(received!.kind).toBe("ai-review");
+    expect(received!.witness_level).toBe("agent-claimed-locally");
+    const payload = received!.payload as AIReviewPayload;
+    expect(payload.reviewer).toBe("security");
+    expect(payload.confidence).toBe(0.9);
+    expect(payload.findings).toHaveLength(1);
+    expect(payload.findings[0]!.severity).toBe("error");
+    expect(payload.findings[0]!.message).toBe("SQL injection risk");
+
+    const rows = await evidenceStore.list({ task_id: "tsk-aaaaaa" });
+    expect(rows.length).toBe(1);
+  });
+
+  it("errors when --reviewer is missing for --kind ai-review", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "ai-review",
+        "--findings", '[{"severity":"info","message":"ok"}]',
+      ]),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("--kind ai-review requires --reviewer"),
+    });
+  });
+
+  it("errors when --reviewer is an invalid value", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "ai-review",
+        "--reviewer", "unknown-reviewer",
+        "--findings", '[{"severity":"info","message":"ok"}]',
+      ]),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("--kind ai-review requires --reviewer"),
+    });
+  });
+
+  it("errors when --findings is missing for --kind ai-review", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "ai-review",
+        "--reviewer", "bug",
+      ]),
+    ).rejects.toMatchObject({
+      message: "--kind ai-review requires --findings",
+    });
+  });
+
+  it("errors when --confidence is outside [0,1]", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "ai-review",
+        "--reviewer", "bug",
+        "--findings", '[{"severity":"info","message":"ok"}]',
+        "--confidence", "1.5",
+      ]),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("--confidence must be between 0 and 1"),
+    });
+  });
+
+  it("errors when a finding has an invalid severity", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "ai-review",
+        "--reviewer", "architecture",
+        "--findings", '[{"severity":"critical","message":"bad"}]',
+      ]),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("severity must be one of: info, warn, error"),
+    });
+  });
+
+  it("errors when a finding has an empty message", async () => {
+    captureConsole();
+    const { deps } = evidenceDeps();
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+
+    await expect(
+      program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "ai-review",
+        "--reviewer", "bug",
+        "--findings", '[{"severity":"warn","message":""}]',
+      ]),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("message must be a non-empty string"),
+    });
+  });
+
+  it("uses default confidence of 0.5 when not specified", async () => {
+    captureConsole();
+    let received: RecordEvidenceInput | undefined;
+    const { deps } = evidenceDeps({
+      recordEvidence: async (store, input) => {
+        received = input;
+        return realRecordEvidence(store, input);
+      },
+    });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync([
+      "node", "maestro", "evidence", "record",
+      "--task", "tsk-aaaaaa",
+      "--kind", "ai-review",
+      "--reviewer", "architecture",
+      "--findings", '[{"severity":"info","message":"Looks good"}]',
+    ]);
+
+    const payload = received!.payload as AIReviewPayload;
+    expect(payload.confidence).toBe(0.5);
+  });
+
+  it("accepts all three reviewer kinds: bug, security, architecture", async () => {
+    for (const reviewer of ["bug", "security", "architecture"] as const) {
+      captureConsole();
+      let received: RecordEvidenceInput | undefined;
+      const { deps } = evidenceDeps({
+        recordEvidence: async (store, input) => {
+          received = input;
+          return realRecordEvidence(store, input);
+        },
+      });
+
+      const program = makeProgram();
+      registerEvidenceCommand(program, deps);
+      await program.parseAsync([
+        "node", "maestro", "evidence", "record",
+        "--task", "tsk-aaaaaa",
+        "--kind", "ai-review",
+        "--reviewer", reviewer,
+        "--findings", '[{"severity":"info","message":"ok"}]',
+      ]);
+
+      const payload = received!.payload as AIReviewPayload;
+      expect(payload.reviewer).toBe(reviewer);
+    }
   });
 });

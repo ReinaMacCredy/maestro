@@ -1,8 +1,9 @@
 import { describe, it, expect } from "bun:test";
-import { computeRisk } from "@/features/risk/usecases/compute-risk.js";
+import { computeRisk, applyAIReviewerRiskRaise } from "@/features/risk/usecases/compute-risk.js";
 import type { ComputeRiskInput } from "@/features/risk/usecases/compute-risk.js";
 import type { Contract, RiskClass } from "@/features/task/index.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
+import type { AIReviewPayload } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/index.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
@@ -361,5 +362,130 @@ describe("computeRisk", () => {
       expect(verdict.evidenceConsulted).toContain(row1.id);
       expect(verdict.evidenceConsulted).toContain(row2.id);
     });
+  });
+});
+
+// --- L4.3: AI Reviewer Risk Raise (Rule 1: veto-only) ---
+
+function makeAIReviewRow(
+  reviewer: AIReviewPayload["reviewer"],
+  findings: AIReviewPayload["findings"],
+  overrides: Partial<EvidenceRow<"ai-review">> = {},
+): EvidenceRow<"ai-review"> {
+  return {
+    schema_version: 3,
+    id: `ev-${Math.random().toString(36).slice(2, 8)}`,
+    task_id: "task-001",
+    kind: "ai-review",
+    witness_level: "agent-claimed-locally",
+    created_at: "2026-01-01T00:00:00.000Z",
+    payload: { reviewer, findings, confidence: 0.9 },
+    ...overrides,
+  };
+}
+
+describe("applyAIReviewerRiskRaise", () => {
+  it("security reviewer with error finding → critical (from medium)", () => {
+    const rows = [makeAIReviewRow("security", [{ severity: "error", message: "injection" }])];
+    expect(applyAIReviewerRiskRaise("medium", rows)).toBe("critical");
+  });
+
+  it("bug reviewer with error finding on medium → high (one notch)", () => {
+    const rows = [makeAIReviewRow("bug", [{ severity: "error", message: "null deref" }])];
+    expect(applyAIReviewerRiskRaise("medium", rows)).toBe("high");
+  });
+
+  it("bug reviewer with error finding on low → medium (one notch)", () => {
+    const rows = [makeAIReviewRow("bug", [{ severity: "error", message: "null deref" }])];
+    expect(applyAIReviewerRiskRaise("low", rows)).toBe("medium");
+  });
+
+  it("bug reviewer with error finding on high → critical (one notch)", () => {
+    const rows = [makeAIReviewRow("bug", [{ severity: "error", message: "null deref" }])];
+    expect(applyAIReviewerRiskRaise("high", rows)).toBe("critical");
+  });
+
+  it("bug reviewer with error finding on critical → critical (saturates)", () => {
+    const rows = [makeAIReviewRow("bug", [{ severity: "error", message: "null deref" }])];
+    expect(applyAIReviewerRiskRaise("critical", rows)).toBe("critical");
+  });
+
+  it("clean ai-review (zero error findings) on medium → medium (no lowering)", () => {
+    const rows = [makeAIReviewRow("security", [{ severity: "info", message: "looks good" }])];
+    expect(applyAIReviewerRiskRaise("medium", rows)).toBe("medium");
+  });
+
+  it("clean ai-review with only warns → no raise", () => {
+    const rows = [makeAIReviewRow("bug", [{ severity: "warn", message: "minor concern" }])];
+    expect(applyAIReviewerRiskRaise("low", rows)).toBe("low");
+  });
+
+  it("architecture reviewer with error finding on medium → high (one notch)", () => {
+    const rows = [makeAIReviewRow("architecture", [{ severity: "error", message: "circular dep" }])];
+    expect(applyAIReviewerRiskRaise("medium", rows)).toBe("high");
+  });
+
+  it("multiple reviews: 1 security clean + 1 bug error → bug raises one notch, security does not lower", () => {
+    const rows = [
+      makeAIReviewRow("security", [{ severity: "info", message: "looks good" }]),
+      makeAIReviewRow("bug", [{ severity: "error", message: "null deref" }]),
+    ];
+    // medium + bug error → high; security clean has no effect
+    expect(applyAIReviewerRiskRaise("medium", rows)).toBe("high");
+  });
+
+  it("no ai-review rows → unchanged", () => {
+    const rows: EvidenceRow[] = [makeEvidenceRow()];
+    expect(applyAIReviewerRiskRaise("medium", rows)).toBe("medium");
+  });
+});
+
+describe("computeRisk: ai-review integration (Rule 1)", () => {
+  it("security reviewer error on medium baseline → effectiveRiskClass critical, HUMAN verdict", () => {
+    const verdict = computeRisk(
+      makeInput({
+        contract: makeContract({ riskClass: "medium" }),
+        derivedRiskClass: "medium",
+        evidenceRows: [
+          makeEvidenceRow({ witness_level: "witnessed-by-maestro" }),
+          makeAIReviewRow("security", [{ severity: "error", message: "injection" }]),
+        ],
+      }),
+    );
+    expect(verdict.effectiveRiskClass).toBe("critical");
+    expect(verdict.decision).toBe("HUMAN");
+  });
+
+  it("bug reviewer error on medium baseline → effectiveRiskClass high", () => {
+    const verdict = computeRisk(
+      makeInput({
+        contract: makeContract({ riskClass: "medium" }),
+        derivedRiskClass: "medium",
+        autopilotPolicy: makeAutopilotPolicy({
+          autoMergeAllowed: { low: true, medium: true, high: false, critical: false },
+        }),
+        evidenceRows: [
+          makeEvidenceRow({ witness_level: "witnessed-by-maestro" }),
+          makeAIReviewRow("bug", [{ severity: "error", message: "null deref" }]),
+        ],
+      }),
+    );
+    expect(verdict.effectiveRiskClass).toBe("high");
+    expect(verdict.decision).toBe("HUMAN");
+  });
+
+  it("clean ai-review on medium baseline → effectiveRiskClass still medium", () => {
+    const verdict = computeRisk(
+      makeInput({
+        contract: makeContract({ riskClass: "medium" }),
+        derivedRiskClass: "medium",
+        evidenceRows: [
+          makeEvidenceRow({ witness_level: "witnessed-by-maestro" }),
+          makeAIReviewRow("security", [{ severity: "info", message: "all good" }]),
+        ],
+      }),
+    );
+    expect(verdict.effectiveRiskClass).toBe("medium");
+    expect(verdict.decision).toBe("PASS");
   });
 });

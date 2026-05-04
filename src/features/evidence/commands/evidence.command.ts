@@ -5,13 +5,18 @@ import { getServices, type Services } from "@/services.js";
 import { recordEvidence, type RecordEvidenceInput } from "../usecases/record-evidence.usecase.js";
 import { listEvidence } from "../usecases/list-evidence.usecase.js";
 import { isEvidenceId } from "../domain/evidence-id.js";
+import { readFileSync } from "node:fs";
 import type {
+  AIReviewFinding,
+  AIReviewPayload,
+  AIReviewerKind,
   CommandPayload,
   EvidenceKind,
   EvidenceRow,
   ManualNotePayload,
   WitnessLevel,
 } from "../domain/types.js";
+import { parseYaml } from "@/shared/lib/yaml.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
@@ -19,7 +24,8 @@ interface EvidenceCommandDeps {
   readonly recordEvidence: typeof recordEvidence;
 }
 
-const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note"];
+const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note", "ai-review"];
+const AI_REVIEWER_KINDS: readonly AIReviewerKind[] = ["bug", "security", "architecture"];
 
 export function registerEvidenceCommand(
   program: Command,
@@ -43,6 +49,7 @@ Examples:
   maestro evidence record --task tsk-aaaaaa --command "bun test" --exit 0
   maestro evidence record --task tsk-aaaaaa --command "bun run build" --exit 0 --duration 12345 --log ./build.log
   maestro evidence record --task tsk-aaaaaa --kind manual-note --note "Verified UI on staging"
+  maestro evidence record --task tsk-aaaaaa --kind ai-review --reviewer security --findings '[{"severity":"error","message":"SQL injection"}]' --confidence 0.9
 `)
     .requiredOption("--task <id>", "Task this evidence belongs to")
     .option("--kind <kind>", `Evidence kind (${EVIDENCE_KINDS.join("|")})`, "command")
@@ -52,6 +59,9 @@ Examples:
     .option("--duration <ms>", "Duration in milliseconds", parseNonNegativeInt)
     .option("--criterion <id>", "Criterion id this evidence references")
     .option("--note <text>", "Free-form note (with --kind manual-note)")
+    .option("--reviewer <kind>", `Reviewer kind for --kind ai-review (${AI_REVIEWER_KINDS.join("|")})`)
+    .option("--findings <json>", "JSON array of findings or path to a JSON/YAML file (with --kind ai-review)")
+    .option("--confidence <n>", "Confidence score 0-1 for --kind ai-review (default 0.5)", parseFloat)
     .option("--session <id>", "Override session id (default: detected session)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -73,6 +83,9 @@ interface RecordOpts {
   readonly duration?: number;
   readonly criterion?: string;
   readonly note?: string;
+  readonly reviewer?: string;
+  readonly findings?: string;
+  readonly confidence?: number;
   readonly session?: string;
 }
 
@@ -134,6 +147,40 @@ async function buildRecordInput(
     };
   }
 
+  if (kind === "ai-review") {
+    if (typeof opts.reviewer !== "string" || !AI_REVIEWER_KINDS.includes(opts.reviewer as AIReviewerKind)) {
+      throw new MaestroError(
+        `--kind ai-review requires --reviewer (one of: ${AI_REVIEWER_KINDS.join(", ")})`,
+        [`maestro evidence record --task ${taskId} --kind ai-review --reviewer security --findings '[...]'`],
+      );
+    }
+    if (typeof opts.findings !== "string" || opts.findings.length === 0) {
+      throw new MaestroError("--kind ai-review requires --findings", [
+        `maestro evidence record --task ${taskId} --kind ai-review --reviewer ${opts.reviewer} --findings '[{"severity":"info","message":"..."}]'`,
+      ]);
+    }
+    const confidence = opts.confidence ?? 0.5;
+    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+      throw new MaestroError(`--confidence must be between 0 and 1, got: ${confidence}`, [
+        "Pass a decimal value between 0 and 1 (e.g. 0.8)",
+      ]);
+    }
+    const findings = parseFindings(opts.findings, taskId);
+    const payload: AIReviewPayload = {
+      reviewer: opts.reviewer as AIReviewerKind,
+      findings,
+      confidence,
+      ...(opts.criterion !== undefined ? { criterion_id: opts.criterion } : {}),
+    };
+    return {
+      task_id: taskId,
+      ...(sessionId !== undefined ? { session_id: sessionId } : {}),
+      kind: "ai-review",
+      payload,
+      witness_level: "agent-claimed-locally" satisfies WitnessLevel,
+    };
+  }
+
   if (typeof opts.note !== "string" || opts.note.length === 0) {
     throw new MaestroError("--kind manual-note requires --note", [
       `maestro evidence record --task ${taskId} --kind manual-note --note "verified manually"`,
@@ -154,12 +201,74 @@ async function buildRecordInput(
 
 function parseKind(value: string | undefined): EvidenceKind {
   const kind = value ?? "command";
-  if (kind !== "command" && kind !== "manual-note") {
+  if (!EVIDENCE_KINDS.includes(kind as EvidenceKind)) {
     throw new MaestroError(`Invalid --kind: ${kind}`, [
       `Valid kinds: ${EVIDENCE_KINDS.join(", ")}`,
     ]);
   }
-  return kind;
+  return kind as EvidenceKind;
+}
+
+const VALID_SEVERITIES = new Set(["info", "warn", "error"]);
+
+function parseFindings(raw: string, taskId: string): readonly AIReviewFinding[] {
+  let parsed: unknown;
+  if (raw.trimStart().startsWith("[") || raw.trimStart().startsWith("{")) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new MaestroError("--findings: invalid JSON", [
+        "Pass a JSON array of findings or a path to a JSON/YAML file",
+      ]);
+    }
+  } else {
+    // Treat as a file path
+    let fileContent: string;
+    try {
+      fileContent = readFileSync(raw, "utf8");
+    } catch {
+      throw new MaestroError(`--findings: could not read file: ${raw}`, [
+        `maestro evidence record --task ${taskId} --kind ai-review --reviewer security --findings ./findings.json`,
+      ]);
+    }
+    try {
+      parsed = parseYaml<unknown>(fileContent);
+    } catch {
+      throw new MaestroError(`--findings: could not parse file as JSON/YAML: ${raw}`, [
+        "Ensure the file contains a valid JSON or YAML array of findings",
+      ]);
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new MaestroError("--findings: expected a JSON array of findings", [
+      'Example: \'[{"severity":"info","message":"looks good"}]\'',
+    ]);
+  }
+
+  const findings: AIReviewFinding[] = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const item = parsed[i] as Record<string, unknown>;
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      throw new MaestroError(`--findings[${i}]: each finding must be an object`, []);
+    }
+    if (!VALID_SEVERITIES.has(item["severity"] as string)) {
+      throw new MaestroError(
+        `--findings[${i}]: severity must be one of: info, warn, error (got: ${item["severity"]})`,
+        [],
+      );
+    }
+    if (typeof item["message"] !== "string" || (item["message"] as string).length === 0) {
+      throw new MaestroError(`--findings[${i}]: message must be a non-empty string`, []);
+    }
+    findings.push({
+      severity: item["severity"] as AIReviewFinding["severity"],
+      message: item["message"] as string,
+      ...(Array.isArray(item["paths"]) ? { paths: item["paths"] as string[] } : {}),
+      ...(typeof item["suggestion"] === "string" ? { suggestion: item["suggestion"] } : {}),
+    });
+  }
+  return findings;
 }
 
 function parseNonNegativeInt(raw: string): number {
@@ -186,6 +295,15 @@ function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
     lines.push(`  Command: ${payload.command}`, `  Exit: ${payload.exit}`);
     if (payload.duration_ms !== undefined) lines.push(`  Duration: ${payload.duration_ms}ms`);
     if (payload.log_path !== undefined) lines.push(`  Log: ${payload.log_path}`);
+    if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
+  } else if (row.kind === "ai-review") {
+    const payload = row.payload as AIReviewPayload;
+    const errorCount = payload.findings.filter((f) => f.severity === "error").length;
+    const warnCount = payload.findings.filter((f) => f.severity === "warn").length;
+    const infoCount = payload.findings.filter((f) => f.severity === "info").length;
+    lines.push(`  Reviewer: ${payload.reviewer}`);
+    lines.push(`  Findings: ${payload.findings.length} (errors: ${errorCount}, warns: ${warnCount}, infos: ${infoCount})`);
+    lines.push(`  Confidence: ${payload.confidence}`);
     if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
   } else {
     const payload = row.payload as ManualNotePayload;

@@ -5,6 +5,9 @@ export type {
   ManualNotePayload,
   EvidencePayload,
   EvidenceRow,
+  AIReviewerKind,
+  AIReviewFinding,
+  AIReviewPayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,

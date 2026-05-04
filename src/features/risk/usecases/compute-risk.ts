@@ -1,11 +1,11 @@
 import type { Contract, RiskClass } from "@/features/task/index.js";
-import type { EvidenceRow } from "@/features/evidence/index.js";
+import type { AIReviewPayload, EvidenceRow } from "@/features/evidence/index.js";
 import { compareWitnessLevel } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/index.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { Verdict, VerdictReason } from "@/features/verdict/index.js";
 import { generateVerdictId } from "@/features/verdict/index.js";
-import { maxRiskClass } from "./risk-class-order.js";
+import { maxRiskClass, RISK_CLASS_ORDER } from "./risk-class-order.js";
 
 export interface ComputeRiskInput {
   readonly contract: Contract;
@@ -50,7 +50,10 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
   } = input;
 
   const proposedRiskClass: RiskClass = contract.riskClass ?? "medium";
-  const effectiveRiskClass: RiskClass = maxRiskClass(proposedRiskClass, derivedRiskClass);
+  const effectiveRiskClass: RiskClass = applyAIReviewerRiskRaise(
+    maxRiskClass(proposedRiskClass, derivedRiskClass),
+    evidenceRows,
+  );
 
   const errors = trustFindings.filter((f) => f.severity === "error");
   const warns = trustFindings.filter((f) => f.severity === "warn");
@@ -148,6 +151,36 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     message: "All checks passed.",
   });
   return buildVerdict("PASS", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
+}
+
+/**
+ * Applies ai-review Evidence rows to potentially RAISE the effective risk class.
+ * Per Rule 1 (LLM veto-only): a clean review never lowers; only error-severity
+ * findings raise the class.
+ *
+ * - security reviewer error → always critical
+ * - bug/architecture reviewer error → raise by one notch
+ */
+export function applyAIReviewerRiskRaise(
+  effectiveRiskClass: RiskClass,
+  evidenceRows: readonly EvidenceRow[],
+): RiskClass {
+  let current = effectiveRiskClass;
+  for (const row of evidenceRows) {
+    if (row.kind !== "ai-review") continue;
+    const payload = row.payload as AIReviewPayload;
+    const hasError = payload.findings.some((f) => f.severity === "error");
+    if (!hasError) continue;
+    if (payload.reviewer === "security") {
+      current = "critical";
+    } else {
+      // Raise by one notch: low→medium, medium→high, high→critical, critical→critical
+      const idx = RISK_CLASS_ORDER.indexOf(current);
+      const raised = RISK_CLASS_ORDER[Math.min(idx + 1, RISK_CLASS_ORDER.length - 1)];
+      if (raised !== undefined) current = raised;
+    }
+  }
+  return current;
 }
 
 function buildVerdict(
