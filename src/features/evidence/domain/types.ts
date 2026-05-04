@@ -55,7 +55,7 @@ interface EvidencePayloadByKind {
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];
 
 export interface EvidenceRow<K extends EvidenceKind = EvidenceKind> {
-  readonly schema_version: 2 | 1;
+  readonly schema_version: 3 | 2 | 1;
   readonly id: string;
   readonly task_id: string;
   readonly session_id?: string;

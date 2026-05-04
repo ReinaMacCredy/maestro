@@ -20,7 +20,7 @@ export async function recordEvidence<K extends EvidenceKind>(
   input: RecordEvidenceInput<K>,
 ): Promise<EvidenceRow<K>> {
   const row: EvidenceRow<K> = {
-    schema_version: 2,
+    schema_version: 3,
     id: generateEvidenceId(),
     task_id: input.task_id,
     session_id: input.session_id,

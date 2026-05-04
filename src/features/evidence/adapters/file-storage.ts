@@ -22,8 +22,8 @@ import type {
 } from "../ports/storage.js";
 
 const EVIDENCE_DIR = "evidence";
-const CURRENT_SCHEMA_VERSION = 2;
-const ACCEPTED_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([1, 2]);
+const CURRENT_SCHEMA_VERSION = 3;
+const ACCEPTED_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([1, 2, 3]);
 
 export class FsEvidenceStoreAdapter implements EvidenceStorePort {
   constructor(private readonly baseDir: string) {}
@@ -116,22 +116,43 @@ async function tryReadRow(path: string): Promise<EvidenceRow | undefined> {
   } catch {
     return undefined;
   }
-  if (!isEvidenceRow(raw)) return undefined;
-  return raw;
+  return coerceEvidenceRow(raw);
 }
 
-function isEvidenceRow(value: unknown): value is EvidenceRow {
-  if (typeof value !== "object" || value === null) return false;
+/**
+ * Validates and coerces a raw JSON value to an EvidenceRow.
+ *
+ * - v1 rows missing `witness_level` are synthesized to "agent-claimed-locally".
+ * - v2 and v3 rows must carry `witness_level`; rows without it are rejected.
+ */
+function coerceEvidenceRow(value: unknown): EvidenceRow | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
   const v = value as Record<string, unknown>;
-  return (
-    typeof v["schema_version"] === "number"
-    && ACCEPTED_SCHEMA_VERSIONS.has(v["schema_version"] as number)
-    && typeof v["id"] === "string"
-    && typeof v["task_id"] === "string"
-    && typeof v["kind"] === "string"
-    && typeof v["witness_level"] === "string"
-    && typeof v["created_at"] === "string"
-    && typeof v["payload"] === "object"
-    && v["payload"] !== null
-  );
+
+  if (
+    typeof v["schema_version"] !== "number"
+    || !ACCEPTED_SCHEMA_VERSIONS.has(v["schema_version"] as number)
+    || typeof v["id"] !== "string"
+    || typeof v["task_id"] !== "string"
+    || typeof v["kind"] !== "string"
+    || typeof v["created_at"] !== "string"
+    || typeof v["payload"] !== "object"
+    || v["payload"] === null
+  ) {
+    return undefined;
+  }
+
+  const version = v["schema_version"] as number;
+
+  if (typeof v["witness_level"] === "string") {
+    return value as EvidenceRow;
+  }
+
+  // v1 rows may pre-date witness_level — synthesize a safe default
+  if (version === 1) {
+    return { ...(value as object), witness_level: "agent-claimed-locally" } as EvidenceRow;
+  }
+
+  // v2 and v3 rows must carry witness_level
+  return undefined;
 }

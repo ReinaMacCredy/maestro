@@ -6,6 +6,8 @@ import { FsEvidenceStoreAdapter } from "@/features/evidence/adapters/file-storag
 import { generateEvidenceId } from "@/features/evidence/domain/evidence-id.js";
 import type { EvidenceRow } from "@/features/evidence/domain/types.js";
 
+const FIXTURES_DIR = join(import.meta.dir, "../../../../fixtures/evidence");
+
 function commandRow(overrides: Partial<EvidenceRow<"command">> = {}): EvidenceRow<"command"> {
   return {
     schema_version: 1,
@@ -258,6 +260,122 @@ describe("FsEvidenceStoreAdapter", () => {
       expect(list[0]?.schema_version).toBe(1);
       expect(list[1]?.schema_version).toBe(2);
       expect(list[2]?.schema_version).toBe(2);
+    });
+  });
+
+  describe("schema v3 — witness_level required + v1 synthesis", () => {
+    it("v1 fixture row without witness_level is synthesized to agent-claimed-locally on read", async () => {
+      const fixture = await Bun.file(join(FIXTURES_DIR, "v1-row.json")).json() as Record<string, unknown>;
+      const taskDir = join(tmpDir, ".maestro", "evidence", fixture["task_id"] as string);
+      await mkdir(taskDir, { recursive: true });
+      await Bun.write(
+        join(taskDir, `${fixture["id"] as string}.json`),
+        JSON.stringify(fixture),
+      );
+
+      const result = await store.read(fixture["id"] as string);
+      expect(result).toBeDefined();
+      expect(result?.witness_level).toBe("agent-claimed-locally");
+      expect(result?.schema_version).toBe(1);
+    });
+
+    it("v2 fixture row with witness_level reads back unchanged", async () => {
+      const fixture = await Bun.file(join(FIXTURES_DIR, "v2-row.json")).json() as Record<string, unknown>;
+      const taskDir = join(tmpDir, ".maestro", "evidence", fixture["task_id"] as string);
+      await mkdir(taskDir, { recursive: true });
+      await Bun.write(
+        join(taskDir, `${fixture["id"] as string}.json`),
+        JSON.stringify(fixture),
+      );
+
+      const result = await store.read(fixture["id"] as string);
+      expect(result).toBeDefined();
+      expect(result?.witness_level).toBe("witnessed-by-maestro");
+      expect(result?.schema_version).toBe(2);
+    });
+
+    it("v2 row missing witness_level is rejected", async () => {
+      const badId = generateEvidenceId();
+      const taskDir = join(tmpDir, ".maestro", "evidence", "tsk-aaaaaa");
+      await mkdir(taskDir, { recursive: true });
+      await Bun.write(
+        join(taskDir, `${badId}.json`),
+        JSON.stringify({
+          schema_version: 2,
+          id: badId,
+          task_id: "tsk-aaaaaa",
+          kind: "command",
+          created_at: "2026-05-04T08:00:00.000Z",
+          payload: { command: "bun test", exit: 0 },
+        }),
+      );
+
+      expect(await store.read(badId)).toBeUndefined();
+    });
+
+    it("v3 row written by adapter round-trips with schema_version 3", async () => {
+      const row: EvidenceRow<"command"> = {
+        schema_version: 3,
+        id: generateEvidenceId(),
+        task_id: "tsk-aaaaaa",
+        kind: "command",
+        witness_level: "witnessed-by-maestro",
+        created_at: "2026-05-04T09:00:00.000Z",
+        payload: { command: "bun run build", exit: 0 },
+      };
+      await store.append(row);
+      const result = await store.read(row.id);
+      expect(result?.schema_version).toBe(3);
+      expect(result?.witness_level).toBe("witnessed-by-maestro");
+    });
+
+    it("list returns mixed v1/v2/v3 rows ordered by created_at", async () => {
+      const v1Id = generateEvidenceId();
+      const taskDir = join(tmpDir, ".maestro", "evidence", "tsk-aaaaaa");
+      await mkdir(taskDir, { recursive: true });
+
+      // Write a v1 row directly (no witness_level)
+      await Bun.write(
+        join(taskDir, `${v1Id}.json`),
+        JSON.stringify({
+          schema_version: 1,
+          id: v1Id,
+          task_id: "tsk-aaaaaa",
+          kind: "manual-note",
+          created_at: "2026-05-04T07:00:00.000Z",
+          payload: { note: "legacy note" },
+        }),
+      );
+
+      // Append a v2 row (written verbatim as v2)
+      const v2Row: EvidenceRow<"command"> = {
+        schema_version: 2,
+        id: generateEvidenceId(),
+        task_id: "tsk-aaaaaa",
+        kind: "command",
+        witness_level: "witnessed-by-maestro",
+        created_at: "2026-05-04T08:00:00.000Z",
+        payload: { command: "bun test", exit: 0 },
+      };
+      await store.append(v2Row);
+
+      // Append a v3 row
+      const v3Row: EvidenceRow<"command"> = {
+        schema_version: 3,
+        id: generateEvidenceId(),
+        task_id: "tsk-aaaaaa",
+        kind: "command",
+        witness_level: "witnessed-by-ci",
+        created_at: "2026-05-04T09:00:00.000Z",
+        payload: { command: "bun run check:boundaries", exit: 0 },
+      };
+      await store.append(v3Row);
+
+      const list = await store.list({ task_id: "tsk-aaaaaa" });
+      expect(list.map((r) => r.id)).toEqual([v1Id, v2Row.id, v3Row.id]);
+      expect(list[0]?.schema_version).toBe(1);
+      expect(list[1]?.schema_version).toBe(2);
+      expect(list[2]?.schema_version).toBe(3);
     });
   });
 

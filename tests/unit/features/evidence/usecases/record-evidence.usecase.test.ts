@@ -6,7 +6,7 @@ import { mockEvidenceStore } from "../../../../helpers/mocks.js";
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
 describe("recordEvidence", () => {
-  it("returns a row with schema_version 2, generated id and ISO created_at, and preserves the input fields", async () => {
+  it("returns a row with schema_version 3, generated id and ISO created_at, and preserves the input fields", async () => {
     const store = mockEvidenceStore();
 
     const row = await recordEvidence(store, {
@@ -17,7 +17,7 @@ describe("recordEvidence", () => {
       witness_level: "witnessed-by-maestro",
     });
 
-    expect(row.schema_version).toBe(2);
+    expect(row.schema_version).toBe(3);
     expect(row.id).toMatch(EVIDENCE_ID_PATTERN);
     expect(row.created_at).toMatch(ISO_TIMESTAMP);
     expect(row.task_id).toBe("tsk-aaaaaa");
