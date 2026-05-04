@@ -14,6 +14,7 @@ import { buildPolicyServices, type PolicyServices } from "./features/policy/serv
 import { buildVerifyServices, type VerifyServices } from "./features/verify/services.js";
 import { buildRiskServices, type RiskServices } from "./features/risk/services.js";
 import { buildVerdictServices, type VerdictServices } from "./features/verdict/services.js";
+import { buildPlanServices, type PlanServices } from "./features/plan/services.js";
 
 export interface Services extends
   InfraServices,
@@ -31,7 +32,8 @@ export interface Services extends
   PolicyServices,
   VerifyServices,
   RiskServices,
-  VerdictServices {
+  VerdictServices,
+  PlanServices {
   readonly projectRoot: string;
 }
 
@@ -56,6 +58,7 @@ export function initServices(projectDir: string): Services {
     ...buildVerifyServices(projectDir),
     ...buildRiskServices(),
     ...buildVerdictServices(projectDir),
+    ...buildPlanServices(),
     projectRoot: projectDir,
   };
   return instance;

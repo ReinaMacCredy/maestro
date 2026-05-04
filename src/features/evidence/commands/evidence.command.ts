@@ -14,6 +14,7 @@ import type {
   EvidenceKind,
   EvidenceRow,
   ManualNotePayload,
+  PlanCheckPayload,
   WitnessLevel,
 } from "../domain/types.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
@@ -24,7 +25,7 @@ interface EvidenceCommandDeps {
   readonly recordEvidence: typeof recordEvidence;
 }
 
-const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note", "ai-review"];
+const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note", "ai-review", "plan-check"];
 const AI_REVIEWER_KINDS: readonly AIReviewerKind[] = ["bug", "security", "architecture"];
 
 export function registerEvidenceCommand(
@@ -305,6 +306,13 @@ function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
     lines.push(`  Findings: ${payload.findings.length} (errors: ${errorCount}, warns: ${warnCount}, infos: ${infoCount})`);
     lines.push(`  Confidence: ${payload.confidence}`);
     if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
+  } else if (row.kind === "plan-check") {
+    const payload = row.payload as PlanCheckPayload;
+    lines.push(`  SHA: ${payload.planFileSha}`);
+    lines.push(`  Errors: ${payload.errorCount}  Warnings: ${payload.warnCount}`);
+    for (const f of payload.findings) {
+      lines.push(`  [${f.severity}] ${f.check}: ${f.message}`);
+    }
   } else {
     const payload = row.payload as ManualNotePayload;
     lines.push(`  Note: ${payload.note}`);

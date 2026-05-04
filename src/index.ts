@@ -55,6 +55,7 @@ import { registerSpecCommand } from "./features/spec/index.js";
 import { registerContractL2Command } from "./features/task/commands/contract-l2.command.js";
 import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
 import { registerVerdictCommand } from "./features/verdict/index.js";
+import { registerPlanCheckCommand } from "./features/plan/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -101,6 +102,11 @@ registerSpecCommand(program);
 registerContractL2Command(program);
 registerPolicyCommand(program);
 registerVerdictCommand(program);
+
+const planCmd = program
+  .command("plan")
+  .description("Plan-time checks for agent tasks");
+registerPlanCheckCommand(planCmd, program);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,

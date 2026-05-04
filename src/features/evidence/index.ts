@@ -8,6 +8,7 @@ export type {
   AIReviewerKind,
   AIReviewFinding,
   AIReviewPayload,
+  PlanCheckPayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,
