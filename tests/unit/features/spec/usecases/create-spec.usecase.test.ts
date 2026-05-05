@@ -27,7 +27,7 @@ describe("createSpec", () => {
     });
 
     expect(spec.mission_id).toBe("2026-05-04-001");
-    expect(spec.schema_version).toBe(1);
+    expect(spec.schema_version).toBe(2);
     expect(spec.acceptance_criteria).toHaveLength(3);
     expect(spec.acceptance_criteria[0]!.text).toBe("Tests pass");
     expect(spec.acceptance_criteria[1]!.text).toBe("Build succeeds");

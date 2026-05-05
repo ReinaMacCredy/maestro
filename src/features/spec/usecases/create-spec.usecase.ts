@@ -20,7 +20,7 @@ export async function createSpec(
   }));
   const nonGoals: NonGoal[] = (input.non_goals ?? []).map((g) => ({ text: g.text }));
   const spec: Spec = {
-    schema_version: 1,
+    schema_version: 2,
     mission_id: input.mission_id,
     acceptance_criteria: criteria,
     non_goals: nonGoals,

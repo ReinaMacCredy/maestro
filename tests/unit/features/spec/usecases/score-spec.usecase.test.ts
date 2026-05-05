@@ -4,7 +4,7 @@ import type { Spec } from "@/features/spec/domain/types.js";
 
 function makeSpec(overrides: Partial<Pick<Spec, "acceptance_criteria" | "non_goals">>): Spec {
   return {
-    schema_version: 1,
+    schema_version: 2,
     mission_id: "2026-05-05-001",
     acceptance_criteria: [],
     non_goals: [],

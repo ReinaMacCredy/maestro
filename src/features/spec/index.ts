@@ -3,6 +3,12 @@ export type {
   AcceptanceCriterion,
   NonGoal,
   RuntimeSignal,
+  RuntimeSignalOperator,
+  RuntimeSignalSeverity,
+  RuntimeSignalThreshold,
+  CanaryStage,
+  CanaryPlan,
+  RolloutPlan,
 } from "./domain/types.js";
 export {
   CRITERION_ID_PATTERN,

@@ -67,7 +67,7 @@ describe("spec show", () => {
     const parsed = JSON.parse(logs.join("\n")) as Spec;
     expect(parsed.mission_id).toBe("2026-05-04-001");
     expect(parsed.acceptance_criteria).toHaveLength(2);
-    expect(parsed.schema_version).toBe(1);
+    expect(parsed.schema_version).toBe(2);
   });
 
   it("text mode lists criteria with ids", async () => {
