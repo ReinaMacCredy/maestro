@@ -17,6 +17,7 @@ import { buildVerdictServices, type VerdictServices } from "./features/verdict/s
 import { buildPlanServices, type PlanServices } from "./features/plan/services.js";
 import { buildCiServices, type CiServices } from "./features/ci/services.js";
 import { buildMergeServices, type MergeServices } from "./features/merge/services.js";
+import { buildDeployServices, type DeployServices } from "./features/deploy/services.js";
 
 export interface Services extends
   InfraServices,
@@ -37,7 +38,8 @@ export interface Services extends
   VerdictServices,
   PlanServices,
   CiServices,
-  MergeServices {
+  MergeServices,
+  DeployServices {
   readonly projectRoot: string;
 }
 
@@ -65,6 +67,7 @@ export function initServices(projectDir: string): Services {
     ...buildPlanServices(),
     ...buildCiServices(),
     ...buildMergeServices(),
+    ...buildDeployServices(),
     projectRoot: projectDir,
   };
   return instance;
