@@ -179,7 +179,7 @@ export async function runCiVerify(
 
   if (
     deps.env.provider === "github-actions" &&
-    deps.env.pr !== undefined &&
+    resolvedPr !== undefined &&
     deps.env.token !== undefined &&
     deps.env.repository !== undefined &&
     deps.env.headSha !== undefined &&

@@ -131,4 +131,3 @@ function printTextFindings(findings: readonly TrustFinding[], counts: FindingCou
     }
   }
 }
-

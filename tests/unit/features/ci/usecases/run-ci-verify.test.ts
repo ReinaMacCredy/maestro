@@ -287,6 +287,40 @@ describe("runCiVerify", () => {
     expect(outputs).toHaveLength(0);
   });
 
+  it("posts a PR check when pr is provided by args and env.pr is unavailable", async () => {
+    const postedInputs: CheckRunInput[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({
+        pr: undefined,
+        token: "gh-token",
+        repository: "owner/repo",
+        headSha: "abc1234",
+      }),
+      evidenceStore: fakeEvidenceStore(),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      prCheck: {
+        githubApi: {
+          getPullRequestAuthor: async () => "alice",
+          postCheckRun: async (input: CheckRunInput): Promise<CheckRunRef> => {
+            postedInputs.push(input);
+            return { id: 1 };
+          },
+          patchCheckRun: async () => undefined,
+          triggerAutoMerge: async () => undefined,
+          listOpenPullRequests: async () => [],
+          getPullRequestFiles: async () => [],
+        },
+      },
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa", pr: 99 }, deps);
+    expect(postedInputs).toHaveLength(1);
+    expect(postedInputs[0]?.conclusion).toBe("success");
+  });
+
   it("returns the verdict from requestVerdict unchanged", async () => {
     const verdicts: Verdict[] = [
       makeVerdict("PASS"),
