@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.72.6 - contract amend propagates after.scope into the new version
+
+Round-2 surfaced a real correctness bug: agents who ran
+`maestro contract amend --add-path <p> --reason "..."` saw the new path
+appear in the amended `v2.json`'s `amendments[]` array, but the
+contract's effective `scope.filesExpected` was unchanged on the new
+version. The Trust Verifier's scope check reads
+`contract.scope.filesExpected` and saw the un-amended scope, so the
+amended path kept producing `scope` error findings even after a
+successful `contract amend` call. Agents looked at the error, looked
+at the v2 file, and concluded amend was broken.
+
+### Fix
+
+- `amendContract` now applies the amendment's `after.scope`,
+  `after.intent`, and `after.doneWhen` to the new version, in addition
+  to appending to `amendments[]` and flipping status to `amended`. The
+  amendment object is unchanged — `before`/`after` snapshots still
+  capture history. Downstream readers (`task verify`, `plan check`,
+  `contract show`) now see the effective post-amendment state.
+- Regression test in
+  `tests/unit/features/task/usecases/amend-contract.usecase.test.ts`
+  covering the after.scope application path.
+
 ## 0.72.5 - Default base ref handles master-defaulting greenfield repos
 
 Round-2 first-time-user test on a fresh `git init` (which still defaults

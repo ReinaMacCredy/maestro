@@ -164,6 +164,37 @@ describe("amendContract", () => {
     expect(payload.reason).toBe("forbidden_path");
   });
 
+  it("amendment's after.scope is applied to the new version's scope", async () => {
+    // Regression: pre-fix, amendContract spread `current` and only updated
+    // `amendments[]` and `status`, so the new version still carried the
+    // pre-amendment scope. The Trust Verifier scope check (which reads
+    // contract.scope.filesExpected) saw the un-amended scope and emitted
+    // an out-of-scope error for paths that the amendment explicitly added.
+    await proposeContract(store, makeContract({ amendmentBudget: undefined }));
+
+    const amendment: ContractAmendment = makeAmendment({
+      after: {
+        scope: {
+          filesExpected: ["src/**", ".gitignore"],
+          filesForbidden: [],
+        },
+      },
+    });
+
+    const evidenceStore = mockEvidenceStore();
+    await amendContract(store, evidenceStore, {
+      taskId: "tsk-a1b2c3",
+      amendment,
+      addedPaths: [".gitignore"],
+      removedPaths: [],
+    });
+
+    const v2 = await store.readCurrent("tsk-a1b2c3");
+    expect(v2?.scope.filesExpected).toEqual(["src/**", ".gitignore"]);
+    expect(v2?.amendments).toHaveLength(1);
+    expect(v2?.status).toBe("amended");
+  });
+
   it("when contract has no amendmentBudget, amendments are unbounded (success)", async () => {
     await proposeContract(store, makeContract({ amendmentBudget: undefined }));
 

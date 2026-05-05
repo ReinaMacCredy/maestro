@@ -133,8 +133,19 @@ export async function amendContract(
 
   const versions = await readContractHistoryWithBackfill(store, legacyStore, input.taskId);
   const nextVersion = versions.length + 1;
+  // Apply the amendment's after.snapshot to the contract's effective state.
+  // Without this, the new version still carries the pre-amendment scope and
+  // every downstream reader (Trust Verifier scope check, plan check) sees
+  // the un-amended contract — agents amend, the verifier still complains,
+  // and they conclude amend is broken.
+  const afterScope = input.amendment.after.scope ?? current.scope;
+  const afterIntent = input.amendment.after.intent ?? current.intent;
+  const afterDoneWhen = input.amendment.after.doneWhen ?? current.doneWhen;
   await store.write(input.taskId, nextVersion, {
     ...current,
+    intent: afterIntent,
+    scope: afterScope,
+    doneWhen: afterDoneWhen,
     amendments: [...current.amendments, input.amendment],
     status: "amended",
   });
