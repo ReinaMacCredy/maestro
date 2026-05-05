@@ -82,26 +82,29 @@ export async function runCiVerify(
 
   const resolvedPr = args.pr ?? deps.env.pr;
 
-  // ─── Cross-task conflict detection (L8.1) ────────────────────────────────────
+  // ─── Cross-task conflict detection ────────────────────────────────────
   // Run BEFORE verdict.request so the evidence row is present when Risk Engine reads it.
   if (
     deps.githubApi !== undefined &&
     deps.env.repository !== undefined &&
     resolvedPr !== undefined
   ) {
+    const githubApi = deps.githubApi;
+    const repository = deps.env.repository;
     try {
-      const repository = deps.env.repository;
-      const allOpenPrs = await deps.githubApi.listOpenPullRequests({ repository });
-      const otherPrs = allOpenPrs.filter((pr) => pr !== resolvedPr);
-      const thisPrFiles = await deps.githubApi.getPullRequestFiles({ repository, pr: resolvedPr });
-      const otherPrFiles = await Promise.all(
-        otherPrs.map(async (pr) => ({
-          pr,
-          files: await deps.githubApi!.getPullRequestFiles({ repository, pr }),
-        })),
+      const otherPrs = (await githubApi.listOpenPullRequests({ repository })).filter(
+        (pr) => pr !== resolvedPr,
       );
+      const [thisPrFiles, otherPrFiles] = await Promise.all([
+        githubApi.getPullRequestFiles({ repository, pr: resolvedPr }),
+        Promise.all(
+          otherPrs.map(async (pr) => ({
+            pr,
+            files: await githubApi.getPullRequestFiles({ repository, pr }),
+          })),
+        ),
+      ]);
       const conflictResult = detectCrossTaskConflict({
-        thisPr: resolvedPr,
         thisPrFiles,
         otherPrs: otherPrFiles,
       });

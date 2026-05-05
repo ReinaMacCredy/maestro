@@ -6,7 +6,6 @@ describe("detectCrossTaskConflict", () => {
   describe("happy path — overlapping paths", () => {
     it("detects a single conflicting PR with overlapping files", () => {
       const input: DetectCrossTaskConflictInput = {
-        thisPr: 42,
         thisPrFiles: ["src/foo.ts", "src/bar.ts"],
         otherPrs: [
           { pr: 7, files: ["src/foo.ts", "src/other.ts"] },
@@ -19,7 +18,6 @@ describe("detectCrossTaskConflict", () => {
 
     it("detects multiple conflicting PRs", () => {
       const input: DetectCrossTaskConflictInput = {
-        thisPr: 42,
         thisPrFiles: ["src/foo.ts", "src/bar.ts", "src/baz.ts"],
         otherPrs: [
           { pr: 7, files: ["src/foo.ts"] },
@@ -36,7 +34,6 @@ describe("detectCrossTaskConflict", () => {
   describe("no-overlap — no conflicts", () => {
     it("returns empty when no other PRs touch the same files", () => {
       const input: DetectCrossTaskConflictInput = {
-        thisPr: 42,
         thisPrFiles: ["src/foo.ts"],
         otherPrs: [
           { pr: 7, files: ["src/completely-different.ts"] },
@@ -49,7 +46,6 @@ describe("detectCrossTaskConflict", () => {
 
     it("returns empty when otherPrs is empty", () => {
       const input: DetectCrossTaskConflictInput = {
-        thisPr: 42,
         thisPrFiles: ["src/foo.ts"],
         otherPrs: [],
       };
@@ -60,7 +56,6 @@ describe("detectCrossTaskConflict", () => {
 
     it("returns empty when thisPrFiles is empty", () => {
       const input: DetectCrossTaskConflictInput = {
-        thisPr: 42,
         thisPrFiles: [],
         otherPrs: [{ pr: 7, files: ["src/foo.ts"] }],
       };
@@ -73,7 +68,6 @@ describe("detectCrossTaskConflict", () => {
   describe("multiple-overlap — paths touched by multiple PRs", () => {
     it("deduplicates overlapping paths appearing in more than one conflicting PR", () => {
       const input: DetectCrossTaskConflictInput = {
-        thisPr: 42,
         thisPrFiles: ["src/foo.ts", "src/bar.ts"],
         otherPrs: [
           { pr: 7, files: ["src/foo.ts", "src/bar.ts"] },
@@ -90,7 +84,6 @@ describe("detectCrossTaskConflict", () => {
   describe("path-dedup — sorted output", () => {
     it("returns overlappingPaths sorted alphabetically", () => {
       const input: DetectCrossTaskConflictInput = {
-        thisPr: 42,
         thisPrFiles: ["z-file.ts", "a-file.ts", "m-file.ts"],
         otherPrs: [
           { pr: 7, files: ["m-file.ts", "a-file.ts", "z-file.ts"] },

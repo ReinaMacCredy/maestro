@@ -122,7 +122,7 @@ export class GhCliAdapter implements GithubApiPort {
 
   readonly listOpenPullRequests = async (input: { repository: string }): Promise<readonly number[]> => {
     const result = spawnGh(
-      ["api", `repos/${input.repository}/pulls?state=open`, "--jq", ".[].number"],
+      ["api", "--paginate", `repos/${input.repository}/pulls?state=open&per_page=100`, "--jq", ".[].number"],
       "",
     );
 
@@ -143,7 +143,7 @@ export class GhCliAdapter implements GithubApiPort {
 
   readonly getPullRequestFiles = async (input: { repository: string; pr: number }): Promise<readonly string[]> => {
     const result = spawnGh(
-      ["api", `repos/${input.repository}/pulls/${input.pr}/files`, "--jq", ".[].filename"],
+      ["api", "--paginate", `repos/${input.repository}/pulls/${input.pr}/files?per_page=100`, "--jq", ".[].filename"],
       "",
     );
 

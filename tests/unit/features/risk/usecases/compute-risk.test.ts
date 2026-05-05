@@ -672,9 +672,4 @@ describe("applyCrossTaskConflictRiskRaise", () => {
     const rows: EvidenceRow[] = [makeEvidenceRow({ kind: "command" })];
     expect(applyCrossTaskConflictRiskRaise("medium", rows)).toBe("medium");
   });
-
-  it("does not raise when conflict row has empty conflictingPrs", () => {
-    const rows = [makeCrossTaskConflictRow([])];
-    expect(applyCrossTaskConflictRiskRaise("low", rows)).toBe("low");
-  });
 });

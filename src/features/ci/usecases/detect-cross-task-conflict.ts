@@ -1,5 +1,4 @@
 export interface DetectCrossTaskConflictInput {
-  readonly thisPr: number;
   readonly thisPrFiles: readonly string[];
   readonly otherPrs: readonly { readonly pr: number; readonly files: readonly string[] }[];
 }

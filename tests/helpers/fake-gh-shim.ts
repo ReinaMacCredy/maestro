@@ -122,14 +122,6 @@ function readState() {
   }
 }
 
-function getPrFiles(state, pr) {
-  if (state.prFilesArray) {
-    const entry = state.prFilesArray.find((e) => e[0] === pr);
-    return entry ? entry[1] : [];
-  }
-  return [];
-}
-
 function writeState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
@@ -185,23 +177,29 @@ if (subcommand !== "api") {
   process.exit(1);
 }
 
-const endpoint = args[1];
-if (!endpoint) {
-  process.stderr.write("fake-gh: missing endpoint\\n");
-  process.exit(1);
-}
-
-// Parse -X flag and --jq flag
+// Parse -X / --jq / --paginate flags. Endpoint is the first non-flag arg after "api".
 let method = "GET";
 let jqExpr = undefined;
-for (let i = 2; i < args.length; i++) {
+let endpoint = undefined;
+for (let i = 1; i < args.length; i++) {
   if (args[i] === "-X" && args[i + 1]) {
     method = args[i + 1].toUpperCase();
     i++;
   } else if (args[i] === "--jq" && args[i + 1]) {
     jqExpr = args[i + 1];
     i++;
+  } else if (args[i] === "--paginate") {
+    // shim returns all rows in one response, ignore
+  } else if (args[i].startsWith("--input")) {
+    // --input - reads stdin; consume the next arg if it's a value
+    if (args[i] === "--input" && args[i + 1]) i++;
+  } else if (endpoint === undefined) {
+    endpoint = args[i];
   }
+}
+if (!endpoint) {
+  process.stderr.write("fake-gh: missing endpoint\\n");
+  process.exit(1);
 }
 
 // ─── GET repos/<owner>/<repo>/pulls/<n> ─────────────────────────────────────
@@ -242,11 +240,11 @@ if (openPullsMatch && method === "GET" && !endpoint.match(/\\/pulls\\/\\d/)) {
 
 // ─── GET repos/<owner>/<repo>/pulls/<n>/files ─────────────────────────────────
 // Used by GhCliAdapter.getPullRequestFiles with --jq '.[].filename'
-const prFilesMatch = endpoint.match(/^repos\\/([^/]+)\\/([^/]+)\\/pulls\\/(\\d+)\\/files$/);
+const prFilesMatch = endpoint.match(/^repos\\/([^/]+)\\/([^/]+)\\/pulls\\/(\\d+)\\/files(\\?.*)?$/);
 if (prFilesMatch && method === "GET") {
   const pr = parseInt(prFilesMatch[3], 10);
   const state = readState();
-  const files = getPrFiles(state, pr);
+  const files = state.prFiles.get(pr) ?? [];
   // jqExpr is '.[].filename'; output one path per line (what real jq produces)
   if (files.length > 0) {
     process.stdout.write(files.join("\\n") + "\\n");
