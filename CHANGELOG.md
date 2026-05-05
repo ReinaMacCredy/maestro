@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.71.0 - L7 — Deploy Safety (advanced optional, trimmed)
+
+Honest framing: L7 is reachable from L5 — teams running L5 alone can
+adopt L7 without shipping L6. L7 itself is opt-in: producing
+`deploy-readiness` and `runtime-signal` Evidence does not by itself
+flip Verdict semantics. Teams wire the new Evidence into their
+`policies/risk.yaml` if they want it to gate verdicts.
+
+### Spec schema v2
+
+`Spec.schema_version` bumps from 1 to 2. Two new slots:
+- `runtime_signals[].{name, provider, query, threshold, severity}` —
+  replaces the v1 placeholder `{ kind, source }`.
+- `rollout_plan?.{feature_flag?, canary?, rollback_command?}` —
+  optional rollout descriptor; consumed by `deploy gate`.
+
+v1 specs forward-migrate at read time: `FsSpecStoreAdapter` coerces
+v1 → v2 in memory without rewriting the on-disk file. Files are
+rewritten only on the next `spec edit`.
+
+### New verbs
+
+- `maestro deploy gate --task <id> [--base <ref>] [--json]` — runs
+  four deterministic checks (feature_flag, canary_plan, rollback,
+  owner) against the task's mission Spec, rollback Evidence, and
+  owners.yaml. Always writes a `kind=deploy-readiness` Evidence row
+  with the per-check breakdown and `gate: pass | fail`. Exit 0 on
+  pass, 1 on fail. Witness: `witnessed-by-ci` in CI, else
+  `agent-claimed-locally`. Does not mutate the Verdict.
+- `maestro deploy rollback --task <id> --command <cmd> [--json]` —
+  spawns the supplied shell command, captures exit code, and writes
+  a `kind=rollback-exercised` Evidence row. Witness:
+  `witnessed-by-ci` in CI, else `witnessed-by-maestro` (the only
+  non-CI context that warrants `witnessed-by-maestro`). Exit 0 on
+  command exit 0, else 1. Evidence is written either way — the
+  witness is the audit, not the success.
+- `maestro runtime check --task <id> [--provider-base-url <url>]
+  [--json]` — iterates `Spec.runtime_signals` and queries each
+  signal via the configured monitor adapter (Prometheus is the one
+  shipped reference adapter). Writes one `kind=runtime-signal`
+  Evidence row per signal. Provider base URL precedence:
+  `--provider-base-url` flag → `MAESTRO_PROMETHEUS_URL` env →
+  `http://localhost:9090`. Signals with `provider != "prometheus"`
+  log `[skip] provider <X> not supported` and record a
+  runtime-signal row with `pass: false` and
+  `note: "unsupported provider"`. Exit 0 always.
+
+### owners.yaml fourth role
+
+`owners.yaml` gains a fourth role list: `deploy_approver`. CI
+Maestro (`maestro ci verify`) authorizes the PR author against this
+list when a `kind=deploy-readiness` Evidence row with `gate: pass`
+exists for the task. If the PR author is not in `deploy_approver`,
+the GitHub check conclusion is downgraded to `failure` and the
+summary appends `deploy not authorized: PR author <login> is not in
+owners.yaml deploy_approver`. Owners are loaded from the base
+branch (Rule 12). Outside CI, the author check is skipped.
+
+### Two new Evidence kinds, one new producer
+
+- `kind=deploy-readiness` (new at L7.2): payload `{ task_id,
+  checks: { feature_flag, canary_plan, rollback, owner }, gate }`.
+- `kind=runtime-signal` (new at L7.3): payload `{ signal_name,
+  provider, query, value, threshold, operator, pass, sampled_at,
+  note? }`.
+- `kind=rollback-exercised` was declared in the EvidenceKind union
+  at L6.1 with payload `{ command, exit }`. L7.5 ships the
+  producer (`maestro deploy rollback`).
+
+`maestro evidence show` renders payload detail for all three kinds.
+
+### Compatibility
+
+Fully additive. Existing repos at L5 (or L5+L6) are unaffected
+unless they explicitly:
+- populate `Spec.rollout_plan` (no behavior change without a
+  populated rollout plan)
+- add `deploy_approver` to `owners.yaml` (existing files keep
+  working without it)
+- set `policies/risk.yaml` predicates that consume
+  `deploy-readiness` or `runtime-signal` Evidence
+
+The Spec v1 → v2 migration is read-time forward-compat: existing v1
+spec files on disk continue to load.
+
+### Deferred to L8
+
+Autopsy generator, ratchet review/approve/sunset CLI, N≥2
+broad-promotion guard, sunset/decay machinery, cross-task conflict
+detection, trust benchmark corpus.
+
 ## 0.70.0 - L6 — Auto-Merge for Declared Safe Scope (advanced optional, trimmed)
 
 Honest framing: L6 is opt-in and applies to roughly 5–15% of merged
