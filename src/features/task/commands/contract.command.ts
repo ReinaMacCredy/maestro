@@ -406,13 +406,46 @@ async function loadContractDraftTemplate(
     ? await editContractDraft(baseContent, resolvedEditor)
     : baseContent;
 
+  let parsed: ContractDraftTemplate;
   try {
-    return parseYaml<ContractDraftTemplate>(finalContent) ?? {};
+    parsed = parseYaml<ContractDraftTemplate>(finalContent) ?? {};
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new MaestroError(`Cannot parse contract draft YAML: ${detail}`, [
       "Fix the YAML syntax in the template and retry",
     ]);
+  }
+  warnUnknownContractDraftKeys(parsed);
+  return parsed;
+}
+
+const KNOWN_CONTRACT_DRAFT_KEYS = ["intent", "scope", "doneWhen"] as const;
+const KNOWN_CONTRACT_DRAFT_SCOPE_KEYS = [
+  "filesExpected",
+  "filesForbidden",
+  "maxFilesTouched",
+] as const;
+
+function warnUnknownContractDraftKeys(template: ContractDraftTemplate): void {
+  if (typeof template !== "object" || template === null) return;
+  const topUnknown = Object.keys(template).filter(
+    (k) => !(KNOWN_CONTRACT_DRAFT_KEYS as readonly string[]).includes(k),
+  );
+  for (const key of topUnknown) {
+    warn(`Ignoring unknown contract draft key: '${key}'. Known keys: ${KNOWN_CONTRACT_DRAFT_KEYS.join(", ")}.`);
+  }
+  if (template.scope && typeof template.scope === "object") {
+    const scopeUnknown = Object.keys(template.scope).filter(
+      (k) => !(KNOWN_CONTRACT_DRAFT_SCOPE_KEYS as readonly string[]).includes(k),
+    );
+    for (const key of scopeUnknown) {
+      const hint = key === "allowedPaths" || key === "expectedPaths"
+        ? " (did you mean 'filesExpected'?)"
+        : key === "forbiddenPaths"
+          ? " (did you mean 'filesForbidden'?)"
+          : "";
+      warn(`Ignoring unknown contract draft key: 'scope.${key}'${hint}. Known scope keys: ${KNOWN_CONTRACT_DRAFT_SCOPE_KEYS.join(", ")}.`);
+    }
   }
 }
 
