@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
@@ -97,7 +98,10 @@ export function registerPolicyCheckCommand(
         taskId,
       );
       if (contract === undefined) {
-        throw new Error(`No contract found for task ${taskId}. Run 'maestro contract amend' first.`);
+        throw new MaestroError(`No contract found for task ${taskId}`, [
+          `Create one: maestro task contract new ${taskId}`,
+          `Then lock it: maestro task contract lock ${taskId}`,
+        ]);
       }
 
       const baseRef = typeof opts.base === "string" && opts.base.length > 0

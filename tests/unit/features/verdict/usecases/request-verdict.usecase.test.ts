@@ -212,6 +212,22 @@ describe("requestVerdict", () => {
     await expect(requestVerdict({ taskId: "tsk-aaaaaa" }, deps)).rejects.toThrow(/No contract found/);
   });
 
+  it("uses MaestroError with hints when no contract exists (no raw stack trace)", async () => {
+    const deps = makeDeps({
+      contractVersionStore: fakeContractVersionStore(undefined),
+    });
+    try {
+      await requestVerdict({ taskId: "tsk-aaaaaa" }, deps);
+      throw new Error("expected requestVerdict to throw");
+    } catch (err) {
+      const { MaestroError } = await import("@/shared/errors.js");
+      expect(err).toBeInstanceOf(MaestroError);
+      const hints = (err as { hints?: readonly string[] }).hints ?? [];
+      expect(hints.some((h) => h.includes("contract new tsk-aaaaaa"))).toBe(true);
+      expect(hints.some((h) => h.includes("contract lock tsk-aaaaaa"))).toBe(true);
+    }
+  });
+
   it("loads the contract from contractVersionStore", async () => {
     let loadedTaskId: string | undefined;
     const contract = makeContract();

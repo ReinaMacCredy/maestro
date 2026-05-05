@@ -1,4 +1,5 @@
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
+import { MaestroError } from "@/shared/errors.js";
 import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
@@ -39,7 +40,10 @@ export async function requestVerdict(
     taskId,
   );
   if (contract === undefined) {
-    throw new Error(`No contract found for task ${taskId}. Run 'maestro contract amend' first.`);
+    throw new MaestroError(`No contract found for task ${taskId}`, [
+      `Create one: maestro task contract new ${taskId}`,
+      `Then lock it: maestro task contract lock ${taskId}`,
+    ]);
   }
 
   // Read current run-state early so cost-budget exhaustion is checked before
