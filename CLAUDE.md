@@ -15,7 +15,7 @@ Local Maestro is advisory; CI Maestro is authoritative. The PR check status post
 
 Auto-merge (`maestro merge auto`) requires a `PASS` verdict, a Spec quality score of 1.0 (when a Spec is associated with the task), and `autoMergeAllowed.<riskClass>: true` in `policies/autopilot.yaml`. See `docs/auto-merge-eligibility.md` for the full 8-predicate reference.
 
-Deploy gate (`maestro deploy gate`) emits `kind=deploy-readiness` Evidence; runtime monitoring (`maestro runtime check`) emits `kind=runtime-signal` Evidence; rollback witness (`maestro deploy rollback`) emits `kind=rollback-exercised` Evidence. See `docs/deploy-gate.md` and `docs/runtime-monitoring.md`.
+Deploy gate (`maestro deploy gate`) emits `kind=deploy-readiness` Evidence; runtime monitoring (`maestro runtime check`) emits `kind=runtime-signal` Evidence; rollback witness (`maestro deploy rollback`) emits `kind=rollback-exercised` Evidence. See `docs/deploy-gate.md` and `docs/runtime-monitoring.md`. Cross-task conflict detection emits `kind=cross-task-conflict` Evidence when other open PRs touch overlapping paths; the Risk Engine raises class one tier per signal. See `docs/cross-task-conflict.md`.
 
 ## Always release + link locally when testing
 

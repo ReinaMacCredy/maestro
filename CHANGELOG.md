@@ -1,5 +1,81 @@
 # Changelog
 
+## 0.72.0 - L8 (trimmed) — Cross-Task Conflict + Trust Benchmark
+
+Honest framing: this is a trimmed L8 release. The full learning loop
+(autopsy generator, `maestro ratchet` CLI, N≥2 broad-promotion guard,
+sunset/decay machinery) is intentionally not in this slice. Those
+phases will ship when teams ask maestro to learn from incidents.
+
+### L8.0: `memory-ratchet` rename (internal)
+
+`src/features/ratchet/` renamed to `src/features/memory-ratchet/`.
+No CLI surface change, no behavior change. Internal restructuring only
+— agents and operators are not affected.
+
+### L8.1: Cross-task conflict detection
+
+`maestro ci verify` now queries open PRs for overlapping changed file
+paths. When overlap is found, it records a `kind=cross-task-conflict`
+Evidence row at `witnessed-by-ci` and feeds the signal to the Risk
+Engine.
+
+**Risk impact:** the Risk Engine raises the effective risk class one
+tier per conflict signal, capped at `critical`. Multiple
+`cross-task-conflict` rows for the same verification run are
+deduplicated to a single tier raise — piling up rows does not
+compound the raise.
+
+**New `EvidenceKind`:** `cross-task-conflict`
+- Payload: `{ thisPr, conflictingPrs: number[], overlappingPaths: string[] }`
+- Witness: `witnessed-by-ci`
+- Recorded by `maestro ci verify` only (not a manual-record target)
+
+**New port additions:**
+- `ConflictDetectorPort` in `src/features/ci/ports/` — interface for
+  listing open-PR file paths.
+- `GhCliConflictDetectorAdapter` in `src/features/ci/adapters/` —
+  Prometheus-style implementation backed by `gh api`.
+
+**Non-fatal on API errors:** if the `gh api` call fails (missing token,
+rate-limit, etc.), `ci verify` logs a warning and continues without
+recording a conflict row. The verify step does not fail.
+
+See `docs/cross-task-conflict.md` for the full reference.
+
+### L8.2: Trust benchmark corpus seed
+
+`tests/e2e/trust-benchmark/` is a new end-to-end regression corpus.
+9 seed scenarios are included; the corpus grows demand-driven.
+
+| File | Edge case | Mitigation |
+|------|-----------|------------|
+| `ec05-out-of-scope.test.ts` | EC 5 | Trust Verifier scope check |
+| `ec06-generated-drift.test.ts` | EC 6 | Generated-file parity |
+| `ec09-sensitive-path.test.ts` | EC 9 | `forbidden_paths` + `sensitive-paths.yaml` |
+| `ec12-security-thin.test.ts` | EC 12 | Threat-model required predicate |
+| `ec22-amendment-creep.test.ts` | EC 22 | Amendment-budget rules 3–7 |
+| `ec23-proof-not-tied.test.ts` | EC 23 | ProofMap at L3.5 |
+| `ec27-rebase-squash.test.ts` | EC 27 | Tree-SHA verdict identity |
+| `ec31-decision-authority.test.ts` | EC 31 | `owners.yaml.deploy_approver` |
+| `ec32-self-weakening.test.ts` | EC 32 | Rule 12 base-branch reading |
+
+CI runs `bun test tests/e2e/trust-benchmark/` on every release.
+
+See `docs/trust-benchmark.md` for fixture pattern and how to add
+new scenarios.
+
+### Compatibility
+
+Fully additive. Existing repos at L5/L6/L7 are unaffected unless they
+run `maestro ci verify` in CI — which will now additionally check for
+cross-task conflicts and record Evidence when found. The check is
+advisory by default (raises risk class; does not hard-block unless
+the raised class already triggers a BLOCK condition under the team's
+policy).
+
+---
+
 ## 0.71.0 - L7 — Deploy Safety (advanced optional, trimmed)
 
 Honest framing: L7 is reachable from L5 — teams running L5 alone can

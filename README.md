@@ -914,6 +914,32 @@ maestro runtime check --task <id> [--provider-base-url <url>] [--json]
 
 See `docs/deploy-gate.md` for the full check enumeration, `Spec.rollout_plan` reference, and troubleshooting. See `docs/runtime-monitoring.md` for the `RuntimeMonitorPort` reference and Prometheus adapter guide.
 
+## L8 (trimmed): Cross-Task Conflict + Trust Benchmark
+
+L8 is a trimmed release — the full learning loop (autopsy, ratchet CLI, sunset machinery) is intentionally not in this slice. The two features that shipped are:
+
+### L8.1: Cross-task conflict detection
+
+`maestro ci verify` now checks whether other open PRs touch any of the same file paths as the current PR. When overlap is detected, it records a `kind=cross-task-conflict` Evidence row at `witnessed-by-ci` and passes it to the Risk Engine. The Risk Engine raises the effective risk class one tier per signal (capped at `critical`; multiple conflict rows still produce only a one-tier raise total).
+
+Detection is file-path-level: a path counts as overlapping when it appears in both this PR's changed-file list and at least one other open PR's changed-file list. The check is non-fatal on API errors — a failed `gh api` call logs a warning and skips the record without failing the verify step.
+
+See `docs/cross-task-conflict.md` for the port/adapter/use-case flow, payload schema, and troubleshooting.
+
+### L8.2: Trust benchmark corpus seed
+
+`tests/e2e/trust-benchmark/` is a new end-to-end regression corpus of 9 scenarios drawn from the master edge-case list (32 total). The corpus covers: out-of-scope edits, generated-file drift, sensitive-path violations, security-thin diffs, amendment creep, proof not tied to criteria, rebase/squash verdict identity, deploy-gate decision authority, and PR self-weakening. Each scenario includes a positive assertion (mitigation fires) and a negative assertion (mitigation does not fire without the trigger).
+
+```bash
+bun test tests/e2e/trust-benchmark/
+```
+
+See `docs/trust-benchmark.md` for the full scenario table, fixture pattern, and how to add new scenarios.
+
+### Deferred from L8
+
+The following phases are intentionally not in this release and will ship when teams ask maestro to learn from incidents: autopsy generator, `maestro ratchet` review/approve/sunset CLI, N≥2 broad-promotion guard for ratchet rules, and sunset/decay machinery.
+
 ## Common Commands
 
 | Command | Use it when you want to... |
@@ -1039,7 +1065,7 @@ The design is intentionally transparent: state is inspectable, diffable, and eas
 
 Maestro is organized as a feature-first hexagonal codebase:
 
-- `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `ratchet`, `handoff` (markdown prompt building plus Codex or Claude launch orchestration), `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders and behavioral principles), `agent` (library-only; composes agent prompts and manages harness config injection), `task` (Claude-style blocker graph for the daily loop), `reply` (agent reply ingest with principle gating), and `bundle` (portable mission archive).
+- `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `memory-ratchet`, `handoff` (markdown prompt building plus Codex or Claude launch orchestration), `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders and behavioral principles), `agent` (library-only; composes agent prompts and manages harness config injection), `task` (Claude-style blocker graph for the daily loop), `reply` (agent reply ingest with principle gating), and `bundle` (portable mission archive).
 - `src/infra/` -- plumbing that isn't a feature: init, doctor, status, install, update, uninstall, and mission-control commands, config and git ports/adapters, and infra-owned domain types.
 - `src/shared/` -- generic utilities with no domain knowledge: filesystem, YAML, shell, path safety, and output formatting under `lib/`; cross-cutting primitives like IDs and UI config under `domain/`; plus top-level `errors.ts`, `version.ts`, and `version-format.ts`.
 - `src/tui/` -- read-only rendering and input for Mission Control; consumes features through their public surfaces. See `src/tui/README.md` for the contributor-oriented TUI architecture walkthrough.

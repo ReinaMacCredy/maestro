@@ -427,6 +427,38 @@ See `docs/runtime-monitoring.md` for the full reference and adapter guide.
 
 ---
 
+## Cross-Task Conflict Evidence (L8.1)
+
+`maestro ci verify` automatically detects when other open PRs touch overlapping file paths and records a `kind=cross-task-conflict` Evidence row when overlap is found.
+
+**What it means for your task:**
+
+- The Evidence row is recorded at `witnessed-by-ci` — CI performed the check, not the agent.
+- The Risk Engine raises the effective risk class **one tier per conflict signal** (capped at `critical`). If the current diff is already at `medium` and a conflict row exists, the effective class becomes `high`.
+- **Multi-row clamping:** even if multiple `cross-task-conflict` rows exist for the same run, the raise is capped at one tier total. The raise does not compound.
+- The conflict is **advisory by default**: it raises risk class, which may push the Verdict from `PASS` to `HUMAN` or `BLOCK` depending on the team's autopilot policy thresholds. It does not unconditionally fail the verify step.
+- On `gh api` errors (missing token, rate-limit, etc.), `ci verify` logs a warning and skips the record without failing. Treat a missing row as "unknown" rather than "clean."
+
+**Payload shape:**
+
+```typescript
+interface CrossTaskConflictPayload {
+  thisPr: number;
+  conflictingPrs: number[];
+  overlappingPaths: string[];
+}
+```
+
+**What to do when you see a conflict row:**
+
+1. Run `maestro evidence show <id>` to inspect which PRs and paths overlap.
+2. Coordinate with the author of the conflicting PR before merging. The safest resolution is to merge the other PR first, rebase, and re-verify.
+3. If the conflict is benign (e.g., unrelated edits to the same config file), document the coordination outcome in a `manual-note` Evidence row before requesting a Verdict.
+
+See `docs/cross-task-conflict.md` for the full reference.
+
+---
+
 ## Witnessed Rollback
 
 **Rule 10** (plain English): A rollback procedure must be mechanically witnessed — by CI or by Maestro CLI itself — before a deploy can be considered safe. A manual note is not sufficient.

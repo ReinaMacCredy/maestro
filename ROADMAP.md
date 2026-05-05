@@ -95,7 +95,7 @@ The 7 adoption levels are the shipping plan. Each level is a release with its ow
 | **L5** | **CI is the authoritative verifier — terminal default** | shipped (v0.69.0) | P18 (CI/PR gate), P17 (Human Review UX) |
 | L6 | Auto-merge for declared safe scope | shipped (v0.70.0, trimmed); full 7-reviewer pipeline deferred | P19, P20, P13 full, P4 (Spec Quality as gate threshold) |
 | L7 | Deploy safety: gate, runtime signal ingestion, witnessed rollback | shipped (v0.71.0, trimmed); autopsy/ratchet/sunset machinery deferred to L8 | P21, P22, P23, P24, P25 |
-| L8 | Learning loop: autopsy → ratchet → sunset | future, signal-driven; not on the active roadmap | (deferred phases parked in §L8) |
+| L8 | Cross-task conflict detection + trust benchmark seed (trimmed); full learning loop deferred | shipped (v0.72.0, trimmed); autopsy, ratchet CLI, N≥2 guard, sunset/decay remain deferred | L8.0 (memory-ratchet rename), L8.1 (cross-task conflict), L8.2 (trust benchmark seed) |
 
 L5 is the default journey. L6 and L7 are opt-in advanced levels with honest scope acknowledgment: in a typical repo, L6 covers ~5–15% of merged PRs.
 
@@ -1638,18 +1638,22 @@ Sequencing rules:
 
 ---
 
-### L8 — Learning Loop (Future, signal-driven)
+### L8 — Learning Loop (trimmed: v0.72.0; full loop deferred)
 
-Autopsy → RatchetProposal → human review → sunset is a research feature. Build when teams ask maestro to learn from their incidents. Until then, this is intentionally not on the roadmap. The phases below are a parking lot for future planners.
+L8 shipped in trimmed form at v0.72.0. Two phases from the original parking lot landed; the rest remain deferred until teams ask maestro to learn from incidents.
 
-**Deferred phases:**
+**Shipped at v0.72.0 (trimmed L8):**
+
+- **L8.0 / `memory-ratchet` rename**: `src/features/ratchet/` renamed to `src/features/memory-ratchet/` (internal only; no CLI surface change).
+- **L8.1 / Cross-task conflict detection** (was L7.10, edge case 26): `maestro ci verify` detects overlapping changed paths across open PRs; emits `kind=cross-task-conflict` Evidence at `witnessed-by-ci`; the Risk Engine raises the effective risk class one tier per conflict signal (capped at `critical`; multiple rows still raise by one tier total). See `docs/cross-task-conflict.md`.
+- **L8.2 / Trust Benchmark corpus seed** (was L7.11, edge case 29): `tests/e2e/trust-benchmark/` with 9 of 32 seed scenarios. CI runs the full directory on every release. See `docs/trust-benchmark.md`.
+
+**Deferred phases (not in this release):**
 
 - **L7.4 / Autopsy generator**: `maestro autopsy run --incident <id>` walks Spec, Contract, Plan, Evidence, Verdict, Runtime signals and emits a `RatchetProposal`. Speculative until incidents accumulate and teams request it.
 - **L7.6 / `maestro ratchet` review/approve/sunset/export/import CLI**: `ratchet list`, `ratchet review`, `ratchet approve`, `ratchet reject`, `ratchet sunset`, `ratchet export`, `ratchet import`. No proposals to manage until the autopsy generator ships.
 - **L7.7 / N≥2 broad-promotion guard**: single-incident proposals can only be narrow; broad scope requires N≥2 corroborating incidents. Depends on autopsy generator and ratchet CLI.
 - **L7.8 / Sunset and decay machinery**: rule schema adds `effective_from`, `state: "active" | "soft" | "deleted"`; computed sunset from `effective_from + ratchet_sunset_days`. Depends on ratchet CLI.
-- **L7.10 / Cross-task conflict detection** (edge case 26): `maestro ci verify` detects overlapping changed paths across open PRs/tasks; emits `kind=cross-task-conflict` Evidence; risk-raising. Speculative until users hit it.
-- **L7.11 / Trust Benchmark corpus** (Phase 26, edge case 29): `tests/e2e/trust-benchmark/` corpus of 20+ scenarios from the edge case list; CI runs the benchmark on every release. Large surface; ship when stability matters more than feature surface.
 
 ---
 
@@ -1690,7 +1694,7 @@ L4 done = plan-check; self-check loop; cost budget enforced; maestro-verify skil
 L5 done = workflow template shipped via `maestro-setup` skill (skill-first; no CLI verb); `maestro ci verify` (CI-mode verification, witnessed-by-ci Evidence, verdict to $GITHUB_OUTPUT); tree-SHA verdict identity; PR check status via `gh api` (no comment); docs/ci-integration.md, README "Quick Start: L5" walkthrough (L5.DOCS); E2E green. Shipped in v0.69.0.
 L6 done = auto-merge gate predicates; `maestro merge auto`; deterministic Spec Quality Score; review checklist for HUMAN verdicts; `maestro verdict override`; docs/auto-merge-eligibility.md, docs/override-flow.md (L6.DOCS); E2E green. Advanced optional — ship only when teams request auto-merge post-L5.
 L7 done = `Spec.runtime_signals` schema; `maestro deploy gate`; runtime monitor port + 1 reference adapter; witnessed rollback (Rule 10); `owners.yaml` deploy-gate roles; docs/deploy-gate.md, docs/runtime-monitoring.md (L7.DOCS); E2E green.
-L8 deferred / signal-driven = autopsy generator; ratchet review/approve/sunset/export/import CLI; N≥2 broad-promotion guard; sunset + decay machinery; cross-task conflict detection; trust benchmark corpus. Build when teams ask maestro to learn from incidents.
+L8 trimmed done = cross-task conflict detection (kind=cross-task-conflict Evidence, one-tier risk raise per signal, capped) + trust benchmark seed (9 scenarios). Autopsy generator, ratchet review/approve/sunset CLI, N≥2 broad-promotion guard, and sunset/decay machinery remain deferred — build when teams ask maestro to learn from incidents.
 ```
 
 ## Glossary
@@ -1710,7 +1714,7 @@ L8 deferred / signal-driven = autopsy generator; ratchet review/approve/sunset/e
   - `deploy-readiness` — deploy gate output (Phase L7.2); payload includes flag/canary/rollback/owner check results. Introduced at L7.
   - `rollback-exercised` — Witnessed rollback execution in CI (Rule 10); payload includes CI run id, exit code, log hash. Introduced at L7.
   - `verdict-override` — explicit `sensitive_waiver` action (Override section); payload includes overrider, reason, original BLOCK reasons. Always witness level 4. Introduced at L6 (Phase L6.5).
-  - `cross-task-conflict` — overlapping changed paths across open PRs/tasks (edge case 26); payload includes conflicting task ids and paths. Deferred to L8.
+  - `cross-task-conflict` — overlapping changed paths across open PRs/tasks (edge case 26); payload `{ thisPr, conflictingPrs[], overlappingPaths[] }`; witness `witnessed-by-ci`; Risk Engine raises effective class one tier per signal (capped at `critical`). Introduced at L8.1.
   - `flake-cache-miss` — CI cache restore failure for flake history; payload includes cache key. Deferred (flake tracking deferred to L8/signal-driven).
   - `threat-model` — declared threat model addressing security-relevant changes (edge case 12 mitigation); payload includes `assets`, `threat_categories`, `mitigations` (list of `{ threat, mitigation }`), `residual_risk`. CLI: `maestro evidence record --kind threat-model --threat-model-file <path>`. Introduced at L4 (Phase L4.3a).
   - `manual-note` — free-form human note attached to a task. Always witness level 4. Available from L1.
