@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.72.3 - Worktree project-root resolver fix
+
+Bug fix. The v0.72.2 release wrapped five call sites in
+`resolveMaestroProjectRoot`, but the resolver itself was wrong: it
+checked `existsSync(.maestro/)` before walking through
+`.git/commondir`. Linked worktrees always contain a tracked
+`.maestro/` snapshot (AGENTS.md, policies/, bootstrap/,
+principles.jsonl, tasks/contract-templates/), so the resolver
+returned the worktree path and every L1 contract write landed in the
+worktree's local `.maestro/` instead of the main repo's. A second
+greenfield demo with three parallel teammates surfaced this as the
+same "stranded contracts" symptom v0.72.2 was supposed to fix.
+
+### Fix
+
+- **Walk via `.git/commondir` before local `.maestro/` in worktrees.**
+  When `.git` is a worktree pointer file, resolve to the main
+  worktree's `.maestro/` first; only fall through to the local
+  directory if commondir resolution fails. The main-worktree case
+  (where `.git` is a directory) is unchanged.
+
+### Test coverage
+
+`tests/unit/shared/lib/project-root.test.ts` gains a regression test
+that reproduces the bug deterministically: a linked worktree with
+both a `.git` pointer file AND a tracked `.maestro/policies/`
+directory must still resolve to the main repo root. The test would
+fail against v0.72.2.
+
 ## 0.72.2 - Worktree config + contract draft UX fixes
 
 Bug fixes surfaced by re-running the v0.72.1 greenfield demo with three
