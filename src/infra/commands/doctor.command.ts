@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { getServices } from "@/services.js";
 import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { output } from "@/shared/lib/output.js";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 
 export function registerDoctorCommand(program: Command): void {
   program
@@ -13,7 +14,7 @@ export function registerDoctorCommand(program: Command): void {
       const checks = await runDoctor(
         services.git,
         services.config,
-        process.cwd(),
+        resolveMaestroProjectRoot(process.cwd()),
       );
 
       const isJson = opts.json ?? program.opts().json;

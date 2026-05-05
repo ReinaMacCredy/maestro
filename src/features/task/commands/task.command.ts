@@ -1903,7 +1903,7 @@ async function maybeWarnMissingContractAfterClaim(
   }
 
   const services = getServices();
-  const config = await services.config.load(process.cwd());
+  const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
   const policy = opts.contractRequired
     ? "required"
     : (config.contracts?.default ?? "prompt");
@@ -1927,7 +1927,7 @@ async function enforceContractCompletionPolicy(
   opts: { readonly strictFlag: boolean; readonly noContract: boolean },
 ): Promise<void> {
   const services = getServices();
-  const config = await services.config.load(process.cwd());
+  const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
 
   if (!task.contractId) {
     if (!opts.noContract && config.contracts?.default === "required") {

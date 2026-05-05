@@ -17,6 +17,7 @@ import {
 import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import type { Mission, UpdateMissionInput, MissionStatus } from "../domain/mission-types.js";
 
 const DEFAULT_TEXT_MISSION_LIST_LIMIT = 10;
@@ -75,7 +76,7 @@ export function registerMissionCommand(program: Command): void {
             ["Remove the milestones array from the plan file, or remove --workflow"],
           );
         }
-        const config = await services.config.load(process.cwd());
+        const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
         plan.milestones = expandWorkflowTemplate(opts.workflow, config);
       }
 

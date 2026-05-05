@@ -140,7 +140,7 @@ export async function loadSnapshotInput(
   ] = await Promise.all([
     deps.missions.loadFullState(missionId),
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
-    deps.config.loadLayers(deps.cwd),
+    deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.getState(deps.cwd),
     buildMissionControlMemorySnapshot({
       correctionStore: deps.correctionStore,
@@ -196,7 +196,7 @@ export async function loadHomeSnapshotInput(
     : Promise.resolve(undefined);
   const [env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
-    deps.config.loadLayers(deps.cwd),
+    deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
     buildMissionControlMemorySnapshot({
       correctionStore: deps.correctionStore,

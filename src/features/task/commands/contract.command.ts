@@ -74,7 +74,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const cwd = process.cwd();
-      const config = await services.config.load(cwd);
+      const config = await services.config.load(resolveMaestroProjectRoot(cwd));
       const template = await loadContractDraftTemplate(opts.from, opts.editor);
       const contract = await services.contracts.draft({
         taskId,
@@ -100,7 +100,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (ref: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const config = await services.config.load(process.cwd());
+      const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
       const contract = await services.contracts.lock({
         ref,
         actorId: await resolveDraftContractActor(ref, opts.session),
