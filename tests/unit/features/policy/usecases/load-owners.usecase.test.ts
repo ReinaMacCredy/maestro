@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadOwners } from "@/features/policy/usecases/load-owners.usecase.js";
+import { loadOwners, parseOwners } from "@/features/policy/usecases/load-owners.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
 let tmpDir: string;
@@ -83,5 +83,36 @@ describe("loadOwners", () => {
 
   it("does not silently return empty owners when file is missing", async () => {
     await expect(loadOwners(tmpDir)).rejects.toThrow(MaestroError);
+  });
+});
+
+describe("parseOwners — deploy_approver", () => {
+  it("populates deployApprovers from an array of usernames", () => {
+    const owners = parseOwners(
+      'policy_approver: []\nratchet_approver: []\nsensitive_waiver: []\ndeploy_approver: ["@alice", "@bob"]\n',
+    );
+    expect(owners.deployApprovers).toEqual(["@alice", "@bob"]);
+  });
+
+  it("coerces null deploy_approver to empty array", () => {
+    const owners = parseOwners(
+      "policy_approver: []\nratchet_approver: []\nsensitive_waiver: []\ndeploy_approver: null\n",
+    );
+    expect(owners.deployApprovers).toEqual([]);
+  });
+
+  it("defaults deployApprovers to empty array when field is missing", () => {
+    const owners = parseOwners(
+      "policy_approver: []\nratchet_approver: []\nsensitive_waiver: []\n",
+    );
+    expect(owners.deployApprovers).toEqual([]);
+  });
+
+  it("throws MaestroError /malformed/i when deploy_approver is not an array", () => {
+    expect(() =>
+      parseOwners(
+        "policy_approver: []\nratchet_approver: []\nsensitive_waiver: []\ndeploy_approver: not-an-array\n",
+      ),
+    ).toThrow(/malformed/i);
   });
 });

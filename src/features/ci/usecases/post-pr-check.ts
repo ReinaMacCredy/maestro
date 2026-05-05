@@ -13,6 +13,11 @@ export interface PostPrCheckArgs {
   readonly existingCheckRunId?: number;
   /** Override rows for this verdict, if any. Appended to summary — does NOT change conclusion. */
   readonly overrides?: readonly VerdictOverridePayload[];
+  /**
+   * When set, overrides the conclusion to `failure` regardless of verdict decision and appends
+   * this message to the summary. Used by the deploy-authorization gate (L7.9).
+   */
+  readonly deployBlockReason?: string;
 }
 
 function conclusionFor(decision: VerdictDecision): CheckRunConclusion {
@@ -47,15 +52,22 @@ export async function postPrCheck(
   args: PostPrCheckArgs,
   deps: PostPrCheckDeps,
 ): Promise<void> {
-  const { verdict, repository, headSha, existingCheckRunId, overrides } = args;
+  const { verdict, repository, headSha, existingCheckRunId, overrides, deployBlockReason } = args;
+
+  const baseConclusion = conclusionFor(verdict.decision);
+  const conclusion: CheckRunConclusion = deployBlockReason !== undefined ? "failure" : baseConclusion;
+  const baseSummary = buildSummary(verdict, overrides);
+  const summary = deployBlockReason !== undefined
+    ? `${baseSummary}\n\n${deployBlockReason}`
+    : baseSummary;
 
   const input = {
     repository,
     headSha,
     name: "Maestro Verify",
-    conclusion: conclusionFor(verdict.decision),
+    conclusion,
     title: `Maestro Verdict: ${verdict.decision}`,
-    summary: buildSummary(verdict, overrides),
+    summary,
   };
 
   if (existingCheckRunId !== undefined) {

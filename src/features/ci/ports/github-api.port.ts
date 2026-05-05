@@ -20,6 +20,7 @@ export interface TriggerAutoMergeInput {
 }
 
 export interface GithubApiPort {
+  readonly getPullRequestAuthor: (input: { repository: string; pr: number }) => Promise<string>;
   readonly postCheckRun: (input: CheckRunInput) => Promise<CheckRunRef>;
   readonly patchCheckRun: (input: CheckRunInput & { readonly checkRunId: number }) => Promise<void>;
   readonly triggerAutoMerge: (input: TriggerAutoMergeInput) => Promise<void>;

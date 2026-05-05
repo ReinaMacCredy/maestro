@@ -3,9 +3,12 @@ import { runCiVerify } from "@/features/ci/usecases/run-ci-verify.js";
 import type { RunCiVerifyDeps } from "@/features/ci/usecases/run-ci-verify.js";
 import type { CiEnv } from "@/features/ci/domain/ci-env.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
+import type { EvidenceRow } from "@/features/evidence/domain/types.js";
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
 import type { RequestVerdictDeps } from "@/features/verdict/index.js";
+import type { GithubApiPort, CheckRunInput, CheckRunRef } from "@/features/ci/ports/github-api.port.js";
+import type { Owners } from "@/features/policy/index.js";
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -25,13 +28,47 @@ function makeVerdict(decision: VerdictDecision = "PASS"): Verdict {
   };
 }
 
-function fakeEvidenceStore(appended: { kind: string; witnessLevel: string }[] = []): EvidenceStorePort {
+function fakeEvidenceStore(
+  appended: { kind: string; witnessLevel: string }[] = [],
+  extraRows: readonly EvidenceRow[] = [],
+): EvidenceStorePort {
   return {
     append: async (row) => {
       appended.push({ kind: row.kind, witnessLevel: row.witness_level });
     },
     read: async () => undefined,
-    list: async () => [],
+    list: async () => extraRows,
+  };
+}
+
+function makeDeployReadinessRow(): EvidenceRow {
+  return {
+    schema_version: 2,
+    id: "evd-deploy-001",
+    task_id: "tsk-aaaaaa",
+    // "deploy-readiness" is not yet in EvidenceKind (L7.2); cast for test purposes.
+    kind: "deploy-readiness" as unknown as EvidenceRow["kind"],
+    witness_level: "agent-claimed-locally",
+    created_at: new Date().toISOString(),
+    payload: { gate: "pass" } as unknown as EvidenceRow["payload"],
+  };
+}
+
+function fakeGithubApi(author: string): GithubApiPort {
+  return {
+    getPullRequestAuthor: async () => author,
+    postCheckRun: async (_input: CheckRunInput): Promise<CheckRunRef> => ({ id: 1 }),
+    patchCheckRun: async () => undefined,
+    triggerAutoMerge: async () => undefined,
+  };
+}
+
+function makeOwners(deployApprovers: readonly string[]): Owners {
+  return {
+    policyApprovers: [],
+    ratchetApprovers: [],
+    sensitiveWaivers: [],
+    deployApprovers,
   };
 }
 
@@ -277,5 +314,121 @@ describe("runCiVerify", () => {
     await expect(runCiVerify({ taskId: "tsk-missing" }, deps)).rejects.toThrow(
       "No contract found for task tsk-missing",
     );
+  });
+});
+
+// ─── Deploy-authorization gate (L7.9) ────────────────────────────────────────
+
+describe("runCiVerify — deploy-authorization gate", () => {
+  it("skips author check when no deploy-readiness evidence exists", async () => {
+    const authorCalls: string[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ token: "gh-token", repository: "owner/repo", pr: 42 }),
+      // evidenceStore returns no rows — no deploy-readiness row
+      evidenceStore: fakeEvidenceStore(),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      githubApi: {
+        getPullRequestAuthor: async () => {
+          authorCalls.push("called");
+          return "some-author";
+        },
+        postCheckRun: async (_input: CheckRunInput): Promise<CheckRunRef> => ({ id: 1 }),
+        patchCheckRun: async () => undefined,
+        triggerAutoMerge: async () => undefined,
+      },
+      loadOwnersFromBase: () => makeOwners(["alice"]),
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
+    expect(authorCalls).toHaveLength(0);
+  });
+
+  it("deploy-readiness exists and author is in deploy_approver — conclusion unchanged", async () => {
+    const postedConclusions: string[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ token: "gh-token", repository: "owner/repo", pr: 42 }),
+      evidenceStore: fakeEvidenceStore([], [makeDeployReadinessRow()]),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      githubApi: fakeGithubApi("alice"),
+      loadOwnersFromBase: () => makeOwners(["alice", "bob"]),
+      prCheck: {
+        githubApi: {
+          getPullRequestAuthor: async () => "alice",
+          postCheckRun: async (input: CheckRunInput): Promise<CheckRunRef> => {
+            postedConclusions.push(input.conclusion);
+            return { id: 1 };
+          },
+          patchCheckRun: async () => undefined,
+          triggerAutoMerge: async () => undefined,
+        },
+      },
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
+    expect(postedConclusions).toHaveLength(1);
+    expect(postedConclusions[0]).toBe("success");
+  });
+
+  it("deploy-readiness exists and author NOT in deploy_approver — conclusion downgrades to failure", async () => {
+    const postedInputs: CheckRunInput[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ token: "gh-token", repository: "owner/repo", pr: 42 }),
+      evidenceStore: fakeEvidenceStore([], [makeDeployReadinessRow()]),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      githubApi: fakeGithubApi("unauthorized-user"),
+      loadOwnersFromBase: () => makeOwners(["alice", "bob"]),
+      prCheck: {
+        githubApi: {
+          getPullRequestAuthor: async () => "unauthorized-user",
+          postCheckRun: async (input: CheckRunInput): Promise<CheckRunRef> => {
+            postedInputs.push(input);
+            return { id: 1 };
+          },
+          patchCheckRun: async () => undefined,
+          triggerAutoMerge: async () => undefined,
+        },
+      },
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
+    expect(postedInputs).toHaveLength(1);
+    expect(postedInputs[0]?.conclusion).toBe("failure");
+    expect(postedInputs[0]?.summary).toContain("deploy not authorized");
+    expect(postedInputs[0]?.summary).toContain("unauthorized-user");
+    expect(postedInputs[0]?.summary).toContain("deploy_approver");
+  });
+
+  it("skips deploy check when provider is not github-actions even if deploy-readiness exists", async () => {
+    const authorCalls: string[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ provider: "unknown", token: undefined, headSha: undefined }),
+      evidenceStore: fakeEvidenceStore([], [makeDeployReadinessRow()]),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      githubApi: {
+        getPullRequestAuthor: async () => {
+          authorCalls.push("called");
+          return "some-author";
+        },
+        postCheckRun: async (_input: CheckRunInput): Promise<CheckRunRef> => ({ id: 1 }),
+        patchCheckRun: async () => undefined,
+        triggerAutoMerge: async () => undefined,
+      },
+      loadOwnersFromBase: () => makeOwners(["alice"]),
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
+    expect(authorCalls).toHaveLength(0);
   });
 });

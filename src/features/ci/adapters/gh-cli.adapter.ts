@@ -57,6 +57,22 @@ function spawnGh(
 }
 
 export class GhCliAdapter implements GithubApiPort {
+  readonly getPullRequestAuthor = async (input: { repository: string; pr: number }): Promise<string> => {
+    const result = spawnGh(
+      ["api", `repos/${input.repository}/pulls/${input.pr}`, "--jq", ".user.login"],
+      "",
+    );
+
+    if (result.exitCode !== 0) {
+      const stderrTail = result.stderr.slice(-500);
+      throw new Error(
+        `gh api getPullRequestAuthor failed (exit ${result.exitCode}): ${stderrTail}`,
+      );
+    }
+
+    return result.stdout.trim();
+  };
+
   readonly postCheckRun = async (input: CheckRunInput): Promise<CheckRunRef> => {
     const payload = JSON.stringify(buildCheckRunPayload(input));
     const result = spawnGh(

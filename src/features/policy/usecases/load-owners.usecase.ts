@@ -38,6 +38,7 @@ export function parseOwners(text: string): Owners {
     policyApprovers: toRole(raw.policy_approver, "policy_approver"),
     ratchetApprovers: toRole(raw.ratchet_approver, "ratchet_approver"),
     sensitiveWaivers: toRole(raw.sensitive_waiver, "sensitive_waiver"),
+    deployApprovers: toRole(raw.deploy_approver, "deploy_approver"),
   };
 }
 
