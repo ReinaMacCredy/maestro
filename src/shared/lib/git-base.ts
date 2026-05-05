@@ -1,10 +1,24 @@
 import { execArgv } from "./shell.js";
 
+/** Git's well-known empty tree object SHA. Diffing against it shows every
+ *  committed change since repo creation — the right "base" for a brand-new
+ *  repo with no parent branch to merge from. */
+const EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
 /**
- * Resolve the default base ref for a diff: prefer the upstream tracking
- * branch's merge-base with HEAD, then fall back to merge-base with `main`,
- * then to the literal `"main"`. Returns the SHA when available so subsequent
- * git commands stay stable across HEAD movement.
+ * Resolve the default base ref for a diff. Walks a fallback chain so the
+ * verifier still produces a meaningful diff in greenfield repos and on
+ * platforms where `git init` defaults to `master` rather than `main`.
+ *
+ * 1. Upstream tracking branch's merge-base with HEAD (PR-style flow).
+ * 2. merge-base with `main`, then `master`, then `trunk` (local branch flow).
+ * 3. Empty-tree SHA — full repo content as the diff. Without this fallback,
+ *    a greenfield repo on `master` returns the literal `"main"` ref, which
+ *    git can't resolve, the diff comes back empty, and the trust verifier
+ *    looks healthy backed by no evidence.
+ *
+ * Returns the SHA when available so subsequent git commands stay stable
+ * across HEAD movement.
  */
 export async function resolveDefaultBase(): Promise<string> {
   const upstream = await execArgv(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
@@ -17,12 +31,24 @@ export async function resolveDefaultBase(): Promise<string> {
     return upstreamRef;
   }
 
-  const mergeBaseMain = await execArgv(["git", "merge-base", "HEAD", "main"]);
-  if (mergeBaseMain.exitCode === 0 && mergeBaseMain.stdout) {
-    return mergeBaseMain.stdout;
+  // When HEAD is at the tip of (or behind) the parent-branch candidate, the
+  // merge-base equals HEAD itself and the diff is empty. Skip those — the
+  // user is likely on the parent branch in a greenfield repo, where the
+  // sensible "base" is the empty tree (i.e., everything since creation).
+  const head = await execArgv(["git", "rev-parse", "HEAD"]);
+  const headSha = head.exitCode === 0 ? head.stdout : "";
+  for (const candidate of ["main", "master", "trunk"]) {
+    const mergeBase = await execArgv(["git", "merge-base", "HEAD", candidate]);
+    if (
+      mergeBase.exitCode === 0 &&
+      mergeBase.stdout &&
+      mergeBase.stdout !== headSha
+    ) {
+      return mergeBase.stdout;
+    }
   }
 
-  return "main";
+  return EMPTY_TREE_SHA;
 }
 
 /** Resolve current HEAD sha, falling back to the literal `"HEAD"` on failure. */

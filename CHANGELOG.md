@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.72.5 - Default base ref handles master-defaulting greenfield repos
+
+Round-2 first-time-user test on a fresh `git init` (which still defaults
+to `master` on macOS) hit a misleading empty-diff warn even after
+committing code: `task verify`'s `resolveDefaultBase` walked
+`@{u}` → `merge-base HEAD main` → literal `"main"`, which doesn't exist
+on a `master` repo. Git silently treated the unknown ref as empty and
+the trust verifier saw no diff.
+
+### Fix
+
+- `resolveDefaultBase` now walks `main` → `master` → `trunk` and falls
+  back to git's empty-tree SHA (`4b825dc6...`) when none of those
+  candidates differ from HEAD. On a single-branch greenfield repo, the
+  empty tree is the right base — it shows every commit since creation,
+  which is what a brand-new user actually wants to verify.
+- New unit test (`tests/unit/shared/lib/git-base.test.ts`) locks the
+  three fallback paths.
+
 ## 0.72.4 - Trust Verifier flags empty diffs
 
 First-time-user friction. A greenfield agent who staged but never committed
