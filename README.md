@@ -869,6 +869,51 @@ Exit codes for `merge auto`: 0 = eligible and triggered, 1 = ineligible (reasons
 
 See `docs/auto-merge-eligibility.md` for the full predicate reference and "Why isn't my PR auto-merging?" troubleshooting. See `docs/override-flow.md` for override authorization, audit trail, and no-silent-pass guarantees.
 
+## L7: Deploy Safety
+
+L7 is opt-in and reachable from L5 — building L7 phases does not require shipping L6 first. Producing `deploy-readiness` and `runtime-signal` Evidence does not by itself flip Verdict semantics; teams wire the new Evidence into `policies/risk.yaml` if they want it to gate.
+
+### Spec schema v2: `runtime_signals` and `rollout_plan`
+
+Spec schema v2 (introduced in L7.1) adds two optional fields: `runtime_signals` (array of `RuntimeSignal` — name, provider, query, threshold) and `rollout_plan` (feature flag name, canary stages, rollback command). v1 Specs forward-migrate at read time with empty arrays and no rollout plan.
+
+### `maestro deploy gate`
+
+Runs four checks and records a `deploy-readiness` Evidence row. Exits 0 when all checks pass, 1 when any fail.
+
+| Check | Passes when |
+|---|---|
+| `feature_flag` | `Spec.rollout_plan.feature_flag` is a non-empty string |
+| `canary_plan` | `Spec.rollout_plan.canary.stages` has at least one stage |
+| `rollback` | A `rollback-exercised` Evidence row at `witnessed-by-ci` or stronger exists |
+| `owner` | `owners.yaml.deploy_approver` has at least one entry |
+
+`deploy gate` does NOT mutate the Verdict. Teams add a `deploy-readiness` signal to `policies/risk.yaml` if they want it to block a PR.
+
+### `maestro deploy rollback`
+
+Runs the provided shell command, records a `rollback-exercised` Evidence row, and exits 1 if the command fails. The witness level is `witnessed-by-ci` in CI and `witnessed-by-maestro` locally — both satisfy the rollback check in `deploy gate`.
+
+### `maestro runtime check`
+
+Queries each signal declared in `Spec.runtime_signals` via the configured provider (Prometheus at L7). Records one `runtime-signal` Evidence row per signal. Exit code is always 0; `pass=false` rows are advisory at L7 unless wired into risk policy.
+
+Provider base URL precedence: `--provider-base-url` flag → `MAESTRO_PROMETHEUS_URL` env → `http://localhost:9090`.
+
+### `owners.yaml` — `deploy_approver` role
+
+L7 adds a fourth role to `owners.yaml`. The `deploy_approver` list is checked by `deploy gate` (owner check). See `docs/owners-yaml-format.md` for the full schema. CI Maestro's PR-author check also verifies that the committer is not self-approving their own deploy.
+
+### CLI shapes
+
+```bash
+maestro deploy gate --task <id> [--base <ref>] [--json]
+maestro deploy rollback --task <id> --command <cmd> [--json]
+maestro runtime check --task <id> [--provider-base-url <url>] [--json]
+```
+
+See `docs/deploy-gate.md` for the full check enumeration, `Spec.rollout_plan` reference, and troubleshooting. See `docs/runtime-monitoring.md` for the `RuntimeMonitorPort` reference and Prometheus adapter guide.
+
 ## Common Commands
 
 | Command | Use it when you want to... |

@@ -7,6 +7,9 @@ import {
   type EvidenceStorePort,
   type RecordEvidenceInput,
   type AIReviewPayload,
+  type DeployReadinessPayload,
+  type RollbackExercisedPayload,
+  type RuntimeSignalPayload,
   type ThreatModelPayload,
 } from "@/features/evidence";
 import { join } from "node:path";
@@ -1210,5 +1213,124 @@ describe("evidence record --kind threat-model", () => {
     ]);
 
     expect(received!.witness_level).toBe("witnessed-by-ci");
+  });
+});
+
+describe("formatEvidenceRow — L7 kinds", () => {
+  it("renders deploy-readiness with gate and check summary", async () => {
+    const payload: DeployReadinessPayload = {
+      task_id: "tsk-aaaaaa",
+      checks: {
+        feature_flag: { ok: true, value: "my-flag" },
+        canary_plan:  { ok: false },
+        rollback:     { ok: true, witness_evidence_id: "evd-0000000000002-b01bac" },
+        owner:        { ok: false },
+      },
+      gate: "fail",
+    };
+    const row = makeEvidenceRow({
+      id: "evd-0000000000010-de9ead",
+      kind: "deploy-readiness",
+      payload,
+    });
+    const captured = captureConsole();
+    const store = mockEvidenceStore([row]);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "show", "evd-0000000000010-de9ead"]);
+
+    const lines = captured.logs;
+    expect(lines.some((l) => l.includes("Gate: fail"))).toBe(true);
+    expect(lines.some((l) => l.includes("feature_flag: ok"))).toBe(true);
+    expect(lines.some((l) => l.includes("canary_plan: fail"))).toBe(true);
+    expect(lines.some((l) => l.includes("rollback: ok"))).toBe(true);
+    expect(lines.some((l) => l.includes("owner: fail"))).toBe(true);
+  });
+
+  it("renders runtime-signal with value, operator, threshold, pass, and sampled_at", async () => {
+    const payload: RuntimeSignalPayload = {
+      signal_name: "p99_latency",
+      provider: "prometheus",
+      query: "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))",
+      value: 0.312,
+      threshold: 0.5,
+      operator: "<",
+      pass: true,
+      sampled_at: "2026-05-10T14:23:00.000Z",
+    };
+    const row = makeEvidenceRow({
+      id: "evd-0000000000011-51651a",
+      kind: "runtime-signal",
+      payload,
+    });
+    const captured = captureConsole();
+    const store = mockEvidenceStore([row]);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "show", "evd-0000000000011-51651a"]);
+
+    const lines = captured.logs;
+    expect(lines.some((l) => l.includes("Signal: p99_latency"))).toBe(true);
+    expect(lines.some((l) => l.includes("Provider: prometheus"))).toBe(true);
+    expect(lines.some((l) => l.includes("0.312") && l.includes("<") && l.includes("0.5"))).toBe(true);
+    expect(lines.some((l) => l.includes("pass"))).toBe(true);
+    expect(lines.some((l) => l.includes("2026-05-10T14:23:00.000Z"))).toBe(true);
+  });
+
+  it("renders runtime-signal note when present", async () => {
+    const payload: RuntimeSignalPayload = {
+      signal_name: "error_rate",
+      provider: "datadog",
+      query: "avg:http.request.errors",
+      value: 0,
+      threshold: 0.01,
+      operator: "<",
+      pass: false,
+      sampled_at: "2026-05-10T14:23:00.000Z",
+      note: "unsupported provider",
+    };
+    const row = makeEvidenceRow({
+      id: "evd-0000000000012-1a2b3c",
+      kind: "runtime-signal",
+      payload,
+    });
+    const captured = captureConsole();
+    const store = mockEvidenceStore([row]);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "show", "evd-0000000000012-1a2b3c"]);
+
+    const lines = captured.logs;
+    expect(lines.some((l) => l.includes("Note: unsupported provider"))).toBe(true);
+  });
+
+  it("renders rollback-exercised with command and exit", async () => {
+    const payload: RollbackExercisedPayload = {
+      command: "./scripts/rollback.sh",
+      exit: 0,
+    };
+    const row = makeEvidenceRow({
+      id: "evd-0000000000013-b01bac",
+      kind: "rollback-exercised",
+      witness_level: "witnessed-by-ci",
+      payload,
+    });
+    const captured = captureConsole();
+    const store = mockEvidenceStore([row]);
+    const { deps } = evidenceDeps({ evidenceStore: store });
+
+    const program = makeProgram();
+    registerEvidenceCommand(program, deps);
+    await program.parseAsync(["node", "maestro", "evidence", "show", "evd-0000000000013-b01bac"]);
+
+    const lines = captured.logs;
+    expect(lines.some((l) => l.includes("Command: ./scripts/rollback.sh"))).toBe(true);
+    expect(lines.some((l) => l.includes("Exit: 0"))).toBe(true);
   });
 });

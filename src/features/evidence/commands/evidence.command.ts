@@ -13,10 +13,13 @@ import {
   type AIReviewPayload,
   type AIReviewerKind,
   type CommandPayload,
+  type DeployReadinessPayload,
   type EvidenceKind,
   type EvidenceRow,
   type ManualNotePayload,
   type PlanCheckPayload,
+  type RollbackExercisedPayload,
+  type RuntimeSignalPayload,
   type ThreatModelPayload,
   type WitnessLevel,
 } from "../domain/types.js";
@@ -439,6 +442,29 @@ function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
     const payload = row.payload as ManualNotePayload;
     lines.push(`  Note: ${payload.note}`);
     if (payload.criterion_id !== undefined) lines.push(`  Criterion: ${payload.criterion_id}`);
+  } else if (row.kind === "deploy-readiness") {
+    const payload = row.payload as DeployReadinessPayload;
+    const { feature_flag, canary_plan, rollback, owner } = payload.checks;
+    const checkSummary = [
+      `feature_flag: ${feature_flag.ok ? "ok" : "fail"}`,
+      `canary_plan: ${canary_plan.ok ? "ok" : "fail"}`,
+      `rollback: ${rollback.ok ? "ok" : "fail"}`,
+      `owner: ${owner.ok ? "ok" : "fail"}`,
+    ].join(", ");
+    lines.push(`  Task: ${payload.task_id}`);
+    lines.push(`  Gate: ${payload.gate}`);
+    lines.push(`  Checks: ${checkSummary}`);
+  } else if (row.kind === "runtime-signal") {
+    const payload = row.payload as RuntimeSignalPayload;
+    lines.push(`  Signal: ${payload.signal_name}`);
+    lines.push(`  Provider: ${payload.provider}`);
+    lines.push(`  Value: ${payload.value} ${payload.operator} ${payload.threshold} => ${payload.pass ? "pass" : "fail"}`);
+    lines.push(`  Sampled: ${payload.sampled_at}`);
+    if (payload.note !== undefined) lines.push(`  Note: ${payload.note}`);
+  } else if (row.kind === "rollback-exercised") {
+    const payload = row.payload as RollbackExercisedPayload;
+    lines.push(`  Command: ${payload.command}`);
+    lines.push(`  Exit: ${payload.exit}`);
   }
   return lines;
 }

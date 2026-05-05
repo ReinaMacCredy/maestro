@@ -41,6 +41,9 @@ Shipped skill source tree. Use this file with the repo-root [AGENTS.md](../AGENT
 - `maestro-plan` (`bundled/maestro-plan/SKILL.md`) was updated in L4 to cross-reference `maestro-verify` for the plan-check step (`maestro plan check --task <id> --plan-file <path>`) which catches `scope-widens`, `missing-proof`, and `risk-class-too-low` before coding starts.
 - `maestro-handoff` (`bundled/maestro-handoff/SKILL.md`) cross-references `maestro-verify` for the handoff gate protocol.
 
+## Skill Changes (L7)
+- `maestro-verify` (`bundled/maestro-verify/SKILL.md`) was updated in L7 to add three new sections covering deploy/runtime/rollback: `## Deploy Gate` (the four checks, advisory wiring), `## Runtime Signals` (`Spec.runtime_signals` schema and `runtime-signal` Evidence), and `## Witnessed Rollback` (Rule 10, how the rollback check consumes witnessed evidence). These sections are slotted between `## Verdict Override` and `## The Pre-Claim Ritual`.
+
 ## Local Gotchas
 
 - Do not hand-edit `src/infra/domain/built-in-skill-templates.ts` or `src/infra/domain/bundled-skill-templates.ts`.

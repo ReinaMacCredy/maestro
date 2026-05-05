@@ -34,6 +34,8 @@ src/
 | `maestro ci verify` (L5) | `features/ci/` | `maestro ci verify` CLI verb, GitHub Actions env reader (`readCiEnv`), GitHub API port + gh-cli adapter, post-PR-check use-case. |
 | Auto-merge eligibility + `merge auto` (L6) | `features/merge/` | `usecases/auto-merge-eligible.usecase.ts` runs 8 deterministic predicates; `commands/merge-auto.command.ts` registers `merge auto`; `domain/eligibility-types.ts` defines reason codes. Consumed `autoMergeAllowed` from `AutopilotPolicy` (field existed since L3). |
 | Review acknowledgement + `review ack` (L6) | `features/review/` | `commands/review-ack.command.ts` registers `review ack`; records `review-ack` Evidence at `agent-claimed-locally`; required by eligibility gate when verdict is `HUMAN` at `>=medium` risk. |
+| Deploy gate + witnessed rollback (L7) | `features/deploy/` | `commands/deploy-gate.command.ts` registers `deploy gate`; `commands/deploy-rollback.command.ts` registers `deploy rollback`; `usecases/check-deploy-readiness.usecase.ts` runs 4 checks. |
+| Runtime monitor + `runtime check` (L7) | `features/runtime/` | `ports/monitor.port.ts` defines `RuntimeMonitorPort`; `adapters/prometheus.adapter.ts` is the Prometheus implementation; `commands/runtime-check.command.ts` registers `runtime check`; `domain/types.ts` defines `RuntimeSignalResult`. |
 
 ## CONVENTIONS
 - Cross-feature imports go through `@/features/<name>` only.

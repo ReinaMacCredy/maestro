@@ -35,7 +35,7 @@ maestro/
 | Daily task loop vs mission workflow | `.maestro/tasks/tasks.jsonl`, `README.md`, `.maestro/MAESTRO.md` | `task` and `mission` are separate systems |
 | Compiled-binary verification | `tests/e2e/`, `tests/helpers/run-compiled-cli.ts` | Distinguish `./dist/maestro` from installed `maestro` |
 | Mission Spec (acceptance criteria, non-goals) | `src/features/spec/` | `spec show/edit --mission <id>`; stored under `.maestro/missions/<id>/spec.json` |
-| Policy and owners loader | `src/features/policy/` | Loads `.maestro/policies/owners.yaml`; three roles: `policy_approver`, `ratchet_approver`, `sensitive_waiver`. Extended in L3 with `RiskPolicy`, `AutopilotPolicy`, `ReleasePolicy` loaders, asymmetric edit classifier, and effective-policy use-case. |
+| Policy and owners loader | `src/features/policy/` | Loads `.maestro/policies/owners.yaml`; four roles: `policy_approver`, `ratchet_approver`, `sensitive_waiver`, `deploy_approver`. Extended in L3 with `RiskPolicy`, `AutopilotPolicy`, `ReleasePolicy` loaders, asymmetric edit classifier, and effective-policy use-case. |
 | Trust Verifier | `src/features/verify/` | Runs 6 checks (scope, lockfile, generated, sensitive-paths, commit-metadata, secrets) against a diff + contract |
 | `maestro ci verify` (L5)               | `src/features/ci/` | Reads CI env (`GITHUB_*`), resolves PR + diff, runs Trust Verifier, ingests CI job results as `witnessed-by-ci` Evidence, computes Verdict via existing request-verdict use-case. Posts a GitHub Check (success/failure/action_required) per verdict decision. |
 | ProofMap builder (L3) | `src/features/verify/usecases/proof-map.ts` | Joins `Spec.acceptance_criteria` with Evidence rows to produce a per-criterion coverage map |
@@ -48,6 +48,8 @@ maestro/
 | Mission Control autopilot view (L4) | `src/tui/state/autopilot-screen.ts` | Mission-mode only read model; consumed by Mission Control preview/render paths |
 | Auto-merge eligibility + `merge auto` | `src/features/merge/` | 8 deterministic predicates; opt-in via `autopilot.yaml`; see `docs/auto-merge-eligibility.md` |
 | Review acknowledgement + `review ack` | `src/features/review/` | Records `review-ack` Evidence at `agent-claimed-locally`; required for HUMAN verdicts at `>=medium` risk |
+| Deploy gate + witnessed rollback (L7) | `src/features/deploy/` | `deploy gate` runs 4 checks (feature_flag, canary_plan, rollback, owner) and records `deploy-readiness` Evidence; `deploy rollback` runs and witnesses a rollback command |
+| Runtime monitor + `runtime check` (L7) | `src/features/runtime/` | `RuntimeMonitorPort` + Prometheus adapter; `runtime check` queries `Spec.runtime_signals` and records `runtime-signal` Evidence |
 
 ## CODE STYLE
 - Prefer `interface` for object shapes and `type` for unions/intersections.
@@ -75,6 +77,7 @@ maestro/
 - Asymmetric policy editing (L3): policy tightenings take effect immediately; loosenings soak for 30 days before becoming effective. Pending loosenings accumulate in `.maestro/policies/.pending-loosenings.json` (gitignored). Use `maestro policy pending` to inspect.
 - CI is the authoritative verifier. Local Maestro is advisory; the GitHub check status posted by `maestro ci verify` is the merge gate. Verdicts are bound to (pr, tree_sha) so squashes survive but force-push to a different tree invalidates them.
 - L6 auto-merge is opt-in via `policies/autopilot.yaml`. The `autoMergeAllowed.<risk-class>` field already existed from L3; L6 is the first layer that consumes it. All classes default to `false`. Set `autoMergeAllowed.<class>: true` only for risk classes your team has approved for automated merging. L6 also adds `review-ack` evidence (recorded via `maestro review ack`) and `verdict-override` evidence (recorded via `maestro verdict override`) — both consumed by the auto-merge eligibility gate. See `docs/auto-merge-eligibility.md`.
+- L7 is reachable from L5 — building L7 phases does not require shipping L6 first. L7 is opt-in: producing `deploy-readiness` and `runtime-signal` Evidence does not by itself flip Verdict semantics; teams wire the new Evidence into `policies/risk.yaml` if they want it to gate. `deploy gate` runs four checks (feature_flag, canary_plan, rollback witness, owner); `runtime check` queries Prometheus signals declared in `Spec.runtime_signals` (schema v2; v1 specs forward-migrate at read time). Rollback must be witnessed at `witnessed-by-ci` or stronger before the deploy gate passes the rollback check. `owners.yaml` now has a fourth role: `deploy_approver` (required for the owner check in `deploy gate`). See `docs/deploy-gate.md` and `docs/runtime-monitoring.md`.
 
 ## ANTI-PATTERNS
 - Deep imports into another feature's `commands/`, `usecases/`, `domain/`, `ports/`, or `adapters/`.
@@ -93,6 +96,9 @@ bun run check:bundled-skills
 bun run test
 ./dist/maestro mission-control --render-check --size 120x40
 bun run release:local
+./dist/maestro deploy gate --task <id>
+./dist/maestro deploy rollback --task <id> --command <cmd>
+./dist/maestro runtime check --task <id>
 ```
 
 ## CLI VERBS — EVIDENCE
@@ -203,6 +209,27 @@ maestro review ack --task <id> --verdict <id> --criterion "<text>" [--criterion 
 ```
 
 Records a `review-ack` Evidence row at `agent-claimed-locally`. Required when the verdict is `HUMAN` at `>=medium` risk before `maestro merge auto` can succeed. The `--criterion` flag is repeatable.
+
+## CLI VERBS — DEPLOY (L7)
+```bash
+maestro deploy gate --task <id> [--base <ref>] [--json]
+maestro deploy rollback --task <id> --command <cmd> [--json]
+```
+
+`deploy gate` runs 4 checks (feature_flag, canary_plan, rollback, owner) and records a `deploy-readiness` Evidence row. Exits 0 when gate=pass, 1 when gate=fail. Requires a `deploy_approver` entry in `owners.yaml` for the owner check to pass, and at least one `rollback-exercised` Evidence row at `witnessed-by-ci` or stronger for the rollback check to pass. Does NOT mutate the Verdict — teams wire it via `policies/risk.yaml` if they want it to gate.
+
+`deploy rollback` runs the given shell command, records a `rollback-exercised` Evidence row at `witnessed-by-ci` (in CI) or `witnessed-by-maestro` (locally), and exits 1 if the command fails.
+
+See `docs/deploy-gate.md` for the full check enumeration, `Spec.rollout_plan` reference, and troubleshooting.
+
+## CLI VERBS — RUNTIME (L7)
+```bash
+maestro runtime check --task <id> [--provider-base-url <url>] [--json]
+```
+
+Queries each signal declared in `Spec.runtime_signals` via the configured provider (currently Prometheus). Records one `runtime-signal` Evidence row per signal. Exit code is always 0; `pass=false` rows are advisory at L7 (teams wire them into risk policy to make them gate). Provider base URL precedence: `--provider-base-url` flag → `MAESTRO_PROMETHEUS_URL` env → `http://localhost:9090`.
+
+See `docs/runtime-monitoring.md` for the `RuntimeMonitorPort` reference, Prometheus adapter guide, and how to add new adapters.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
