@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { readText } from "@/shared/lib/fs.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -40,6 +41,23 @@ export function parseOwners(text: string): Owners {
     sensitiveWaivers: toRole(raw.sensitive_waiver, "sensitive_waiver"),
     deployApprovers: toRole(raw.deploy_approver, "deploy_approver"),
   };
+}
+
+export function loadOwnersFromBase(base: string, projectRoot: string): Owners {
+  let text: string;
+  try {
+    text = execFileSync(
+      "git",
+      ["show", `${base}:${OWNERS_REL_PATH}`],
+      { cwd: projectRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
+    ).trim();
+  } catch {
+    throw new MaestroError(
+      `owners.yaml not found at ${base}:${OWNERS_REL_PATH}`,
+      ["Run 'maestro init' to scaffold it, or check the base ref is correct"],
+    );
+  }
+  return parseOwners(text);
 }
 
 export async function loadOwners(baseDir: string): Promise<Owners> {

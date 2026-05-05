@@ -17,22 +17,18 @@ export interface RuntimeSignalCheckOutcome {
 export async function checkRuntimeSignals(
   input: CheckRuntimeSignalsInput,
 ): Promise<readonly RuntimeSignalCheckOutcome[]> {
-  const outcomes: RuntimeSignalCheckOutcome[] = [];
-
-  for (const signal of input.signals) {
-    if (signal.provider !== "prometheus") {
-      outcomes.push({ signal, note: "unsupported provider" });
-      continue;
-    }
-
-    try {
-      const result = await input.monitor.query(signal);
-      outcomes.push({ signal, result });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      outcomes.push({ signal, note: `error: ${message}` });
-    }
-  }
-
-  return outcomes;
+  return Promise.all(
+    input.signals.map(async (signal): Promise<RuntimeSignalCheckOutcome> => {
+      if (signal.provider !== "prometheus") {
+        return { signal, note: "unsupported provider" };
+      }
+      try {
+        const result = await input.monitor.query(signal);
+        return { signal, result };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { signal, note: `error: ${message}` };
+      }
+    }),
+  );
 }

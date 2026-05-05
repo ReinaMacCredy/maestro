@@ -1,12 +1,11 @@
 import os from "node:os";
-import { execFileSync } from "node:child_process";
 import type { Command } from "commander";
 import { resolveJsonFlag, output } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { getServices, type Services } from "@/services.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { EvidenceStorePort, VerdictOverridePayload } from "@/features/evidence/index.js";
-import { parseOwners, OWNERS_REL_PATH } from "@/features/policy/index.js";
+import { loadOwnersFromBase } from "@/features/policy/index.js";
 import type { Owners } from "@/features/policy/index.js";
 import { resolveDefaultBase } from "@/shared/lib/git-base.js";
 import type { Verdict } from "../domain/types.js";
@@ -22,24 +21,6 @@ async function loadVerdictOverrides(
   return rows
     .filter((r) => (r.payload as VerdictOverridePayload).verdictId === verdictId)
     .map((r) => r.payload as VerdictOverridePayload);
-}
-
-// Rule 12: always load owners from base, not PR head, so self-promotion is rejected.
-function loadOwnersFromBase(base: string, projectRoot: string): Owners {
-  let text: string;
-  try {
-    text = execFileSync(
-      "git",
-      ["show", `${base}:${OWNERS_REL_PATH}`],
-      { cwd: projectRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
-    ).trim();
-  } catch {
-    throw new MaestroError(
-      `owners.yaml not found at ${base}:${OWNERS_REL_PATH}`,
-      ["Run 'maestro init' to scaffold it, or check the base ref is correct"],
-    );
-  }
-  return parseOwners(text);
 }
 
 interface VerdictCommandDeps {

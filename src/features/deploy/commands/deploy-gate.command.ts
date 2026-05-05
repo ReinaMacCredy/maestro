@@ -1,35 +1,17 @@
-import { execFileSync } from "node:child_process";
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase } from "@/shared/lib/git-base.js";
 import { getServices, type Services } from "@/services.js";
 import { recordEvidence } from "@/features/evidence/index.js";
+import { compareWitnessLevel } from "@/features/evidence/index.js";
 import type { DeployReadinessPayload, WitnessLevel, EvidenceStorePort } from "@/features/evidence/index.js";
-import { parseOwners, OWNERS_REL_PATH } from "@/features/policy/index.js";
+import { loadOwnersFromBase } from "@/features/policy/index.js";
 import type { Owners } from "@/features/policy/index.js";
 import type { Spec } from "@/features/spec/index.js";
 import type { RecordEvidenceInput } from "@/features/evidence/index.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
 import { checkDeployReadiness } from "../usecases/check-deploy-readiness.usecase.js";
-
-// Rule 12 pattern: load owners from base branch, not PR head.
-function loadOwnersFromBase(base: string, projectRoot: string): Owners {
-  let text: string;
-  try {
-    text = execFileSync(
-      "git",
-      ["show", `${base}:${OWNERS_REL_PATH}`],
-      { cwd: projectRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
-    ).trim();
-  } catch {
-    throw new MaestroError(
-      `owners.yaml not found at ${base}:${OWNERS_REL_PATH}`,
-      ["Run 'maestro init' to scaffold it, or check the base ref is correct"],
-    );
-  }
-  return parseOwners(text);
-}
 
 export interface DeployGateCommandDeps {
   readonly getServices: () => Pick<
@@ -70,7 +52,6 @@ export function registerDeployGateCommand(
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      // Resolve task
       const task = await services.taskStore.get(taskId);
       if (task === undefined) {
         throw new MaestroError(`Task not found: ${taskId}`, [
@@ -78,38 +59,32 @@ export function registerDeployGateCommand(
         ]);
       }
 
-      // Resolve base ref
       const base: string = typeof opts.base === "string" && opts.base.length > 0
         ? opts.base
         : await deps.resolveDefaultBase();
 
-      // Load owners from base (Rule 12)
+      // Rule 12: load owners from base, not PR head, so self-promotion is rejected.
       const owners = deps.loadOwnersFromBase(base, services.projectRoot);
 
-      // Load spec if task has missionId
       let spec: Spec | undefined;
       if (task.missionId !== undefined) {
         spec = await services.specStore.read(task.missionId);
       }
 
-      // Collect rollback-exercised evidence at witnessed-by-ci or stronger
       const allEvidence = await services.evidenceStore.list({
         task_id: taskId,
         kind: "rollback-exercised",
       });
       const rollbackEvidence = allEvidence.filter(
-        (r) => r.witness_level === "witnessed-by-ci" || r.witness_level === "witnessed-by-maestro",
+        (r) => compareWitnessLevel(r.witness_level, "witnessed-by-ci") >= 0,
       );
 
-      // Run the pure use case
       const result = checkDeployReadiness({ spec, rollbackEvidence, owners });
 
-      // Determine witness level
       const witnessLevel: WitnessLevel = deps.isCI()
         ? "witnessed-by-ci"
         : "agent-claimed-locally";
 
-      // Write deploy-readiness Evidence row
       const payload: DeployReadinessPayload = {
         task_id: taskId,
         checks: {

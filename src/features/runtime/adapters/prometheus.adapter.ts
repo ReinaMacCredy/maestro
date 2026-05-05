@@ -1,4 +1,4 @@
-import type { RuntimeSignal } from "@/features/spec";
+import type { RuntimeSignal, RuntimeSignalOperator } from "@/features/spec";
 import type { RuntimeSignalResult } from "../domain/types.js";
 import type { RuntimeMonitorPort } from "../ports/monitor.port.js";
 
@@ -19,7 +19,6 @@ export class PrometheusRuntimeMonitor implements RuntimeMonitorPort {
       throw new Error("prometheus: empty result vector");
     }
     const sample = result[0] as [unknown, unknown] | { value?: [unknown, unknown] };
-    // Prometheus instant query: result items are [timestamp, value] arrays
     const rawValue = Array.isArray(sample) ? sample[1] : undefined;
     const value = parseFloat(String(rawValue));
     if (Number.isNaN(value)) throw new Error("prometheus: non-numeric value");
@@ -33,13 +32,12 @@ export class PrometheusRuntimeMonitor implements RuntimeMonitorPort {
   }
 }
 
-function compare(a: number, op: string, b: number): boolean {
+function compare(a: number, op: RuntimeSignalOperator, b: number): boolean {
   switch (op) {
     case ">":  return a > b;
     case "<":  return a < b;
     case ">=": return a >= b;
     case "<=": return a <= b;
     case "==": return a === b;
-    default:   return false;
   }
 }

@@ -1,13 +1,16 @@
 import { appendFile } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
 import { readJson } from "@/shared/lib/fs.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import { recordEvidence } from "@/features/evidence/index.js";
-import type { CommandPayload, VerdictOverridePayload } from "@/features/evidence/domain/types.js";
+import type {
+  CommandPayload,
+  VerdictOverridePayload,
+  DeployReadinessPayload,
+} from "@/features/evidence/domain/types.js";
 import { requestVerdict } from "@/features/verdict/index.js";
 import type { RequestVerdictDeps } from "@/features/verdict/index.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
-import { parseOwners, OWNERS_REL_PATH } from "@/features/policy/index.js";
+import { loadOwnersFromBase } from "@/features/policy/index.js";
 import type { GithubApiPort } from "../ports/github-api.port.js";
 import type { CiEnv } from "../domain/ci-env.js";
 import { postPrCheck } from "./post-pr-check.js";
@@ -89,10 +92,6 @@ export async function runCiVerify(
     await writeOutput("effective_risk_class", verdict.effectiveRiskClass);
   }
 
-  // Deploy-authorization gate (L7.9 — Rule 12 pattern).
-  // Check only when: a deploy-readiness row with gate=pass exists, we're in
-  // GitHub Actions, and the githubApi dep is wired. Pre-L7.2 trees have no
-  // deploy-readiness rows so this block is a no-op until L7.2 lands.
   let deployBlockReason: string | undefined;
   if (
     deps.env.provider === "github-actions" &&
@@ -100,13 +99,15 @@ export async function runCiVerify(
     deps.env.repository !== undefined &&
     resolvedPr !== undefined
   ) {
-    let deployReadiness: { payload?: Record<string, unknown> } | undefined;
+    let deployReadiness: { payload: DeployReadinessPayload } | undefined;
     try {
-      const rows = await deps.evidenceStore.list({ task_id: taskId });
+      const rows = await deps.evidenceStore.list({
+        task_id: taskId,
+        kind: "deploy-readiness",
+      });
       deployReadiness = rows.find(
-        // "deploy-readiness" is not yet in EvidenceKind (ships at L7.2); cast avoids TS error.
-        (r) => (r.kind as string) === "deploy-readiness" && (r.payload as Record<string, unknown>)?.gate === "pass",
-      );
+        (r) => (r.payload as DeployReadinessPayload).gate === "pass",
+      ) as { payload: DeployReadinessPayload } | undefined;
     } catch {
       // non-fatal — if evidence list fails, skip the deploy gate
     }
@@ -117,8 +118,8 @@ export async function runCiVerify(
           repository: deps.env.repository,
           pr: resolvedPr,
         });
-        // Load owners from base branch (Rule 12 — match the L6.5 pattern).
-        const loadOwnersFn = deps.loadOwnersFromBase ?? defaultLoadOwnersFromBase;
+        // Rule 12: load owners from base, not PR head, so a PR cannot promote itself.
+        const loadOwnersFn = deps.loadOwnersFromBase ?? loadOwnersFromBase;
         const owners = loadOwnersFn(resolvedBase ?? "main", deps.projectRoot ?? process.cwd());
         if (!owners.deployApprovers.includes(author)) {
           deployBlockReason = `deploy not authorized: PR author \`${author}\` is not in owners.yaml deploy_approver`;
@@ -177,16 +178,4 @@ function makeDefaultWriteOutput(outputPath: string): (key: string, value: string
 
 async function defaultReadTestResults(path: string): Promise<TestResultPayload | undefined> {
   return readJson<TestResultPayload>(path);
-}
-
-function defaultLoadOwnersFromBase(
-  base: string,
-  projectRoot: string,
-): import("@/features/policy/index.js").Owners {
-  const text = execFileSync(
-    "git",
-    ["show", `${base}:${OWNERS_REL_PATH}`],
-    { cwd: projectRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
-  ).trim();
-  return parseOwners(text);
 }
