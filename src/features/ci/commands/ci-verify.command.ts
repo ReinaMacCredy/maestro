@@ -10,6 +10,7 @@ interface CiVerifyCommandDeps {
     Services,
     | "verdictStore"
     | "contractVersionStore"
+    | "contractStore"
     | "runStateStore"
     | "evidenceStore"
     | "getEffectiveRiskPolicy"
@@ -54,6 +55,7 @@ export function registerCiVerifyCommand(
           verdict: { request: requestVerdict },
           verdictDeps: {
             contractVersionStore: services.contractVersionStore,
+            contractStore: services.contractStore,
             runStateStore: services.runStateStore,
             evidenceStore: services.evidenceStore,
             verdictStore: services.verdictStore,

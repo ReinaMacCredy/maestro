@@ -1,7 +1,8 @@
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
+import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
-import { checkCostBudget } from "@/features/task/index.js";
+import { checkCostBudget, readCurrentContractWithBackfill } from "@/features/task/index.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { PolicyServices } from "@/features/policy/services.js";
@@ -13,6 +14,7 @@ import type { VerdictStorePort } from "../ports/storage.js";
 
 export interface RequestVerdictDeps {
   readonly contractVersionStore: ContractVersionStorePort;
+  readonly contractStore?: ContractStoreQueryPort;
   readonly runStateStore: RunStateStorePort;
   readonly evidenceStore: EvidenceStorePort;
   readonly verdictStore: VerdictStorePort;
@@ -31,7 +33,11 @@ export async function requestVerdict(
 ): Promise<Verdict> {
   const { taskId, base } = args;
 
-  const contract = await deps.contractVersionStore.readCurrent(taskId);
+  const contract = await readCurrentContractWithBackfill(
+    deps.contractVersionStore,
+    deps.contractStore,
+    taskId,
+  );
   if (contract === undefined) {
     throw new Error(`No contract found for task ${taskId}. Run 'maestro contract amend' first.`);
   }

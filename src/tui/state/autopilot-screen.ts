@@ -4,6 +4,8 @@ import type {
   RunStateStorePort,
   TaskQueryPort,
 } from "@/features/task";
+import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
+import { readCurrentContractWithBackfill } from "@/features/task/usecases/read-current-contract-with-backfill.js";
 
 export interface AutopilotTaskRow {
   readonly taskId: string;
@@ -25,6 +27,7 @@ export interface AutopilotSnapshotDeps {
   readonly verdictStore: VerdictStorePort;
   readonly runStateStore: RunStateStorePort;
   readonly contractVersionStore: ContractVersionStorePort;
+  readonly contractStore: ContractStoreQueryPort;
 }
 
 export async function buildAutopilotSnapshot(
@@ -39,7 +42,11 @@ export async function buildAutopilotSnapshot(
       const [verdict, runState, contract] = await Promise.all([
         deps.verdictStore.readLatest(task.id),
         deps.runStateStore.read(task.id),
-        deps.contractVersionStore.readCurrent(task.id),
+        readCurrentContractWithBackfill(
+          deps.contractVersionStore,
+          deps.contractStore,
+          task.id,
+        ),
       ]);
 
       return {

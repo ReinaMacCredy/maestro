@@ -18,6 +18,7 @@ import type { RatchetStorePort } from "@/features/memory-ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort } from "@/features/handoff";
 import type { TaskQueryPort, RunStateStorePort, ContractVersionStorePort } from "@/features/task";
+import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence";
 import type { VerdictStorePort } from "@/features/verdict";
 import { buildAutopilotSnapshot } from "./autopilot-screen.js";
@@ -55,6 +56,7 @@ export interface SnapshotDeps {
   verdictStore?: VerdictStorePort;
   runStateStore?: RunStateStorePort;
   contractVersionStore?: ContractVersionStorePort;
+  contractStore?: ContractStoreQueryPort;
   cwd: string;
 }
 
@@ -94,6 +96,7 @@ export async function loadSnapshotInput(
     && deps.verdictStore !== undefined
     && deps.runStateStore !== undefined
     && deps.contractVersionStore !== undefined
+    && deps.contractStore !== undefined
   )
     ? buildAutopilotSnapshot(
         {
@@ -101,6 +104,7 @@ export async function loadSnapshotInput(
           verdictStore: deps.verdictStore,
           runStateStore: deps.runStateStore,
           contractVersionStore: deps.contractVersionStore,
+          contractStore: deps.contractStore,
         },
         missionId,
       )

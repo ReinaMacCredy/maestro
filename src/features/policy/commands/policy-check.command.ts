@@ -6,11 +6,13 @@ import { getServices, type Services } from "@/services.js";
 import type { RiskClass } from "@/features/task/index.js";
 import { maxRiskClass } from "@/features/risk/index.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
+import { readCurrentContractWithBackfill } from "@/features/task/index.js";
 
 interface PolicyCheckCommandDeps {
   readonly getServices: () => Pick<
     Services,
     | "contractVersionStore"
+    | "contractStore"
     | "getEffectiveRiskPolicy"
     | "getEffectiveAutopilotPolicy"
     | "getEffectiveReleasePolicy"
@@ -89,7 +91,11 @@ export function registerPolicyCheckCommand(
       const isJson = resolveJsonFlag(opts, program);
       const taskId: string = opts.task;
 
-      const contract = await services.contractVersionStore.readCurrent(taskId);
+      const contract = await readCurrentContractWithBackfill(
+        services.contractVersionStore,
+        services.contractStore,
+        taskId,
+      );
       if (contract === undefined) {
         throw new Error(`No contract found for task ${taskId}. Run 'maestro contract amend' first.`);
       }

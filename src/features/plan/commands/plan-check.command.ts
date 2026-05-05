@@ -7,6 +7,7 @@ import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { getServices, type Services } from "@/services.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import { deriveRiskClassFromDiff } from "@/features/risk/index.js";
+import { readCurrentContractWithBackfill } from "@/features/task/index.js";
 import { checkPlan } from "../usecases/check-plan.js";
 import type { PlanCheckFinding, PlanCheckResult, PlanInput } from "../domain/types.js";
 import type { PlanCheckPayload } from "@/features/evidence/index.js";
@@ -14,7 +15,7 @@ import type { PlanCheckPayload } from "@/features/evidence/index.js";
 interface PlanCheckCommandDeps {
   readonly getServices: () => Pick<
     Services,
-    "contractVersionStore" | "evidenceStore" | "specStore"
+    "contractVersionStore" | "contractStore" | "evidenceStore" | "specStore"
   >;
 }
 
@@ -45,7 +46,11 @@ export function registerPlanCheckCommand(
       const plan = parseYaml<PlanInput>(planText);
       const planFileSha = createHash("sha256").update(planText).digest("hex");
 
-      const contract = await services.contractVersionStore.readCurrent(taskId);
+      const contract = await readCurrentContractWithBackfill(
+        services.contractVersionStore,
+        services.contractStore,
+        taskId,
+      );
       if (contract === undefined) {
         throw new MaestroError(`No contract found for task: ${taskId}`, [
           "Run `maestro contract show --task <id>` to inspect the contract",

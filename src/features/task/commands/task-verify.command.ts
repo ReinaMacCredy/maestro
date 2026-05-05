@@ -4,10 +4,14 @@ import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/domain/types.js";
+import { readCurrentContractWithBackfill } from "@/features/task/usecases/read-current-contract-with-backfill.js";
 import { getServices, type Services } from "@/services.js";
 
 interface TaskVerifyDeps {
-  readonly getServices: () => Pick<Services, "contractVersionStore" | "evidenceStore" | "gitAnchor" | "runTrustVerifier">;
+  readonly getServices: () => Pick<
+    Services,
+    "contractVersionStore" | "contractStore" | "evidenceStore" | "gitAnchor" | "runTrustVerifier"
+  >;
 }
 
 export function registerTaskVerifyCommand(
@@ -27,7 +31,11 @@ export function registerTaskVerifyCommand(
       const taskId: string = opts.task;
 
       // 1. Resolve current contract
-      const contract = await services.contractVersionStore.readCurrent(taskId);
+      const contract = await readCurrentContractWithBackfill(
+        services.contractVersionStore,
+        services.contractStore,
+        taskId,
+      );
       if (contract === undefined) {
         throw new MaestroError(`No contract proposed for task ${taskId}`, [
           "Run 'maestro contract amend' or propose via maestro-plan skill",

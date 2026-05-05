@@ -3,7 +3,12 @@ import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import type { ContractAmendment } from "../domain/contract/contract-types.js";
+import type { ContractStoreQueryPort } from "../ports/contract-store.port.js";
 import type { ContractVersionStorePort } from "../ports/contract-version-store.port.js";
+import {
+  readContractHistoryWithBackfill,
+  readCurrentContractWithBackfill,
+} from "./read-current-contract-with-backfill.js";
 
 export interface AmendContractInput {
   readonly taskId: string;
@@ -19,12 +24,38 @@ export interface AmendContractResult {
   readonly amendmentId: string;
 }
 
-export async function amendContract(
+// Three-arg overload preserves the pre-bridge call signature for tests that
+// build the v2 store directly. Production callers pass a legacyStore so
+// pre-bridge L1-only contracts get backfilled on first read.
+export function amendContract(
   store: ContractVersionStorePort,
   evidenceStore: EvidenceStorePort,
   input: AmendContractInput,
+): Promise<AmendContractResult>;
+export function amendContract(
+  store: ContractVersionStorePort,
+  legacyStore: ContractStoreQueryPort,
+  evidenceStore: EvidenceStorePort,
+  input: AmendContractInput,
+): Promise<AmendContractResult>;
+export async function amendContract(
+  store: ContractVersionStorePort,
+  legacyOrEvidence: ContractStoreQueryPort | EvidenceStorePort,
+  evidenceOrInput: EvidenceStorePort | AmendContractInput,
+  maybeInput?: AmendContractInput,
 ): Promise<AmendContractResult> {
-  const current = await store.readCurrent(input.taskId);
+  const { legacyStore, evidenceStore, input } = maybeInput === undefined
+    ? {
+        legacyStore: undefined,
+        evidenceStore: legacyOrEvidence as EvidenceStorePort,
+        input: evidenceOrInput as AmendContractInput,
+      }
+    : {
+        legacyStore: legacyOrEvidence as ContractStoreQueryPort,
+        evidenceStore: evidenceOrInput as EvidenceStorePort,
+        input: maybeInput,
+      };
+  const current = await readCurrentContractWithBackfill(store, legacyStore, input.taskId);
   if (current === undefined) {
     throw new MaestroError(
       `No contract found for task ${input.taskId}`,
@@ -100,7 +131,7 @@ export async function amendContract(
     }
   }
 
-  const versions = await store.history(input.taskId);
+  const versions = await readContractHistoryWithBackfill(store, legacyStore, input.taskId);
   const nextVersion = versions.length + 1;
   await store.write(input.taskId, nextVersion, {
     ...current,

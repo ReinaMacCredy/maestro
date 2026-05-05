@@ -1,9 +1,15 @@
 import type { Contract } from "../domain/contract/contract-types.js";
+import type { ContractStoreQueryPort } from "../ports/contract-store.port.js";
 import type { ContractVersionStorePort } from "../ports/contract-version-store.port.js";
+import { readContractHistoryWithBackfill } from "./read-current-contract-with-backfill.js";
 
 export async function getContractHistory(
   store: ContractVersionStorePort,
-  taskId: string,
+  legacyStoreOrTaskId: ContractStoreQueryPort | string,
+  maybeTaskId?: string,
 ): Promise<readonly Contract[]> {
-  return store.history(taskId);
+  if (typeof legacyStoreOrTaskId === "string") {
+    return readContractHistoryWithBackfill(store, undefined, legacyStoreOrTaskId);
+  }
+  return readContractHistoryWithBackfill(store, legacyStoreOrTaskId, maybeTaskId as string);
 }

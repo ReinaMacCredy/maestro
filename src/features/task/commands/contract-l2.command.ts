@@ -9,7 +9,10 @@ import { generateContractAmendmentId } from "../domain/contract/contract-state.j
 import type { Contract, ContractAmendment } from "../domain/contract/contract-types.js";
 
 interface ContractL2Deps {
-  readonly getServices: () => Pick<Services, "contractVersionStore" | "evidenceStore">;
+  readonly getServices: () => Pick<
+    Services,
+    "contractVersionStore" | "contractStore" | "evidenceStore"
+  >;
   readonly amendContract: typeof amendContract;
 }
 
@@ -45,14 +48,22 @@ function registerShowSubcommand(parent: Command, root: Command, deps: ContractL2
       let contract: Contract | undefined;
 
       if (versionN === undefined) {
-        contract = await getCurrentContract(services.contractVersionStore, taskId);
+        contract = await getCurrentContract(
+          services.contractVersionStore,
+          services.contractStore,
+          taskId,
+        );
         if (contract === undefined) {
           throw new MaestroError(`No versioned contract found for task ${taskId}`, [
             "Propose a contract first with `maestro task contract new <taskId>`",
           ]);
         }
       } else {
-        const history = await getContractHistory(services.contractVersionStore, taskId);
+        const history = await getContractHistory(
+          services.contractVersionStore,
+          services.contractStore,
+          taskId,
+        );
         contract = history[versionN - 1];
         if (contract === undefined) {
           throw new MaestroError(
@@ -137,7 +148,11 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
       const removePaths: string[] = opts.removePath ?? [];
       const reason: string = opts.reason;
 
-      const before = await getCurrentContract(services.contractVersionStore, taskId);
+      const before = await getCurrentContract(
+        services.contractVersionStore,
+        services.contractStore,
+        taskId,
+      );
       if (before === undefined) {
         throw new MaestroError(`No versioned contract found for task ${taskId}`, [
           "Propose a contract before amending it",
@@ -164,6 +179,7 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
 
       const { newVersion } = await deps.amendContract(
         services.contractVersionStore,
+        services.contractStore,
         services.evidenceStore,
         {
           taskId,
@@ -208,7 +224,11 @@ function registerHistorySubcommand(parent: Command, root: Command, deps: Contrac
       const isJson = resolveJsonFlag(opts, root);
 
       const taskId: string = opts.task;
-      const history = await getContractHistory(services.contractVersionStore, taskId);
+      const history = await getContractHistory(
+        services.contractVersionStore,
+        services.contractStore,
+        taskId,
+      );
 
       output(isJson, history, formatHistory);
     });

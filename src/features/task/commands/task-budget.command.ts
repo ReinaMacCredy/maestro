@@ -2,9 +2,13 @@ import type { Command } from "commander";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { getServices, type Services } from "@/services.js";
 import { checkCostBudget } from "../usecases/check-cost-budget.js";
+import { readCurrentContractWithBackfill } from "../usecases/read-current-contract-with-backfill.js";
 
 interface TaskBudgetDeps {
-  readonly getServices: () => Pick<Services, "contractVersionStore" | "runStateStore">;
+  readonly getServices: () => Pick<
+    Services,
+    "contractVersionStore" | "contractStore" | "runStateStore"
+  >;
 }
 
 export function registerTaskBudgetCommand(
@@ -22,7 +26,11 @@ export function registerTaskBudgetCommand(
       const isJson = resolveJsonFlag(opts, program);
       const taskId: string = opts.task;
 
-      const contract = await services.contractVersionStore.readCurrent(taskId);
+      const contract = await readCurrentContractWithBackfill(
+        services.contractVersionStore,
+        services.contractStore,
+        taskId,
+      );
       if (contract === undefined) {
         console.log(`No contract for task ${taskId}`);
         return;

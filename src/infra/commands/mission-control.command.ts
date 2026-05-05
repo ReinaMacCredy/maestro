@@ -133,6 +133,7 @@ export function registerMissionControlCommand(program: Command): void {
           verdictStore: services.verdictStore,
           runStateStore: services.runStateStore,
           contractVersionStore: services.contractVersionStore,
+          contractStore: services.contractStore,
           cwd: process.cwd(),
         };
         const snapshotLoader = createMissionControlSnapshotLoader(

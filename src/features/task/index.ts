@@ -139,3 +139,7 @@ export { amendContract } from "./usecases/amend-contract.usecase.js";
 export type { AmendContractInput } from "./usecases/amend-contract.usecase.js";
 export { getCurrentContract } from "./usecases/get-current-contract.usecase.js";
 export { getContractHistory } from "./usecases/get-contract-history.usecase.js";
+export {
+  readCurrentContractWithBackfill,
+  readContractHistoryWithBackfill,
+} from "./usecases/read-current-contract-with-backfill.js";

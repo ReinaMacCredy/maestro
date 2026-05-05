@@ -28,6 +28,7 @@ interface VerdictCommandDeps {
     Services,
     | "verdictStore"
     | "contractVersionStore"
+    | "contractStore"
     | "runStateStore"
     | "evidenceStore"
     | "getEffectiveRiskPolicy"
@@ -144,6 +145,7 @@ export function registerVerdictCommand(
         { taskId, base: typeof opts.base === "string" ? opts.base : undefined },
         {
           contractVersionStore: services.contractVersionStore,
+          contractStore: services.contractStore,
           runStateStore: services.runStateStore,
           evidenceStore: services.evidenceStore,
           verdictStore: services.verdictStore,

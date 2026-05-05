@@ -38,7 +38,7 @@ export function buildTaskServices(projectDir: string): TaskServices {
   const contractStore = new FsContractStoreAdapter(projectDir);
   const contractVersionStore = new FsContractVersionStoreAdapter(projectDir);
   const gitAnchor = new ShellGitAnchorAdapter();
-  const contracts = buildContractWorkflows(contractStore, taskStore, gitAnchor);
+  const contracts = buildContractWorkflows(contractStore, taskStore, gitAnchor, contractVersionStore);
   return {
     taskStore,
     contractStore,

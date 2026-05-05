@@ -3,6 +3,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
+import { readCurrentContractWithBackfill } from "@/features/task/index.js";
 import { getServices, type Services } from "@/services.js";
 import { autoMergeEligible } from "../usecases/auto-merge-eligible.usecase.js";
 
@@ -12,6 +13,7 @@ interface MergeAutoCommandDeps {
     | "verdictStore"
     | "evidenceStore"
     | "contractVersionStore"
+    | "contractStore"
     | "gitAnchor"
     | "getEffectiveAutopilotPolicy"
     | "specStore"
@@ -62,7 +64,11 @@ export function registerMergeAutoCommand(
       }
 
       // 2. Resolve contract
-      const contract = await services.contractVersionStore.readCurrent(taskId);
+      const contract = await readCurrentContractWithBackfill(
+        services.contractVersionStore,
+        services.contractStore,
+        taskId,
+      );
       if (contract === undefined) {
         throw new MaestroError(
           `No contract found for task ${taskId}`,

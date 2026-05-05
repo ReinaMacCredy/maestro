@@ -56,3 +56,5 @@ feedback.jsonl
 .maestro/verdicts/
 # Run-state — derived per-task execution counters (retries, wall-clock, tokens)
 .maestro/runs/
+# L2 versioned contract mirror — derived from .maestro/tasks/contracts/ (canonical L1 store)
+.maestro/contracts/
