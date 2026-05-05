@@ -17,6 +17,7 @@ export type {
   VerdictOverridePayload,
   RuntimeSignalPayload,
   DeployReadinessPayload,
+  CrossTaskConflictPayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,

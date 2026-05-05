@@ -120,6 +120,46 @@ export class GhCliAdapter implements GithubApiPort {
     }
   };
 
+  readonly listOpenPullRequests = async (input: { repository: string }): Promise<readonly number[]> => {
+    const result = spawnGh(
+      ["api", `repos/${input.repository}/pulls?state=open`, "--jq", ".[].number"],
+      "",
+    );
+
+    if (result.exitCode !== 0) {
+      const stderrTail = result.stderr.slice(-500);
+      throw new Error(
+        `gh api listOpenPullRequests failed (exit ${result.exitCode}): ${stderrTail}`,
+      );
+    }
+
+    return result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => parseInt(line, 10))
+      .filter((n) => !isNaN(n));
+  };
+
+  readonly getPullRequestFiles = async (input: { repository: string; pr: number }): Promise<readonly string[]> => {
+    const result = spawnGh(
+      ["api", `repos/${input.repository}/pulls/${input.pr}/files`, "--jq", ".[].filename"],
+      "",
+    );
+
+    if (result.exitCode !== 0) {
+      const stderrTail = result.stderr.slice(-500);
+      throw new Error(
+        `gh api getPullRequestFiles failed (exit ${result.exitCode}): ${stderrTail}`,
+      );
+    }
+
+    return result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  };
+
   readonly triggerAutoMerge = async (input: TriggerAutoMergeInput): Promise<void> => {
     const args: string[] = ["pr", "merge", String(input.pr), "--auto", "--repo", input.repository];
     if (input.mergeMethod === "squash") {

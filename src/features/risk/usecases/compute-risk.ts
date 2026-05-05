@@ -1,5 +1,5 @@
 import type { Contract, RiskClass } from "@/features/task/index.js";
-import type { AIReviewPayload, EvidenceRow } from "@/features/evidence/index.js";
+import type { AIReviewPayload, CrossTaskConflictPayload, EvidenceRow } from "@/features/evidence/index.js";
 import { compareWitnessLevel } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/index.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
@@ -52,8 +52,11 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
   } = input;
 
   const proposedRiskClass: RiskClass = contract.riskClass ?? "medium";
-  const effectiveRiskClass: RiskClass = applyAIReviewerRiskRaise(
-    maxRiskClass(proposedRiskClass, derivedRiskClass),
+  const effectiveRiskClass: RiskClass = applyCrossTaskConflictRiskRaise(
+    applyAIReviewerRiskRaise(
+      maxRiskClass(proposedRiskClass, derivedRiskClass),
+      evidenceRows,
+    ),
     evidenceRows,
   );
 
@@ -192,6 +195,29 @@ export function applyAIReviewerRiskRaise(
     }
   }
   return current;
+}
+
+/**
+ * Applies cross-task-conflict Evidence rows to potentially RAISE the effective
+ * risk class by one tier. Multiple rows still raise by ONE tier total (capped at
+ * critical), mirroring the ai-review raise pattern.
+ *
+ * Presence of any cross-task-conflict row (regardless of count) raises once:
+ *   low → medium, medium → high, high → critical, critical → critical
+ */
+export function applyCrossTaskConflictRiskRaise(
+  effectiveRiskClass: RiskClass,
+  evidenceRows: readonly EvidenceRow[],
+): RiskClass {
+  const hasConflict = evidenceRows.some((row) => {
+    if (row.kind !== "cross-task-conflict") return false;
+    const payload = row.payload as CrossTaskConflictPayload;
+    return payload.conflictingPrs.length > 0;
+  });
+  if (!hasConflict) return effectiveRiskClass;
+  const idx = RISK_CLASS_ORDER.indexOf(effectiveRiskClass);
+  const raised = RISK_CLASS_ORDER[Math.min(idx + 1, RISK_CLASS_ORDER.length - 1)];
+  return raised !== undefined ? raised : effectiveRiskClass;
 }
 
 /**

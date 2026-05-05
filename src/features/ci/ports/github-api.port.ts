@@ -24,4 +24,6 @@ export interface GithubApiPort {
   readonly postCheckRun: (input: CheckRunInput) => Promise<CheckRunRef>;
   readonly patchCheckRun: (input: CheckRunInput & { readonly checkRunId: number }) => Promise<void>;
   readonly triggerAutoMerge: (input: TriggerAutoMergeInput) => Promise<void>;
+  readonly listOpenPullRequests: (input: { repository: string }) => Promise<readonly number[]>;
+  readonly getPullRequestFiles: (input: { repository: string; pr: number }) => Promise<readonly string[]>;
 }

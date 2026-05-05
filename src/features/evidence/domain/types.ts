@@ -11,7 +11,8 @@ export type EvidenceKind =
   | "rollback-exercised"
   | "verdict-override"
   | "runtime-signal"
-  | "deploy-readiness";
+  | "deploy-readiness"
+  | "cross-task-conflict";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -170,6 +171,12 @@ export interface DeployReadinessPayload {
   readonly gate: "pass" | "fail";
 }
 
+export interface CrossTaskConflictPayload {
+  readonly thisPr: number;
+  readonly conflictingPrs: readonly number[];
+  readonly overlappingPaths: readonly string[];
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -184,6 +191,7 @@ interface EvidencePayloadByKind {
   readonly "verdict-override": VerdictOverridePayload;
   readonly "runtime-signal": RuntimeSignalPayload;
   readonly "deploy-readiness": DeployReadinessPayload;
+  readonly "cross-task-conflict": CrossTaskConflictPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

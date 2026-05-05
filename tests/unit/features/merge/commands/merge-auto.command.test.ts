@@ -181,11 +181,14 @@ interface FakeMergeServices {
 function makeFakeGithubApi(): { api: GithubApiPort; calls: string[] } {
   const calls: string[] = [];
   const api: GithubApiPort = {
+    getPullRequestAuthor: async () => "test-user",
     postCheckRun: async () => ({ id: 1 }),
     patchCheckRun: async () => {},
     triggerAutoMerge: async (input) => {
       calls.push(`triggerAutoMerge:${input.repository}:${input.pr}`);
     },
+    listOpenPullRequests: async () => [],
+    getPullRequestFiles: async () => [],
   };
   return { api, calls };
 }

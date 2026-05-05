@@ -51,6 +51,10 @@ export interface FakeGhShimState {
   readonly checkRuns: CheckRunRecord[];
   readonly prMergeCalls: PrMergeRecord[];
   readonly prLookupCalls: PrLookupRecord[];
+  /** Open PR numbers returned by the list-open-PRs endpoint. */
+  readonly openPrs: number[];
+  /** Map from PR number to file list returned by the PR-files endpoint. */
+  readonly prFiles: Map<number, string[]>;
 }
 
 export interface FakeGhShim {
@@ -65,6 +69,16 @@ export interface FakeGhShim {
    * Call before the CLI invocation that triggers a PR author lookup.
    */
   setPrAuthor(author: string): void;
+  /**
+   * Seed the list of open PR numbers returned by
+   * `gh api repos/<repo>/pulls?state=open`.
+   */
+  setOpenPrs(prs: readonly number[]): void;
+  /**
+   * Seed the file list returned by
+   * `gh api repos/<repo>/pulls/<pr>/files`.
+   */
+  setPrFiles(pr: number, files: readonly string[]): void;
   /** Remove the tmp dir */
   cleanup(): Promise<void>;
 }
@@ -95,10 +109,25 @@ const STATE_FILE = '${escapedPath}';
 
 function readState() {
   try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    const raw = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    // prFiles is stored as an array of [pr, files] pairs for JSON compatibility
+    if (raw.prFilesArray) {
+      raw.prFiles = new Map(raw.prFilesArray);
+    } else {
+      raw.prFiles = new Map();
+    }
+    return raw;
   } catch {
-    return { checkRuns: [], prMergeCalls: [], prLookupCalls: [], nextId: 1, prAuthor: "test-user" };
+    return { checkRuns: [], prMergeCalls: [], prLookupCalls: [], nextId: 1, prAuthor: "test-user", openPrs: [], prFiles: new Map() };
   }
+}
+
+function getPrFiles(state, pr) {
+  if (state.prFilesArray) {
+    const entry = state.prFilesArray.find((e) => e[0] === pr);
+    return entry ? entry[1] : [];
+  }
+  return [];
 }
 
 function writeState(state) {
@@ -198,6 +227,33 @@ if (pullsMatch && method === "GET") {
   process.exit(0);
 }
 
+// ─── GET repos/<owner>/<repo>/pulls?state=open ──────────────────────────────
+// Used by GhCliAdapter.listOpenPullRequests with --jq '.[].number'
+const openPullsMatch = endpoint.match(/^repos\\/([^/]+)\\/([^/]+)\\/pulls(\\?.*)?$/);
+if (openPullsMatch && method === "GET" && !endpoint.match(/\\/pulls\\/\\d/)) {
+  const state = readState();
+  const openPrs = state.openPrs ?? [];
+  // jqExpr is '.[].number'; output one number per line (what real jq produces)
+  if (openPrs.length > 0) {
+    process.stdout.write(openPrs.join("\\n") + "\\n");
+  }
+  process.exit(0);
+}
+
+// ─── GET repos/<owner>/<repo>/pulls/<n>/files ─────────────────────────────────
+// Used by GhCliAdapter.getPullRequestFiles with --jq '.[].filename'
+const prFilesMatch = endpoint.match(/^repos\\/([^/]+)\\/([^/]+)\\/pulls\\/(\\d+)\\/files$/);
+if (prFilesMatch && method === "GET") {
+  const pr = parseInt(prFilesMatch[3], 10);
+  const state = readState();
+  const files = getPrFiles(state, pr);
+  // jqExpr is '.[].filename'; output one path per line (what real jq produces)
+  if (files.length > 0) {
+    process.stdout.write(files.join("\\n") + "\\n");
+  }
+  process.exit(0);
+}
+
 // Determine if this is a check-runs call
 // POST: repos/<owner>/<repo>/check-runs
 // PATCH: repos/<owner>/<repo>/check-runs/<id>
@@ -284,7 +340,7 @@ export async function createFakeGhShim(): Promise<FakeGhShim> {
 
   // Initialise empty state so readState() never throws before first call.
   await writeFile(stateFile, JSON.stringify(
-    { checkRuns: [], prMergeCalls: [], prLookupCalls: [], nextId: 1, prAuthor: "test-user" },
+    { checkRuns: [], prMergeCalls: [], prLookupCalls: [], nextId: 1, prAuthor: "test-user", openPrs: [], prFilesArray: [] },
     null,
     2,
   ));
@@ -295,13 +351,42 @@ export async function createFakeGhShim(): Promise<FakeGhShim> {
 
     readState(): FakeGhShimState {
       const raw = require("node:fs").readFileSync(stateFile, "utf8") as string;
-      return JSON.parse(raw) as FakeGhShimState;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const prFilesArray = (parsed["prFilesArray"] as Array<[number, string[]]>) ?? [];
+      return {
+        checkRuns: (parsed["checkRuns"] as CheckRunRecord[]) ?? [],
+        prMergeCalls: (parsed["prMergeCalls"] as PrMergeRecord[]) ?? [],
+        prLookupCalls: (parsed["prLookupCalls"] as PrLookupRecord[]) ?? [],
+        openPrs: (parsed["openPrs"] as number[]) ?? [],
+        prFiles: new Map(prFilesArray),
+      };
     },
 
     setPrAuthor(author: string): void {
       const raw = require("node:fs").readFileSync(stateFile, "utf8") as string;
       const state = JSON.parse(raw) as Record<string, unknown>;
       state["prAuthor"] = author;
+      require("node:fs").writeFileSync(stateFile, JSON.stringify(state, null, 2));
+    },
+
+    setOpenPrs(prs: readonly number[]): void {
+      const raw = require("node:fs").readFileSync(stateFile, "utf8") as string;
+      const state = JSON.parse(raw) as Record<string, unknown>;
+      state["openPrs"] = [...prs];
+      require("node:fs").writeFileSync(stateFile, JSON.stringify(state, null, 2));
+    },
+
+    setPrFiles(pr: number, files: readonly string[]): void {
+      const raw = require("node:fs").readFileSync(stateFile, "utf8") as string;
+      const state = JSON.parse(raw) as Record<string, unknown>;
+      const arr = (state["prFilesArray"] as Array<[number, string[]]>) ?? [];
+      const idx = arr.findIndex((e) => e[0] === pr);
+      if (idx >= 0) {
+        arr[idx] = [pr, [...files]];
+      } else {
+        arr.push([pr, [...files]]);
+      }
+      state["prFilesArray"] = arr;
       require("node:fs").writeFileSync(stateFile, JSON.stringify(state, null, 2));
     },
 

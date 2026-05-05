@@ -4,9 +4,11 @@ import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type {
   CommandPayload,
+  CrossTaskConflictPayload,
   VerdictOverridePayload,
   DeployReadinessPayload,
 } from "@/features/evidence/domain/types.js";
+import { detectCrossTaskConflict } from "./detect-cross-task-conflict.js";
 import { requestVerdict } from "@/features/verdict/index.js";
 import type { RequestVerdictDeps } from "@/features/verdict/index.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
@@ -79,6 +81,48 @@ export async function runCiVerify(
   }
 
   const resolvedPr = args.pr ?? deps.env.pr;
+
+  // ─── Cross-task conflict detection (L8.1) ────────────────────────────────────
+  // Run BEFORE verdict.request so the evidence row is present when Risk Engine reads it.
+  if (
+    deps.githubApi !== undefined &&
+    deps.env.repository !== undefined &&
+    resolvedPr !== undefined
+  ) {
+    try {
+      const repository = deps.env.repository;
+      const allOpenPrs = await deps.githubApi.listOpenPullRequests({ repository });
+      const otherPrs = allOpenPrs.filter((pr) => pr !== resolvedPr);
+      const thisPrFiles = await deps.githubApi.getPullRequestFiles({ repository, pr: resolvedPr });
+      const otherPrFiles = await Promise.all(
+        otherPrs.map(async (pr) => ({
+          pr,
+          files: await deps.githubApi!.getPullRequestFiles({ repository, pr }),
+        })),
+      );
+      const conflictResult = detectCrossTaskConflict({
+        thisPr: resolvedPr,
+        thisPrFiles,
+        otherPrs: otherPrFiles,
+      });
+      if (conflictResult.conflictingPrs.length > 0) {
+        const conflictPayload: CrossTaskConflictPayload = {
+          thisPr: resolvedPr,
+          conflictingPrs: conflictResult.conflictingPrs,
+          overlappingPaths: conflictResult.overlappingPaths,
+        };
+        await recordEvidence(deps.evidenceStore, {
+          task_id: taskId,
+          kind: "cross-task-conflict",
+          payload: conflictPayload,
+          witness_level: "witnessed-by-ci",
+        });
+      }
+    } catch {
+      // non-fatal — GitHub API failure skips conflict detection silently
+    }
+  }
+
   const verdict = await deps.verdict.request(
     { taskId, base: resolvedBase, pr: resolvedPr },
     deps.verdictDeps,

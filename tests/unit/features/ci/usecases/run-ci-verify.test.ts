@@ -54,12 +54,20 @@ function makeDeployReadinessRow(): EvidenceRow {
   };
 }
 
-function fakeGithubApi(author: string): GithubApiPort {
+function fakeGithubApi(
+  author: string,
+  opts: {
+    openPrs?: number[];
+    prFiles?: Map<number, string[]>;
+  } = {},
+): GithubApiPort {
   return {
     getPullRequestAuthor: async () => author,
     postCheckRun: async (_input: CheckRunInput): Promise<CheckRunRef> => ({ id: 1 }),
     patchCheckRun: async () => undefined,
     triggerAutoMerge: async () => undefined,
+    listOpenPullRequests: async () => opts.openPrs ?? [],
+    getPullRequestFiles: async ({ pr }) => opts.prFiles?.get(pr) ?? [],
   };
 }
 
@@ -338,6 +346,8 @@ describe("runCiVerify — deploy-authorization gate", () => {
         postCheckRun: async (_input: CheckRunInput): Promise<CheckRunRef> => ({ id: 1 }),
         patchCheckRun: async () => undefined,
         triggerAutoMerge: async () => undefined,
+        listOpenPullRequests: async () => [],
+        getPullRequestFiles: async () => [],
       },
       loadOwnersFromBase: () => makeOwners(["alice"]),
     };
@@ -366,6 +376,8 @@ describe("runCiVerify — deploy-authorization gate", () => {
           },
           patchCheckRun: async () => undefined,
           triggerAutoMerge: async () => undefined,
+          listOpenPullRequests: async () => [],
+          getPullRequestFiles: async () => [],
         },
       },
     };
@@ -395,6 +407,8 @@ describe("runCiVerify — deploy-authorization gate", () => {
           },
           patchCheckRun: async () => undefined,
           triggerAutoMerge: async () => undefined,
+          listOpenPullRequests: async () => [],
+          getPullRequestFiles: async () => [],
         },
       },
     };
@@ -424,11 +438,107 @@ describe("runCiVerify — deploy-authorization gate", () => {
         postCheckRun: async (_input: CheckRunInput): Promise<CheckRunRef> => ({ id: 1 }),
         patchCheckRun: async () => undefined,
         triggerAutoMerge: async () => undefined,
+        listOpenPullRequests: async () => [],
+        getPullRequestFiles: async () => [],
       },
       loadOwnersFromBase: () => makeOwners(["alice"]),
     };
 
     await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
     expect(authorCalls).toHaveLength(0);
+  });
+});
+
+// ─── Cross-task conflict detection (L8.1) ────────────────────────────────────
+
+describe("runCiVerify — cross-task conflict detection", () => {
+  it("records cross-task-conflict evidence when overlapping files exist", async () => {
+    const appended: { kind: string; witnessLevel: string }[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+    const prFiles = new Map([
+      [42, ["src/foo.ts", "src/bar.ts"]],
+      [7, ["src/foo.ts", "src/other.ts"]],
+    ]);
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ repository: "owner/repo", pr: 42 }),
+      evidenceStore: fakeEvidenceStore(appended),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      githubApi: fakeGithubApi("alice", {
+        openPrs: [42, 7],
+        prFiles,
+      }),
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
+    const conflictRow = appended.find((r) => r.kind === "cross-task-conflict");
+    expect(conflictRow).toBeDefined();
+    expect(conflictRow?.witnessLevel).toBe("witnessed-by-ci");
+  });
+
+  it("does not record cross-task-conflict evidence when no files overlap", async () => {
+    const appended: { kind: string; witnessLevel: string }[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+    const prFiles = new Map([
+      [42, ["src/foo.ts"]],
+      [7, ["src/other.ts"]],
+    ]);
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ repository: "owner/repo", pr: 42 }),
+      evidenceStore: fakeEvidenceStore(appended),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      githubApi: fakeGithubApi("alice", {
+        openPrs: [42, 7],
+        prFiles,
+      }),
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
+    expect(appended.find((r) => r.kind === "cross-task-conflict")).toBeUndefined();
+  });
+
+  it("silently skips cross-task detection when githubApi is not set", async () => {
+    const appended: { kind: string; witnessLevel: string }[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ repository: "owner/repo", pr: 42 }),
+      evidenceStore: fakeEvidenceStore(appended),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      // githubApi intentionally omitted
+    };
+
+    await runCiVerify({ taskId: "tsk-aaaaaa" }, deps);
+    expect(appended.find((r) => r.kind === "cross-task-conflict")).toBeUndefined();
+  });
+
+  it("silently skips cross-task detection when API throws", async () => {
+    const appended: { kind: string; witnessLevel: string }[] = [];
+    const expectedVerdict = makeVerdict("PASS");
+
+    const deps: RunCiVerifyDeps = {
+      env: makeCiEnv({ repository: "owner/repo", pr: 42 }),
+      evidenceStore: fakeEvidenceStore(appended),
+      verdict: { request: async () => expectedVerdict },
+      verdictDeps: makeVerdictDeps(),
+      githubApi: {
+        getPullRequestAuthor: async () => "alice",
+        postCheckRun: async (): Promise<CheckRunRef> => ({ id: 1 }),
+        patchCheckRun: async () => undefined,
+        triggerAutoMerge: async () => undefined,
+        listOpenPullRequests: async () => {
+          throw new Error("API rate limit exceeded");
+        },
+        getPullRequestFiles: async () => [],
+      },
+    };
+
+    // Should not throw; cross-task detection is non-fatal
+    await expect(runCiVerify({ taskId: "tsk-aaaaaa" }, deps)).resolves.toBeDefined();
+    expect(appended.find((r) => r.kind === "cross-task-conflict")).toBeUndefined();
   });
 });

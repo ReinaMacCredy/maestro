@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { computeRisk, applyAIReviewerRiskRaise, requiresThreatModel, hasThreatModelEvidence } from "@/features/risk/usecases/compute-risk.js";
+import { computeRisk, applyAIReviewerRiskRaise, applyCrossTaskConflictRiskRaise, requiresThreatModel, hasThreatModelEvidence } from "@/features/risk/usecases/compute-risk.js";
 import type { ComputeRiskInput } from "@/features/risk/usecases/compute-risk.js";
 import type { Contract, RiskClass } from "@/features/task/index.js";
 import type { EvidenceRow, ThreatModelPayload } from "@/features/evidence/index.js";
@@ -620,5 +620,61 @@ describe("computeRisk: threat-model-required gate (Edge Case 12)", () => {
     expect(verdict.decision).toBe("PASS");
     const threatModelReason = verdict.reasons.find((r) => r.code === "threat-model-required");
     expect(threatModelReason).toBeUndefined();
+  });
+});
+
+// ─── applyCrossTaskConflictRiskRaise ─────────────────────────────────────────
+
+function makeCrossTaskConflictRow(conflictingPrs: number[]): EvidenceRow {
+  return {
+    schema_version: 3,
+    id: `ev-ctc-${Math.random().toString(36).slice(2, 8)}`,
+    task_id: "task-001",
+    kind: "cross-task-conflict" as EvidenceRow["kind"],
+    witness_level: "witnessed-by-ci",
+    created_at: "2026-01-01T00:00:00.000Z",
+    payload: {
+      thisPr: 42,
+      conflictingPrs,
+      overlappingPaths: ["src/shared.ts"],
+    } as unknown as EvidenceRow["payload"],
+  };
+}
+
+describe("applyCrossTaskConflictRiskRaise", () => {
+  it("raises low to medium when one conflict row exists", () => {
+    const rows = [makeCrossTaskConflictRow([7])];
+    expect(applyCrossTaskConflictRiskRaise("low", rows)).toBe("medium");
+  });
+
+  it("raises medium to high when one conflict row exists", () => {
+    const rows = [makeCrossTaskConflictRow([7])];
+    expect(applyCrossTaskConflictRiskRaise("medium", rows)).toBe("high");
+  });
+
+  it("raises high to critical when one conflict row exists", () => {
+    const rows = [makeCrossTaskConflictRow([7])];
+    expect(applyCrossTaskConflictRiskRaise("high", rows)).toBe("critical");
+  });
+
+  it("stays critical when already at critical (ceiling)", () => {
+    const rows = [makeCrossTaskConflictRow([7])];
+    expect(applyCrossTaskConflictRiskRaise("critical", rows)).toBe("critical");
+  });
+
+  it("raises by ONE tier total even when multiple conflict rows exist", () => {
+    // Multiple rows should not multiply the raise — one tier total
+    const rows = [makeCrossTaskConflictRow([7]), makeCrossTaskConflictRow([8])];
+    expect(applyCrossTaskConflictRiskRaise("low", rows)).toBe("medium");
+  });
+
+  it("does not raise when no cross-task-conflict rows exist", () => {
+    const rows: EvidenceRow[] = [makeEvidenceRow({ kind: "command" })];
+    expect(applyCrossTaskConflictRiskRaise("medium", rows)).toBe("medium");
+  });
+
+  it("does not raise when conflict row has empty conflictingPrs", () => {
+    const rows = [makeCrossTaskConflictRow([])];
+    expect(applyCrossTaskConflictRiskRaise("low", rows)).toBe("low");
   });
 });

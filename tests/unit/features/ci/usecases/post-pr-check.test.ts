@@ -36,6 +36,7 @@ interface FakePortState {
 
 function fakeGithubApi(state: FakePortState): GithubApiPort {
   return {
+    getPullRequestAuthor: async () => "test-user",
     postCheckRun: async (input) => {
       state.posted.push(input);
       return { id: state.nextId++ };
@@ -43,6 +44,9 @@ function fakeGithubApi(state: FakePortState): GithubApiPort {
     patchCheckRun: async (input) => {
       state.patched.push(input);
     },
+    triggerAutoMerge: async () => undefined,
+    listOpenPullRequests: async () => [],
+    getPullRequestFiles: async () => [],
   };
 }
 

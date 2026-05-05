@@ -13,6 +13,7 @@ import {
   type AIReviewPayload,
   type AIReviewerKind,
   type CommandPayload,
+  type CrossTaskConflictPayload,
   type DeployReadinessPayload,
   type EvidenceKind,
   type EvidenceRow,
@@ -465,6 +466,15 @@ function formatEvidenceRow(row: EvidenceRow, label = "Evidence"): string[] {
     const payload = row.payload as RollbackExercisedPayload;
     lines.push(`  Command: ${payload.command}`);
     lines.push(`  Exit: ${payload.exit}`);
+  } else if (row.kind === "cross-task-conflict") {
+    const payload = row.payload as CrossTaskConflictPayload;
+    lines.push(`  This PR: ${payload.thisPr}`);
+    lines.push(`  Conflicting PRs: ${payload.conflictingPrs.join(", ")}`);
+    const paths = payload.overlappingPaths.slice(0, 5);
+    const truncated = payload.overlappingPaths.length > 5
+      ? [...paths, `... (${payload.overlappingPaths.length - 5} more)`]
+      : paths;
+    lines.push(`  Overlapping Paths (${payload.overlappingPaths.length}): ${truncated.join(", ")}`);
   }
   return lines;
 }

@@ -116,11 +116,126 @@ describe("GhCliAdapter — patchCheckRun", () => {
 });
 
 describe("GhCliAdapter — interface conformance", () => {
-  it("implements GithubApiPort (has postCheckRun, patchCheckRun, and triggerAutoMerge)", () => {
+  it("implements GithubApiPort (has postCheckRun, patchCheckRun, triggerAutoMerge, listOpenPullRequests, getPullRequestFiles)", () => {
     const adapter = new GhCliAdapter();
     expect(typeof adapter.postCheckRun).toBe("function");
     expect(typeof adapter.patchCheckRun).toBe("function");
     expect(typeof adapter.triggerAutoMerge).toBe("function");
+    expect(typeof adapter.listOpenPullRequests).toBe("function");
+    expect(typeof adapter.getPullRequestFiles).toBe("function");
+  });
+});
+
+describe("GhCliAdapter — listOpenPullRequests", () => {
+  it("parses newline-delimited integers from gh output", async () => {
+    // Create a custom fake gh that outputs PR numbers, one per line
+    const customBinDir = await mkdtemp(join(tmpdir(), "maestro-gh-list-prs-"));
+    const customBin = join(customBinDir, "gh");
+    await writeFile(customBin, "#!/bin/sh\nprintf '10\\n20\\n30\\n'\nexit 0\n", "utf8");
+    await chmod(customBin, 0o755);
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${customBinDir}:${originalPath}`;
+
+    try {
+      const adapter = new GhCliAdapter();
+      const result = await adapter.listOpenPullRequests({ repository: "owner/repo" });
+      expect(result).toEqual([10, 20, 30]);
+    } finally {
+      process.env.PATH = savedPath;
+      await rm(customBinDir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns empty array when gh outputs nothing", async () => {
+    const customBinDir = await mkdtemp(join(tmpdir(), "maestro-gh-list-empty-"));
+    const customBin = join(customBinDir, "gh");
+    await writeFile(customBin, "#!/bin/sh\nprintf ''\nexit 0\n", "utf8");
+    await chmod(customBin, 0o755);
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${customBinDir}:${originalPath}`;
+
+    try {
+      const adapter = new GhCliAdapter();
+      const result = await adapter.listOpenPullRequests({ repository: "owner/repo" });
+      expect(result).toEqual([]);
+    } finally {
+      process.env.PATH = savedPath;
+      await rm(customBinDir, { recursive: true, force: true });
+    }
+  });
+
+  it("throws when gh exits non-zero", async () => {
+    const customBinDir = await mkdtemp(join(tmpdir(), "maestro-gh-list-fail-"));
+    const customBin = join(customBinDir, "gh");
+    await writeFile(customBin, "#!/bin/sh\nprintf 'error: not found\\n' >&2\nexit 1\n", "utf8");
+    await chmod(customBin, 0o755);
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${customBinDir}:${originalPath}`;
+
+    try {
+      const adapter = new GhCliAdapter();
+      await expect(adapter.listOpenPullRequests({ repository: "owner/repo" }))
+        .rejects.toThrow(/listOpenPullRequests failed.*exit 1/);
+    } finally {
+      process.env.PATH = savedPath;
+      await rm(customBinDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("GhCliAdapter — getPullRequestFiles", () => {
+  it("parses newline-delimited file paths from gh output", async () => {
+    const customBinDir = await mkdtemp(join(tmpdir(), "maestro-gh-pr-files-"));
+    const customBin = join(customBinDir, "gh");
+    await writeFile(customBin, "#!/bin/sh\nprintf 'src/foo.ts\\nsrc/bar.ts\\n'\nexit 0\n", "utf8");
+    await chmod(customBin, 0o755);
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${customBinDir}:${originalPath}`;
+
+    try {
+      const adapter = new GhCliAdapter();
+      const result = await adapter.getPullRequestFiles({ repository: "owner/repo", pr: 42 });
+      expect(result).toEqual(["src/foo.ts", "src/bar.ts"]);
+    } finally {
+      process.env.PATH = savedPath;
+      await rm(customBinDir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns empty array when gh outputs nothing", async () => {
+    const customBinDir = await mkdtemp(join(tmpdir(), "maestro-gh-pr-files-empty-"));
+    const customBin = join(customBinDir, "gh");
+    await writeFile(customBin, "#!/bin/sh\nprintf ''\nexit 0\n", "utf8");
+    await chmod(customBin, 0o755);
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${customBinDir}:${originalPath}`;
+
+    try {
+      const adapter = new GhCliAdapter();
+      const result = await adapter.getPullRequestFiles({ repository: "owner/repo", pr: 42 });
+      expect(result).toEqual([]);
+    } finally {
+      process.env.PATH = savedPath;
+      await rm(customBinDir, { recursive: true, force: true });
+    }
+  });
+
+  it("throws when gh exits non-zero", async () => {
+    const customBinDir = await mkdtemp(join(tmpdir(), "maestro-gh-pr-files-fail-"));
+    const customBin = join(customBinDir, "gh");
+    await writeFile(customBin, "#!/bin/sh\nprintf 'error: not found\\n' >&2\nexit 1\n", "utf8");
+    await chmod(customBin, 0o755);
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${customBinDir}:${originalPath}`;
+
+    try {
+      const adapter = new GhCliAdapter();
+      await expect(adapter.getPullRequestFiles({ repository: "owner/repo", pr: 42 }))
+        .rejects.toThrow(/getPullRequestFiles failed.*exit 1/);
+    } finally {
+      process.env.PATH = savedPath;
+      await rm(customBinDir, { recursive: true, force: true });
+    }
   });
 });
 
