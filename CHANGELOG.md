@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.72.2 - Worktree config + contract draft UX fixes
+
+Bug fixes surfaced by re-running the v0.72.1 greenfield demo with three
+parallel teammates working in independent git worktrees.
+
+### Fixes
+
+- **Worktree-aware config resolution.** Calls like
+  `services.config.load(process.cwd())` were not walking through
+  `.git/commondir` to the main worktree, so contracts locked from a
+  worktree captured the contract-loader's defaults instead of the
+  shared `.maestro/config.yaml`. The most visible symptom was a
+  contract created with `overlapPolicy: fail` even when the repo
+  config opted into `annotate`. All five call sites (contract new/lock,
+  mission, doctor, task, mission-control snapshot loaders) now route
+  through `resolveMaestroProjectRoot`, which already existed but was
+  unused at these seams.
+
+- **Structured error when no contract exists.** `verdict request` and
+  `policy check` raised bare `Error` when the requested task had no
+  contract, which Bun rendered as a runtime stack trace with bunfs
+  paths. Both call sites now throw `MaestroError` with hints
+  (`contract new <id>`, `contract lock <id>`), matching the rest of
+  the CLI's error formatting.
+
+- **Warn on unknown contract draft YAML keys.** Keys outside the draft
+  schema were silently dropped. A teammate using
+  `scope.allowedPaths` (vs the real `scope.filesExpected`) produced a
+  contract with no scope and no warning. The draft loader now warns
+  to stderr per unknown key with did-you-mean hints for the common
+  typos. Warnings are advisory; exit code is unchanged.
+
+### Test coverage
+
+New `tests/e2e/l2c-config-resolution-flow.test.ts` adds 4 compiled-
+binary tests that lock all three fixes from the user-facing surface:
+worktree config-snapshot capture, unknown-key warnings on stderr, and
+structured `MaestroError` output for both `verdict request` and
+`policy check` when a contract is missing.
+
 ## 0.72.1 - L1↔L2 contract bridge fix
 
 Bug fix. The L1 contract store (`.maestro/tasks/contracts/`, written by
