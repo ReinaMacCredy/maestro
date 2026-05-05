@@ -264,12 +264,13 @@ describe("L5 ci verify flow (compiled binary)", () => {
       });
 
       // task verify at baseline (no diff yet) should not error out.
-      // It may report findings, but the command itself should exit 0.
+      // Exit 0 = clean; exit 2 = warn-only (e.g., the empty-diff finding the
+      // verifier emits when nothing has been committed yet).
       const verifyResult = await runCompiled(
         ["task", "verify", "--task", taskId],
         dir,
       );
-      expect(verifyResult.exitCode).toBe(0);
+      expect([0, 2]).toContain(verifyResult.exitCode);
     },
     SLOW_CLI_TIMEOUT_MS,
   );

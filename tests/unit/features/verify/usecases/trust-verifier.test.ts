@@ -125,6 +125,24 @@ describe("runTrustVerifier", () => {
     expect(lockfileFindings[0].severity).toBe("error");
   });
 
+  it("empty diff — emits empty-diff warn finding", async () => {
+    const input: TrustVerifierInput = {
+      contract: makeContract({ scope: { filesExpected: ["**"], filesForbidden: [] } }),
+      diff: {
+        changedPaths: [],
+        addedLines: [],
+        base: "base-sha",
+        head: "head-sha",
+      },
+      projectRoot: tmpDir,
+    };
+
+    const result = await runTrustVerifier(input, { gitSignatureProbe: stubProbe });
+    const emptyDiffFindings = result.findings.filter((f) => f.check === "empty-diff");
+    expect(emptyDiffFindings).toHaveLength(1);
+    expect(emptyDiffFindings[0].severity).toBe("warn");
+  });
+
   it("sync: script in package.json — emits generated-file-parity info finding", async () => {
     await writeFile(
       join(tmpDir, "package.json"),

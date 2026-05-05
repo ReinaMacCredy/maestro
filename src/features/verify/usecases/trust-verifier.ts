@@ -7,6 +7,7 @@ import { checkGeneratedFileParity } from "./checks/check-generated-file-parity.j
 import { checkSensitivePaths } from "./checks/check-sensitive-paths.js";
 import { checkCommitMetadata } from "./checks/check-commit-metadata.js";
 import { checkSecretsInDiff } from "./checks/check-secrets-in-diff.js";
+import { checkNonEmptyDiff } from "./checks/check-non-empty-diff.js";
 
 export interface TrustVerifierInput {
   readonly contract: Contract;
@@ -24,7 +25,7 @@ export interface TrustVerifierDeps {
 }
 
 /**
- * Runs all 6 trust checks in parallel and returns a flat list of findings.
+ * Runs all 7 trust checks in parallel and returns a flat list of findings.
  * This function is deterministic given the same inputs — it performs no writes
  * and does not mutate any shared state.
  */
@@ -33,6 +34,7 @@ export async function runTrustVerifier(
   deps: TrustVerifierDeps,
 ): Promise<TrustVerifierResult> {
   const [
+    emptyDiffFindings,
     scopeFindings,
     lockfileFindings,
     generatedFindings,
@@ -40,6 +42,7 @@ export async function runTrustVerifier(
     metadataFindings,
     secretFindings,
   ] = await Promise.all([
+    Promise.resolve(checkNonEmptyDiff(input.diff)),
     checkScope(input.diff.changedPaths, input.contract),
     checkLockfileParity(input.diff.changedPaths, input.projectRoot),
     checkGeneratedFileParity(input.projectRoot),
@@ -49,6 +52,7 @@ export async function runTrustVerifier(
   ]);
 
   const findings: readonly TrustFinding[] = [
+    ...emptyDiffFindings,
     ...scopeFindings,
     ...lockfileFindings,
     ...generatedFindings,

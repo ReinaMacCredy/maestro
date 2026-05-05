@@ -252,7 +252,11 @@ describe("L2 contract bridge — end-to-end seam coverage", () => {
       await lockContractViaCli(dir, taskId);
 
       const r = await runCompiled(["task", "verify", "--task", taskId, "--json"], dir);
-      expect(r.exitCode).toBe(0);
+      // Exit 0 = clean; exit 2 = warn-only. The bridge bug we're catching
+      // would surface as a "no contract" error or a non-2xx exit, not as a
+      // legitimate empty-diff warn (which fires because we haven't committed
+      // any code yet — the bridge itself has nothing to do with that).
+      expect([0, 2]).toContain(r.exitCode);
       const combined = r.stdout + " " + r.stderr;
       expect(combined).not.toMatch(/no contract proposed/i);
       const parsed = expectJson<{ findings: readonly unknown[] }>(r);
@@ -480,7 +484,9 @@ describe("L2 contract bridge — end-to-end seam coverage", () => {
 
       // Trigger an L2 read — should backfill v1.json transparently.
       const r = await runCompiled(["task", "verify", "--task", taskId, "--json"], dir);
-      expect(r.exitCode).toBe(0);
+      // Exit 0 = clean; exit 2 = warn-only (empty-diff fires because no code
+      // is committed yet — orthogonal to the backfill we're verifying).
+      expect([0, 2]).toContain(r.exitCode);
       const combined = r.stdout + " " + r.stderr;
       expect(combined).not.toMatch(/no contract proposed/i);
 

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.72.4 - Trust Verifier flags empty diffs
+
+First-time-user friction. A greenfield agent who staged but never committed
+saw `Trust Verifier: no findings`, `verdict request` returned a healthy-
+looking HUMAN, and the verdict's `subject.tree_sha` was
+`4b825dc642cb6eb9a060e54bf8d69288fbee4904` — git's well-known empty-tree
+SHA. The whole trust trail bound itself to nothing because the six existing
+checks all return clean trivially when there is nothing to inspect.
+
+### Fix
+
+- **New `empty-diff` check.** Trust Verifier now runs 7 checks. The new
+  check returns a `warn` finding when both `changedPaths` and `addedLines`
+  are empty, with details that name the base/head SHAs and tell the user
+  to commit before verifying. Surfaces in `task verify` (exit 2) and
+  `verdict request` (counts the warn in `trustVerifier.warns`). Severity is
+  `warn` not `error` so legitimate pre-commit verifies still succeed
+  visibly without blocking.
+
+### Test coverage
+
+- Unit test for the new check (`tests/unit/features/verify/usecases/checks/check-non-empty-diff.test.ts`).
+- New `runTrustVerifier` integration test asserting the empty-diff finding
+  surfaces alongside the other checks.
+
 ## 0.72.3 - Worktree project-root resolver fix
 
 Bug fix. The v0.72.2 release wrapped five call sites in
