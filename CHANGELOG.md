@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.72.1 - L1↔L2 contract bridge fix
+
+Bug fix. The L1 contract store (`.maestro/tasks/contracts/`, written by
+`task contract new/lock/amend/edit/discard/criteria *`) and the L2
+versioned store (`.maestro/contracts/<taskId>/vN.json`, read by
+`task verify`, `plan check`, `verdict request`, `contract show`,
+`contract history`, `contract amend`, `merge auto`, `ci verify`)
+shared a schema but had disjoint filesystem layouts and no bridge.
+The documented agent workflow `task contract new <id> --from <yaml>
+&& task contract lock <id> && task verify --task <id>` failed with
+"no contract found" until v1.json was hand-seeded.
+
+### Fix
+
+- **Write-through mirror.** Every L1 transition that produces an
+  active status (locked, amended, fulfilled, broken) now mirrors the
+  saved contract into the L2 version store as the next vN.json. The
+  mirror runs at the use-case layer (`contract-workflows.usecase.ts`)
+  so adapter layering stays clean. Drafts and discards are skipped.
+  Mirror writes serialize behind L1's existing `withFileLock`.
+
+- **Read-time backfill.** A new helper
+  (`readCurrentContractWithBackfill`) reads from L2 first; on miss,
+  it pulls the active L1 record and writes it as v1. Existing
+  v0.72.0 repos with locked L1-only contracts on disk continue to
+  work after upgrade — no manual migration verb required.
+
+- **Mirror is derived state.** `.maestro/contracts/` is now in
+  `.gitignore` and in `git-anchor`'s runtime-path ignore list, so
+  mirror writes don't pollute verdict scope analysis. The L1 store
+  remains the canonical write path; the L2 store is a derived view.
+
+### Test coverage
+
+New `tests/e2e/l2b-contract-bridge-flow.test.ts` adds 13 compiled-
+binary tests that exercise every L1 → active-state transition plus
+the legacy backfill plus per-task isolation, using only documented
+agent verbs. The seam that previously had zero coverage is now the
+most-tested surface in the trust substrate.
+
 ## 0.72.0 - L8 (trimmed) — Cross-Task Conflict + Trust Benchmark
 
 Honest framing: this is a trimmed L8 release. The full learning loop
