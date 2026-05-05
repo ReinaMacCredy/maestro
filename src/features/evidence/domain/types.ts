@@ -9,7 +9,8 @@ export type EvidenceKind =
   | "threat-model"
   | "review-ack"
   | "rollback-exercised"
-  | "verdict-override";
+  | "verdict-override"
+  | "runtime-signal";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -145,6 +146,18 @@ export interface VerdictOverridePayload {
   readonly reason: string;
 }
 
+export interface RuntimeSignalPayload {
+  readonly signal_name: string;
+  readonly provider: string;
+  readonly query: string;
+  readonly value: number;
+  readonly threshold: number;
+  readonly operator: string;
+  readonly pass: boolean;
+  readonly sampled_at: string;
+  readonly note?: string;
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -157,6 +170,7 @@ interface EvidencePayloadByKind {
   readonly "review-ack": ReviewAckPayload;
   readonly "rollback-exercised": RollbackExercisedPayload;
   readonly "verdict-override": VerdictOverridePayload;
+  readonly "runtime-signal": RuntimeSignalPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

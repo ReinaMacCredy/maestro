@@ -18,6 +18,7 @@ import { buildPlanServices, type PlanServices } from "./features/plan/services.j
 import { buildCiServices, type CiServices } from "./features/ci/services.js";
 import { buildMergeServices, type MergeServices } from "./features/merge/services.js";
 import { buildDeployServices, type DeployServices } from "./features/deploy/services.js";
+import { buildRuntimeServices, type RuntimeServices } from "./features/runtime/services.js";
 
 export interface Services extends
   InfraServices,
@@ -39,7 +40,8 @@ export interface Services extends
   PlanServices,
   CiServices,
   MergeServices,
-  DeployServices {
+  DeployServices,
+  RuntimeServices {
   readonly projectRoot: string;
 }
 
@@ -68,6 +70,7 @@ export function initServices(projectDir: string): Services {
     ...buildCiServices(),
     ...buildMergeServices(),
     ...buildDeployServices(),
+    ...buildRuntimeServices(),
     projectRoot: projectDir,
   };
   return instance;

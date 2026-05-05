@@ -60,6 +60,7 @@ import { registerCiVerifyCommand } from "./features/ci/index.js";
 import { registerReviewCommand } from "./features/review/index.js";
 import { registerMergeAutoCommand } from "./features/merge/index.js";
 import { registerDeployRollbackCommand } from "./features/deploy/index.js";
+import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -128,6 +129,11 @@ const deployCmd = program
   .command("deploy")
   .description("Deploy safety commands — rollback and gate controls");
 registerDeployRollbackCommand(deployCmd, program);
+
+const runtimeCmd = program
+  .command("runtime")
+  .description("Runtime signal checks — query providers and record Evidence");
+registerRuntimeCheckCommand(runtimeCmd, program);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,
