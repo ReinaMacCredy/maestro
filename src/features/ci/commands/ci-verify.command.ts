@@ -69,6 +69,11 @@ export function registerCiVerifyCommand(
             projectRoot: services.projectRoot,
           },
           prCheck: { githubApi: services.githubApi },
+          // Wire githubApi at the top level so the deploy-authorization gate
+          // (L7.9) can call getPullRequestAuthor when a deploy-readiness row
+          // with gate=pass is present.
+          githubApi: services.githubApi,
+          projectRoot: services.projectRoot,
         },
       );
 

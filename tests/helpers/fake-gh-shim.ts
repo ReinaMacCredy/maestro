@@ -39,9 +39,18 @@ export interface PrMergeRecord {
   readonly args: string[];
 }
 
+/**
+ * Record of a `gh api repos/<owner>/<repo>/pulls/<n>` GET invocation.
+ */
+export interface PrLookupRecord {
+  readonly repository: string;
+  readonly pr: number;
+}
+
 export interface FakeGhShimState {
   readonly checkRuns: CheckRunRecord[];
   readonly prMergeCalls: PrMergeRecord[];
+  readonly prLookupCalls: PrLookupRecord[];
 }
 
 export interface FakeGhShim {
@@ -51,6 +60,11 @@ export interface FakeGhShim {
   readonly stateFile: string;
   /** Read the current state (parsed from the JSON file) */
   readState(): FakeGhShimState;
+  /**
+   * Configure what `user.login` the shim returns for `gh api repos/<repo>/pulls/<n>`.
+   * Call before the CLI invocation that triggers a PR author lookup.
+   */
+  setPrAuthor(author: string): void;
   /** Remove the tmp dir */
   cleanup(): Promise<void>;
 }
@@ -83,7 +97,7 @@ function readState() {
   try {
     return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
   } catch {
-    return { checkRuns: [], prMergeCalls: [], nextId: 1 };
+    return { checkRuns: [], prMergeCalls: [], prLookupCalls: [], nextId: 1, prAuthor: "test-user" };
   }
 }
 
@@ -148,13 +162,40 @@ if (!endpoint) {
   process.exit(1);
 }
 
-// Parse -X flag
+// Parse -X flag and --jq flag
 let method = "GET";
+let jqExpr = undefined;
 for (let i = 2; i < args.length; i++) {
   if (args[i] === "-X" && args[i + 1]) {
     method = args[i + 1].toUpperCase();
     i++;
+  } else if (args[i] === "--jq" && args[i + 1]) {
+    jqExpr = args[i + 1];
+    i++;
   }
+}
+
+// ─── GET repos/<owner>/<repo>/pulls/<n> ─────────────────────────────────────
+// Used by GhCliAdapter.getPullRequestAuthor with --jq .user.login
+const pullsMatch = endpoint.match(/^repos\\/([^/]+)\\/([^/]+)\\/pulls\\/(\\d+)$/);
+if (pullsMatch && method === "GET") {
+  const repository = pullsMatch[1] + "/" + pullsMatch[2];
+  const pr = parseInt(pullsMatch[3], 10);
+  const state = readState();
+  if (!state.prLookupCalls) state.prLookupCalls = [];
+  state.prLookupCalls.push({ repository, pr });
+  writeState(state);
+
+  const author = state.prAuthor ?? "test-user";
+  const responseBody = { user: { login: author } };
+
+  // If --jq .user.login was passed, return just the value
+  if (jqExpr === ".user.login") {
+    process.stdout.write(author + "\\n");
+  } else {
+    process.stdout.write(JSON.stringify(responseBody) + "\\n");
+  }
+  process.exit(0);
 }
 
 // Determine if this is a check-runs call
@@ -242,7 +283,11 @@ export async function createFakeGhShim(): Promise<FakeGhShim> {
   await chmod(shimScript, 0o755);
 
   // Initialise empty state so readState() never throws before first call.
-  await writeFile(stateFile, JSON.stringify({ checkRuns: [], prMergeCalls: [], nextId: 1 }, null, 2));
+  await writeFile(stateFile, JSON.stringify(
+    { checkRuns: [], prMergeCalls: [], prLookupCalls: [], nextId: 1, prAuthor: "test-user" },
+    null,
+    2,
+  ));
 
   return {
     binDir,
@@ -251,6 +296,13 @@ export async function createFakeGhShim(): Promise<FakeGhShim> {
     readState(): FakeGhShimState {
       const raw = require("node:fs").readFileSync(stateFile, "utf8") as string;
       return JSON.parse(raw) as FakeGhShimState;
+    },
+
+    setPrAuthor(author: string): void {
+      const raw = require("node:fs").readFileSync(stateFile, "utf8") as string;
+      const state = JSON.parse(raw) as Record<string, unknown>;
+      state["prAuthor"] = author;
+      require("node:fs").writeFileSync(stateFile, JSON.stringify(state, null, 2));
     },
 
     async cleanup(): Promise<void> {
