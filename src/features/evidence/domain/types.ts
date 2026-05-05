@@ -10,7 +10,8 @@ export type EvidenceKind =
   | "review-ack"
   | "rollback-exercised"
   | "verdict-override"
-  | "runtime-signal";
+  | "runtime-signal"
+  | "deploy-readiness";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -158,6 +159,17 @@ export interface RuntimeSignalPayload {
   readonly note?: string;
 }
 
+export interface DeployReadinessPayload {
+  readonly task_id: string;
+  readonly checks: {
+    readonly feature_flag: { readonly ok: boolean; readonly value?: string };
+    readonly canary_plan: { readonly ok: boolean; readonly stages?: number };
+    readonly rollback: { readonly ok: boolean; readonly witness_evidence_id?: string };
+    readonly owner: { readonly ok: boolean; readonly approvers?: readonly string[] };
+  };
+  readonly gate: "pass" | "fail";
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -171,6 +183,7 @@ interface EvidencePayloadByKind {
   readonly "rollback-exercised": RollbackExercisedPayload;
   readonly "verdict-override": VerdictOverridePayload;
   readonly "runtime-signal": RuntimeSignalPayload;
+  readonly "deploy-readiness": DeployReadinessPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

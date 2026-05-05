@@ -16,6 +16,7 @@ export type {
   RollbackExercisedPayload,
   VerdictOverridePayload,
   RuntimeSignalPayload,
+  DeployReadinessPayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,

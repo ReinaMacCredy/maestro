@@ -59,7 +59,7 @@ import { registerPlanCheckCommand } from "./features/plan/index.js";
 import { registerCiVerifyCommand } from "./features/ci/index.js";
 import { registerReviewCommand } from "./features/review/index.js";
 import { registerMergeAutoCommand } from "./features/merge/index.js";
-import { registerDeployRollbackCommand } from "./features/deploy/index.js";
+import { registerDeployCommand } from "./features/deploy/index.js";
 import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
 
 export const program = new Command()
@@ -128,7 +128,7 @@ registerMergeAutoCommand(mergeCmd, program);
 const deployCmd = program
   .command("deploy")
   .description("Deploy safety commands — rollback and gate controls");
-registerDeployRollbackCommand(deployCmd, program);
+registerDeployCommand(deployCmd, program);
 
 const runtimeCmd = program
   .command("runtime")
