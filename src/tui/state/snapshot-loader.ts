@@ -14,7 +14,7 @@ import type {
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
-import type { RatchetStorePort } from "@/features/ratchet";
+import type { RatchetStorePort } from "@/features/memory-ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort } from "@/features/handoff";
 import type { TaskQueryPort, RunStateStorePort, ContractVersionStorePort } from "@/features/task";

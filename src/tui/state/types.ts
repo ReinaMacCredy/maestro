@@ -15,7 +15,7 @@ import type {
   RawLearningEntry,
 } from "@/features/memory";
 import type { ProjectEdge, ProjectNode } from "@/features/graph";
-import type { RatchetBaseline, RatchetSuite } from "@/features/ratchet";
+import type { RatchetBaseline, RatchetSuite } from "@/features/memory-ratchet";
 import type {
   AgentGridRow,
   DispatchQueueItem,

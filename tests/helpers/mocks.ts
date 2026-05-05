@@ -22,7 +22,7 @@ import type {
   RawLearningEntry,
   CompiledLearnings,
 } from "@/features/memory";
-import type { RatchetStorePort, RatchetSuite, RatchetBaseline } from "@/features/ratchet";
+import type { RatchetStorePort, RatchetSuite, RatchetBaseline } from "@/features/memory-ratchet";
 import type { ProjectGraphStorePort, ProjectGraph } from "@/features/graph";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
 import { isOpenHandoffRecord } from "@/features/handoff";

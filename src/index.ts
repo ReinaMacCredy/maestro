@@ -42,7 +42,7 @@ import {
 import {
   registerRatchetCheckCommand,
   registerRatchetPromoteCommand,
-} from "./features/ratchet/index.js";
+} from "./features/memory-ratchet/index.js";
 import {
   registerGraphLinkCommand,
   registerGraphContextCommand,

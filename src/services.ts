@@ -4,7 +4,7 @@ import { buildNotesServices, type NotesServices } from "./features/notes/service
 import { buildMissionServices, type MissionServices } from "./features/mission/services.js";
 import { buildMemoryServices, type MemoryServices } from "./features/memory/services.js";
 import { buildHandoffServices, type HandoffServices } from "./features/handoff/services.js";
-import { buildRatchetServices, type RatchetServices } from "./features/ratchet/services.js";
+import { buildRatchetServices, type RatchetServices } from "./features/memory-ratchet/services.js";
 import { buildGraphServices, type GraphServices } from "./features/graph/services.js";
 import { buildTaskServices, type TaskServices } from "./features/task/services.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
