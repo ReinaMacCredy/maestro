@@ -1,6 +1,42 @@
 # Changelog
 
-## 0.72.17 - L1 contract amend now enforces amendmentBudget
+## 0.72.18 - close three trust-substrate seam bugs from round-16 verdict-mid-amend exploration
+
+Round-16 ran a verdict-mid-amend explorer agent against v0.72.17. The
+flow worked end-to-end (verdict bound to contract version, history
+correctly versioned, evidence correctly attributed) but three real seam
+bugs surfaced.
+
+### Fixes
+
+- **`--version <id>` flag on `verdict show`, `contract show`, and
+  `update` now uses `--at-version` / `--release` instead.** The previous
+  flag name collided with Commander's global `--version`, which is
+  registered on the root program by `.version(...)`. As a result,
+  `maestro verdict show --task <id> --version <verdictId>` silently
+  printed the binary version string and exited 0 — the documented flow
+  in AGENTS.md was unusable as written. Renamed to `--at-version` for
+  the show verbs (`verdict show --at-version <id>`,
+  `contract show --task <id> --at-version <n>`) and to `--release` for
+  `maestro update --release <version>`. All three documented flows now
+  work as intended; AGENTS.md and the `maestro-verify` skill updated.
+
+- **`maestro task verify` now exits 0 for info-only findings.** Previously
+  any non-empty findings list returned exit 2, even when every finding
+  was severity `info` (e.g. unsigned commits). An agent reading exit 2
+  would think verify failed when the report was purely informational.
+  New behavior: exit 0 (no error/warn), 1 (any error), or 2 (any warn,
+  no error). Info-only is success.
+
+- **L1 amend (full-replace) now preserves criterion ids when the text
+  is unchanged.** Previously, an amendment YAML that re-stated the same
+  doneWhen text without explicit ids regenerated fresh ids for every
+  criterion, silently breaking any caller tracking criteria by id across
+  versions. The normalize logic now falls back to text-matching against
+  the current criteria when the input doesn't carry an id, so a no-op
+  re-statement keeps the existing id.
+
+
 
 Round-15 ran a new batch of minimal-prompt sub-agents against v0.72.16.
 The L1-amend scenario surfaced an asymmetric-gate bug: the L2 path
