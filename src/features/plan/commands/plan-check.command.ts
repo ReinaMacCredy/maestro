@@ -9,7 +9,8 @@ import { recordEvidence } from "@/features/evidence/index.js";
 import { deriveRiskClassFromDiff } from "@/features/risk/index.js";
 import { readCurrentContractWithBackfill } from "@/features/task/index.js";
 import { checkPlan } from "../usecases/check-plan.js";
-import type { PlanCheckFinding, PlanCheckResult, PlanInput } from "../domain/types.js";
+import { validatePlanInput } from "../domain/plan-validators.js";
+import type { PlanCheckFinding, PlanCheckResult } from "../domain/types.js";
 import type { PlanCheckPayload } from "@/features/evidence/index.js";
 
 interface PlanCheckCommandDeps {
@@ -30,6 +31,26 @@ export function registerPlanCheckCommand(
     .requiredOption("--task <id>", "Task ID")
     .requiredOption("--plan-file <path>", "Path to the plan file (JSON or YAML)")
     .option("--json", "Output as JSON")
+    .addHelpText("after", `
+Plan file shape (YAML or JSON):
+  intendedFiles: [<path>, ...]                       # required, paths the plan touches
+  proofSet:                                          # required, may be empty
+    - criterionId: <id>
+      evidenceKinds: [command|manual-note|...]
+  riskClass: <low|medium|high|critical>              # required
+  notes: <string>                                    # optional
+
+Example:
+  intendedFiles: [src/foo.ts]
+  proofSet: []
+  riskClass: medium
+
+Checks (exit code is always 0; agents react to findings):
+  scope-widens         Plan touches paths outside the contract scope
+  missing-proof        Plan claims a criterion is met but no evidence row exists
+                       (only fires when the contract is linked to a mission spec)
+  risk-class-too-low   Plan declares a class lower than what the diff implies
+`)
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
@@ -43,7 +64,8 @@ export function registerPlanCheckCommand(
         ]);
       }
 
-      const plan = parseYaml<PlanInput>(planText);
+      const planRaw = parseYaml<unknown>(planText);
+      const plan = validatePlanInput(planRaw, planFilePath);
       const planFileSha = createHash("sha256").update(planText).digest("hex");
 
       const contract = await readCurrentContractWithBackfill(
