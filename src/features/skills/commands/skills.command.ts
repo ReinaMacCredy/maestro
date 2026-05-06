@@ -557,17 +557,91 @@ async function prepareHttpArchive(source: string): Promise<{ readonly path: stri
   if (!response.ok) {
     throw new MaestroError(`Failed to download skill archive: HTTP ${response.status}`, [source]);
   }
-  await Bun.write(archive, await response.arrayBuffer());
+  // Stream to disk via Bun.write(Response) — avoids loading the full archive
+  // into memory, which would scale linearly with archive size.
+  await Bun.write(archive, response);
   const extractDir = join(tmp, "extract");
   await ensureDir(extractDir);
-  const command = archive.endsWith(".zip")
+  const isZip = archive.endsWith(".zip");
+
+  // Pre-extraction validation: list archive contents and reject any entry
+  // with an absolute path or `..` segment. This is the first line of defense
+  // against Zip Slip (CWE-22). Extraction itself is the second.
+  const listCommand = isZip ? ["unzip", "-Z", "-1", archive] : ["tar", "-tf", archive];
+  const list = await execArgv(listCommand, { timeout: 60_000 });
+  if (list.exitCode !== 0) {
+    throw new MaestroError(`Failed to inspect skill archive: ${source}`, [
+      list.stderr || list.stdout,
+    ]);
+  }
+  assertSafeArchiveEntries(list.stdout.split("\n"), source);
+
+  const command = isZip
     ? ["unzip", "-q", archive, "-d", extractDir]
     : ["tar", "-xf", archive, "-C", extractDir];
   const extracted = await execArgv(command, { timeout: 60_000 });
   if (extracted.exitCode !== 0) {
     throw new MaestroError(`Failed to extract skill archive: ${source}`, [extracted.stderr || extracted.stdout]);
   }
+  // Post-extraction validation: walk the tree, refuse any symlink or realpath
+  // that resolves outside extractDir. Catches symlink-based escapes the
+  // pre-extraction listing cannot see.
+  await assertExtractedPathsContained(extractDir, source);
   return { path: extractDir, resolvedSource: source, cleanup: tmp };
+}
+
+function assertSafeArchiveEntries(entries: readonly string[], source: string): void {
+  for (const raw of entries) {
+    const entry = raw.trim();
+    if (entry.length === 0) continue;
+    if (isAbsolute(entry) || entry.startsWith("/") || entry.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(entry)) {
+      throw new MaestroError(`Refusing to install ${source}: archive contains absolute path '${entry}'`, [
+        "Archive may be malicious (Zip Slip / CWE-22 directory traversal).",
+      ]);
+    }
+    const segments = entry.split(/[\\/]+/);
+    if (segments.some((segment) => segment === "..")) {
+      throw new MaestroError(`Refusing to install ${source}: archive contains parent-directory traversal in '${entry}'`, [
+        "Archive may be malicious (Zip Slip / CWE-22 directory traversal).",
+      ]);
+    }
+  }
+}
+
+async function assertExtractedPathsContained(extractDir: string, source: string): Promise<void> {
+  const realRoot = await realpath(extractDir);
+  const stack: string[] = [extractDir];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const child = join(current, entry.name);
+      if (entry.isSymbolicLink()) {
+        const link = await readlinkSafe(child);
+        if (link === undefined) continue;
+        const resolved = isAbsolute(link) ? link : resolve(dirname(child), link);
+        if (!isPathWithin(resolved, realRoot)) {
+          throw new MaestroError(`Refusing to install ${source}: extracted symlink '${relative(extractDir, child)}' points outside the archive root (${link})`, [
+            "Archive may be malicious (Zip Slip / CWE-22 symlink escape).",
+          ]);
+        }
+        continue;
+      }
+      const real = await realpath(child).catch(() => resolve(child));
+      if (!isPathWithin(real, realRoot)) {
+        throw new MaestroError(`Refusing to install ${source}: extracted entry '${relative(extractDir, child)}' resolves outside the archive root`, [
+          "Archive may be malicious (Zip Slip / CWE-22 directory traversal).",
+        ]);
+      }
+      if (entry.isDirectory()) stack.push(child);
+    }
+  }
+}
+
+function isPathWithin(candidate: string, root: string): boolean {
+  const resolvedCandidate = resolve(candidate);
+  const resolvedRoot = resolve(root);
+  return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(resolvedRoot + sep);
 }
 
 async function findSkillDirectories(root: string): Promise<readonly string[]> {
