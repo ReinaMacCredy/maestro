@@ -18,9 +18,20 @@ export class PrometheusRuntimeMonitor implements RuntimeMonitorPort {
     if (!Array.isArray(result) || result.length === 0) {
       throw new Error("prometheus: empty result vector");
     }
-    const sample = result[0] as [unknown, unknown] | { value?: [unknown, unknown] };
-    const rawValue = Array.isArray(sample) ? sample[1] : undefined;
-    const value = parseFloat(String(rawValue));
+    // Prometheus instant queries return result entries as
+    //   { metric: {...}, value: [<unix_ts>, "<stringified-number>"] }
+    // and matrix queries return `values: [[ts, "n"], ...]`. We accept either
+    // shape here and also the bare [ts, value] tuple some adapters synthesize
+    // for tests.
+    const sample = result[0];
+    const tuple = Array.isArray(sample)
+      ? (sample as [unknown, unknown])
+      : (sample as { value?: [unknown, unknown]; values?: [unknown, unknown][] }).value
+        ?? (sample as { values?: [unknown, unknown][] }).values?.[0];
+    const rawValue = Array.isArray(tuple) ? tuple[1] : undefined;
+    const value = typeof rawValue === "string" || typeof rawValue === "number"
+      ? parseFloat(String(rawValue))
+      : NaN;
     if (Number.isNaN(value)) throw new Error("prometheus: non-numeric value");
     return {
       value,
