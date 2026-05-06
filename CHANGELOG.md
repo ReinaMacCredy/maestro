@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.72.8 - close-path scope exemption + post-lock empty-diff hint
+
+Round-2 greenfield surfaced two follow-on bugs after v0.72.7:
+
+1. `task update --status completed` ran the legacy close-path verdict
+   (`computeContractVerdict`), which audited `.maestro/**` paths against
+   the user's scope just like the pre-v0.72.7 Trust Verifier did.
+   Greenfield agents who `git add -A` after `maestro init` and committed
+   substrate alongside user code saw their contract auto-flip to
+   `broken` with `outOfScopeFiles: [".maestro/contracts/...", ".maestro/
+   tasks/NOW.md", ...]` on every task completion.
+2. The `empty-diff` warn finding always told agents to "stage and commit
+   your changes," but the most common cause is locking the contract,
+   then running `task verify` before any post-lock commit exists. In
+   that case `base === head`, nothing has been staged, and the advice
+   is actively misleading.
+
+### Fix
+
+- `computeContractVerdict` filters `.maestro/**` paths out of
+  `forbiddenTouched`, `expectedFilesMatched`, and `outOfScopeFiles` —
+  matching the Trust Verifier exemption shipped in v0.72.7. Substrate
+  metadata is owned by the CLI, not the user's task, and must not flip
+  the contract verdict on close.
+- `checkNonEmptyDiff` now distinguishes the base-equals-HEAD case and
+  emits a hint that points at "commit work after locking the contract"
+  rather than "stage and commit your changes."
+- New unit test in `tests/unit/features/task/contract/verdict.test.ts`
+  asserts substrate paths (including forbidden globs inside `.maestro/`)
+  are exempt from close-path scope evaluation.
+- New unit test in `tests/unit/features/verify/usecases/checks/check-non-empty-diff.test.ts`
+  asserts the post-lock message variant.
+
 ## 0.72.7 - brownfield base resolution + .maestro/ scope exemption
 
 Round-3 brownfield test surfaced two compounding bugs that effectively

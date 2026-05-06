@@ -18,14 +18,21 @@ export function checkNonEmptyDiff(
   },
 ): readonly TrustFinding[] {
   if (diff.changedPaths.length > 0 || diff.addedLines.length > 0) return [];
+  // When base == head the typical cause is "locked the contract, then ran
+  // verify before committing any work after lock." Pointing at staging is
+  // misleading there — what's needed is a fresh commit AFTER the lock.
+  const baseEqualsHead = diff.base === diff.head;
+  const details = baseEqualsHead
+    ? `Diff between ${diff.base} and ${diff.head} is empty (base equals HEAD). ` +
+      "Commit work after locking the contract — the verifier diffs from the lock-commit."
+    : `Diff between ${diff.base} and ${diff.head} is empty. ` +
+      "Stage and commit your changes before verifying — the verifier has nothing to inspect.";
   return [
     {
       check: "empty-diff",
       severity: "warn",
       paths: [],
-      details:
-        `Diff between ${diff.base} and ${diff.head} is empty. ` +
-        "Stage and commit your changes before verifying — the verifier has nothing to inspect.",
+      details,
     },
   ];
 }

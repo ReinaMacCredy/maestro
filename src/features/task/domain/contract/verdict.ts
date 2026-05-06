@@ -8,6 +8,16 @@ import type {
   DoneWhenCriterion,
 } from "./contract-types.js";
 
+// Substrate metadata maestro itself writes during the task lifecycle.
+// Excluded from close-time scope evaluation for the same reason
+// `checkScope` excludes it: these files are produced by the CLI, not by
+// the user's task. Without the exemption, greenfield agents who
+// `git add -A` after `maestro init` get auto-broken contracts on every
+// `task update --status completed`.
+function isMaestroSubstratePath(path: string): boolean {
+  return path === ".maestro" || path.startsWith(".maestro/");
+}
+
 export interface ComputedContractVerdict {
   readonly verdict: ContractVerdict;
   readonly criteria: readonly DoneWhenCriterion[];
@@ -28,11 +38,14 @@ export function computeContractVerdict(
   const storedActualFilesTouched = gitResult.actualFilesTouchedTruncated
     ? actualFilesTouched.slice(0, gitResult.actualFilesTouchedTruncated.stored)
     : actualFilesTouched;
-  const forbiddenTouched = actualFilesTouched.filter((path) => matchesAnyGlob(contract.scope.filesForbidden, path));
-  const expectedFilesMatched = actualFilesTouched.filter((path) =>
+  // .maestro/** is substrate metadata written by the CLI itself; it is not
+  // part of the user's contract scope and must not influence fulfilled/broken.
+  const auditableFiles = actualFilesTouched.filter((path) => !isMaestroSubstratePath(path));
+  const forbiddenTouched = auditableFiles.filter((path) => matchesAnyGlob(contract.scope.filesForbidden, path));
+  const expectedFilesMatched = auditableFiles.filter((path) =>
     !matchesAnyGlob(contract.scope.filesForbidden, path) && matchesAnyGlob(contract.scope.filesExpected, path),
   );
-  const outOfScopeFiles = actualFilesTouched.filter((path) =>
+  const outOfScopeFiles = auditableFiles.filter((path) =>
     !matchesAnyGlob(contract.scope.filesForbidden, path) && !matchesAnyGlob(contract.scope.filesExpected, path),
   );
   const filesExpectedUnused = contract.scope.filesExpected.filter((pattern) =>
