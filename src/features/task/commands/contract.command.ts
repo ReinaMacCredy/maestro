@@ -18,6 +18,7 @@ import {
   isActiveContract,
 } from "../domain/contract/contract-state.js";
 import type {
+  AmendmentBudget,
   Contract,
   ContractConfigSnapshot,
   ContractScope,
@@ -46,6 +47,7 @@ interface ContractDraftTemplate {
     readonly maxFilesTouched?: unknown;
   };
   readonly doneWhen?: unknown;
+  readonly amendmentBudget?: unknown;
 }
 
 interface ContractVerdictPreview {
@@ -76,6 +78,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const cwd = process.cwd();
       const config = await services.config.load(resolveMaestroProjectRoot(cwd));
       const template = await loadContractDraftTemplate(opts.from, opts.editor);
+      const amendmentBudget = readTemplateAmendmentBudget(template);
       const contract = await services.contracts.draft({
         taskId,
         repoRoot: await services.gitAnchor.resolveRepoRoot(cwd),
@@ -84,6 +87,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         doneWhen: readTemplateDoneWhen(template),
         createdBy: await resolveDraftContractActor(taskId, opts.session),
         configSnapshot: buildContractConfigSnapshot(config),
+        ...(amendmentBudget ? { amendmentBudget } : {}),
       });
       await refreshContractNowMd();
 
@@ -419,7 +423,7 @@ async function loadContractDraftTemplate(
   return parsed;
 }
 
-const KNOWN_CONTRACT_DRAFT_KEYS = ["intent", "scope", "doneWhen"] as const;
+const KNOWN_CONTRACT_DRAFT_KEYS = ["intent", "scope", "doneWhen", "amendmentBudget"] as const;
 const KNOWN_CONTRACT_DRAFT_SCOPE_KEYS = [
   "filesExpected",
   "filesForbidden",
@@ -653,6 +657,36 @@ function readTemplateDoneWhen(
       ...(kind !== undefined ? { kind } : {}),
     };
   });
+}
+
+function readTemplateAmendmentBudget(template: ContractDraftTemplate): AmendmentBudget | undefined {
+  const raw = template.amendmentBudget;
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new MaestroError("Invalid contract draft: amendmentBudget must be an object", [
+      "Use YAML like: amendmentBudget: { maxAmendments: 3 }",
+    ]);
+  }
+  const known = new Set(["maxAmendments", "maxPathsPerAmendment", "forbiddenAmendmentPaths"]);
+  for (const key of Object.keys(raw)) {
+    if (!known.has(key)) {
+      warn(
+        `Ignoring unknown contract draft key: 'amendmentBudget.${key}'.`
+        + ` Known keys: ${[...known].join(", ")}.`,
+      );
+    }
+  }
+  const obj = raw as Record<string, unknown>;
+  const maxAmendments = obj.maxAmendments === undefined
+    ? 3
+    : readPositiveInteger(obj.maxAmendments, "amendmentBudget.maxAmendments");
+  const maxPathsPerAmendment = obj.maxPathsPerAmendment === undefined
+    ? 5
+    : readPositiveInteger(obj.maxPathsPerAmendment, "amendmentBudget.maxPathsPerAmendment");
+  const forbiddenAmendmentPaths = obj.forbiddenAmendmentPaths === undefined
+    ? []
+    : readStringList(obj.forbiddenAmendmentPaths, "amendmentBudget.forbiddenAmendmentPaths");
+  return { maxAmendments, maxPathsPerAmendment, forbiddenAmendmentPaths };
 }
 
 function readStringList(value: unknown, field: string): readonly string[] {

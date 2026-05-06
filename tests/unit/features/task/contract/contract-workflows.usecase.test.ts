@@ -133,6 +133,41 @@ describe("ContractWorkflows", () => {
     expect((linkError as Error & { rollbackError?: unknown }).rollbackError).toBe(rollbackError);
   });
 
+  it("draft persists amendmentBudget when supplied", async () => {
+    const baseContractStore = mockContractStore();
+    const contractStore = {
+      ...baseContractStore,
+      create: (input: Parameters<typeof baseContractStore.create>[0]) =>
+        baseContractStore.create({ ...input, id: "c-000001" }),
+    };
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask({ status: "pending", contractId: undefined })]),
+      mockGitAnchor(),
+    );
+
+    const drafted = await contracts.draft({
+      taskId: "tsk-000001",
+      repoRoot: "/repo",
+      intent: "ship it",
+      scope: { filesExpected: ["src/**/*.ts"], filesForbidden: [] },
+      doneWhen: [{ text: "tests pass" }],
+      createdBy: "agent-a",
+      configSnapshot: CONFIG,
+      amendmentBudget: {
+        maxAmendments: 1,
+        maxPathsPerAmendment: 5,
+        forbiddenAmendmentPaths: [],
+      },
+    });
+
+    expect(drafted.amendmentBudget).toEqual({
+      maxAmendments: 1,
+      maxPathsPerAmendment: 5,
+      forbiddenAmendmentPaths: [],
+    });
+  });
+
   it("discard unlinks task metadata on a best-effort basis", async () => {
     const taskStore = {
       ...mockTaskStore([makeTask({ contractId: "c-000001" })]),

@@ -659,6 +659,10 @@ export function mockContractStore(initial: readonly Contract[] = []): ContractSt
         amendments: [],
         createdBy: input.createdBy,
         configSnapshot: input.configSnapshot,
+        ...(input.amendmentBudget ? { amendmentBudget: input.amendmentBudget } : {}),
+        ...(input.costBudget ? { costBudget: input.costBudget } : {}),
+        ...(input.riskClass ? { riskClass: input.riskClass } : {}),
+        ...(input.missionId ? { missionId: input.missionId } : {}),
       };
       contracts.set(id, contract);
       index.push({ id, taskId: contract.taskId, status: contract.status, at: contract.createdAt });

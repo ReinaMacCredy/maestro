@@ -1,4 +1,5 @@
 import { MaestroError } from "@/shared/errors.js";
+import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import {
   buildActiveOverlapError,
   canAmendContract,
@@ -15,6 +16,7 @@ import {
   snapshotForAmendment,
 } from "../domain/contract/contract-state.js";
 import type {
+  AmendmentBudget,
   Contract,
   ContractConfigSnapshot,
   ContractScope,
@@ -54,6 +56,7 @@ export interface CreateContractInput {
   }>;
   readonly createdBy: string;
   readonly configSnapshot: ContractConfigSnapshot;
+  readonly amendmentBudget?: AmendmentBudget;
 }
 
 export interface EditContractInput {
@@ -247,6 +250,7 @@ async function createContract(
     })),
     createdBy: input.createdBy,
     configSnapshot: input.configSnapshot,
+    ...(input.amendmentBudget ? { amendmentBudget: input.amendmentBudget } : {}),
   });
 
   try {
@@ -702,13 +706,23 @@ async function detectContractOverlap(
     // overlap or their git windows overlap. Parallel worktrees touching
     // disjoint paths under the same `src/**` glob is not an overlap.
     const candidateTouched = candidate.verdict?.actualFilesTouched;
-    if (!candidateTouched) {
-      // Candidate is still open or has no recorded verdict; defer the
-      // file-intersection check until the candidate also closes.
-      return false;
+    if (candidateTouched) {
+      // Closed candidate: require recorded actuals to intersect ours.
+      if (currentTouched.size === 0) return false;
+      return candidateTouched.some((path) => currentTouched.has(path));
     }
+    // Open candidate (locked/amended, no verdict yet): include when its
+    // declared filesExpected glob matches any of our actual touches.
+    // Preview-time annotation needs this — both contracts may still be open
+    // when a user runs `task contract verdict --json` on the second worktree
+    // and wants to see whether they're racing the first.
     if (currentTouched.size === 0) return false;
-    return candidateTouched.some((path) => currentTouched.has(path));
+    for (const touched of currentActualFilesTouched) {
+      if (matchesAnyGlob(candidate.scope.filesExpected, touched)) {
+        return true;
+      }
+    }
+    return false;
   });
   if (candidates.length === 0) {
     return undefined;

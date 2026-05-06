@@ -2100,10 +2100,11 @@ function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
       console.error(`      maestro task contract criteria mark ${contract.id} ${c.id} --met`);
     }
   }
+  const lockCommit = contract.claimedAtCommit ?? "HEAD~1";
   if (verdict.outOfScopeFiles.length > 0) {
     console.error(
       `      # then EITHER revert the out-of-scope files`
-      + ` (git checkout HEAD -- ${verdict.outOfScopeFiles.join(" ")})`,
+      + ` (git checkout ${lockCommit} -- ${verdict.outOfScopeFiles.join(" ")})`,
     );
     for (const path of verdict.outOfScopeFiles) {
       console.error(
@@ -2115,7 +2116,7 @@ function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
   if (verdict.forbiddenTouched.length > 0) {
     console.error(
       `      # then revert the forbidden files`
-      + ` (git checkout HEAD -- ${verdict.forbiddenTouched.join(" ")})`,
+      + ` (git checkout ${lockCommit} -- ${verdict.forbiddenTouched.join(" ")})`,
     );
   }
   if (verdict.capExceeded) {
@@ -2133,7 +2134,9 @@ function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
       );
     }
   }
-  console.error(`      maestro task update --task ${task.id} --status completed`);
+  console.error(
+    `      maestro task update --task ${task.id} --status completed --reason "<one-line outcome>"`,
+  );
 }
 
 function formatVerdictHint(verdict: {
