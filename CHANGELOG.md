@@ -1,6 +1,30 @@
 # Changelog
 
-## 0.72.16 - broken-contract recovery hint now works for newly-introduced forbidden files
+## 0.72.17 - L1 contract amend now enforces amendmentBudget
+
+Round-15 ran a new batch of minimal-prompt sub-agents against v0.72.16.
+The L1-amend scenario surfaced an asymmetric-gate bug: the L2 path
+(`maestro contract amend --add-path`) correctly enforced the contract's
+`amendmentBudget`, but the L1 path (`maestro task contract amend
+<ref> --reason --from <yaml>`) did not consult it at all. Same contract,
+same budget field, two different answers depending on which verb the
+agent reached for.
+
+### Fixes
+
+- **L1 `maestro task contract amend` now consumes from
+  `amendmentBudget`.** A new `enforceAmendmentBudget` helper runs before
+  every L1 drift op (full-replace via `replace`, criterion add, criterion
+  remove) and rejects the amend with a `MaestroError` plus a
+  `contract-amendment-blocked` Evidence row at `witnessed-by-maestro` if
+  any of the three budget gates fail: `maxAmendments` exhausted,
+  `maxPathsPerAmendment` exceeded by net-new added paths, or any added
+  path matches `forbiddenAmendmentPaths`. `markCriterion` is exempt by
+  design — it is metadata-only (mark a manual criterion met after work
+  is done) and gating it would break the standard close-flow UX. The L2
+  amend path is unchanged; the gate now matches across both verbs.
+
+
 
 Round-13 ran another batch of minimal-prompt sub-agents against v0.72.15.
 The forbidden-file scenario surfaced one real seam bug; the
