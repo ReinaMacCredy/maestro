@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.72.41 - parallelize evidence file reads to keep listings flat as rows grow
+
+`FsEvidenceStoreAdapter` stores one JSON file per row under
+`.maestro/evidence/<task-id>/`, and `readTaskDir` was awaiting each
+read sequentially. With dozens of rows on a single task, the linear
+walk added up: at 30+ rows the per-call wall-clock started to scale
+with row count even though the reads are I/O-independent.
+
+A render-check screen-parallelism prototype was tested at the same
+time and reverted — concurrent OpenTUI/React mounts contend on the
+single JS thread and the whole thing got slower (1.0s → 1.5s).
+
+### Fix
+
+- **Parallelize per-file reads inside `readTaskDir`.** Reads now run
+  via `Promise.all` over candidate filenames after the directory scan.
+- **Parallelize per-task reads inside `list()`.** When no `task_id`
+  filter is given, all tasks' rows are now fetched concurrently.
+
+### Measured impact
+
+| Variant | Before | After |
+|---------|--------|-------|
+| `evidence list` (1 row) | 0.13s | 0.13s |
+| `evidence list` (33 rows) | n/a | 0.12-0.17s |
+| `evidence list` (133 rows) | n/a | 0.14-0.20s |
+
+Cold-start dominates short lists; parallel reads keep the per-row
+cost flat instead of growing linearly.
+
 ## 0.72.40 - lazy-load OpenTUI inside mission-control, cut --json mode 86%
 
 `maestro mission-control --json` is the agent-facing snapshot path —

@@ -61,14 +61,20 @@ export class FsEvidenceStoreAdapter implements EvidenceStorePort {
   }
 
   async list(filter: EvidenceListFilter = {}): Promise<readonly EvidenceRow[]> {
-    const rows: EvidenceRow[] = [];
     const taskIds = filter.task_id
       ? [filter.task_id]
       : await listTaskDirs(this.dir());
 
-    for (const taskId of taskIds) {
-      if (!TASK_ID_PATTERN.test(taskId)) continue;
-      for (const row of await readTaskDir(this.taskDir(taskId), taskId)) {
+    // Each task's evidence directory is independent — read them in parallel.
+    const perTaskRows = await Promise.all(
+      taskIds
+        .filter((taskId) => TASK_ID_PATTERN.test(taskId))
+        .map((taskId) => readTaskDir(this.taskDir(taskId), taskId)),
+    );
+
+    const rows: EvidenceRow[] = [];
+    for (const taskRows of perTaskRows) {
+      for (const row of taskRows) {
         if (filter.session_id !== undefined && row.session_id !== filter.session_id) continue;
         if (filter.kind !== undefined && row.kind !== filter.kind) continue;
         rows.push(row);
@@ -96,17 +102,25 @@ async function readTaskDir(taskDir: string, taskId: string): Promise<readonly Ev
   } catch {
     return [];
   }
-  const rows: EvidenceRow[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+  // Each row is its own JSON file, so reads are I/O-independent. Parallel
+  // reads cut wall-clock for tasks with many evidence rows by roughly the
+  // file count. Tasks with one or two rows pay no measurable extra cost.
+  const candidates = entries.flatMap((entry) => {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) return [];
     const evidenceId = entry.name.slice(0, -".json".length);
-    if (!EVIDENCE_ID_PATTERN.test(evidenceId)) continue;
-    const row = await tryReadRow(join(taskDir, entry.name));
-    if (row && row.id === evidenceId && row.task_id === taskId) {
-      rows.push(row);
-    }
-  }
-  return rows;
+    if (!EVIDENCE_ID_PATTERN.test(evidenceId)) return [];
+    return [{ evidenceId, path: join(taskDir, entry.name) }];
+  });
+  const rows = await Promise.all(
+    candidates.map(async ({ evidenceId, path }) => {
+      const row = await tryReadRow(path);
+      if (row && row.id === evidenceId && row.task_id === taskId) {
+        return row;
+      }
+      return undefined;
+    }),
+  );
+  return rows.filter((row): row is EvidenceRow => row !== undefined);
 }
 
 async function tryReadRow(path: string): Promise<EvidenceRow | undefined> {
