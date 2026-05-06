@@ -9,6 +9,7 @@ import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { PolicyServices } from "@/features/policy/services.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
 import type { RiskServices } from "@/features/risk/services.js";
+import type { SpecStorePort } from "@/features/spec/index.js";
 import type { VerifyServices } from "@/features/verify/services.js";
 import type { Verdict, VerdictSubject } from "../domain/types.js";
 import type { VerdictStorePort } from "../ports/storage.js";
@@ -19,6 +20,7 @@ export interface RequestVerdictDeps {
   readonly runStateStore: RunStateStorePort;
   readonly evidenceStore: EvidenceStorePort;
   readonly verdictStore: VerdictStorePort;
+  readonly specStore?: SpecStorePort;
   readonly getEffectiveRiskPolicy: PolicyServices["getEffectiveRiskPolicy"];
   readonly getEffectiveAutopilotPolicy: PolicyServices["getEffectiveAutopilotPolicy"];
   readonly getEffectiveReleasePolicy: PolicyServices["getEffectiveReleasePolicy"];
@@ -72,7 +74,7 @@ export async function requestVerdict(
 
   const cwd = process.cwd();
 
-  const [changedPaths, addedLines, evidenceRows, riskPolicy, autopilotPolicy, releasePolicy, sensitivePathsPolicy] =
+  const [changedPaths, addedLines, evidenceRows, riskPolicy, autopilotPolicy, releasePolicy, sensitivePathsPolicy, spec] =
     await Promise.all([
       deps.gitAnchor.collectChangedPaths(cwd, baseRef, headSha),
       deps.gitAnchor.collectAddedLines(cwd, baseRef, headSha),
@@ -81,6 +83,9 @@ export async function requestVerdict(
       deps.getEffectiveAutopilotPolicy(),
       deps.getEffectiveReleasePolicy(),
       loadSensitivePathsGlobs(deps.projectRoot),
+      contract.missionId !== undefined && deps.specStore !== undefined
+        ? deps.specStore.read(contract.missionId)
+        : Promise.resolve(undefined),
     ]);
 
   const verifierResult = await deps.runTrustVerifier({
@@ -104,6 +109,7 @@ export async function requestVerdict(
     amendmentCount: contract.amendments.length,
     costBudgetExhausted,
     matchedRiskPolicySignal: derivedRiskResult.matchedRow.signal,
+    spec,
   });
 
   // Stamp subject with tree SHA so verdicts are bound to diff content,

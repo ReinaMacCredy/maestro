@@ -1,6 +1,7 @@
 import type { Contract, RiskClass } from "@/features/task/index.js";
 import type { AIReviewPayload, EvidenceRow } from "@/features/evidence/index.js";
 import { compareWitnessLevel } from "@/features/evidence/index.js";
+import type { Spec } from "@/features/spec/index.js";
 import type { TrustFinding } from "@/features/verify/index.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { Verdict, VerdictReason } from "@/features/verdict/index.js";
@@ -19,6 +20,9 @@ export interface ComputeRiskInput {
   readonly blockedAmendments?: number;
   readonly costBudgetExhausted?: boolean;
   readonly matchedRiskPolicySignal?: string;
+  /** Linked Spec (when the task is associated with a mission). Consulted for
+   * release.yaml `require_proof_map_complete` enforcement. */
+  readonly spec?: Spec;
 }
 
 /**
@@ -49,6 +53,7 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     amendmentCount,
     costBudgetExhausted,
     matchedRiskPolicySignal,
+    spec,
   } = input;
 
   const proposedRiskClass: RiskClass = contract.riskClass ?? "medium";
@@ -163,7 +168,24 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     }
   }
 
-  // 6. HUMAN if policy disallows auto-merge for this risk class.
+  // 6. HUMAN if release policy requires a complete proof map and any
+  //    acceptance criterion has no covering evidence row. The criteria source
+  //    is the linked Spec when present, falling back to the contract's
+  //    `doneWhen`. A criterion is "covered" when at least one criterion-linked
+  //    evidence row carries its id.
+  if (releasePolicy.requireProofMapComplete) {
+    const uncovered = uncoveredCriteria(spec, contract, evidenceRows);
+    if (uncovered.length > 0) {
+      reasons.push({
+        category: "evidence",
+        code: "proof-map-incomplete",
+        message: `Release policy requires a complete proof map; ${uncovered.length} acceptance criterion/criteria are uncovered: ${uncovered.join(", ")}.`,
+      });
+      return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
+    }
+  }
+
+  // 7. HUMAN if policy disallows auto-merge for this risk class.
   if (autopilotPolicy.autoMergeAllowed[effectiveRiskClass] === false) {
     reasons.push({
       category: "policy",
@@ -173,13 +195,31 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
-  // 7. PASS.
+  // 8. PASS.
   reasons.push({
     category: "policy",
     code: "all-checks-passed",
     message: "All checks passed.",
   });
   return buildVerdict("PASS", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
+}
+
+function uncoveredCriteria(
+  spec: Spec | undefined,
+  contract: Contract,
+  evidenceRows: readonly EvidenceRow[],
+): readonly string[] {
+  const criteria = spec?.acceptance_criteria ?? contract.doneWhen ?? [];
+  if (criteria.length === 0) return [];
+  const coveredIds = new Set<string>();
+  for (const row of evidenceRows) {
+    if (!isCriterionLinkedEvidence(row)) continue;
+    const id = (row.payload as { criterion_id?: string }).criterion_id;
+    if (typeof id === "string" && id.length > 0) coveredIds.add(id);
+  }
+  return criteria
+    .filter((c) => !coveredIds.has(c.id))
+    .map((c) => c.id);
 }
 
 /**
