@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.72.28 - close R25 + R26 seam bugs in handoff, contract drafts, spec edit, deploy gate, task budget
+
+R25 and R26 sub-agent passes surfaced two handoff seam bugs and four
+agent-facing UX gaps that left autonomous agents stuck without an
+obvious next action.
+
+### Fixes
+
+- **`handoff pickup --standalone` no longer poisons the source workspace.**
+  Cross-project guard now runs before the `--standalone` fast-path so a
+  foreign workspace cannot consume a task-linked packet by claiming it
+  only wants prompt-only consumption. Marking `consumedAt` on a
+  task-linked packet from the wrong workspace blocked the rightful
+  workspace from ever picking it up. Standalone (task-less) foreign
+  packets continue to work as before.
+- **`handoff create` refuses to stack a second open task-linked packet.**
+  Previously `launchHandoff` accepted multiple open packets for the same
+  taskId, leading to ambiguous pickup and ownership races. New guard
+  surfaces the existing packet's id and the exact pickup / show commands.
+  Standalone packets without a taskId still stack since they don't claim
+  a task.
+- **`task contract new` now accepts `costBudget` in draft templates.**
+  Previously `costBudget.maxRetries` and friends were silently dropped at
+  the unknown-keys filter, making the L4 BLOCK-via-budget path
+  unreachable through the documented CLI flow. Schema mirrors
+  `amendmentBudget`: maxRetries (required positive int),
+  maxWallClockSeconds (required positive int), maxTokens (optional
+  positive int), with unknown-key warnings.
+- **`spec edit --mission <fake>` no longer creates orphan spec files.**
+  The verb now looks up the mission first and refuses with a clear next
+  step (`mission list` / `mission new`) when the mission does not exist.
+- **`deploy gate` failing checks now print inline recovery hints.**
+  Previously each failing check printed bare `fail` with no path back to
+  green. New output points feature_flag and canary_plan at
+  `maestro spec edit`, rollback at `maestro deploy rollback`, and owner
+  at `.maestro/policies/owners.yaml`.
+- **`task budget` cleanly distinguishes "no costBudget set" from real
+  limits.** Previous text mode showed `Retries: 0/0` and
+  `Wall clock: 0s/0s` for contracts with no `costBudget`, which read as
+  "0 retries allowed, exhausted." New output prints `(no limit)` and a
+  YAML snippet for setting one; JSON adds `hasBudget` and omits the
+  `max*` fields entirely when none is set.
+
 ## 0.72.27 - tell agents what to do next after `review ack` and cost-budget BLOCK
 
 R24's two remaining UX gaps. Both surface "what next?" hints that
