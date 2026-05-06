@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.72.15 - close three trust-substrate gaps surfaced by round-12 minimal-prompt scenarios
+
+Round-12 ran five minimal-prompt sub-agents against v0.72.14 against scenarios
+the prior rounds had not exercised (reopen → re-complete loop, forbidden
+file touched, amendment-budget exhaustion, empty diff, stale-claim reclaim).
+Three real seam bugs surfaced; one was a wash; one was filed as a known
+limitation that needs a broader fix.
+
+### Fixes
+
+- **Broken-contract recovery now uses the lock-time commit for revert
+  hints.** When a contract closed `broken` because of out-of-scope or
+  forbidden files, the recovery printer told the agent
+  `git checkout HEAD -- <file>`. But by the time the broken close
+  happens, HEAD is the commit containing the bad change — so the
+  printed command is a no-op. The hint now uses
+  `contract.claimedAtCommit` (the lock-time SHA, captured by
+  `task contract lock`), falling back to `HEAD~1` when the field is
+  missing. Always-correct regardless of how many commits the agent
+  layered after the lock.
+- **Broken-contract recovery now includes the required `--reason` flag.**
+  The final command in the fix-forward sequence —
+  `maestro task update --task <id> --status completed` — was missing
+  the mandatory `--reason "<one-line outcome>"` flag, so an agent
+  following the printout verbatim would error out at the last step.
+  The recovery output now prints
+  `... --status completed --reason "<one-line outcome>"`.
+- **`amendmentBudget` is now parsed from `task contract new --from
+  <yaml>`.** The contract draft YAML parser only knew three top-level
+  keys (`intent`, `scope`, `doneWhen`). `amendmentBudget` was silently
+  dropped with a `[!] Ignoring unknown contract draft key` warning —
+  even though the Contract record schema and the
+  `amend-contract.usecase.ts` enforcement logic both supported the
+  field. Result: budgets declared in YAML were never stored, and every
+  `contract amend` succeeded regardless of `maxAmendments`. The parser
+  now recognises `amendmentBudget`, validates the inner shape
+  (`maxAmendments`, `maxPathsPerAmendment`, `forbiddenAmendmentPaths`),
+  fills sensible defaults (3 / 5 / []) for unspecified inner keys, and
+  threads the budget through `services.contracts.draft` →
+  `CreateContractInput` → `contractStore.create`. Subsequent
+  `contract amend` calls now hit the existing budget gate and the
+  second amendment fails with
+  `[!] Amendment budget exhausted for task <id>: 1 of 1 amendments used`
+  plus a `contract-amendment-blocked` Evidence row.
+
+### Known limitation (not fixed in this release)
+
+- **Stale-claim reclaim semantics are coarse.** Round-12 scenario 5
+  observed that `maestro task claim <id>` on an `in_progress` task
+  succeeds silently (no warning, no `--force` required) because
+  `MAESTRO_SESSION_ID` does not propagate as an actor identity — the
+  CLI synthesises a per-user session and emits `[info] no agent
+  session detected`. Both "agents" therefore resolve to the same
+  identity, no ownership transfer is recorded, and the bundled
+  `maestro-task` skill defers reclaim flow explanation to a
+  `reference/recovery.md` that is not in the install bundle. Filed
+  for a future release that will tighten reclaim semantics and ship
+  the missing reference doc.
+
+### Regression coverage
+
+- contract-workflows.usecase.test.ts: new test for amendmentBudget
+  passthrough in `draft({...})` (covers the YAML→record→store path
+  end-to-end).
+
 ## 0.72.14 - close five trust-substrate seam bugs found by round-9 + round-10 minimal-prompt scenarios
 
 Round-9 surfaced two close-time UX gaps (recovery output too narrow,
