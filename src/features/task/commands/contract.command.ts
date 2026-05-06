@@ -73,13 +73,14 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--editor <cmd>", "Open an editor command to write the draft YAML")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--allow-unknown-keys", "Warn instead of error on unknown contract draft keys")
     .option("--json", "Output as JSON")
     .action(async (taskId: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const cwd = process.cwd();
       const config = await services.config.load(resolveMaestroProjectRoot(cwd));
-      const template = await loadContractDraftTemplate(opts.from, opts.editor);
+      const template = await loadContractDraftTemplate(opts.from, opts.editor, undefined, Boolean(opts.allowUnknownKeys));
       const amendmentBudget = readTemplateAmendmentBudget(template);
       const costBudget = readTemplateCostBudget(template);
       const contract = await services.contracts.draft({
@@ -129,13 +130,14 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--allow-unknown-keys", "Warn instead of error on unknown contract draft keys")
     .option("--json", "Output as JSON")
     .action(async (ref: string, opts) => {
       await resolveDraftContractActor(ref, opts.session);
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
-      const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract));
+      const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract), Boolean(opts.allowUnknownKeys));
       const edited = await services.contracts.editDraft({
         ref,
         intent: readTemplateIntent(template),
@@ -156,12 +158,13 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--allow-unknown-keys", "Warn instead of error on unknown contract draft keys")
     .option("--json", "Output as JSON")
     .action(async (ref: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
-      const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract));
+      const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract), Boolean(opts.allowUnknownKeys));
       const amended = await services.contracts.amend({
         kind: "replace",
         ref,
@@ -379,6 +382,7 @@ async function loadContractDraftTemplate(
   fromPath: string | undefined,
   editorCommand: string | undefined,
   initialContent = defaultContractTemplate(),
+  allowUnknownKeys = false,
 ): Promise<ContractDraftTemplate> {
   const envEditor = process.env.EDITOR ?? process.env.VISUAL;
   const autoDetectedStdin = fromPath === undefined
@@ -403,6 +407,22 @@ async function loadContractDraftTemplate(
       "Example: cat contract.yaml | maestro task contract new <id>",
       "Or set $EDITOR and rerun without --from",
     ]);
+  }
+
+  // If we'd fall back to $EDITOR but stdin is not a TTY, refuse instead of
+  // launching an interactive editor that has nowhere to read keystrokes from.
+  // Otherwise the verb appears to hang silently while the editor blocks on
+  // stdin — fatal for autonomous agents and CI runs.
+  if (!resolvedFromPath && !editorCommand && envEditor && !process.stdin.isTTY) {
+    throw new MaestroError(
+      "Cannot open $EDITOR in a non-interactive context (no TTY on stdin)",
+      [
+        "Pass --from <path> with the contract YAML, or pipe it on stdin",
+        "Example: maestro task contract new <id> --from contract.yaml",
+        "Example: cat contract.yaml | maestro task contract new <id>",
+        "Use --editor <cmd> if you really mean to run a non-blocking editor command",
+      ],
+    );
   }
 
   const resolvedEditor = editorCommand
@@ -436,7 +456,11 @@ async function loadContractDraftTemplate(
       "An empty or fields-less draft would silently wipe contract state; refusing to proceed",
     ]);
   }
-  warnUnknownContractDraftKeys(parsed);
+  if (allowUnknownKeys) {
+    warnUnknownContractDraftKeys(parsed);
+  } else {
+    rejectUnknownContractDraftKeys(parsed);
+  }
   return parsed;
 }
 
@@ -447,6 +471,54 @@ const KNOWN_CONTRACT_DRAFT_SCOPE_KEYS = [
   "maxFilesTouched",
 ] as const;
 
+// Refuse drafts with unknown keys — silently swallowing them produced
+// half-initialized contracts (e.g. `expectedPaths` typo'd in for
+// `filesExpected` saved a contract with empty scope and no error). Surfaced
+// in R27. Aggregating both top-level and scope-level unknowns into one
+// MaestroError keeps the user from playing whack-a-mole.
+function rejectUnknownContractDraftKeys(template: ContractDraftTemplate): void {
+  if (typeof template !== "object" || template === null) return;
+  const messages: string[] = [];
+  const hints: string[] = [];
+
+  const topUnknown = Object.keys(template).filter(
+    (k) => !(KNOWN_CONTRACT_DRAFT_KEYS as readonly string[]).includes(k),
+  );
+  for (const key of topUnknown) {
+    messages.push(`Unknown contract draft key: '${key}'`);
+  }
+  if (topUnknown.length > 0) {
+    hints.push(`Known top-level keys: ${KNOWN_CONTRACT_DRAFT_KEYS.join(", ")}`);
+  }
+
+  if (template.scope && typeof template.scope === "object") {
+    const scopeUnknown = Object.keys(template.scope).filter(
+      (k) => !(KNOWN_CONTRACT_DRAFT_SCOPE_KEYS as readonly string[]).includes(k),
+    );
+    for (const key of scopeUnknown) {
+      const hint = key === "allowedPaths" || key === "expectedPaths"
+        ? " (did you mean 'filesExpected'?)"
+        : key === "forbiddenPaths"
+          ? " (did you mean 'filesForbidden'?)"
+          : "";
+      messages.push(`Unknown contract draft key: 'scope.${key}'${hint}`);
+    }
+    if (scopeUnknown.length > 0) {
+      hints.push(`Known scope keys: ${KNOWN_CONTRACT_DRAFT_SCOPE_KEYS.join(", ")}`);
+    }
+  }
+
+  if (messages.length > 0) {
+    throw new MaestroError(messages.join("; "), [
+      ...hints,
+      "Fix the YAML and re-run, or pass --allow-unknown-keys to keep the previous warn-and-ignore behavior",
+    ]);
+  }
+}
+
+// Suppress noise from the `silent` parameter — we still want stderr
+// surfacing when a user explicitly passed --allow-unknown-keys but kept
+// typo'd keys around.
 function warnUnknownContractDraftKeys(template: ContractDraftTemplate): void {
   if (typeof template !== "object" || template === null) return;
   const topUnknown = Object.keys(template).filter(
@@ -824,7 +896,7 @@ function formatContractDetail(contract: Contract): string[] {
     }
   }
   if (contract.verdict) {
-    lines.push(`  Verdict: ${contract.verdict.fulfilled ? "fulfilled" : "broken"}`);
+    lines.push(`  Verdict: ${formatVerdictResult(contract.verdict)}`);
     lines.push(`  Files touched: ${contract.verdict.actualFilesTouched.join(", ") || "(none)"}`);
     if (contract.verdict.actualFilesTouchedTruncated) {
       lines.push(
@@ -833,6 +905,19 @@ function formatContractDetail(contract: Contract): string[] {
     }
   }
   return lines;
+}
+
+// "broken" alongside "Done when: 3/3 met" reads as nonsense — broken means
+// scope/forbidden/cap violation. Append the structural reasons inline so the
+// reader doesn't have to scan for the explanation. Surfaced in R27.
+function formatVerdictResult(verdict: ContractVerdict): string {
+  if (verdict.fulfilled) return "fulfilled";
+  const reasons: string[] = [];
+  if (verdict.outOfScopeFiles.length > 0) reasons.push(`out-of-scope files: ${verdict.outOfScopeFiles.length}`);
+  if (verdict.forbiddenTouched.length > 0) reasons.push(`forbidden files: ${verdict.forbiddenTouched.length}`);
+  if (verdict.unmetCriteria.length > 0) reasons.push(`unmet criteria: ${verdict.unmetCriteria.length}`);
+  if (verdict.capExceeded) reasons.push(`files-touched cap exceeded: ${verdict.capExceeded.actual}/${verdict.capExceeded.cap}`);
+  return reasons.length > 0 ? `broken — ${reasons.join(", ")}` : "broken";
 }
 
 function formatContractList(contracts: readonly Contract[]): string[] {
@@ -852,7 +937,7 @@ function formatContractVerdictPreview(preview: ContractVerdictPreview): string[]
     `Contract verdict preview: ${preview.contractId}`,
     `  Task: ${preview.taskId}`,
     `  Status: ${preview.contractStatus}`,
-    `  Result: ${preview.verdict.fulfilled ? "fulfilled" : "broken"}`,
+    `  Result: ${formatVerdictResult(preview.verdict)}`,
     ...(preview.closedAtCommit ? [`  Closed at commit: ${preview.closedAtCommit}`] : []),
     `  Done when: ${countMetCriteria(preview.criteria)}/${preview.criteria.length} met`,
     `  Files touched: ${preview.verdict.actualFilesTouched.join(", ") || "(none)"}`,

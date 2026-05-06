@@ -176,8 +176,10 @@ function printRecoveryHints(
     for (const path of outOfScope) {
       console.log(`  #   git checkout ${lockCommit} -- ${path} 2>/dev/null || git rm -f ${path}`);
     }
-    console.log("  # OR expand scope via amend (re-states the full filesExpected list):");
-    console.log(`  #   maestro task contract amend ${taskId} --reason "<why>" --from <yaml-with-new-scope>`);
+    console.log("  # OR expand scope via amend (adds the path to the contract's filesExpected):");
+    for (const path of outOfScope) {
+      console.log(`  #   maestro contract amend --task ${taskId} --add-path ${path} --reason "<why>"`);
+    }
   }
   if (forbidden.length > 0) {
     console.log("  # revert each forbidden file (cannot be amended; forbidden paths stay forbidden):");

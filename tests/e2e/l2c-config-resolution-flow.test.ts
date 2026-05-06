@@ -159,7 +159,7 @@ describe("L2C config resolution + UX fixes", () => {
   );
 
   it(
-    "2. unknown contract-draft YAML keys produce did-you-mean warnings (advisory, exit 0)",
+    "2. unknown contract-draft YAML keys reject by default; --allow-unknown-keys downgrades to warnings",
     async () => {
       const dir = await setupRepo();
       tempDirs.push(dir);
@@ -186,19 +186,31 @@ describe("L2C config resolution + UX fixes", () => {
       const yamlPath = join(dir, "contract.yaml");
       await writeFile(yamlPath, yaml);
 
-      const newRes = await runCompiled(
+      // Default: strict — typos that produce half-initialized contracts are
+      // rejected. The error message names every offending key so the user
+      // doesn't play whack-a-mole on retries.
+      const strictRes = await runCompiled(
         ["task", "contract", "new", taskId, "--from", yamlPath],
         dir,
       );
-      // Unknown keys are advisory — exit 0, contract still drafts.
-      expect(newRes.exitCode).toBe(0);
-      // Warnings hit stderr.
-      expect(newRes.stderr).toContain("scope.allowedPaths");
-      expect(newRes.stderr).toContain("did you mean 'filesExpected'");
-      expect(newRes.stderr).toContain("scope.forbiddenPaths");
-      expect(newRes.stderr).toContain("did you mean 'filesForbidden'");
-      expect(newRes.stderr).toContain("scope.unknownNonsense");
-      expect(newRes.stderr).toContain("mysteryField");
+      expect(strictRes.exitCode).not.toBe(0);
+      const strictMsg = `${strictRes.stderr}${strictRes.stdout}`;
+      expect(strictMsg).toContain("scope.allowedPaths");
+      expect(strictMsg).toContain("did you mean 'filesExpected'");
+      expect(strictMsg).toContain("scope.forbiddenPaths");
+      expect(strictMsg).toContain("did you mean 'filesForbidden'");
+      expect(strictMsg).toContain("scope.unknownNonsense");
+      expect(strictMsg).toContain("mysteryField");
+
+      // Opt-in fallback: `--allow-unknown-keys` keeps the old warn-and-ignore
+      // behavior for users who actually want to attach free-form keys.
+      const lenientRes = await runCompiled(
+        ["task", "contract", "new", taskId, "--from", yamlPath, "--allow-unknown-keys"],
+        dir,
+      );
+      expect(lenientRes.exitCode).toBe(0);
+      expect(lenientRes.stderr).toContain("scope.allowedPaths");
+      expect(lenientRes.stderr).toContain("did you mean 'filesExpected'");
     },
     SLOW_CLI_TIMEOUT_MS,
   );

@@ -547,7 +547,7 @@ async function removeContractCriterion(
 async function markContractCriterion(
   contractStore: ContractStorePort,
   versionStore: ContractVersionStorePort | undefined,
-  evidenceStore: EvidenceStorePort | undefined,
+  _evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "markCriterion" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);
@@ -573,14 +573,18 @@ async function markContractCriterion(
         kind: criterion.kind,
       };
 
-  const saved = await contractStore.save(
-    withContractAmendment(contract, {
-      actorId: input.actorId,
-      reason: `Marked criterion ${criterion.id} ${met ? "met" : "unmet"}`,
-      at,
-      doneWhen: contract.doneWhen.map((candidate) => candidate.id === criterion.id ? nextCriterion : candidate),
-    }),
-  );
+  // Marking a criterion met/unmet is workflow progress, not a structural
+  // contract change. Per-criterion `metAt` / `metBy` / `metEvidence` already
+  // carry the audit trail, so we don't append to `amendments[]` (which would
+  // consume against `amendmentBudget.maxAmendments`) and we don't flip status
+  // to "amended". Surfaced after R27: a 2-amendment budget was being burnt
+  // through by 3 criteria-mark calls before any structural amend could land.
+  const saved = await contractStore.save({
+    ...contract,
+    doneWhen: contract.doneWhen.map((candidate) =>
+      candidate.id === criterion.id ? nextCriterion : candidate,
+    ),
+  });
   await mirrorActiveContractToVersionStore(versionStore, saved);
   return saved;
 }

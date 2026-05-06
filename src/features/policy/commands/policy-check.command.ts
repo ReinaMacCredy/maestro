@@ -104,9 +104,14 @@ export function registerPolicyCheckCommand(
         ]);
       }
 
+      // Match `verdict request`'s base resolution: explicit > contract claim
+      // > default. Without this, policy check and verdict request diff against
+      // different bases and report inconsistent effective risk classes — most
+      // visibly in greenfield repos where `policy check` falls all the way back
+      // to the empty-tree SHA and counts every committed file as "modified".
       const baseRef = typeof opts.base === "string" && opts.base.length > 0
         ? opts.base
-        : await resolveDefaultBase();
+        : (contract.claimedAtCommit ?? await resolveDefaultBase());
       const headSha = await resolveHeadSha();
 
       const cwd = process.cwd();
