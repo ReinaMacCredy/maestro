@@ -1,5 +1,6 @@
 import { appendFile } from "node:fs/promises";
 import { readJson } from "@/shared/lib/fs.js";
+import { mapWithConcurrency } from "@/shared/lib/concurrency.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type {
@@ -36,7 +37,11 @@ export interface RunCiVerifyDeps {
   readonly githubApi?: GithubApiPort;
   readonly projectRoot?: string;
   /** Overridable for testing — defaults to reading owners.yaml from the base ref via git. */
-  readonly loadOwnersFromBase?: (base: string, projectRoot: string) => import("@/features/policy/index.js").Owners;
+  readonly loadOwnersFromBase?: (
+    base: string,
+    projectRoot: string,
+  ) => Promise<import("@/features/policy/index.js").Owners>
+    | import("@/features/policy/index.js").Owners;
   readonly readTestResults?: (path: string) => Promise<TestResultPayload | undefined>;
   readonly writeOutput?: (key: string, value: string) => Promise<void>;
   readonly now?: () => Date;
@@ -95,14 +100,16 @@ export async function runCiVerify(
       const otherPrs = (await githubApi.listOpenPullRequests({ repository })).filter(
         (pr) => pr !== resolvedPr,
       );
+      // GitHub's secondary rate limit (CONTENTION_REQUEST_LIMITS) trips around
+      // 10 concurrent requests against the same repository. Cap parallelism
+      // well below that for a generous safety margin on busy repos.
+      const FILES_CONCURRENCY = 4;
       const [thisPrFiles, otherPrFiles] = await Promise.all([
         githubApi.getPullRequestFiles({ repository, pr: resolvedPr }),
-        Promise.all(
-          otherPrs.map(async (pr) => ({
-            pr,
-            files: await githubApi.getPullRequestFiles({ repository, pr }),
-          })),
-        ),
+        mapWithConcurrency(otherPrs, FILES_CONCURRENCY, async (pr) => ({
+          pr,
+          files: await githubApi.getPullRequestFiles({ repository, pr }),
+        })),
       ]);
       const conflictResult = detectCrossTaskConflict({
         thisPrFiles,
@@ -167,7 +174,7 @@ export async function runCiVerify(
         });
         // Rule 12: load owners from base, not PR head, so a PR cannot promote itself.
         const loadOwnersFn = deps.loadOwnersFromBase ?? loadOwnersFromBase;
-        const owners = loadOwnersFn(resolvedBase ?? "main", deps.projectRoot ?? process.cwd());
+        const owners = await loadOwnersFn(resolvedBase ?? "main", deps.projectRoot ?? process.cwd());
         if (!owners.deployApprovers.includes(author)) {
           deployBlockReason = `deploy not authorized: PR author \`${author}\` is not in owners.yaml deploy_approver`;
         }

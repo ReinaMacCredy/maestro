@@ -13,6 +13,13 @@ import { readdir } from "node:fs/promises";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
+import { mapWithConcurrency } from "@/shared/lib/concurrency.js";
+
+// Bounds open file handles when listing a task with many evidence rows.
+// macOS default ulimit -n is 256; 32 leaves plenty of headroom and still
+// keeps wall-clock close to unbounded Promise.all on warm cache.
+const PER_TASK_READ_CONCURRENCY = 32;
+const PER_LIST_TASK_CONCURRENCY = 8;
 import { TASK_ID_PATTERN } from "@/features/task";
 import type { EvidenceRow } from "../domain/types.js";
 import { EVIDENCE_ID_PATTERN } from "../domain/evidence-id.js";
@@ -65,11 +72,14 @@ export class FsEvidenceStoreAdapter implements EvidenceStorePort {
       ? [filter.task_id]
       : await listTaskDirs(this.dir());
 
-    // Each task's evidence directory is independent — read them in parallel.
-    const perTaskRows = await Promise.all(
-      taskIds
-        .filter((taskId) => TASK_ID_PATTERN.test(taskId))
-        .map((taskId) => readTaskDir(this.taskDir(taskId), taskId)),
+    // Each task's evidence directory is independent — read them in parallel,
+    // but cap concurrency so a workspace with hundreds of tasks does not
+    // exhaust the per-process file-handle budget (EMFILE).
+    const validTaskIds = taskIds.filter((taskId) => TASK_ID_PATTERN.test(taskId));
+    const perTaskRows = await mapWithConcurrency(
+      validTaskIds,
+      PER_LIST_TASK_CONCURRENCY,
+      (taskId) => readTaskDir(this.taskDir(taskId), taskId),
     );
 
     const rows: EvidenceRow[] = [];
@@ -104,21 +114,24 @@ async function readTaskDir(taskDir: string, taskId: string): Promise<readonly Ev
   }
   // Each row is its own JSON file, so reads are I/O-independent. Parallel
   // reads cut wall-clock for tasks with many evidence rows by roughly the
-  // file count. Tasks with one or two rows pay no measurable extra cost.
+  // file count, but the parallelism is capped so a task with thousands of
+  // rows does not blow past the process file-descriptor budget (EMFILE).
   const candidates = entries.flatMap((entry) => {
     if (!entry.isFile() || !entry.name.endsWith(".json")) return [];
     const evidenceId = entry.name.slice(0, -".json".length);
     if (!EVIDENCE_ID_PATTERN.test(evidenceId)) return [];
     return [{ evidenceId, path: join(taskDir, entry.name) }];
   });
-  const rows = await Promise.all(
-    candidates.map(async ({ evidenceId, path }) => {
+  const rows = await mapWithConcurrency(
+    candidates,
+    PER_TASK_READ_CONCURRENCY,
+    async ({ evidenceId, path }) => {
       const row = await tryReadRow(path);
       if (row && row.id === evidenceId && row.task_id === taskId) {
         return row;
       }
       return undefined;
-    }),
+    },
   );
   return rows.filter((row): row is EvidenceRow => row !== undefined);
 }
