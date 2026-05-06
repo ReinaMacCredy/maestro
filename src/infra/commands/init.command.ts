@@ -24,14 +24,26 @@ export function registerInitCommand(program: Command): void {
           confirmReplace: replacementPrompter?.confirmReplace,
         });
 
-        output(isJson, result, (r) => [
-          `[ok] Initialized ${r.scope} ${r.bootstrapGenerated ? "bootstrap" : "config"}`,
-          ...r.created.map((p) => `  --> ${p}`),
-          ...r.skipped.map((p) => `  [skip] ${p}`),
-          "",
-          "Next: run `maestro install` to install the bundled agent skills into",
-          "      ~/.claude/skills/ and ~/.codex/skills/ for Claude Code / Codex.",
-        ]);
+        output(isJson, result, (r) => {
+          const lines = [
+            `[ok] Initialized ${r.scope} ${r.bootstrapGenerated ? "bootstrap" : "config"}`,
+            ...r.created.map((p) => `  --> ${p}`),
+            ...r.skipped.map((p) => `  [skip] ${p}`),
+            "",
+            "Next: run `maestro install` to install the bundled agent skills into",
+            "      ~/.claude/skills/ and ~/.codex/skills/ for Claude Code / Codex.",
+          ];
+          if (r.scope === "project" && r.created.length > 0) {
+            lines.push(
+              "",
+              "Tip: commit the substrate maestro just wrote (`.claude/`, `.codex/`,",
+              "     `.maestro/`, `.gitignore`) before locking your first contract.",
+              "     Bundled `maestro:` skill paths are exempt from scope checks, but",
+              "     committing them up-front keeps your task diff minimal.",
+            );
+          }
+          return lines;
+        });
       } finally {
         replacementPrompter?.close();
       }
