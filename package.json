@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.72.38",
+  "version": "0.72.39",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
