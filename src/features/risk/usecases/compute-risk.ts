@@ -153,7 +153,7 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     reasons.push({
       category: "policy",
       code: "auto-merge-not-allowed",
-      message: `Auto-merge is not allowed for risk class "${effectiveRiskClass}" per autopilot policy.`,
+      message: `Auto-merge is opt-in and not enabled for risk class "${effectiveRiskClass}" in autopilot.yaml; the task can still complete via human review (run \`maestro handoff create\` or set autoMergeAllowed.${effectiveRiskClass}: true to enable auto-merge).`,
     });
     return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }

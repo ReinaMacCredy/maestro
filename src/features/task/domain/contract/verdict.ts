@@ -1,4 +1,5 @@
 import { matchGlob, matchesAnyGlob } from "@/shared/lib/glob-match.js";
+import { isMaestroSubstratePath } from "@/shared/lib/maestro-substrate-paths.js";
 import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
 import type { TaskReceipt } from "../task-types.js";
 import type { GitTouchedFilesResult } from "../../ports/git-anchor.port.js";
@@ -7,16 +8,6 @@ import type {
   ContractVerdict,
   DoneWhenCriterion,
 } from "./contract-types.js";
-
-// Substrate metadata maestro itself writes during the task lifecycle.
-// Excluded from close-time scope evaluation for the same reason
-// `checkScope` excludes it: these files are produced by the CLI, not by
-// the user's task. Without the exemption, greenfield agents who
-// `git add -A` after `maestro init` get auto-broken contracts on every
-// `task update --status completed`.
-function isMaestroSubstratePath(path: string): boolean {
-  return path === ".maestro" || path.startsWith(".maestro/");
-}
 
 export interface ComputedContractVerdict {
   readonly verdict: ContractVerdict;

@@ -1,22 +1,16 @@
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
+import { isMaestroSubstratePath } from "@/shared/lib/maestro-substrate-paths.js";
 import type { Contract } from "@/features/task/index.js";
 import type { TrustFinding } from "../../domain/types.js";
-
-/** Substrate-managed metadata that maestro itself writes during the task
- *  lifecycle (contract creation, task heartbeat, NOW.md refresh). These
- *  files appear in the diff between lock-commit and HEAD by construction —
- *  they're not user code, so gating them with the user's scope produces
- *  false positives that block legitimate brownfield workflows. */
-function isMaestroSubstratePath(path: string): boolean {
-  return path === ".maestro" || path.startsWith(".maestro/");
-}
 
 /**
  * Checks every changed path against the contract scope.
  *
  * - Paths in filesForbidden → error finding.
  * - Paths outside filesExpected (when filesExpected is not ["**"] / empty) → error finding.
- * - Paths under `.maestro/` are exempt: they are substrate-managed metadata, not user code.
+ * - Maestro substrate paths (`.maestro/`, bundled `maestro:` skill bundles
+ *   under `.claude/skills/` and `.codex/skills/`) are exempt — see
+ *   `isMaestroSubstratePath`.
  */
 export function checkScope(
   changedPaths: readonly string[],
