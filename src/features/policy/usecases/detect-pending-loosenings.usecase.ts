@@ -1,7 +1,10 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { join } from "node:path";
 import { readJson, writeJson } from "@/shared/lib/fs.js";
 import { MaestroError } from "@/shared/errors.js";
+
+const execFileAsync = promisify(execFile);
 import type { PolicyKind } from "../domain/policy-types.js";
 import { classifyPolicyEdit } from "./classify-policy-edit.usecase.js";
 import type { PolicyEdit } from "./classify-policy-edit.usecase.js";
@@ -48,13 +51,10 @@ function kindFromFile(file: string): PolicyKind | undefined {
   }
 }
 
-function git(args: string[], cwd: string): string {
+async function git(args: string[], cwd: string): Promise<string> {
   try {
-    return execFileSync("git", args, {
-      cwd,
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    const { stdout } = await execFileAsync("git", args, { cwd, encoding: "utf8" });
+    return stdout;
   } catch (err: unknown) {
     const e = err as { stderr?: string; stdout?: string };
     const msg = e.stderr ?? e.stdout ?? String(err);
@@ -62,16 +62,16 @@ function git(args: string[], cwd: string): string {
   }
 }
 
-function gitSafe(args: string[], cwd: string): string {
+async function gitSafe(args: string[], cwd: string): Promise<string> {
   try {
-    return git(args, cwd);
+    return await git(args, cwd);
   } catch {
     return "";
   }
 }
 
-function headSha(projectRoot: string): string {
-  return git(["rev-parse", "HEAD"], projectRoot).trim();
+async function headSha(projectRoot: string): Promise<string> {
+  return (await git(["rev-parse", "HEAD"], projectRoot)).trim();
 }
 
 function toIso(epochSeconds: number): string {
@@ -120,12 +120,12 @@ function parseGitLog(output: string): Array<{ sha: string; commitEpoch: number; 
   return commits;
 }
 
-function getFileAtCommit(sha: string, file: string, projectRoot: string): string {
+async function getFileAtCommit(sha: string, file: string, projectRoot: string): Promise<string> {
   // git show <sha>:<file>; returns empty string if ENOENT
   return gitSafe(["show", `${sha}:${file}`], projectRoot);
 }
 
-function getFileAtParent(sha: string, file: string, projectRoot: string): string {
+async function getFileAtParent(sha: string, file: string, projectRoot: string): Promise<string> {
   // Parent of the first commit is empty; git show SHA^:file fails gracefully
   return gitSafe(["show", `${sha}^:${file}`], projectRoot);
 }
@@ -140,7 +140,7 @@ async function writeCache(projectRoot: string, cache: CacheFile): Promise<void> 
 
 async function recomputeLoosenings(projectRoot: string): Promise<readonly PendingLoosening[]> {
   const lookbackEpoch = Math.floor(Date.now() / 1000) - LOOKBACK_DAYS * 86400;
-  const logOutput = gitSafe(
+  const logOutput = await gitSafe(
     [
       "log",
       `--after=${lookbackEpoch}`,
@@ -159,12 +159,24 @@ async function recomputeLoosenings(projectRoot: string): Promise<readonly Pendin
   const loosenings: PendingLoosening[] = [];
 
   for (const { sha, commitEpoch, files } of commits) {
-    for (const file of files) {
-      const kind = kindFromFile(file);
-      if (!kind || kind === "owners") continue;
+    // Within a commit, fetching old+new for each file is independent — issue
+    // them concurrently so the per-commit cost is one round-trip per file
+    // instead of two sequential `git show` calls.
+    const fileResults = await Promise.all(
+      files.map(async (file) => {
+        const kind = kindFromFile(file);
+        if (!kind || kind === "owners") return undefined;
+        const [newYaml, oldYaml] = await Promise.all([
+          getFileAtCommit(sha, file, projectRoot),
+          getFileAtParent(sha, file, projectRoot),
+        ]);
+        return { file, kind, newYaml, oldYaml };
+      }),
+    );
 
-      const newYaml = getFileAtCommit(sha, file, projectRoot);
-      const oldYaml = getFileAtParent(sha, file, projectRoot);
+    for (const result of fileResults) {
+      if (result === undefined) continue;
+      const { file, kind, newYaml, oldYaml } = result;
 
       let classification;
       try {
@@ -205,7 +217,7 @@ export async function detectPendingLoosenings(
   // Try cache
   let sha: string;
   try {
-    sha = headSha(projectRoot);
+    sha = await headSha(projectRoot);
   } catch {
     // Not a git repo or no commits — return empty
     return [];

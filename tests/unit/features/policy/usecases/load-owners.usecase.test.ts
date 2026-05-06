@@ -90,18 +90,11 @@ describe("loadOwners", () => {
 describe("loadOwnersFromBase", () => {
   const EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
-  it("emits a tailored hint when base resolves to the empty tree", () => {
+  it("emits a tailored hint when base resolves to the empty tree", async () => {
     execFileSync("git", ["init", "-q"], { cwd: tmpDir });
     execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: tmpDir });
     execFileSync("git", ["config", "user.name", "t"], { cwd: tmpDir });
-    const err = (() => {
-      try {
-        loadOwnersFromBase(EMPTY_TREE_SHA, tmpDir);
-        return undefined;
-      } catch (e) {
-        return e;
-      }
-    })();
+    const err = await loadOwnersFromBase(EMPTY_TREE_SHA, tmpDir).catch((e) => e);
     expect(err).toBeInstanceOf(MaestroError);
     expect((err as MaestroError).message).toMatch(/empty-tree base/i);
     expect((err as MaestroError).hints.join("\n")).toMatch(/--base/);

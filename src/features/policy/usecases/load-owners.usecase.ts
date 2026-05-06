@@ -1,9 +1,12 @@
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { readText } from "@/shared/lib/fs.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { Owners, OwnersYaml } from "../domain/owners-types.js";
+
+const execFileAsync = promisify(execFile);
 
 export const OWNERS_REL_PATH = ".maestro/policies/owners.yaml";
 
@@ -45,14 +48,15 @@ export function parseOwners(text: string): Owners {
   };
 }
 
-export function loadOwnersFromBase(base: string, projectRoot: string): Owners {
+export async function loadOwnersFromBase(base: string, projectRoot: string): Promise<Owners> {
   let text: string;
   try {
-    text = execFileSync(
+    const { stdout } = await execFileAsync(
       "git",
       ["show", `${base}:${OWNERS_REL_PATH}`],
-      { cwd: projectRoot, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
-    ).trim();
+      { cwd: projectRoot, encoding: "utf8" },
+    );
+    text = stdout.trim();
   } catch {
     if (base === EMPTY_TREE_SHA) {
       throw new MaestroError(

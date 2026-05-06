@@ -13,6 +13,7 @@ interface CiVerifyCommandDeps {
     | "contractStore"
     | "runStateStore"
     | "evidenceStore"
+    | "specStore"
     | "getEffectiveRiskPolicy"
     | "getEffectiveAutopilotPolicy"
     | "getEffectiveReleasePolicy"
@@ -59,6 +60,7 @@ export function registerCiVerifyCommand(
             runStateStore: services.runStateStore,
             evidenceStore: services.evidenceStore,
             verdictStore: services.verdictStore,
+            specStore: services.specStore,
             getEffectiveRiskPolicy: services.getEffectiveRiskPolicy,
             getEffectiveAutopilotPolicy: services.getEffectiveAutopilotPolicy,
             getEffectiveReleasePolicy: services.getEffectiveReleasePolicy,

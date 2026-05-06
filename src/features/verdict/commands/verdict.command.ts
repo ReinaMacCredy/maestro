@@ -31,6 +31,7 @@ interface VerdictCommandDeps {
     | "contractStore"
     | "runStateStore"
     | "evidenceStore"
+    | "specStore"
     | "getEffectiveRiskPolicy"
     | "getEffectiveAutopilotPolicy"
     | "getEffectiveReleasePolicy"
@@ -41,7 +42,7 @@ interface VerdictCommandDeps {
     | "projectRoot"
   >;
   readonly getUsername?: () => string;
-  readonly loadOwnersFromBase?: (base: string, projectRoot: string) => Owners;
+  readonly loadOwnersFromBase?: (base: string, projectRoot: string) => Promise<Owners> | Owners;
   readonly recordEvidence?: typeof recordEvidence;
 }
 
@@ -149,6 +150,7 @@ export function registerVerdictCommand(
           runStateStore: services.runStateStore,
           evidenceStore: services.evidenceStore,
           verdictStore: services.verdictStore,
+          specStore: services.specStore,
           getEffectiveRiskPolicy: services.getEffectiveRiskPolicy,
           getEffectiveAutopilotPolicy: services.getEffectiveAutopilotPolicy,
           getEffectiveReleasePolicy: services.getEffectiveReleasePolicy,
@@ -213,7 +215,7 @@ Examples:
 
       // Load owners from base branch (Rule 12 — not from PR head)
       const loadOwnersFn = deps.loadOwnersFromBase ?? loadOwnersFromBase;
-      const owners = loadOwnersFn(base, services.projectRoot);
+      const owners = await loadOwnersFn(base, services.projectRoot);
 
       // Authorization check: invoking user must be in sensitive_waiver
       const getUser = deps.getUsername ?? (() => os.userInfo().username);
