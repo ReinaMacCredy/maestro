@@ -24,6 +24,7 @@ import type {
   ContractScope,
   ContractStatus,
   ContractVerdict,
+  CostBudget,
   DoneWhenCriterion,
 } from "../domain/contract/contract-types.js";
 import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
@@ -48,6 +49,7 @@ interface ContractDraftTemplate {
   };
   readonly doneWhen?: unknown;
   readonly amendmentBudget?: unknown;
+  readonly costBudget?: unknown;
 }
 
 interface ContractVerdictPreview {
@@ -79,6 +81,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const config = await services.config.load(resolveMaestroProjectRoot(cwd));
       const template = await loadContractDraftTemplate(opts.from, opts.editor);
       const amendmentBudget = readTemplateAmendmentBudget(template);
+      const costBudget = readTemplateCostBudget(template);
       const contract = await services.contracts.draft({
         taskId,
         repoRoot: await services.gitAnchor.resolveRepoRoot(cwd),
@@ -88,6 +91,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         createdBy: await resolveDraftContractActor(taskId, opts.session),
         configSnapshot: buildContractConfigSnapshot(config),
         ...(amendmentBudget ? { amendmentBudget } : {}),
+        ...(costBudget ? { costBudget } : {}),
       });
       await refreshContractNowMd();
 
@@ -436,7 +440,7 @@ async function loadContractDraftTemplate(
   return parsed;
 }
 
-const KNOWN_CONTRACT_DRAFT_KEYS = ["intent", "scope", "doneWhen", "amendmentBudget"] as const;
+const KNOWN_CONTRACT_DRAFT_KEYS = ["intent", "scope", "doneWhen", "amendmentBudget", "costBudget"] as const;
 const KNOWN_CONTRACT_DRAFT_SCOPE_KEYS = [
   "filesExpected",
   "filesForbidden",
@@ -712,6 +716,46 @@ function readTemplateAmendmentBudget(template: ContractDraftTemplate): Amendment
     ? []
     : readStringList(obj.forbiddenAmendmentPaths, "amendmentBudget.forbiddenAmendmentPaths");
   return { maxAmendments, maxPathsPerAmendment, forbiddenAmendmentPaths };
+}
+
+function readTemplateCostBudget(template: ContractDraftTemplate): CostBudget | undefined {
+  const raw = template.costBudget;
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new MaestroError("Invalid contract draft: costBudget must be an object", [
+      "Use YAML like: costBudget: { maxRetries: 3, maxWallClockSeconds: 1800 }",
+    ]);
+  }
+  const known = new Set(["maxRetries", "maxWallClockSeconds", "maxTokens"]);
+  for (const key of Object.keys(raw)) {
+    if (!known.has(key)) {
+      warn(
+        `Ignoring unknown contract draft key: 'costBudget.${key}'.`
+        + ` Known keys: ${[...known].join(", ")}.`,
+      );
+    }
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.maxRetries === undefined) {
+    throw new MaestroError("Invalid contract draft: costBudget.maxRetries is required", [
+      "Set costBudget.maxRetries to a positive integer (e.g. 3)",
+    ]);
+  }
+  if (obj.maxWallClockSeconds === undefined) {
+    throw new MaestroError("Invalid contract draft: costBudget.maxWallClockSeconds is required", [
+      "Set costBudget.maxWallClockSeconds to a positive integer (e.g. 1800)",
+    ]);
+  }
+  const maxRetries = readPositiveInteger(obj.maxRetries, "costBudget.maxRetries");
+  const maxWallClockSeconds = readPositiveInteger(obj.maxWallClockSeconds, "costBudget.maxWallClockSeconds");
+  const maxTokens = obj.maxTokens === undefined
+    ? undefined
+    : readPositiveInteger(obj.maxTokens, "costBudget.maxTokens");
+  return {
+    maxRetries,
+    maxWallClockSeconds,
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
+  };
 }
 
 function readStringList(value: unknown, field: string): readonly string[] {

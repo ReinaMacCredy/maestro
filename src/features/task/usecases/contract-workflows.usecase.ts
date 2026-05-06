@@ -24,6 +24,7 @@ import type {
   ContractScope,
   ContractStatus,
   ContractVerdict,
+  CostBudget,
   DoneWhenCriterion,
 } from "../domain/contract/contract-types.js";
 import {
@@ -59,6 +60,7 @@ export interface CreateContractInput {
   readonly createdBy: string;
   readonly configSnapshot: ContractConfigSnapshot;
   readonly amendmentBudget?: AmendmentBudget;
+  readonly costBudget?: CostBudget;
 }
 
 export interface EditContractInput {
@@ -257,6 +259,7 @@ async function createContract(
     createdBy: input.createdBy,
     configSnapshot: input.configSnapshot,
     ...(input.amendmentBudget ? { amendmentBudget: input.amendmentBudget } : {}),
+    ...(input.costBudget ? { costBudget: input.costBudget } : {}),
   });
 
   try {
