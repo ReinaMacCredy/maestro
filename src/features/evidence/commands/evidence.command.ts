@@ -252,7 +252,19 @@ async function parseFindings(raw: string, taskId: string): Promise<readonly AIRe
       ]);
     }
   } else {
-    const fileContent = await readText(raw);
+    let fileContent: string | undefined;
+    try {
+      fileContent = await readText(raw);
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EISDIR") {
+        throw new MaestroError(`--findings: path is a directory: ${raw}`, [
+          "Pass a path to a JSON or YAML file, not a directory",
+        ]);
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new MaestroError(`--findings: cannot read file: ${raw}`, [msg]);
+    }
     if (fileContent === undefined) {
       throw new MaestroError(`--findings: could not read file: ${raw}`, [
         `maestro evidence record --task ${taskId} --kind ai-review --reviewer security --findings ./findings.json`,
@@ -315,7 +327,19 @@ async function parseThreatModelFile(
   taskId: string,
   criterion?: string,
 ): Promise<ThreatModelPayload> {
-  const fileContent = await readText(filePath);
+  let fileContent: string | undefined;
+  try {
+    fileContent = await readText(filePath);
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EISDIR") {
+      throw new MaestroError(`--threat-model-file: path is a directory: ${filePath}`, [
+        "Pass a path to a JSON or YAML file, not a directory",
+      ]);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new MaestroError(`--threat-model-file: cannot read file: ${filePath}`, [msg]);
+  }
   if (fileContent === undefined) {
     throw new MaestroError(`--threat-model-file: could not read file: ${filePath}`, [
       `maestro evidence record --task ${taskId} --kind threat-model --threat-model-file ./threat-model.json`,

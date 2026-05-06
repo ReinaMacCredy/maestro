@@ -410,6 +410,13 @@ async function loadContractDraftTemplate(
     ? await editContractDraft(baseContent, resolvedEditor)
     : baseContent;
 
+  if (finalContent.trim().length === 0) {
+    throw new MaestroError("Contract draft is empty", [
+      "Provide intent, scope, and doneWhen — see `maestro task contract new --help`",
+      "An empty draft would silently wipe contract fields; refusing to proceed",
+    ]);
+  }
+
   let parsed: ContractDraftTemplate;
   try {
     parsed = parseYaml<ContractDraftTemplate>(finalContent) ?? {};
@@ -417,6 +424,12 @@ async function loadContractDraftTemplate(
     const detail = error instanceof Error ? error.message : String(error);
     throw new MaestroError(`Cannot parse contract draft YAML: ${detail}`, [
       "Fix the YAML syntax in the template and retry",
+    ]);
+  }
+  if (typeof parsed !== "object" || parsed === null || Object.keys(parsed).length === 0) {
+    throw new MaestroError("Contract draft has no fields", [
+      "Provide intent, scope, and doneWhen — see `maestro task contract new --help`",
+      "An empty or fields-less draft would silently wipe contract state; refusing to proceed",
     ]);
   }
   warnUnknownContractDraftKeys(parsed);
@@ -463,7 +476,19 @@ function hasRealStdinPayload(): boolean {
 }
 
 async function readDraftSource(path: string): Promise<string> {
-  const raw = await readTextOrStdin(path);
+  let raw: string | undefined;
+  try {
+    raw = await readTextOrStdin(path);
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EISDIR") {
+      throw new MaestroError(`Contract draft path is a directory: ${path}`, [
+        "Pass a path to a YAML or JSON file, not a directory",
+      ]);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new MaestroError(`Cannot read contract draft: ${path}`, [msg]);
+  }
   if (raw !== undefined) {
     return raw;
   }
