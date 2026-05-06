@@ -23,7 +23,7 @@ export interface LaunchHandoffDeps {
   readonly missions: Missions;
   readonly git: GitPort;
   readonly handoffStore: HandoffStorePort;
-  readonly launchers: Readonly<Record<HandoffAgent, HandoffLaunchPort>>;
+  readonly launchers: Readonly<Partial<Record<HandoffAgent, HandoffLaunchPort>>>;
 }
 
 export interface LaunchHandoffResult {
@@ -63,7 +63,7 @@ export async function launchHandoff(
   const handoffLauncher = deps.launchers[input.agent];
   if (!handoffLauncher) {
     throw new MaestroError(`Unsupported agent '${input.agent}'`, [
-      "Valid agents: codex, claude",
+      "Valid agents: codex, claude, hermes",
     ]);
   }
 
@@ -141,9 +141,16 @@ export async function launchHandoff(
       prompt: launchPrompt,
       targetDir,
       model,
+      modelProvided: input.model !== undefined,
       name,
       wait: input.wait,
       logPath: deps.handoffStore.resolveArtifactPath(initialRecord.outputPath),
+      env: input.agent === "hermes"
+        ? {
+            MAESTRO_AGENT: "hermes",
+            MAESTRO_SESSION_ID: initialRecord.id,
+          }
+        : undefined,
     });
     const waitedExitCode = input.wait ? launchResult.exitCode : undefined;
     const finalRecord = await deps.handoffStore.update({

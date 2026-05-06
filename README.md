@@ -8,7 +8,7 @@ It is designed for a workflow where a human operator coordinates multiple termin
 
 - Shared state lives on disk in `.maestro/`, not in chat history.
 - Missions break work into milestones, features, and validation assertions.
-- Native handoff launches build a self-contained markdown brief and start a fresh Codex or Claude run from the current repo state.
+- Native handoff launches build a self-contained markdown brief and start a fresh Codex, Claude, or Hermes run from the current repo state.
 - Memory commands turn corrections and learnings into reusable guidance.
 - Mission Control gives you a read-only TUI and JSON snapshots of current state.
 - The runtime stays local-first: filesystem, git, config, and terminal tools.
@@ -47,7 +47,7 @@ If you only remember one distinction: `mission` is for planned execution; `task`
 | Milestone | A phase within a mission. Milestones can act as work phases or validation gates. |
 | Feature | A concrete piece of work assigned to an agent type, with verification steps and optional dependencies. |
 | Assertion | A validation target tied to a feature. Assertions are updated to `passed`, `failed`, `blocked`, or `waived`. |
-| Handoff | A persisted launch record plus markdown brief for starting a fresh Codex or Claude session from current mission or repo context. |
+| Handoff | A persisted launch record plus markdown brief for starting a fresh Codex, Claude, or Hermes session from current mission or repo context. |
 | Task | A Claude-style blocker-graph work item for the daily loop; lives at `.maestro/tasks/tasks.jsonl` independent of missions. |
 | Reply | An agent's structured outcome record for a feature, optionally gated by behavioral principles. |
 | Principle | A behavioral rule injected into agent prompts and scored against replies. Stored at `.maestro/principles.jsonl`. |
@@ -74,7 +74,7 @@ The loop is deliberately simple: define work, optionally inspect the feature bri
 
 - [Bun](https://bun.sh/)
 - Git
-- A local agent harness in another terminal, such as Claude Code, Codex, Gemini CLI, or Droid CLI
+- A local agent harness in another terminal, such as Codex, Claude Code, or Hermes
 
 ### Install From Release
 
@@ -118,6 +118,8 @@ If you also want to initialize global config and inject supported agent instruct
 ```bash
 maestro install
 ```
+
+This syncs bundled Maestro skills into Codex, Claude Code, Hermes, and the shared AgentSkills root when those targets are available. See [Provider Registry and Skills](docs/providers.md) for roots, diagnostics, and external skill installs.
 
 `./dist/maestro` is the fresh repo build. `maestro` on your `PATH` is the installed local binary.
 
@@ -224,6 +226,7 @@ Useful variants:
 ```bash
 maestro handoff "Review auth-impl before merge" --agent claude --worktree auth-review
 maestro handoff "Finish auth-impl and wait for the result" --agent codex --wait --json
+maestro handoff "Run a Hermes pass over auth-impl" --agent hermes --wait --json
 maestro handoff pickup --id <handoff-id> --json
 ```
 
@@ -240,7 +243,7 @@ maestro milestone seal implement --mission <mission-id>
 
 ## Handoffs
 
-`maestro handoff "<task>"` builds a self-contained markdown brief from the current repo state plus the linked task continuation, then launches a fresh Codex or Claude run. Every launch is persisted under `~/.maestro/handoff/<id>/` (a single global store) so the operator can inspect exactly what was sent and what the child process printed. Handoffs created in one working directory are visible from any other. Prompt-only packets can be picked up from any working directory, but task-linked packets must be picked up from their source project unless you explicitly pass `maestro handoff pickup --standalone`.
+`maestro handoff "<task>"` builds a self-contained markdown brief from the current repo state plus the linked task continuation, then launches a fresh Codex, Claude, or Hermes run. Every launch is persisted under `~/.maestro/handoff/<id>/` (a single global store) so the operator can inspect exactly what was sent and what the child process printed. Handoffs created in one working directory are visible from any other. Prompt-only packets can be picked up from any working directory, but task-linked packets must be picked up from their source project unless you explicitly pass `maestro handoff pickup --standalone`.
 
 ### What a launch contains
 
@@ -310,7 +313,17 @@ maestro handoff \
   --json
 ```
 
-Use `--model` to override the agent default (`gpt-5.4` for Codex, `opus` for Claude), `--name` to label the launch, and `--base` when you need a specific base branch for a worktree handoff. Use `maestro handoff pickup` to consume a packet, and pass `--standalone` when you intentionally want only the prompt without resuming a linked task.
+Hermes launch:
+
+```bash
+maestro handoff \
+  "Run a focused Hermes implementation pass" \
+  --agent hermes \
+  --wait \
+  --json
+```
+
+Use `--model` to override the agent default (`gpt-5.4` for Codex, `opus` for Claude; Hermes only receives `--model` when explicitly provided), `--name` to label the launch, and `--base` when you need a specific base branch for a worktree handoff. Use `maestro handoff pickup` to consume a packet, and pass `--standalone` when you intentionally want only the prompt without resuming a linked task.
 
 ## Task System
 
@@ -948,6 +961,8 @@ The following phases are intentionally not in this release and will ship when te
 | `maestro install` | Initialize global config and inject supported agent instruction blocks. |
 | `maestro update` | Upgrade the local binary to the latest release and refresh agent instruction blocks. |
 | `maestro doctor` | Check whether the local environment is configured correctly. |
+| `maestro providers list` / `maestro providers doctor` | Inspect runtime and skill-target provider configuration. |
+| `maestro skills list` / `maestro skills install <source>` | Discover, inspect, install, remove, and sync AgentSkills-compatible skills. |
 | `maestro status` | Inspect the current Maestro state quickly. |
 | `maestro mission create --file plan.json` | Create a mission from a plan file. |
 | `maestro feature prompt <feature-id> --mission <mission-id>` | Generate the next agent prompt. |
@@ -1065,7 +1080,7 @@ The design is intentionally transparent: state is inspectable, diffable, and eas
 
 Maestro is organized as a feature-first hexagonal codebase:
 
-- `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `memory-ratchet`, `handoff` (markdown prompt building plus Codex or Claude launch orchestration), `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders and behavioral principles), `agent` (library-only; composes agent prompts and manages harness config injection), `task` (Claude-style blocker graph for the daily loop), `reply` (agent reply ingest with principle gating), and `bundle` (portable mission archive).
+- `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `memory-ratchet`, `handoff` (markdown prompt building plus Codex, Claude, or Hermes launch orchestration), `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders and behavioral principles), `agent` (library-only; composes agent prompts and manages harness config injection), `task` (Claude-style blocker graph for the daily loop), `reply` (agent reply ingest with principle gating), and `bundle` (portable mission archive).
 - `src/infra/` -- plumbing that isn't a feature: init, doctor, status, install, update, uninstall, and mission-control commands, config and git ports/adapters, and infra-owned domain types.
 - `src/shared/` -- generic utilities with no domain knowledge: filesystem, YAML, shell, path safety, and output formatting under `lib/`; cross-cutting primitives like IDs and UI config under `domain/`; plus top-level `errors.ts`, `version.ts`, and `version-format.ts`.
 - `src/tui/` -- read-only rendering and input for Mission Control; consumes features through their public surfaces. See `src/tui/README.md` for the contributor-oriented TUI architecture walkthrough.
@@ -1099,16 +1114,16 @@ maestro mission-control --preview --size 120x40 --format plain
 maestro mission-control --render-check --size 120x40
 ```
 
-## Supported Agent Config Injection
+## Provider and Skill Targets
 
-`maestro install` and `maestro update` can inject instruction blocks for:
+`maestro install`, `maestro update --agents-only`, and `maestro uninstall --agents-only` manage bundled Maestro skills for:
 
 - Claude Code
 - Codex
-- Gemini CLI
-- Droid CLI
+- Hermes
+- AgentSkills shared root
 
-These instruction blocks help each harness read and write shared Maestro state consistently.
+These skills help each harness read and write shared Maestro state consistently. External AgentSkills-compatible skills can be managed with `maestro skills ...`; provider diagnostics live under `maestro providers ...`. See [Provider Registry and Skills](docs/providers.md).
 
 ## License
 
