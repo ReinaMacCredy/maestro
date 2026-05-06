@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.72.12 - extend substrate exemption to bundled `maestro:` skills + clearer HUMAN reason
+
+Round-6 minimal-prompt agents (greenfield + brownfield) both closed
+`broken` for the same reason: `maestro init` writes ~39 files into
+`.claude/skills/maestro:*/` and `.codex/skills/maestro:*/`, and when
+those land in the close-time diff (the user does `git add .` after
+locking the contract) every one of them shows up as out-of-scope. The
+contract semantics are correct — those paths are not in the user's
+`filesExpected` glob — but the surprise is total: the user only edited
+`src/`, the trust-loop output is *covered in unrelated maestro
+substrate*, and the only fix today is "amend the contract or reset
+`.maestro/contracts/`."
+
+### Fixes
+
+- New shared helper `isMaestroSubstratePath` in
+  `src/shared/lib/maestro-substrate-paths.ts` covers three categories:
+  `.maestro/`, bundled `maestro:` skill bundles under
+  `.claude/skills/`, and bundled `maestro:` skill bundles under
+  `.codex/skills/` (matching both `maestro:` and the URL-encoded
+  on-disk form `maestro%3A`). Both `verdict.ts` (close-path) and
+  `check-scope.ts` (Trust Verifier) now share this single source of
+  truth so the two layers can never drift again. Project-authored
+  skills outside the `maestro:` namespace are still in scope — they're
+  user code.
+- `maestro init` prints a closing tip nudging users to commit the
+  substrate it just wrote (`.claude/`, `.codex/`, `.maestro/`,
+  `.gitignore`) before locking their first contract. The exemption
+  catches the pure-substrate case automatically; this tip handles the
+  user who edits a non-`maestro:` skill or a `.gitignore` line as part
+  of their task and wants those changes in the diff explicitly.
+- Verdict reason text for `auto-merge-not-allowed` now reads
+  "Auto-merge is opt-in and not enabled for risk class … the task can
+  still complete via human review" instead of the previously-terse
+  "Auto-merge is not allowed". Round-6 brownfield reported the old
+  wording reads as a hard block on task completion; the new wording
+  distinguishes "no auto-merge" from "no completion."
+
 ## 0.72.11 - close four UX seams: contract checkbox view, task update --task alias, exit-2 + HUMAN-default skill notes
 
 Round-5 closed cleanly (greenfield + brownfield both `fulfilled`), but
