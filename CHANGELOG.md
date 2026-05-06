@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.72.26 - surface trust-fail paths and tailor empty-tree owners hint (R24 sweep)
+
+R24 sub-agent walked the verdict BLOCK / HUMAN paths end-to-end and
+flagged two real ergonomic gaps and one false positive.
+
+### Fixes
+
+- **Trust-FAIL verdicts now list the offending paths inline.** Previously
+  a `verdict request` returning FAIL on a scope violation said only
+  "Trust verifier found 1 error(s)" with `findingChecks: ["scope"]`,
+  forcing the agent to re-run `maestro task verify` to learn which
+  files were out of scope. The verdict reason now carries
+  `findingPaths` (de-duplicated, sorted across all error findings)
+  and the human printer dents them under the reason. Agents can
+  self-correct from the verdict output alone.
+- **`verdict override` and other `--base`-aware verbs now produce a
+  tailored hint** when the resolved base is the empty-tree SHA
+  (greenfield repo with no upstream / main / master / trunk merge-base).
+  Previous behavior surfaced
+  `owners.yaml not found at 4b825dc...:.maestro/policies/owners.yaml`
+  with a "run maestro init" suggestion that didn't help. New error
+  names the empty-tree case directly and tells the user to pass
+  `--base <commit-or-ref>` explicitly.
+
+### Investigated, not a bug
+
+R24 also reported `verdict request --json` exiting 0 regardless of
+decision. Could not reproduce: both `--json` and plain output exit
+0 / 1 / 2 / 3 for PASS / FAIL / HUMAN / BLOCK in v0.72.25. The
+`process.exit(exitCodeForDecision(...))` is unconditional after the
+JSON branch (`src/features/verdict/commands/verdict.command.ts:171`).
+Likely a shell-piping artifact in the sub-agent's environment.
+
 ## 0.72.25 - harden contract draft + evidence file readers (R22 sweep)
 
 R22 sub-agent swept every `--from` / `--file` / `--findings` flag for
