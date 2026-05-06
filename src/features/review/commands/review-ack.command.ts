@@ -88,6 +88,11 @@ Examples:
         ...payload.criteria.map((c) => `    - ${c}`),
         `  Witness: ${r.witness_level}`,
         `  Created: ${r.created_at}`,
+        "",
+        "Next step: this ack is consumed by `maestro merge auto`,",
+        "  not by `verdict request` — re-running `verdict request` will",
+        "  still return HUMAN. Run `maestro merge auto --pr <n> --task <id>`",
+        "  to check eligibility now that the ack is recorded.",
       ]);
     });
 }

@@ -85,7 +85,11 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     reasons.push({
       category: "cost-budget",
       code: "cost-budget-exhausted",
-      message: "Cost budget exhausted; further execution blocked.",
+      message:
+        "Cost budget exhausted; further execution blocked. " +
+        "Run `maestro task budget --task <id>` to inspect the limits, " +
+        "amend the contract's costBudget via `maestro contract amend` " +
+        "to raise the cap, or escalate to a human via `maestro handoff create`.",
     });
     return buildVerdict("BLOCK", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
