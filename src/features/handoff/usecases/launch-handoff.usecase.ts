@@ -15,6 +15,7 @@ import type { GitPort } from "@/infra/ports/git.port.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readText, writeText } from "@/shared/lib/fs.js";
 import { buildHandoffPrompt } from "./build-handoff-prompt.usecase.js";
+import { listOpenHandoffsForTask } from "./list-open-handoffs-for-task.usecase.js";
 
 const PROMPT_FILE_SIZE_WARN_BYTES = 500_000;
 
@@ -64,6 +65,25 @@ export async function launchHandoff(
     throw new MaestroError(`Unsupported agent '${input.agent}'`, [
       "Valid agents: codex, claude",
     ]);
+  }
+
+  // Refuse to create a duplicate task-linked packet. Two open packets on the
+  // same task lead to ambiguous pickup and race conditions on task ownership.
+  // Standalone (no taskId) packets can stack since they don't claim a task.
+  if (input.refs?.taskId) {
+    const openIds = await listOpenHandoffsForTask(deps.handoffStore, input.refs.taskId, {
+      currentProjectRoot: input.cwd,
+    });
+    if (openIds.length > 0) {
+      throw new MaestroError(
+        `Task ${input.refs.taskId} already has an open handoff packet (${openIds.join(", ")})`,
+        [
+          `Pick up the existing packet: maestro handoff pickup --id ${openIds[0]}`,
+          `Or inspect it: maestro handoff show ${openIds[0]}`,
+          "Two open packets on the same task lead to ambiguous pickup and ownership races",
+        ],
+      );
+    }
   }
 
   const promptFromFile = input.promptFile !== undefined

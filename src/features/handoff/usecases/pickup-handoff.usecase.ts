@@ -61,6 +61,25 @@ export async function pickupHandoff(
   }
 
   const taskId = launch.refs.taskId;
+
+  // Cross-project guard runs BEFORE the --standalone fast-path so a foreign
+  // workspace cannot consume a task-linked packet. Consuming a task-linked
+  // packet from the wrong workspace marks the source's `consumedAt`, blocking
+  // the rightful workspace from ever picking it up. --standalone bypasses
+  // task-resume side-effects, not source-of-truth ownership of the packet.
+  if (taskId) {
+    const sourceProjectRoot = resolveHandoffProjectRoot(launch);
+    if (input.currentProjectRoot && input.currentProjectRoot !== sourceProjectRoot) {
+      throw new MaestroError(
+        `Handoff ${input.id} belongs to project ${sourceProjectRoot} and remains linked to task ${taskId}`,
+        [
+          `Pick it up from the source project to preserve task ownership: ${buildSourceProjectPickupCommand(sourceProjectRoot, input.id)}`,
+          `--standalone does not bypass this; run it from ${sourceProjectRoot} if you only want prompt-only consumption`,
+        ],
+      );
+    }
+  }
+
   if (!taskId || input.standalone) {
     const consumedOnly = await consumeHandoffOnly(deps.handoffStore, input);
     return {
@@ -73,17 +92,6 @@ export async function pickupHandoff(
       [
         `Inspect the packet with: maestro handoff show ${input.id}`,
         "Reopen the task and create a fresh handoff if more work is needed",
-      ],
-    );
-  }
-
-  const sourceProjectRoot = resolveHandoffProjectRoot(launch);
-  if (input.currentProjectRoot && input.currentProjectRoot !== sourceProjectRoot) {
-    throw new MaestroError(
-      `Handoff ${input.id} belongs to project ${sourceProjectRoot} and remains linked to task ${taskId}`,
-      [
-        `Pick it up from the source project to preserve task ownership: ${buildSourceProjectPickupCommand(sourceProjectRoot, input.id)}`,
-        `Or consume it here as prompt-only: maestro handoff pickup --id ${input.id} --standalone --json`,
       ],
     );
   }

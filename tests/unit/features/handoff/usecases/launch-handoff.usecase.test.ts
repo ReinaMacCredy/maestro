@@ -536,4 +536,49 @@ describe("launchHandoff", () => {
       }
     });
   });
+
+  it("refuses to create a duplicate task-linked handoff", async () => {
+    const handoffStore = makeHandoffStore();
+    const codexLauncher: HandoffLaunchPort = {
+      agent: "codex",
+      async launch(request) {
+        return {
+          command: ["codex", "exec", request.prompt],
+          pid: 1234,
+        };
+      },
+    };
+    const launchers = {
+      codex: codexLauncher,
+      claude: { agent: "claude" as const, async launch() { throw new Error("not used"); } },
+    };
+
+    await launchHandoff({
+      missions: mockMissions(),
+      git: makeGit(),
+      handoffStore,
+      launchers,
+    }, {
+      cwd: "/tmp/project",
+      task: "First packet",
+      agent: "codex",
+      wait: false,
+      refs: { taskId: "tsk-aaa111" },
+    });
+
+    await expect(
+      launchHandoff({
+        missions: mockMissions(),
+        git: makeGit(),
+        handoffStore,
+        launchers,
+      }, {
+        cwd: "/tmp/project",
+        task: "Second packet",
+        agent: "codex",
+        wait: false,
+        refs: { taskId: "tsk-aaa111" },
+      }),
+    ).rejects.toThrow(/already has an open handoff packet/);
+  });
 });
