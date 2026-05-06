@@ -140,11 +140,23 @@ export function buildEffectivePolicyServices(args: {
     detectPendingLooseningsImpl,
   } = args;
 
+  // verdict request fetches all three effective policies in sequence and
+  // each call walks the same `detectPendingLoosenings` path — which spawns
+  // `git rev-parse HEAD` + reads the on-disk pending-loosenings cache.
+  // Memoize per services-instance so the work happens once per CLI run.
+  // services is built once per invocation, so this can't return stale data
+  // mid-flight (the next `maestro` call gets a fresh services tree).
+  let pendingPromise: Promise<readonly PendingLoosening[]> | undefined;
+  const memoizedDetect = (): Promise<readonly PendingLoosening[]> => {
+    pendingPromise ??= detectPendingLooseningsImpl();
+    return pendingPromise;
+  };
+
   return {
     async getEffectiveRiskPolicy(): Promise<RiskPolicy> {
       const [policy, pending] = await Promise.all([
         loadRiskPolicyImpl(projectRoot),
-        detectPendingLooseningsImpl(),
+        memoizedDetect(),
       ]);
       const riskLoosenings = pending.filter((l) => l.kind === "risk");
       return riskLoosenings.reduce(
@@ -156,7 +168,7 @@ export function buildEffectivePolicyServices(args: {
     async getEffectiveAutopilotPolicy(): Promise<AutopilotPolicy> {
       const [policy, pending] = await Promise.all([
         loadAutopilotPolicyImpl(projectRoot),
-        detectPendingLooseningsImpl(),
+        memoizedDetect(),
       ]);
       const autopilotLoosenings = pending.filter((l) => l.kind === "autopilot");
       return autopilotLoosenings.reduce(
@@ -168,7 +180,7 @@ export function buildEffectivePolicyServices(args: {
     async getEffectiveReleasePolicy(): Promise<ReleasePolicy> {
       const [policy, pending] = await Promise.all([
         loadReleasePolicyImpl(projectRoot),
-        detectPendingLooseningsImpl(),
+        memoizedDetect(),
       ]);
       const releaseLoosenings = pending.filter((l) => l.kind === "release");
       return releaseLoosenings.reduce(

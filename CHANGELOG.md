@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.72.39 - cache HEAD sha + pending-loosenings per CLI run, halve verdict-request time
+
+`verdict request` was spawning `git rev-parse HEAD` 4 times and the
+pending-loosenings `git log` 3 times in a single invocation. Each
+spawn costs 30-50ms, so ~300ms of pure subprocess overhead per call.
+Tracing showed:
+
+1. `getEffectiveRiskPolicy` / `getEffectiveAutopilotPolicy` /
+   `getEffectiveReleasePolicy` each called `detectPendingLoosenings`
+   independently — same git operations 3x.
+2. `resolveHeadSha` and `resolveDefaultBase` were called from
+   independent code paths (request-verdict.usecase.ts,
+   task-verify.command.ts, policy-check.command.ts, merge-auto.command.ts)
+   without any shared memoization.
+
+### Fix
+
+- **Memoize `detectPendingLooseningsImpl` per services-instance.**
+  `effective-policy.usecase.ts` now caches the promise and shares it
+  across all three `getEffective*Policy` calls. services is built once
+  per CLI invocation, so this can't return stale data mid-flight.
+- **Cache `resolveHeadSha` and `resolveDefaultBase` per (process, cwd).**
+  `git-base.ts` now keeps a Map<cwd, Promise> for each. Tests that
+  `process.chdir()` between cases get fresh entries automatically.
+
+### Measured impact (relative to v0.72.38)
+
+| Verb | v0.72.38 | v0.72.39 |
+|------|----------|----------|
+| `verdict request` | 0.37s | 0.18s |
+| `task verify` | 0.36s | 0.15s |
+| `policy check` | 0.36s | 0.16s |
+
+Trace shows git invocations during `verdict request` dropped from
+11 to 6.
+
 ## 0.72.38 - lazy-load mission-control, cut cold-start ~85% for non-TUI verbs
 
 Cold-start profiling showed mission-control alone owned 252ms of the 522ms

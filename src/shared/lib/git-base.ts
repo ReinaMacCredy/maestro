@@ -5,6 +5,15 @@ import { execArgv } from "./shell.js";
  *  repo with no parent branch to merge from. */
 const EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
+// Per-process memoization keyed on cwd. A single CLI invocation always runs
+// against one cwd, so callers in `verdict request` / `task verify` /
+// `policy check` / `merge auto` that each independently call
+// resolveHeadSha or resolveDefaultBase share one git subprocess instead of
+// each spawning their own. Tests that `process.chdir()` between cases get
+// fresh cache entries automatically because the cache is cwd-keyed.
+const headShaCache = new Map<string, Promise<string>>();
+const defaultBaseCache = new Map<string, Promise<string>>();
+
 /**
  * Resolve the default base ref for a diff. Walks a fallback chain so the
  * verifier still produces a meaningful diff in greenfield repos and on
@@ -21,6 +30,15 @@ const EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
  * across HEAD movement.
  */
 export async function resolveDefaultBase(): Promise<string> {
+  const cwd = process.cwd();
+  const cached = defaultBaseCache.get(cwd);
+  if (cached) return cached;
+  const promise = computeDefaultBase();
+  defaultBaseCache.set(cwd, promise);
+  return promise;
+}
+
+async function computeDefaultBase(): Promise<string> {
   const upstream = await execArgv(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
   if (upstream.exitCode === 0 && upstream.stdout) {
     const upstreamRef = upstream.stdout;
@@ -53,6 +71,13 @@ export async function resolveDefaultBase(): Promise<string> {
 
 /** Resolve current HEAD sha, falling back to the literal `"HEAD"` on failure. */
 export async function resolveHeadSha(): Promise<string> {
-  const head = await execArgv(["git", "rev-parse", "HEAD"]);
-  return head.exitCode === 0 && head.stdout ? head.stdout : "HEAD";
+  const cwd = process.cwd();
+  const cached = headShaCache.get(cwd);
+  if (cached) return cached;
+  const promise = (async () => {
+    const head = await execArgv(["git", "rev-parse", "HEAD"]);
+    return head.exitCode === 0 && head.stdout ? head.stdout : "HEAD";
+  })();
+  headShaCache.set(cwd, promise);
+  return promise;
 }
