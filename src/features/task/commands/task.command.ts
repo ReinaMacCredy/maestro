@@ -2102,22 +2102,27 @@ function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
   }
   const lockCommit = contract.claimedAtCommit ?? "HEAD~1";
   if (verdict.outOfScopeFiles.length > 0) {
-    console.error(
-      `      # then EITHER revert the out-of-scope files`
-      + ` (git checkout ${lockCommit} -- ${verdict.outOfScopeFiles.join(" ")})`,
-    );
+    console.error(`      # then EITHER revert each out-of-scope file:`);
     for (const path of verdict.outOfScopeFiles) {
       console.error(
-        `      #   OR amend the contract: maestro contract amend --task ${task.id}`
+        `      #   git checkout ${lockCommit} -- ${path} 2>/dev/null || git rm -f ${path}`,
+      );
+    }
+    console.error(`      #   OR amend the contract for each file:`);
+    for (const path of verdict.outOfScopeFiles) {
+      console.error(
+        `      #     maestro contract amend --task ${task.id}`
         + ` --add-path ${path} --reason "<why>"`,
       );
     }
   }
   if (verdict.forbiddenTouched.length > 0) {
-    console.error(
-      `      # then revert the forbidden files`
-      + ` (git checkout ${lockCommit} -- ${verdict.forbiddenTouched.join(" ")})`,
-    );
+    console.error(`      # then revert each forbidden file:`);
+    for (const path of verdict.forbiddenTouched) {
+      console.error(
+        `      #   git checkout ${lockCommit} -- ${path} 2>/dev/null || git rm -f ${path}`,
+      );
+    }
   }
   if (verdict.capExceeded) {
     console.error(

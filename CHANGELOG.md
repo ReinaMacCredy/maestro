@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.72.16 - broken-contract recovery hint now works for newly-introduced forbidden files
+
+Round-13 ran another batch of minimal-prompt sub-agents against v0.72.15.
+The forbidden-file scenario surfaced one real seam bug; the
+amendment-budget scenario reported an exit-code-0 false alarm caused by
+the agent's own `2>&1 | tail -10` shell pattern (the pipe masks the
+upstream exit code; direct invocation correctly returns exit 1 on budget
+exhaustion).
+
+### Fixes
+
+- **Broken-contract recovery hint now handles files newly added after
+  the lock-time commit.** Pre-fix, the printer emitted
+  `git checkout <lock-sha> -- <file>` for every out-of-scope or
+  forbidden path. That works for files that existed at the lock-time
+  commit, but `git checkout <sha> -- <new-file>` fails with
+  `error: pathspec '<new-file>' did not match any file(s) known to git`
+  when the file was created after the lock. R13's forbidden-file agent
+  hit exactly this: a `tests/x.test.ts` introduced after lock could not
+  be reverted via the printed command and they had to improvise
+  `git rm`. The recovery printer now emits one line per file in the
+  form `git checkout <lock-sha> -- <file> 2>/dev/null || git rm -f <file>`
+  — the `||` chains the new-file path so a verbatim copy-paste reverts
+  pre-existing files (via checkout) and removes newly-added files
+  (via rm). Same change applies to both the out-of-scope and
+  forbidden-touched branches.
+
 ## 0.72.15 - close three trust-substrate gaps surfaced by round-12 minimal-prompt scenarios
 
 Round-12 ran five minimal-prompt sub-agents against v0.72.14 against scenarios
