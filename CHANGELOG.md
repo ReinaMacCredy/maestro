@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.72.36 - close R34 substrate bugs: L1/L2 amend confusion + version drift between package.json and version.ts
+
+R34 sub-agent found two substrate bugs that wasted autonomous-recovery
+budget:
+
+1. **MEDIUM:** `maestro task contract amend <ref> --add-path <path>`
+   produced an unhelpful `unknown option '--add-path'` error. Agents
+   following the documented `maestro-verify` ritual confused the L1
+   editor-based `task contract amend <ref>` (full-YAML replace via
+   `--from`/`--editor`) with the L2 path-scoped `contract amend --task
+   <id>` (incremental `--add-path`/`--remove-path`). The error message
+   gave no clue that a different verb existed.
+2. **LOW:** `package.json` and `src/shared/version.ts` could drift out
+   of sync. If someone hand-edited `package.json` instead of running
+   `bun scripts/bump.ts`, the build would compile a binary that
+   reported the stale version embedded in `version.ts`. The R33 release
+   shipped with `package.json=0.72.35` but `version.ts=0.72.33`.
+
+### Fixes
+
+- **L1 `task contract amend` now redirects to L2 when path-scoped flags
+  are used.** Detects `--task`, `--add-path`, or `--remove-path` and
+  throws a `MaestroError` with the exact `maestro contract amend
+  --task <id> --add-path <path>` invocation pre-filled with the user's
+  values. The verb signature changed from `amend <ref>` to `amend
+  [ref]` so misuse no longer trips commander's argument validation
+  before the redirect can fire; manual `--reason` and `<ref>`
+  validation now lives in the action handler with redirect-friendly
+  hints.
+- **`scripts/build.ts` now refuses to build when `package.json` and
+  `src/shared/version.ts` disagree.** Reads both files before invoking
+  Bun's compiler and exits 1 with a redirect to `bun scripts/bump.ts
+  patch` if the versions don't match. Eliminates the class of release
+  binaries that report a stale version.
+
 ## 0.72.35 - close R33 substrate bug: evidence record accepted unknown criterion ids
 
 R33 sub-agent found that `maestro evidence record --criterion <id>` had

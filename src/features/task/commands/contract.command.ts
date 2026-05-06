@@ -151,16 +151,46 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     });
 
   contractCmd
-    .command("amend <ref>")
+    .command("amend [ref]")
     .description("Amend a locked contract and record why it changed")
-    .requiredOption("--reason <text>", "Why the contract changed")
+    .option("--reason <text>", "Why the contract changed")
     .option("--from <path>", "Load YAML from a file or named template ('-' for stdin)")
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--allow-unknown-keys", "Warn instead of error on unknown contract draft keys")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
+    .option("--task <id>", "[L2 flag — see hint below]")
+    .option("--add-path <path>", "[L2 flag — see hint below]")
+    .option("--remove-path <path>", "[L2 flag — see hint below]")
+    .action(async (ref: string | undefined, opts) => {
+      if (opts.task !== undefined || opts.addPath !== undefined || opts.removePath !== undefined) {
+        const taskId = opts.task ?? ref ?? "<task-id>";
+        const flags: string[] = [];
+        if (opts.addPath !== undefined) flags.push(`--add-path "${opts.addPath}"`);
+        if (opts.removePath !== undefined) flags.push(`--remove-path "${opts.removePath}"`);
+        if (opts.reason !== undefined) flags.push(`--reason "${opts.reason}"`);
+        else flags.push(`--reason "<why>"`);
+        throw new MaestroError(
+          "Path-scoped amend uses the L2 contract verb, not 'task contract amend'",
+          [
+            `Run: maestro contract amend --task ${taskId} ${flags.join(" ")}`,
+            "'task contract amend <ref>' is the L1 editor-based replace flow (uses --from / --editor on full YAML)",
+            "'contract amend --task <id>' is the L2 path-scoped flow (uses --add-path / --remove-path)",
+          ],
+        );
+      }
+      if (ref === undefined) {
+        throw new MaestroError("Missing required argument: <ref>", [
+          "Usage: maestro task contract amend <task-id-or-contract-id> --reason '<why>' --from <yaml>",
+          "For path-scoped amends use: maestro contract amend --task <id> --add-path <path> --reason '<why>'",
+        ]);
+      }
+      if (opts.reason === undefined) {
+        throw new MaestroError("Missing required option: --reason", [
+          "Pass --reason '<why>' to record why the contract changed",
+        ]);
+      }
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);

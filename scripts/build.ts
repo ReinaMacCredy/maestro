@@ -6,6 +6,21 @@ import { syncBuiltInSkills } from "./sync-built-in-skills";
 
 const root = join(import.meta.dir, "..");
 
+// Fail fast if package.json and src/shared/version.ts are out of sync.
+// They diverge whenever someone hand-edits package.json instead of running
+// `bun scripts/bump.ts`, which produces a binary that reports a stale version.
+const pkgJson = await Bun.file(join(root, "package.json")).json();
+const versionFileText = await Bun.file(join(root, "src", "shared", "version.ts")).text();
+const versionFileMatch = versionFileText.match(/export const VERSION = "([^"]+)"/);
+const versionFileValue = versionFileMatch?.[1];
+if (versionFileValue !== pkgJson.version) {
+  console.error(
+    `[!] package.json version (${pkgJson.version}) does not match src/shared/version.ts (${versionFileValue ?? "missing"}).`,
+  );
+  console.error(`    Run 'bun scripts/bump.ts patch' (or feature) to bump both, or sync manually.`);
+  process.exit(1);
+}
+
 // Keep the embedded built-in skill templates in sync with skills/built-in/
 // before compile. The binary ships the embedded copy; drift here would mean
 // users get stale skills on `maestro init`.
