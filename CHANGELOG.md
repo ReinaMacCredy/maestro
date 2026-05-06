@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.72.25 - harden contract draft + evidence file readers (R22 sweep)
+
+R22 sub-agent swept every `--from` / `--file` / `--findings` flag for
+the same crash classes plan-check fixed. Found four crash paths and
+two destructive silent-success paths.
+
+### Fixes
+
+- **`task contract new --from` and `task contract amend --from`** now
+  emit a clean `[!] Contract draft path is a directory` error on
+  EISDIR instead of dumping a raw Bun stack. Other read errors get
+  a `[!] Cannot read contract draft: <path>` wrapper.
+- **Empty contract drafts now hard-fail** instead of silently writing
+  an all-empty contract (which previously wiped intent / scope /
+  doneWhen on amend). `[!] Contract draft is empty` and `[!] Contract
+  draft has no fields` cover the whitespace-only and parsed-empty
+  cases respectively. This was the highest-impact R22 finding —
+  destructive without warning.
+- **`evidence record --threat-model-file` and `evidence record
+  --findings`** now wrap the same EISDIR class with a clean
+  `--threat-model-file: path is a directory` / `--findings: path is
+  a directory` error. The YAML parse error path was already clean.
+
+R22 also flagged `policy check` silently swallowing a malformed
+`owners.yaml`. Confirmed: `policy check` doesn't actually load
+owners — that file is consumed by `verdict request`, `ci verify`,
+and `deploy gate`, where `parseOwners` already throws a clean
+MaestroError. No fix needed.
+
 ## 0.72.24 - plan-check wraps directory-path and YAML-parse errors
 
 R21 follow-up sub-agent (validating the v0.72.23 fixes) confirmed the
