@@ -134,7 +134,7 @@ export function registerVerdictCommand(
     .command("request")
     .description("Compute a new Verdict for a task and persist it")
     .requiredOption("--task <id>", "Task ID")
-    .option("--base <ref>", "Base git ref for the diff (default: merge-base with main or upstream)")
+    .option("--base <ref>", "Base git ref for the diff (default: contract lock-commit; falls back to merge-base with main/master/upstream)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();

@@ -51,11 +51,17 @@ export async function requestVerdict(
   const runState = await deps.runStateStore.read(taskId);
   const costBudgetExhausted = checkCostBudget(contract, runState).exhausted;
 
+  // Prefer the contract's lock-commit (claimedAtCommit) over branch heuristics
+  // so brownfield repos don't pull pre-existing files into the diff and trigger
+  // spurious scope errors that escalate risk class. Fall back to branch
+  // heuristics only when the contract was locked before the field existed.
   const hasExplicitBase = typeof base === "string" && base.length > 0;
-  const [baseRef, headSha] = await Promise.all([
-    hasExplicitBase ? Promise.resolve(base as string) : resolveDefaultBase(),
-    resolveHeadSha(),
-  ]);
+  const resolveBase = (): Promise<string> => {
+    if (hasExplicitBase) return Promise.resolve(base as string);
+    if (contract.claimedAtCommit) return Promise.resolve(contract.claimedAtCommit);
+    return resolveDefaultBase();
+  };
+  const [baseRef, headSha] = await Promise.all([resolveBase(), resolveHeadSha()]);
 
   const cwd = process.cwd();
 

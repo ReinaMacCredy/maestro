@@ -77,6 +77,29 @@ describe("checkScope", () => {
     expect(findings).toEqual([]);
   });
 
+  it("paths under .maestro/ are exempt — substrate metadata is not user code", () => {
+    // The diff between lock-commit and HEAD always contains the substrate's
+    // own bookkeeping (contract files, tasks.jsonl, NOW.md). Gating those
+    // against the user's `src/**` scope is a false positive that breaks
+    // brownfield workflows.
+    const contract = makeContract({
+      scope: { filesExpected: ["src/**"], filesForbidden: [".maestro/policies/**"] },
+    });
+    const findings = checkScope(
+      [
+        "src/foo.ts",
+        ".maestro/contracts/tsk-001/v1.json",
+        ".maestro/tasks/NOW.md",
+        ".maestro/tasks/tasks.jsonl",
+        ".maestro/policies/risk.yaml",
+      ],
+      contract,
+    );
+    // Even an explicitly-forbidden .maestro/** path is exempt — substrate
+    // changes are produced by the maestro CLI itself, not the user's task.
+    expect(findings).toEqual([]);
+  });
+
   it("path matching both filesExpected and filesForbidden — forbidden wins", () => {
     const contract = makeContract({
       scope: { filesExpected: ["src/**"], filesForbidden: ["src/secret.ts"] },

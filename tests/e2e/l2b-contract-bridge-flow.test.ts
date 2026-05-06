@@ -605,4 +605,79 @@ describe("L2 contract bridge — end-to-end seam coverage", () => {
     },
     SLOW_CLI_TIMEOUT_MS,
   );
+
+  it(
+    "14. brownfield: task verify defaults base to contract lock-commit (pre-existing files stay out of diff)",
+    async () => {
+      // Pre-fix bug: `task verify` with no --base resolved against
+      // merge-base/empty-tree, so brownfield repos pulled every pre-existing
+      // file into the diff and emitted spurious scope errors on README.md,
+      // package.json, .gitignore, etc. Forced users to manually pass
+      // `--base <lock-commit>`.
+      //
+      // Fix: prefer contract.claimedAtCommit (recorded at lock time) over the
+      // branch fallback chain when no --base is given.
+      const dir = await mkdtemp(join(tmpdir(), "maestro-l2b-brownfield-"));
+      tempDirs.push(dir);
+      await initGitRepo(dir);
+      await runCommand(["git", "config", "user.email", "test@example.com"], dir);
+      await runCommand(["git", "config", "user.name", "Test"], dir);
+
+      // Seed the repo with pre-existing files BEFORE maestro init/lock —
+      // this is the brownfield distinction.
+      await writeFile(join(dir, "README.md"), "# pre-existing\n");
+      await writeFile(join(dir, "package.json"), '{"name":"pre","version":"0.1.0"}\n');
+      await writeFile(join(dir, ".gitignore"), "node_modules/\n");
+      await runCommand(["git", "add", "-A"], dir);
+      await runCommand(
+        ["git", "commit", "-m", "pre-existing brownfield content", "--author", "Test <test@example.com>"],
+        dir,
+      );
+
+      const init = await runCompiled(["init"], dir);
+      if (init.exitCode !== 0) throw new Error(`maestro init failed: ${init.stderr}`);
+      await runCommand(["git", "add", "-A"], dir);
+      await runCommand(
+        ["git", "commit", "-m", "maestro init", "--author", "Test <test@example.com>"],
+        dir,
+      );
+
+      const taskId = await createTask(dir, "test-14 brownfield base");
+      // Lock a contract scoped only to src/**.
+      await lockContractViaCli(dir, taskId, { filesExpected: ["src/**"] });
+      // Drop the contract.yaml fixture file the lockContractViaCli helper
+      // writes — it's a test scaffolding artifact, not user code, and would
+      // otherwise show up in the diff and trigger a (correct) scope error.
+      await rm(join(dir, "contract.yaml"), { force: true });
+
+      // Touch ONLY a scoped file and commit.
+      await mkdir(join(dir, "src"), { recursive: true });
+      await writeFile(join(dir, "src", "feature.ts"), "export const x = 1;\n");
+      await runCommand(["git", "add", "-A"], dir);
+      await runCommand(
+        ["git", "commit", "-m", "feat: add scoped feature", "--author", "Test <test@example.com>"],
+        dir,
+      );
+
+      // task verify with NO --base: should diff from claimedAtCommit (the lock
+      // commit) and see only src/feature.ts — not the pre-existing files.
+      const r = await runCompiled(["task", "verify", "--task", taskId, "--json"], dir);
+      // Exit 0 (clean) or 2 (warn/info only). Exit 1 (error) means a scope
+      // finding fired — which is the bug.
+      const parsed = expectJson<{
+        findings: ReadonlyArray<{ check: string; severity: string; paths?: readonly string[]; details?: string }>;
+      }>(r);
+      const scopeErrors = parsed.findings.filter(
+        (f) => f.check === "scope" && f.severity === "error",
+      );
+      expect(scopeErrors).toEqual([]);
+      if (![0, 2].includes(r.exitCode)) {
+        throw new Error(
+          `task verify exited ${r.exitCode}; findings: ${JSON.stringify(parsed.findings, null, 2)}`,
+        );
+      }
+      expect([0, 2]).toContain(r.exitCode);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
 });

@@ -23,7 +23,7 @@ export function registerTaskVerifyCommand(
     .command("verify")
     .description("Run the Trust Verifier locally against the current diff and print findings")
     .requiredOption("--task <id>", "Task id")
-    .option("--base <ref>", "Base git ref for the diff (default: merge-base with main or upstream)")
+    .option("--base <ref>", "Base git ref for the diff (default: contract lock-commit; falls back to merge-base with main/master/upstream)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
@@ -42,9 +42,12 @@ export function registerTaskVerifyCommand(
         ]);
       }
 
+      // Prefer the contract's lock-commit so brownfield repos don't pull
+      // pre-existing files into the diff and trigger spurious scope errors.
+      // Fall back to branch heuristics only when the contract has no anchor.
       const baseRef = typeof opts.base === "string" && opts.base.length > 0
         ? opts.base
-        : await resolveDefaultBase();
+        : (contract.claimedAtCommit ?? (await resolveDefaultBase()));
       const headSha = await resolveHeadSha();
 
       // 4. Build diff
