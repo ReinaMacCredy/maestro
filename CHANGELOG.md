@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.72.37 - close R35 substrate bug: witness-level gate counted infrastructure rows
+
+R35 sub-agent found a HIGH-severity bug: when effectiveRiskClass was
+`high`, `verdict request` returned `HUMAN` with reason
+`evidence-witness-level-insufficient` even when every contract
+`doneWhen` criterion already had a passing `witnessed-by-maestro`
+evidence row covering it. The cause: the witness-level filter in
+`compute-risk.ts` examined every evidence row, including infrastructure
+rows recorded at `agent-claimed-locally` by design — `plan-check`,
+`review-ack`, `verifier` (unlinked trust-verifier findings),
+`contract-amendment`, `verdict-override`, `cross-task-conflict`,
+`runtime-signal`, `deploy-readiness`, `rollback-exercised`. Agents who
+correctly ran the maestro-verify ritual still got blocked because
+`task verify` itself wrote 2-4 verifier rows below the threshold.
+
+### Fix
+
+- **Witness-level gate now restricted to criterion-linked evidence
+  kinds.** Added `isCriterionLinkedEvidence` predicate: a row counts
+  toward the gate only if `kind` is one of `command`, `manual-note`,
+  `ai-review`, `threat-model` AND its payload carries a non-empty
+  `criterion_id`. Every other row (infra/audit/diagnostic) is excluded.
+  The companion ProofMap path is unchanged — coverage is still proven
+  the same way; only the witness-strength gate stops mistaking infra
+  rows for criterion evidence.
+
 ## 0.72.36 - close R34 substrate bugs: L1/L2 amend confusion + version drift between package.json and version.ts
 
 R34 sub-agent found two substrate bugs that wasted autonomous-recovery

@@ -137,11 +137,20 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
-  // 5. HUMAN if high risk and any evidence is below the required witness level.
+  // 5. HUMAN if high risk and any criterion-linked evidence is below the
+  //    required witness level. Only criterion-gating kinds with a criterion_id
+  //    in their payload count — infra/audit rows (plan-check, review-ack,
+  //    unlinked verifier, contract-amendment, verdict-override,
+  //    cross-task-conflict, runtime-signal, deploy-readiness,
+  //    rollback-exercised) are recorded at agent-claimed-locally by design and
+  //    must not flip a verdict to HUMAN when every doneWhen criterion already
+  //    has a passing witnessed-by-maestro row.
   if (effectiveRiskClass === "high") {
     const requiredLevel = autopilotPolicy.requiredWitnessLevel.high;
     const weakEvidence = evidenceRows.filter(
-      (r) => compareWitnessLevel(r.witness_level, requiredLevel) < 0,
+      (r) =>
+        isCriterionLinkedEvidence(r) &&
+        compareWitnessLevel(r.witness_level, requiredLevel) < 0,
     );
     if (weakEvidence.length > 0) {
       reasons.push({
@@ -269,4 +278,19 @@ function buildVerdict(
     policiesConsulted,
     trustVerifier,
   };
+}
+
+/**
+ * True when the row could plausibly cover a contract doneWhen criterion: a
+ * criterion-evidence kind whose payload carries a `criterion_id` field. Rows
+ * without a criterion link are infrastructure/audit/diagnostic and must not
+ * gate the witness-level check (Rule: ProofMap is what proves coverage; this
+ * predicate is the inverse — "can this row participate in coverage at all?").
+ */
+function isCriterionLinkedEvidence(row: EvidenceRow): boolean {
+  if (row.kind !== "command" && row.kind !== "manual-note" && row.kind !== "ai-review" && row.kind !== "threat-model") {
+    return false;
+  }
+  const payload = row.payload as { criterion_id?: unknown };
+  return typeof payload.criterion_id === "string" && payload.criterion_id.length > 0;
 }

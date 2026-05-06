@@ -324,13 +324,53 @@ describe("computeRisk", () => {
               critical: "witnessed-by-maestro",
             },
           }),
-          evidenceRows: [makeEvidenceRow({ witness_level: "agent-claimed-locally" })],
+          evidenceRows: [
+            makeEvidenceRow({
+              witness_level: "agent-claimed-locally",
+              payload: { command: "bun test", exit: 0, criterion_id: "dw-aaaaaa" },
+            }),
+          ],
         }),
       );
       expect(verdict.decision).toBe("HUMAN");
       const reason = verdict.reasons[0];
       expect(reason?.category).toBe("evidence");
       expect(reason?.code).toBe("evidence-witness-level-insufficient");
+    });
+
+    it("ignores unlinked infrastructure rows (plan-check / review-ack / unlinked verifier) for the witness gate", () => {
+      const verdict = computeRisk(
+        makeInput({
+          contract: makeContract({ riskClass: "high" }),
+          derivedRiskClass: "high",
+          autopilotPolicy: makeAutopilotPolicy({
+            autoMergeAllowed: { low: true, medium: true, high: true, critical: false },
+            requiredWitnessLevel: {
+              low: "agent-claimed-locally",
+              medium: "agent-claimed-locally",
+              high: "witnessed-by-maestro",
+              critical: "witnessed-by-maestro",
+            },
+          }),
+          evidenceRows: [
+            makeEvidenceRow({
+              witness_level: "witnessed-by-maestro",
+              payload: { command: "bun test", exit: 0, criterion_id: "dw-aaaaaa" },
+            }),
+            // plan-check row at agent-claimed-locally must NOT flip the verdict
+            {
+              schema_version: 3,
+              id: "ev-plan",
+              task_id: "task-001",
+              kind: "plan-check",
+              witness_level: "agent-claimed-locally",
+              created_at: "2026-01-01T00:00:00.000Z",
+              payload: { planFileSha: "abc", findings: [], errorCount: 0, warnCount: 0 },
+            } as unknown as EvidenceRow,
+          ],
+        }),
+      );
+      expect(verdict.decision).toBe("PASS");
     });
   });
 
