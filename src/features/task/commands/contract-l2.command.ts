@@ -115,6 +115,20 @@ function formatContract(c: Contract): string[] {
     );
   }
 
+  // doneWhen (per-criterion checkboxes — agents need to see why a contract
+  // closed fulfilled vs broken; aggregate status alone hides the receipt-hint
+  // auto-mark trail and which criterion is unmarked when status is broken).
+  if (c.doneWhen.length === 0) {
+    lines.push("  DoneWhen:        (none)");
+  } else {
+    lines.push(`  DoneWhen (${c.doneWhen.length}):`);
+    for (const criterion of c.doneWhen) {
+      const box = criterion.met === true ? "[x]" : "[ ]";
+      const evidence = criterion.metEvidence ? ` -- ${criterion.metEvidence}` : "";
+      lines.push(`    ${box} (${criterion.kind}) ${criterion.text}${evidence}`);
+    }
+  }
+
   // amendments
   if (c.amendments.length === 0) {
     lines.push("  Amendments:      (none)");
@@ -122,6 +136,21 @@ function formatContract(c: Contract): string[] {
     lines.push(`  Amendments (${c.amendments.length}):`);
     for (const a of c.amendments) {
       lines.push(`    [${a.id}] ${a.at} by ${a.by} — ${a.reason}`);
+    }
+  }
+
+  // verdict (only present after close — explains why broken vs fulfilled)
+  if (c.verdict !== undefined) {
+    const v = c.verdict;
+    lines.push(`  Verdict:         ${v.fulfilled ? "fulfilled" : "broken"} (computed ${v.computedAt})`);
+    if (v.outOfScopeFiles.length > 0) {
+      lines.push(`    out-of-scope: ${v.outOfScopeFiles.join(", ")}`);
+    }
+    if (v.forbiddenTouched.length > 0) {
+      lines.push(`    forbidden:    ${v.forbiddenTouched.join(", ")}`);
+    }
+    if (v.unmetCriteria.length > 0) {
+      lines.push(`    unmet:        ${v.unmetCriteria.map((u) => u.id).join(", ")}`);
     }
   }
 

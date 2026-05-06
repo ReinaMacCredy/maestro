@@ -637,8 +637,9 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
 
 function registerUpdateCommand(taskCmd: Command, program: Command): void {
   taskCmd
-    .command("update <id-or-slug>")
-    .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug)")
+    .command("update [id-or-slug]")
+    .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug; positional or --task)")
+    .option("--task <id>", "Task id or slug (alternative to the positional argument)")
     .option("--title <title>", "New title")
     .option("--description <text>", "New description")
     .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
@@ -665,10 +666,28 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .addOption(new Option("--claim").hideHelp())
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (rawRef: string, opts) => {
+    .action(async (rawRef: string | undefined, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const resolved = await resolveTaskRef(services.taskStore, rawRef);
+      // Accept either positional <id-or-slug> or --task <id>. If both are supplied,
+      // require they refer to the same task; otherwise the user is confused about
+      // which one wins and the safe answer is to fail loud.
+      const flagRef = typeof opts.task === "string" ? opts.task.trim() : "";
+      const positionalRef = typeof rawRef === "string" ? rawRef.trim() : "";
+      if (positionalRef.length === 0 && flagRef.length === 0) {
+        throw new MaestroError("Task id is required", [
+          "Pass a task id or slug as the positional argument: `maestro task update <id> ...`",
+          "Or use --task <id>: `maestro task update --task <id> ...`",
+        ]);
+      }
+      if (positionalRef.length > 0 && flagRef.length > 0 && positionalRef !== flagRef) {
+        throw new MaestroError(
+          `Conflicting task ids: positional "${positionalRef}" vs --task "${flagRef}"`,
+          ["Pass the id once (positional or --task, not both)"],
+        );
+      }
+      const ref = positionalRef.length > 0 ? positionalRef : flagRef;
+      const resolved = await resolveTaskRef(services.taskStore, ref);
       const id = resolved.id;
       const previous = await services.taskStore.get(id);
       const continuationEdits = parseContinuationEdits(opts);
