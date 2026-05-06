@@ -109,7 +109,7 @@ intent: >
   One to three sentences on what this task changes and why.
 scope:
   filesExpected:
-    - src/features/foo/**
+    - src/**
   filesForbidden: []
 doneWhen:
   - text: tests pass

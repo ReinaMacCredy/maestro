@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.72.10 - skill quick-start uses a working filesExpected glob
+
+Round-4 greenfield agent followed the SKILL.md quick-start verbatim
+(including `kind: receipt-hint` from v0.72.9) and still got a `broken`
+contract. Cause: the quick-start's `filesExpected` example was
+`src/features/foo/**` — a placeholder pulled from maestro's own repo
+layout. A minimal-prompt agent writing `src/hello.ts` landed outside
+that glob, the scope check flagged it, and the contract closed
+`broken` despite both `receipt-hint` criteria auto-marking correctly
+from `--verified-by`.
+
+### Fix
+
+- `skills/bundled/maestro-task/SKILL.md` quick-start now uses
+  `filesExpected: - src/**` — the most common case for both greenfield
+  and brownfield TS projects. Tight-scope guidance lives in surrounding
+  prose; the example is now a working scaffold instead of a trap.
+
 ## 0.72.9 - skill quick-start defaults to receipt-hint criteria
 
 Round-3 minimal-prompt agents (greenfield + brownfield) both completed
