@@ -57,14 +57,38 @@ Checks (exit code is always 0; agents react to findings):
       const taskId: string = opts.task;
       const planFilePath: string = opts.planFile;
 
-      const planText = await readText(planFilePath);
+      let planText: string | undefined;
+      try {
+        planText = await readText(planFilePath);
+      } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "EISDIR") {
+          throw new MaestroError(`Plan file is a directory: ${planFilePath}`, [
+            "Pass a path to a YAML or JSON file, not a directory",
+          ]);
+        }
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new MaestroError(`Cannot read plan file: ${planFilePath}`, [msg]);
+      }
       if (planText === undefined) {
         throw new MaestroError(`Plan file not found: ${planFilePath}`, [
           "Check the path and re-run",
         ]);
       }
 
-      const planRaw = parseYaml<unknown>(planText);
+      let planRaw: unknown;
+      try {
+        planRaw = parseYaml<unknown>(planText);
+      } catch (err: unknown) {
+        const yamlErr = err as { linePos?: Array<{ line: number; col: number }> };
+        const pos = yamlErr.linePos?.[0];
+        const where = pos !== undefined ? ` at line ${pos.line}, col ${pos.col}` : "";
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new MaestroError(
+          `Plan file is not valid YAML/JSON: ${planFilePath}${where}`,
+          [msg, "Fix the syntax and re-run `maestro plan check`"],
+        );
+      }
       const plan = validatePlanInput(planRaw, planFilePath);
       const planFileSha = createHash("sha256").update(planText).digest("hex");
 
