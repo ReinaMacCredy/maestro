@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.72.24 - plan-check wraps directory-path and YAML-parse errors
+
+R21 follow-up sub-agent (validating the v0.72.23 fixes) confirmed the
+schema-validation path was clean but found two more unhandled crash
+paths in the same command:
+
+1. `--plan-file <directory>` produced a raw Bun `EISDIR` error and
+   exit 1 — same crash class as the original R20 bug, just at the
+   read-text step instead of the schema step.
+2. A plan file containing structurally invalid YAML produced a raw
+   `YAMLParseError` Bun stack trace from inside the `yaml` library.
+
+### Fixes
+
+- **`maestro plan check` now wraps `readText` and `parseYaml`** in
+  try/catch and re-throws `MaestroError` for the EISDIR and
+  YAMLParseError branches. The YAML branch surfaces the parse
+  position (line/col) when the underlying library exposes it.
+  Directory paths get a one-line hint pointing at the user's
+  mistake; YAML errors get the original parser message plus a
+  fix-and-rerun hint.
+
 ## 0.72.23 - plan-check rejects malformed plan files with field-level hints
 
 R20 sub-agent (plan-check failure ergonomics scenario) found two
