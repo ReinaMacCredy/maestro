@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.72.27 - tell agents what to do next after `review ack` and cost-budget BLOCK
+
+R24's two remaining UX gaps. Both surface "what next?" hints that
+were absent before and that a sub-agent could not deduce from the
+existing output.
+
+### Fixes
+
+- **`review ack` now tells agents the next step is `merge auto`,
+  not re-running `verdict request`.** The ack is consumed by the
+  auto-merge eligibility predicate, not the verdict decision tree.
+  Without this hint an agent that just acknowledged review criteria
+  re-runs `verdict request`, gets HUMAN again, and stalls.
+- **`cost-budget-exhausted` BLOCK reason now lists recovery paths
+  inline.** Previously the reason text was just "Cost budget
+  exhausted; further execution blocked." with no suggestion of how
+  to un-block. New text names `maestro task budget` for inspection,
+  `maestro contract amend` for raising the cap, and
+  `maestro handoff create` for human escalation.
+
 ## 0.72.26 - surface trust-fail paths and tailor empty-tree owners hint (R24 sweep)
 
 R24 sub-agent walked the verdict BLOCK / HUMAN paths end-to-end and
