@@ -3,7 +3,7 @@ import { MaestroError } from "@/shared/errors.js";
 import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
-import { checkCostBudget, readCurrentContractWithBackfill } from "@/features/task/index.js";
+import { checkCostBudget, readCurrentContractWithBackfill, readDraftContract } from "@/features/task/index.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { PolicyServices } from "@/features/policy/services.js";
@@ -40,6 +40,13 @@ export async function requestVerdict(
     taskId,
   );
   if (contract === undefined) {
+    const draft = await readDraftContract(deps.contractStore, taskId);
+    if (draft !== undefined) {
+      throw new MaestroError(
+        `Contract ${draft.id} for task ${taskId} is in draft status — lock it first`,
+        [`maestro task contract lock ${taskId}`],
+      );
+    }
     throw new MaestroError(`No contract found for task ${taskId}`, [
       `Create one: maestro task contract new ${taskId}`,
       `Then lock it: maestro task contract lock ${taskId}`,

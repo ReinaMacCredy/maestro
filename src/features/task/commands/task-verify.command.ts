@@ -6,7 +6,10 @@ import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/domain/types.js";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
-import { readCurrentContractWithBackfill } from "@/features/task/usecases/read-current-contract-with-backfill.js";
+import {
+  readCurrentContractWithBackfill,
+  readDraftContract,
+} from "@/features/task/usecases/read-current-contract-with-backfill.js";
 import { getServices, type Services } from "@/services.js";
 
 interface TaskVerifyDeps {
@@ -39,6 +42,13 @@ export function registerTaskVerifyCommand(
         taskId,
       );
       if (contract === undefined) {
+        const draft = await readDraftContract(services.contractStore, taskId);
+        if (draft !== undefined) {
+          throw new MaestroError(
+            `Contract ${draft.id} for task ${taskId} is in draft status — lock it first`,
+            [`maestro task contract lock ${taskId}`],
+          );
+        }
         throw new MaestroError(`No contract proposed for task ${taskId}`, [
           "Run 'maestro task contract new <taskId>' to create one, or propose via maestro-plan skill",
         ]);

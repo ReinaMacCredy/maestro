@@ -32,6 +32,20 @@ export async function readCurrentContractWithBackfill(
   return legacy;
 }
 
+// Returns a draft contract for the task if one exists, regardless of L2
+// version-store state. Used to give a helpful "lock it first" hint when
+// task verify / verdict request / plan check are run against a task that
+// has a draft but no locked contract yet.
+export async function readDraftContract(
+  legacyStore: ContractStoreQueryPort | undefined,
+  taskId: string,
+): Promise<Contract | undefined> {
+  if (legacyStore === undefined) return undefined;
+  const legacy = await legacyStore.getByTaskId(taskId);
+  if (legacy && legacy.status === "draft") return legacy;
+  return undefined;
+}
+
 // Same shape as readCurrentContractWithBackfill but for the full version
 // history. If the L2 store has no versions but L1 has an active record,
 // backfill v1 and return [contract].

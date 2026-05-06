@@ -7,7 +7,7 @@ import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { getServices, type Services } from "@/services.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import { deriveRiskClassFromDiff } from "@/features/risk/index.js";
-import { readCurrentContractWithBackfill } from "@/features/task/index.js";
+import { readCurrentContractWithBackfill, readDraftContract } from "@/features/task/index.js";
 import { checkPlan } from "../usecases/check-plan.js";
 import { validatePlanInput } from "../domain/plan-validators.js";
 import type { PlanCheckFinding, PlanCheckResult } from "../domain/types.js";
@@ -98,6 +98,13 @@ Checks (exit code is always 0; agents react to findings):
         taskId,
       );
       if (contract === undefined) {
+        const draft = await readDraftContract(services.contractStore, taskId);
+        if (draft !== undefined) {
+          throw new MaestroError(
+            `Contract ${draft.id} for task ${taskId} is in draft status — lock it first`,
+            [`maestro task contract lock ${taskId}`],
+          );
+        }
         throw new MaestroError(`No contract found for task: ${taskId}`, [
           "Run `maestro contract show --task <id>` to inspect the contract",
         ]);

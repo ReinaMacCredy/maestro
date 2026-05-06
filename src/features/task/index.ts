@@ -142,4 +142,5 @@ export { getContractHistory } from "./usecases/get-contract-history.usecase.js";
 export {
   readCurrentContractWithBackfill,
   readContractHistoryWithBackfill,
+  readDraftContract,
 } from "./usecases/read-current-contract-with-backfill.js";

@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.72.33 - close R31 substrate bugs: invisible draft contract, witness flag ignored, silent skipped paths, opaque dw-id error
+
+R31 sub-agent surfaced four follow-up bugs against the R30 ship: a draft
+contract was indistinguishable from "no contract" across `task verify`,
+`verdict request`, and `plan check`, sending agents to create a duplicate
+contract; `evidence record --kind command` hardcoded the witness level
+and silently ignored `--witness`; mixed amendments (some redundant, some
+new) succeeded without reporting which paths were skipped; and the
+`doneWhen[].id` validation error said "must look like dw-xxxxxx" without
+explaining the hex constraint.
+
+### Fixes
+
+- **Draft contracts now produce a clear "lock it first" error from
+  `task verify`, `verdict request`, and `plan check`.** Previously each
+  verb used `readCurrentContractWithBackfill`, which returns `undefined`
+  for both "no contract" AND "draft only", so the error read "No contract
+  proposed" and pointed agents to `maestro task contract new` — but a
+  draft already existed, so creating another would fail. Added
+  `readDraftContract(legacyStore, taskId)` and call it as a fallback in
+  all three commands; when a draft exists, the error becomes
+  "Contract <id> for task <id> is in draft status — lock it first" with
+  the exact lock command in the hint.
+- **`evidence record --kind command` now honors `--witness <level>`.**
+  Previously the command-kind path hardcoded
+  `"agent-claimed-locally" satisfies WitnessLevel`, ignoring `--witness`
+  even though the flag was registered. Replaced with
+  `parseWitnessLevel(opts.witness, "agent-claimed-locally")` to match the
+  pattern already used by `--kind ai-review` and `--kind threat-model`.
+  Also applied the same fix to `--kind manual-note`.
+- **`contract amend` now reports paths that were silently skipped as
+  already-covered.** Previously a mixed amendment (one new path + one
+  redundant path) would succeed, consume budget, and say nothing about
+  the skip. Now `applyPathChangesWithReport` collects skipped entries
+  and the success output adds a `Skipped (already covered): <paths>`
+  line. JSON output includes a `skippedAddPaths` field.
+- **`doneWhen[].id` validation error now explains the hex constraint.**
+  Previously said "must look like dw-xxxxxx" — agents couldn't tell that
+  `x` meant lowercase hex. New message: "must be 'dw-' followed by
+  exactly 6 lowercase hex chars (0-9, a-f), e.g. dw-a1b2c3" with a hint
+  that omitting the id lets maestro generate one.
+
 ## 0.72.32 - close R30 substrate bugs: redundant amendment budget leak, ProofMap contract criteria gap, untracked-warning noise
 
 R30 sub-agent surfaced four follow-up bugs against the R29 ship: redundant

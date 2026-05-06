@@ -197,7 +197,8 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
 
       const amendmentId = generateContractAmendmentId();
 
-      const newFilesExpected = applyPathChanges(before.scope.filesExpected, addPaths, removePaths);
+      const { result: newFilesExpected, skipped: skippedAddPaths } =
+        applyPathChangesWithReport(before.scope.filesExpected, addPaths, removePaths);
 
       // Check if scope actually changed
       const scopeChanged =
@@ -238,29 +239,39 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
         },
       );
 
-      const result = { amendmentId, newVersion };
-      output(isJson, result, () => [
-        `[ok] Contract amended for task ${taskId}`,
-        `  Amendment id:  ${amendmentId}`,
-        `  New version:   ${newVersion}`,
-      ]);
+      const result = { amendmentId, newVersion, skippedAddPaths };
+      output(isJson, result, () => {
+        const lines = [
+          `[ok] Contract amended for task ${taskId}`,
+          `  Amendment id:  ${amendmentId}`,
+          `  New version:   ${newVersion}`,
+        ];
+        if (skippedAddPaths.length > 0) {
+          lines.push(
+            `  Skipped (already covered): ${skippedAddPaths.join(", ")}`,
+          );
+        }
+        return lines;
+      });
     });
 }
 
-function applyPathChanges(
+function applyPathChangesWithReport(
   existing: readonly string[],
   add: readonly string[],
   remove: readonly string[],
-): string[] {
+): { result: string[]; skipped: string[] } {
   const removeSet = new Set(remove);
   const result = existing.filter((p) => !removeSet.has(p));
+  const skipped: string[] = [];
   for (const p of add) {
-    // Skip if path already exists or is covered by an existing glob
-    if (result.includes(p)) continue;
-    if (matchesAnyGlob(result, p)) continue;
+    if (result.includes(p) || matchesAnyGlob(result, p)) {
+      skipped.push(p);
+      continue;
+    }
     result.push(p);
   }
-  return result;
+  return { result, skipped };
 }
 
 // ─── history ─────────────────────────────────────────────────────────────────

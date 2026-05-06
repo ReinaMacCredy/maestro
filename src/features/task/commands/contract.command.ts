@@ -746,7 +746,10 @@ function readTemplateDoneWhen(
       ]);
     }
     if (id !== undefined && (typeof id !== "string" || !DONE_WHEN_ID_PATTERN.test(id))) {
-      throw new MaestroError(`Invalid contract draft: doneWhen[${index}].id must look like dw-xxxxxx`);
+      throw new MaestroError(
+        `Invalid contract draft: doneWhen[${index}].id must be 'dw-' followed by exactly 6 lowercase hex chars (0-9, a-f), e.g. dw-a1b2c3`,
+        ["Or omit the id entirely — maestro will generate one for you."],
+      );
     }
     if (kind !== undefined && kind !== "manual" && kind !== "receipt-hint") {
       throw new MaestroError(`Invalid contract draft: doneWhen[${index}].kind must be manual or receipt-hint`);

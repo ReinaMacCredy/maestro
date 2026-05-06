@@ -156,7 +156,7 @@ async function buildRecordInput(
       ...(sessionId !== undefined ? { session_id: sessionId } : {}),
       kind: "command",
       payload,
-      witness_level: "agent-claimed-locally" satisfies WitnessLevel,
+      witness_level: parseWitnessLevel(opts.witness, "agent-claimed-locally"),
     };
   }
 
@@ -225,7 +225,7 @@ async function buildRecordInput(
     ...(sessionId !== undefined ? { session_id: sessionId } : {}),
     kind: "manual-note",
     payload,
-    witness_level: "agent-claimed-and-not-reproducible" satisfies WitnessLevel,
+    witness_level: parseWitnessLevel(opts.witness, "agent-claimed-and-not-reproducible"),
   };
 }
 
