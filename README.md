@@ -1116,15 +1116,73 @@ maestro mission-control --render-check --size 120x40
 
 ## Provider and Skill Targets
 
-`maestro install`, `maestro update --agents-only`, and `maestro uninstall --agents-only` manage bundled Maestro skills for:
+Maestro treats agent integrations as providers. Runtime providers can launch handoffs; skill-target providers receive Maestro-managed skills.
 
-- Claude Code
-- Codex
-- Hermes
-- AgentSkills shared root
+| Provider | Runtime | Skill target | Skills root |
+|---|---:|---:|---|
+| Codex | yes | yes | `$CODEX_HOME/skills` or `~/.codex/skills` |
+| Claude Code | yes | yes | `~/.claude/skills` |
+| Hermes | yes | yes | `~/.hermes/skills/maestro` |
+| AgentSkills | no | yes | `~/.agents/skills` |
 
-These skills help each harness read and write shared Maestro state consistently. External AgentSkills-compatible skills can be managed with `maestro skills ...`; provider diagnostics live under `maestro providers ...`. See [Provider Registry and Skills](docs/providers.md).
+`maestro install`, `maestro update --agents-only`, and `maestro uninstall --agents-only` keep the bundled Maestro skills synced across every available skill target. The skills feature also discovers and manages external AgentSkills-compatible skills.
+
+### Skill discovery precedence
+
+Skill discovery is deterministic and stops at the first match. The order:
+
+1. project `.maestro/skills`
+2. project `.agents/skills`
+3. repo bundled skills
+4. `~/.maestro/external-skills`
+5. `~/.agents/skills`
+6. provider roots (`~/.claude/skills`, `~/.codex/skills`, `~/.hermes/skills/maestro`)
+
+Collisions emit warnings. The first skill in precedence order wins.
+
+### Provider and skill commands
+
+```bash
+maestro providers list [--json]
+maestro providers doctor [provider] [--json]
+
+maestro skills list [--scope project|user|shared|all] [--json]
+maestro skills inspect <name> [--json]
+maestro skills install <source> [--scope user|project|shared] [--targets all|codex,claude,hermes,agentskills]
+maestro skills remove <name> [--scope user|project|shared]
+maestro skills sync [--targets ...]
+```
+
+Supported install sources: local skill directory, local directory containing one or more skill directories, Git URL, GitHub shorthand (`owner/repo` or `owner/repo/path`), and HTTP `zip`/`tar`/`tgz`/`tar.gz` archive URLs. Bundled scripts inside a skill source are never executed during install.
+
+See [Provider Registry and Skills](docs/providers.md) for the full reference, including the Hermes config mutation and security model.
+
+## Documentation
+
+In-depth references live under [`docs/`](docs/):
+
+| Topic | File |
+|---|---|
+| Provider registry, skills, Hermes setup | [`providers.md`](docs/providers.md) |
+| CI integration (`maestro ci verify`, GitHub Checks) | [`ci-integration.md`](docs/ci-integration.md) |
+| Auto-merge eligibility (8 predicates) | [`auto-merge-eligibility.md`](docs/auto-merge-eligibility.md) |
+| Override authorization and audit trail | [`override-flow.md`](docs/override-flow.md) |
+| Risk class derivation from diff signals | [`risk-class-derivation.md`](docs/risk-class-derivation.md) |
+| Witness levels (the trust ladder) | [`witness-levels.md`](docs/witness-levels.md) |
+| Policy file schemas (risk, autopilot, release, sensitive paths, owners) | [`policy-format.md`](docs/policy-format.md), [`sensitive-paths-defaults.md`](docs/sensitive-paths-defaults.md), [`owners-yaml-format.md`](docs/owners-yaml-format.md) |
+| AI Reviewer protocol (Rule 1, veto-only) | [`ai-reviewer-protocol.md`](docs/ai-reviewer-protocol.md) |
+| Threat-model schema | [`threat-model-format.md`](docs/threat-model-format.md) |
+| Cross-task conflict detection | [`cross-task-conflict.md`](docs/cross-task-conflict.md) |
+| Deploy gate (4 checks + `Spec.rollout_plan`) | [`deploy-gate.md`](docs/deploy-gate.md) |
+| Runtime monitoring (Prometheus adapter) | [`runtime-monitoring.md`](docs/runtime-monitoring.md) |
+| Trust benchmark corpus (regression seed) | [`trust-benchmark.md`](docs/trust-benchmark.md) |
+
+The agent-facing protocol is documented inside the bundled skills under [`skills/bundled/`](skills/bundled/) — `maestro-verify` is the canonical verification protocol; `maestro-task`, `maestro-plan`, `maestro-mission`, `maestro-handoff`, `maestro-brainstorm`, and `maestro-setup` cross-reference it.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev loop, repository layout, conventions, required pre-PR checks, and the port → adapter → use-case → command → test pattern. For security-sensitive reports, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)
