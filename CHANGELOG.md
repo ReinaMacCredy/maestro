@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.72.20 - extend deprecation guard to L1 `task contract show --version`
+
+Round-18 sub-agent flagged a remaining gap in the v0.72.19 guard. The
+top-level `maestro contract show --task <id> --version <n>` (L2 verb)
+correctly errored with a redirect to `--at-version`, but the aliased L1
+path `maestro task contract show --task <id> --version <n>` silently
+hit Commander's global `--version` handler and printed the binary
+version with exit 0 — the same trap the v0.72.19 guard was meant to
+close.
+
+### Fixes
+
+- **`task contract show --task <id> --version <n>` now errors** with
+  a redirect that points at the L2 verb's correct invocation
+  (`maestro contract show --task <id> --at-version <n>`) and clarifies
+  that the L1 viewer takes a positional `<ref>` instead of flags.
+  Same `assertNoDeprecatedVersionFlag` helper, one new branch, one new
+  unit test. The L1 viewer never accepted `--version` — users typing
+  it almost certainly meant the L2 versioned viewer.
+
 ## 0.72.19 - task verify prints recovery hints; deprecated --version flag now errors loudly
 
 Round-17 ran a mixed-recovery-plus-amend explorer agent against v0.72.18.

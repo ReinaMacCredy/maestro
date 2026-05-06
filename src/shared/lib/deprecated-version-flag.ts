@@ -45,6 +45,19 @@ export function assertNoDeprecatedVersionFlag(argv: readonly string[]): void {
       [`Use \`--at-version ${next}\` instead (renamed in v0.72.18)`],
     );
   }
+  if (cmd === "task contract show") {
+    // The L1 viewer (`maestro task contract show <ref>`) does not accept a
+    // version flag at all; users typing this almost always meant the L2
+    // versioned viewer. Redirect to the L2 form rather than telling them
+    // to rename a flag that does not exist on this verb.
+    throw new MaestroError(
+      "`task contract show --version <n>` is not a flag on the L1 contract viewer",
+      [
+        `For a versioned contract view, use \`maestro contract show --task <id> --at-version ${next}\``,
+        "For the current contract by id, use `maestro task contract show <ref>` (positional id, no flags)",
+      ],
+    );
+  }
   if (cmd === "update") {
     throw new MaestroError(
       "`update --version <release>` collides with the global `maestro --version` flag",

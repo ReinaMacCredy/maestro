@@ -68,4 +68,22 @@ describe("assertNoDeprecatedVersionFlag", () => {
       assertNoDeprecatedVersionFlag(argv("contract", "show", "--task", "tsk-abc", "--version")),
     ).not.toThrow();
   });
+
+  it("throws on `task contract show --task <id> --version <n>` (L1 viewer doesn't take this flag)", () => {
+    let caught: unknown;
+    try {
+      assertNoDeprecatedVersionFlag(
+        argv("task", "contract", "show", "--task", "tsk-abc", "--version", "1"),
+      );
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(MaestroError);
+    expect(String((caught as Error).message)).toContain(
+      "is not a flag on the L1 contract viewer",
+    );
+    // The redirect should point at the L2 verb with the new flag and value preserved.
+    const hints = (caught as { hints?: readonly string[] }).hints;
+    expect(hints?.some((h) => h.includes("contract show --task <id> --at-version 1"))).toBe(true);
+  });
 });
