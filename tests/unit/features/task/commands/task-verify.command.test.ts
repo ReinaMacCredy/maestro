@@ -213,6 +213,21 @@ describe("task verify", () => {
     });
   });
 
+  describe("info-only findings exit 0", () => {
+    const infoFinding: TrustFinding = {
+      check: "commit-metadata",
+      severity: "info",
+      paths: [],
+      details: "Unsigned commit (info-only)",
+    };
+
+    it("exits 0 when only info-level findings are present", async () => {
+      const deps = makeDeps({ runTrustVerifier: mockTrustVerifier([infoFinding]) });
+      const { exitCode } = await runVerify(["--task", TASK_ID, "--base", "abc123"], deps);
+      expect(exitCode).toBe(0);
+    });
+  });
+
   describe("--json output", () => {
     const finding: TrustFinding = {
       check: "scope",

@@ -1001,9 +1001,13 @@ function normalizeAmendedCriteria(
 ): readonly DoneWhenCriterion[] {
   return next.map((criterion) => {
     const text = criterion.text.trim();
+    // Resolve to an existing criterion in two passes: explicit id match first,
+    // then text-fallback so that an amend that doesn't carry ids (e.g. the
+    // YAML form `doneWhen: [{text: "implementation done"}]`) doesn't silently
+    // reissue ids and break agents tracking criteria by id across versions.
     const existing = criterion.id
       ? current.find((candidate) => candidate.id === criterion.id)
-      : undefined;
+      : current.find((candidate) => candidate.text === text);
     const kind = criterion.kind ?? existing?.kind ?? "manual";
 
     if (!existing) {

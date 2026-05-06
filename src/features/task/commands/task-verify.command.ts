@@ -121,7 +121,7 @@ function countBySeverity(findings: readonly TrustFinding[]): FindingCounts {
 
 function deriveExitCode(counts: FindingCounts): number {
   if (counts.error > 0) return 1;
-  if (counts.warn > 0 || counts.info > 0) return 2;
+  if (counts.warn > 0) return 2;
   return 0;
 }
 

@@ -36,14 +36,14 @@ function registerShowSubcommand(parent: Command, root: Command, deps: ContractL2
     .command("show")
     .description("Show the current (or a specific) versioned contract for a task")
     .requiredOption("--task <id>", "Task id")
-    .option("--version <n>", "Show a specific version (default: current)", parsePositiveInt)
+    .option("--at-version <n>", "Show a specific version (default: current)", parsePositiveInt)
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root);
 
       const taskId: string = opts.task;
-      const versionN: number | undefined = opts.version;
+      const versionN: number | undefined = opts.atVersion;
 
       let contract: Contract | undefined;
 

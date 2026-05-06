@@ -142,26 +142,26 @@ describe("contract show", () => {
     expect(joined).toContain("Amendments (2)");
   });
 
-  it("shows v1 when --version 1", async () => {
+  it("shows v1 when --at-version 1", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
     registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
 
-    await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--version", "1"]);
+    await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--at-version", "1"]);
 
     const joined = logs.join("\n");
     // v1 has no amendments
     expect(joined).toContain("(none)");
   });
 
-  it("exits non-zero and prints clear error for --version 999", async () => {
+  it("exits non-zero and prints clear error for --at-version 999", async () => {
     captureConsole();
     const program = makeProgram();
     registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
 
     let thrown: unknown;
     try {
-      await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--version", "999"]);
+      await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--at-version", "999"]);
     } catch (err) {
       thrown = err;
     }
@@ -184,12 +184,12 @@ describe("contract show", () => {
     expect(parsed).toHaveProperty("status");
   });
 
-  it("returns specific version JSON with --version 1 --json", async () => {
+  it("returns specific version JSON with --at-version 1 --json", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
     registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
 
-    await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--version", "1", "--json"]);
+    await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--at-version", "1", "--json"]);
 
     const parsed = JSON.parse(logs.join("\n"));
     expect(parsed).toHaveProperty("taskId", TASK_ID);

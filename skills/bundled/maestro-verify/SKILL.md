@@ -175,7 +175,7 @@ Inspect an existing Verdict without re-running:
 
 ```bash
 maestro verdict show --task <id>
-maestro verdict show --task <id> --version <verdictId>
+maestro verdict show --task <id> --at-version <verdictId>
 ```
 
 Example text output:

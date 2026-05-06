@@ -62,7 +62,7 @@ export function registerVerdictCommand(
     .command("show")
     .description("Show the current verdict for a task")
     .requiredOption("--task <id>", "Task ID")
-    .option("--version <verdictId>", "Show a specific verdict by ID (default: latest)")
+    .option("--at-version <verdictId>", "Show a specific verdict by ID (default: latest)")
     .option("--latest", "Show the latest verdict (default)")
     // --pr is a query-time filter: when provided alongside --task, the latest
     // verdict for that task is filtered by tree SHA + PR number. The tree SHA
@@ -103,11 +103,11 @@ export function registerVerdictCommand(
 
       let verdict: Verdict | undefined;
 
-      if (typeof opts.version === "string" && opts.version.length > 0) {
-        verdict = await services.verdictStore.readVersion(taskId, opts.version);
+      if (typeof opts.atVersion === "string" && opts.atVersion.length > 0) {
+        verdict = await services.verdictStore.readVersion(taskId, opts.atVersion);
         if (verdict === undefined) {
-          throw new MaestroError(`Verdict ${opts.version} not found for task ${taskId}`, [
-            "Run 'maestro verdict show --task <id>' (without --version) to see the latest",
+          throw new MaestroError(`Verdict ${opts.atVersion} not found for task ${taskId}`, [
+            "Run 'maestro verdict show --task <id>' (without --at-version) to see the latest",
           ]);
         }
       } else {

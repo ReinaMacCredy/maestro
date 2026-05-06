@@ -116,7 +116,7 @@ maestro evidence show <evidence-id>
 ## CLI VERBS — CONTRACT (L2)
 ```bash
 maestro contract show --task <id>
-maestro contract show --task <id> --version <n>
+maestro contract show --task <id> --at-version <n>
 maestro contract amend --task <id> --add-path <path> --reason "<why>"
 maestro contract amend --task <id> --remove-path <path> --reason "<why>"
 maestro contract history --task <id>
@@ -138,7 +138,7 @@ maestro spec edit --mission <id>
 ## CLI VERBS — VERDICT (L3)
 ```bash
 maestro verdict show --task <id>
-maestro verdict show --task <id> --version <id>
+maestro verdict show --task <id> --at-version <id>
 maestro verdict show --task <id> --pr <number>
 maestro verdict request --task <id>
 maestro verdict request --task <id> --json

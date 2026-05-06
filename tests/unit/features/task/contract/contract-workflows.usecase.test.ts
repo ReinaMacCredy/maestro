@@ -602,6 +602,38 @@ describe("ContractWorkflows", () => {
     ).rejects.toBeInstanceOf(MaestroError);
   });
 
+  it("L1 amend (replace) preserves criterion id when text is unchanged", async () => {
+    const contract = makeContract({
+      doneWhen: [
+        { id: "dw-stable", text: "implementation done", kind: "manual" },
+        { id: "dw-other", text: "tests pass", kind: "manual" },
+      ],
+    });
+    const contractStore = mockContractStore([contract]);
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+    );
+
+    const replaced = await contracts.amend({
+      kind: "replace",
+      ref: "c-000001",
+      actorId: "agent-a",
+      reason: "no-op replace, just re-state criteria",
+      intent: "Change task code",
+      scope: { filesExpected: ["src/**/*.ts"], filesForbidden: [] },
+      doneWhen: [
+        { text: "implementation done" },
+        { text: "tests pass" },
+      ],
+    });
+
+    const ids = replaced.doneWhen.map((c) => c.id);
+    expect(ids).toContain("dw-stable");
+    expect(ids).toContain("dw-other");
+  });
+
   it("L1 amend (markCriterion) is exempt from amendmentBudget", async () => {
     const contract = makeContract({
       amendmentBudget: {

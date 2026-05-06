@@ -256,14 +256,14 @@ describe("verdict show", () => {
     expect(parsed.taskId).toBe("tsk-aaaaaa");
   });
 
-  it("shows specific version by --version flag", async () => {
+  it("shows specific version by --at-version flag", async () => {
     const v1 = makeVerdict("PASS", { computedAt: "2026-05-04T08:00:00.000Z" });
     const v2 = makeVerdict("FAIL", { computedAt: "2026-05-04T10:00:00.000Z" });
     const services = makeServices(v2, [v1, v2]);
     const program = makeProgram(services);
     const { logs } = captureConsole();
 
-    await program.parseAsync(["node", "maestro", "verdict", "show", "--task", "tsk-aaaaaa", "--version", v1.id, "--json"]);
+    await program.parseAsync(["node", "maestro", "verdict", "show", "--task", "tsk-aaaaaa", "--at-version", v1.id, "--json"]);
 
     const parsed = JSON.parse(logs.join("")) as Verdict;
     expect(parsed.id).toBe(v1.id);
