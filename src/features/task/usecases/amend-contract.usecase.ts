@@ -3,7 +3,10 @@ import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import type { ContractAmendment } from "../domain/contract/contract-types.js";
-import type { ContractStoreQueryPort } from "../ports/contract-store.port.js";
+import type {
+  ContractStorePort,
+  ContractStoreQueryPort,
+} from "../ports/contract-store.port.js";
 import type { ContractVersionStorePort } from "../ports/contract-version-store.port.js";
 import {
   readContractHistoryWithBackfill,
@@ -141,14 +144,31 @@ export async function amendContract(
   const afterScope = input.amendment.after.scope ?? current.scope;
   const afterIntent = input.amendment.after.intent ?? current.intent;
   const afterDoneWhen = input.amendment.after.doneWhen ?? current.doneWhen;
-  await store.write(input.taskId, nextVersion, {
+  const amended = {
     ...current,
     intent: afterIntent,
     scope: afterScope,
     doneWhen: afterDoneWhen,
     amendments: [...current.amendments, input.amendment],
-    status: "amended",
-  });
+    status: "amended" as const,
+  };
+  await store.write(input.taskId, nextVersion, amended);
+
+  // Also write to L1 so that L1-driven verbs (criteria mark/add/remove,
+  // task update --status completed) see the amended scope and don't clobber
+  // it on their next save. Without this, criteria mark loads the L1
+  // contract (which still has the pre-amendment scope), saves a new
+  // version that drops the amendment, and the user's docs/** addition is
+  // silently lost on the next mirror back to L2.
+  if (legacyStore && isContractStorePort(legacyStore)) {
+    try {
+      await legacyStore.save(amended);
+    } catch {
+      // L1 sync is best-effort: the L2 write is the authoritative record.
+      // If L1 writes fail (concurrent edit, FS issue), surface in next
+      // L1-driven save rather than rolling back the L2 amendment.
+    }
+  }
 
   await recordEvidence(evidenceStore, {
     task_id: input.taskId,
@@ -163,6 +183,12 @@ export async function amendContract(
   });
 
   return { newVersion: nextVersion, amendmentId: input.amendment.id };
+}
+
+function isContractStorePort(
+  store: ContractStoreQueryPort,
+): store is ContractStorePort {
+  return typeof (store as Partial<ContractStorePort>).save === "function";
 }
 
 function findForbiddenPathMatches(

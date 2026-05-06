@@ -197,7 +197,26 @@ describe("ContractWorkflows", () => {
 
   it("previewVerdict reports overlap annotations from the captured git anchor", async () => {
     const contract = makeContract({ id: "c-000001", claimedAtCommit: "base-a" });
-    const other = makeContract({ id: "c-000002", taskId: "tsk-000002", claimedAtCommit: "base-b" });
+    // Overlap requires the candidate to have a closed verdict whose
+    // actualFilesTouched intersects with ours: open candidates are not
+    // counted (they haven't raced on actual files yet).
+    const other = makeContract({
+      id: "c-000002",
+      taskId: "tsk-000002",
+      claimedAtCommit: "base-b",
+      status: "fulfilled",
+      verdict: {
+        fulfilled: true,
+        computedAt: "2026-04-20T00:00:00.000Z",
+        actualFilesTouched: ["src/features/task/usecases/contract-workflows.usecase.ts"],
+        expectedFilesMatched: [],
+        outOfScopeFiles: [],
+        forbiddenTouched: [],
+        filesExpectedUnused: [],
+        unmetCriteria: [],
+        metCriteria: [],
+      },
+    });
     const contractStore = mockContractStore([contract, other]);
     const contracts = buildContractWorkflows(
       contractStore,

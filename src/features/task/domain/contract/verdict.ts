@@ -44,8 +44,8 @@ export function computeContractVerdict(
   );
 
   const cap = contract.scope.maxFilesTouched ?? contract.configSnapshot.defaultMaxFilesTouched;
-  const capExceeded = cap !== undefined && actualFilesTouched.length > cap
-    ? { cap, actual: actualFilesTouched.length }
+  const capExceeded = cap !== undefined && auditableFiles.length > cap
+    ? { cap, actual: auditableFiles.length }
     : undefined;
 
   const metCriteria = criteria.filter((criterion) => criterion.met === true);

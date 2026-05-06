@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.72.14 - close five trust-substrate seam bugs found by round-9 + round-10 minimal-prompt scenarios
+
+Round-9 surfaced two close-time UX gaps (recovery output too narrow,
+cap counting included substrate). Round-10 ran five minimal-prompt
+scenarios in parallel and surfaced three more — none caught by existing
+unit/integration tests because each lived in a seam between two stores,
+two policies, or two diff bases:
+
+### Fixes
+
+- **Recovery output covers every `broken` reason, not just unmet manual
+  criteria.** v0.72.13 only printed the fix-forward sequence when a
+  contract closed `broken` because of unmet `kind: manual` rows. Round-9
+  surfaced two more variants (out-of-scope edits, cap exceeded) where
+  the recovery message regressed to "Inspect: maestro contract show"
+  with no actionable verbs. The recovery printer now enumerates ALL
+  active `broken` reasons (out-of-scope files, forbidden touches, cap
+  exceeded, unmet manual criteria, unmet receipt-hint criteria) and
+  prints the appropriate `git checkout HEAD --` / `contract amend`
+  / `criteria mark` / `--verified-by` follow-up per reason.
+- **Cap counting now excludes `.maestro/` substrate metadata.** The
+  `maxFilesTouched` cap counted every file in the diff, including
+  `.maestro/` substrate written by the CLI itself (run-state, evidence,
+  contract index updates). A user with `maxFilesTouched: 3` could
+  legitimately edit two source files and still trip the cap because the
+  CLI's own substrate writes pushed the count over. v0.72.12 already
+  exempted substrate from the scope/forbidden checks via
+  `isMaestroSubstratePath`; the cap check now reads from the same
+  `auditableFiles` list rather than raw `actualFilesTouched`.
+- **Contract amend → criteria mark/completion no longer drops scope.**
+  `maestro contract amend --task <id>` previously wrote only to the L2
+  versioned store. The L1 store (read by `task contract criteria mark`,
+  `task contract criteria add/remove`, and `task update --status
+  completed`) stayed at the pre-amendment scope. Each subsequent L1-driven
+  save then mirrored its own un-amended scope back into L2, silently
+  reverting the amendment. The amend usecase now mirrors the amended
+  contract into L1 when the legacyStore exposes a `save()` method, so
+  every downstream verb sees the live scope. Round-10 scenario 3 walked
+  v1→v6 with two amendments — pre-fix, the final version had `src/**`
+  only and contract closed `broken`; post-fix, both amendments persist.
+- **Overlap detection now requires actually-touched-file intersection.**
+  `closeForTask` flagged parallel worktrees as overlapping when they
+  shared a `filesExpected` glob (e.g. `src/**`) even though their
+  actually-touched files were disjoint (`src/add.ts` vs `src/list.ts` vs
+  `src/complete.ts`). The git-window-overlap test was firing on time
+  alone, not on actual file races. Open candidates (no recorded verdict
+  yet) are now deferred — they have not actually raced on any file —
+  and closed candidates must have a `verdict.actualFilesTouched` that
+  intersects with ours before they count as overlap. Round-10 scenario 4
+  (3 disjoint parallel tasks) closed 1/3 fulfilled and 2/3 broken
+  pre-fix; post-fix, all three close cleanly.
+- **Auto-merge HUMAN message now points at the loosening soak.** When
+  the user sets `autoMergeAllowed.<class>: true` it counts as a
+  "loosening" and soaks for 30 days before taking effect; the verdict
+  reason previously said "set autoMergeAllowed.<class>: true" without
+  noting that doing so triggers the soak window. The reason text now
+  says so explicitly and points at `maestro policy pending`. Surfaced
+  by round-10 scenario 5 — the user set `medium: true`, ran the task,
+  and got HUMAN with a message telling them to set the flag they
+  already set.
+
 ## 0.72.13 - surface fix-forward recovery on broken contract close + skill nudge to mark manual criteria up front
 
 Round-7 minimal-prompt agents (greenfield + brownfield) both completed

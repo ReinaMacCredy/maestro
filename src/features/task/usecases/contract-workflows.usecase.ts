@@ -662,6 +662,7 @@ async function computeContractVerdictForTask(
     contract,
     gitResult.closedAtCommit,
     repoRoot,
+    gitResult.actualFilesTouched,
   );
   const computed = computeContractVerdict(contract, gitResult, receipt, actorId, at, {
     overlapDetected,
@@ -679,18 +680,36 @@ async function detectContractOverlap(
   contract: Contract,
   currentClosedAtCommit: string | undefined,
   runtimeRepoRoot: string,
+  currentActualFilesTouched: readonly string[],
   includeCandidate?: (candidate: Contract) => boolean,
 ): Promise<ContractVerdict["overlapDetected"] | undefined> {
   if (!contract.claimedAtCommit || !currentClosedAtCommit) {
     return undefined;
   }
 
-  const candidates = (await contractStore.all()).filter((candidate) =>
-    candidate.id !== contract.id
-    && (includeCandidate
-      ? includeCandidate(candidate)
-      : candidate.status !== "draft" && candidate.status !== "discarded"),
-  );
+  const currentTouched = new Set(currentActualFilesTouched);
+
+  const candidates = (await contractStore.all()).filter((candidate) => {
+    if (candidate.id === contract.id) return false;
+    if (includeCandidate) {
+      return includeCandidate(candidate);
+    }
+    if (candidate.status === "draft" || candidate.status === "discarded") {
+      return false;
+    }
+    // Path-level prerequisite: overlap means the two contracts actually
+    // raced on the same files, not merely that their declared scope globs
+    // overlap or their git windows overlap. Parallel worktrees touching
+    // disjoint paths under the same `src/**` glob is not an overlap.
+    const candidateTouched = candidate.verdict?.actualFilesTouched;
+    if (!candidateTouched) {
+      // Candidate is still open or has no recorded verdict; defer the
+      // file-intersection check until the candidate also closes.
+      return false;
+    }
+    if (currentTouched.size === 0) return false;
+    return candidateTouched.some((path) => currentTouched.has(path));
+  });
   if (candidates.length === 0) {
     return undefined;
   }

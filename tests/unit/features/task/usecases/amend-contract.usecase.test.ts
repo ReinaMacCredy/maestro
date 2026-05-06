@@ -195,6 +195,68 @@ describe("amendContract", () => {
     expect(v2?.status).toBe("amended");
   });
 
+  it("L1 store is synced when legacyStore exposes save() — keeps L1-driven verbs from clobbering amended scope", async () => {
+    // Regression for v0.72.14: pre-fix, `maestro contract amend --task` only
+    // wrote to the L2 versioned store. L1 verbs (criteria mark/add/remove,
+    // task update --status completed) read from L1, computed a "new"
+    // version from the un-amended L1 scope, and saved that back — silently
+    // dropping the amendment's scope expansion. The amend usecase now
+    // mirrors the amended contract into L1 when the legacyStore exposes
+    // a save() method.
+    const tmpDir = await mkdtemp(join(tmpdir(), "amend-contract-l1-sync-"));
+    const versionStore = new FsContractVersionStoreAdapter(tmpDir);
+    const initial = makeContract({ amendmentBudget: undefined });
+    await proposeContract(versionStore, initial);
+
+    let l1Saved: Contract | undefined;
+    const legacyStore = {
+      async get(id: string) {
+        return id === initial.id ? initial : undefined;
+      },
+      async getByTaskId(taskId: string) {
+        return taskId === initial.taskId ? initial : undefined;
+      },
+      async all() {
+        return [initial];
+      },
+      async readIndex() {
+        return [];
+      },
+      async create() {
+        throw new Error("unused");
+      },
+      async save(contract: Contract) {
+        l1Saved = contract;
+        return contract;
+      },
+      async delete() {
+        return true;
+      },
+    };
+
+    const amendment: ContractAmendment = makeAmendment({
+      after: {
+        scope: {
+          filesExpected: ["src/**", "docs/**"],
+          filesForbidden: [],
+        },
+      },
+    });
+
+    const evidenceStore = mockEvidenceStore();
+    await amendContract(versionStore, legacyStore, evidenceStore, {
+      taskId: initial.taskId,
+      amendment,
+      addedPaths: ["docs/**"],
+      removedPaths: [],
+    });
+
+    expect(l1Saved).toBeDefined();
+    expect(l1Saved?.scope.filesExpected).toEqual(["src/**", "docs/**"]);
+    expect(l1Saved?.amendments).toHaveLength(1);
+    expect(l1Saved?.status).toBe("amended");
+  });
+
   it("when contract has no amendmentBudget, amendments are unbounded (success)", async () => {
     await proposeContract(store, makeContract({ amendmentBudget: undefined }));
 

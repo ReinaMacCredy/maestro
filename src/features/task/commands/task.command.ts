@@ -2067,47 +2067,73 @@ function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
     );
     return;
   }
+
   const unmetManual = verdict.unmetCriteria.filter((c) => c.kind === "manual");
-  const otherReasons: string[] = [];
+  const unmetReceiptHints = verdict.unmetCriteria.filter((c) => c.kind === "receipt-hint");
+  const reasonsLine: string[] = [];
   if (verdict.outOfScopeFiles.length > 0) {
-    otherReasons.push(`Out of scope: ${verdict.outOfScopeFiles.join(", ")}`);
+    reasonsLine.push(`Out of scope: ${verdict.outOfScopeFiles.join(", ")}`);
   }
   if (verdict.forbiddenTouched.length > 0) {
-    otherReasons.push(`Forbidden touched: ${verdict.forbiddenTouched.join(", ")}`);
+    reasonsLine.push(`Forbidden touched: ${verdict.forbiddenTouched.join(", ")}`);
   }
   if (verdict.capExceeded) {
-    otherReasons.push(`Cap exceeded: ${verdict.capExceeded.actual}/${verdict.capExceeded.cap}`);
+    reasonsLine.push(`Cap exceeded: ${verdict.capExceeded.actual}/${verdict.capExceeded.cap}`);
   }
-  const unmetReceiptHints = verdict.unmetCriteria.filter((c) => c.kind === "receipt-hint");
+  if (unmetManual.length > 0) {
+    reasonsLine.push(`Unmet manual criteria: ${unmetManual.map((c) => c.id).join(", ")}`);
+  }
   if (unmetReceiptHints.length > 0) {
-    otherReasons.push(
+    reasonsLine.push(
       `Unmet receipt-hint criteria: ${unmetReceiptHints.map((c) => c.id).join(", ")}`,
     );
   }
 
-  if (unmetManual.length === 0) {
-    const reasonText = otherReasons.length > 0 ? ` (${otherReasons.join("; ")})` : "";
-    warn(
-      `Task ${task.id} completed but contract ${contract.id} closed \`broken\`${reasonText}. `
-      + `Inspect: maestro contract show --task ${task.id}`,
-    );
-    return;
-  }
-
-  const ids = unmetManual.map((c) => c.id);
   warn(
-    `Task ${task.id} completed but contract ${contract.id} closed \`broken\` `
-    + `due to unmet manual criteria: ${ids.join(", ")}.`,
+    `Task ${task.id} completed but contract ${contract.id} closed \`broken\`. `
+    + (reasonsLine.length > 0 ? `Reasons: ${reasonsLine.join("; ")}.` : ""),
   );
   console.error("    To fix forward:");
   console.error(`      maestro task contract reopen ${contract.id}`);
-  for (const id of ids) {
-    console.error(`      maestro task contract criteria mark ${contract.id} ${id} --met`);
+  if (unmetManual.length > 0) {
+    for (const c of unmetManual) {
+      console.error(`      maestro task contract criteria mark ${contract.id} ${c.id} --met`);
+    }
+  }
+  if (verdict.outOfScopeFiles.length > 0) {
+    console.error(
+      `      # then EITHER revert the out-of-scope files`
+      + ` (git checkout HEAD -- ${verdict.outOfScopeFiles.join(" ")})`,
+    );
+    for (const path of verdict.outOfScopeFiles) {
+      console.error(
+        `      #   OR amend the contract: maestro contract amend --task ${task.id}`
+        + ` --add-path ${path} --reason "<why>"`,
+      );
+    }
+  }
+  if (verdict.forbiddenTouched.length > 0) {
+    console.error(
+      `      # then revert the forbidden files`
+      + ` (git checkout HEAD -- ${verdict.forbiddenTouched.join(" ")})`,
+    );
+  }
+  if (verdict.capExceeded) {
+    console.error(
+      `      # then trim the change to ${verdict.capExceeded.cap} files`
+      + ` or fewer (current: ${verdict.capExceeded.actual});`
+      + ` cap is set in the contract YAML and cannot be raised by amend`,
+    );
+  }
+  if (unmetReceiptHints.length > 0) {
+    for (const c of unmetReceiptHints) {
+      console.error(
+        `      # then re-complete with --verified-by "${c.text}" (or mark`
+        + ` ${c.id} via task contract criteria mark)`,
+      );
+    }
   }
   console.error(`      maestro task update --task ${task.id} --status completed`);
-  if (otherReasons.length > 0) {
-    console.error(`    Also broken because: ${otherReasons.join("; ")}.`);
-  }
 }
 
 function formatVerdictHint(verdict: {
