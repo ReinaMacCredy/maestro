@@ -176,6 +176,21 @@ maestro task update <id> --status completed \
 
 Run this loop before marking any task done:
 
+0. **Mark any `kind: manual` criteria met first.** Run
+   `maestro contract show --task <id>` and inspect each `[ ]` checkbox
+   on a `(manual)` criterion. If you have evidence the criterion is
+   satisfied, tick it now:
+
+   ```bash
+   maestro task contract criteria mark <contractId> <criterionId> --met
+   ```
+
+   `receipt-hint` criteria auto-tick from your `--verified-by` tags
+   on `task update --status completed`; `manual` criteria do not.
+   Unticked `manual` criteria silently close the contract `broken`
+   on completion — the recovery is `task contract reopen` + `criteria
+   mark` + re-complete, so it is cheaper to mark them up front.
+
 1. `maestro task verify --task <id>` — Trust Verifier (scope, lockfile,
    generated, sensitive-paths, commit-metadata, secrets). Address every
    error finding before proceeding.

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.72.13 - surface fix-forward recovery on broken contract close + skill nudge to mark manual criteria up front
+
+Round-7 minimal-prompt agents (greenfield + brownfield) both completed
+their work, ran the documented pre-claim ritual, and still landed on a
+`broken` contract — the cause in both cases was identical and silent:
+`kind: manual` `doneWhen` criteria were never ticked. Recovery required
+four undocumented commands (`task contract reopen` + `criteria mark` +
+re-claim + re-complete). The pre-claim ritual nowhere told them to mark
+the boxes first; nothing in the close-time output told them how to fix
+forward.
+
+### Fixes
+
+- `task update --status completed` now surfaces explicit recovery
+  commands when the contract closes `broken` due to unmet `kind: manual`
+  criteria. The output names the contract id, lists the unmarked
+  criterion ids, and prints the exact `task contract reopen → criteria
+  mark → task update --status completed` sequence. Other broken reasons
+  (out-of-scope, forbidden, cap exceeded, unmet `receipt-hint` rows)
+  are also enumerated when present so triage isn't a JSON pipe.
+- `maestro-task` SKILL.md adds a step `0` to the pre-claim ritual:
+  inspect `contract show` for `(manual)` `[ ]` rows and tick them via
+  `task contract criteria mark` *before* running `task verify`.
+  `receipt-hint` criteria still auto-tick from `--verified-by` tags;
+  `manual` criteria require an explicit operator action and the skill
+  now says so up front rather than in passing.
+
 ## 0.72.12 - extend substrate exemption to bundled `maestro:` skills + clearer HUMAN reason
 
 Round-6 minimal-prompt agents (greenfield + brownfield) both closed

@@ -46,6 +46,7 @@ import type {
   TaskReceipt,
   UpdateTaskInput,
 } from "../domain/task-types.js";
+import type { Contract } from "../domain/contract/contract-types.js";
 import { TASK_STATUSES, TASK_TYPES, buildTaskReceipt, indexTasksById } from "../domain/task-types.js";
 import {
   buildCreateInput,
@@ -2039,6 +2040,76 @@ function completedTaskUpdateRequiresReopen(id: string): MaestroError {
   ]);
 }
 
+async function maybeFinalizeTaskContract(task: Task): Promise<void> {
+  let closed: Contract | undefined;
+  try {
+    const services = getServices();
+    closed = await services.contracts.closeForTask(
+      task,
+      await services.gitAnchor.resolveRepoRoot(process.cwd()),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(`Task ${task.id} completed, but contract close failed: ${message}`);
+    return;
+  }
+  if (closed?.status === "broken") {
+    surfaceBrokenContractRecovery(task, closed);
+  }
+}
+
+function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
+  const verdict = contract.verdict;
+  if (!verdict) {
+    warn(
+      `Task ${task.id} completed but contract ${contract.id} closed \`broken\`. `
+      + `Inspect: maestro contract show --task ${task.id}`,
+    );
+    return;
+  }
+  const unmetManual = verdict.unmetCriteria.filter((c) => c.kind === "manual");
+  const otherReasons: string[] = [];
+  if (verdict.outOfScopeFiles.length > 0) {
+    otherReasons.push(`Out of scope: ${verdict.outOfScopeFiles.join(", ")}`);
+  }
+  if (verdict.forbiddenTouched.length > 0) {
+    otherReasons.push(`Forbidden touched: ${verdict.forbiddenTouched.join(", ")}`);
+  }
+  if (verdict.capExceeded) {
+    otherReasons.push(`Cap exceeded: ${verdict.capExceeded.actual}/${verdict.capExceeded.cap}`);
+  }
+  const unmetReceiptHints = verdict.unmetCriteria.filter((c) => c.kind === "receipt-hint");
+  if (unmetReceiptHints.length > 0) {
+    otherReasons.push(
+      `Unmet receipt-hint criteria: ${unmetReceiptHints.map((c) => c.id).join(", ")}`,
+    );
+  }
+
+  if (unmetManual.length === 0) {
+    const reasonText = otherReasons.length > 0 ? ` (${otherReasons.join("; ")})` : "";
+    warn(
+      `Task ${task.id} completed but contract ${contract.id} closed \`broken\`${reasonText}. `
+      + `Inspect: maestro contract show --task ${task.id}`,
+    );
+    return;
+  }
+
+  const ids = unmetManual.map((c) => c.id);
+  warn(
+    `Task ${task.id} completed but contract ${contract.id} closed \`broken\` `
+    + `due to unmet manual criteria: ${ids.join(", ")}.`,
+  );
+  console.error("    To fix forward:");
+  console.error(`      maestro task contract reopen ${contract.id}`);
+  for (const id of ids) {
+    console.error(`      maestro task contract criteria mark ${contract.id} ${id} --met`);
+  }
+  console.error(`      maestro task update --task ${task.id} --status completed`);
+  if (otherReasons.length > 0) {
+    console.error(`    Also broken because: ${otherReasons.join("; ")}.`);
+  }
+}
+
 function formatVerdictHint(verdict: {
   readonly outOfScopeFiles: readonly string[];
   readonly forbiddenTouched: readonly string[];
@@ -2060,18 +2131,6 @@ function formatVerdictHint(verdict: {
   return "Inspect the stored verdict for details.";
 }
 
-async function maybeFinalizeTaskContract(task: Task): Promise<void> {
-  try {
-    const services = getServices();
-    await services.contracts.closeForTask(
-      task,
-      await services.gitAnchor.resolveRepoRoot(process.cwd()),
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    warn(`Task ${task.id} completed, but contract close failed: ${message}`);
-  }
-}
 
 async function maybeTransferClaimedContractOwnership(
   taskId: string,
