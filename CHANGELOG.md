@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.72.29 - close R27 substrate bugs: TTY hang, risk divergence, criteria budget, amend path, draft strictness, broken wording
+
+R27 sub-agent surfaced six seam bugs that left an autonomous agent
+without a working recovery path: a silent editor hang, divergent risk
+class between `policy check` and `verdict request`, criteria-mark
+operations consuming amendmentBudget so structural amends had nowhere
+left to land, the trust verifier suggesting a non-existent amend path,
+half-initialized contracts produced from typo'd YAML keys, and a
+"broken" verdict word with no inline reason. Together those last three
+made scope-creep recovery impossible — the user couldn't even identify
+why they were broken, much less fix it.
+
+### Fixes
+
+- **`task contract new` no longer hangs silently when $EDITOR is set
+  but stdin is not a TTY.** Background processes inherit $EDITOR from
+  their parent shell; without a controlling terminal the editor blocks
+  on a stdin that will never produce input. The verb now refuses with
+  a clear message pointing at `--from <path>`, stdin piping, or
+  `--editor <cmd>` for non-blocking commands. Surfaced when
+  agents/CI ran the verb in a worktree with $EDITOR exported.
+- **`policy check` now resolves the same base ref as `verdict request`.**
+  Previously `policy check` fell back to `resolveDefaultBase()` (which
+  in greenfield repos returns the empty-tree SHA) while `verdict request`
+  used `contract.claimedAtCommit ?? resolveDefaultBase()`. Result:
+  `policy check` counted every committed file as "modified" and reported
+  `effectiveRisk: high` while `verdict request` saw a clean diff and
+  reported `medium`. Both now agree.
+- **`task contract criteria mark` no longer consumes from
+  `amendmentBudget`.** Marking a criterion met or unmet is workflow
+  progress, not a structural contract change. Per-criterion `metAt` /
+  `metBy` / `metEvidence` fields already record the audit trail. The
+  amendments[] log now contains structural changes only (add/remove
+  criterion, replace, scope amend). Three criteria marks no longer
+  exhaust a 2-amendment budget before any real amend can land.
+- **`task verify` fix-forward hint points at the working amend path.**
+  Previously the printer suggested `maestro contract amend tsk-XXX
+  --reason ...` (positional ref form) which does not accept `--task`,
+  while `maestro task contract amend` doesn't accept `--task` at all.
+  Hint now uses the canonical `maestro contract amend --task <id>
+  --add-path <path> --reason "<why>"` form documented in the skill.
+- **Unknown contract draft keys reject by default.** A typo such as
+  `expectedPaths` (vs `filesExpected`) used to print a stderr warning
+  and proceed with an empty `filesExpected[]`, producing a
+  half-initialized contract that immediately failed every scope check.
+  The verb now exits non-zero with every offending key listed in one
+  message; pass `--allow-unknown-keys` to keep the previous
+  warn-and-continue behavior. The bootstrap default contract template
+  now also documents `amendmentBudget` and `costBudget` as commented
+  examples.
+- **Contract verdict "broken" now names the structural reasons.**
+  Output previously read `Verdict: broken` alongside `Done when: 3/3
+  met`, which scanned as nonsense — broken means scope/forbidden/cap
+  violation. Now reads `Verdict: broken — out-of-scope files: 2,
+  forbidden files: 0, unmet criteria: 0` so the reader doesn't have
+  to scroll for the explanation.
+
 ## 0.72.28 - close R25 + R26 seam bugs in handoff, contract drafts, spec edit, deploy gate, task budget
 
 R25 and R26 sub-agent passes surfaced two handoff seam bugs and four
