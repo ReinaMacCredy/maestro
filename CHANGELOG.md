@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.72.38 - lazy-load mission-control, cut cold-start ~85% for non-TUI verbs
+
+Cold-start profiling showed mission-control alone owned 252ms of the 522ms
+total module-import cost (it pulls `@opentui/core`, `@opentui/react`,
+`react`). Every other verb — `task verify`, `verdict request`,
+`task ready`, `evidence record`, `--version`, `--help` — paid that cost
+even though they never touch the TUI runtime. For autonomous agents
+that fire 6+ verbs per recovery cycle, this added ~5 seconds of pure
+overhead per loop.
+
+### Fix
+
+- **mission-control's registration deferred** until argv actually targets
+  it. `src/index.ts` now scans argv before `program.parseAsync` and only
+  dynamic-imports `@/infra/commands/mission-control.command.js` when the
+  verb is `mission-control` or when help text is being rendered. Every
+  other path skips the OpenTUI/React import graph.
+
+### Measured impact
+
+| Path | Before | After |
+|------|--------|-------|
+| `maestro --version` | 0.90s | 0.12s |
+| `maestro task ready` | 0.98s | 0.20s |
+| `maestro task proof` | 0.89s | 0.12s |
+| `maestro task verify` | 1.03s | 0.36s |
+| `maestro verdict request` | 1.05s | 0.37s |
+| 6-verb agent chain | 5.92s | 0.89s |
+
+`task verify` / `verdict request` retain their git-subprocess floor
+(~0.3s); the lazy-load only addresses module-import cost.
+
+`mission-control --render-check`, `mission-control --help`, and
+`mission-control --preview` all behave identically — they pay the
+253ms import once, as before.
+
 ## 0.72.37 - close R35 substrate bug: witness-level gate counted infrastructure rows
 
 R35 sub-agent found a HIGH-severity bug: when effectiveRiskClass was

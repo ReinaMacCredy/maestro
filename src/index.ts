@@ -15,6 +15,7 @@ import { registerDoctorCommand } from "@/infra/commands/doctor.command.js";
 import { registerInstallCommand } from "@/infra/commands/install.command.js";
 import { registerUpdateCommand } from "@/infra/commands/update.command.js";
 import { registerUninstallCommand } from "@/infra/commands/uninstall.command.js";
+import { registerProvidersCommand } from "@/infra/commands/providers.command.js";
 import {
   resolveInstallDir,
   resolveInstalledBinaryName,
@@ -30,7 +31,10 @@ import {
   registerPrincipleCommand,
   registerReplyCommand,
 } from "./features/mission/index.js";
-import { registerMissionControlCommand } from "@/infra/commands/mission-control.command.js";
+// Mission Control lazy-loads — its import graph (OpenTUI + React) costs
+// ~250ms on cold start, but is only needed when the `mission-control` verb
+// runs. Every other verb (and `--version`/`--help`) skips it entirely.
+// See profile-imports.ts for the measurements.
 import {
   registerMemoryCorrectCommand,
   registerMemoryRecallCommand,
@@ -62,6 +66,7 @@ import { registerReviewCommand } from "./features/review/index.js";
 import { registerMergeAutoCommand } from "./features/merge/index.js";
 import { registerDeployCommand } from "./features/deploy/index.js";
 import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
+import { registerSkillsCommand } from "./features/skills/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -81,12 +86,13 @@ registerSessionCommand(program);
 registerInstallCommand(program);
 registerUpdateCommand(program);
 registerUninstallCommand(program);
+registerProvidersCommand(program);
+registerSkillsCommand(program);
 registerMissionCommand(program);
 registerFeatureCommand(program);
 registerValidateCommand(program);
 registerMilestoneCommand(program);
 registerCheckpointCommand(program);
-registerMissionControlCommand(program);
 registerMemoryCorrectCommand(program);
 registerMemoryRecallCommand(program);
 registerMemorySearchCommand(program);
@@ -168,12 +174,34 @@ export async function cleanupStaleWindowsBinary(
 // timeout fires (verified ~9s hang on cold cache + slow network).
 const REFRESH_GRACE_MS = 1500;
 
+// mission-control is the only verb that pulls OpenTUI/React (~250ms cold).
+// Skip its registration when argv targets a different verb. For `--help`,
+// `--version`, and the bare `mission-control` invocation, register it so
+// help text and the verb itself still work.
+async function maybeRegisterMissionControl(argv: readonly string[]): Promise<void> {
+  let needsMissionControl = true;
+  for (let i = 2; i < argv.length; i++) {
+    const token = argv[i];
+    if (!token) continue;
+    if (token === "--help" || token === "-h") { needsMissionControl = true; break; }
+    if (token === "--version" || token === "-V") { needsMissionControl = false; break; }
+    if (token.startsWith("-")) continue;
+    needsMissionControl = token === "mission-control";
+    break;
+  }
+  if (needsMissionControl) {
+    const mod = await import("@/infra/commands/mission-control.command.js");
+    mod.registerMissionControlCommand(program);
+  }
+}
+
 async function main(): Promise<void> {
   const refreshController = new AbortController();
   try {
     await cleanupStaleWindowsBinary();
     assertNoDeprecatedMissionControlFlags(process.argv);
     assertNoDeprecatedVersionFlag(process.argv);
+    await maybeRegisterMissionControl(process.argv);
     // Run the cache read in parallel with the user's command so the FS read
     // does not delay parsing. Stale-cache refresh is fire-and-forget inside
     // checkForUpdate() and intentionally not awaited here.
