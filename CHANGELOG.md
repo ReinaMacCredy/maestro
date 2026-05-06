@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.72.34 - close R32 substrate bug: user-supplied doneWhen criterion IDs were silently regenerated
+
+R32 sub-agent found a CRITICAL bug: user-supplied `doneWhen[].id` values
+in a contract draft YAML (e.g. `dw-aaaaaa`) passed schema validation but
+were thrown away during contract create. Locking issued fresh
+auto-generated IDs (`dw-20e179`, `dw-c5436b`). Agents who recorded
+evidence with `--criterion <user-id>` ended up with orphaned evidence
+because the criterion no longer existed under that ID, and `task proof`
+showed 0% coverage even though every criterion had evidence.
+
+### Fixes
+
+- **`task contract new` now preserves user-supplied `doneWhen[].id`
+  values when present and only generates IDs when absent.** Previously
+  `proposeContract` mapped `input.doneWhen` and called
+  `generateDoneWhenId()` unconditionally for every criterion, throwing
+  away validated user input. Now uses `criterion.id ?? generateDoneWhenId()`
+  to match the existing `normalizeAmendedCriteria` behavior used during
+  amendments.
+- **Duplicate `doneWhen[].id` in the same draft is now rejected.** Added
+  a unique-id check in `proposeContract` before contract creation. Error:
+  "Duplicate doneWhen.id in draft: dw-xxxxxx" with a hint to omit the id
+  if uniqueness can't be guaranteed.
+
 ## 0.72.33 - close R31 substrate bugs: invisible draft contract, witness flag ignored, silent skipped paths, opaque dw-id error
 
 R31 sub-agent surfaced four follow-up bugs against the R30 ship: a draft

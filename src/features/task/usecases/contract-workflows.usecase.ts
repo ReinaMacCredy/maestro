@@ -245,6 +245,17 @@ async function createContract(
     }
   }
 
+  const seenIds = new Set<string>();
+  for (const criterion of input.doneWhen) {
+    if (criterion.id === undefined) continue;
+    if (seenIds.has(criterion.id)) {
+      throw new MaestroError(`Duplicate doneWhen.id in draft: ${criterion.id}`, [
+        "Each doneWhen criterion must have a unique id, or omit the id to let maestro generate one",
+      ]);
+    }
+    seenIds.add(criterion.id);
+  }
+
   const contract = await contractStore.create({
     taskId: input.taskId,
     repoRoot: normalizeStoredContractRepoRoot(input.repoRoot),
@@ -252,7 +263,7 @@ async function createContract(
     intent: input.intent.trim(),
     scope: normalizeScope(input.scope),
     doneWhen: input.doneWhen.map((criterion) => ({
-      id: generateDoneWhenId(),
+      id: criterion.id ?? generateDoneWhenId(),
       text: criterion.text.trim(),
       kind: criterion.kind ?? "manual",
     })),
