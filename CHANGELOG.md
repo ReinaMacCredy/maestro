@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.72.11 - close four UX seams: contract checkbox view, task update --task alias, exit-2 + HUMAN-default skill notes
+
+Round-5 closed cleanly (greenfield + brownfield both `fulfilled`), but
+left four documented papercuts that minimal-prompt agents will keep
+hitting. None block the trust flow on their own; together they account
+for "I followed the skill and the output still surprised me" reports.
+
+### Fixes
+
+- `task contract show` now renders the per-criterion `doneWhen`
+  checklist (`[x]`/`[ ]` plus criterion `kind` and the `metEvidence`
+  hint when present) and a post-close `Verdict:` block citing
+  out-of-scope, forbidden, and unmet rows. The aggregate `Status:` line
+  alone hid the receipt-hint auto-mark trail; agents triaging a
+  `broken` close had to JSON-pipe the contract to see *why*. The
+  default human view now matches the JSON shape.
+- `task update` accepts `--task <id>` as an alternative to the
+  positional `<id-or-slug>`. Every other agent-facing trust verb
+  (`task verify`, `task proof`, `verdict request`, `plan check`,
+  `contract show/amend/history`, `evidence record`, `review ack`,
+  `merge auto`, `deploy gate`, `runtime check`) requires `--task`;
+  `task update` was the lone holdout. Passing both forms with
+  conflicting ids is rejected with a clear error; passing the same id
+  in both is accepted.
+
+### Skill docs
+
+- `skills/bundled/maestro-task/SKILL.md` now spells out
+  `task verify`'s exit codes (`0` clean / `1` errors / `2`
+  warnings/info-only) so agents stop interpreting `2` as a verification
+  failure and looping back to step 1.
+- The HUMAN verdict block now states the autopilot default explicitly:
+  every risk class — `low`, `medium`, `high`, `critical` — defaults to
+  `autoMergeAllowed: false`, so a clean PASS lands as HUMAN until the
+  team flips the relevant entry in `policies/autopilot.yaml`. The
+  pointer to `docs/auto-merge-eligibility.md` answers the inevitable
+  "why is even my low-risk PR HUMAN?" follow-up.
+
 ## 0.72.10 - skill quick-start uses a working filesExpected glob
 
 Round-4 greenfield agent followed the SKILL.md quick-start verbatim
