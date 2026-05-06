@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.72.23 - plan-check rejects malformed plan files with field-level hints
+
+R20 sub-agent (plan-check failure ergonomics scenario) found two
+agent-facing rough edges:
+
+1. A plan file missing `intendedFiles` crashed `maestro plan check`
+   with a raw `TypeError: undefined is not an object` and exit 1.
+   No user-facing error, no hint to the agent.
+2. `plan check --help` only said the plan file is "JSON or YAML"
+   without listing required fields. Agents had to source-dive or
+   guess the shape (`PlanInput` lives in `src/features/plan/domain/`).
+
+### Fixes
+
+- **`maestro plan check` now validates the parsed plan file** via a
+  zod schema in `src/features/plan/domain/plan-validators.ts` before
+  calling the use-case. Invalid payloads throw a `MaestroError` that
+  enumerates every missing/invalid field plus a hint block showing
+  the canonical YAML shape. No more raw stack traces.
+- **`maestro plan check --help` now embeds the plan-file schema**
+  via `addHelpText("after", ...)`: required vs optional fields, an
+  inline example, and a one-line description per check. The
+  description also notes that `missing-proof` only fires when the
+  contract is linked to a mission spec — a discoverability gap R20
+  surfaced.
+
 ## 0.72.21 - generalize argv guard to catch any `<subcommand> --version <value>`
 
 While shipping v0.72.20 a quick audit found `maestro task update --task
