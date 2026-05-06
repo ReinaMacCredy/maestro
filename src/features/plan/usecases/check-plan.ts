@@ -33,16 +33,20 @@ export function checkPlan(input: CheckPlanInput): PlanCheckResult {
   }
 
   // Check 2 — missing-proof
-  if (spec !== undefined) {
+  const allCriteria = [
+    ...(spec?.acceptance_criteria ?? []),
+    ...contract.doneWhen,
+  ];
+  if (allCriteria.length > 0) {
     const coveredIds = new Set(plan.proofSet.map((p) => p.criterionId));
-    const missingIds = spec.acceptance_criteria
+    const missingIds = allCriteria
       .map((c) => c.id)
       .filter((id) => !coveredIds.has(id));
     if (missingIds.length > 0) {
       findings.push({
         check: "missing-proof",
         severity: "error",
-        message: `${missingIds.length} acceptance criterion/criteria not covered by the proof set.`,
+        message: `${missingIds.length} criterion/criteria not covered by the proof set.`,
         criterionIds: missingIds,
       });
     }

@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { getServices, type Services } from "@/services.js";
 import { amendContract } from "../usecases/amend-contract.usecase.js";
 import { getCurrentContract } from "../usecases/get-current-contract.usecase.js";
@@ -177,6 +178,12 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
       const removePaths: string[] = opts.removePath ?? [];
       const reason: string = opts.reason;
 
+      if (addPaths.length === 0 && removePaths.length === 0) {
+        throw new MaestroError("At least one of --add-path or --remove-path is required", [
+          "Specify paths to add or remove from the contract scope",
+        ]);
+      }
+
       const before = await getCurrentContract(
         services.contractVersionStore,
         services.contractStore,
@@ -235,7 +242,10 @@ function applyPathChanges(
   const removeSet = new Set(remove);
   const result = existing.filter((p) => !removeSet.has(p));
   for (const p of add) {
-    if (!result.includes(p)) result.push(p);
+    // Skip if path already exists or is covered by an existing glob
+    if (result.includes(p)) continue;
+    if (matchesAnyGlob(result, p)) continue;
+    result.push(p);
   }
   return result;
 }

@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.72.31 - close R29 substrate bugs: no-op amendments, redundant paths, plan-check contract criteria gap
+
+R29 sub-agent surfaced three bugs that blocked autonomous recovery: no-op
+amendments consuming budget without making changes, redundant path
+amendments wasting budget on paths already covered by globs, and
+plan-check failing to validate contract criteria (only checking Spec
+criteria), violating the documented pre-claim ritual.
+
+### Fixes
+
+- **`contract amend` now rejects no-op calls that specify neither
+  `--add-path` nor `--remove-path`.** Previously calling `contract amend`
+  with only `--reason` would succeed, increment the version counter,
+  consume amendment budget, and record an amendment entry, but make no
+  actual changes to the contract scope. Agents could accidentally exhaust
+  the amendment budget without making any meaningful changes, blocking
+  recovery when they later needed to legitimately amend. Now exits with
+  clear error: "At least one of --add-path or --remove-path is required."
+- **`contract amend` now skips paths already covered by existing glob
+  patterns.** Previously adding a path like `src/features/logging/index.ts`
+  when `src/features/logging/**` was already in scope would consume
+  amendment budget and create a duplicate entry. Now checks if the path
+  being added is already matched by existing `filesExpected` patterns and
+  silently skips the addition (but still records the amendment for audit
+  purposes). Prevents agents from wasting amendment budget on redundant
+  additions.
+- **`plan check` now validates all contract `doneWhen` criteria, not just
+  Spec acceptance criteria.** Previously the `missing-proof` check only
+  iterated over `spec.acceptance_criteria`, ignoring contract criteria
+  entirely. This violated the documented workflow in `maestro-verify/SKILL.md`
+  which states plan-check will catch missing proof strategies. Agents
+  following the documented pre-claim ritual would get a clean plan-check,
+  proceed to implementation, and only discover missing contract criteria at
+  verdict-request time (after wasting work). Now checks both Spec and
+  contract criteria, emitting a `missing-proof` finding for any criterion
+  missing from the plan's `proofSet`.
+- **`task verify` error message for missing contract now suggests correct
+  recovery command.** Previously suggested `maestro contract amend` (which
+  only works on locked contracts). Now suggests `maestro task contract new
+  <taskId>` for tasks with no contract.
+
 ## 0.72.30 - close R28 substrate bugs: scope divergence, kind enum docs
 
 R28 sub-agent surfaced two issues: a critical scope divergence where

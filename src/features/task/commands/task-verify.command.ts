@@ -40,7 +40,7 @@ export function registerTaskVerifyCommand(
       );
       if (contract === undefined) {
         throw new MaestroError(`No contract proposed for task ${taskId}`, [
-          "Run 'maestro contract amend' or propose via maestro-plan skill",
+          "Run 'maestro task contract new <taskId>' to create one, or propose via maestro-plan skill",
         ]);
       }
 
