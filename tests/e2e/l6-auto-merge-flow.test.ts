@@ -297,6 +297,36 @@ async function seedCommandEvidence(
 }
 
 /**
+ * Seed a deploy-readiness Evidence row. Brings L7 into scope so the
+ * rollback-not-witnessed predicate applies even without a Spec rollout_plan.
+ */
+async function seedDeployReadinessEvidence(dir: string, taskId: string): Promise<void> {
+  const evidenceDir = join(dir, ".maestro", "evidence", taskId);
+  await mkdir(evidenceDir, { recursive: true });
+  const ts = String(Date.now()).padStart(13, "0");
+  const id = `evd-${ts}-d70001`;
+  const row = {
+    schema_version: 3,
+    id,
+    task_id: taskId,
+    kind: "deploy-readiness",
+    witness_level: "witnessed-by-ci",
+    created_at: new Date().toISOString(),
+    payload: {
+      task_id: taskId,
+      checks: {
+        feature_flag: { ok: false },
+        canary_plan: { ok: false },
+        rollback: { ok: false },
+        owner: { ok: false },
+      },
+      gate: "fail",
+    },
+  };
+  await writeFile(join(evidenceDir, `${id}.json`), JSON.stringify(row, null, 2));
+}
+
+/**
  * Request a verdict for the given task, returning the verdict JSON.
  * Uses HEAD~1 as base so a single committed file produces a clean diff.
  */
@@ -489,8 +519,12 @@ describe("L6 auto-merge flow (compiled binary)", () => {
         riskClass: "medium",
       });
 
-      // Gating evidence strong, but NO rollback evidence
+      // Gating evidence strong, but NO rollback evidence.
       await seedCommandEvidence(dir, taskId, "witnessed-by-ci", "ce0001");
+      // Seed a deploy-readiness Evidence row so the rollback predicate
+      // applies (L7 is in scope for this task). Without it, the rollback
+      // predicate is skipped — by design — and merge would proceed.
+      await seedDeployReadinessEvidence(dir, taskId);
       // (intentionally omit seedRollbackEvidence)
 
       await commitFile(dir, "src/feature.ts", "export const x = 1;\n");

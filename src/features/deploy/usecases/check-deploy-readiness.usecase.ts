@@ -4,7 +4,10 @@ import type { EvidenceRow } from "@/features/evidence/index.js";
 
 export interface DeployReadinessInput {
   readonly spec?: Spec;
-  /** Pre-filtered to kind=rollback-exercised at witnessed-by-ci or stronger. */
+  /**
+   * Pre-filtered to kind=rollback-exercised at witnessed-by-ci or stronger
+   * AND payload.exit === 0. A failed rollback exercise must not pass the gate.
+   */
   readonly rollbackEvidence: readonly EvidenceRow[];
   readonly owners: Owners;
 }

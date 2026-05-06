@@ -23,7 +23,7 @@ export interface DeployGateCommandDeps {
     store: EvidenceStorePort,
     input: RecordEvidenceInput,
   ) => Promise<EvidenceRow>;
-  readonly loadOwnersFromBase: (base: string, projectRoot: string) => Owners;
+  readonly loadOwnersFromBase: (base: string, projectRoot: string) => Promise<Owners> | Owners;
   readonly resolveDefaultBase: () => Promise<string>;
   readonly isCI: () => boolean;
 }
@@ -64,7 +64,7 @@ export function registerDeployGateCommand(
         : await deps.resolveDefaultBase();
 
       // Rule 12: load owners from base, not PR head, so self-promotion is rejected.
-      const owners = deps.loadOwnersFromBase(base, services.projectRoot);
+      const owners = await deps.loadOwnersFromBase(base, services.projectRoot);
 
       let spec: Spec | undefined;
       if (task.missionId !== undefined) {
@@ -76,7 +76,9 @@ export function registerDeployGateCommand(
         kind: "rollback-exercised",
       });
       const rollbackEvidence = allEvidence.filter(
-        (r) => compareWitnessLevel(r.witness_level, "witnessed-by-ci") >= 0,
+        (r) =>
+          compareWitnessLevel(r.witness_level, "witnessed-by-ci") >= 0 &&
+          (r.payload as { exit?: number }).exit === 0,
       );
 
       const result = checkDeployReadiness({ spec, rollbackEvidence, owners });

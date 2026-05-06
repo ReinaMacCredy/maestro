@@ -103,6 +103,13 @@ function makeSpec(overrides: Partial<Spec> = {}): Spec {
     acceptance_criteria: [{ id: "cr-1", text: "Tests pass" }],
     non_goals: [{ text: "No new dependencies" }],
     runtime_signals: [],
+    // rollout_plan is what brings L7 into scope, which makes
+    // rollback-not-witnessed applicable. Tests that need to assert
+    // L7-applies-here behavior rely on this default.
+    rollout_plan: {
+      feature_flag: "test-flag",
+      canary: { stages: [{ percent: 10, hold_minutes: 5 }] },
+    },
     created_at: "2026-05-05T00:00:00.000Z",
     updated_at: "2026-05-05T00:00:00.000Z",
     ...overrides,
@@ -209,6 +216,34 @@ describe("autoMergeEligible", () => {
     };
     const result = autoMergeEligible(input);
     expect(result.eligible).toBe(false);
+    const codes = result.reasons.map((r) => r.code);
+    expect(codes).toContain("rollback-not-witnessed");
+  });
+
+  it("predicate 6 — does not fire when the spec has no rollout_plan (L7 out of scope)", () => {
+    const { rollout_plan: _ignore, ...specWithoutRollout } = makeSpec();
+    const input: AutoMergeEligibleInput = {
+      ...makePassingInput(),
+      spec: specWithoutRollout as Spec,
+      evidenceRows: [makeEvidence()],
+    };
+    const result = autoMergeEligible(input);
+    const codes = result.reasons.map((r) => r.code);
+    expect(codes).not.toContain("rollback-not-witnessed");
+    expect(result.eligible).toBe(true);
+  });
+
+  it("predicate 6 — does not fire when rollback evidence exists but exited non-zero", () => {
+    const input: AutoMergeEligibleInput = {
+      ...makePassingInput(),
+      // rollback ran but failed: CI witnessed it, but the gate must not pass
+      evidenceRows: [
+        makeRollbackEvidence({
+          payload: { command: "bun run rollback", exit: 1 },
+        }),
+      ],
+    };
+    const result = autoMergeEligible(input);
     const codes = result.reasons.map((r) => r.code);
     expect(codes).toContain("rollback-not-witnessed");
   });

@@ -93,16 +93,32 @@ export function autoMergeEligible(input: AutoMergeEligibleInput): EligibilityRes
     }
   }
 
-  // 6. rollback-not-witnessed
-  const hasRollbackCiEvidence = evidenceRows.some(
-    (row) =>
-      row.kind === "rollback-exercised" && row.witness_level === "witnessed-by-ci",
-  );
-  if (!hasRollbackCiEvidence) {
-    reasons.push({
-      code: "rollback-not-witnessed",
-      message: 'No "rollback-exercised" evidence row at "witnessed-by-ci" level found.',
-    });
+  // 6. rollback-not-witnessed — only required when L7 deploy gating is in
+  // scope for this PR. A project that ships L6 (auto-merge) but skips L7
+  // entirely should never trip this predicate. L7 is in scope when EITHER
+  //   - the Spec declares a `rollout_plan` (the mission ships something
+  //     deployable), OR
+  //   - a `deploy-readiness` Evidence row exists for the task (the team
+  //     wired `maestro deploy gate` into their workflow).
+  // Without either signal, a PR carries no deployable surface and demanding
+  // rollback evidence is a false positive.
+  const l7InScope =
+    spec?.rollout_plan !== undefined ||
+    evidenceRows.some((row) => row.kind === "deploy-readiness");
+  if (l7InScope) {
+    const hasRollbackCiEvidence = evidenceRows.some(
+      (row) =>
+        row.kind === "rollback-exercised" &&
+        compareWitnessLevel(row.witness_level, "witnessed-by-ci") >= 0 &&
+        (row.payload as { exit?: number }).exit === 0,
+    );
+    if (!hasRollbackCiEvidence) {
+      reasons.push({
+        code: "rollback-not-witnessed",
+        message:
+          'No successful "rollback-exercised" evidence row at "witnessed-by-ci" or stronger found.',
+      });
+    }
   }
 
   // 7. review-ack-missing
