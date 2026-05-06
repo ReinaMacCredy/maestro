@@ -1,5 +1,7 @@
 import { MaestroError } from "@/shared/errors.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
+import { recordEvidence } from "@/features/evidence/index.js";
+import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import {
   buildActiveOverlapError,
   canAmendContract,
@@ -147,6 +149,10 @@ export function buildContractWorkflows(
   // when undefined, mirror calls become no-ops. Production wiring in
   // services.ts always passes the real store.
   contractVersionStore?: ContractVersionStorePort,
+  // Evidence store for recording amendment-blocked rows when budget
+  // enforcement rejects an amend. Optional for existing test fixtures;
+  // production wiring always passes it.
+  evidenceStore?: EvidenceStorePort,
 ): ContractWorkflows {
   return {
     load: (ref) => resolveContractRef(contractStore, ref),
@@ -161,7 +167,7 @@ export function buildContractWorkflows(
 
     lock: (input) => lockContract(contractStore, contractVersionStore, input),
 
-    amend: (input) => amendContract(contractStore, contractVersionStore, input),
+    amend: (input) => amendContract(contractStore, contractVersionStore, evidenceStore, input),
 
     previewVerdict: (input) => computeContractVerdictForTask(
       contractStore,
@@ -354,29 +360,123 @@ async function lockContract(
 async function amendContract(
   contractStore: ContractStorePort,
   versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: ContractAmendmentCommand,
 ): Promise<Contract> {
   switch (input.kind) {
     case "replace":
-      return replaceContract(contractStore, versionStore, input);
+      return replaceContract(contractStore, versionStore, evidenceStore, input);
     case "addCriterion":
-      return addContractCriterion(contractStore, versionStore, input);
+      return addContractCriterion(contractStore, versionStore, evidenceStore, input);
     case "removeCriterion":
-      return removeContractCriterion(contractStore, versionStore, input);
+      return removeContractCriterion(contractStore, versionStore, evidenceStore, input);
     case "markCriterion":
-      return markContractCriterion(contractStore, versionStore, input);
+      return markContractCriterion(contractStore, versionStore, evidenceStore, input);
+  }
+}
+
+// Symmetric with the L2 amend use-case: every L1 amend (replace, criterion
+// add/remove/mark) consumes from amendmentBudget so the gate is uniform
+// regardless of which verb the agent reaches for. R15's L1-amend agent
+// surfaced that `maestro task contract amend` was bypassing the budget
+// entirely while `maestro contract amend` enforced it — same contract,
+// same budget, two different answers.
+async function enforceAmendmentBudget(
+  contract: Contract,
+  addedPaths: readonly string[],
+  evidenceStore: EvidenceStorePort | undefined,
+): Promise<void> {
+  const budget = contract.amendmentBudget;
+  if (budget === undefined) return;
+
+  const existingCount = contract.amendments.length;
+  if (existingCount >= budget.maxAmendments) {
+    if (evidenceStore) {
+      await recordEvidence(evidenceStore, {
+        task_id: contract.taskId,
+        kind: "contract-amendment-blocked",
+        witness_level: "witnessed-by-maestro",
+        payload: {
+          reason: "budget_exhausted",
+          attemptedPaths: addedPaths,
+          details: `Amendment budget exhausted: ${existingCount} of ${budget.maxAmendments} amendments already used`,
+        },
+      });
+    }
+    throw new MaestroError(
+      `Amendment budget exhausted for task ${contract.taskId}: ${existingCount} of ${budget.maxAmendments} amendments used`,
+      [
+        "Increase amendmentBudget.maxAmendments on the contract or work within the existing scope",
+      ],
+    );
+  }
+
+  if (addedPaths.length > budget.maxPathsPerAmendment) {
+    if (evidenceStore) {
+      await recordEvidence(evidenceStore, {
+        task_id: contract.taskId,
+        kind: "contract-amendment-blocked",
+        witness_level: "witnessed-by-maestro",
+        payload: {
+          reason: "budget_exhausted",
+          attemptedPaths: addedPaths,
+          details: `Too many added paths: ${addedPaths.length} exceeds maxPathsPerAmendment (${budget.maxPathsPerAmendment})`,
+        },
+      });
+    }
+    throw new MaestroError(
+      `Amendment adds too many paths for task ${contract.taskId}: ${addedPaths.length} exceeds maxPathsPerAmendment (${budget.maxPathsPerAmendment})`,
+      [
+        "Split the amendment into smaller chunks or increase amendmentBudget.maxPathsPerAmendment",
+      ],
+    );
+  }
+
+  if (budget.forbiddenAmendmentPaths.length > 0 && addedPaths.length > 0) {
+    const forbidden: string[] = [];
+    for (const path of addedPaths) {
+      if (matchesAnyGlob(budget.forbiddenAmendmentPaths, path)) {
+        forbidden.push(path);
+      }
+    }
+    if (forbidden.length > 0) {
+      if (evidenceStore) {
+        await recordEvidence(evidenceStore, {
+          task_id: contract.taskId,
+          kind: "contract-amendment-blocked",
+          witness_level: "witnessed-by-maestro",
+          payload: {
+            reason: "forbidden_path",
+            attemptedPaths: addedPaths,
+            details: `Added paths match forbidden patterns: ${forbidden.join(", ")}`,
+          },
+        });
+      }
+      throw new MaestroError(
+        `Amendment for task ${contract.taskId} includes forbidden paths: ${forbidden.join(", ")}`,
+        [
+          "Remove the forbidden paths from the amendment",
+          `Forbidden patterns: ${budget.forbiddenAmendmentPaths.join(", ")}`,
+        ],
+      );
+    }
   }
 }
 
 async function replaceContract(
   contractStore: ContractStorePort,
   versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "replace" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);
   const nextIntent = input.intent.trim();
   const nextScope = normalizeScope(input.scope);
   const nextDoneWhen = normalizeAmendedCriteria(contract.doneWhen, input.doneWhen);
+
+  const existingExpected = new Set(contract.scope.filesExpected);
+  const addedPaths = nextScope.filesExpected.filter((p) => !existingExpected.has(p));
+  await enforceAmendmentBudget(contract, addedPaths, evidenceStore);
 
   const saved = await contractStore.save(
     withContractAmendment(contract, {
@@ -394,6 +494,7 @@ async function replaceContract(
 async function addContractCriterion(
   contractStore: ContractStorePort,
   versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "addCriterion" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);
@@ -401,6 +502,8 @@ async function addContractCriterion(
   if (text.length === 0) {
     throw new MaestroError("Contract criteria need non-empty text");
   }
+
+  await enforceAmendmentBudget(contract, [], evidenceStore);
 
   const nextCriterion: DoneWhenCriterion = {
     id: generateDoneWhenId(),
@@ -421,10 +524,12 @@ async function addContractCriterion(
 async function removeContractCriterion(
   contractStore: ContractStorePort,
   versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "removeCriterion" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);
   const criterion = findCriterion(contract, input.criterionId);
+  await enforceAmendmentBudget(contract, [], evidenceStore);
   const saved = await contractStore.save(
     withContractAmendment(contract, {
       actorId: input.actorId,
@@ -439,6 +544,7 @@ async function removeContractCriterion(
 async function markContractCriterion(
   contractStore: ContractStorePort,
   versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "markCriterion" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);

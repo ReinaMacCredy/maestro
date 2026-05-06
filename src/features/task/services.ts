@@ -19,6 +19,7 @@ import { FsContractStoreAdapter } from "./adapters/fs-contract-store.adapter.js"
 import { FsContractVersionStoreAdapter } from "./adapters/fs-contract-version-store.adapter.js";
 import { ShellGitAnchorAdapter } from "./adapters/git-anchor.adapter.js";
 import { FsRunStateStoreAdapter } from "./adapters/fs-run-state-store.adapter.js";
+import { FsEvidenceStoreAdapter } from "@/features/evidence";
 
 export interface TaskServices {
   readonly taskStore: TaskStorePort;
@@ -38,7 +39,14 @@ export function buildTaskServices(projectDir: string): TaskServices {
   const contractStore = new FsContractStoreAdapter(projectDir);
   const contractVersionStore = new FsContractVersionStoreAdapter(projectDir);
   const gitAnchor = new ShellGitAnchorAdapter();
-  const contracts = buildContractWorkflows(contractStore, taskStore, gitAnchor, contractVersionStore);
+  const evidenceStore = new FsEvidenceStoreAdapter(projectDir);
+  const contracts = buildContractWorkflows(
+    contractStore,
+    taskStore,
+    gitAnchor,
+    contractVersionStore,
+    evidenceStore,
+  );
   return {
     taskStore,
     contractStore,

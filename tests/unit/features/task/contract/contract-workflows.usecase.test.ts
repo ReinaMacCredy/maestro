@@ -8,6 +8,7 @@ import type { Task } from "@/features/task";
 import { MaestroError } from "@/shared/errors.js";
 import {
   mockContractStore,
+  mockEvidenceStore,
   mockGitAnchor,
   mockTaskStore,
 } from "../../../../helpers/mocks.js";
@@ -445,6 +446,196 @@ describe("ContractWorkflows", () => {
       contracts.prepareReopen({ id: "tsk-000001", contractId: "c-000001" }),
     ).rejects.toBeInstanceOf(MaestroError);
     expect(overlapChecks).toBe(0);
+  });
+
+  it("L1 amend (replace) rejects when amendment budget is exhausted", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 1,
+        maxPathsPerAmendment: 5,
+        forbiddenAmendmentPaths: [],
+      },
+      amendments: [
+        {
+          id: "am-000001",
+          at: "2026-04-20T00:01:30.000Z",
+          actorId: "agent-a",
+          reason: "first amendment used the budget",
+        },
+      ],
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    await expect(
+      contracts.amend({
+        kind: "replace",
+        ref: "c-000001",
+        actorId: "agent-a",
+        reason: "scope change",
+        intent: "Change task code",
+        scope: { filesExpected: ["src/**/*.ts", "tests/**/*.ts"], filesForbidden: [] },
+        doneWhen: [{ id: "dw-000001", text: "tests pass", kind: "manual" }],
+      }),
+    ).rejects.toBeInstanceOf(MaestroError);
+
+    const blocked = await evidenceStore.list({ task_id: "tsk-000001", kind: "contract-amendment-blocked" });
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]!.payload).toMatchObject({ reason: "budget_exhausted" });
+  });
+
+  it("L1 amend (replace) rejects when added paths exceed maxPathsPerAmendment", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 5,
+        maxPathsPerAmendment: 1,
+        forbiddenAmendmentPaths: [],
+      },
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    await expect(
+      contracts.amend({
+        kind: "replace",
+        ref: "c-000001",
+        actorId: "agent-a",
+        reason: "expand scope",
+        intent: "Change task code",
+        scope: {
+          filesExpected: ["src/**/*.ts", "tests/**/*.ts", "docs/**/*.md"],
+          filesForbidden: [],
+        },
+        doneWhen: [{ id: "dw-000001", text: "tests pass", kind: "manual" }],
+      }),
+    ).rejects.toBeInstanceOf(MaestroError);
+
+    const blocked = await evidenceStore.list({ task_id: "tsk-000001", kind: "contract-amendment-blocked" });
+    expect(blocked).toHaveLength(1);
+  });
+
+  it("L1 amend (replace) rejects when added paths match forbidden patterns", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 5,
+        maxPathsPerAmendment: 10,
+        forbiddenAmendmentPaths: ["**/secrets/**"],
+      },
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    await expect(
+      contracts.amend({
+        kind: "replace",
+        ref: "c-000001",
+        actorId: "agent-a",
+        reason: "expand into secrets",
+        intent: "Change task code",
+        scope: {
+          filesExpected: ["src/**/*.ts", "src/secrets/api-keys.ts"],
+          filesForbidden: [],
+        },
+        doneWhen: [{ id: "dw-000001", text: "tests pass", kind: "manual" }],
+      }),
+    ).rejects.toBeInstanceOf(MaestroError);
+
+    const blocked = await evidenceStore.list({ task_id: "tsk-000001", kind: "contract-amendment-blocked" });
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]!.payload).toMatchObject({ reason: "forbidden_path" });
+  });
+
+  it("L1 amend (addCriterion) consumes from amendmentBudget", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 1,
+        maxPathsPerAmendment: 5,
+        forbiddenAmendmentPaths: [],
+      },
+      amendments: [
+        {
+          id: "am-000001",
+          at: "2026-04-20T00:01:30.000Z",
+          actorId: "agent-a",
+          reason: "first amendment used the budget",
+        },
+      ],
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    await expect(
+      contracts.amend({
+        kind: "addCriterion",
+        ref: "c-000001",
+        actorId: "agent-a",
+        text: "another criterion",
+      }),
+    ).rejects.toBeInstanceOf(MaestroError);
+  });
+
+  it("L1 amend (markCriterion) is exempt from amendmentBudget", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 1,
+        maxPathsPerAmendment: 5,
+        forbiddenAmendmentPaths: [],
+      },
+      amendments: [
+        {
+          id: "am-000001",
+          at: "2026-04-20T00:01:30.000Z",
+          actorId: "agent-a",
+          reason: "first amendment used the budget",
+        },
+      ],
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    const marked = await contracts.amend({
+      kind: "markCriterion",
+      ref: "c-000001",
+      actorId: "agent-a",
+      criterionId: "dw-000001",
+      evidence: "manual review passed",
+    });
+    expect(marked.doneWhen[0]?.met).toBe(true);
   });
 
   it("transferOwnership updates active owners and ignores terminal contracts", async () => {
