@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.72.7 - brownfield base resolution + .maestro/ scope exemption
+
+Round-3 brownfield test surfaced two compounding bugs that effectively
+broke the trust substrate on any repo with pre-existing files:
+
+1. `task verify` and `verdict request` resolved the default base via the
+   branch fallback chain (`main` → `master` → `trunk` → empty-tree)
+   instead of the contract's own lock-commit. On a brownfield repo the
+   merge-base sat well before the contract was locked, so every
+   pre-existing file (`README.md`, `package.json`, `.gitignore`, etc.)
+   appeared in the diff and was flagged as out-of-scope. A single bogus
+   scope finding then escalated risk class from `medium` to `critical`,
+   pushing the verdict from PASS to FAIL.
+2. The scope check itself audited `.maestro/**` paths the same way it
+   audited user code. But `.maestro/contracts/...`, `.maestro/tasks/...`,
+   `.maestro/policies/...` are written by the maestro CLI itself during
+   the task lifecycle. They land in the lock-commit-to-HEAD diff by
+   construction, so even after fixing #1 the substrate's own bookkeeping
+   triggered scope errors.
+
+Together: the documented brownfield workflow (`init` → `task q` →
+`contract new --from yaml` → `contract lock` → write code → `git commit`
+→ `task verify`) was guaranteed to fail on any non-empty repo.
+
+### Fix
+
+- `task verify` and `verdict request` now prefer `contract.claimedAtCommit`
+  (the HEAD recorded at lock time) over `resolveDefaultBase()` when no
+  `--base` flag is given. Pre-existing files committed before the lock
+  no longer appear in the diff. The branch fallback only fires for
+  contracts locked before the field existed.
+- `checkScope` exempts paths under `.maestro/` unconditionally — those
+  are substrate metadata, not user code, and gating them with the user's
+  contract scope produces only false positives. Forbidden patterns
+  inside `.maestro/` are also exempt (consistent with the rule that the
+  CLI, not the user, owns those files).
+- Help text on `--base` for both `task verify` and `verdict request`
+  now reads `default: contract lock-commit; falls back to merge-base
+  with main/master/upstream`.
+- New E2E test (`tests/e2e/l2b-contract-bridge-flow.test.ts` test 14)
+  asserts a brownfield repo with pre-existing committed files produces
+  no scope errors after the documented workflow.
+- New unit test (`tests/unit/features/verify/usecases/checks/check-scope.test.ts`)
+  locks the `.maestro/` exemption.
+
 ## 0.72.6 - contract amend propagates after.scope into the new version
 
 Round-2 surfaced a real correctness bug: agents who ran
