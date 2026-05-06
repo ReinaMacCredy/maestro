@@ -6,6 +6,7 @@ import { VERSION } from "@/shared/version.js";
 import { MaestroError } from "@/shared/errors.js";
 import { removeIfExists } from "@/shared/lib/fs.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
+import { assertNoDeprecatedVersionFlag } from "@/shared/lib/deprecated-version-flag.js";
 import { initServices } from "./services.js";
 import { checkForUpdate, isNewerSemver } from "@/infra/usecases/check-for-update.usecase.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
@@ -172,6 +173,7 @@ async function main(): Promise<void> {
   try {
     await cleanupStaleWindowsBinary();
     assertNoDeprecatedMissionControlFlags(process.argv);
+    assertNoDeprecatedVersionFlag(process.argv);
     // Run the cache read in parallel with the user's command so the FS read
     // does not delay parsing. Stale-cache refresh is fire-and-forget inside
     // checkForUpdate() and intentionally not awaited here.
@@ -300,6 +302,7 @@ function assertNoDeprecatedMissionControlFlags(argv: readonly string[]): void {
     "Use `maestro mission-control --json` for machine-readable output",
   ]);
 }
+
 
 if (import.meta.main) {
   void main();

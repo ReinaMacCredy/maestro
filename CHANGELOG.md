@@ -1,6 +1,41 @@
 # Changelog
 
-## 0.72.18 - close three trust-substrate seam bugs from round-16 verdict-mid-amend exploration
+## 0.72.19 - task verify prints recovery hints; deprecated --version flag now errors loudly
+
+Round-17 ran a mixed-recovery-plus-amend explorer agent against v0.72.18.
+The flow worked end-to-end but two UX gaps surfaced.
+
+### Fixes
+
+- **`maestro task verify` now prints fix-forward recovery hints when
+  scope errors are present.** Previously only the close-flow's broken-
+  contract printer emitted hints; the standalone verifier just listed
+  findings, leaving agents to infer the revert/amend pattern themselves.
+  The verifier now mirrors the close-flow printer: for out-of-scope
+  paths it offers EITHER a per-file `git checkout <lock-sha> -- <path>
+  2>/dev/null || git rm -f <path>` revert OR the `task contract amend`
+  expand-scope path; for forbidden-touched paths it offers the revert
+  only (forbidden paths cannot be amended). JSON output is unchanged
+  (hints stay on stdout text path) so machine consumers see only the
+  finding list.
+
+- **`<subcommand> --version <value>` now errors loudly with a redirect
+  to the new flag.** v0.72.18 renamed `verdict show --version`,
+  `contract show --version`, and `update --version` to `--at-version`
+  / `--release` to fix a Commander root-flag collision, but the old
+  invocation continued to silently print the binary version and exit
+  0 (Commander's global handler still wins). Agents migrating from
+  the old flag had no signal. A pre-Commander argv check now detects
+  the three known patterns and throws a `MaestroError` with the new
+  flag name, so the failure is visible. The argv match scans only
+  positional words in the prefix (skipping option flags and their
+  values, both `--foo bar` and `--foo=bar` forms) so it correctly
+  fires when subcommand options sit between the verb and `--version`,
+  e.g. `contract show --task tsk-abc --version 1`. Extracted into
+  `src/shared/lib/deprecated-version-flag.ts` with direct unit
+  coverage (8 cases).
+
+
 
 Round-16 ran a verdict-mid-amend explorer agent against v0.72.17. The
 flow worked end-to-end (verdict bound to contract version, history

@@ -4,6 +4,7 @@ import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/domain/types.js";
+import type { Contract } from "@/features/task/domain/contract/contract-types.js";
 import { readCurrentContractWithBackfill } from "@/features/task/usecases/read-current-contract-with-backfill.js";
 import { getServices, type Services } from "@/services.js";
 
@@ -89,6 +90,9 @@ export function registerTaskVerifyCommand(
         );
       } else {
         printTextFindings(result.findings, counts);
+        if (counts.error > 0) {
+          printRecoveryHints(result.findings, contract, taskId);
+        }
       }
 
       // 8. Exit code
@@ -139,6 +143,46 @@ function printTextFindings(findings: readonly TrustFinding[], counts: FindingCou
     console.log(`  [${finding.severity}] ${finding.check}${pathsSuffix}`);
     if (finding.details) {
       console.log(`    ${finding.details}`);
+    }
+  }
+}
+
+// Mirror the broken-contract recovery printer used by `task close`. Stdout-only
+// so JSON consumers stay clean. Distinguishes forbidden-touched (revert only)
+// from out-of-scope (revert OR amend) by reading the scope finding's `details`
+// — the trust verifier emits two distinct strings for the two conditions.
+function printRecoveryHints(
+  findings: readonly TrustFinding[],
+  contract: Contract,
+  taskId: string,
+): void {
+  const forbidden: string[] = [];
+  const outOfScope: string[] = [];
+  for (const f of findings) {
+    if (f.check !== "scope" || f.severity !== "error") continue;
+    if (f.details?.includes("filesForbidden")) {
+      forbidden.push(...f.paths);
+    } else if (f.details?.includes("filesExpected")) {
+      outOfScope.push(...f.paths);
+    }
+  }
+  if (forbidden.length === 0 && outOfScope.length === 0) return;
+
+  const lockCommit = contract.claimedAtCommit ?? "HEAD~1";
+  console.log("");
+  console.log("To fix forward:");
+  if (outOfScope.length > 0) {
+    console.log("  # EITHER revert each out-of-scope file:");
+    for (const path of outOfScope) {
+      console.log(`  #   git checkout ${lockCommit} -- ${path} 2>/dev/null || git rm -f ${path}`);
+    }
+    console.log("  # OR expand scope via amend (re-states the full filesExpected list):");
+    console.log(`  #   maestro task contract amend ${taskId} --reason "<why>" --from <yaml-with-new-scope>`);
+  }
+  if (forbidden.length > 0) {
+    console.log("  # revert each forbidden file (cannot be amended; forbidden paths stay forbidden):");
+    for (const path of forbidden) {
+      console.log(`  #   git checkout ${lockCommit} -- ${path} 2>/dev/null || git rm -f ${path}`);
     }
   }
 }
