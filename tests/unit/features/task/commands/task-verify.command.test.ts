@@ -69,6 +69,7 @@ function makeDeps(opts: Partial<TestDeps> = {}): TestDeps {
     gitAnchor: opts.gitAnchor ?? mockGitAnchor({
       collectChangedPaths: async () => ["src/feature.ts"],
       collectAddedLines: async () => ["+const x = 1;"],
+      collectUntrackedFiles: async () => [],
     }),
     runTrustVerifier: opts.runTrustVerifier ?? mockTrustVerifier([]),
   };
@@ -225,6 +226,64 @@ describe("task verify", () => {
       const deps = makeDeps({ runTrustVerifier: mockTrustVerifier([infoFinding]) });
       const { exitCode } = await runVerify(["--task", TASK_ID, "--base", "abc123"], deps);
       expect(exitCode).toBe(0);
+    });
+  });
+
+  describe("untracked out-of-scope files — exit 2", () => {
+    it("emits warn-level finding when untracked files are out of scope", async () => {
+      const contract = makeBaseContract({ scope: { filesExpected: ["src/**"], filesForbidden: [] } });
+      const deps = makeDeps({
+        contractVersionStore: mockContractVersionStore(contract),
+        gitAnchor: mockGitAnchor({
+          collectChangedPaths: async () => [],
+          collectAddedLines: async () => [],
+          collectUntrackedFiles: async () => ["dist/build.js", "temp.log"],
+        }),
+        runTrustVerifier: mockTrustVerifier([]),
+      });
+      const { logs, exitCode } = await runVerify(["--task", TASK_ID, "--base", "abc123"], deps);
+      expect(exitCode).toBe(2);
+      expect(logs.some((l) => l.includes("[warn]"))).toBe(true);
+      expect(logs.some((l) => l.includes("untracked-out-of-scope"))).toBe(true);
+    });
+
+    it("writes evidence row for untracked-out-of-scope finding", async () => {
+      const contract = makeBaseContract({ scope: { filesExpected: ["src/**"], filesForbidden: [] } });
+      const evidenceStore = mockEvidenceStore();
+      const deps = makeDeps({
+        contractVersionStore: mockContractVersionStore(contract),
+        evidenceStore,
+        gitAnchor: mockGitAnchor({
+          collectChangedPaths: async () => [],
+          collectAddedLines: async () => [],
+          collectUntrackedFiles: async () => ["dist/build.js"],
+        }),
+        runTrustVerifier: mockTrustVerifier([]),
+      });
+      await runVerify(["--task", TASK_ID, "--base", "abc123"], deps);
+      const rows = await evidenceStore.list({ task_id: TASK_ID, kind: "verifier" });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.payload).toMatchObject({
+        check: "untracked-out-of-scope",
+        severity: "warn",
+        paths: ["dist/build.js"],
+      });
+    });
+
+    it("does not emit finding when untracked files are in scope", async () => {
+      const contract = makeBaseContract({ scope: { filesExpected: ["src/**"], filesForbidden: [] } });
+      const deps = makeDeps({
+        contractVersionStore: mockContractVersionStore(contract),
+        gitAnchor: mockGitAnchor({
+          collectChangedPaths: async () => [],
+          collectAddedLines: async () => [],
+          collectUntrackedFiles: async () => ["src/new-feature.ts"],
+        }),
+        runTrustVerifier: mockTrustVerifier([]),
+      });
+      const { logs, exitCode } = await runVerify(["--task", TASK_ID, "--base", "abc123"], deps);
+      expect(exitCode).toBe(0);
+      expect(logs.some((l) => l.includes("no findings"))).toBe(true);
     });
   });
 

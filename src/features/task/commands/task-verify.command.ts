@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
+import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/features/verify/domain/types.js";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
@@ -53,9 +54,10 @@ export function registerTaskVerifyCommand(
 
       // 4. Build diff
       const cwd = process.cwd();
-      const [changedPaths, addedLines] = await Promise.all([
+      const [changedPaths, addedLines, untrackedFiles] = await Promise.all([
         services.gitAnchor.collectChangedPaths(cwd, baseRef, headSha),
         services.gitAnchor.collectAddedLines(cwd, baseRef, headSha),
+        services.gitAnchor.collectUntrackedFiles(cwd),
       ]);
 
       // 5. Run trust verifier
@@ -64,9 +66,24 @@ export function registerTaskVerifyCommand(
         diff: { changedPaths, addedLines, base: baseRef, head: headSha },
       });
 
-      // 6. Write one verifier-kind Evidence row per finding
+      // 6. Check untracked files against scope (R28 Obs 5 fix: warn users
+      // before completion blocks on untracked out-of-scope files).
+      const untrackedOutOfScope = untrackedFiles.filter(
+        (path) => !matchesAnyGlob(contract.scope.filesExpected, path),
+      );
+      const allFindings: TrustFinding[] = [...result.findings];
+      if (untrackedOutOfScope.length > 0) {
+        allFindings.push({
+          check: "untracked-out-of-scope",
+          severity: "warn",
+          paths: untrackedOutOfScope,
+          details: `${untrackedOutOfScope.length} untracked file${untrackedOutOfScope.length !== 1 ? "s" : ""} in working tree not covered by scope.filesExpected — will block completion if not committed or removed`,
+        });
+      }
+
+      // 7. Write one verifier-kind Evidence row per finding
       await Promise.all(
-        result.findings.map((finding) =>
+        allFindings.map((finding) =>
           recordEvidence(services.evidenceStore, {
             task_id: taskId,
             kind: "verifier",
@@ -81,21 +98,21 @@ export function registerTaskVerifyCommand(
         ),
       );
 
-      // 7. Print output
-      const counts = countBySeverity(result.findings);
+      // 8. Print output
+      const counts = countBySeverity(allFindings);
 
       if (isJson) {
         process.stdout.write(
-          JSON.stringify({ findings: result.findings, counts }) + "\n",
+          JSON.stringify({ findings: allFindings, counts }) + "\n",
         );
       } else {
-        printTextFindings(result.findings, counts);
+        printTextFindings(allFindings, counts);
         if (counts.error > 0) {
-          printRecoveryHints(result.findings, contract, taskId);
+          printRecoveryHints(allFindings, contract, taskId);
         }
       }
 
-      // 8. Exit code
+      // 9. Exit code
       const exitCode = deriveExitCode(counts);
       if (exitCode !== 0) {
         process.exit(exitCode);

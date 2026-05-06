@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.72.30 - close R28 substrate bugs: scope divergence, kind enum docs
+
+R28 sub-agent surfaced two issues: a critical scope divergence where
+`task verify` checked committed changes only while `task close` checked
+committed + untracked, causing untracked out-of-scope files to pass
+verification but block completion with no warning; and a docs gap where
+the default contract template didn't explain the `kind` enum for
+`doneWhen` criteria.
+
+### Fixes
+
+- **`task verify` now warns about untracked out-of-scope files before
+  they block completion.** Previously `task verify` ran the Trust
+  Verifier against `collectChangedPaths` (committed changes only) while
+  `task close` ran `collectTouchedFiles` (committed + staged +
+  untracked). Result: untracked files outside `scope.filesExpected`
+  passed verification but blocked completion with a cryptic "contract
+  broken" verdict. `task verify` now collects untracked files via
+  `collectUntrackedFiles`, filters them against `scope.filesExpected`,
+  and emits a warn-level `untracked-out-of-scope` finding when any are
+  present. The warning message explicitly states the files will block
+  completion if not committed or removed. Exit code 2 (warn) signals
+  the agent to act before attempting `task close`.
+- **Default contract template now documents the `kind` enum for
+  `doneWhen` criteria.** Added inline comment explaining `manual`
+  (human verification) vs `receipt-hint` (auto-tick from `--verified-by`
+  tags at completion). Agents no longer need to guess or infer from
+  examples.
+
 ## 0.72.29 - close R27 substrate bugs: TTY hang, risk divergence, criteria budget, amend path, draft strictness, broken wording
 
 R27 sub-agent surfaced six seam bugs that left an autonomous agent

@@ -111,6 +111,9 @@ scope:
 doneWhen:
   - text: Describe the observable signal that proves the task is done.
     kind: manual
+    # kind can be 'manual' (human verification) or 'receipt-hint' (auto-tick
+    # from --verified-by tags at completion). Use receipt-hint when the
+    # criterion text is short and matches a --verified-by tag exactly.
 # Optional: cap how many times the contract may be structurally amended
 # (adding files to scope, changing intent, adding/removing criteria).
 # Marking criteria met/unmet is workflow progress and does NOT count.

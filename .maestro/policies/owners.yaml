@@ -1,0 +1,11 @@
+# Decision-authority roles for Maestro policy enforcement.
+# Each role is a list of GitHub usernames or team handles (e.g., "@org/team").
+# Empty lists default to "any maintainer" (resolved via CODEOWNERS or repo-admin
+# status if 'gh' CLI is available at runtime).
+#
+# - policy_approver: approves Policy file changes (L3+).
+# - ratchet_approver: approves Ratchet promotions (L7+).
+# - sensitive_waiver: signs off on changes to sensitive paths (L5+).
+policy_approver: []
+ratchet_approver: []
+sensitive_waiver: []
