@@ -108,6 +108,8 @@ function evidenceDeps(overrides: DepsOverrides = {}) {
         taskStore: fakeTaskStore(tasks) as TaskStorePort,
         sessionDetect: fakeSessionDetect(session) as SessionDetectPort,
         specStore,
+        contractVersionStore: { write: async () => {}, readCurrent: async () => undefined, readVersion: async () => undefined, history: async () => [] },
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [] },
       }),
       recordEvidence: overrides.recordEvidence ?? realRecordEvidence,
     },

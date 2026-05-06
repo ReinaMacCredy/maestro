@@ -25,6 +25,7 @@ import {
   type WitnessLevel,
 } from "../domain/types.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
+import { readCurrentContractWithBackfill } from "@/features/task/index.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
@@ -103,7 +104,7 @@ interface RecordOpts {
 }
 
 async function buildRecordInput(
-  services: Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore">,
+  services: Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore" | "contractVersionStore" | "contractStore">,
   opts: RecordOpts,
 ): Promise<RecordEvidenceInput> {
   const taskId = opts.task;
@@ -128,6 +129,23 @@ async function buildRecordInput(
       if (!ids.includes(opts.criterion)) {
         throw new MaestroError(`Unknown criterion id: ${opts.criterion}`, [
           `Available: ${ids.join(", ")}`,
+        ]);
+      }
+    }
+  } else if (opts.criterion !== undefined) {
+    // No Spec linked — if a contract exists with doneWhen criteria, validate
+    // --criterion against those ids so agents don't accumulate orphaned
+    // evidence rows that ProofMap silently ignores.
+    const contract = await readCurrentContractWithBackfill(
+      services.contractVersionStore,
+      services.contractStore,
+      taskId,
+    );
+    if (contract && contract.doneWhen.length > 0) {
+      const ids = contract.doneWhen.map((c) => c.id);
+      if (!ids.includes(opts.criterion)) {
+        throw new MaestroError(`Unknown criterion id: ${opts.criterion}`, [
+          `Available in contract ${contract.id}: ${ids.join(", ")}`,
         ]);
       }
     }

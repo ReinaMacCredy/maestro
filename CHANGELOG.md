@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.72.35 - close R33 substrate bug: evidence record accepted unknown criterion ids
+
+R33 sub-agent found that `maestro evidence record --criterion <id>` had
+no validation when the task didn't reference a Mission Spec. An agent
+could record evidence with `--criterion dw-zzzzzz` (an id not in the
+contract, or even a malformed id) and the row would be silently
+accepted, then ignored by ProofMap. Result: agents couldn't tell their
+evidence was orphaned until they ran `task proof` and saw the criterion
+they thought they covered was still uncovered.
+
+### Fix
+
+- **`evidence record --criterion <id>` now validates against contract
+  `doneWhen` ids when no Spec is linked.** Previously the validation
+  branch only fired for tasks with `missionId` and a Spec. Added a
+  fallback branch that loads the current contract via
+  `readCurrentContractWithBackfill` and rejects unknown ids with the
+  same "Unknown criterion id" error and the available ids listed in the
+  hint. Tasks without a contract or with an empty `doneWhen` still
+  accept any `--criterion` value (no contract context to validate
+  against).
+
 ## 0.72.34 - close R32 substrate bug: user-supplied doneWhen criterion IDs were silently regenerated
 
 R32 sub-agent found a CRITICAL bug: user-supplied `doneWhen[].id` values
