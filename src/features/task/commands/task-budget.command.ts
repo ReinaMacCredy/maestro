@@ -44,20 +44,26 @@ export function registerTaskBudgetCommand(
       const tokensUsed = runState?.tokensUsed;
 
       const budget = contract.costBudget;
-      const maxRetries = budget?.maxRetries ?? 0;
-      const maxWallClockSeconds = budget?.maxWallClockSeconds ?? 0;
+      const hasBudget = budget !== undefined;
+      const maxRetries = budget?.maxRetries;
+      const maxWallClockSeconds = budget?.maxWallClockSeconds;
       const maxTokens = budget?.maxTokens;
 
       if (isJson) {
         const jsonOut: Record<string, unknown> = {
           taskId,
+          hasBudget,
           retryCount,
-          maxRetries,
           wallClockElapsedSeconds,
-          maxWallClockSeconds,
           tokensUsed,
           exhausted: budgetCheck.exhausted,
         };
+        if (maxRetries !== undefined) {
+          jsonOut["maxRetries"] = maxRetries;
+        }
+        if (maxWallClockSeconds !== undefined) {
+          jsonOut["maxWallClockSeconds"] = maxWallClockSeconds;
+        }
         if (budgetCheck.reason !== undefined) {
           jsonOut["reason"] = budgetCheck.reason;
         }
@@ -70,6 +76,14 @@ export function registerTaskBudgetCommand(
 
       // Text mode: small table
       console.log(`Budget for task ${taskId}:`);
+      if (!hasBudget) {
+        console.log("  (no costBudget set on contract — no limits enforced)");
+        console.log(`  Retries:    ${retryCount} (no limit)`);
+        console.log(`  Wall clock: ${wallClockElapsedSeconds}s (no limit)`);
+        console.log("  Set limits via costBudget in the contract draft template:");
+        console.log("    costBudget: { maxRetries: 3, maxWallClockSeconds: 1800 }");
+        return;
+      }
       console.log(`  Retries:    ${retryCount}/${maxRetries}`);
       console.log(`  Wall clock: ${wallClockElapsedSeconds}s/${maxWallClockSeconds}s`);
       if (maxTokens !== undefined) {

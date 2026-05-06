@@ -124,9 +124,25 @@ export function registerDeployGateCommand(
           `  Witness:  ${r.witness_level}`,
           "",
           `  feature_flag : ${fmtCheck(checks.feature_flag, checks.feature_flag.value !== undefined ? `flag="${checks.feature_flag.value}"` : undefined)}`,
+          ...failureHint(checks.feature_flag.ok, [
+            "    Set spec.rollout_plan.feature_flag in the mission spec",
+            `    Edit it: maestro spec edit --mission ${task.missionId ?? "<id>"}`,
+          ]),
           `  canary_plan  : ${fmtCheck(checks.canary_plan, checks.canary_plan.stages !== undefined ? `stages=${checks.canary_plan.stages}` : undefined)}`,
+          ...failureHint(checks.canary_plan.ok, [
+            "    Add at least one stage to spec.rollout_plan.canary.stages",
+            `    Edit it: maestro spec edit --mission ${task.missionId ?? "<id>"}`,
+          ]),
           `  rollback     : ${fmtCheck(checks.rollback, checks.rollback.witness_evidence_id !== undefined ? `evd=${checks.rollback.witness_evidence_id}` : undefined)}`,
+          ...failureHint(checks.rollback.ok, [
+            "    Witness a rollback at witnessed-by-ci or stronger before passing this gate",
+            `    Run it: maestro deploy rollback --task ${taskId} --command <cmd>`,
+          ]),
           `  owner        : ${fmtCheck(checks.owner, checks.owner.approvers !== undefined ? `approvers=[${checks.owner.approvers.join(",")}]` : undefined)}`,
+          ...failureHint(checks.owner.ok, [
+            "    Add at least one entry to deploy_approver in .maestro/policies/owners.yaml",
+            "    Format: docs/owners-yaml-format.md",
+          ]),
         ];
         return lines;
       });
@@ -140,4 +156,8 @@ export function registerDeployGateCommand(
 function fmtCheck(check: { ok: boolean }, detail: string | undefined): string {
   const status = check.ok ? "pass" : "fail";
   return detail !== undefined ? `${status}  (${detail})` : status;
+}
+
+function failureHint(ok: boolean, hints: readonly string[]): readonly string[] {
+  return ok ? [] : hints;
 }

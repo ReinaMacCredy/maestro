@@ -12,7 +12,7 @@ import type { Spec, AcceptanceCriterion } from "../domain/types.js";
 import type { SpecStorePort } from "../ports/storage.js";
 
 interface SpecCommandDeps {
-  readonly getServices: () => Pick<Services, "specStore">;
+  readonly getServices: () => Pick<Services, "specStore" | "missions">;
 }
 
 export function registerSpecCommand(
@@ -66,6 +66,14 @@ function registerEditCommand(parent: Command, root: Command, deps: SpecCommandDe
         throw new MaestroError("$EDITOR is not set", [
           "Set EDITOR in your shell profile (e.g. export EDITOR=vim)",
           "Or set VISUAL instead",
+        ]);
+      }
+
+      const mission = await services.missions.get(opts.mission);
+      if (!mission) {
+        throw new MaestroError(`Mission not found: ${opts.mission}`, [
+          "List missions with: maestro mission list",
+          "Create a mission first with: maestro mission new",
         ]);
       }
 

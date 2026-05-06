@@ -239,6 +239,59 @@ describe("registerTaskBudgetCommand", () => {
     expect(parsed.reason).toBe("max-retries");
   });
 
+  it("text mode marks contract as having no budget when costBudget is undefined", async () => {
+    const lines: string[] = [];
+    console.log = (...args: unknown[]) => lines.push(args.map(String).join(" "));
+
+    // costBudget removed entirely
+    const contract = makeContract({ costBudget: undefined });
+    const state = makeRunState({ retryCount: 1, wallClockElapsedSeconds: 60 });
+
+    const program = new Command();
+    program.exitOverride();
+    const taskCmd = program.command("task");
+    registerTaskBudgetCommand(taskCmd, program, {
+      getServices: () => ({
+        contractVersionStore: fakeContractVersionStore(contract),
+        runStateStore: fakeRunStateStore(state),
+      }),
+    });
+
+    await program.parseAsync(["task", "budget", "--task", "tsk-aaaaaa"], { from: "user" });
+    const joined = lines.join("\n");
+    expect(joined).toContain("(no costBudget set on contract");
+    expect(joined).toContain("(no limit)");
+    expect(joined).not.toContain("/0");
+  });
+
+  it("JSON mode reports hasBudget=false and omits max* fields when costBudget is undefined", async () => {
+    let captured = "";
+    process.stdout.write = ((data: string | Uint8Array) => {
+      if (typeof data === "string") captured += data;
+      return true;
+    }) as typeof process.stdout.write;
+
+    const contract = makeContract({ costBudget: undefined });
+    const state = makeRunState({ retryCount: 1, wallClockElapsedSeconds: 60 });
+
+    const program = new Command();
+    program.exitOverride();
+    const taskCmd = program.command("task");
+    registerTaskBudgetCommand(taskCmd, program, {
+      getServices: () => ({
+        contractVersionStore: fakeContractVersionStore(contract),
+        runStateStore: fakeRunStateStore(state),
+      }),
+    });
+
+    await program.parseAsync(["task", "budget", "--task", "tsk-aaaaaa", "--json"], { from: "user" });
+
+    const parsed = JSON.parse(captured);
+    expect(parsed.hasBudget).toBe(false);
+    expect(parsed.maxRetries).toBeUndefined();
+    expect(parsed.maxWallClockSeconds).toBeUndefined();
+  });
+
   it("text mode omits tokens row when maxTokens is undefined", async () => {
     const lines: string[] = [];
     console.log = (...args: unknown[]) => lines.push(args.map(String).join(" "));

@@ -37,7 +37,11 @@ function mockSpecStore(initial: Spec[] = []): SpecStorePort {
 
 function makeProgram(specStore: SpecStorePort): Command {
   const program = new Command().name("maestro").option("--json", "Output as JSON").exitOverride();
-  registerSpecCommand(program, { getServices: () => ({ specStore }) });
+  // spec show tests don't touch missions; cast a stub through unknown.
+  const missions = { get: async () => undefined } as unknown as ReturnType<
+    Parameters<typeof registerSpecCommand>[1]["getServices"]
+  >["missions"];
+  registerSpecCommand(program, { getServices: () => ({ specStore, missions }) });
   return program;
 }
 
