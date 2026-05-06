@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.72.9 - skill quick-start defaults to receipt-hint criteria
+
+Round-3 minimal-prompt agents (greenfield + brownfield) both completed
+the documented contract flow successfully and then saw their contract
+auto-flip to `broken` on `task update --status completed`. Cause: the
+`maestro-task` SKILL.md quick-start example used `kind: manual` for the
+sample `doneWhen` criterion. Per `reference/contracts.md`, `manual`
+means "an operator ticks the box explicitly" via `criteria mark` —
+which the SKILL.md never mentions. So a minimal-prompt agent who reads
+only SKILL.md leaves the criterion unmarked, the close-path verdict
+sees `unmetCriteria.length > 0`, and the contract closes `broken`.
+
+### Fix
+
+- `skills/bundled/maestro-task/SKILL.md` quick-start now defaults to
+  `kind: receipt-hint` with two short, matchable example texts (`tests
+  pass`, `manual`). Agents who follow the example and complete with
+  `--verified-by "tests pass" --verified-by manual` get both criteria
+  auto-marked at close.
+- The same section now explicitly contrasts `receipt-hint` (auto-marked
+  from `--verified-by`) and `manual` (requires explicit
+  `criteria mark`), and warns that unmarked `manual` criteria close
+  the contract as `broken`. The CLI semantics are unchanged.
+
 ## 0.72.8 - close-path scope exemption + post-lock empty-diff hint
 
 Round-2 greenfield surfaced two follow-on bugs after v0.72.7:

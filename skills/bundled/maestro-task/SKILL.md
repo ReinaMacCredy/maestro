@@ -112,16 +112,20 @@ scope:
     - src/features/foo/**
   filesForbidden: []
 doneWhen:
-  - text: Describe the observable signal that proves the task is done.
-    kind: manual
+  - text: tests pass
+    kind: receipt-hint
+  - text: manual
+    kind: receipt-hint
 YAML
 
 maestro task contract lock <id>
 ```
 
-Load a project-local template: `maestro task contract new <id> --from default` (reads `.maestro/tasks/contract-templates/default.md`).
+Each `doneWhen` bullet has a `kind`. Use `receipt-hint` when the bullet should auto-mark from your completion `--verified-by` tags (`--verified-by "tests pass" --verified-by manual` would tick both above). Use `kind: manual` only when an operator must tick the box explicitly via `maestro task contract criteria mark <id> <criterionId> --met` — `manual` criteria left unmarked at completion will close the contract as `broken`.
 
 Contract amend/reopen/criteria verbs and verdict semantics live in `./reference/contracts.md`.
+
+Load a project-local template: `maestro task contract new <id> --from default` (reads `.maestro/tasks/contract-templates/default.md`).
 
 ## Stay in scope; amend on genuine discovery
 
