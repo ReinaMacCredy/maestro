@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.72.40 - lazy-load OpenTUI inside mission-control, cut --json mode 86%
+
+`maestro mission-control --json` is the agent-facing snapshot path —
+agents read it to inspect mission state programmatically. It paid the
+full OpenTUI + React import cost (~250-400ms) even though it never
+renders anything; `renderDashboard`, `renderPreviewFrame`, and
+`runRenderCheck` were eagerly imported at the top of
+`src/infra/commands/mission-control.command.ts`.
+
+### Fix
+
+- **Defer OpenTUI imports to inside the rendering branches.**
+  `mission-control --json` now skips the import entirely;
+  `--render-check`, `--preview`, and the interactive dashboard
+  dynamic-import on demand. Same import is shared across same-process
+  invocations of multiple render branches (Bun caches modules).
+
+### Measured impact
+
+| Variant | Before | After |
+|---------|--------|-------|
+| `mission-control --json` | 1.04s | 0.15s |
+| `mission-control --render-check` | 1.12s | 1.17s |
+| `mission-control --preview --format plain` | 0.96s | 1.07s |
+
+Render-check and preview retain their full cost because they actually
+need the renderer; the small uptick is import-deferral overhead, well
+under noise.
+
 ## 0.72.39 - cache HEAD sha + pending-loosenings per CLI run, halve verdict-request time
 
 `verdict request` was spawning `git rev-parse HEAD` 4 times and the
