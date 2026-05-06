@@ -53,8 +53,9 @@ async function computeDefaultBase(): Promise<string> {
   // merge-base equals HEAD itself and the diff is empty. Skip those — the
   // user is likely on the parent branch in a greenfield repo, where the
   // sensible "base" is the empty tree (i.e., everything since creation).
-  const head = await execArgv(["git", "rev-parse", "HEAD"]);
-  const headSha = head.exitCode === 0 ? head.stdout : "";
+  // Reuse the cached resolveHeadSha so verdict request doesn't pay a second
+  // `git rev-parse HEAD` here.
+  const headSha = await resolveHeadSha();
   for (const candidate of ["main", "master", "trunk"]) {
     const mergeBase = await execArgv(["git", "merge-base", "HEAD", candidate]);
     if (
