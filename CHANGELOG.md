@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.72.42 - parallelize verdict and spec store reads (same pattern, same win)
+
+`FsVerdictStoreAdapter` and `FsSpecStoreAdapter` had the same
+sequential per-file read pattern that `FsEvidenceStoreAdapter` did
+before 0.72.41: one `for` loop awaiting each `readJson` in turn.
+`verdict request` and `verdict show` exercise the verdict store on
+every call, so the per-file linear walk added measurable wall-clock
+once a task accumulated more than a handful of past verdicts.
+
+### Fix
+
+- **Parallelize per-file reads inside `FsVerdictStoreAdapter.readTaskVerdicts`**
+  via `Promise.all` over candidate filenames after the directory scan.
+- **Parallelize per-task reads inside `findByTreeSha`** so the
+  CI-PR-by-tree-SHA lookup walks all task directories concurrently.
+- **Parallelize per-spec reads inside `FsSpecStoreAdapter.list`** the
+  same way.
+
+### Measured impact
+
+`verdict request --json` (warm cache): 0.13-0.17s → 0.09-0.10s.
+
 ## 0.72.41 - parallelize evidence file reads to keep listings flat as rows grow
 
 `FsEvidenceStoreAdapter` stores one JSON file per row under

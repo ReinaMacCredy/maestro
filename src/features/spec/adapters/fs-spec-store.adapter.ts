@@ -64,15 +64,22 @@ export class FsSpecStoreAdapter implements SpecStorePort {
     } catch {
       return [];
     }
-    const specs: Spec[] = [];
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-      const missionId = entry.name.slice(0, -".json".length);
-      const raw = await readJson<unknown>(join(this.dir(), entry.name)).catch(() => undefined);
-      const spec = coerceSpec(raw);
-      if (!spec || spec.mission_id !== missionId) continue;
-      specs.push(spec);
-    }
+    // One file per spec; reads are I/O-independent.
+    const candidates = entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => ({
+        missionId: entry.name.slice(0, -".json".length),
+        path: join(this.dir(), entry.name),
+      }));
+    const settled = await Promise.all(
+      candidates.map(async ({ missionId, path }) => {
+        const raw = await readJson<unknown>(path).catch(() => undefined);
+        const spec = coerceSpec(raw);
+        if (!spec || spec.mission_id !== missionId) return undefined;
+        return spec;
+      }),
+    );
+    const specs = settled.filter((s): s is Spec => s !== undefined);
     return specs.sort((a, b) => a.mission_id.localeCompare(b.mission_id));
   }
 }

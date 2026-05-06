@@ -73,10 +73,15 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
       return [];
     }
 
+    // Each task dir is independent; read them in parallel.
+    const perTask = await Promise.all(
+      taskDirs
+        .filter((entry) => entry.isDirectory() && TASK_ID_PATTERN.test(entry.name))
+        .map((entry) => this.readTaskVerdicts(join(baseDir, entry.name))),
+    );
+
     const matches: Verdict[] = [];
-    for (const taskEntry of taskDirs) {
-      if (!taskEntry.isDirectory() || !TASK_ID_PATTERN.test(taskEntry.name)) continue;
-      const verdicts = await this.readTaskVerdicts(join(baseDir, taskEntry.name));
+    for (const verdicts of perTask) {
       for (const verdict of verdicts) {
         if (verdict.subject?.tree_sha === treeSha) matches.push(verdict);
       }
@@ -93,22 +98,24 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
       return [];
     }
 
-    const verdicts: Verdict[] = [];
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    // One file per verdict; reads are I/O-independent.
+    const candidates = entries.filter((entry) => {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) return false;
       const verdictId = entry.name.slice(0, -".json".length);
-      if (!VERDICT_ID_PATTERN.test(verdictId)) continue;
-      let raw: unknown;
-      try {
-        raw = await readJson<unknown>(join(taskDir, entry.name));
-      } catch {
-        continue;
-      }
-      if (raw === undefined) continue;
-      const verdict = coerceVerdict(raw);
-      if (verdict !== undefined) verdicts.push(verdict);
-    }
-    return verdicts;
+      return VERDICT_ID_PATTERN.test(verdictId);
+    });
+    const settled = await Promise.all(
+      candidates.map(async (entry) => {
+        try {
+          const raw = await readJson<unknown>(join(taskDir, entry.name));
+          if (raw === undefined) return undefined;
+          return coerceVerdict(raw);
+        } catch {
+          return undefined;
+        }
+      }),
+    );
+    return settled.filter((v): v is Verdict => v !== undefined);
   }
 }
 

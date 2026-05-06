@@ -51,13 +51,12 @@ export class FsReplyStoreAdapter implements ReplyStorePort {
   }
 
   async list(): Promise<readonly AgentReply[]> {
-    const replies: AgentReply[] = [];
-    for (const ref of await listReplyRefs(this.dir())) {
-      const reply = await this.get(ref.missionId, ref.featureId);
-      if (reply) {
-        replies.push(reply);
-      }
-    }
+    const refs = await listReplyRefs(this.dir());
+    // Each reply is its own file; reads are I/O-independent.
+    const settled = await Promise.all(
+      refs.map((ref) => this.get(ref.missionId, ref.featureId)),
+    );
+    const replies = settled.filter((r): r is AgentReply => r !== undefined);
     return replies.sort((a, b) => a.writtenAt.localeCompare(b.writtenAt));
   }
 
