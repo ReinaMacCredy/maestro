@@ -31,6 +31,7 @@ export interface VerdictReason {
   readonly message: string;
   readonly evidenceIds?: readonly string[];
   readonly findingChecks?: readonly string[];
+  readonly findingPaths?: readonly string[];
   readonly policyRuleIds?: readonly string[];
 }
 

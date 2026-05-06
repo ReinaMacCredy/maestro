@@ -23,6 +23,11 @@ export function printVerdict(
     console.log("Reasons:");
     for (const r of verdict.reasons) {
       console.log(`  [${r.category}] ${r.code}: ${r.message}`);
+      if (r.findingPaths !== undefined && r.findingPaths.length > 0) {
+        for (const p of r.findingPaths) {
+          console.log(`      ${p}`);
+        }
+      }
     }
   }
   console.log(`Evidence consulted: ${verdict.evidenceConsulted.length}`);

@@ -92,11 +92,13 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
 
   // 2. FAIL on trust errors.
   if (errors.length > 0) {
+    const findingPaths = Array.from(new Set(errors.flatMap((f) => f.paths))).sort();
     reasons.push({
       category: "trust",
       code: "trust-findings-error",
       message: `Trust verifier found ${errors.length} error(s).`,
       findingChecks: errors.map((f) => f.check),
+      ...(findingPaths.length > 0 ? { findingPaths } : {}),
     });
     return buildVerdict("FAIL", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }

@@ -1,8 +1,9 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadOwners, parseOwners } from "@/features/policy/usecases/load-owners.usecase.js";
+import { loadOwners, loadOwnersFromBase, parseOwners } from "@/features/policy/usecases/load-owners.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
 let tmpDir: string;
@@ -83,6 +84,27 @@ describe("loadOwners", () => {
 
   it("does not silently return empty owners when file is missing", async () => {
     await expect(loadOwners(tmpDir)).rejects.toThrow(MaestroError);
+  });
+});
+
+describe("loadOwnersFromBase", () => {
+  const EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+  it("emits a tailored hint when base resolves to the empty tree", () => {
+    execFileSync("git", ["init", "-q"], { cwd: tmpDir });
+    execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: tmpDir });
+    execFileSync("git", ["config", "user.name", "t"], { cwd: tmpDir });
+    const err = (() => {
+      try {
+        loadOwnersFromBase(EMPTY_TREE_SHA, tmpDir);
+        return undefined;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(MaestroError);
+    expect((err as MaestroError).message).toMatch(/empty-tree base/i);
+    expect((err as MaestroError).hints.join("\n")).toMatch(/--base/);
   });
 });
 

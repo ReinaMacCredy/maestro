@@ -181,6 +181,33 @@ describe("computeRisk", () => {
       expect(reason?.findingChecks).toHaveLength(1);
       expect(reason?.findingChecks).toContain("scope");
     });
+
+    it("surfaces de-duplicated, sorted finding paths so agents can self-correct", () => {
+      const verdict = computeRisk(
+        makeInput({
+          trustFindings: [
+            makeTrustFinding({ check: "scope", severity: "error", paths: ["package.json", "src/foo.ts"] }),
+            makeTrustFinding({ check: "secrets", severity: "error", paths: ["src/foo.ts", ".env"] }),
+          ],
+        }),
+      );
+      expect(verdict.decision).toBe("FAIL");
+      const reason = verdict.reasons[0];
+      expect(reason?.findingPaths).toEqual([".env", "package.json", "src/foo.ts"]);
+    });
+
+    it("omits findingPaths when no error finding has any path", () => {
+      const verdict = computeRisk(
+        makeInput({
+          trustFindings: [
+            makeTrustFinding({ check: "scope", severity: "error", paths: [] }),
+          ],
+        }),
+      );
+      expect(verdict.decision).toBe("FAIL");
+      const reason = verdict.reasons[0];
+      expect(reason?.findingPaths).toBeUndefined();
+    });
   });
 
   describe("HUMAN: amendment budget high (Rule 5)", () => {
