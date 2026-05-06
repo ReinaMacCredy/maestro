@@ -180,6 +180,11 @@ Run this loop before marking any task done:
    generated, sensitive-paths, commit-metadata, secrets). Address every
    error finding before proceeding.
 
+   Exit codes: `0` clean, `1` errors present (must fix), `2` warnings or
+   info-only findings (review and continue if expected). A `2` is not a
+   failure — it is a heads-up; read the findings and proceed to step 2
+   if nothing actionable is flagged.
+
 2. `maestro task proof --task <id>` — confirm criterion coverage. Every
    Spec acceptance criterion must have at least one Evidence row.
 
@@ -189,7 +194,15 @@ Run this loop before marking any task done:
    - **0 PASS** — claim the task done.
    - **1 FAIL** — fix the cited findings, then loop back to step 1.
    - **2 HUMAN** — run `maestro handoff create` and stop. A human must
-     approve before the task can complete.
+     approve before the task can complete. **By default**,
+     `policies/autopilot.yaml` opts *every* risk class out of auto-merge
+     (`autoMergeAllowed.<class>: false` for `low`, `medium`, `high`,
+     `critical`), so even an otherwise-clean run lands as HUMAN until
+     the team explicitly enables auto-merge for that class. To enable
+     auto-merge for a risk class your team approves, set
+     `autoMergeAllowed.<class>: true` in
+     `.maestro/policies/autopilot.yaml`. See
+     `docs/auto-merge-eligibility.md`.
    - **3 BLOCK** — stop. The task is blocked (typically cost-budget
      exhaustion). Surface the BLOCK reason to the user; do not retry
      without their guidance.
