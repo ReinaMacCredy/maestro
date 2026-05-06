@@ -48,9 +48,18 @@ describe("assertNoDeprecatedVersionFlag", () => {
     ).not.toThrow();
   });
 
-  it("does not throw on unrelated subcommands using `--version`", () => {
-    // No special-case for these — they should fall through to Commander as today.
-    expect(() => assertNoDeprecatedVersionFlag(argv("task", "list", "--version", "1"))).not.toThrow();
+  it("throws on any other subcommand prefix + `--version <value>` (catch-all)", () => {
+    // No subcommand declares `--version` as an option (verified at v0.72.20),
+    // so any verb-prefix + `--version <value>` is a trap that would otherwise
+    // silently hit Commander's root handler.
+    let caught: unknown;
+    try {
+      assertNoDeprecatedVersionFlag(argv("task", "update", "--task", "tsk-abc", "--version", "1"));
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(MaestroError);
+    expect(String((caught as Error).message)).toContain("task update --version <value>");
   });
 
   it("handles `--foo=bar` interleaved option syntax", () => {

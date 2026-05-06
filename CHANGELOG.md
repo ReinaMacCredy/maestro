@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.72.21 - generalize argv guard to catch any `<subcommand> --version <value>`
+
+While shipping v0.72.20 a quick audit found `maestro task update --task
+<id> --version 1` had the same silent-print-binary-version trap.
+Verifying the source confirmed no subcommand declares `--version` as
+an option, so any verb-prefix + `--version <value>` is always a user
+mistake that would otherwise hit Commander's global handler.
+
+### Fixes
+
+- **`assertNoDeprecatedVersionFlag` now ends with a catch-all** that
+  errors on any non-empty subcommand prefix followed by `--version
+  <value>`, with a generic redirect to `<verb> --help`. The three
+  verb-specific branches still fire first for richer redirects
+  (`contract show`, `verdict show`, `task contract show`, `update`);
+  the catch-all covers the rest. Bare root `maestro --version` still
+  works (empty positional prefix).
+
 ## 0.72.20 - extend deprecation guard to L1 `task contract show --version`
 
 Round-18 sub-agent flagged a remaining gap in the v0.72.19 guard. The

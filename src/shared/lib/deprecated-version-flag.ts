@@ -64,4 +64,19 @@ export function assertNoDeprecatedVersionFlag(argv: readonly string[]): void {
       [`Use \`--release ${next}\` instead (renamed in v0.72.18)`],
     );
   }
+
+  // Catch-all: any subcommand prefix + `--version <value>` is a trap. No
+  // subcommand declares a `--version` option (verified at v0.72.20), so this
+  // pattern is always a user mistake that would silently print the binary
+  // version via Commander's root handler. The three branches above give
+  // verb-specific redirect hints; the catch-all covers everything else.
+  if (cmd.length > 0) {
+    throw new MaestroError(
+      `\`${cmd} --version <value>\` collides with the global \`maestro --version\` flag`,
+      [
+        `Run \`maestro ${cmd} --help\` to see this verb's flags`,
+        "Bare `maestro --version` (no subcommand) prints the binary version",
+      ],
+    );
+  }
 }
