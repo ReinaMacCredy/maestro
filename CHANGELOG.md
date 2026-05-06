@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.72.32 - close R30 substrate bugs: redundant amendment budget leak, ProofMap contract criteria gap, untracked-warning noise
+
+R30 sub-agent surfaced four follow-up bugs against the R29 ship: redundant
+path amendments still consumed amendment budget even though the path was
+correctly skipped; the budget-exhaustion error message suggested an action
+agents couldn't take; `task proof` ignored contract `doneWhen` criteria
+when no Spec was linked; and `task verify`'s untracked-out-of-scope warning
+listed maestro runtime metadata files (verdicts, contracts, evidence, runs)
+that are gitignored and irrelevant to scope review.
+
+### Fixes
+
+- **`contract amend` no longer consumes budget when the proposed change is
+  a no-op against existing scope.** R29 added skipping of paths already
+  covered by globs in `applyPathChanges`, but the amendment still wrote a
+  versioned record and incremented version, wasting budget. Now compares
+  `before.scope.filesExpected` to the result of `applyPathChanges` and
+  exits early with `MaestroError("No scope changes to apply")` when they
+  match. Budget stays intact for legitimate amendments.
+- **Budget-exhaustion error message now suggests reachable recovery
+  commands.** Previously suggested "Increase amendmentBudget.maxAmendments
+  on the contract" — but no CLI verb edits a locked contract's budget,
+  leaving agents stuck. Now suggests `git checkout <base> -- <path>` to
+  revert specific files OR `maestro task contract reopen <taskId>` to
+  reopen the draft and re-lock with a higher budget.
+- **`task proof` (ProofMap) now uses contract `doneWhen` criteria when no
+  Spec is linked.** `buildProofMap` previously bailed out with
+  `uncoveredCount: 0` when `args.spec` was undefined, hiding contract
+  criteria from coverage analysis. Agents could record evidence with
+  `--criterion` pointing to a `doneWhen.id`, but `task proof` would
+  silently ignore it. Now falls back to `contract.doneWhen` when the spec
+  is absent, joining evidence rows against contract criteria the same way
+  it does Spec criteria. Output labels the source: `(spec, ...)` vs
+  `(contract, ...)`.
+- **`task verify` no longer warns about gitignored maestro runtime
+  metadata as untracked out-of-scope.** `collectUntrackedFiles` returned
+  raw `git ls-files --others --exclude-standard` output without applying
+  the same `filterTouchedPaths` filter used by `collectTouchedFiles`.
+  Files like `.maestro/contracts/<task>/v*.json`, `.maestro/tasks/NOW.md`,
+  `.maestro/tasks/continuations/`, and `.maestro/tasks/contracts/` leaked
+  into the untracked-out-of-scope warning even though they're maestro's
+  own state. Now applies `filterTouchedPaths(output, "untracked")` so
+  warnings only surface real working-tree clutter agents need to
+  address.
+
 ## 0.72.31 - close R29 substrate bugs: no-op amendments, redundant paths, plan-check contract criteria gap
 
 R29 sub-agent surfaced three bugs that blocked autonomous recovery: no-op

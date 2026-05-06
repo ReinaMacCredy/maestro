@@ -83,7 +83,9 @@ export async function amendContract(
       throw new MaestroError(
         `Amendment budget exhausted for task ${input.taskId}: ${existingCount} of ${amendmentBudget.maxAmendments} amendments used`,
         [
-          "Increase amendmentBudget.maxAmendments on the contract or work within the existing scope",
+          "Work within existing scope by reverting out-of-scope files, or reopen the contract to increase the budget:",
+          "  git checkout <base-sha> -- <path>  # revert specific files",
+          "  maestro task contract reopen <taskId>  # then edit draft and re-lock with higher budget",
         ],
       );
     }

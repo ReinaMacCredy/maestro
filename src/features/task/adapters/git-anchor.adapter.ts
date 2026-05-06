@@ -263,7 +263,7 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
   async collectUntrackedFiles(repoRoot: string): Promise<readonly string[]> {
     const result = await execArgv(["git", "ls-files", "--others", "--exclude-standard"], { cwd: repoRoot });
     if (result.exitCode !== 0 || !result.stdout) return [];
-    return splitPaths(result.stdout);
+    return filterTouchedPaths(result.stdout, "untracked");
   }
 
   async resolveTreeSha(cwd: string, ref?: string): Promise<string> {
@@ -334,6 +334,11 @@ function isIgnoredUntrackedContractRuntimePath(path: string): boolean {
     || normalized === ".claude/scheduled_tasks.lock"
     || normalized === ".codex/config.toml"
     || normalized === ".codex/installation_id"
+    || normalized.startsWith(".maestro/verdicts/")
+    || normalized.startsWith(".maestro/contracts/")
+    || normalized.startsWith(".maestro/policies/.pending-loosenings")
+    || normalized.startsWith(".maestro/evidence/")
+    || normalized.startsWith(".maestro/runs/")
     || normalized.startsWith(".bun/install/cache/")
     || normalized.startsWith("Library/Caches/bun/")
     || normalized.startsWith(".codex/.tmp/")

@@ -197,6 +197,19 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
 
       const amendmentId = generateContractAmendmentId();
 
+      const newFilesExpected = applyPathChanges(before.scope.filesExpected, addPaths, removePaths);
+
+      // Check if scope actually changed
+      const scopeChanged =
+        newFilesExpected.length !== before.scope.filesExpected.length ||
+        newFilesExpected.some((p, i) => p !== before.scope.filesExpected[i]);
+
+      if (!scopeChanged) {
+        throw new MaestroError("No scope changes to apply", [
+          "All paths are already covered by existing scope patterns or were removed",
+        ]);
+      }
+
       const amendment: ContractAmendment = {
         id: amendmentId,
         at: new Date().toISOString(),
@@ -207,7 +220,7 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
         },
         after: {
           scope: {
-            filesExpected: applyPathChanges(before.scope.filesExpected, addPaths, removePaths),
+            filesExpected: newFilesExpected,
             filesForbidden: before.scope.filesForbidden,
           },
         },

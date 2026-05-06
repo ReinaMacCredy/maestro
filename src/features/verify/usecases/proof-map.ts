@@ -1,4 +1,5 @@
 import type { Spec } from "@/features/spec/index.js";
+import type { Contract } from "@/features/task/index.js";
 import type { EvidenceRow, EvidenceKind, WitnessLevel } from "@/features/evidence/index.js";
 
 export interface ProofMapEvidence {
@@ -25,9 +26,11 @@ export interface ProofMap {
 export function buildProofMap(args: {
   readonly taskId: string;
   readonly spec: Spec | undefined;
+  readonly contract: Contract | undefined;
   readonly evidenceRows: readonly EvidenceRow[];
 }): ProofMap {
-  if (!args.spec) {
+  const criteria = args.spec?.acceptance_criteria ?? args.contract?.doneWhen ?? [];
+  if (criteria.length === 0) {
     return { taskId: args.taskId, entries: [], uncoveredCount: 0 };
   }
 
@@ -45,7 +48,7 @@ export function buildProofMap(args: {
     evidenceByCriterion.set(criterionId, list);
   }
 
-  const entries: ProofMapEntry[] = args.spec.acceptance_criteria.map((c) => {
+  const entries: ProofMapEntry[] = criteria.map((c) => {
     const evidence = evidenceByCriterion.get(c.id) ?? [];
     return {
       criterionId: c.id,
@@ -57,7 +60,7 @@ export function buildProofMap(args: {
   const uncoveredCount = entries.filter((e) => !e.covered).length;
   return {
     taskId: args.taskId,
-    missionId: args.spec.mission_id,
+    missionId: args.spec?.mission_id,
     entries,
     uncoveredCount,
   };

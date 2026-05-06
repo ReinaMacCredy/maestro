@@ -1,11 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Command } from "commander";
 import { registerTaskProofCommand } from "@/features/task/commands/task-proof.command.js";
-import { mockEvidenceStore, mockTaskStore } from "../../../../helpers/mocks.js";
+import { mockEvidenceStore, mockTaskStore, mockContractStore } from "../../../../helpers/mocks.js";
 import type { EvidenceStorePort, EvidenceRow } from "@/features/evidence/index.js";
 import type { SpecStorePort, Spec } from "@/features/spec/index.js";
-import type { TaskStorePort, Task } from "@/features/task";
+import type { TaskStorePort, Task, Contract } from "@/features/task";
+import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { ProofMap } from "@/features/verify/index.js";
+
+function mockContractVersionStore(contract: Contract | undefined): ContractVersionStorePort {
+  return {
+    write: async () => {},
+    readCurrent: async () => contract,
+    readVersion: async () => undefined,
+    history: async () => (contract ? [contract] : []),
+  };
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -73,6 +84,8 @@ interface TestDeps {
   readonly taskStore: TaskStorePort;
   readonly evidenceStore: EvidenceStorePort;
   readonly specStore: SpecStorePort;
+  readonly contractVersionStore: ContractVersionStorePort;
+  readonly contractStore: ContractStorePort;
 }
 
 function makeDeps(overrides: Partial<TestDeps> = {}): TestDeps {
@@ -80,6 +93,8 @@ function makeDeps(overrides: Partial<TestDeps> = {}): TestDeps {
     taskStore: overrides.taskStore ?? mockTaskStore([makeTask()]),
     evidenceStore: overrides.evidenceStore ?? mockEvidenceStore(),
     specStore: overrides.specStore ?? mockSpecStore(makeSpec()),
+    contractVersionStore: overrides.contractVersionStore ?? mockContractVersionStore(undefined),
+    contractStore: overrides.contractStore ?? mockContractStore(),
   };
 }
 
@@ -174,12 +189,12 @@ describe("task proof", () => {
       expect(exitCode).toBe(0);
     });
 
-    it("prints 'no spec linked' when task has no missionId", async () => {
+    it("prints 'no criteria found' when task has no missionId and no contract", async () => {
       const task = makeTask({ missionId: undefined });
       const taskStore = mockTaskStore([task]);
       const deps = makeDeps({ taskStore });
       const { logs } = await runProof(["--task", TASK_ID], deps);
-      expect(logs.join("\n")).toContain("no spec linked");
+      expect(logs.join("\n")).toContain("no criteria found");
     });
   });
 
