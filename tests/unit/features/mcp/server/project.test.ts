@@ -42,16 +42,20 @@ describe("findMaestroProjectRoot", () => {
     }
   });
 
-  it("ignores MAESTRO_PROJECT_ROOT when it does not contain .maestro/ and walks up from start", () => {
+  it("throws when MAESTRO_PROJECT_ROOT is set but does not contain .maestro/", () => {
+    // Silent fallback to CWD traversal would mask the user's intent (e.g.
+    // pointing at a monorepo sub-project) and run git operations against the
+    // wrong tree. The env var is authoritative when set.
     mkdirSync(join(root, ".maestro"));
     const nested = join(root, "deep");
     mkdirSync(nested, { recursive: true });
     const bogus = realpathSync(mkdtempSync(join(tmpdir(), "maestro-mcp-bogus-")));
     try {
-      const found = findMaestroProjectRoot(nested, {
-        MAESTRO_PROJECT_ROOT: bogus,
-      } as NodeJS.ProcessEnv);
-      expect(found).toBe(root);
+      expect(() =>
+        findMaestroProjectRoot(nested, {
+          MAESTRO_PROJECT_ROOT: bogus,
+        } as NodeJS.ProcessEnv),
+      ).toThrow(/MAESTRO_PROJECT_ROOT=.* is not a maestro project/);
     } finally {
       rmSync(bogus, { recursive: true, force: true });
     }

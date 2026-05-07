@@ -42,12 +42,15 @@ export function fromMaestroError(err: unknown, fallbackCode = "MAESTRO_ERROR"): 
 
 function deriveErrorCode(message: string, fallback: string): string {
   const lower = message.toLowerCase();
+  // Order matters: most-specific patterns first, since later checks would
+  // otherwise shadow them (e.g. "already completed" must map to
+  // ALREADY_COMPLETED, not ALREADY_EXISTS).
   if (lower.includes("not found")) return "NOT_FOUND";
-  if (lower.includes("already")) return "ALREADY_EXISTS";
+  if (lower.includes("completed")) return "ALREADY_COMPLETED";
   if (lower.includes("cycle")) return "CYCLE_DETECTED";
   if (lower.includes("self-block")) return "SELF_BLOCK";
   if (lower.includes("ownership") || lower.includes("owned by")) return "OWNERSHIP_CONFLICT";
-  if (lower.includes("completed")) return "ALREADY_COMPLETED";
+  if (lower.includes("already")) return "ALREADY_EXISTS";
   if (lower.includes("contract")) return "CONTRACT_ERROR";
   if (lower.includes("policy")) return "POLICY_ERROR";
   return fallback;

@@ -82,19 +82,23 @@ export function configureAgentRuntime(
       : {};
 
   const previous = mcpServers[SERVER_KEY] as AgentMcpEntry | undefined;
-  const wasIdentical =
-    previous !== undefined &&
-    previous.command === entry.command &&
-    JSON.stringify(previous.args ?? []) === JSON.stringify(entry.args) &&
-    JSON.stringify(previous.env ?? {}) === JSON.stringify(entry.env ?? {});
 
-  if (wasIdentical) {
-    return { target, action: "unchanged" };
-  }
-
+  // Merge first, then compare. If we used a different env source for the
+  // identical-check than for the merge, an existing entry with a custom env
+  // would always look "different" and we'd report a spurious "updated" on
+  // every install run.
   const merged: AgentMcpEntry = previous
     ? { ...previous, command: entry.command, args: entry.args, env: previous.env ?? entry.env }
     : entry;
+
+  if (
+    previous !== undefined &&
+    previous.command === merged.command &&
+    JSON.stringify(previous.args ?? []) === JSON.stringify(merged.args) &&
+    JSON.stringify(previous.env ?? {}) === JSON.stringify(merged.env ?? {})
+  ) {
+    return { target, action: "unchanged" };
+  }
 
   const next = {
     ...existing,

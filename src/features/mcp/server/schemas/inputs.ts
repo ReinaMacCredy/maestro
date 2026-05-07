@@ -6,8 +6,10 @@ const taskId = z
   .describe("A maestro task id like 'tsk-abc123'.");
 const missionId = z
   .string()
-  .regex(/^msn-[a-z0-9]+$/, "Invalid mission id")
-  .describe("A maestro mission id like 'msn-abc123'.");
+  .regex(/^[a-z0-9][a-z0-9-]*$/, "Invalid mission id")
+  .describe(
+    "A maestro mission id. Maestro generates dated ids like '2026-05-07-001'; legacy and seeded ids may use prefixes like 'msn-billing'.",
+  );
 const verdictId = z
   .string()
   .regex(/^vrd-\d{13}-[0-9a-f]{6}$/, "Invalid verdict id")
@@ -37,6 +39,25 @@ const witnessLevel = z
     "Trust ladder for evidence. Strongest to weakest: witnessed-by-maestro, witnessed-by-ci, agent-claimed-locally, agent-claimed-and-not-reproducible.",
   );
 const riskClass = z.enum(["low", "medium", "high", "critical"]);
+
+const evidenceKind = z
+  .enum([
+    "command",
+    "manual-note",
+    "verifier",
+    "contract-amendment",
+    "contract-amendment-blocked",
+    "ai-review",
+    "plan-check",
+    "threat-model",
+    "review-ack",
+    "rollback-exercised",
+    "verdict-override",
+    "runtime-signal",
+    "deploy-readiness",
+    "cross-task-conflict",
+  ])
+  .describe("Evidence kind. Mirrors the EvidenceKind union in the evidence domain.");
 
 const limit = z
   .number()
@@ -138,12 +159,7 @@ export const TaskUnblockInput = z
 export const EvidenceListInput = z
   .object({
     taskId,
-    kind: z
-      .string()
-      .optional()
-      .describe(
-        "Optional kind filter, e.g. 'command', 'manual-note', 'plan-check', 'ai-review', 'threat-model'.",
-      ),
+    kind: evidenceKind.optional(),
     witnessLevel: witnessLevel.optional(),
     limit,
     offset,

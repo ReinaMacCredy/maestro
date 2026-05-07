@@ -32,7 +32,7 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 | Tool | Behavior |
 |------|----------|
 | `maestro_contract_show` | Current contract by default; pass `version` for a historical version. |
-| `maestro_contract_amend` | Add or remove paths from `filesExpected`. Records a versioned amendment plus a `contract-amended` evidence row. |
+| `maestro_contract_amend` | Add or remove paths from `filesExpected`. Records a versioned amendment plus a `contract-amendment` evidence row. |
 
 ### Verdict
 
