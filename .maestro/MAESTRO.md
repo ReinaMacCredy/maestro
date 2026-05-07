@@ -12,6 +12,14 @@ For any agent picking up work in this repo, read in order:
 
 If two sources conflict, the lower-numbered file is operational; the higher-numbered file is informational.
 
+## Before code: run `maestro intake`
+
+Pre-flight risk classification before writing code. `maestro intake --paths <paths> [--flag <flag> ...]` returns a lane (`tiny` | `normal` | `high-risk`), the derived risk class, and the recommended next step. Use it as the entry point for any non-trivial change.
+
+- `tiny` — patch directly, run validation, close with reason.
+- `normal` — `maestro task plan` then `maestro plan check`.
+- `high-risk` — Spec acceptance criteria plus threat-model evidence required.
+
 ## Two outputs per task
 
 Every task close should answer two questions:
@@ -25,6 +33,7 @@ If the harness delta is non-trivial, capture it before the close so the next ses
 
 ```bash
 maestro status --json                                 # what is in flight
+maestro intake --paths <paths> [--flag <flag>]        # pre-code risk classifier
 maestro task plan --file - --start <name>             # batch-create tasks atomically
 maestro plan check --task <id> --plan-file <path>     # plan-time consistency check
 maestro feature prompt <featureId> --mission <id>     # worker prompt with memory injected
