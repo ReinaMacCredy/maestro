@@ -38,11 +38,11 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     agents: ["claude-code"],
   },
   defaultWorkflow: "plan-implement",
-  ui: {
-    missionControl: {
-      backgroundMode: "solid",
-    },
-  },
+  // No `ui` block: ui.missionControl.backgroundMode is global-only
+  // (see GLOBAL_ONLY_CONFIG_KEYS in shared/domain/ui-config.ts). Writing
+  // it as a project default would make `maestro doctor` flag every fresh
+  // init's config.yaml as containing keys it will ignore. Runtime falls
+  // back to "solid" via getMissionControlBackgroundMode.
   memory: {
     enabled: true,
     corrections: { enabled: true, matching: "keyword", auto_capture: "prompt", severity_default: "soft" },
