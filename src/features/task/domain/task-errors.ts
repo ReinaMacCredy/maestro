@@ -8,7 +8,7 @@ export function taskNotFound(id: string): MaestroError {
   return new MaestroError(`Task ${id} not found`, [
     "List tasks: maestro task list",
     `Check that task ID '${id}' is correct`,
-  ]);
+  ], "TASK_NOT_FOUND");
 }
 
 export function invalidSimilarTaskLimit(limit: number): MaestroError {
@@ -36,6 +36,7 @@ export function taskSelfBlock(id: string): MaestroError {
       "Remove the task id from the blocker edge",
       "Use a different task id with task block",
     ],
+    "SELF_BLOCK",
   );
 }
 
@@ -46,6 +47,7 @@ export function taskBlockCycle(id: string, chain: readonly string[]): MaestroErr
       "A task cannot block a chain that leads back to itself",
       "Remove one of the blocker edges before retrying",
     ],
+    "CYCLE_DETECTED",
   );
 }
 
@@ -132,6 +134,7 @@ export function taskAlreadyCompleted(id: string): MaestroError {
       "Use 'maestro task show <id>' to inspect the existing completion reason",
       "Completed tasks are immutable; create a follow-up task instead",
     ],
+    "ALREADY_COMPLETED",
   );
 }
 
@@ -174,6 +177,7 @@ export function taskAlreadyClaimed(id: string, assignee: string): MaestroError {
       "Use 'maestro task claim <id> --force' for an explicit takeover",
       "Pass '--session <id>' when forcing takeover outside an agent session",
     ],
+    "OWNERSHIP_CONFLICT",
   );
 }
 
@@ -198,6 +202,7 @@ export function taskClaimOwnedByDifferentSession(id: string, assignee: string): 
       "Pass '--session <id>' when forcing release outside an agent session",
       "Or ask the current owner to release the task",
     ],
+    "OWNERSHIP_CONFLICT",
   );
 }
 
@@ -213,6 +218,7 @@ export function taskMutationRequiresOwnershipContext(
       "Or pass '--force' for an explicit operator override",
       "If the owner is dead, use a real agent-prefixed session id so stale-owner recovery can release it automatically",
     ],
+    "OWNERSHIP_CONFLICT",
   );
 }
 
@@ -227,6 +233,7 @@ export function taskMutationOwnedByDifferentSession(
       `Retry from the owning session or pass '--force' to override`,
       "Use 'maestro task show <id>' to inspect current ownership",
     ],
+    "OWNERSHIP_CONFLICT",
   );
 }
 
