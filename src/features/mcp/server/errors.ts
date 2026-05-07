@@ -28,7 +28,11 @@ export function fail(code: string, message: string, hints: readonly string[] = [
 
 export function fromMaestroError(err: unknown, fallbackCode = "MAESTRO_ERROR"): McpToolFailure {
   if (err instanceof MaestroError) {
-    return fail(deriveErrorCode(err.message, fallbackCode), err.message, err.hints);
+    // Prefer the explicit code attached at throw time. Domain factories that
+    // pre-date this convention fall back to message-pattern heuristics so we
+    // don't lose code routing for legacy throw sites.
+    const code = err.code ?? deriveErrorCode(err.message, fallbackCode);
+    return fail(code, err.message, err.hints);
   }
   if (err instanceof Error) {
     return fail(fallbackCode, err.message, []);
