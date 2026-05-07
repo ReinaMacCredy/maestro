@@ -55,4 +55,23 @@ describe("PROJECT_BOOTSTRAP_TEMPLATES", () => {
     expect(template?.content).toContain("filesExpected:");
     expect(template?.content).toContain("doneWhen:");
   });
+
+  it("ships a .maestro/MAESTRO.md read-order compass", () => {
+    const template = PROJECT_BOOTSTRAP_TEMPLATES.find(
+      (entry) => entry.path === ".maestro/MAESTRO.md",
+    );
+    expect(template).toBeDefined();
+    expect(template?.content).toContain("Read Order");
+    expect(template?.content).toContain("AGENTS.md");
+    expect(template?.content).toContain("maestro intake");
+    expect(template?.content).toContain("Two outputs per task");
+  });
+
+  it("points the bootstrap AGENTS template at the root AGENTS.md", () => {
+    const template = PROJECT_BOOTSTRAP_TEMPLATES.find(
+      (entry) => entry.path === ".maestro/AGENTS.md",
+    );
+    expect(template?.content).toContain("project root");
+    expect(template?.content).toContain("AGENTS.md");
+  });
 });
