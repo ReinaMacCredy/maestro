@@ -514,3 +514,18 @@ Run this loop before marking any task done. Steps are ordered; do not skip.
    - `3` BLOCK — stop, surface the reason to the user
 
 If retries are accumulating before step 5, run `maestro task budget --task <id>` to check consumption.
+
+## MCP tools (when available)
+
+Verification verbs are also exposed via MCP for runtimes that prefer structured tool calls. The MCP layer is a thin wrapper; semantics match the CLI exactly.
+
+| MCP tool | CLI equivalent | Notes |
+|----------|----------------|-------|
+| `verdict_show` | `maestro verdict show --task <id>` | Returns `code: VERDICT_NOT_FOUND` if no verdict yet |
+| `verdict_request` | `maestro verdict request --task <id>` | Same `PASS / FAIL / HUMAN / BLOCK` decision tree |
+| `contract_show` | `maestro contract show --task <id>` | Optional `version` argument for historical reads |
+| `contract_amend` | `maestro contract amend --task <id>` | `addPaths` / `removePaths` arrays + `reason` |
+| `policy_check` | `maestro policy check --task <id>` | Returns effective risk class and required witness level |
+| `evidence_record` | `maestro evidence record --task <id>` | Same kinds (command, manual-note) |
+
+When acting through MCP, the return shapes are JSON; do not parse them as CLI text. CLI exit codes have no MCP analog — instead, success vs failure is signalled by the tool result's `isError` flag and `code` string.
