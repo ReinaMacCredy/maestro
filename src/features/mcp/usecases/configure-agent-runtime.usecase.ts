@@ -21,14 +21,6 @@ export interface ConfigureRuntimeResult {
 
 const SERVER_KEY = "maestro";
 
-/**
- * Path to the standalone Node entry point. Kept as a fallback for
- * environments that cannot launch the Bun-compiled binary directly.
- */
-export function resolveStartMjsInstallPath(installDir: string): string {
-  return join(installDir, "start.mjs");
-}
-
 export function resolveMaestroBinaryInstallPath(
   installDir: string,
   platform: NodeJS.Platform = process.platform,
