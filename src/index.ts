@@ -67,6 +67,7 @@ import { registerMergeAutoCommand } from "./features/merge/index.js";
 import { registerDeployCommand } from "./features/deploy/index.js";
 import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
 import { registerSkillsCommand } from "./features/skills/index.js";
+import { registerIntakeCommand } from "./features/intake/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -126,6 +127,7 @@ const ciCmd = program
 registerCiVerifyCommand(ciCmd, program);
 
 registerReviewCommand(program);
+registerIntakeCommand(program);
 
 const mergeCmd = program
   .command("merge")
