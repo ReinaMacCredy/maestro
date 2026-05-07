@@ -7,6 +7,7 @@ import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/poli
 import type { Verdict, VerdictReason } from "@/features/verdict/index.js";
 import { generateVerdictId } from "@/features/verdict/index.js";
 import { maxRiskClass, RISK_CLASS_ORDER } from "./risk-class-order.js";
+import * as REASONS from "./verdict-reason-templates.js";
 
 export interface ComputeRiskInput {
   readonly contract: Contract;
@@ -87,39 +88,25 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
 
   // 1. BLOCK on cost-budget exhaustion (Rule 11).
   if (costBudgetExhausted === true) {
-    reasons.push({
-      category: "cost-budget",
-      code: "cost-budget-exhausted",
-      message:
-        "Cost budget exhausted; further execution blocked. " +
-        "Run `maestro task budget --task <id>` to inspect the limits, " +
-        "amend the contract's costBudget via `maestro contract amend` " +
-        "to raise the cap, or escalate to a human via `maestro handoff create`.",
-    });
+    reasons.push(REASONS.costBudgetExhausted());
     return buildVerdict("BLOCK", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
   // 2. FAIL on trust errors.
   if (errors.length > 0) {
     const findingPaths = Array.from(new Set(errors.flatMap((f) => f.paths))).sort();
-    reasons.push({
-      category: "trust",
-      code: "trust-findings-error",
-      message: `Trust verifier found ${errors.length} error(s).`,
+    reasons.push(REASONS.trustFindingsError({
+      errorCount: errors.length,
       findingChecks: errors.map((f) => f.check),
-      ...(findingPaths.length > 0 ? { findingPaths } : {}),
-    });
+      findingPaths,
+    }));
     return buildVerdict("FAIL", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
   // 3. HUMAN if amendment usage exceeds 75% of budget (Rule 5).
   const maxAmendments = contract.amendmentBudget?.maxAmendments ?? 0;
   if (maxAmendments > 0 && amendmentCount > Math.floor(maxAmendments * 0.75)) {
-    reasons.push({
-      category: "amendment",
-      code: "amendment-budget-high",
-      message: `Amendment count (${amendmentCount}) exceeds 75% of budget (${maxAmendments}).`,
-    });
+    reasons.push(REASONS.amendmentBudgetHigh({ amendmentCount, maxAmendments }));
     return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
@@ -128,17 +115,9 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
   //    and no threat-model evidence is present (Edge Case 12).
   if (effectiveRiskClass === "critical") {
     if (requiresThreatModel(derivedRiskClass, matchedRiskPolicySignal) && !hasThreatModelEvidence(evidenceRows)) {
-      reasons.push({
-        category: "policy",
-        code: "threat-model-required",
-        message: "Diff intersects security-relevant sensitive paths with critical risk class; a threat-model Evidence row is required.",
-      });
+      reasons.push(REASONS.threatModelRequired());
     }
-    reasons.push({
-      category: "risk",
-      code: "effective-risk-critical",
-      message: `Effective risk class is critical (proposed: ${proposedRiskClass}, derived: ${derivedRiskClass}). Human review always required.`,
-    });
+    reasons.push(REASONS.effectiveRiskCritical({ proposedRiskClass, derivedRiskClass }));
     return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
@@ -158,12 +137,11 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
         compareWitnessLevel(r.witness_level, requiredLevel) < 0,
     );
     if (weakEvidence.length > 0) {
-      reasons.push({
-        category: "evidence",
-        code: "evidence-witness-level-insufficient",
-        message: `${weakEvidence.length} evidence row(s) are below the required witness level "${requiredLevel}" for high-risk tasks.`,
+      reasons.push(REASONS.evidenceWitnessLevelInsufficient({
+        weakCount: weakEvidence.length,
+        requiredLevel,
         evidenceIds: weakEvidence.map((r) => r.id),
-      });
+      }));
       return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
     }
   }
@@ -176,31 +154,19 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
   if (releasePolicy.requireProofMapComplete) {
     const uncovered = uncoveredCriteria(spec, contract, evidenceRows);
     if (uncovered.length > 0) {
-      reasons.push({
-        category: "evidence",
-        code: "proof-map-incomplete",
-        message: `Release policy requires a complete proof map; ${uncovered.length} acceptance criterion/criteria are uncovered: ${uncovered.join(", ")}.`,
-      });
+      reasons.push(REASONS.proofMapIncomplete({ uncoveredIds: uncovered }));
       return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
     }
   }
 
   // 7. HUMAN if policy disallows auto-merge for this risk class.
   if (autopilotPolicy.autoMergeAllowed[effectiveRiskClass] === false) {
-    reasons.push({
-      category: "policy",
-      code: "auto-merge-not-allowed",
-      message: `Auto-merge is opt-in and not enabled for risk class "${effectiveRiskClass}" in autopilot.yaml; the task can still complete via human review (run \`maestro handoff create\`, or set autoMergeAllowed.${effectiveRiskClass}: true — note: enabling auto-merge is a "loosening" and soaks for 30 days before taking effect; run \`maestro policy pending\` to see in-flight changes).`,
-    });
+    reasons.push(REASONS.autoMergeNotAllowed(effectiveRiskClass));
     return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
   // 8. PASS.
-  reasons.push({
-    category: "policy",
-    code: "all-checks-passed",
-    message: "All checks passed.",
-  });
+  reasons.push(REASONS.allChecksPassed());
   return buildVerdict("PASS", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
 }
 
