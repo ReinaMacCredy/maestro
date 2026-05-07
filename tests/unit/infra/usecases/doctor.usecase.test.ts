@@ -144,11 +144,13 @@ describe("runDoctor", () => {
     expect(checks.some((c) => c.name === "oversized-root-doc-TINY-md")).toBe(false);
   });
 
-  it("warns when legacy handoff or launch artifacts are still present", async () => {
+  it("warns when legacy handoff or launch artifacts are still present in the project dir", async () => {
     await mkdir(join(cwd, ".maestro", "handoffs"), { recursive: true });
     await writeFile(join(cwd, ".maestro", "handoffs", "2026-04-20-001.json"), "{}\n");
     await mkdir(join(cwd, ".maestro", "launches"), { recursive: true });
     await writeFile(join(cwd, ".maestro", "launches", "2026-04-20-002.json"), "{}\n");
+    // Home dir launches are scoped to other repos and must not affect this
+    // project's doctor output.
     await mkdir(join(homeDir, ".maestro", "launches"), { recursive: true });
     await writeFile(join(homeDir, ".maestro", "launches", "2026-04-20-003.json"), "{}\n");
 
@@ -161,7 +163,7 @@ describe("runDoctor", () => {
 
     expect(checks.find((check) => check.name === "legacy-handoffs")).toMatchObject({
       status: "warn",
-      message: "Found 3 legacy handoff artifact(s) under .maestro/handoffs/, .maestro/launches/, or ~/.maestro/launches/",
+      message: "Found 2 legacy handoff artifact(s) under .maestro/handoffs/ or .maestro/launches/",
     });
   });
 });
