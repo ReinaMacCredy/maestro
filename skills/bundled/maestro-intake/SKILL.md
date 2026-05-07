@@ -31,12 +31,11 @@ Do not activate for:
 ## Verb
 
 ```bash
-maestro intake --paths <comma-list> [--flag <flag> ...] [--summary "<text>"] [--json]
+maestro intake --paths <comma-list> [--flag <flag> ...] [--json]
 ```
 
 `--paths` (required): the files you intend to change. Use forward slashes, paths relative to the repo root.
 `--flag` (repeatable): declare a risk flag explicitly. Auto-detection is conservative; declared flags always count.
-`--summary` (optional): one-liner; not consumed by the classifier today, but persisted for future use.
 
 Exit code is always `0`. React to the lane in the output, not the exit code.
 
@@ -75,9 +74,12 @@ Auto-detection is intentionally narrow: declared flags are the primary input. Wh
   "autoDetectedFlags": [],
   "declaredFlags": ["existing-behavior", "weak-proof"],
   "hardGatesTriggered": [],
+  "threatModelRequired": false,
   "recommendedNextStep": "create a task via `maestro task plan` and run `maestro plan check`"
 }
 ```
+
+`threatModelRequired` is `true` only when the diff intersects sensitive security paths (the same predicate the post-diff Verdict pipeline uses to require a `threat-model` Evidence row). If it is `true` and you skip the threat-model row, the verdict will fail.
 
 ## Examples
 

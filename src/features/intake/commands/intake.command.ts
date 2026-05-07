@@ -32,7 +32,6 @@ export function registerIntakeCommand(
   program
     .command("intake")
     .description("Plan-time risk classifier; returns a lane and recommended next step before coding")
-    .option("--summary <text>", "One-line summary of the intended change")
     .option(
       "--paths <list>",
       "Comma-separated list of intended file paths",
@@ -65,7 +64,7 @@ Hard gates (any one promotes to high-risk):
   auth, authz, data-model, audit-security, external-systems
 
 Examples:
-  maestro intake --summary "rename foo to bar" --paths src/foo.ts,src/bar.ts
+  maestro intake --paths src/foo.ts,src/bar.ts
   maestro intake --paths src/auth/session.ts --flag auth
   maestro intake --paths .maestro/policies/risk.yaml --json
 
@@ -73,7 +72,6 @@ Exit code is always 0; agents react to the lane in the output.
 `,
     )
     .action(async (opts: {
-      summary?: string;
       paths?: string[];
       flag: IntakeFlag[];
       json?: boolean;
@@ -95,7 +93,6 @@ Exit code is always 0; agents react to the lane in the output.
 
       const result = classifyIntake(
         {
-          summary: opts.summary ?? "",
           intendedPaths: paths,
           declaredFlags: opts.flag,
         },
@@ -125,6 +122,9 @@ function printResult(r: IntakeResult): void {
   }
   if (r.hardGatesTriggered.length > 0) {
     console.log(`         hard gates:          ${r.hardGatesTriggered.join(", ")}`);
+  }
+  if (r.threatModelRequired) {
+    console.log(`         threat-model:        required (Evidence row of kind=threat-model)`);
   }
   console.log("");
   console.log(`Next step: ${r.recommendedNextStep}`);

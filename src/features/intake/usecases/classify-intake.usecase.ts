@@ -1,4 +1,4 @@
-import { deriveRiskClassFromDiff } from "@/features/risk/index.js";
+import { deriveRiskClassFromDiff, requiresThreatModel } from "@/features/risk/index.js";
 import type { RiskPolicy } from "@/features/policy/index.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import type {
@@ -73,12 +73,16 @@ export function classifyIntake(
     riskPolicy,
   );
 
+  const threatModelRequired = requiresThreatModel(derived.class, derived.matchedRow.signal);
+
   const recommendedNextStep =
     lane === "tiny"
-      ? "patch directly; run validation; close with reason"
+      ? "patch directly; run `maestro task verify` if a contract exists; otherwise run repo-level validation and close"
       : lane === "normal"
         ? "create a task via `maestro task plan` and run `maestro plan check`"
-        : "create a high-risk task; require Spec acceptance criteria and threat-model evidence";
+        : threatModelRequired
+          ? "create a high-risk task with Spec acceptance criteria and a `threat-model` Evidence row"
+          : "create a high-risk task with Spec acceptance criteria";
 
   return {
     lane,
@@ -87,6 +91,7 @@ export function classifyIntake(
     autoDetectedFlags: Array.from(auto).sort(),
     declaredFlags: declared,
     hardGatesTriggered: hardGates,
+    threatModelRequired,
     recommendedNextStep,
   };
 }
