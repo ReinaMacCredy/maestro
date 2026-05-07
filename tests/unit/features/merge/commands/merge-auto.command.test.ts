@@ -57,6 +57,9 @@ function makeVerdict(overrides: Partial<Verdict> = {}): Verdict {
     evidenceConsulted: [],
     policiesConsulted: [],
     trustVerifier: { findingsCount: 0, errors: 0, warns: 0, infos: 0 },
+    // merge-auto filters by tree_sha + pr; default to the test fixtures'
+    // values so the eligibility flow can locate the verdict.
+    subject: { tree_sha: "deadbeef", pr: 42 },
     ...overrides,
   };
 }
@@ -372,5 +375,101 @@ describe("merge auto — ineligible PR", () => {
     expect(Array.isArray(parsed.reasons)).toBe(true);
     expect(parsed.reasons.length).toBeGreaterThan(0);
     expect(parsed.merged).toBe(false);
+  });
+});
+
+describe("merge auto — verdict identity is bound to (pr, tree_sha)", () => {
+  let savedEnv: string | undefined;
+
+  beforeEach(() => {
+    savedEnv = process.env.GITHUB_REPOSITORY;
+    process.env.GITHUB_REPOSITORY = "owner/repo";
+  });
+
+  afterEach(() => {
+    if (savedEnv === undefined) {
+      delete process.env.GITHUB_REPOSITORY;
+    } else {
+      process.env.GITHUB_REPOSITORY = savedEnv;
+    }
+  });
+
+  it("refuses to reuse a PASS verdict whose tree_sha does not match the current HEAD", async () => {
+    // Stale verdict from a different tree (e.g., older content before a force-push).
+    const staleVerdict = makeVerdict({
+      decision: "PASS",
+      effectiveRiskClass: "low",
+      subject: { tree_sha: "stale123", pr: 42 },
+    });
+    const { api, calls } = makeFakeGithubApi();
+    const services: FakeMergeServices = {
+      verdictStore: {
+        write: async () => {},
+        readLatest: async () => staleVerdict,
+        readVersion: async () => staleVerdict,
+        history: async () => [staleVerdict],
+        // Crucially, current tree (deadbeef) does not match staleVerdict.subject.tree_sha
+        findByTreeSha: async (sha) => sha === "stale123" ? [staleVerdict] : [],
+      },
+      evidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
+      contractVersionStore: fakeContractVersionStore(makeContract()),
+      gitAnchor: fakeGitAnchor(),
+      getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
+      specStore: fakeSpecStore(),
+      githubApi: api,
+      projectRoot: "/tmp/test-project",
+    };
+    const program = makeProgram(services);
+    captureStdout();
+
+    let thrown: Error | undefined;
+    try {
+      await program.parseAsync(["node", "maestro", "merge", "auto", "--pr", "42", "--task", "tsk-aaaaaa"]);
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown).toBeDefined();
+    expect(thrown?.message).toContain("No verdict found for task tsk-aaaaaa on PR 42");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses to reuse a verdict tagged with a different PR number even if the tree matches", async () => {
+    // Verdict for the right tree but wrong PR — e.g. someone re-targeted the branch.
+    const wrongPrVerdict = makeVerdict({
+      decision: "PASS",
+      effectiveRiskClass: "low",
+      subject: { tree_sha: "deadbeef", pr: 99 },
+    });
+    const { api, calls } = makeFakeGithubApi();
+    const services: FakeMergeServices = {
+      verdictStore: {
+        write: async () => {},
+        readLatest: async () => wrongPrVerdict,
+        readVersion: async () => wrongPrVerdict,
+        history: async () => [wrongPrVerdict],
+        findByTreeSha: async () => [wrongPrVerdict],
+      },
+      evidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
+      contractVersionStore: fakeContractVersionStore(makeContract()),
+      gitAnchor: fakeGitAnchor(),
+      getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
+      specStore: fakeSpecStore(),
+      githubApi: api,
+      projectRoot: "/tmp/test-project",
+    };
+    const program = makeProgram(services);
+    captureStdout();
+
+    let thrown: Error | undefined;
+    try {
+      await program.parseAsync(["node", "maestro", "merge", "auto", "--pr", "42", "--task", "tsk-aaaaaa"]);
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown).toBeDefined();
+    expect(thrown?.message).toContain("No verdict found for task tsk-aaaaaa on PR 42");
+    expect(calls).toHaveLength(0);
   });
 });

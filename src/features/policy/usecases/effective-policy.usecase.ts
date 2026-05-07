@@ -121,22 +121,38 @@ function revertReleasePolicyLoosening(
   return policy;
 }
 
+function revertSensitivePathsLoosening(
+  globs: readonly string[],
+  loosening: PendingLoosening,
+): readonly string[] {
+  const { edit } = loosening;
+  // "globs[<glob>]" — glob was removed; re-add it
+  const removedMatch = edit.path ? /^globs\[(.+)\]$/.exec(edit.path) : null;
+  if (!removedMatch) return globs;
+  const glob = removedMatch[1];
+  if (globs.includes(glob)) return globs;
+  return [...globs, glob];
+}
+
 export function buildEffectivePolicyServices(args: {
   readonly projectRoot: string;
   readonly loadRiskPolicyImpl: (root: string) => Promise<RiskPolicy>;
   readonly loadAutopilotPolicyImpl: (root: string) => Promise<AutopilotPolicy>;
   readonly loadReleasePolicyImpl: (root: string) => Promise<ReleasePolicy>;
+  readonly loadSensitivePathsGlobsImpl: (root: string) => Promise<readonly string[]>;
   readonly detectPendingLooseningsImpl: () => Promise<readonly PendingLoosening[]>;
 }): {
   getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
+  getEffectiveSensitivePathsGlobs: () => Promise<readonly string[]>;
 } {
   const {
     projectRoot,
     loadRiskPolicyImpl,
     loadAutopilotPolicyImpl,
     loadReleasePolicyImpl,
+    loadSensitivePathsGlobsImpl,
     detectPendingLooseningsImpl,
   } = args;
 
@@ -186,6 +202,18 @@ export function buildEffectivePolicyServices(args: {
       return releaseLoosenings.reduce(
         (p, loosening) => revertReleasePolicyLoosening(p, loosening),
         policy,
+      );
+    },
+
+    async getEffectiveSensitivePathsGlobs(): Promise<readonly string[]> {
+      const [globs, pending] = await Promise.all([
+        loadSensitivePathsGlobsImpl(projectRoot),
+        memoizedDetect(),
+      ]);
+      const sensitiveLoosenings = pending.filter((l) => l.kind === "sensitive-paths");
+      return sensitiveLoosenings.reduce(
+        (gs, loosening) => revertSensitivePathsLoosening(gs, loosening),
+        globs,
       );
     },
   };

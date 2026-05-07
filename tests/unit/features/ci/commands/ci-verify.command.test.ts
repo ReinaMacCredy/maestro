@@ -170,6 +170,7 @@ interface FakeServices {
   getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
+  getEffectiveSensitivePathsGlobs: () => Promise<readonly string[]>;
   computeRisk: RiskServices["computeRisk"];
   deriveRiskClassFromDiff: RiskServices["deriveRiskClassFromDiff"];
   runTrustVerifier: (input: unknown) => Promise<{ findings: [] }>;
@@ -187,6 +188,7 @@ function makeServices(verdict: Verdict): FakeServices {
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     getEffectiveReleasePolicy: async () => makeReleasePolicy(),
+    getEffectiveSensitivePathsGlobs: async () => [] as readonly string[],
     computeRisk: riskServices.computeRisk,
     deriveRiskClassFromDiff: riskServices.deriveRiskClassFromDiff,
     runTrustVerifier: async () => ({ findings: [] }),

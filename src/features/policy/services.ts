@@ -2,6 +2,7 @@ import { loadOwners } from "./usecases/load-owners.usecase.js";
 import { loadRiskPolicy } from "./usecases/load-risk-policy.usecase.js";
 import { loadAutopilotPolicy } from "./usecases/load-autopilot-policy.usecase.js";
 import { loadReleasePolicy } from "./usecases/load-release-policy.usecase.js";
+import { loadSensitivePathsGlobs } from "./usecases/load-sensitive-paths-globs.usecase.js";
 import { buildDetectPendingLoosenings } from "./usecases/detect-pending-loosenings.usecase.js";
 import { buildEffectivePolicyServices } from "./usecases/effective-policy.usecase.js";
 import type { Owners } from "./domain/owners-types.js";
@@ -18,6 +19,7 @@ export interface PolicyServices {
   readonly getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   readonly getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   readonly getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
+  readonly getEffectiveSensitivePathsGlobs: () => Promise<readonly string[]>;
   /** Currently-pending loosenings list */
   readonly pendingLoosenings: () => Promise<readonly PendingLoosening[]>;
 }
@@ -30,6 +32,7 @@ export function buildPolicyServices(baseDir: string): PolicyServices {
     loadRiskPolicyImpl: loadRiskPolicy,
     loadAutopilotPolicyImpl: loadAutopilotPolicy,
     loadReleasePolicyImpl: loadReleasePolicy,
+    loadSensitivePathsGlobsImpl: loadSensitivePathsGlobs,
     detectPendingLooseningsImpl: detectPending,
   });
 
@@ -41,6 +44,7 @@ export function buildPolicyServices(baseDir: string): PolicyServices {
     getEffectiveRiskPolicy: effective.getEffectiveRiskPolicy,
     getEffectiveAutopilotPolicy: effective.getEffectiveAutopilotPolicy,
     getEffectiveReleasePolicy: effective.getEffectiveReleasePolicy,
+    getEffectiveSensitivePathsGlobs: effective.getEffectiveSensitivePathsGlobs,
     pendingLoosenings: detectPending,
   };
 }

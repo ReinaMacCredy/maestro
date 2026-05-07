@@ -35,6 +35,7 @@ interface VerdictCommandDeps {
     | "getEffectiveRiskPolicy"
     | "getEffectiveAutopilotPolicy"
     | "getEffectiveReleasePolicy"
+    | "getEffectiveSensitivePathsGlobs"
     | "computeRisk"
     | "deriveRiskClassFromDiff"
     | "runTrustVerifier"
@@ -154,6 +155,7 @@ export function registerVerdictCommand(
           getEffectiveRiskPolicy: services.getEffectiveRiskPolicy,
           getEffectiveAutopilotPolicy: services.getEffectiveAutopilotPolicy,
           getEffectiveReleasePolicy: services.getEffectiveReleasePolicy,
+          getEffectiveSensitivePathsGlobs: services.getEffectiveSensitivePathsGlobs,
           riskServices: {
             computeRisk: services.computeRisk,
             deriveRiskClassFromDiff: services.deriveRiskClassFromDiff,

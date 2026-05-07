@@ -110,4 +110,40 @@ describe("detectPendingLoosenings", () => {
     const loosenings = await detectPendingLoosenings({ projectRoot: tmpDir });
     expect(loosenings).toHaveLength(0);
   });
+
+  it("file deletion (D) is treated as a loosening — every removed glob enters the soak window", async () => {
+    // Regression for P1 #3: --diff-filter must include D, otherwise a PR that
+    // deletes sensitive-paths.yaml silently bypasses the 30-day soak window.
+    const SENSITIVE_PATH = ".maestro/policies/sensitive-paths.yaml";
+    const SENSITIVE_YAML = `
+globs:
+  - src/auth/**
+  - src/secrets/**
+`.trim();
+
+    // Commit 1: baseline with two globs
+    await writeFile(join(tmpDir, SENSITIVE_PATH), SENSITIVE_YAML, "utf8");
+    git(["add", SENSITIVE_PATH], tmpDir);
+    git(["commit", "-m", "baseline: add sensitive-paths"], tmpDir);
+
+    // Commit 2: delete the file entirely
+    git(["rm", SENSITIVE_PATH], tmpDir);
+    git(["commit", "-m", "loosening: remove sensitive-paths"], tmpDir);
+
+    const loosenings = await detectPendingLoosenings({ projectRoot: tmpDir });
+
+    // Both globs should be reported as removed
+    const sensitiveLoosenings = loosenings.filter((l) => l.kind === "sensitive-paths");
+    expect(sensitiveLoosenings.length).toBe(2);
+
+    const removedPaths = new Set(sensitiveLoosenings.map((l) => l.edit.path));
+    expect(removedPaths).toContain("globs[src/auth/**]");
+    expect(removedPaths).toContain("globs[src/secrets/**]");
+
+    // effectiveAt is ~30 days out (deletion just happened)
+    const l = sensitiveLoosenings[0]!;
+    const diffDays = (Date.parse(l.effectiveAt) - Date.now()) / (1000 * 60 * 60 * 24);
+    expect(diffDays).toBeGreaterThan(28);
+    expect(diffDays).toBeLessThan(32);
+  });
 });

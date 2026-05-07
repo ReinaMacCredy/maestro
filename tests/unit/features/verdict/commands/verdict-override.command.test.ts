@@ -143,6 +143,7 @@ function makeProgram(opts: {
         loaded: false,
         source: "default",
       }),
+      getEffectiveSensitivePathsGlobs: async () => [] as readonly string[],
       computeRisk: async () => ({ riskClass: "low", signals: [] }),
       deriveRiskClassFromDiff: async () => "low" as const,
       runTrustVerifier: async () => ({

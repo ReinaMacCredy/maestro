@@ -140,13 +140,17 @@ async function writeCache(projectRoot: string, cache: CacheFile): Promise<void> 
 
 async function recomputeLoosenings(projectRoot: string): Promise<readonly PendingLoosening[]> {
   const lookbackEpoch = Math.floor(Date.now() / 1000) - LOOKBACK_DAYS * 86400;
+  // Include deletions (D): a PR that removes a policy file (e.g. release.yaml)
+  // is a loosening of the entire file's surface area and must enter the soak
+  // window like any other field-level loosening. classifyPolicyEdit handles
+  // the empty-newYaml case by treating each old field as removed.
   const logOutput = await gitSafe(
     [
       "log",
       `--after=${lookbackEpoch}`,
       "--pretty=format:%H %ct",
       "--name-only",
-      "--diff-filter=AM",
+      "--diff-filter=AMD",
       "--",
       ".maestro/policies/*.yaml",
     ],

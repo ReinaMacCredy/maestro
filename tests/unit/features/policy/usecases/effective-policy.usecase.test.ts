@@ -43,7 +43,6 @@ function makePendingLoosening(overrides: Partial<PendingLoosening>): PendingLoos
     commitSha: "abc123",
     commitTime: now.toISOString(),
     effectiveAt,
-    oldYaml: "",
     kind: "autopilot",
     file: ".maestro/policies/autopilot.yaml",
     edit: {
@@ -63,7 +62,6 @@ function makePastLoosening(overrides: Partial<PendingLoosening>): PendingLooseni
     commitSha: "def456",
     commitTime: pastTime.toISOString(),
     effectiveAt,
-    oldYaml: "",
     kind: "autopilot",
     file: ".maestro/policies/autopilot.yaml",
     edit: {
@@ -97,6 +95,7 @@ describe("buildEffectivePolicyServices: autopilot", () => {
       loadRiskPolicyImpl: async () => BASE_RISK,
       loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
       loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => [],
       detectPendingLooseningsImpl: async () => [loosening],
     });
 
@@ -133,6 +132,7 @@ describe("buildEffectivePolicyServices: autopilot", () => {
       loadRiskPolicyImpl: async () => BASE_RISK,
       loadAutopilotPolicyImpl: async () => currentPolicy,
       loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => [],
       detectPendingLooseningsImpl: async () => [loosening],
     });
 
@@ -151,6 +151,7 @@ describe("buildEffectivePolicyServices: autopilot", () => {
       loadRiskPolicyImpl: async () => BASE_RISK,
       loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
       loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => [],
       detectPendingLooseningsImpl: async () => [],
     });
 
@@ -183,6 +184,7 @@ describe("buildEffectivePolicyServices: release", () => {
       loadRiskPolicyImpl: async () => BASE_RISK,
       loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
       loadReleasePolicyImpl: async () => currentRelease,
+      loadSensitivePathsGlobsImpl: async () => [],
       detectPendingLooseningsImpl: async () => [loosening],
     });
 
@@ -215,6 +217,7 @@ describe("buildEffectivePolicyServices: risk", () => {
       loadRiskPolicyImpl: async () => currentRisk,
       loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
       loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => [],
       detectPendingLooseningsImpl: async () => [loosening],
     });
 
@@ -251,11 +254,114 @@ describe("buildEffectivePolicyServices: risk", () => {
       loadRiskPolicyImpl: async () => currentRisk,
       loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
       loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => [],
       detectPendingLooseningsImpl: async () => [loosening],
     });
 
     const effective = await services.getEffectiveRiskPolicy();
     const row = effective.rows.find((r) => r.signal === "changes-lockfile");
     expect(row?.derivedClass).toBe("medium");
+  });
+});
+
+describe("buildEffectivePolicyServices: sensitive-paths", () => {
+  it("pending loosening (glob removed) is reverted by re-adding the glob", async () => {
+    // On-disk: "src/auth/**" was removed (loosened); only "src/secrets/**" remains
+    const currentGlobs: readonly string[] = ["src/secrets/**"];
+
+    const loosening = makePendingLoosening({
+      kind: "sensitive-paths",
+      file: ".maestro/policies/sensitive-paths.yaml",
+      edit: {
+        description: "removed sensitive-paths glob: 'src/auth/**'",
+        path: "globs[src/auth/**]",
+        oldValue: "src/auth/**",
+        newValue: undefined,
+      },
+    });
+
+    const services = buildEffectivePolicyServices({
+      projectRoot: "/fake",
+      loadRiskPolicyImpl: async () => BASE_RISK,
+      loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
+      loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => currentGlobs,
+      detectPendingLooseningsImpl: async () => [loosening],
+    });
+
+    const effective = await services.getEffectiveSensitivePathsGlobs();
+    expect(effective).toContain("src/auth/**");
+    expect(effective).toContain("src/secrets/**");
+  });
+
+  it("no pending sensitive-paths loosening — on-disk globs are honored as-is", async () => {
+    const currentGlobs: readonly string[] = ["src/secrets/**"];
+
+    const services = buildEffectivePolicyServices({
+      projectRoot: "/fake",
+      loadRiskPolicyImpl: async () => BASE_RISK,
+      loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
+      loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => currentGlobs,
+      detectPendingLooseningsImpl: async () => [],
+    });
+
+    const effective = await services.getEffectiveSensitivePathsGlobs();
+    expect(effective).toEqual(["src/secrets/**"]);
+  });
+
+  it("loosenings of other kinds (autopilot, risk) do not affect sensitive-paths globs", async () => {
+    const currentGlobs: readonly string[] = ["src/secrets/**"];
+
+    const autopilotLoosening = makePendingLoosening({
+      kind: "autopilot",
+      edit: {
+        description: "auto_merge_allowed.medium: false → true",
+        path: "autoMergeAllowed.medium",
+        oldValue: false,
+        newValue: true,
+      },
+    });
+
+    const services = buildEffectivePolicyServices({
+      projectRoot: "/fake",
+      loadRiskPolicyImpl: async () => BASE_RISK,
+      loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
+      loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => currentGlobs,
+      detectPendingLooseningsImpl: async () => [autopilotLoosening],
+    });
+
+    const effective = await services.getEffectiveSensitivePathsGlobs();
+    expect(effective).toEqual(["src/secrets/**"]);
+  });
+
+  it("does not double-add a glob that is already on disk", async () => {
+    // Edge case: someone re-added the glob between commits but the loosening
+    // is still in the lookback window. The revert is a no-op.
+    const currentGlobs: readonly string[] = ["src/auth/**", "src/secrets/**"];
+
+    const loosening = makePendingLoosening({
+      kind: "sensitive-paths",
+      file: ".maestro/policies/sensitive-paths.yaml",
+      edit: {
+        description: "removed sensitive-paths glob: 'src/auth/**'",
+        path: "globs[src/auth/**]",
+        oldValue: "src/auth/**",
+        newValue: undefined,
+      },
+    });
+
+    const services = buildEffectivePolicyServices({
+      projectRoot: "/fake",
+      loadRiskPolicyImpl: async () => BASE_RISK,
+      loadAutopilotPolicyImpl: async () => BASE_AUTOPILOT,
+      loadReleasePolicyImpl: async () => BASE_RELEASE,
+      loadSensitivePathsGlobsImpl: async () => currentGlobs,
+      detectPendingLooseningsImpl: async () => [loosening],
+    });
+
+    const effective = await services.getEffectiveSensitivePathsGlobs();
+    expect(effective.filter((g) => g === "src/auth/**")).toHaveLength(1);
   });
 });

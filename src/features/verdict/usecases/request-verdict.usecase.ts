@@ -7,7 +7,6 @@ import { checkCostBudget, readCurrentContractWithBackfill, readDraftContract } f
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { PolicyServices } from "@/features/policy/services.js";
-import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
 import type { RiskServices } from "@/features/risk/services.js";
 import type { SpecStorePort } from "@/features/spec/index.js";
 import type { VerifyServices } from "@/features/verify/services.js";
@@ -24,6 +23,7 @@ export interface RequestVerdictDeps {
   readonly getEffectiveRiskPolicy: PolicyServices["getEffectiveRiskPolicy"];
   readonly getEffectiveAutopilotPolicy: PolicyServices["getEffectiveAutopilotPolicy"];
   readonly getEffectiveReleasePolicy: PolicyServices["getEffectiveReleasePolicy"];
+  readonly getEffectiveSensitivePathsGlobs: PolicyServices["getEffectiveSensitivePathsGlobs"];
   readonly riskServices: RiskServices;
   readonly runTrustVerifier: VerifyServices["runTrustVerifier"];
   readonly gitAnchor: GitAnchorPort;
@@ -82,7 +82,7 @@ export async function requestVerdict(
       deps.getEffectiveRiskPolicy(),
       deps.getEffectiveAutopilotPolicy(),
       deps.getEffectiveReleasePolicy(),
-      loadSensitivePathsGlobs(deps.projectRoot),
+      deps.getEffectiveSensitivePathsGlobs(),
       contract.missionId !== undefined && deps.specStore !== undefined
         ? deps.specStore.read(contract.missionId)
         : Promise.resolve(undefined),

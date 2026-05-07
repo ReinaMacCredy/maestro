@@ -191,6 +191,7 @@ function makeDeps(overrides: Partial<RequestVerdictDeps> = {}): RequestVerdictDe
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     getEffectiveReleasePolicy: async () => makeReleasePolicy(),
+    getEffectiveSensitivePathsGlobs: async () => [] as readonly string[],
     riskServices: {
       computeRisk: () => fakeVerdictResult,
       deriveRiskClassFromDiff: () => ({ class: "medium", matchedRow: { signal: "diff-source-only" } }),

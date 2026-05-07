@@ -17,6 +17,7 @@ interface CiVerifyCommandDeps {
     | "getEffectiveRiskPolicy"
     | "getEffectiveAutopilotPolicy"
     | "getEffectiveReleasePolicy"
+    | "getEffectiveSensitivePathsGlobs"
     | "computeRisk"
     | "deriveRiskClassFromDiff"
     | "runTrustVerifier"
@@ -64,6 +65,7 @@ export function registerCiVerifyCommand(
             getEffectiveRiskPolicy: services.getEffectiveRiskPolicy,
             getEffectiveAutopilotPolicy: services.getEffectiveAutopilotPolicy,
             getEffectiveReleasePolicy: services.getEffectiveReleasePolicy,
+            getEffectiveSensitivePathsGlobs: services.getEffectiveSensitivePathsGlobs,
             riskServices: {
               computeRisk: services.computeRisk,
               deriveRiskClassFromDiff: services.deriveRiskClassFromDiff,

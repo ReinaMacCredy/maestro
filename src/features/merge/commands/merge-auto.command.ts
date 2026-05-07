@@ -55,11 +55,32 @@ export function registerMergeAutoCommand(
         ]);
       }
 
-      const verdict = await services.verdictStore.readLatest(taskId);
+      // Bind the verdict to the current HEAD tree SHA. Reusing the task's
+      // latest verdict by name lets a stale PASS for older content trigger
+      // auto-merge after a force-push or unrelated rebase. Mirror the
+      // pattern from `verdict show --pr`: load all verdicts that match the
+      // current tree, filter by task (and PR when the verdict was tagged
+      // with one), and take the latest.
+      //
+      // Verdicts produced via `verdict request` without --pr have no
+      // subject.pr; those are tree-bound but PR-agnostic and remain valid
+      // for any PR that points at the same tree. Verdicts produced with a
+      // specific PR (e.g. `ci verify` in a GitHub Actions context) MUST
+      // match the requested PR.
+      const cwd = process.cwd();
+      const treeSha = await services.gitAnchor.resolveTreeSha(cwd);
+      const treeMatches = await services.verdictStore.findByTreeSha(treeSha);
+      const eligibleVerdicts = treeMatches
+        .filter((v) => v.taskId === taskId && (v.subject?.pr === undefined || v.subject.pr === pr))
+        .sort((a, b) => a.computedAt.localeCompare(b.computedAt));
+      const verdict = eligibleVerdicts.at(-1);
       if (verdict === undefined) {
         throw new MaestroError(
-          `No verdict found for task ${taskId}`,
-          ["Run `maestro verdict request --task <id>` first"],
+          `No verdict found for task ${taskId} on PR ${pr} at tree ${treeSha}`,
+          [
+            "Run `maestro ci verify --task <id> --pr <n>` (or `maestro verdict request --task <id>` locally) on the current HEAD",
+            "Verdicts are bound to (pr, tree_sha) — squashes preserve identity, force-push to a different tree invalidates them",
+          ],
         );
       }
 
@@ -81,7 +102,6 @@ export function registerMergeAutoCommand(
         ? opts.base
         : await resolveDefaultBase();
       const headSha = await resolveHeadSha();
-      const cwd = process.cwd();
       const changedPaths = await services.gitAnchor.collectChangedPaths(cwd, baseRef, headSha);
 
       // 4. Resolve all remaining inputs in parallel
