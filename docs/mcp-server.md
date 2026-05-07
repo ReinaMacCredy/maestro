@@ -1,6 +1,6 @@
 # MCP Server
 
-Maestro ships a Model Context Protocol (MCP) server that exposes its core verbs to MCP-aware agent runtimes (Claude Code, Codex, and any other client that speaks the MCP stdio transport). This lets agents call `task_create`, `evidence_record`, `verdict_request`, and so on as structured tools instead of shelling out to the CLI and parsing text.
+Maestro ships a Model Context Protocol (MCP) server that exposes its core verbs to MCP-aware agent runtimes (Claude Code, Codex, and any other client that speaks the MCP stdio transport). This lets agents call `maestro_task_create`, `maestro_evidence_record`, `maestro_verdict_request`, and so on as structured tools instead of shelling out to the CLI and parsing text.
 
 The server is the same maestro binary, run with `maestro mcp serve`. Agents launch it; you do not start it manually.
 
@@ -12,40 +12,40 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 
 | Tool | Behavior |
 |------|----------|
-| `task_list` | Paginated list, optional filters: `missionId`, `status`, `limit`, `offset`. |
-| `task_get` | Fetch one task by id. Returns `code: TASK_NOT_FOUND` if missing. |
-| `task_create` | Create a top-level task. Slug derived from title. |
-| `task_claim` | Claim a task for the current MCP session. Session id is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, `CODEX_THREAD_ID`, falling back to `<user>@<host>`. |
-| `task_complete` | Mark completed. Optional `summary` stored on the receipt. |
-| `task_block` | Add bidirectional blocker edges. Detects cycles. |
-| `task_unblock` | Remove blocker edges. |
+| `maestro_task_list` | Paginated list, optional filters: `missionId`, `status`, `limit`, `offset`. |
+| `maestro_task_get` | Fetch one task by id. Returns `code: TASK_NOT_FOUND` if missing. |
+| `maestro_task_create` | Create a top-level task. Slug derived from title. |
+| `maestro_task_claim` | Claim a task for the current MCP session. Session id is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, `CODEX_THREAD_ID`, falling back to `<user>@<host>`. |
+| `maestro_task_complete` | Mark completed. Optional `summary` stored on the receipt. |
+| `maestro_task_block` | Add bidirectional blocker edges. Detects cycles. |
+| `maestro_task_unblock` | Remove blocker edges. |
 
 ### Evidence
 
 | Tool | Behavior |
 |------|----------|
-| `evidence_record` | Record either a command result (`command` + `exitCode`) or a manual note (`note`). Optional `witnessLevel`. |
-| `evidence_list` | Paginated list, optional `kind` and `witnessLevel` filters. |
+| `maestro_evidence_record` | Record either a command result (`command` + `exitCode`) or a manual note (`note`). Optional `witnessLevel`. |
+| `maestro_evidence_list` | Paginated list, optional `kind` and `witnessLevel` filters. |
 
 ### Contract
 
 | Tool | Behavior |
 |------|----------|
-| `contract_show` | Current contract by default; pass `version` for a historical version. |
-| `contract_amend` | Add or remove paths from `filesExpected`. Records a versioned amendment plus a `contract-amended` evidence row. |
+| `maestro_contract_show` | Current contract by default; pass `version` for a historical version. |
+| `maestro_contract_amend` | Add or remove paths from `filesExpected`. Records a versioned amendment plus a `contract-amended` evidence row. |
 
 ### Verdict
 
 | Tool | Behavior |
 |------|----------|
-| `verdict_show` | Latest verdict for a task; optional `id` for a specific verdict. |
-| `verdict_request` | Run the verifier and return a fresh verdict. |
+| `maestro_verdict_show` | Latest verdict for a task; optional `id` for a specific verdict. |
+| `maestro_verdict_request` | Run the verifier and return a fresh verdict. |
 
 ### Policy
 
 | Tool | Behavior |
 |------|----------|
-| `policy_check` | Compute effective risk class, autopilot rules, and sensitive-path matches against the task's current diff. |
+| `maestro_policy_check` | Compute effective risk class, autopilot rules, and sensitive-path matches against the task's current diff. |
 
 ## Result shape
 
@@ -62,7 +62,7 @@ Failures set `isError: true` and the payload is `{ code, message, hints }`. Code
 
 ## Pagination
 
-`task_list` and `evidence_list` accept `limit` (default 20, max 100) and `offset` (default 0). Responses include a `pagination: { total, limit, offset, hasMore }` block.
+`maestro_task_list` and `maestro_evidence_list` accept `limit` (default 20, max 100) and `offset` (default 0). Responses include a `pagination: { total, limit, offset, hasMore }` block.
 
 ## Strict input validation
 

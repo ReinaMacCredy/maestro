@@ -374,12 +374,12 @@ If your runtime exposes maestro MCP tools, prefer them over the CLI verbs above 
 
 | MCP tool | CLI equivalent |
 |----------|----------------|
-| `task_list`, `task_get` | `maestro task list`, `maestro task show` |
-| `task_create` | `maestro task q` / `maestro task new` |
-| `task_claim`, `task_complete` | `maestro task claim`, `maestro task update --status completed` |
-| `task_block`, `task_unblock` | `maestro task block`, `maestro task unblock` |
-| `evidence_record`, `evidence_list` | `maestro evidence record`, `maestro evidence list` |
-| `contract_show`, `contract_amend` | `maestro contract show`, `maestro contract amend` |
+| `maestro_task_list`, `maestro_task_get` | `maestro task list`, `maestro task show` |
+| `maestro_task_create` | `maestro task q` / `maestro task new` |
+| `maestro_task_claim`, `maestro_task_complete` | `maestro task claim`, `maestro task update --status completed` |
+| `maestro_task_block`, `maestro_task_unblock` | `maestro task block`, `maestro task unblock` |
+| `maestro_evidence_record`, `maestro_evidence_list` | `maestro evidence record`, `maestro evidence list` |
+| `maestro_contract_show`, `maestro_contract_amend` | `maestro contract show`, `maestro contract amend` |
 
 If MCP is not available (no `maestro_*` tool prefix in your tool list), fall back to the CLI verbs documented above.
 

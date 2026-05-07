@@ -16,12 +16,18 @@ interface RegisterDeps {
 
 export function registerContractTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
-    "contract_show",
+    "maestro_contract_show",
     {
       title: "Show a task contract",
       description:
-        "Show the current contract for a task, or a specific version when `version` is provided.",
+        "Show the current contract for a task, or a specific version when `version` is provided. Returns code CONTRACT_NOT_FOUND when no contract has been proposed. Read-only.",
       inputSchema: ContractShowInput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -62,12 +68,18 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
   );
 
   server.registerTool(
-    "contract_amend",
+    "maestro_contract_amend",
     {
       title: "Amend a task contract scope",
       description:
-        "Add or remove paths from filesExpected on the current contract. Records a versioned amendment and a contract-amendment evidence row.",
+        "Add or remove paths from filesExpected on the current contract. Records a versioned amendment and a contract-amendment evidence row. Returns code NO_SCOPE_CHANGES if all paths are already covered. Each successful amend creates a new version.",
       inputSchema: ContractAmendInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {

@@ -17,12 +17,18 @@ interface RegisterDeps {
 
 export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
-    "policy_check",
+    "maestro_policy_check",
     {
       title: "Check policy compliance for a task",
       description:
-        "Compute the effective risk class, autopilot rules, and sensitive-path matches for a task's current diff.",
+        "Compute the effective risk class, autopilot rules, and sensitive-path matches for a task's current diff. Read-only.",
       inputSchema: PolicyCheckInput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {

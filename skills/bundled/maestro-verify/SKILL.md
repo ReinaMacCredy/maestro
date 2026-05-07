@@ -521,11 +521,11 @@ Verification verbs are also exposed via MCP for runtimes that prefer structured 
 
 | MCP tool | CLI equivalent | Notes |
 |----------|----------------|-------|
-| `verdict_show` | `maestro verdict show --task <id>` | Returns `code: VERDICT_NOT_FOUND` if no verdict yet |
-| `verdict_request` | `maestro verdict request --task <id>` | Same `PASS / FAIL / HUMAN / BLOCK` decision tree |
-| `contract_show` | `maestro contract show --task <id>` | Optional `version` argument for historical reads |
-| `contract_amend` | `maestro contract amend --task <id>` | `addPaths` / `removePaths` arrays + `reason` |
-| `policy_check` | `maestro policy check --task <id>` | Returns effective risk class and required witness level |
-| `evidence_record` | `maestro evidence record --task <id>` | Same kinds (command, manual-note) |
+| `maestro_verdict_show` | `maestro verdict show --task <id>` | Returns `code: VERDICT_NOT_FOUND` if no verdict yet |
+| `maestro_verdict_request` | `maestro verdict request --task <id>` | Same `PASS / FAIL / HUMAN / BLOCK` decision tree |
+| `maestro_contract_show` | `maestro contract show --task <id>` | Optional `version` argument for historical reads |
+| `maestro_contract_amend` | `maestro contract amend --task <id>` | `addPaths` / `removePaths` arrays + `reason` |
+| `maestro_policy_check` | `maestro policy check --task <id>` | Returns effective risk class and required witness level |
+| `maestro_evidence_record` | `maestro evidence record --task <id>` | Same kinds (command, manual-note) |
 
 When acting through MCP, the return shapes are JSON; do not parse them as CLI text. CLI exit codes have no MCP analog — instead, success vs failure is signalled by the tool result's `isError` flag and `code` string.

@@ -1,25 +1,57 @@
 import { z } from "zod";
 
-const taskId = z.string().regex(/^tsk-[a-z0-9]+$/, "Invalid task id");
-const missionId = z.string().regex(/^msn-[a-z0-9]+$/, "Invalid mission id");
-const verdictId = z.string().regex(/^vdt-[a-z0-9]+$/, "Invalid verdict id");
-const evidenceId = z.string().regex(/^evd-[a-z0-9]+$/, "Invalid evidence id");
+const taskId = z
+  .string()
+  .regex(/^tsk-[a-z0-9]+$/, "Invalid task id")
+  .describe("A maestro task id like 'tsk-abc123'.");
+const missionId = z
+  .string()
+  .regex(/^msn-[a-z0-9]+$/, "Invalid mission id")
+  .describe("A maestro mission id like 'msn-abc123'.");
+const verdictId = z
+  .string()
+  .regex(/^vdt-[a-z0-9]+$/, "Invalid verdict id")
+  .describe("A maestro verdict id like 'vdt-abc123'.");
+const evidenceId = z
+  .string()
+  .regex(/^evd-[a-z0-9]+$/, "Invalid evidence id")
+  .describe("A maestro evidence id like 'evd-abc123'.");
 
-const taskStatus = z.enum(["pending", "in_progress", "completed"]);
-const witnessLevel = z.enum([
-  "witnessed-by-maestro",
-  "witnessed-by-ci",
-  "agent-claimed-locally",
-  "agent-claimed-and-not-reproducible",
-]);
+const taskStatus = z
+  .enum(["pending", "in_progress", "completed"])
+  .describe("Filter by task status.");
+const witnessLevel = z
+  .enum([
+    "witnessed-by-maestro",
+    "witnessed-by-ci",
+    "agent-claimed-locally",
+    "agent-claimed-and-not-reproducible",
+  ])
+  .describe(
+    "Trust ladder for evidence. Strongest to weakest: witnessed-by-maestro, witnessed-by-ci, agent-claimed-locally, agent-claimed-and-not-reproducible.",
+  );
 const riskClass = z.enum(["low", "medium", "high", "critical"]);
+
+const limit = z
+  .number()
+  .int()
+  .min(1)
+  .max(100)
+  .optional()
+  .describe("Page size, 1..100. Defaults to 20 when omitted.");
+const offset = z
+  .number()
+  .int()
+  .min(0)
+  .optional()
+  .describe("Zero-based page offset. Defaults to 0 when omitted.");
 
 export const TaskListInput = z
   .object({
     missionId: missionId.optional(),
     status: taskStatus.optional(),
-    limit: z.number().int().min(1).max(100).optional(),
-    offset: z.number().int().min(0).optional(),
+    limit,
+    offset,
   })
   .strict();
 
@@ -31,8 +63,15 @@ export const TaskGetInput = z
 
 export const TaskCreateInput = z
   .object({
-    title: z.string().min(1).max(200),
-    description: z.string().optional(),
+    title: z
+      .string()
+      .min(1)
+      .max(200)
+      .describe("Task title, 1..200 chars. Slug is derived from this automatically."),
+    description: z
+      .string()
+      .optional()
+      .describe("Optional task description; supports markdown."),
   })
   .strict();
 
@@ -45,79 +84,131 @@ export const TaskClaimInput = z
 export const TaskCompleteInput = z
   .object({
     id: taskId,
-    summary: z.string().optional(),
+    summary: z
+      .string()
+      .optional()
+      .describe("Optional one-line completion summary stored on the task receipt."),
   })
   .strict();
 
 export const TaskBlockInput = z
   .object({
     id: taskId,
-    blockedTaskIds: z.array(taskId).min(1),
-    force: z.boolean().optional(),
+    blockedTaskIds: z
+      .array(taskId)
+      .min(1)
+      .describe("Task ids that this task should block. Edges are bidirectional."),
+    force: z
+      .boolean()
+      .optional()
+      .describe("Bypass cycle detection. Use only when you understand the consequences."),
   })
   .strict();
 
 export const TaskUnblockInput = z
   .object({
     id: taskId,
-    blockedTaskIds: z.array(taskId).min(1),
+    blockedTaskIds: z
+      .array(taskId)
+      .min(1)
+      .describe("Task ids whose blocker edge from this task should be removed."),
     force: z.boolean().optional(),
   })
   .strict();
 
 export const EvidenceListInput = z
   .object({
-    taskId: taskId,
-    kind: z.string().optional(),
+    taskId,
+    kind: z
+      .string()
+      .optional()
+      .describe(
+        "Optional kind filter, e.g. 'command', 'manual-note', 'plan-check', 'ai-review', 'threat-model'.",
+      ),
     witnessLevel: witnessLevel.optional(),
-    limit: z.number().int().min(1).max(100).optional(),
-    offset: z.number().int().min(0).optional(),
+    limit,
+    offset,
   })
   .strict();
 
 export const EvidenceRecordInput = z
   .object({
-    taskId: taskId,
-    command: z.string().optional(),
-    exitCode: z.number().int().optional(),
-    note: z.string().optional(),
+    taskId,
+    command: z
+      .string()
+      .optional()
+      .describe(
+        "Shell command that was executed. Pair with exitCode. Mutually exclusive with note.",
+      ),
+    exitCode: z
+      .number()
+      .int()
+      .optional()
+      .describe("Exit code of the command (0=success). Required when command is set."),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        "Free-text note for manual evidence (e.g. 'Verified UI on staging'). Mutually exclusive with command.",
+      ),
     witnessLevel: witnessLevel.optional(),
   })
   .strict();
 
 export const VerdictShowInput = z
   .object({
-    taskId: taskId,
-    id: verdictId.optional(),
+    taskId,
+    id: verdictId
+      .optional()
+      .describe("Optional specific verdict id. Omit to fetch the latest verdict for the task."),
   })
   .strict();
 
 export const VerdictRequestInput = z
   .object({
-    taskId: taskId,
-    base: z.string().optional(),
+    taskId,
+    base: z
+      .string()
+      .optional()
+      .describe(
+        "Optional git base ref (e.g. 'main', 'origin/main'). Defaults to the contract's claimedAtCommit or the repo default base.",
+      ),
   })
   .strict();
 
 export const ContractShowInput = z
   .object({
-    taskId: taskId,
-    version: z.number().int().min(1).optional(),
+    taskId,
+    version: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe("Optional 1-based version number. Omit to fetch the current contract."),
   })
   .strict();
 
 export const ContractAmendInput = z
   .object({
-    taskId: taskId,
-    addPaths: z.array(z.string()).optional(),
-    removePaths: z.array(z.string()).optional(),
-    reason: z.string().min(1),
+    taskId,
+    addPaths: z
+      .array(z.string())
+      .optional()
+      .describe("Paths to add to filesExpected. May include glob patterns."),
+    removePaths: z
+      .array(z.string())
+      .optional()
+      .describe("Paths to remove from filesExpected (exact-string match)."),
+    reason: z
+      .string()
+      .min(1)
+      .describe("Required free-text reason for the amendment, recorded in evidence."),
   })
   .strict();
 
 export const PolicyCheckInput = z
   .object({
-    taskId: taskId,
+    taskId,
   })
   .strict();
 
