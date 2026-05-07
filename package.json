@@ -26,6 +26,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@opentui/core": "0.1.105",
     "@opentui/react": "0.1.105",
     "cli-spinners": "^3.4.0",

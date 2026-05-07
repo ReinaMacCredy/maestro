@@ -68,6 +68,7 @@ import { registerDeployCommand } from "./features/deploy/index.js";
 import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
 import { registerSkillsCommand } from "./features/skills/index.js";
 import { registerIntakeCommand } from "./features/intake/index.js";
+import { registerMcpCommand } from "./features/mcp/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -89,6 +90,7 @@ registerUpdateCommand(program);
 registerUninstallCommand(program);
 registerProvidersCommand(program);
 registerSkillsCommand(program);
+registerMcpCommand(program);
 registerMissionCommand(program);
 registerFeatureCommand(program);
 registerValidateCommand(program);
