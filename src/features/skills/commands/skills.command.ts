@@ -7,6 +7,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { parseYaml } from "@/shared/lib/yaml.js";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
+import { resolveWithin } from "@/shared/lib/path-safety.js";
 import {
   dirExists,
   ensureDir,
@@ -302,7 +303,7 @@ export async function installSkillSource(input: {
       if (!parsed.skill) {
         throw new MaestroError(`Invalid skill at ${candidate}`, parsed.diagnostics.map((d) => d.message));
       }
-      const targetDir = join(managedRoot, parsed.skill.name);
+      const targetDir = resolveWithin(managedRoot, parsed.skill.name, "Skill install path");
       await removeIfExists(targetDir, { recursive: true });
       await cp(candidate, targetDir, { recursive: true });
       const installedTargets = await syncOneSkillToTargets(
@@ -387,11 +388,11 @@ export async function removeManagedSkill(input: {
   readonly homeDir: string;
 }): Promise<{ readonly name: string; readonly removed: boolean; readonly removedTargets: readonly ProviderId[] }> {
   const root = installRoot(input.scope, input.cwd, input.homeDir);
-  const sourceDir = join(root, input.name);
+  const sourceDir = resolveWithin(root, input.name, "Skill remove path");
   const manifest = await readManagedManifest(sourceDir);
   const removedTargets: ProviderId[] = [];
   for (const provider of listSkillTargetProviders(input.cwd, input.homeDir)) {
-    const target = join(provider.skillsRoot, input.name);
+    const target = resolveWithin(provider.skillsRoot, input.name, "Skill target path");
     if (await removeManagedTarget(target, sourceDir)) {
       removedTargets.push(provider.id);
     }
@@ -461,7 +462,7 @@ async function syncOneSkillToTargets(
   const installed: Array<{ id: ProviderId; root: string }> = [];
   for (const provider of selected) {
     await ensureDir(provider.skillsRoot);
-    const target = join(provider.skillsRoot, name);
+    const target = resolveWithin(provider.skillsRoot, name, "Skill target path");
     const targetReal = await realpath(target).catch(() => undefined);
     if (targetReal === sourceReal) {
       installed.push({ id: provider.id, root: provider.skillsRoot });
@@ -531,7 +532,7 @@ async function prepareSource(
     }
     const head = await execArgv(["git", "rev-parse", "HEAD"], { cwd: tmp, timeout: 10_000 });
     return {
-      path: subpath ? join(tmp, subpath) : tmp,
+      path: subpath ? resolveWithin(tmp, subpath, "Skill source subpath") : tmp,
       resolvedSource: head.exitCode === 0 ? `${repo}#${head.stdout.trim()}` : repo,
       cleanup: tmp,
     };
@@ -729,7 +730,13 @@ function normalizeGitSource(source: string): { readonly repo: string; readonly s
   const parts = source.split("/");
   const owner = parts[0]!;
   const repo = parts[1]!;
-  const subpath = parts.slice(2).join("/");
+  const subpathParts = parts.slice(2);
+  if (subpathParts.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    throw new MaestroError(`Invalid skill source subpath in '${source}'`, [
+      "GitHub shorthand subpaths must not contain '.' or '..' segments",
+    ]);
+  }
+  const subpath = subpathParts.join("/");
   return {
     repo: `https://github.com/${owner}/${repo}.git`,
     ...(subpath ? { subpath } : {}),
