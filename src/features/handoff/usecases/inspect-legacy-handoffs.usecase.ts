@@ -1,22 +1,26 @@
 import { readdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 
+// Kept for back-compat with infra callers that still pass `{ homeDir }`.
+// The scan no longer reaches the home dir; the option is ignored.
 export interface CountLegacyHandoffFilesOptions {
   readonly homeDir?: string;
 }
 
+/**
+ * Counts legacy handoff/launch artifacts under the project's `.maestro/`
+ * directory. Scoped to project state so doctor's per-project output
+ * doesn't bleed in home-dir launches that belong to other repos.
+ */
 export async function countLegacyHandoffFiles(
   projectDir: string,
-  options: CountLegacyHandoffFilesOptions = {},
+  _options: CountLegacyHandoffFilesOptions = {},
 ): Promise<number> {
-  const homeRoot = options.homeDir ?? homedir();
   return (
     await Promise.all([
       countEntries(join(projectDir, MAESTRO_DIR, "handoffs")),
       countEntries(join(projectDir, MAESTRO_DIR, "launches")),
-      countEntries(join(homeRoot, MAESTRO_DIR, "launches")),
     ])
   ).reduce((sum, count) => sum + count, 0);
 }
