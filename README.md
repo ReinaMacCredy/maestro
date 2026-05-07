@@ -1180,6 +1180,8 @@ In-depth references live under [`docs/`](docs/):
 | Deploy gate (4 checks + `Spec.rollout_plan`) | [`deploy-gate.md`](docs/deploy-gate.md) |
 | Runtime monitoring (Prometheus adapter) | [`runtime-monitoring.md`](docs/runtime-monitoring.md) |
 | Trust benchmark corpus (regression seed) | [`trust-benchmark.md`](docs/trust-benchmark.md) |
+| MCP server tools and result shapes | [`mcp-server.md`](docs/mcp-server.md) |
+| MCP setup for Claude Code and Codex | [`mcp-setup.md`](docs/mcp-setup.md) |
 
 The agent-facing protocol is documented inside the bundled skills under [`skills/bundled/`](skills/bundled/) — `maestro-verify` is the canonical verification protocol; `maestro-task`, `maestro-plan`, `maestro-mission`, `maestro-handoff`, `maestro-brainstorm`, and `maestro-setup` cross-reference it.
 

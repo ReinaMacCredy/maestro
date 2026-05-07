@@ -368,6 +368,21 @@ maestro task prune [--keep N] [--candidates-only|--continuations-only] [--all]
 
 Deeper recovery patterns live in `./reference/recovery.md`. The full command surface lives in `./reference/commands.md`.
 
+## MCP tools (when available)
+
+If your runtime exposes maestro MCP tools, prefer them over the CLI verbs above — they return structured JSON without text parsing. The MCP server is a thin wrapper around the same use cases the CLI calls, so semantics are identical and the CLI examples in this skill remain the source of truth for behavior.
+
+| MCP tool | CLI equivalent |
+|----------|----------------|
+| `task_list`, `task_get` | `maestro task list`, `maestro task show` |
+| `task_create` | `maestro task q` / `maestro task new` |
+| `task_claim`, `task_complete` | `maestro task claim`, `maestro task update --status completed` |
+| `task_block`, `task_unblock` | `maestro task block`, `maestro task unblock` |
+| `evidence_record`, `evidence_list` | `maestro evidence record`, `maestro evidence list` |
+| `contract_show`, `contract_amend` | `maestro contract show`, `maestro contract amend` |
+
+If MCP is not available (no `maestro_*` tool prefix in your tool list), fall back to the CLI verbs documented above.
+
 ## Reference
 
 - `./reference/plan-conversion.md`: longer examples mapping markdown plans to task batches
