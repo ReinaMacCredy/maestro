@@ -1,4 +1,7 @@
 import { MaestroError } from "@/shared/errors.js";
+import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
+import { recordEvidence } from "@/features/evidence/index.js";
+import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import {
   buildActiveOverlapError,
   canAmendContract,
@@ -15,11 +18,13 @@ import {
   snapshotForAmendment,
 } from "../domain/contract/contract-state.js";
 import type {
+  AmendmentBudget,
   Contract,
   ContractConfigSnapshot,
   ContractScope,
   ContractStatus,
   ContractVerdict,
+  CostBudget,
   DoneWhenCriterion,
 } from "../domain/contract/contract-types.js";
 import {
@@ -33,6 +38,7 @@ import type {
   ContractStorePort,
   ContractStoreQueryPort,
 } from "../ports/contract-store.port.js";
+import type { ContractVersionStorePort } from "../ports/contract-version-store.port.js";
 import type { GitAnchorPort } from "../ports/git-anchor.port.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 
@@ -53,6 +59,8 @@ export interface CreateContractInput {
   }>;
   readonly createdBy: string;
   readonly configSnapshot: ContractConfigSnapshot;
+  readonly amendmentBudget?: AmendmentBudget;
+  readonly costBudget?: CostBudget;
 }
 
 export interface EditContractInput {
@@ -139,6 +147,14 @@ export function buildContractWorkflows(
   contractStore: ContractStorePort,
   taskStore: TaskStorePort,
   gitAnchor: GitAnchorPort,
+  // L2 version store. Optional to keep existing test fixtures working;
+  // when undefined, mirror calls become no-ops. Production wiring in
+  // services.ts always passes the real store.
+  contractVersionStore?: ContractVersionStorePort,
+  // Evidence store for recording amendment-blocked rows when budget
+  // enforcement rejects an amend. Optional for existing test fixtures;
+  // production wiring always passes it.
+  evidenceStore?: EvidenceStorePort,
 ): ContractWorkflows {
   return {
     load: (ref) => resolveContractRef(contractStore, ref),
@@ -151,9 +167,9 @@ export function buildContractWorkflows(
 
     discard: (ref) => discardContract(taskStore, contractStore, ref),
 
-    lock: (input) => lockContract(contractStore, input),
+    lock: (input) => lockContract(contractStore, contractVersionStore, input),
 
-    amend: (input) => amendContract(contractStore, input),
+    amend: (input) => amendContract(contractStore, contractVersionStore, evidenceStore, input),
 
     previewVerdict: (input) => computeContractVerdictForTask(
       contractStore,
@@ -166,6 +182,7 @@ export function buildContractWorkflows(
 
     closeForTask: (task, runtimeRepoRoot) => closeContractForTask(
       contractStore,
+      contractVersionStore,
       gitAnchor,
       task,
       runtimeRepoRoot,
@@ -173,11 +190,35 @@ export function buildContractWorkflows(
 
     prepareReopen: (task) => loadContractForReopen(contractStore, gitAnchor, task),
 
-    reopenForTask: (task, loaded) => reopenContractForTask(contractStore, gitAnchor, task, loaded),
+    reopenForTask: (task, loaded) =>
+      reopenContractForTask(contractStore, contractVersionStore, gitAnchor, task, loaded),
 
     transferOwnership: (taskId, newActor, reason = "claim_reclaim") =>
-      transferContractOwnership(contractStore, taskId, newActor, reason),
+      transferContractOwnership(contractStore, contractVersionStore, taskId, newActor, reason),
   };
+}
+
+// Mirror an L1 save into the L2 version store so the trust substrate readers
+// (task verify, plan check, verdict request, contract show/amend/history)
+// resolve the contract without manual file copying. Drafts and discarded
+// contracts are deliberately left out of the L2 view.
+async function mirrorActiveContractToVersionStore(
+  versionStore: ContractVersionStorePort | undefined,
+  contract: Contract,
+): Promise<void> {
+  if (versionStore === undefined) return;
+  if (
+    contract.status !== "locked"
+    && contract.status !== "amended"
+    && contract.status !== "fulfilled"
+    && contract.status !== "broken"
+  ) {
+    return;
+  }
+  // The L1 store serializes saves via withFileLock, so each mirror call
+  // observes a settled history length. New version = next slot.
+  const history = await versionStore.history(contract.taskId);
+  await versionStore.write(contract.taskId, history.length + 1, contract);
 }
 
 async function createContract(
@@ -204,6 +245,17 @@ async function createContract(
     }
   }
 
+  const seenIds = new Set<string>();
+  for (const criterion of input.doneWhen) {
+    if (criterion.id === undefined) continue;
+    if (seenIds.has(criterion.id)) {
+      throw new MaestroError(`Duplicate doneWhen.id in draft: ${criterion.id}`, [
+        "Each doneWhen criterion must have a unique id, or omit the id to let maestro generate one",
+      ]);
+    }
+    seenIds.add(criterion.id);
+  }
+
   const contract = await contractStore.create({
     taskId: input.taskId,
     repoRoot: normalizeStoredContractRepoRoot(input.repoRoot),
@@ -211,12 +263,14 @@ async function createContract(
     intent: input.intent.trim(),
     scope: normalizeScope(input.scope),
     doneWhen: input.doneWhen.map((criterion) => ({
-      id: generateDoneWhenId(),
+      id: criterion.id ?? generateDoneWhenId(),
       text: criterion.text.trim(),
       kind: criterion.kind ?? "manual",
     })),
     createdBy: input.createdBy,
     configSnapshot: input.configSnapshot,
+    ...(input.amendmentBudget ? { amendmentBudget: input.amendmentBudget } : {}),
+    ...(input.costBudget ? { costBudget: input.costBudget } : {}),
   });
 
   try {
@@ -293,6 +347,7 @@ async function discardContract(
 
 async function lockContract(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
   input: LockContractInput,
 ): Promise<Contract> {
   const contract = await resolveContractRef(contractStore, input.ref);
@@ -304,7 +359,7 @@ async function lockContract(
   }
 
   const now = new Date().toISOString();
-  return contractStore.save({
+  const saved = await contractStore.save({
     ...contract,
     status: "locked",
     lockedAt: now,
@@ -312,26 +367,120 @@ async function lockContract(
     claimedAtCommit: input.claimedAtCommit ?? contract.claimedAtCommit,
     configSnapshot: input.configSnapshot,
   });
+  await mirrorActiveContractToVersionStore(versionStore, saved);
+  return saved;
 }
 
 async function amendContract(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: ContractAmendmentCommand,
 ): Promise<Contract> {
   switch (input.kind) {
     case "replace":
-      return replaceContract(contractStore, input);
+      return replaceContract(contractStore, versionStore, evidenceStore, input);
     case "addCriterion":
-      return addContractCriterion(contractStore, input);
+      return addContractCriterion(contractStore, versionStore, evidenceStore, input);
     case "removeCriterion":
-      return removeContractCriterion(contractStore, input);
+      return removeContractCriterion(contractStore, versionStore, evidenceStore, input);
     case "markCriterion":
-      return markContractCriterion(contractStore, input);
+      return markContractCriterion(contractStore, versionStore, evidenceStore, input);
+  }
+}
+
+// Symmetric with the L2 amend use-case: every L1 amend (replace, criterion
+// add/remove/mark) consumes from amendmentBudget so the gate is uniform
+// regardless of which verb the agent reaches for. R15's L1-amend agent
+// surfaced that `maestro task contract amend` was bypassing the budget
+// entirely while `maestro contract amend` enforced it — same contract,
+// same budget, two different answers.
+async function enforceAmendmentBudget(
+  contract: Contract,
+  addedPaths: readonly string[],
+  evidenceStore: EvidenceStorePort | undefined,
+): Promise<void> {
+  const budget = contract.amendmentBudget;
+  if (budget === undefined) return;
+
+  const existingCount = contract.amendments.length;
+  if (existingCount >= budget.maxAmendments) {
+    if (evidenceStore) {
+      await recordEvidence(evidenceStore, {
+        task_id: contract.taskId,
+        kind: "contract-amendment-blocked",
+        witness_level: "witnessed-by-maestro",
+        payload: {
+          reason: "budget_exhausted",
+          attemptedPaths: addedPaths,
+          details: `Amendment budget exhausted: ${existingCount} of ${budget.maxAmendments} amendments already used`,
+        },
+      });
+    }
+    throw new MaestroError(
+      `Amendment budget exhausted for task ${contract.taskId}: ${existingCount} of ${budget.maxAmendments} amendments used`,
+      [
+        "Increase amendmentBudget.maxAmendments on the contract or work within the existing scope",
+      ],
+    );
+  }
+
+  if (addedPaths.length > budget.maxPathsPerAmendment) {
+    if (evidenceStore) {
+      await recordEvidence(evidenceStore, {
+        task_id: contract.taskId,
+        kind: "contract-amendment-blocked",
+        witness_level: "witnessed-by-maestro",
+        payload: {
+          reason: "budget_exhausted",
+          attemptedPaths: addedPaths,
+          details: `Too many added paths: ${addedPaths.length} exceeds maxPathsPerAmendment (${budget.maxPathsPerAmendment})`,
+        },
+      });
+    }
+    throw new MaestroError(
+      `Amendment adds too many paths for task ${contract.taskId}: ${addedPaths.length} exceeds maxPathsPerAmendment (${budget.maxPathsPerAmendment})`,
+      [
+        "Split the amendment into smaller chunks or increase amendmentBudget.maxPathsPerAmendment",
+      ],
+    );
+  }
+
+  if (budget.forbiddenAmendmentPaths.length > 0 && addedPaths.length > 0) {
+    const forbidden: string[] = [];
+    for (const path of addedPaths) {
+      if (matchesAnyGlob(budget.forbiddenAmendmentPaths, path)) {
+        forbidden.push(path);
+      }
+    }
+    if (forbidden.length > 0) {
+      if (evidenceStore) {
+        await recordEvidence(evidenceStore, {
+          task_id: contract.taskId,
+          kind: "contract-amendment-blocked",
+          witness_level: "witnessed-by-maestro",
+          payload: {
+            reason: "forbidden_path",
+            attemptedPaths: addedPaths,
+            details: `Added paths match forbidden patterns: ${forbidden.join(", ")}`,
+          },
+        });
+      }
+      throw new MaestroError(
+        `Amendment for task ${contract.taskId} includes forbidden paths: ${forbidden.join(", ")}`,
+        [
+          "Remove the forbidden paths from the amendment",
+          `Forbidden patterns: ${budget.forbiddenAmendmentPaths.join(", ")}`,
+        ],
+      );
+    }
   }
 }
 
 async function replaceContract(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "replace" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);
@@ -339,7 +488,11 @@ async function replaceContract(
   const nextScope = normalizeScope(input.scope);
   const nextDoneWhen = normalizeAmendedCriteria(contract.doneWhen, input.doneWhen);
 
-  return contractStore.save(
+  const existingExpected = new Set(contract.scope.filesExpected);
+  const addedPaths = nextScope.filesExpected.filter((p) => !existingExpected.has(p));
+  await enforceAmendmentBudget(contract, addedPaths, evidenceStore);
+
+  const saved = await contractStore.save(
     withContractAmendment(contract, {
       actorId: input.actorId,
       reason: input.reason,
@@ -348,10 +501,14 @@ async function replaceContract(
       doneWhen: nextDoneWhen,
     }),
   );
+  await mirrorActiveContractToVersionStore(versionStore, saved);
+  return saved;
 }
 
 async function addContractCriterion(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "addCriterion" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);
@@ -360,37 +517,48 @@ async function addContractCriterion(
     throw new MaestroError("Contract criteria need non-empty text");
   }
 
+  await enforceAmendmentBudget(contract, [], evidenceStore);
+
   const nextCriterion: DoneWhenCriterion = {
     id: generateDoneWhenId(),
     text,
     kind: "manual",
   };
-  return contractStore.save(
+  const saved = await contractStore.save(
     withContractAmendment(contract, {
       actorId: input.actorId,
       reason: `Added criterion ${nextCriterion.id}`,
       doneWhen: [...contract.doneWhen, nextCriterion],
     }),
   );
+  await mirrorActiveContractToVersionStore(versionStore, saved);
+  return saved;
 }
 
 async function removeContractCriterion(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
+  evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "removeCriterion" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);
   const criterion = findCriterion(contract, input.criterionId);
-  return contractStore.save(
+  await enforceAmendmentBudget(contract, [], evidenceStore);
+  const saved = await contractStore.save(
     withContractAmendment(contract, {
       actorId: input.actorId,
       reason: `Removed criterion ${criterion.id}`,
       doneWhen: contract.doneWhen.filter((candidate) => candidate.id !== criterion.id),
     }),
   );
+  await mirrorActiveContractToVersionStore(versionStore, saved);
+  return saved;
 }
 
 async function markContractCriterion(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
+  _evidenceStore: EvidenceStorePort | undefined,
   input: Extract<ContractAmendmentCommand, { readonly kind: "markCriterion" }>,
 ): Promise<Contract> {
   const contract = await resolveActiveContract(contractStore, input.ref);
@@ -416,18 +584,25 @@ async function markContractCriterion(
         kind: criterion.kind,
       };
 
-  return contractStore.save(
-    withContractAmendment(contract, {
-      actorId: input.actorId,
-      reason: `Marked criterion ${criterion.id} ${met ? "met" : "unmet"}`,
-      at,
-      doneWhen: contract.doneWhen.map((candidate) => candidate.id === criterion.id ? nextCriterion : candidate),
-    }),
-  );
+  // Marking a criterion met/unmet is workflow progress, not a structural
+  // contract change. Per-criterion `metAt` / `metBy` / `metEvidence` already
+  // carry the audit trail, so we don't append to `amendments[]` (which would
+  // consume against `amendmentBudget.maxAmendments`) and we don't flip status
+  // to "amended". Surfaced after R27: a 2-amendment budget was being burnt
+  // through by 3 criteria-mark calls before any structural amend could land.
+  const saved = await contractStore.save({
+    ...contract,
+    doneWhen: contract.doneWhen.map((candidate) =>
+      candidate.id === criterion.id ? nextCriterion : candidate,
+    ),
+  });
+  await mirrorActiveContractToVersionStore(versionStore, saved);
+  return saved;
 }
 
 async function closeContractForTask(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
   gitAnchor: GitAnchorPort,
   task: Task,
   runtimeRepoRoot: string,
@@ -458,7 +633,7 @@ async function closeContractForTask(
     runtimeRepoRoot,
   );
   const verdict = withOwnershipNotes(contract, computed.verdict);
-  return contractStore.save({
+  const saved = await contractStore.save({
     ...contract,
     status: verdict.fulfilled ? "fulfilled" : "broken",
     closedAt: task.updatedAt,
@@ -467,6 +642,8 @@ async function closeContractForTask(
     doneWhen: computed.criteria,
     verdict,
   });
+  await mirrorActiveContractToVersionStore(versionStore, saved);
+  return saved;
 }
 
 async function loadContractForReopen(
@@ -495,6 +672,7 @@ async function loadContractForReopen(
 
 async function reopenContractForTask(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
   gitAnchor: GitAnchorPort,
   task: Pick<Task, "id" | "contractId">,
   loadedContract?: Contract,
@@ -504,18 +682,19 @@ async function reopenContractForTask(
     return undefined;
   }
 
-  return reopenLoadedContract(contractStore, contract);
+  return reopenLoadedContract(contractStore, versionStore, contract);
 }
 
 async function reopenLoadedContract(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
   contract: Contract,
 ): Promise<Contract> {
   if (!canReopenContract(contract)) {
     return contract;
   }
 
-  return contractStore.save({
+  const saved = await contractStore.save({
     ...contract,
     status: contract.amendments.length > 0 ? "amended" : "locked",
     closedAt: undefined,
@@ -523,10 +702,13 @@ async function reopenLoadedContract(
     closedBy: undefined,
     verdict: undefined,
   });
+  await mirrorActiveContractToVersionStore(versionStore, saved);
+  return saved;
 }
 
 async function transferContractOwnership(
   contractStore: ContractStorePort,
+  versionStore: ContractVersionStorePort | undefined,
   taskId: string,
   newActor: string,
   reason: "claim_reclaim" | "handoff_pickup",
@@ -536,7 +718,7 @@ async function transferContractOwnership(
     return contract;
   }
 
-  return contractStore.save({
+  const saved = await contractStore.save({
     ...contract,
     lockedBy: newActor,
     ...(shouldRecordOwnershipTransfer(contract)
@@ -553,6 +735,8 @@ async function transferContractOwnership(
         }
       : {}),
   });
+  await mirrorActiveContractToVersionStore(versionStore, saved);
+  return saved;
 }
 
 async function loadLinkedContractOrThrow(
@@ -606,6 +790,7 @@ async function computeContractVerdictForTask(
     contract,
     gitResult.closedAtCommit,
     repoRoot,
+    gitResult.actualFilesTouched,
   );
   const computed = computeContractVerdict(contract, gitResult, receipt, actorId, at, {
     overlapDetected,
@@ -623,18 +808,46 @@ async function detectContractOverlap(
   contract: Contract,
   currentClosedAtCommit: string | undefined,
   runtimeRepoRoot: string,
+  currentActualFilesTouched: readonly string[],
   includeCandidate?: (candidate: Contract) => boolean,
 ): Promise<ContractVerdict["overlapDetected"] | undefined> {
   if (!contract.claimedAtCommit || !currentClosedAtCommit) {
     return undefined;
   }
 
-  const candidates = (await contractStore.all()).filter((candidate) =>
-    candidate.id !== contract.id
-    && (includeCandidate
-      ? includeCandidate(candidate)
-      : candidate.status !== "draft" && candidate.status !== "discarded"),
-  );
+  const currentTouched = new Set(currentActualFilesTouched);
+
+  const candidates = (await contractStore.all()).filter((candidate) => {
+    if (candidate.id === contract.id) return false;
+    if (includeCandidate) {
+      return includeCandidate(candidate);
+    }
+    if (candidate.status === "draft" || candidate.status === "discarded") {
+      return false;
+    }
+    // Path-level prerequisite: overlap means the two contracts actually
+    // raced on the same files, not merely that their declared scope globs
+    // overlap or their git windows overlap. Parallel worktrees touching
+    // disjoint paths under the same `src/**` glob is not an overlap.
+    const candidateTouched = candidate.verdict?.actualFilesTouched;
+    if (candidateTouched) {
+      // Closed candidate: require recorded actuals to intersect ours.
+      if (currentTouched.size === 0) return false;
+      return candidateTouched.some((path) => currentTouched.has(path));
+    }
+    // Open candidate (locked/amended, no verdict yet): include when its
+    // declared filesExpected glob matches any of our actual touches.
+    // Preview-time annotation needs this — both contracts may still be open
+    // when a user runs `task contract verdict --json` on the second worktree
+    // and wants to see whether they're racing the first.
+    if (currentTouched.size === 0) return false;
+    for (const touched of currentActualFilesTouched) {
+      if (matchesAnyGlob(candidate.scope.filesExpected, touched)) {
+        return true;
+      }
+    }
+    return false;
+  });
   if (candidates.length === 0) {
     return undefined;
   }
@@ -806,9 +1019,13 @@ function normalizeAmendedCriteria(
 ): readonly DoneWhenCriterion[] {
   return next.map((criterion) => {
     const text = criterion.text.trim();
+    // Resolve to an existing criterion in two passes: explicit id match first,
+    // then text-fallback so that an amend that doesn't carry ids (e.g. the
+    // YAML form `doneWhen: [{text: "implementation done"}]`) doesn't silently
+    // reissue ids and break agents tracking criteria by id across versions.
     const existing = criterion.id
       ? current.find((candidate) => candidate.id === criterion.id)
-      : undefined;
+      : current.find((candidate) => candidate.text === text);
     const kind = criterion.kind ?? existing?.kind ?? "manual";
 
     if (!existing) {

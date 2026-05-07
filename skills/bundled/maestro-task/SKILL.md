@@ -109,19 +109,35 @@ intent: >
   One to three sentences on what this task changes and why.
 scope:
   filesExpected:
-    - src/features/foo/**
+    - src/**
   filesForbidden: []
 doneWhen:
-  - text: Describe the observable signal that proves the task is done.
-    kind: manual
+  - text: tests pass
+    kind: receipt-hint
+  - text: manual
+    kind: receipt-hint
 YAML
 
 maestro task contract lock <id>
 ```
 
-Load a project-local template: `maestro task contract new <id> --from default` (reads `.maestro/tasks/contract-templates/default.md`).
+Each `doneWhen` bullet has a `kind`. Use `receipt-hint` when the bullet should auto-mark from your completion `--verified-by` tags (`--verified-by "tests pass" --verified-by manual` would tick both above). Use `kind: manual` only when an operator must tick the box explicitly via `maestro task contract criteria mark <id> <criterionId> --met` — `manual` criteria left unmarked at completion will close the contract as `broken`.
 
 Contract amend/reopen/criteria verbs and verdict semantics live in `./reference/contracts.md`.
+
+Load a project-local template: `maestro task contract new <id> --from default` (reads `.maestro/tasks/contract-templates/default.md`).
+
+## Stay in scope; amend on genuine discovery
+
+Your task has a Contract that locks the files you may touch. Do not modify files outside `allowed_files`. Do not touch any path in `forbidden_paths`.
+
+If you discover during implementation that a path you did not anticipate must change (a generated file regenerates differently, an unmocked dependency is reachable, a test helper needs a tweak), call:
+
+```bash
+maestro contract amend --task <id> --add-path <new-path> --reason "<why>"
+```
+
+This writes a new contract version and an Evidence row of kind `contract-amendment`. If the amendment is rejected (budget exhausted, or the path is in `forbidden_amendment_paths`), an Evidence row of kind `contract-amendment-blocked` is written instead. Do not retry the same amendment — surface it in your handoff or stop and ask.
 
 ## While working, keep resume state fresh
 
@@ -155,6 +171,83 @@ maestro task update <id> --status completed \
 ```
 
 `--reason` is persisted verbatim. Short, factual, no secrets. `--strict` blocks completion on a broken contract verdict.
+
+## Before claiming the task complete
+
+Run this loop before marking any task done:
+
+0. **Mark any `kind: manual` criteria met first.** Run
+   `maestro contract show --task <id>` and inspect each `[ ]` checkbox
+   on a `(manual)` criterion. If you have evidence the criterion is
+   satisfied, tick it now:
+
+   ```bash
+   maestro task contract criteria mark <contractId> <criterionId> --met
+   ```
+
+   `receipt-hint` criteria auto-tick from your `--verified-by` tags
+   on `task update --status completed`; `manual` criteria do not.
+   Unticked `manual` criteria silently close the contract `broken`
+   on completion — the recovery is `task contract reopen` + `criteria
+   mark` + re-complete, so it is cheaper to mark them up front.
+
+1. `maestro task verify --task <id>` — Trust Verifier (scope, lockfile,
+   generated, sensitive-paths, commit-metadata, secrets). Address every
+   error finding before proceeding.
+
+   Exit codes: `0` clean, `1` errors present (must fix), `2` warnings or
+   info-only findings (review and continue if expected). A `2` is not a
+   failure — it is a heads-up; read the findings and proceed to step 2
+   if nothing actionable is flagged.
+
+2. `maestro task proof --task <id>` — confirm criterion coverage. Every
+   Spec acceptance criterion must have at least one Evidence row.
+
+3. `maestro verdict request --task <id>` — produces a Verdict.
+
+4. Branch on the verdict's exit code:
+   - **0 PASS** — claim the task done.
+   - **1 FAIL** — fix the cited findings, then loop back to step 1.
+   - **2 HUMAN** — run `maestro handoff create` and stop. A human must
+     approve before the task can complete. **By default**,
+     `policies/autopilot.yaml` opts *every* risk class out of auto-merge
+     (`autoMergeAllowed.<class>: false` for `low`, `medium`, `high`,
+     `critical`), so even an otherwise-clean run lands as HUMAN until
+     the team explicitly enables auto-merge for that class. To enable
+     auto-merge for a risk class your team approves, set
+     `autoMergeAllowed.<class>: true` in
+     `.maestro/policies/autopilot.yaml`. See
+     `docs/auto-merge-eligibility.md`.
+   - **3 BLOCK** — stop. The task is blocked (typically cost-budget
+     exhaustion). Surface the BLOCK reason to the user; do not retry
+     without their guidance.
+
+If retries are accumulating, run `maestro task budget --task <id>` to
+see the current cost-budget consumption. Once retries reach the
+contract's `maxRetries`, the next `verdict request` will return BLOCK.
+
+See the `maestro-verify` skill for the canonical verification protocol
+(witness levels, ProofMap, plan-check, AI Reviewer protocol,
+threat-model production).
+
+## Evidence
+
+After each verification command (test, build, typecheck, lint), record
+the result so future sessions can see what was actually run:
+
+```bash
+maestro evidence record --task <id> --kind command \
+  --command "bun test" --exit 0
+```
+
+For manual checks that maestro can't witness, use `--kind manual-note`:
+
+```bash
+maestro evidence record --task <id> --kind manual-note \
+  --note "Verified UI on staging at 1280x800"
+```
+
+Recorded evidence appears in `maestro task show` and the Mission Control task detail pane.
 
 ## Discovery
 

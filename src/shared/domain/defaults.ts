@@ -22,6 +22,26 @@ export function resolveMaestroSkillsRoot(homeDir = homedir()): string {
   return join(resolveMaestroHome(homeDir), SKILLS_DIR);
 }
 
+export function resolveMaestroExternalSkillsRoot(homeDir = homedir()): string {
+  return join(resolveMaestroHome(homeDir), "external-skills");
+}
+
+export function resolveAgentSkillsSharedRoot(homeDir = homedir()): string {
+  return join(homeDir, ".agents", "skills");
+}
+
+export function resolveHermesHome(homeDir = homedir()): string {
+  return process.env["HERMES_HOME"] ?? join(homeDir, ".hermes");
+}
+
+export function resolveHermesSkillsRoot(homeDir = homedir()): string {
+  return join(resolveHermesHome(homeDir), "skills", "maestro");
+}
+
+export function resolveHermesConfigPath(homeDir = homedir()): string {
+  return join(resolveHermesHome(homeDir), "config.yaml");
+}
+
 /**
  * Resolve the Codex CLI home directory. `CODEX_HOME` env var is the official
  * Codex override (per OpenAI docs); fall back to `~/.codex/`.

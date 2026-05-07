@@ -1,6 +1,6 @@
 import type { CorrectionStorePort } from "../ports/correction-store.port.js";
 import type { LearningStorePort } from "../ports/learning-store.port.js";
-import type { RatchetStorePort } from "@/features/ratchet";
+import type { RatchetStorePort } from "@/features/memory-ratchet";
 
 export interface LintWarning {
   readonly category: "correction" | "learning" | "ratchet";

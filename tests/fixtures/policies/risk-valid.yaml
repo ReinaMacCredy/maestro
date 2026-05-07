@@ -1,0 +1,10 @@
+kind: risk
+id: risk-policy-custom
+version: "2"
+rows:
+  - signal: diff-intersects-sensitive-security
+    derived_class: critical
+    description: Custom critical signal
+  - signal: diff-source-only
+    derived_class: low
+    description: Relaxed source-only to low for this project

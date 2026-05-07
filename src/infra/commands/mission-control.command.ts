@@ -6,11 +6,11 @@ import type { Command } from "commander";
 import { getServices } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
-import {
-  renderDashboard,
-  renderPreviewFrame,
-  runRenderCheck,
-} from "@/tui/opentui/index.js";
+// renderDashboard / renderPreviewFrame / runRenderCheck pull the OpenTUI +
+// React graph (~250-400ms cold start). --json mode never renders, so we
+// dynamic-import these only inside the branches that actually need them.
+// Saves ~half the wall time on `mission-control --json`, which is the
+// agent-facing snapshot path.
 import {
   buildHomeSnapshot,
   buildSnapshot,
@@ -61,6 +61,7 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   principles: "principles",
   principle: "principles",
   help: "help",
+  autopilot: "autopilot",
 };
 
 export function registerMissionControlCommand(program: Command): void {
@@ -126,8 +127,13 @@ export function registerMissionControlCommand(program: Command): void {
           projectGraphStore: services.projectGraphStore,
           handoffStore: services.handoffStore,
           taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
           replyStore: services.replyStore,
           principleStore: services.principleStore,
+          verdictStore: services.verdictStore,
+          runStateStore: services.runStateStore,
+          contractVersionStore: services.contractVersionStore,
+          contractStore: services.contractStore,
           cwd: process.cwd(),
         };
         const snapshotLoader = createMissionControlSnapshotLoader(
@@ -146,6 +152,7 @@ export function registerMissionControlCommand(program: Command): void {
 
             if (opts.renderCheck) {
                 const snapshot = await loadReadSnapshot(buildMissionControlSnapshotDemand({ mode: "render-check" }));
+              const { runRenderCheck } = await import("@/tui/opentui/index.js");
               const result = await runRenderCheck(snapshot, {
                 width: renderSize?.width,
                 height: renderSize?.height,
@@ -157,6 +164,7 @@ export function registerMissionControlCommand(program: Command): void {
           if (previewScreen === "all") {
               const snapshot = await loadReadSnapshot(buildMissionControlSnapshotDemand({ mode: "preview-all" }));
             const screens = getAllApplicableScreens(snapshot);
+              const { renderPreviewFrame } = await import("@/tui/opentui/index.js");
               for (const screen of screens) {
                 console.log(`--- ${screen} ---`);
                 const frame = await renderPreviewFrame({
@@ -173,6 +181,7 @@ export function registerMissionControlCommand(program: Command): void {
       }
 
             if (previewScreen) {
+                const { renderPreviewFrame } = await import("@/tui/opentui/index.js");
                 const frame = await renderPreviewFrame({
                   snapshot: await loadReadSnapshot(buildMissionControlSnapshotDemand({
                     mode: "preview-screen",
@@ -197,6 +206,7 @@ export function registerMissionControlCommand(program: Command): void {
 
       const snapshot = await snapshotLoader.load();
 
+      const { renderDashboard } = await import("@/tui/opentui/index.js");
       await renderDashboard({
         snapshot,
         snapshotDeps,

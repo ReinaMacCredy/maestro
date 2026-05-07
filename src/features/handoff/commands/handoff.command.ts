@@ -28,7 +28,7 @@ export function registerHandoffCommand(program: Command): void {
     .command("handoff")
     .description("Launch or pick up standalone task handoff packets")
     .argument("[task]", "Task description for a new handoff launch")
-    .option("--agent <agent>", "Target agent (codex|claude)")
+    .option("--agent <agent>", "Target agent (codex|claude|hermes)")
     .option("--task-id <id>", "Link the handoff to a specific task id")
     .option("--model <model>", "Override the agent default model")
     .option("--worktree [slug]", "Create and use a sibling git worktree for the handoff")
@@ -198,13 +198,13 @@ function parseAgent(value: unknown): HandoffAgent {
   if (value === undefined) {
     return "codex";
   }
-  if (value === "codex" || value === "claude") {
+  if (value === "codex" || value === "claude" || value === "hermes") {
     return value;
   }
 
   throw new MaestroError(`Invalid --agent '${String(value)}'`, [
-    "Valid agents: codex, claude",
-    `Defaults: codex=${DEFAULT_HANDOFF_MODELS.codex}, claude=${DEFAULT_HANDOFF_MODELS.claude}`,
+    "Valid agents: codex, claude, hermes",
+    `Defaults: codex=${DEFAULT_HANDOFF_MODELS.codex}, claude=${DEFAULT_HANDOFF_MODELS.claude}, hermes=${DEFAULT_HANDOFF_MODELS.hermes}`,
   ]);
 }
 
@@ -406,8 +406,9 @@ function fallbackPickupSessionId(): string {
 function normalizeDetectedAgent(value: string): HandoffAgent {
   if (value === "codex") return "codex";
   if (value === "claude-code" || value === "claude") return "claude";
-  throw new MaestroError(`Detected session agent '${value}' cannot pick up a Codex/Claude handoff`, [
-    "Use --agent codex|claude with --session <id> to override explicitly",
+  if (value === "hermes") return "hermes";
+  throw new MaestroError(`Detected session agent '${value}' cannot pick up a supported handoff`, [
+    "Use --agent codex|claude|hermes with --session <id> to override explicitly",
   ]);
 }
 

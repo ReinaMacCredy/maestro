@@ -5,7 +5,7 @@ import type {
 } from "../domain/memory-types.js";
 import type { CorrectionStorePort } from "../ports/correction-store.port.js";
 import type { LearningStorePort } from "../ports/learning-store.port.js";
-import type { RatchetBaseline, RatchetStorePort, RatchetSuite } from "@/features/ratchet";
+import type { RatchetBaseline, RatchetStorePort, RatchetSuite } from "@/features/memory-ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 
 export function buildMemoryStats(options: {

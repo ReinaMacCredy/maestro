@@ -70,7 +70,8 @@ export type OverlayModalKind =
   | "task-board"
   | "timeline"
   | "principle-review"
-  | "help";
+  | "help"
+  | "autopilot";
 
 export interface ModalRow {
   readonly label?: string;
@@ -345,6 +346,15 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
         selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
         layout: STANDARD_LAYOUT,
+      };
+    case "autopilot":
+      return {
+        family: "split",
+        sizePreset: "wide",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...WIDE_LAYOUT, splitRatio: [40, 60] },
       };
     case "feature-action":
     default:

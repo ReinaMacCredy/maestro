@@ -24,6 +24,8 @@ const RUNTIME_GITIGNORE_LINES = [
   ".maestro/missions/",
   ".maestro/sessions/",
   ".maestro/tasks/local-history/",
+  ".maestro/evidence/",
+  ".maestro/runs/",
 ] as const;
 const MANAGED_AGENT_SKILL_ROOTS = [
   [".claude", "skills"],

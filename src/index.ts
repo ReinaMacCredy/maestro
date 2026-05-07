@@ -6,6 +6,7 @@ import { VERSION } from "@/shared/version.js";
 import { MaestroError } from "@/shared/errors.js";
 import { removeIfExists } from "@/shared/lib/fs.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
+import { assertNoDeprecatedVersionFlag } from "@/shared/lib/deprecated-version-flag.js";
 import { initServices } from "./services.js";
 import { checkForUpdate, isNewerSemver } from "@/infra/usecases/check-for-update.usecase.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
@@ -14,6 +15,7 @@ import { registerDoctorCommand } from "@/infra/commands/doctor.command.js";
 import { registerInstallCommand } from "@/infra/commands/install.command.js";
 import { registerUpdateCommand } from "@/infra/commands/update.command.js";
 import { registerUninstallCommand } from "@/infra/commands/uninstall.command.js";
+import { registerProvidersCommand } from "@/infra/commands/providers.command.js";
 import {
   resolveInstallDir,
   resolveInstalledBinaryName,
@@ -29,7 +31,10 @@ import {
   registerPrincipleCommand,
   registerReplyCommand,
 } from "./features/mission/index.js";
-import { registerMissionControlCommand } from "@/infra/commands/mission-control.command.js";
+// Mission Control lazy-loads — its import graph (OpenTUI + React) costs
+// ~250ms on cold start, but is only needed when the `mission-control` verb
+// runs. Every other verb (and `--version`/`--help`) skips it entirely.
+// See profile-imports.ts for the measurements.
 import {
   registerMemoryCorrectCommand,
   registerMemoryRecallCommand,
@@ -42,7 +47,7 @@ import {
 import {
   registerRatchetCheckCommand,
   registerRatchetPromoteCommand,
-} from "./features/ratchet/index.js";
+} from "./features/memory-ratchet/index.js";
 import {
   registerGraphLinkCommand,
   registerGraphContextCommand,
@@ -50,6 +55,18 @@ import {
 import { registerHandoffCommand } from "./features/handoff/index.js";
 import { registerTaskCommand } from "./features/task/index.js";
 import { registerBundleCommand } from "./features/bundle/index.js";
+import { registerEvidenceCommand } from "./features/evidence/index.js";
+import { registerSpecCommand } from "./features/spec/index.js";
+import { registerContractL2Command } from "./features/task/commands/contract-l2.command.js";
+import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
+import { registerVerdictCommand } from "./features/verdict/index.js";
+import { registerPlanCheckCommand } from "./features/plan/index.js";
+import { registerCiVerifyCommand } from "./features/ci/index.js";
+import { registerReviewCommand } from "./features/review/index.js";
+import { registerMergeAutoCommand } from "./features/merge/index.js";
+import { registerDeployCommand } from "./features/deploy/index.js";
+import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
+import { registerSkillsCommand } from "./features/skills/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -69,12 +86,13 @@ registerSessionCommand(program);
 registerInstallCommand(program);
 registerUpdateCommand(program);
 registerUninstallCommand(program);
+registerProvidersCommand(program);
+registerSkillsCommand(program);
 registerMissionCommand(program);
 registerFeatureCommand(program);
 registerValidateCommand(program);
 registerMilestoneCommand(program);
 registerCheckpointCommand(program);
-registerMissionControlCommand(program);
 registerMemoryCorrectCommand(program);
 registerMemoryRecallCommand(program);
 registerMemorySearchCommand(program);
@@ -91,6 +109,38 @@ registerTaskCommand(program);
 registerReplyCommand(program);
 registerPrincipleCommand(program);
 registerBundleCommand(program);
+registerEvidenceCommand(program);
+registerSpecCommand(program);
+registerContractL2Command(program);
+registerPolicyCommand(program);
+registerVerdictCommand(program);
+
+const planCmd = program
+  .command("plan")
+  .description("Plan-time checks for agent tasks");
+registerPlanCheckCommand(planCmd, program);
+
+const ciCmd = program
+  .command("ci")
+  .description("CI integration — runs the verdict pipeline in CI mode");
+registerCiVerifyCommand(ciCmd, program);
+
+registerReviewCommand(program);
+
+const mergeCmd = program
+  .command("merge")
+  .description("Merge controls — auto-merge eligibility and trigger");
+registerMergeAutoCommand(mergeCmd, program);
+
+const deployCmd = program
+  .command("deploy")
+  .description("Deploy safety commands — rollback and gate controls");
+registerDeployCommand(deployCmd, program);
+
+const runtimeCmd = program
+  .command("runtime")
+  .description("Runtime signal checks — query providers and record Evidence");
+registerRuntimeCheckCommand(runtimeCmd, program);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,
@@ -124,11 +174,34 @@ export async function cleanupStaleWindowsBinary(
 // timeout fires (verified ~9s hang on cold cache + slow network).
 const REFRESH_GRACE_MS = 1500;
 
+// mission-control is the only verb that pulls OpenTUI/React (~250ms cold).
+// Skip its registration when argv targets a different verb. For `--help`,
+// `--version`, and the bare `mission-control` invocation, register it so
+// help text and the verb itself still work.
+async function maybeRegisterMissionControl(argv: readonly string[]): Promise<void> {
+  let needsMissionControl = true;
+  for (let i = 2; i < argv.length; i++) {
+    const token = argv[i];
+    if (!token) continue;
+    if (token === "--help" || token === "-h") { needsMissionControl = true; break; }
+    if (token === "--version" || token === "-V") { needsMissionControl = false; break; }
+    if (token.startsWith("-")) continue;
+    needsMissionControl = token === "mission-control";
+    break;
+  }
+  if (needsMissionControl) {
+    const mod = await import("@/infra/commands/mission-control.command.js");
+    mod.registerMissionControlCommand(program);
+  }
+}
+
 async function main(): Promise<void> {
   const refreshController = new AbortController();
   try {
     await cleanupStaleWindowsBinary();
     assertNoDeprecatedMissionControlFlags(process.argv);
+    assertNoDeprecatedVersionFlag(process.argv);
+    await maybeRegisterMissionControl(process.argv);
     // Run the cache read in parallel with the user's command so the FS read
     // does not delay parsing. Stale-cache refresh is fire-and-forget inside
     // checkForUpdate() and intentionally not awaited here.
@@ -257,6 +330,7 @@ function assertNoDeprecatedMissionControlFlags(argv: readonly string[]): void {
     "Use `maestro mission-control --json` for machine-readable output",
   ]);
 }
+
 
 if (import.meta.main) {
   void main();

@@ -118,6 +118,70 @@ describe("launchHandoff", () => {
     expect(result.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
   });
 
+  it("launches Hermes without passing the default model and injects Maestro session env", async () => {
+    const handoffStore = makeHandoffStore();
+    const launchCalls: Array<Parameters<HandoffLaunchPort["launch"]>[0]> = [];
+    const hermesLauncher: HandoffLaunchPort = {
+      agent: "hermes",
+      async launch(request) {
+        launchCalls.push(request);
+        return {
+          command: ["hermes", "chat", "--quiet", "-q", request.prompt],
+          pid: 6789,
+        };
+      },
+    };
+
+    const result = await launchHandoff({
+      missions: mockMissions(),
+      git: makeGit(),
+      handoffStore,
+      launchers: {
+        hermes: hermesLauncher,
+      },
+    }, {
+      cwd: "/tmp/project",
+      task: "Run Hermes handoff",
+      agent: "hermes",
+      wait: false,
+    });
+
+    expect(result.record.model).toBe("default");
+    expect(result.record.status).toBe("launched");
+    expect(launchCalls[0]?.modelProvided).toBe(false);
+    expect(launchCalls[0]?.env).toEqual({
+      MAESTRO_AGENT: "hermes",
+      MAESTRO_SESSION_ID: "2026-04-20-001",
+    });
+  });
+
+  it("marks an explicitly supplied Hermes model for the launcher", async () => {
+    const launchCalls: Array<Parameters<HandoffLaunchPort["launch"]>[0]> = [];
+    await launchHandoff({
+      missions: mockMissions(),
+      git: makeGit(),
+      handoffStore: makeHandoffStore(),
+      launchers: {
+        hermes: {
+          agent: "hermes",
+          async launch(request) {
+            launchCalls.push(request);
+            return { command: ["hermes"], pid: 1 };
+          },
+        },
+      },
+    }, {
+      cwd: "/tmp/project",
+      task: "Run Hermes with model",
+      agent: "hermes",
+      model: "nous/hermes",
+      wait: false,
+    });
+
+    expect(launchCalls[0]?.model).toBe("nous/hermes");
+    expect(launchCalls[0]?.modelProvided).toBe(true);
+  });
+
   it("rejects --base without --worktree", async () => {
     await expect(
       launchHandoff({
@@ -535,5 +599,50 @@ describe("launchHandoff", () => {
         await Bun.file(`${cwd}/${briefName}`).delete?.();
       }
     });
+  });
+
+  it("refuses to create a duplicate task-linked handoff", async () => {
+    const handoffStore = makeHandoffStore();
+    const codexLauncher: HandoffLaunchPort = {
+      agent: "codex",
+      async launch(request) {
+        return {
+          command: ["codex", "exec", request.prompt],
+          pid: 1234,
+        };
+      },
+    };
+    const launchers = {
+      codex: codexLauncher,
+      claude: { agent: "claude" as const, async launch() { throw new Error("not used"); } },
+    };
+
+    await launchHandoff({
+      missions: mockMissions(),
+      git: makeGit(),
+      handoffStore,
+      launchers,
+    }, {
+      cwd: "/tmp/project",
+      task: "First packet",
+      agent: "codex",
+      wait: false,
+      refs: { taskId: "tsk-aaa111" },
+    });
+
+    await expect(
+      launchHandoff({
+        missions: mockMissions(),
+        git: makeGit(),
+        handoffStore,
+        launchers,
+      }, {
+        cwd: "/tmp/project",
+        task: "Second packet",
+        agent: "codex",
+        wait: false,
+        refs: { taskId: "tsk-aaa111" },
+      }),
+    ).rejects.toThrow(/already has an open handoff packet/);
   });
 });

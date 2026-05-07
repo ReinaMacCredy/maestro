@@ -45,7 +45,7 @@ describe("contract criteria usecases", () => {
     store = new FsContractStoreAdapter(tmpDir);
   });
 
-  it("adds, marks, and removes criteria while appending amendment history", async () => {
+  it("adds and removes criteria as amendments; mark/unmark are progress only", async () => {
     const created = await store.create(createInput());
     const locked = await store.save({
       ...created,
@@ -81,7 +81,9 @@ describe("contract criteria usecases", () => {
         metEvidence: "manual",
       }),
     );
-    expect(marked.amendments).toHaveLength(2);
+    // Marking does NOT append to amendments[] — progress, not structural change.
+    expect(marked.amendments).toHaveLength(1);
+    expect(marked.status).toBe("amended");
 
     const unmarked = await contracts.amend({
       kind: "markCriterion",
@@ -103,7 +105,8 @@ describe("contract criteria usecases", () => {
       criterionId: addedCriterion!.id,
     });
     expect(removed.doneWhen.map((criterion) => criterion.id)).toEqual(["dw-a1b2c3"]);
-    expect(removed.amendments).toHaveLength(4);
+    // 1 add + 1 remove = 2 structural amendments. Mark + unmark do not count.
+    expect(removed.amendments).toHaveLength(2);
   });
 
   it("rejects unmet evidence and missing criteria", async () => {

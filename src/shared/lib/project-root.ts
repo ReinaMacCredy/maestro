@@ -12,15 +12,26 @@ export function resolveMaestroProjectRoot(startDir: string): string {
   let gitFallback: string | undefined;
 
   while (true) {
+    const gitPath = join(current, GIT_DIR);
+    const hasGit = existsSync(gitPath);
+
+    if (hasGit) {
+      gitFallback ??= current;
+      // When `.git` is a worktree pointer file (linked worktree), the
+      // canonical .maestro/ lives in the main worktree — never in this
+      // linked checkout, even if a stale tracked .maestro/ snapshot
+      // exists here. Follow `.git/commondir` first; only fall through
+      // to the local .maestro/ if the commondir resolution fails.
+      if (isFile(gitPath)) {
+        const worktreeRoot = resolveMaestroRootFromGitFile(gitPath);
+        if (worktreeRoot) return worktreeRoot;
+      }
+    }
+
     if (existsSync(join(current, MAESTRO_DIR))) {
       return current;
     }
-    const gitPath = join(current, GIT_DIR);
-    if (existsSync(gitPath)) {
-      gitFallback ??= current;
-      const worktreeRoot = resolveMaestroRootFromGitFile(gitPath);
-      if (worktreeRoot) return worktreeRoot;
-    }
+
     if (current === root) {
       return gitFallback ?? startDir;
     }

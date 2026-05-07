@@ -10,7 +10,7 @@ describe("services composition root", () => {
     expect(source).toContain('./features/mission/services.js');
     expect(source).toContain('./features/memory/services.js');
     expect(source).toContain('./features/handoff/services.js');
-    expect(source).toContain('./features/ratchet/services.js');
+    expect(source).toContain('./features/memory-ratchet/services.js');
     expect(source).toContain('./features/graph/services.js');
     expect(source).toContain('./features/task/services.js');
 
@@ -19,7 +19,7 @@ describe("services composition root", () => {
     expect(source).not.toContain('./features/mission/index.js');
     expect(source).not.toContain('./features/memory/index.js');
     expect(source).not.toContain('./features/handoff/index.js');
-    expect(source).not.toContain('./features/ratchet/index.js');
+    expect(source).not.toContain('./features/memory-ratchet/index.js');
     expect(source).not.toContain('./features/graph/index.js');
     expect(source).not.toContain('./features/task/index.js');
   });

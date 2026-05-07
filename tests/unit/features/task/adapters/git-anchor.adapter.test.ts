@@ -209,4 +209,48 @@ describe("ShellGitAnchorAdapter", () => {
 
     expect(result.actualFilesTouched).toContain(".maestro/tasks/contract-templates/default.md");
   });
+
+  describe("resolveTreeSha", () => {
+    it("returns the same tree SHA for two commits with identical content", async () => {
+      await commitFile("data.txt", "hello world\n", "first commit");
+      const sha1 = await new ShellGitAnchorAdapter().resolveTreeSha(tmpDir);
+
+      // Amend without content change: create a new commit with same tree by
+      // using an empty commit that touches the same file with the same content.
+      // Actually do a second commit with different message but same file content.
+      await runCommand(["git", "commit", "--allow-empty", "-m", "empty commit same tree"], tmpDir);
+      const sha2 = await new ShellGitAnchorAdapter().resolveTreeSha(tmpDir);
+
+      // Two commits with the same tree content produce the same tree SHA
+      expect(sha1).toBe(sha2);
+      expect(sha1).toMatch(/^[0-9a-f]{40}$/);
+    });
+
+    it("returns a different tree SHA after content changes", async () => {
+      await commitFile("data.txt", "hello world\n", "first commit");
+      const sha1 = await new ShellGitAnchorAdapter().resolveTreeSha(tmpDir);
+
+      await commitFile("data.txt", "different content\n", "second commit");
+      const sha2 = await new ShellGitAnchorAdapter().resolveTreeSha(tmpDir);
+
+      expect(sha1).not.toBe(sha2);
+    });
+
+    it("resolves tree SHA for an explicit ref", async () => {
+      await commitFile("data.txt", "hello\n", "first");
+      const firstSha = await new ShellGitAnchorAdapter().resolveTreeSha(tmpDir, "HEAD");
+      const headRef = (await runCommand(["git", "rev-parse", "HEAD"], tmpDir)).stdout;
+
+      // Resolve by exact commit hash
+      const byCommitSha = await new ShellGitAnchorAdapter().resolveTreeSha(tmpDir, headRef);
+      expect(firstSha).toBe(byCommitSha);
+    });
+
+    it("throws on a non-existent ref", async () => {
+      await commitFile("data.txt", "hello\n", "first");
+      await expect(
+        new ShellGitAnchorAdapter().resolveTreeSha(tmpDir, "refs/heads/nonexistent-branch"),
+      ).rejects.toThrow();
+    });
+  });
 });

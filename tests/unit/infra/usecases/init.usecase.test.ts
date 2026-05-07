@@ -273,4 +273,134 @@ describe("initMaestro", () => {
         await expect(access(legacyCodexSkillPath)).rejects.toThrow();
       },
     );
+
+  it("creates .maestro/policies/owners.yaml on fresh init", async () => {
+    const config = mockConfig();
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    const ownersPath = join(tmpDir, ".maestro", "policies", "owners.yaml");
+    expect(result.created).toContain(ownersPath);
+
+    const content = await readFile(ownersPath, "utf8");
+    expect(content).toContain("policy_approver");
+    expect(content).toContain("ratchet_approver");
+    expect(content).toContain("sensitive_waiver");
+  });
+
+  it("does not overwrite existing .maestro/policies/owners.yaml on re-init", async () => {
+    const config = mockConfig();
+    const ownersPath = join(tmpDir, ".maestro", "policies", "owners.yaml");
+    await mkdir(join(tmpDir, ".maestro", "policies"), { recursive: true });
+    await writeFile(ownersPath, "policy_approver:\n  - \"@customowner\"\n");
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(ownersPath);
+    expect(result.created).not.toContain(ownersPath);
+    expect(await readFile(ownersPath, "utf8")).toBe("policy_approver:\n  - \"@customowner\"\n");
+  });
+
+  it("creates .maestro/policies/sensitive-paths.yaml on fresh init", async () => {
+    const config = mockConfig();
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    const policiesPath = join(tmpDir, ".maestro", "policies", "sensitive-paths.yaml");
+    expect(result.created).toContain(policiesPath);
+
+    const content = await readFile(policiesPath, "utf8");
+    expect(content).toContain("paths:");
+    expect(content).toContain("src/auth/**");
+    expect(content).toContain("bun.lock");
+  });
+
+  it("does not overwrite existing .maestro/policies/sensitive-paths.yaml on re-init", async () => {
+    const config = mockConfig();
+    const policiesPath = join(tmpDir, ".maestro", "policies", "sensitive-paths.yaml");
+    await mkdir(join(tmpDir, ".maestro", "policies"), { recursive: true });
+    await writeFile(policiesPath, "paths:\n  - \"custom/**\"\n");
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(policiesPath);
+    expect(result.created).not.toContain(policiesPath);
+    expect(await readFile(policiesPath, "utf8")).toBe("paths:\n  - \"custom/**\"\n");
+  });
+
+  it("creates .maestro/policies/risk.yaml on fresh init", async () => {
+    const config = mockConfig();
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    const riskPath = join(tmpDir, ".maestro", "policies", "risk.yaml");
+    expect(result.created).toContain(riskPath);
+
+    const content = await readFile(riskPath, "utf8");
+    expect(content).toContain("diff-intersects-sensitive-security");
+    expect(content).toContain("critical");
+    expect(content).toContain("diff-docs-only");
+    expect(content).toContain("low");
+  });
+
+  it("does not overwrite existing .maestro/policies/risk.yaml on re-init", async () => {
+    const config = mockConfig();
+    const riskPath = join(tmpDir, ".maestro", "policies", "risk.yaml");
+    await mkdir(join(tmpDir, ".maestro", "policies"), { recursive: true });
+    await writeFile(riskPath, "rows: []\n");
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(riskPath);
+    expect(result.created).not.toContain(riskPath);
+    expect(await readFile(riskPath, "utf8")).toBe("rows: []\n");
+  });
+
+  it("creates .maestro/policies/autopilot.yaml on fresh init", async () => {
+    const config = mockConfig();
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    const autopilotPath = join(tmpDir, ".maestro", "policies", "autopilot.yaml");
+    expect(result.created).toContain(autopilotPath);
+
+    const content = await readFile(autopilotPath, "utf8");
+    expect(content).toContain("auto_merge_allowed");
+    expect(content).toContain("required_witness_level");
+    expect(content).toContain("witnessed-by-maestro");
+  });
+
+  it("does not overwrite existing .maestro/policies/autopilot.yaml on re-init", async () => {
+    const config = mockConfig();
+    const autopilotPath = join(tmpDir, ".maestro", "policies", "autopilot.yaml");
+    await mkdir(join(tmpDir, ".maestro", "policies"), { recursive: true });
+    await writeFile(autopilotPath, "auto_merge_allowed:\n  low: true\n");
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(autopilotPath);
+    expect(result.created).not.toContain(autopilotPath);
+    expect(await readFile(autopilotPath, "utf8")).toBe("auto_merge_allowed:\n  low: true\n");
+  });
+
+  it("creates .maestro/policies/release.yaml on fresh init", async () => {
+    const config = mockConfig();
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    const releasePath = join(tmpDir, ".maestro", "policies", "release.yaml");
+    expect(result.created).toContain(releasePath);
+
+    const content = await readFile(releasePath, "utf8");
+    expect(content).toContain("require_signed_commits");
+    expect(content).toContain("require_proof_map_complete");
+  });
+
+  it("does not overwrite existing .maestro/policies/release.yaml on re-init", async () => {
+    const config = mockConfig();
+    const releasePath = join(tmpDir, ".maestro", "policies", "release.yaml");
+    await mkdir(join(tmpDir, ".maestro", "policies"), { recursive: true });
+    await writeFile(releasePath, "require_signed_commits: true\n");
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(releasePath);
+    expect(result.created).not.toContain(releasePath);
+    expect(await readFile(releasePath, "utf8")).toBe("require_signed_commits: true\n");
+  });
   });

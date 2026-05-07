@@ -246,6 +246,35 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
     return result.exitCode === 0;
   }
 
+  async collectChangedPaths(repoRoot: string, base: string, head: string): Promise<readonly string[]> {
+    const result = await execArgv(["git", "diff", "--name-only", `${base}..${head}`], { cwd: repoRoot });
+    if (result.exitCode !== 0 || !result.stdout) return [];
+    return splitPaths(result.stdout);
+  }
+
+  async collectAddedLines(repoRoot: string, base: string, head: string): Promise<readonly string[]> {
+    const result = await execArgv(["git", "diff", "--no-color", `${base}..${head}`], { cwd: repoRoot });
+    if (result.exitCode !== 0 || !result.stdout) return [];
+    return result.stdout
+      .split("\n")
+      .filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+  }
+
+  async collectUntrackedFiles(repoRoot: string): Promise<readonly string[]> {
+    const result = await execArgv(["git", "ls-files", "--others", "--exclude-standard"], { cwd: repoRoot });
+    if (result.exitCode !== 0 || !result.stdout) return [];
+    return filterTouchedPaths(result.stdout, "untracked");
+  }
+
+  async resolveTreeSha(cwd: string, ref?: string): Promise<string> {
+    const target = ref ?? "HEAD";
+    const result = await execArgv(["git", "rev-parse", `${target}^{tree}`], { cwd });
+    if (result.exitCode !== 0 || !result.stdout) {
+      throw new Error(`Failed to resolve tree SHA for ref "${target}": ${result.stderr || "unknown error"}`);
+    }
+    return result.stdout;
+  }
+
   private async collectMergeSourcedFiles(cwd: string, anchor: string, head: string): Promise<readonly string[]> {
     const merges = await execArgv(["git", "rev-list", "--merges", `${anchor}..${head}`], { cwd });
     if (merges.exitCode !== 0 || !merges.stdout) {
@@ -295,7 +324,8 @@ function isAlwaysIgnoredContractRuntimePath(path: string): boolean {
     || normalized.startsWith(".maestro/tasks/local-history/")
     || normalized.startsWith(".maestro/tasks/contracts/")
     || normalized.startsWith(".maestro/tasks/batches/")
-    || normalized.startsWith(".maestro/tasks/candidates/");
+    || normalized.startsWith(".maestro/tasks/candidates/")
+    || normalized.startsWith(".maestro/contracts/");
 }
 
 function isIgnoredUntrackedContractRuntimePath(path: string): boolean {
@@ -304,6 +334,11 @@ function isIgnoredUntrackedContractRuntimePath(path: string): boolean {
     || normalized === ".claude/scheduled_tasks.lock"
     || normalized === ".codex/config.toml"
     || normalized === ".codex/installation_id"
+    || normalized.startsWith(".maestro/verdicts/")
+    || normalized.startsWith(".maestro/contracts/")
+    || normalized.startsWith(".maestro/policies/.pending-loosenings")
+    || normalized.startsWith(".maestro/evidence/")
+    || normalized.startsWith(".maestro/runs/")
     || normalized.startsWith(".bun/install/cache/")
     || normalized.startsWith("Library/Caches/bun/")
     || normalized.startsWith(".codex/.tmp/")

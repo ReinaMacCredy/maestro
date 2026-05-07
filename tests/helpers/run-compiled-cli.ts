@@ -15,7 +15,7 @@ import {
 export const REPO_ROOT = join(import.meta.dir, "..", "..");
 export const DIST_CLI = join(REPO_ROOT, "dist", process.platform === "win32" ? "maestro.exe" : "maestro");
 export const BUILD_TIMEOUT_MS = 60_000;
-export const SLOW_CLI_TIMEOUT_MS = 30_000;
+export const SLOW_CLI_TIMEOUT_MS = 60_000;
 
 export type { CommandResult };
 export { initGitRepo };

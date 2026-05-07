@@ -1,0 +1,13 @@
+kind: autopilot
+id: autopilot-policy-custom
+version: "1"
+auto_merge_allowed:
+  low: true
+  medium: false
+  high: false
+  critical: false
+required_witness_level:
+  low: witnessed-by-ci
+  medium: witnessed-by-maestro
+  high: witnessed-by-maestro
+  critical: witnessed-by-maestro

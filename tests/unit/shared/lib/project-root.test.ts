@@ -36,4 +36,23 @@ describe("resolveMaestroProjectRoot", () => {
 
     expect(resolveMaestroProjectRoot(repo)).toBe(await realpath(repo));
   });
+
+  it("returns the main repo root when the worktree has a tracked local .maestro/", async () => {
+    // Reproduces the v0.72.2 demo bug: in a real worktree created from a
+    // commit that already had .maestro/ committed, the worktree's checkout
+    // contains a tracked .maestro/ snapshot. The resolver must still walk
+    // via `.git/commondir` to the main worktree — the local snapshot is
+    // never canonical in a linked worktree.
+    const mainRepo = join(tmp, "repo");
+    const worktree = join(tmp, "repo-feature");
+    const worktreeGitDir = join(mainRepo, ".git", "worktrees", "repo-feature");
+
+    await mkdir(join(mainRepo, ".maestro"), { recursive: true });
+    await mkdir(join(worktree, ".maestro", "policies"), { recursive: true }); // tracked .maestro/ snapshot
+    await mkdir(worktreeGitDir, { recursive: true });
+    await writeFile(join(worktree, ".git"), `gitdir: ${worktreeGitDir}\n`);
+    await writeFile(join(worktreeGitDir, "commondir"), "../..\n");
+
+    expect(resolveMaestroProjectRoot(worktree)).toBe(await realpath(mainRepo));
+  });
 });

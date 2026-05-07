@@ -123,12 +123,28 @@ describe("computeContractVerdictForTask", () => {
       id: "c-current",
       claimedAtCommit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     });
+    // Sibling must be closed with actualFilesTouched intersecting ours,
+    // otherwise it has not actually raced on any file (just on the git
+    // window). Open candidates are deferred until they close.
     const sibling = contractFixture({
       id: "c-sibling",
       taskId: "tsk-sibling",
-      status: "amended",
+      status: "fulfilled",
       claimedAtCommit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      closedAtCommit: "dddddddddddddddddddddddddddddddddddddddd",
       lockedAt: "2026-04-21T00:10:00.000Z",
+      closedAt: "2026-04-21T02:00:00.000Z",
+      verdict: {
+        fulfilled: true,
+        computedAt: "2026-04-21T02:00:00.000Z",
+        actualFilesTouched: ["README.md"],
+        expectedFilesMatched: [],
+        outOfScopeFiles: [],
+        forbiddenTouched: [],
+        filesExpectedUnused: [],
+        unmetCriteria: [],
+        metCriteria: [],
+      },
     });
 
     const gitAnchor: GitAnchorPort = {

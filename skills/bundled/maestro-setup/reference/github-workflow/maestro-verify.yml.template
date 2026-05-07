@@ -1,0 +1,78 @@
+# .github/workflows/maestro-verify.yml
+#
+# Maestro CI verification — installs the maestro binary and runs `maestro ci
+# verify` on every pull request. The GitHub Check posted by this job is the
+# authoritative merge gate.
+#
+# Customize:
+#   - Pin MAESTRO_VERSION to a release you trust.
+#   - Adjust the runs-on label if your org uses self-hosted runners.
+#   - Adjust the task-id resolution step (see "Resolve task id" below) if your
+#     team's branch / PR-title convention differs from `tsk-<6 hex>`.
+#   - Add concurrency / timeout-minutes if needed.
+#
+# See https://github.com/<your-org>/maestro/blob/main/docs/ci-integration.md
+# for the full reference.
+
+name: Maestro Verify
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+env:
+  MAESTRO_VERSION: 0.69.0   # Pin to a known release.
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install maestro
+        run: |
+          set -euo pipefail
+          curl -L --fail \
+            "https://github.com/<your-org>/maestro/releases/download/v${MAESTRO_VERSION}/maestro-${MAESTRO_VERSION}-linux-x64.tar.gz" \
+            -o /tmp/maestro.tar.gz
+          mkdir -p /tmp/maestro
+          tar -xzf /tmp/maestro.tar.gz -C /tmp/maestro
+          sudo install -m 0755 /tmp/maestro/maestro /usr/local/bin/maestro
+          maestro --version
+
+      # `maestro ci verify` requires --task <id>. The task-per-PR contract
+      # means each PR maps to exactly one tsk-<6 hex> identifier. We look in:
+      #   1. branch name (e.g. tsk-a1b2c3-fix-login)
+      #   2. PR title    (e.g. "fix(login): handle empty token (tsk-a1b2c3)")
+      #   3. PR body     (e.g. a "Task: tsk-a1b2c3" line)
+      # Replace this step if your team uses a different convention.
+      - name: Resolve task id
+        id: task
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY:  ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          TASK_ID=$(printf '%s\n%s\n%s\n' "$HEAD_REF" "$PR_TITLE" "$PR_BODY" \
+            | grep -oE 'tsk-[0-9a-f]{6}' | head -n 1 || true)
+          if [ -z "$TASK_ID" ]; then
+            echo "::error::Could not find tsk-<6 hex> in branch name, PR title, or PR body."
+            echo "::error::Add the task id to one of those, or replace this step with your own resolver."
+            exit 1
+          fi
+          echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+          echo "Resolved task id: $TASK_ID"
+
+      - name: Verify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          maestro ci verify --task "${{ steps.task.outputs.task_id }}"

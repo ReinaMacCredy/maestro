@@ -45,9 +45,20 @@ feedback.jsonl
 # Claude plans
 .claude/plans/
 
+# Claude Code agent worktrees: transient scratch space for parallel agents
+.claude/worktrees/
+**/.claude/worktrees/
+
 # The Desktop App for Maestro is still under development.
 /apps/
 .gitnexus
 
 # Maestro runtime state
 .maestro/sessions/
+.maestro/policies/.pending-loosenings.json
+# Verdict store — derived, like evidence (re-computable from contract+diff+evidence)
+.maestro/verdicts/
+# Run-state — derived per-task execution counters (retries, wall-clock, tokens)
+.maestro/runs/
+# L2 versioned contract mirror — derived from .maestro/tasks/contracts/ (canonical L1 store)
+.maestro/contracts/

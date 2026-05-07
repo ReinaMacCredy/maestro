@@ -3,6 +3,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BUNDLED_SKILL_TEMPLATES } from "@/infra/domain/bundled-skill-templates.js";
+import { parseYaml } from "@/shared/lib/yaml.js";
 import { isIgnoredSkillSourceArtifact } from "../../../../scripts/skill-template-source-lib";
 
 const ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
@@ -80,6 +81,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
       "maestro-qa",
       "maestro-setup",
       "maestro-task",
+      "maestro-verify",
     ]);
   });
 
@@ -201,6 +203,28 @@ Before non-trivial work:
     const index = setup!.files.find((entry) => entry.path === "reference/styleguides/INDEX.md");
     expect(index?.content).toContain("excludes external Dart and Kotlin guides");
     expect(index?.content).toContain("code samples under Apache 2.0");
+  });
+
+  it("ships maestro-setup CI workflow template as a reference asset", () => {
+    const setup = BUNDLED_SKILL_TEMPLATES.find((template) => template.name === "maestro-setup");
+    expect(setup).toBeDefined();
+
+    const templatePath = "reference/github-workflow/maestro-verify.yml.template";
+    const templateFile = setup!.files.find((file) => file.path === templatePath);
+    expect(templateFile, `${templatePath} present in maestro-setup bundle`).toBeDefined();
+
+    // Parses as valid YAML with no error.
+    interface WorkflowYaml {
+      name?: string;
+      permissions?: Record<string, string>;
+    }
+    let parsed: WorkflowYaml;
+    expect(() => {
+      parsed = parseYaml<WorkflowYaml>(templateFile!.content);
+    }).not.toThrow();
+
+    expect(parsed!.name).toBe("Maestro Verify");
+    expect(parsed!.permissions?.checks).toBe("write");
   });
 
   it("marks bundled shell helpers as executable", () => {

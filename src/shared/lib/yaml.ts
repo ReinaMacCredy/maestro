@@ -1,4 +1,5 @@
 import { parse, stringify } from "yaml";
+import { MaestroError } from "@/shared/errors.js";
 
 export function parseYaml<T>(content: string): T {
   return parse(content) as T;
@@ -6,6 +7,37 @@ export function parseYaml<T>(content: string): T {
 
 export function stringifyYaml(data: unknown): string {
   return stringify(data);
+}
+
+/**
+ * Parse a policy YAML file and validate it is a top-level object. On parse
+ * failure, throws a MaestroError that includes the failing line number when
+ * the underlying yaml library exposes one.
+ */
+export function parsePolicyYaml<T extends Record<string, unknown>>(
+  text: string,
+  filename: string,
+): T {
+  let raw: unknown;
+  try {
+    raw = parse(text) ?? {};
+  } catch (err: unknown) {
+    const yamlErr = err as { linePos?: Array<{ line: number }> };
+    const line = yamlErr.linePos?.[0]?.line;
+    const lineInfo = line !== undefined ? ` at line ${line}` : "";
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new MaestroError(`${filename} malformed${lineInfo}: ${msg}`, [
+      "Fix the YAML syntax and re-run",
+    ]);
+  }
+
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new MaestroError(`${filename} malformed: expected top-level object`, [
+      `Got ${Array.isArray(raw) ? "array" : typeof raw}`,
+    ]);
+  }
+
+  return raw as T;
 }
 
 /**

@@ -1,6 +1,12 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { resolveCodexHome } from "@/shared/domain/defaults.js";
+import {
+  resolveAgentSkillsSharedRoot,
+  resolveCodexHome,
+  resolveHermesConfigPath,
+  resolveHermesHome,
+  resolveHermesSkillsRoot,
+} from "@/shared/domain/defaults.js";
 
 export const BLOCK_START_MARKER = "<!-- maestro:start -->";
 export const BLOCK_END_MARKER = "<!-- maestro:end -->";
@@ -10,17 +16,65 @@ export const REFERENCE_FILE = "MAESTRO.md";
 export interface AgentConfigSpec {
   readonly slug: string;
   readonly displayName: string;
-  readonly configDir: string;
-  readonly configFile: string;
+  readonly providerId: "codex" | "claude" | "hermes" | "agentskills";
+  readonly configDir?: string;
+  readonly configFile?: string;
   readonly agentFlag: string;
   readonly configScope?: "home" | "project";
+  readonly runtime: boolean;
+  readonly skillTarget: boolean;
+  readonly alwaysDetected?: boolean;
+  readonly binary?: string;
 }
 
-// droid and gemini will be re-added once skill support lands in those CLIs
 export const SUPPORTED_AGENTS: readonly AgentConfigSpec[] = [
-  { slug: "claude-code", displayName: "Claude Code", configDir: ".claude", configFile: "CLAUDE.md", agentFlag: "claude" },
-  { slug: "codex", displayName: "Codex", configDir: ".codex", configFile: "AGENTS.md", agentFlag: "codex" },
+  {
+    slug: "claude-code",
+    providerId: "claude",
+    displayName: "Claude Code",
+    configDir: ".claude",
+    configFile: "CLAUDE.md",
+    agentFlag: "claude",
+    runtime: true,
+    skillTarget: true,
+    binary: "claude",
+  },
+  {
+    slug: "codex",
+    providerId: "codex",
+    displayName: "Codex",
+    configDir: ".codex",
+    configFile: "AGENTS.md",
+    agentFlag: "codex",
+    runtime: true,
+    skillTarget: true,
+    binary: "codex",
+  },
+  {
+    slug: "hermes",
+    providerId: "hermes",
+    displayName: "Hermes",
+    configDir: ".hermes",
+    configFile: "config.yaml",
+    agentFlag: "hermes",
+    runtime: true,
+    skillTarget: true,
+    alwaysDetected: true,
+    binary: "hermes",
+  },
+  {
+    slug: "agentskills",
+    providerId: "agentskills",
+    displayName: "AgentSkills",
+    agentFlag: "agentskills",
+    runtime: false,
+    skillTarget: true,
+    alwaysDetected: true,
+  },
 ];
+
+export const RUNTIME_AGENTS = SUPPORTED_AGENTS.filter((agent) => agent.runtime);
+export const SKILL_TARGET_AGENTS = SUPPORTED_AGENTS.filter((agent) => agent.skillTarget);
 
 /**
  * Resolve the agent's home-scoped config root. For Codex this honors the
@@ -28,6 +82,9 @@ export const SUPPORTED_AGENTS: readonly AgentConfigSpec[] = [
  */
 function resolveAgentHomeRoot(agent: AgentConfigSpec, homeDir: string): string {
   if (agent.slug === "codex") return resolveCodexHome(homeDir);
+  if (agent.slug === "hermes") return resolveHermesHome(homeDir);
+  if (agent.slug === "agentskills") return resolveAgentSkillsSharedRoot(homeDir);
+  if (agent.configDir === undefined) return homeDir;
   return join(homeDir, agent.configDir);
 }
 
@@ -36,29 +93,34 @@ function resolveAgentHomeRoot(agent: AgentConfigSpec, homeDir: string): string {
  * `~/.claude/skills/` for Claude Code.
  */
 export function agentSkillsRoot(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
+  if (agent.slug === "agentskills") return resolveAgentSkillsSharedRoot(homeDir);
+  if (agent.slug === "hermes") return resolveHermesSkillsRoot(homeDir);
   if (agent.configScope === "project") {
-    return join(projectDir, agent.configDir, "skills");
+    return join(projectDir, agent.configDir ?? "", "skills");
   }
   return join(resolveAgentHomeRoot(agent, homeDir), "skills");
 }
 
 export function agentConfigPath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
+  if (agent.slug === "hermes") return resolveHermesConfigPath(homeDir);
+  if (agent.configFile === undefined) return agentConfigDirPath(agent, projectDir, homeDir);
   if (agent.configScope === "project") {
-    return join(projectDir, agent.configDir, agent.configFile);
+    return join(projectDir, agent.configDir ?? "", agent.configFile);
   }
   return join(resolveAgentHomeRoot(agent, homeDir), agent.configFile);
 }
 
 export function agentConfigDirPath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
   if (agent.configScope === "project") {
-    return join(projectDir, agent.configDir);
+    return join(projectDir, agent.configDir ?? "");
   }
   return resolveAgentHomeRoot(agent, homeDir);
 }
 
 export function agentReferencePath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
+  if (agent.configFile === undefined) return agentConfigDirPath(agent, projectDir, homeDir);
   if (agent.configScope === "project") {
-    return join(projectDir, agent.configDir, REFERENCE_FILE);
+    return join(projectDir, agent.configDir ?? "", REFERENCE_FILE);
   }
   return join(resolveAgentHomeRoot(agent, homeDir), REFERENCE_FILE);
 }

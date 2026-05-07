@@ -76,6 +76,7 @@ export async function runLoggedCommand(
     readonly cwd?: string;
     readonly logPath: string;
     readonly wait: boolean;
+    readonly env?: Record<string, string>;
   },
 ): Promise<LoggedCommandResult> {
   await ensureDir(dirname(opts.logPath));
@@ -92,6 +93,7 @@ export async function runLoggedCommand(
   try {
     child = spawn(argv[0]!, argv.slice(1), {
       cwd: opts.cwd,
+      env: opts.env ? { ...process.env, ...opts.env } : process.env,
       detached: !opts.wait,
       stdio: ["ignore", logFd, logFd],
     });

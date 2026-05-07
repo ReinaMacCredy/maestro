@@ -14,10 +14,14 @@ import type {
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
-import type { RatchetStorePort } from "@/features/ratchet";
+import type { RatchetStorePort } from "@/features/memory-ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort } from "@/features/handoff";
-import type { TaskQueryPort } from "@/features/task";
+import type { TaskQueryPort, RunStateStorePort, ContractVersionStorePort } from "@/features/task";
+import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
+import type { EvidenceStorePort } from "@/features/evidence";
+import type { VerdictStorePort } from "@/features/verdict";
+import { buildAutopilotSnapshot } from "./autopilot-screen.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { buildMissionControlEnvironmentSummary } from "./environment-projection.js";
 import { buildMissionControlMemorySnapshot } from "./memory-projection.js";
@@ -46,8 +50,13 @@ export interface SnapshotDeps {
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
+  evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
+  verdictStore?: VerdictStorePort;
+  runStateStore?: RunStateStorePort;
+  contractVersionStore?: ContractVersionStorePort;
+  contractStore?: ContractStoreQueryPort;
   cwd: string;
 }
 
@@ -60,6 +69,7 @@ export interface HomeSnapshotDeps {
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
+  evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
   cwd: string;
@@ -79,7 +89,25 @@ export async function loadSnapshotInput(
     ? resolveMaestroProjectRoot(deps.cwd)
     : undefined;
   const taskBoardPromise = options.includeTaskBoard === true
-    ? buildTaskBoard(deps.taskStore)
+    ? buildTaskBoard(deps.taskStore, deps.evidenceStore)
+    : Promise.resolve(undefined);
+  const autopilotPromise = (
+    deps.taskStore !== undefined
+    && deps.verdictStore !== undefined
+    && deps.runStateStore !== undefined
+    && deps.contractVersionStore !== undefined
+    && deps.contractStore !== undefined
+  )
+    ? buildAutopilotSnapshot(
+        {
+          taskStore: deps.taskStore,
+          verdictStore: deps.verdictStore,
+          runStateStore: deps.runStateStore,
+          contractVersionStore: deps.contractVersionStore,
+          contractStore: deps.contractStore,
+        },
+        missionId,
+      )
     : Promise.resolve(undefined);
 
   // Ingest replies FIRST when requested, so the features list below reflects
@@ -108,10 +136,11 @@ export async function loadSnapshotInput(
     gitState,
     memorySnapshot,
     taskBoard,
+    autopilot,
   ] = await Promise.all([
     deps.missions.loadFullState(missionId),
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
-    deps.config.loadLayers(deps.cwd),
+    deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.getState(deps.cwd),
     buildMissionControlMemorySnapshot({
       correctionStore: deps.correctionStore,
@@ -121,6 +150,7 @@ export async function loadSnapshotInput(
       cwd: deps.cwd,
     }),
     taskBoardPromise,
+    autopilotPromise,
   ]);
 
   // Principle effectiveness piggybacks on includeReplies because the reply
@@ -142,6 +172,7 @@ export async function loadSnapshotInput(
     taskBoard,
     replies: ingest.replies,
     principleEffectiveness,
+    autopilot,
   };
 }
 
@@ -153,7 +184,7 @@ export async function loadHomeSnapshotInput(
     ? resolveMaestroProjectRoot(deps.cwd)
     : undefined;
   const taskBoardPromise = options.includeTaskBoard === true
-    ? buildTaskBoard(deps.taskStore)
+    ? buildTaskBoard(deps.taskStore, deps.evidenceStore)
     : Promise.resolve(undefined);
   // Replies in home mode: list without ingest (home mode has no mission to
   // update). Home surface is purely read-only per Mission Control contracts.
@@ -165,7 +196,7 @@ export async function loadHomeSnapshotInput(
     : Promise.resolve(undefined);
   const [env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
-    deps.config.loadLayers(deps.cwd),
+    deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
     buildMissionControlMemorySnapshot({
       correctionStore: deps.correctionStore,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildPreviewState, getApplicablePreviewScreens } from "@/tui/app/preview-state.js";
+import { buildPreviewState, getApplicablePreviewScreens, PREVIEW_SCREENS } from "@/tui/app/preview-state.js";
 import type { MissionControlSnapshot } from "@/tui/state/types.js";
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
@@ -123,7 +123,17 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("buildPreviewState", () => {
-  it("keeps home previews limited to non-mission screens", () => {
+  it("PREVIEW_SCREENS includes autopilot and has 14 entries", () => {
+    expect(PREVIEW_SCREENS).toContain("autopilot");
+    expect(PREVIEW_SCREENS).toHaveLength(14);
+  });
+
+  it("getApplicablePreviewScreens returns autopilot for mission mode", () => {
+    const screens = getApplicablePreviewScreens({ mode: "mission" });
+    expect(screens).toContain("autopilot");
+  });
+
+  it("keeps home previews limited to non-mission screens (no autopilot)", () => {
     const screens = getApplicablePreviewScreens({ mode: "home" });
 
     expect(screens).toEqual([
@@ -138,6 +148,7 @@ describe("buildPreviewState", () => {
       "principles",
       "help",
     ]);
+    expect(screens).not.toContain("autopilot");
   });
 
   it("defaults to the overview left pane when no selector is provided", () => {
@@ -261,5 +272,39 @@ describe("buildPreviewState", () => {
         featureId: "f1",
       })
       ).toThrow("--feature is only supported");
+  });
+
+  it("opens autopilot screen in mission mode", () => {
+    const state = buildPreviewState({
+      snapshot: makeSnapshot(),
+      screen: "autopilot",
+    });
+
+    expect(state.modal).toEqual({
+      kind: "autopilot",
+      selectedIndex: 0,
+      returnTarget: undefined,
+    });
+  });
+
+  it("rejects autopilot preview in home mode", () => {
+    expect(() =>
+      buildPreviewState({
+        snapshot: makeSnapshot({
+          mode: "home",
+          features: [],
+          taskPreviews: [],
+          activeFeature: null,
+          home: {
+            headline: "No missions yet",
+            summary: "Create your first mission.",
+            locationLabel: "In a git repository",
+            checks: [],
+            actions: [],
+          },
+        }),
+        screen: "autopilot",
+      })
+    ).toThrow("Autopilot preview requires a mission");
   });
 });

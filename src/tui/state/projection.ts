@@ -42,6 +42,7 @@ import type {
 import { buildIgnoredProjectOverrideChecks } from "./environment-projection.js";
 import { buildReplyInbox } from "./reply-projection.js";
 import type { PrincipleEffectivenessRow, ReplyInboxEntry } from "./screen-types.js";
+import type { AutopilotSnapshot } from "./autopilot-screen.js";
 
 interface FeatureGraphEntry {
   readonly feature: Feature;
@@ -66,6 +67,7 @@ export interface SnapshotProjectionInput {
   readonly taskBoard: TaskBoardSnapshot | undefined;
   readonly replies: readonly AgentReply[] | undefined;
   readonly principleEffectiveness: readonly PrincipleEffectivenessRow[] | undefined;
+  readonly autopilot?: AutopilotSnapshot;
 }
 
 export interface HomeProjectionInput {
@@ -92,6 +94,7 @@ export function projectSnapshot(input: SnapshotProjectionInput): MissionControlS
     taskBoard,
     replies,
     principleEffectiveness,
+    autopilot,
   } = input;
 
   const report = deriveMissionReport(mission, features, assertions);
@@ -223,6 +226,7 @@ export function projectSnapshot(input: SnapshotProjectionInput): MissionControlS
     timelineMilestones,
     replyInbox,
     principleEffectiveness,
+    autopilot,
     home: null,
   };
 }

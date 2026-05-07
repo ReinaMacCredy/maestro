@@ -12,7 +12,7 @@ export function registerUpdateCommand(program: Command): void {
     .command("update")
     .description("Update maestro from the latest published release and/or refresh bundled agent skills")
     .option("--agents-only", "Only refresh bundled agent skills, skip binary download")
-    .option("--version <version>", "Install a specific release version or tag")
+    .option("--release <version>", "Install a specific release version or tag")
     .option("--force", "Reinstall even when already on the latest published release")
     .option("--check", "Print whether a newer release is available; exit 2 if newer, 0 otherwise. Does not download.")
     .option("--json", "Output as JSON")
@@ -49,7 +49,7 @@ export function registerUpdateCommand(program: Command): void {
 
       if (!opts.agentsOnly) {
         binary = await installReleaseBinary({
-          version: opts.version,
+          version: opts.release,
           force: opts.force,
         });
       }

@@ -33,6 +33,17 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
   constructor(private readonly roots: SessionRootOptions = {}) {}
 
   async detect(cwd: string): Promise<AgentSession | undefined> {
+    const maestroAgent = process.env.MAESTRO_AGENT?.trim();
+    const maestroSessionId = process.env.MAESTRO_SESSION_ID?.trim();
+    if (maestroAgent && maestroSessionId) {
+      return {
+        agent: maestroAgent,
+        sessionId: maestroSessionId,
+        sourcePath: `env:MAESTRO_SESSION_ID:${maestroSessionId}`,
+        startedAt: undefined,
+      };
+    }
+
     if (process.env.CLAUDECODE === "1") {
       const session = await readJson<ClaudeSessionFile>(
         join(this.resolveClaudeSessionsDir(), `${process.ppid}.json`),

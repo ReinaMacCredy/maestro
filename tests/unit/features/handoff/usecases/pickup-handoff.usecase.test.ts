@@ -453,15 +453,15 @@ describe("pickupHandoff", () => {
     expect(reloaded?.consumedAt).toBeUndefined();
   });
 
-  it("allows an explicit standalone pickup for a foreign task-linked packet", async () => {
+  it("refuses --standalone pickup of a foreign task-linked packet to avoid poisoning the source workspace", async () => {
     const task = await createTask(taskStore, { title: "Foreign project takeover" });
     await claimTask(taskStore, task.id, { sessionId: "codex-old-session" });
-    const started = (await updateTask(
+    await updateTask(
       taskStore,
       task.id,
       { status: "in_progress" },
       { sessionId: "codex-old-session" },
-    )).task;
+    );
     const foreignProjectRoot = join(tmpDir, "foreign-project");
     await mkdir(foreignProjectRoot, { recursive: true });
     const launch = await handoffStore.create({
@@ -474,6 +474,43 @@ describe("pickupHandoff", () => {
       targetDir: foreignProjectRoot,
       refs: { taskId: task.id, projectRoot: foreignProjectRoot },
       prompt: "## Task\n\nTake the prompt only\n",
+    });
+
+    await expect(
+      pickupHandoff(
+        {
+          handoffStore,
+          taskStore,
+          contracts,
+          continuationStore,
+          continuationHistory,
+        },
+        {
+          id: launch.id,
+          actorAgent: "claude",
+          currentProjectRoot: resolveMaestroProjectRoot(tmpDir),
+          standalone: true,
+        },
+      ),
+    ).rejects.toThrow(`Handoff ${launch.id} belongs to project ${foreignProjectRoot}`);
+
+    const reloaded = await handoffStore.get(launch.id);
+    expect(reloaded?.consumedAt).toBeUndefined();
+  });
+
+  it("still allows --standalone pickup of a task-less foreign packet (prompt-only)", async () => {
+    const foreignProjectRoot = join(tmpDir, "foreign-project");
+    await mkdir(foreignProjectRoot, { recursive: true });
+    const launch = await handoffStore.create({
+      task: "No task linkage",
+      name: "[Handoff] prompt-only",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: foreignProjectRoot,
+      targetDir: foreignProjectRoot,
+      refs: { projectRoot: foreignProjectRoot },
+      prompt: "## Task\n\nNo task linkage\n",
     });
 
     const result = await pickupHandoff(
@@ -493,13 +530,6 @@ describe("pickupHandoff", () => {
     );
 
     expect(result.taskId).toBeUndefined();
-    expect(result.ownerId).toBeUndefined();
     expect(result.record.consumedAt).toBeTruthy();
-
-    const after = await taskStore.get(task.id);
-    expect(after).toMatchObject({
-      status: "in_progress",
-      assignee: started.assignee,
-    });
   });
 });

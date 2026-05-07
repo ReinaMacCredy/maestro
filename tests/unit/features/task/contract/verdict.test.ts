@@ -336,4 +336,42 @@ describe("computeContractVerdict", () => {
     expect(computed.verdict.outOfScopeFiles).toEqual(["README.md"]);
     expect(computed.verdict.notes).toContain("Previously in scope under amendments: README.md");
   });
+
+  it("paths under .maestro/ are exempt from scope evaluation — substrate metadata", () => {
+    // Greenfield agents naturally `git add -A` after `maestro init` and
+    // commit substrate alongside user code. Pre-fix, that included
+    // .maestro/contracts/, .maestro/tasks/, .maestro/policies/ in
+    // actualFilesTouched, every one fell outside `filesExpected`, and
+    // `task update --status completed` auto-flipped the contract to
+    // `broken`. The exemption keeps the verdict honest about user code.
+    const contract = contractFixture({
+      scope: { filesExpected: ["src/**"], filesForbidden: [".maestro/policies/**"] },
+    });
+    const gitResult: GitTouchedFilesResult = {
+      gitAvailable: true,
+      actualFilesTouched: [
+        "src/index.ts",
+        ".maestro/contracts/tsk-a1b2c3/v1.json",
+        ".maestro/tasks/NOW.md",
+        ".maestro/policies/risk.yaml",
+      ],
+      closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+      anchorFallback: "direct",
+    };
+
+    const computed = computeContractVerdict(
+      contract,
+      gitResult,
+      { summary: "ok", verifiedBy: ["manual"], capturedAt: "2026-04-21T00:10:00.000Z" },
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+    );
+
+    // Even forbidden globs inside .maestro/ are exempt — substrate writes
+    // are owned by the CLI, not by the user's task.
+    expect(computed.verdict.outOfScopeFiles).toEqual([]);
+    expect(computed.verdict.forbiddenTouched).toEqual([]);
+    expect(computed.verdict.expectedFilesMatched).toEqual(["src/index.ts"]);
+    expect(computed.verdict.fulfilled).toBe(true);
+  });
 });

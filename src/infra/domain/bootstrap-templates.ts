@@ -97,6 +97,10 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 `,
   },
   {
+    path: ".maestro/specs/.gitkeep",
+    content: "",
+  },
+  {
     path: ".maestro/tasks/contract-templates/default.md",
     content: `intent: >
   State what will change and why in 1-3 sentences.
@@ -107,6 +111,22 @@ scope:
 doneWhen:
   - text: Describe the observable signal that proves the task is done.
     kind: manual
+    # kind can be 'manual' (human verification) or 'receipt-hint' (auto-tick
+    # from --verified-by tags at completion). Use receipt-hint when the
+    # criterion text is short and matches a --verified-by tag exactly.
+# Optional: cap how many times the contract may be structurally amended
+# (adding files to scope, changing intent, adding/removing criteria).
+# Marking criteria met/unmet is workflow progress and does NOT count.
+# amendmentBudget:
+#   maxAmendments: 2
+#   maxPathsPerAmendment: 5
+#   forbiddenAmendmentPaths: []
+# Optional: cap retries, wall-clock seconds, and tokens for this task.
+# When any limit is exceeded, the next verdict request returns BLOCK.
+# costBudget:
+#   maxRetries: 3
+#   maxWallClockSeconds: 1800
+#   maxTokens: 100000
 `,
   },
   {
@@ -226,6 +246,133 @@ Suggested contents:
 - review findings
 - validation playbooks
 - command transcripts worth preserving
+`,
+  },
+  {
+    path: ".maestro/policies/sensitive-paths.yaml",
+    content: `# Default sensitive-path globs for Maestro Trust Verifier.
+# Paths matching these globs trigger checkSensitivePaths findings (advisory at L2,
+# may gate at L7 per Rule 12). Extend or relax for your repo.
+paths:
+  - "src/auth/**"
+  - "src/payments/**"
+  - "**/secrets/**"
+  - "package.json"
+  - "bun.lock"
+  - ".github/workflows/**"
+  - "**/migrations/**"
+  - "**/permissions/**"
+`,
+  },
+  {
+    path: ".maestro/policies/owners.yaml",
+    content: `# Decision-authority roles for Maestro policy enforcement.
+# Each role is a list of GitHub usernames or team handles (e.g., "@org/team").
+# Empty lists default to "any maintainer" (resolved via CODEOWNERS or repo-admin
+# status if 'gh' CLI is available at runtime).
+#
+# - policy_approver: approves Policy file changes (L3+).
+# - ratchet_approver: approves Ratchet promotions (L7+).
+# - sensitive_waiver: signs off on changes to sensitive paths (L5+).
+policy_approver: []
+ratchet_approver: []
+sensitive_waiver: []
+`,
+  },
+  {
+    path: ".maestro/policies/risk.yaml",
+    content: `# Risk class derivation policy for Maestro Trust Substrate.
+# Maps deterministic diff signals to a derived RiskClass.
+# Rows are evaluated in order; first match wins.
+# See ROADMAP §"Risk Class Enumeration" for the normative table.
+#
+# Valid derived_class values: low, medium, high, critical
+kind: risk
+id: risk-policy-default
+version: "1"
+rows:
+  - signal: diff-intersects-sensitive-security
+    derived_class: critical
+    description: >-
+      Diff intersects sensitive_paths.security set
+      (auth/**, secrets/**, permissions/**, payments/**)
+  - signal: diff-modifies-dependency-manifests
+    derived_class: high
+    description: >-
+      Diff modifies dependency manifests
+      (package.json, bun.lock, Cargo.toml, requirements.txt, etc.)
+  - signal: diff-modifies-migrations
+    derived_class: high
+    description: >-
+      Diff includes database migration files
+      (paths matching policies/migration_paths)
+  - signal: diff-modifies-ci-workflows
+    derived_class: high
+    description: >-
+      Diff modifies CI workflow files
+      (.github/workflows/**, .circleci/**, .gitlab-ci.yml)
+  - signal: diff-modifies-policy-files
+    derived_class: high
+    description: >-
+      Diff modifies policies/, ratchets/, or owners.yaml in .maestro/
+  - signal: diff-modifies-build-config
+    derived_class: medium
+    description: >-
+      Diff modifies build configuration
+      (tsconfig.json, bunfig.toml, vite.config.*, etc.)
+  - signal: diff-source-only
+    derived_class: medium
+    description: >-
+      Any source code change not matched by the above rows
+      (default for source changes)
+  - signal: diff-docs-only
+    derived_class: low
+    description: >-
+      Diff is docs-only, comment-only, or formatting-only
+`,
+  },
+  {
+    path: ".maestro/policies/autopilot.yaml",
+    content: `# Autopilot policy for Maestro Trust Substrate.
+# Controls whether Maestro may auto-merge and what witness level is required,
+# per risk class. Disabled by default — enable only after L6 is shipped.
+#
+# auto_merge_allowed: whether maestro may auto-merge for each risk class.
+# required_witness_level: minimum evidence trust level required before merge.
+#
+# Valid required_witness_level values:
+#   witnessed-by-maestro
+#   witnessed-by-ci
+#   agent-claimed-locally
+#   agent-claimed-and-not-reproducible
+kind: autopilot
+id: autopilot-policy-default
+version: "1"
+auto_merge_allowed:
+  low: false      # Enable when L6 is active and evidence quality is verified
+  medium: false   # Only eligible if all evidence is witnessed-by-maestro or witnessed-by-ci
+  high: false     # Ineligible by default; human review required at L5
+  critical: false # Always ineligible; human review required regardless of evidence
+required_witness_level:
+  low: witnessed-by-maestro
+  medium: witnessed-by-maestro
+  high: witnessed-by-maestro
+  critical: witnessed-by-maestro
+`,
+  },
+  {
+    path: ".maestro/policies/release.yaml",
+    content: `# Release gate policy for Maestro Trust Substrate.
+# Controls release-time enforcement rules.
+# See ROADMAP L8 for the full release gate specification.
+#
+# require_signed_commits: block release if any commit in the range is unsigned.
+# require_proof_map_complete: block release if the proof map has unfilled entries.
+kind: release
+id: release-policy-default
+version: "1"
+require_signed_commits: false     # Tighten at L8 when signing is enforced repo-wide
+require_proof_map_complete: false # Tighten at L8 when proof maps are required
 `,
   },
 ];

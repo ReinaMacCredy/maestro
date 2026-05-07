@@ -57,7 +57,15 @@ export { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
 export { FsCandidateStoreAdapter } from "./adapters/fs-candidate-store.adapter.js";
 export { FsTaskContinuationStoreAdapter } from "./adapters/fs-task-continuation-store.adapter.js";
 export { FsTaskContinuationHistoryStoreAdapter } from "./adapters/fs-task-continuation-history-store.adapter.js";
-export type { Contract } from "./domain/contract/contract-types.js";
+export type { Contract, RiskClass } from "./domain/contract/contract-types.js";
+export type { RunState } from "./domain/run-state.js";
+export type { RunStateStorePort, RunStateDelta } from "./ports/run-state-store.port.js";
+export { FsRunStateStoreAdapter } from "./adapters/fs-run-state-store.adapter.js";
+export {
+  checkCostBudget,
+  type CostBudgetCheck,
+  type CostBudgetExhaustionReason,
+} from "./usecases/check-cost-budget.js";
 
 export { createTask } from "./usecases/create-task.usecase.js";
 export { showTask } from "./usecases/show-task.usecase.js";
@@ -122,3 +130,17 @@ export type {
   ListContractsFilters,
   LockContractInput,
 } from "./usecases/contract-workflows.usecase.js";
+
+export type { ContractVersionStorePort } from "./ports/contract-version-store.port.js";
+export { FsContractVersionStoreAdapter } from "./adapters/fs-contract-version-store.adapter.js";
+export { proposeContract } from "./usecases/propose-contract.usecase.js";
+export { approveContract } from "./usecases/approve-contract.usecase.js";
+export { amendContract } from "./usecases/amend-contract.usecase.js";
+export type { AmendContractInput } from "./usecases/amend-contract.usecase.js";
+export { getCurrentContract } from "./usecases/get-current-contract.usecase.js";
+export { getContractHistory } from "./usecases/get-contract-history.usecase.js";
+export {
+  readCurrentContractWithBackfill,
+  readContractHistoryWithBackfill,
+  readDraftContract,
+} from "./usecases/read-current-contract-with-backfill.js";

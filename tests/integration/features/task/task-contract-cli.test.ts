@@ -398,12 +398,20 @@ describe("task contract CLI", () => {
     );
 
     const amended = await runCli(
-      ["task", "contract", "amend", contract.id, "--reason", "expanded test coverage", "--session", "criteria-owner", "--json"],
+      [
+        "task",
+        "contract",
+        "amend",
+        contract.id,
+        "--reason",
+        "expanded test coverage",
+        "--session",
+        "criteria-owner",
+        "--editor",
+        `bun '${editorPath}'`,
+        "--json",
+      ],
       tmpDir,
-      {
-        env: { EDITOR: `bun '${editorPath}'` },
-        stdin: "",
-      },
     );
     const amendedContract = expectJson<{ status: string; scope: { filesExpected: string[] }; amendments: Array<{ reason: string }> }>(amended);
     expect(amendedContract.status).toBe("amended");
@@ -537,12 +545,8 @@ describe("task contract CLI", () => {
     );
 
     const edited = await runCli(
-      ["task", "contract", "edit", contract.id, "--json"],
+      ["task", "contract", "edit", contract.id, "--editor", `bun '${editorPath}'`, "--json"],
       tmpDir,
-      {
-        env: { EDITOR: `bun '${editorPath}'` },
-        stdin: "",
-      },
     );
     const payload = expectJson<{ status: string; intent: string; scope: { filesExpected: string[] } }>(edited);
     expect(payload.status).toBe("draft");

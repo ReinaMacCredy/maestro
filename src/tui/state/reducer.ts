@@ -76,7 +76,8 @@ export type ModalState =
         }
       | { kind: "timeline"; selectedIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
       | { kind: "principle-review"; selectedIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
-      | { kind: "help"; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState };
+      | { kind: "help"; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | { kind: "autopilot"; selectedIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState };
 
 export interface AppState {
   snapshot: MissionControlSnapshot;
@@ -121,6 +122,7 @@ export type Action =
   | { type: "open-timeline" }
   | { type: "open-principle-review" }
   | { type: "open-help" }
+  | { type: "open-autopilot" }
   | { type: "dispatch-generate-start" }
   | { type: "dispatch-generate-success"; promptPath?: string }
   | { type: "dispatch-generate-error"; message: string }
@@ -181,6 +183,7 @@ export function reduce(state: AppState, action: Action): AppState {
         || state.modal.kind === "task-board"
         || state.modal.kind === "timeline"
         || state.modal.kind === "principle-review"
+        || state.modal.kind === "autopilot"
       ) {
         return handleModalNavigate(state, action.direction);
       }
@@ -492,6 +495,19 @@ export function reduce(state: AppState, action: Action): AppState {
         },
       };
 
+    case "open-autopilot":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      if (state.snapshot.mode !== "mission") return state;
+      return {
+        ...state,
+        modal: {
+          kind: "autopilot",
+          selectedIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
     case "dispatch-generate-start":
       if (state.modal.kind !== "dispatch") return state;
       return { ...state, modal: { ...state.modal, phase: "generating", errorMessage: undefined } };
@@ -677,6 +693,9 @@ export function reduce(state: AppState, action: Action): AppState {
           return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
         }
         if (state.modal.kind === "principle-review") {
+          return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
+        }
+        if (state.modal.kind === "autopilot") {
           return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
         }
         return state;
@@ -1099,6 +1118,15 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
         return { ...state, modal: { ...state.modal, selectedIndex } };
       }
 
+      if (state.modal.kind === "autopilot") {
+        const total = state.snapshot.autopilot?.tasks.length ?? 0;
+        if (total === 0) return state;
+        const selectedIndex = direction === "down"
+          ? Math.min(state.modal.selectedIndex + 1, total - 1)
+          : Math.max(state.modal.selectedIndex - 1, 0);
+        return { ...state, modal: { ...state.modal, selectedIndex } };
+      }
+
     if (state.modal.kind === "config") {
       const total = getConfigRowsForTab(
         state.snapshot.configInspector ?? null,
@@ -1189,6 +1217,7 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
         || modal.kind === "timeline"
         || modal.kind === "principle-review"
         || modal.kind === "help"
+        || modal.kind === "autopilot"
       ) {
         return modal.returnTarget;
       }
@@ -1226,6 +1255,7 @@ function getCommandPaletteReturnState(
     || modal.kind === "timeline"
     || modal.kind === "principle-review"
     || modal.kind === "help"
+    || modal.kind === "autopilot"
   ) {
     return modal.returnPalette
       ? {

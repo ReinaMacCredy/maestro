@@ -4,11 +4,9 @@ import { join } from "node:path";
 import { SUPPORTED_AGENTS, agentConfigPath, agentSkillsRoot } from "@/infra/domain/agents.js";
 
 describe("agent config specs", () => {
-  it("ships Claude Code and Codex entries only", () => {
+  it("ships runtime providers plus the shared AgentSkills target", () => {
     const slugs = SUPPORTED_AGENTS.map((a) => a.slug).sort();
-    expect(slugs).toEqual(["claude-code", "codex"]);
-    // droid and gemini were removed; the comment in agents.ts notes they
-    // will be re-added once skill support lands in those CLIs.
+    expect(slugs).toEqual(["agentskills", "claude-code", "codex", "hermes"]);
   });
 
   it("resolves Claude Code config to ~/.claude/CLAUDE.md", () => {
@@ -33,6 +31,25 @@ describe("agent config specs", () => {
     const claude = SUPPORTED_AGENTS.find((agent) => agent.slug === "claude-code")!;
     expect(agentSkillsRoot(claude, tmpdir(), homedir())).toBe(
       join(homedir(), ".claude", "skills"),
+    );
+  });
+
+  it("resolves Hermes config and skill roots", () => {
+    const hermes = SUPPORTED_AGENTS.find((agent) => agent.slug === "hermes")!;
+    expect(agentConfigPath(hermes, tmpdir(), homedir())).toBe(
+      join(homedir(), ".hermes", "config.yaml"),
+    );
+    expect(agentSkillsRoot(hermes, tmpdir(), homedir())).toBe(
+      join(homedir(), ".hermes", "skills", "maestro"),
+    );
+  });
+
+  it("resolves the shared AgentSkills root", () => {
+    const agentSkills = SUPPORTED_AGENTS.find((agent) => agent.slug === "agentskills")!;
+    expect(agentSkills.runtime).toBe(false);
+    expect(agentSkills.skillTarget).toBe(true);
+    expect(agentSkillsRoot(agentSkills, tmpdir(), homedir())).toBe(
+      join(homedir(), ".agents", "skills"),
     );
   });
 });

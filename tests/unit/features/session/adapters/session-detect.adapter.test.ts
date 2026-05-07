@@ -13,6 +13,8 @@ describe("ClaudeSessionDetectAdapter", () => {
   let originalCodexSessionsDir: string | undefined;
   let originalClaudeSessionsDir: string | undefined;
   let originalClaudeProjectsDir: string | undefined;
+  let originalMaestroAgent: string | undefined;
+  let originalMaestroSessionId: string | undefined;
 
   beforeEach(async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "maestro-session-detect-"));
@@ -21,8 +23,12 @@ describe("ClaudeSessionDetectAdapter", () => {
     originalCodexSessionsDir = process.env.MAESTRO_CODEX_SESSIONS_DIR;
     originalClaudeSessionsDir = process.env.MAESTRO_CLAUDE_SESSIONS_DIR;
     originalClaudeProjectsDir = process.env.MAESTRO_CLAUDE_PROJECTS_DIR;
+    originalMaestroAgent = process.env.MAESTRO_AGENT;
+    originalMaestroSessionId = process.env.MAESTRO_SESSION_ID;
     delete process.env.CODEX_THREAD_ID;
     delete process.env.CLAUDECODE;
+    delete process.env.MAESTRO_AGENT;
+    delete process.env.MAESTRO_SESSION_ID;
     process.env.MAESTRO_CODEX_SESSIONS_DIR = join(tempRoot, "codex-sessions");
     process.env.MAESTRO_CLAUDE_SESSIONS_DIR = join(tempRoot, "claude-sessions");
     process.env.MAESTRO_CLAUDE_PROJECTS_DIR = join(tempRoot, "claude-projects");
@@ -55,9 +61,35 @@ describe("ClaudeSessionDetectAdapter", () => {
     } else {
       process.env.MAESTRO_CLAUDE_PROJECTS_DIR = originalClaudeProjectsDir;
     }
+    if (originalMaestroAgent === undefined) {
+      delete process.env.MAESTRO_AGENT;
+    } else {
+      process.env.MAESTRO_AGENT = originalMaestroAgent;
+    }
+    if (originalMaestroSessionId === undefined) {
+      delete process.env.MAESTRO_SESSION_ID;
+    } else {
+      process.env.MAESTRO_SESSION_ID = originalMaestroSessionId;
+    }
   });
 
   describe("detect", () => {
+    it("prefers Maestro session env over Codex and Claude-specific detection", async () => {
+      process.env.MAESTRO_AGENT = "hermes";
+      process.env.MAESTRO_SESSION_ID = "handoff-123";
+      process.env.CLAUDECODE = "1";
+      process.env.CODEX_THREAD_ID = "thread-123";
+
+      const session = await adapter.detect(process.cwd());
+
+      expect(session).toEqual({
+        agent: "hermes",
+        sessionId: "handoff-123",
+        sourcePath: "env:MAESTRO_SESSION_ID:handoff-123",
+        startedAt: undefined,
+      });
+    });
+
     it("returns a codex session from the configured session root", async () => {
       const sessionsDir = process.env.MAESTRO_CODEX_SESSIONS_DIR!;
       const rolloutPath = join(

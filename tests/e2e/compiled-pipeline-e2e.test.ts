@@ -359,8 +359,8 @@ describe("compiled CLI pipeline E2E", () => {
     expect(renderCheck.exitCode).toBe(0);
     const renderCheckData = JSON.parse(renderCheck.stdout) as RenderCheckResult;
       expect(renderCheckData.summary).toEqual({
-        total: 13,
-        passed: 13,
+        total: 14,
+        passed: 14,
         failed: 0,
         skipped: 0,
       });

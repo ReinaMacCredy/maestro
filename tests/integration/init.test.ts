@@ -197,6 +197,8 @@ describe("init CLI", () => {
     );
     expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/sessions/");
     expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/tasks/local-history/");
+    expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/evidence/");
+    expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/runs/");
     expect(await pathExists(join(tmpDir, ".factory"))).toBe(false);
   });
 
@@ -269,6 +271,17 @@ describe("init CLI", () => {
     // before comparing so the test is deterministic across runners.
     const reported = stdout.trim().replace(/^"(.*)"$/, "$1").replace(/\\\\/g, "\\");
     expect(reported).toBe(sessionPath);
+  });
+
+  it("does not duplicate .maestro/evidence/ or .maestro/runs/ on a second init", async () => {
+    await run(["init", "--json"], tmpDir);
+    await run(["init", "--json"], tmpDir);
+
+    const content = await readFile(join(tmpDir, ".gitignore"), "utf8");
+    const evidenceMatches = content.split("\n").filter((line) => line === ".maestro/evidence/");
+    const runsMatches = content.split("\n").filter((line) => line === ".maestro/runs/");
+    expect(evidenceMatches.length).toBe(1);
+    expect(runsMatches.length).toBe(1);
   });
 
   it("exits cleanly in tty mode when no replacement prompt is needed", async () => {

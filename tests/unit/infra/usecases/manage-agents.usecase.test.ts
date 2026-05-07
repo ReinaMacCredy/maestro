@@ -97,7 +97,7 @@ describe("manage-agents use case logic", () => {
   });
 
   describe("skill install (home-scoped agents)", () => {
-    it("installs all bundled skills for Claude Code and Codex", async () => {
+    it("installs all bundled skills for Claude Code, Codex, Hermes, and AgentSkills targets", async () => {
       // Pre-create both agents' config dirs so they are detected
       await mkdir(join(fakeHome, ".claude"), { recursive: true });
       await mkdir(join(fakeHome, ".codex"), { recursive: true });
@@ -106,14 +106,22 @@ describe("manage-agents use case logic", () => {
 
       const claude = results.find((r) => r.agent === "Claude Code");
       const codex = results.find((r) => r.agent === "Codex");
+      const hermes = results.find((r) => r.agent === "Hermes");
+      const agentSkills = results.find((r) => r.agent === "AgentSkills");
       expect(claude?.action).toBe("installed");
       expect(codex?.action).toBe("installed");
+      expect(hermes?.action).toBe("installed");
+      expect(agentSkills?.action).toBe("installed");
 
       for (const skillName of BUNDLED_SKILL_NAMES) {
         const claudePath = join(fakeHome, ".claude", "skills", skillName, "SKILL.md");
         const codexPath = join(fakeHome, ".codex", "skills", skillName, "SKILL.md");
+        const hermesPath = join(fakeHome, ".hermes", "skills", "maestro", skillName, "SKILL.md");
+        const agentSkillsPath = join(fakeHome, ".agents", "skills", skillName, "SKILL.md");
         expect(existsSync(claudePath)).toBe(true);
         expect(existsSync(codexPath)).toBe(true);
+        expect(existsSync(hermesPath)).toBe(true);
+        expect(existsSync(agentSkillsPath)).toBe(true);
 
         const claudeFrontmatter = await readFile(claudePath, "utf8");
         expect(claudeFrontmatter).toContain(`name: ${skillName}`);
@@ -121,6 +129,8 @@ describe("manage-agents use case logic", () => {
 
       expect(claude?.installedSkills).toEqual(BUNDLED_SKILL_NAMES);
       expect(codex?.installedSkills).toEqual(BUNDLED_SKILL_NAMES);
+      expect(hermes?.installedSkills).toEqual(BUNDLED_SKILL_NAMES);
+      expect(agentSkills?.installedSkills).toEqual(BUNDLED_SKILL_NAMES);
     });
 
     it("returns skipped when skills are already in sync", async () => {
@@ -140,6 +150,36 @@ describe("manage-agents use case logic", () => {
 
       expect(results.find((r) => r.agent === "Claude Code")?.action).toBe("not-detected");
       expect(results.find((r) => r.agent === "Codex")?.action).toBe("not-detected");
+      expect(results.find((r) => r.agent === "Hermes")?.action).toBe("installed");
+      expect(results.find((r) => r.agent === "AgentSkills")?.action).toBe("installed");
+    });
+
+    it("idempotently adds the shared AgentSkills root to Hermes config", async () => {
+      const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      expect(results.find((r) => r.agent === "Hermes")?.action).toBe("installed");
+      const configPath = join(fakeHome, ".hermes", "config.yaml");
+      const first = await readFile(configPath, "utf8");
+      expect(first).toContain("skills:");
+      expect(first).toContain(join(fakeHome, ".agents", "skills"));
+
+      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(second.find((r) => r.agent === "Hermes")?.action).toBe("skipped");
+      const after = await readFile(configPath, "utf8");
+      expect(after.split(join(fakeHome, ".agents", "skills")).length - 1).toBe(1);
+    });
+
+    it("can restrict bundled skill sync to selected providers", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      const results = await injectAgentBlocks(tmpDir, "home", fakeHome, ["codex"]);
+
+      expect(results.map((result) => result.agent)).toEqual(["Codex"]);
+      expect(existsSync(join(fakeHome, ".codex", "skills", BUNDLED_SKILL_NAMES[0]!, "SKILL.md"))).toBe(true);
+      expect(existsSync(join(fakeHome, ".claude", "skills", BUNDLED_SKILL_NAMES[0]!, "SKILL.md"))).toBe(false);
+      expect(existsSync(join(fakeHome, ".hermes", "skills", "maestro", BUNDLED_SKILL_NAMES[0]!, "SKILL.md"))).toBe(false);
+      expect(existsSync(join(fakeHome, ".agents", "skills", BUNDLED_SKILL_NAMES[0]!, "SKILL.md"))).toBe(false);
     });
 
     it("cleans up legacy MAESTRO.md and @MAESTRO.md reference and reports migrated-to-skills", async () => {

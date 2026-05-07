@@ -23,6 +23,7 @@ export const PREVIEW_SCREENS = [
   "timeline",
   "principles",
   "help",
+  "autopilot",
 ] as const;
 
 export type PreviewScreen = typeof PREVIEW_SCREENS[number];
@@ -121,6 +122,13 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
       return reduce(baseState, { type: "open-principle-review" });
     case "help":
       return reduce(baseState, { type: "open-help" });
+    case "autopilot":
+      if (opts.snapshot.mode !== "mission") {
+        throw new MaestroError("Autopilot preview requires a mission", [
+          "Run `maestro mission-control --preview` to view the home dashboard",
+        ]);
+      }
+      return reduce(baseState, { type: "open-autopilot" });
   }
 }
 

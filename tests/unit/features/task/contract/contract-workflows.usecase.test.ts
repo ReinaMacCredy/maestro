@@ -8,6 +8,7 @@ import type { Task } from "@/features/task";
 import { MaestroError } from "@/shared/errors.js";
 import {
   mockContractStore,
+  mockEvidenceStore,
   mockGitAnchor,
   mockTaskStore,
 } from "../../../../helpers/mocks.js";
@@ -133,6 +134,41 @@ describe("ContractWorkflows", () => {
     expect((linkError as Error & { rollbackError?: unknown }).rollbackError).toBe(rollbackError);
   });
 
+  it("draft persists amendmentBudget when supplied", async () => {
+    const baseContractStore = mockContractStore();
+    const contractStore = {
+      ...baseContractStore,
+      create: (input: Parameters<typeof baseContractStore.create>[0]) =>
+        baseContractStore.create({ ...input, id: "c-000001" }),
+    };
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask({ status: "pending", contractId: undefined })]),
+      mockGitAnchor(),
+    );
+
+    const drafted = await contracts.draft({
+      taskId: "tsk-000001",
+      repoRoot: "/repo",
+      intent: "ship it",
+      scope: { filesExpected: ["src/**/*.ts"], filesForbidden: [] },
+      doneWhen: [{ text: "tests pass" }],
+      createdBy: "agent-a",
+      configSnapshot: CONFIG,
+      amendmentBudget: {
+        maxAmendments: 1,
+        maxPathsPerAmendment: 5,
+        forbiddenAmendmentPaths: [],
+      },
+    });
+
+    expect(drafted.amendmentBudget).toEqual({
+      maxAmendments: 1,
+      maxPathsPerAmendment: 5,
+      forbiddenAmendmentPaths: [],
+    });
+  });
+
   it("discard unlinks task metadata on a best-effort basis", async () => {
     const taskStore = {
       ...mockTaskStore([makeTask({ contractId: "c-000001" })]),
@@ -197,7 +233,26 @@ describe("ContractWorkflows", () => {
 
   it("previewVerdict reports overlap annotations from the captured git anchor", async () => {
     const contract = makeContract({ id: "c-000001", claimedAtCommit: "base-a" });
-    const other = makeContract({ id: "c-000002", taskId: "tsk-000002", claimedAtCommit: "base-b" });
+    // Overlap requires the candidate to have a closed verdict whose
+    // actualFilesTouched intersects with ours: open candidates are not
+    // counted (they haven't raced on actual files yet).
+    const other = makeContract({
+      id: "c-000002",
+      taskId: "tsk-000002",
+      claimedAtCommit: "base-b",
+      status: "fulfilled",
+      verdict: {
+        fulfilled: true,
+        computedAt: "2026-04-20T00:00:00.000Z",
+        actualFilesTouched: ["src/features/task/usecases/contract-workflows.usecase.ts"],
+        expectedFilesMatched: [],
+        outOfScopeFiles: [],
+        forbiddenTouched: [],
+        filesExpectedUnused: [],
+        unmetCriteria: [],
+        metCriteria: [],
+      },
+    });
     const contractStore = mockContractStore([contract, other]);
     const contracts = buildContractWorkflows(
       contractStore,
@@ -391,6 +446,228 @@ describe("ContractWorkflows", () => {
       contracts.prepareReopen({ id: "tsk-000001", contractId: "c-000001" }),
     ).rejects.toBeInstanceOf(MaestroError);
     expect(overlapChecks).toBe(0);
+  });
+
+  it("L1 amend (replace) rejects when amendment budget is exhausted", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 1,
+        maxPathsPerAmendment: 5,
+        forbiddenAmendmentPaths: [],
+      },
+      amendments: [
+        {
+          id: "am-000001",
+          at: "2026-04-20T00:01:30.000Z",
+          actorId: "agent-a",
+          reason: "first amendment used the budget",
+        },
+      ],
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    await expect(
+      contracts.amend({
+        kind: "replace",
+        ref: "c-000001",
+        actorId: "agent-a",
+        reason: "scope change",
+        intent: "Change task code",
+        scope: { filesExpected: ["src/**/*.ts", "tests/**/*.ts"], filesForbidden: [] },
+        doneWhen: [{ id: "dw-000001", text: "tests pass", kind: "manual" }],
+      }),
+    ).rejects.toBeInstanceOf(MaestroError);
+
+    const blocked = await evidenceStore.list({ task_id: "tsk-000001", kind: "contract-amendment-blocked" });
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]!.payload).toMatchObject({ reason: "budget_exhausted" });
+  });
+
+  it("L1 amend (replace) rejects when added paths exceed maxPathsPerAmendment", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 5,
+        maxPathsPerAmendment: 1,
+        forbiddenAmendmentPaths: [],
+      },
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    await expect(
+      contracts.amend({
+        kind: "replace",
+        ref: "c-000001",
+        actorId: "agent-a",
+        reason: "expand scope",
+        intent: "Change task code",
+        scope: {
+          filesExpected: ["src/**/*.ts", "tests/**/*.ts", "docs/**/*.md"],
+          filesForbidden: [],
+        },
+        doneWhen: [{ id: "dw-000001", text: "tests pass", kind: "manual" }],
+      }),
+    ).rejects.toBeInstanceOf(MaestroError);
+
+    const blocked = await evidenceStore.list({ task_id: "tsk-000001", kind: "contract-amendment-blocked" });
+    expect(blocked).toHaveLength(1);
+  });
+
+  it("L1 amend (replace) rejects when added paths match forbidden patterns", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 5,
+        maxPathsPerAmendment: 10,
+        forbiddenAmendmentPaths: ["**/secrets/**"],
+      },
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    await expect(
+      contracts.amend({
+        kind: "replace",
+        ref: "c-000001",
+        actorId: "agent-a",
+        reason: "expand into secrets",
+        intent: "Change task code",
+        scope: {
+          filesExpected: ["src/**/*.ts", "src/secrets/api-keys.ts"],
+          filesForbidden: [],
+        },
+        doneWhen: [{ id: "dw-000001", text: "tests pass", kind: "manual" }],
+      }),
+    ).rejects.toBeInstanceOf(MaestroError);
+
+    const blocked = await evidenceStore.list({ task_id: "tsk-000001", kind: "contract-amendment-blocked" });
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]!.payload).toMatchObject({ reason: "forbidden_path" });
+  });
+
+  it("L1 amend (addCriterion) consumes from amendmentBudget", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 1,
+        maxPathsPerAmendment: 5,
+        forbiddenAmendmentPaths: [],
+      },
+      amendments: [
+        {
+          id: "am-000001",
+          at: "2026-04-20T00:01:30.000Z",
+          actorId: "agent-a",
+          reason: "first amendment used the budget",
+        },
+      ],
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    await expect(
+      contracts.amend({
+        kind: "addCriterion",
+        ref: "c-000001",
+        actorId: "agent-a",
+        text: "another criterion",
+      }),
+    ).rejects.toBeInstanceOf(MaestroError);
+  });
+
+  it("L1 amend (replace) preserves criterion id when text is unchanged", async () => {
+    const contract = makeContract({
+      doneWhen: [
+        { id: "dw-stable", text: "implementation done", kind: "manual" },
+        { id: "dw-other", text: "tests pass", kind: "manual" },
+      ],
+    });
+    const contractStore = mockContractStore([contract]);
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+    );
+
+    const replaced = await contracts.amend({
+      kind: "replace",
+      ref: "c-000001",
+      actorId: "agent-a",
+      reason: "no-op replace, just re-state criteria",
+      intent: "Change task code",
+      scope: { filesExpected: ["src/**/*.ts"], filesForbidden: [] },
+      doneWhen: [
+        { text: "implementation done" },
+        { text: "tests pass" },
+      ],
+    });
+
+    const ids = replaced.doneWhen.map((c) => c.id);
+    expect(ids).toContain("dw-stable");
+    expect(ids).toContain("dw-other");
+  });
+
+  it("L1 amend (markCriterion) is exempt from amendmentBudget", async () => {
+    const contract = makeContract({
+      amendmentBudget: {
+        maxAmendments: 1,
+        maxPathsPerAmendment: 5,
+        forbiddenAmendmentPaths: [],
+      },
+      amendments: [
+        {
+          id: "am-000001",
+          at: "2026-04-20T00:01:30.000Z",
+          actorId: "agent-a",
+          reason: "first amendment used the budget",
+        },
+      ],
+    });
+    const contractStore = mockContractStore([contract]);
+    const evidenceStore = mockEvidenceStore();
+    const contracts = buildContractWorkflows(
+      contractStore,
+      mockTaskStore([makeTask()]),
+      mockGitAnchor(),
+      undefined,
+      evidenceStore,
+    );
+
+    const marked = await contracts.amend({
+      kind: "markCriterion",
+      ref: "c-000001",
+      actorId: "agent-a",
+      criterionId: "dw-000001",
+      evidence: "manual review passed",
+    });
+    expect(marked.doneWhen[0]?.met).toBe(true);
   });
 
   it("transferOwnership updates active owners and ignores terminal contracts", async () => {

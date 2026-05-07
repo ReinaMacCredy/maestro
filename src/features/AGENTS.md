@@ -32,6 +32,7 @@ Parent:
 - [../AGENTS.md](../AGENTS.md)
 
 Children:
+- [evidence/AGENTS.md](evidence/AGENTS.md)
 - [handoff/AGENTS.md](handoff/AGENTS.md)
 - [mission/AGENTS.md](mission/AGENTS.md)
 - [task/AGENTS.md](task/AGENTS.md)

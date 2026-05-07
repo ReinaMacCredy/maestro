@@ -86,6 +86,8 @@ For each phase, include:
 - Prefer the cheapest check that can falsify the phase.
 - If later implementation should be test-first, identify the test surfaces up front.
 
+For non-trivial tasks, include a plan file in the hand-off so the executing agent can run `maestro plan check --task <id> --plan-file <path>` before writing code. Use `maestro plan check` per the protocol in `maestro-verify`.
+
 ## Surface risks and cut lines
 
 - Identify what could derail the plan.
@@ -114,6 +116,35 @@ Return a compact response in this shape:
 - Do not hide dependencies or risks.
 - Do not over-plan beyond the actual complexity of the work.
 - Match the depth of the plan to the risk and scope of the task.
+
+## Propose a contract
+
+Your plan must include `proposed_contract` with `allowed_files`, `forbidden_paths`, `risk_class`, and `amendment_budget`. The human reviews the plan including the contract.
+
+Example:
+
+```yaml
+proposed_contract:
+  allowed_files:
+    - "src/features/auth/**"
+    - "tests/unit/features/auth/**"
+  forbidden_paths:
+    - ".github/workflows/**"
+    - "bun.lock"
+    - "package.json"
+  risk_class: medium
+  amendment_budget:
+    max_amendments: 3
+    max_paths_per_amendment: 5
+    forbidden_amendment_paths:
+      - ".github/workflows/**"
+      - "bun.lock"
+      - "package.json"
+```
+
+`risk_class` is one of `low`, `medium`, `high`, `critical`. Be honest — `critical` for changes to auth, payments, secrets, or deploy infrastructure.
+
+`amendment_budget` caps how many times the agent may expand `allowed_files` after the plan is locked. The agent must call `maestro contract amend --task <id> --add-path <p> --reason <r>` for each genuine scope change; failures are recorded.
 
 ## Persist the plan
 
@@ -149,6 +180,23 @@ When `.maestro/plans/` exists in the cwd or an ancestor (the project uses maestr
 ```
 
 Skip this section entirely when no maestro project is detected.
+
+## Risk class is independently verified
+
+When the user approves your plan, the proposed Contract becomes Contract v1. Maestro independently re-derives a `risk_class` from the diff and uses `max(your_proposed, derived)` as the effective class — per Rule 1, you can only **raise** the class, never lower it.
+
+Plan accordingly:
+
+- Diffs intersecting `auth/**`, `secrets/**`, `permissions/**`, `payments/**`, or any path matching the project's `policies/sensitive-paths.yaml` → `critical`.
+- Diffs modifying dependency manifests (`package.json`, `bun.lock`, `Cargo.toml`, `requirements.txt`, `pyproject.toml`, etc.) → `high`.
+- Diffs including database migration files (paths matching `policies/migration_paths`) → `high`.
+- Diffs modifying CI workflow files (`.github/workflows/**`, `.circleci/**`, `.gitlab-ci.yml`) → `high`.
+- Diffs modifying `.maestro/policies/**`, `.maestro/ratchets/**`, or `owners.yaml` → `high`.
+- Diffs modifying build configuration (`tsconfig*.json`, `bunfig.toml`, `vite.config.*`, etc.) → `medium`.
+- Any source code change under `src/`, `lib/`, `app/`, or similar not matched above → `medium`.
+- Docs-only, comment-only, or formatting-only → `low`.
+
+Proposing `low` for any of the above is futile — Maestro will raise it and the verdict will route to a human.
 
 ## Hand off cleanly
 

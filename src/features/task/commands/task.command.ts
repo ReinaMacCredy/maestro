@@ -46,6 +46,7 @@ import type {
   TaskReceipt,
   UpdateTaskInput,
 } from "../domain/task-types.js";
+import type { Contract } from "../domain/contract/contract-types.js";
 import { TASK_STATUSES, TASK_TYPES, buildTaskReceipt, indexTasksById } from "../domain/task-types.js";
 import {
   buildCreateInput,
@@ -89,6 +90,9 @@ import {
   type TaskStatusProjection,
 } from "../usecases/group-tasks-by-track.usecase.js";
 import { registerContractCommand } from "./contract.command.js";
+import { registerTaskVerifyCommand } from "./task-verify.command.js";
+import { registerTaskProofCommand } from "./task-proof.command.js";
+import { registerTaskBudgetCommand } from "./task-budget.command.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
 
 interface ContinuationEditInput {
@@ -128,6 +132,9 @@ Typical loop:
   registerUpdateCommand(taskCmd, program);
   registerClaimCommand(taskCmd, program);
   registerContractCommand(taskCmd, program);
+  registerTaskVerifyCommand(taskCmd, program);
+  registerTaskProofCommand(taskCmd, program);
+  registerTaskBudgetCommand(taskCmd, program);
   registerUnclaimCommand(taskCmd, program);
   registerReleaseOwnedCommand(taskCmd, program);
   registerBlockCommand(taskCmd, program);
@@ -631,8 +638,9 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
 
 function registerUpdateCommand(taskCmd: Command, program: Command): void {
   taskCmd
-    .command("update <id-or-slug>")
-    .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug)")
+    .command("update [id-or-slug]")
+    .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug; positional or --task)")
+    .option("--task <id>", "Task id or slug (alternative to the positional argument)")
     .option("--title <title>", "New title")
     .option("--description <text>", "New description")
     .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
@@ -659,10 +667,28 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .addOption(new Option("--claim").hideHelp())
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (rawRef: string, opts) => {
+    .action(async (rawRef: string | undefined, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const resolved = await resolveTaskRef(services.taskStore, rawRef);
+      // Accept either positional <id-or-slug> or --task <id>. If both are supplied,
+      // require they refer to the same task; otherwise the user is confused about
+      // which one wins and the safe answer is to fail loud.
+      const flagRef = typeof opts.task === "string" ? opts.task.trim() : "";
+      const positionalRef = typeof rawRef === "string" ? rawRef.trim() : "";
+      if (positionalRef.length === 0 && flagRef.length === 0) {
+        throw new MaestroError("Task id is required", [
+          "Pass a task id or slug as the positional argument: `maestro task update <id> ...`",
+          "Or use --task <id>: `maestro task update --task <id> ...`",
+        ]);
+      }
+      if (positionalRef.length > 0 && flagRef.length > 0 && positionalRef !== flagRef) {
+        throw new MaestroError(
+          `Conflicting task ids: positional "${positionalRef}" vs --task "${flagRef}"`,
+          ["Pass the id once (positional or --task, not both)"],
+        );
+      }
+      const ref = positionalRef.length > 0 ? positionalRef : flagRef;
+      const resolved = await resolveTaskRef(services.taskStore, ref);
       const id = resolved.id;
       const previous = await services.taskStore.get(id);
       const continuationEdits = parseContinuationEdits(opts);
@@ -1897,7 +1923,7 @@ async function maybeWarnMissingContractAfterClaim(
   }
 
   const services = getServices();
-  const config = await services.config.load(process.cwd());
+  const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
   const policy = opts.contractRequired
     ? "required"
     : (config.contracts?.default ?? "prompt");
@@ -1921,7 +1947,7 @@ async function enforceContractCompletionPolicy(
   opts: { readonly strictFlag: boolean; readonly noContract: boolean },
 ): Promise<void> {
   const services = getServices();
-  const config = await services.config.load(process.cwd());
+  const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
 
   if (!task.contractId) {
     if (!opts.noContract && config.contracts?.default === "required") {
@@ -2014,6 +2040,110 @@ function completedTaskUpdateRequiresReopen(id: string): MaestroError {
   ]);
 }
 
+async function maybeFinalizeTaskContract(task: Task): Promise<void> {
+  let closed: Contract | undefined;
+  try {
+    const services = getServices();
+    closed = await services.contracts.closeForTask(
+      task,
+      await services.gitAnchor.resolveRepoRoot(process.cwd()),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(`Task ${task.id} completed, but contract close failed: ${message}`);
+    return;
+  }
+  if (closed?.status === "broken") {
+    surfaceBrokenContractRecovery(task, closed);
+  }
+}
+
+function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
+  const verdict = contract.verdict;
+  if (!verdict) {
+    warn(
+      `Task ${task.id} completed but contract ${contract.id} closed \`broken\`. `
+      + `Inspect: maestro contract show --task ${task.id}`,
+    );
+    return;
+  }
+
+  const unmetManual = verdict.unmetCriteria.filter((c) => c.kind === "manual");
+  const unmetReceiptHints = verdict.unmetCriteria.filter((c) => c.kind === "receipt-hint");
+  const reasonsLine: string[] = [];
+  if (verdict.outOfScopeFiles.length > 0) {
+    reasonsLine.push(`Out of scope: ${verdict.outOfScopeFiles.join(", ")}`);
+  }
+  if (verdict.forbiddenTouched.length > 0) {
+    reasonsLine.push(`Forbidden touched: ${verdict.forbiddenTouched.join(", ")}`);
+  }
+  if (verdict.capExceeded) {
+    reasonsLine.push(`Cap exceeded: ${verdict.capExceeded.actual}/${verdict.capExceeded.cap}`);
+  }
+  if (unmetManual.length > 0) {
+    reasonsLine.push(`Unmet manual criteria: ${unmetManual.map((c) => c.id).join(", ")}`);
+  }
+  if (unmetReceiptHints.length > 0) {
+    reasonsLine.push(
+      `Unmet receipt-hint criteria: ${unmetReceiptHints.map((c) => c.id).join(", ")}`,
+    );
+  }
+
+  warn(
+    `Task ${task.id} completed but contract ${contract.id} closed \`broken\`. `
+    + (reasonsLine.length > 0 ? `Reasons: ${reasonsLine.join("; ")}.` : ""),
+  );
+  console.error("    To fix forward:");
+  console.error(`      maestro task contract reopen ${contract.id}`);
+  if (unmetManual.length > 0) {
+    for (const c of unmetManual) {
+      console.error(`      maestro task contract criteria mark ${contract.id} ${c.id} --met`);
+    }
+  }
+  const lockCommit = contract.claimedAtCommit ?? "HEAD~1";
+  if (verdict.outOfScopeFiles.length > 0) {
+    console.error(`      # then EITHER revert each out-of-scope file:`);
+    for (const path of verdict.outOfScopeFiles) {
+      console.error(
+        `      #   git checkout ${lockCommit} -- ${path} 2>/dev/null || git rm -f ${path}`,
+      );
+    }
+    console.error(`      #   OR amend the contract for each file:`);
+    for (const path of verdict.outOfScopeFiles) {
+      console.error(
+        `      #     maestro contract amend --task ${task.id}`
+        + ` --add-path ${path} --reason "<why>"`,
+      );
+    }
+  }
+  if (verdict.forbiddenTouched.length > 0) {
+    console.error(`      # then revert each forbidden file:`);
+    for (const path of verdict.forbiddenTouched) {
+      console.error(
+        `      #   git checkout ${lockCommit} -- ${path} 2>/dev/null || git rm -f ${path}`,
+      );
+    }
+  }
+  if (verdict.capExceeded) {
+    console.error(
+      `      # then trim the change to ${verdict.capExceeded.cap} files`
+      + ` or fewer (current: ${verdict.capExceeded.actual});`
+      + ` cap is set in the contract YAML and cannot be raised by amend`,
+    );
+  }
+  if (unmetReceiptHints.length > 0) {
+    for (const c of unmetReceiptHints) {
+      console.error(
+        `      # then re-complete with --verified-by "${c.text}" (or mark`
+        + ` ${c.id} via task contract criteria mark)`,
+      );
+    }
+  }
+  console.error(
+    `      maestro task update --task ${task.id} --status completed --reason "<one-line outcome>"`,
+  );
+}
+
 function formatVerdictHint(verdict: {
   readonly outOfScopeFiles: readonly string[];
   readonly forbiddenTouched: readonly string[];
@@ -2035,18 +2165,6 @@ function formatVerdictHint(verdict: {
   return "Inspect the stored verdict for details.";
 }
 
-async function maybeFinalizeTaskContract(task: Task): Promise<void> {
-  try {
-    const services = getServices();
-    await services.contracts.closeForTask(
-      task,
-      await services.gitAnchor.resolveRepoRoot(process.cwd()),
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    warn(`Task ${task.id} completed, but contract close failed: ${message}`);
-  }
-}
 
 async function maybeTransferClaimedContractOwnership(
   taskId: string,

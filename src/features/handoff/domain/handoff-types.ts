@@ -1,6 +1,7 @@
 export const DEFAULT_HANDOFF_MODELS = {
   codex: "gpt-5.4",
   claude: "opus",
+  hermes: "default",
 } as const;
 
 export type HandoffAgent = keyof typeof DEFAULT_HANDOFF_MODELS;
@@ -75,9 +76,11 @@ export interface HandoffLaunchRequest {
   readonly prompt: string;
   readonly targetDir: string;
   readonly model: string;
+  readonly modelProvided: boolean;
   readonly name: string;
   readonly wait: boolean;
   readonly logPath: string;
+  readonly env?: Record<string, string>;
 }
 
 export interface HandoffLaunchResult {

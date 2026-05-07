@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { chmod, lstat, readdir, realpath } from "node:fs/promises";
+import { chmod, copyFile, lstat, readdir, realpath } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   SUPPORTED_AGENTS,
+  SKILL_TARGET_AGENTS,
   agentConfigPath,
   agentConfigDirPath,
   agentReferencePath,
@@ -33,6 +34,8 @@ import {
   removeLegacyBlock,
 } from "../lib/agent-block.js";
 import { VERSION } from "@/shared/version.js";
+import { parseYaml, stringifyYaml } from "@/shared/lib/yaml.js";
+import { resolveAgentSkillsSharedRoot } from "@/shared/domain/defaults.js";
 
 export interface InjectResult {
   readonly agent: string;
@@ -110,6 +113,8 @@ async function cleanupLegacyMaestroMd(
   projectDir: string,
   homeDir: string,
 ): Promise<boolean> {
+  if (agent.configFile === undefined) return false;
+
   let didSomething = false;
 
   const refPath = agentReferencePath(agent, projectDir, homeDir);
@@ -622,7 +627,7 @@ async function processInject(
   const configDir = agentConfigDirPath(agent, projectDir, homeDir);
   const skillsRoot = agentSkillsRoot(agent, projectDir, homeDir);
 
-  if (!(await dirExists(configDir))) {
+  if (!agent.alwaysDetected && !(await dirExists(configDir))) {
     return {
       agent: agent.displayName,
       action: "not-detected",
@@ -632,6 +637,7 @@ async function processInject(
     };
   }
 
+  await ensureDir(configDir);
   await ensureDir(skillsRoot);
 
   const dirents = await readdir(skillsRoot, { withFileTypes: true });
@@ -650,6 +656,9 @@ async function processInject(
   const hadLegacy = await cleanupLegacyMaestroMd(agent, projectDir, homeDir);
 
   const localChanged = linkResults.some((r) => r.changed) || removedStale.length > 0;
+  const providerChanged = agent.slug === "hermes"
+    ? await ensureHermesExternalDirs(agent, projectDir, homeDir)
+    : false;
   const localPreservedEdits = linkResults.flatMap((r) => [...r.preservedUserEdits]);
 
   for (const path of localPreservedEdits) {
@@ -660,7 +669,7 @@ async function processInject(
 
   const action: InjectResult["action"] = hadLegacy
     ? "migrated-to-skills"
-    : globalChanged || localChanged
+    : globalChanged || localChanged || providerChanged
       ? "installed"
       : "skipped";
 
@@ -682,7 +691,7 @@ async function processRemove(
   const configDir = agentConfigDirPath(agent, projectDir, homeDir);
   const skillsRoot = agentSkillsRoot(agent, projectDir, homeDir);
 
-  if (!(await dirExists(configDir))) {
+  if (!agent.alwaysDetected && !(await dirExists(configDir))) {
     return {
       agent: agent.displayName,
       action: "not-detected",
@@ -732,9 +741,11 @@ export async function injectAgentBlocks(
   projectDir = process.cwd(),
   targetScope: AgentConfigTargetScope = "all",
   homeDir?: string,
+  providerIds?: readonly AgentConfigSpec["providerId"][],
 ): Promise<InjectResult[]> {
   const resolvedHomeDir = homeDir ?? homedir();
   const maestroSkillsRoot = resolveMaestroSkillsRoot(resolvedHomeDir);
+  const providerFilter = providerIds ? new Set(providerIds) : undefined;
 
   await ensureDir(maestroSkillsRoot);
 
@@ -759,7 +770,9 @@ export async function injectAgentBlocks(
   // migration sees the maestro tree state left by the prior agent — Promise.all
   // would race two migrations against the same maestro-tree path.
   const results: InjectResult[] = [];
-  for (const agent of SUPPORTED_AGENTS.filter((a) => agentMatchesTargetScope(a, targetScope))) {
+  for (const agent of SKILL_TARGET_AGENTS.filter((a) =>
+    agentMatchesTargetScope(a, targetScope) && (providerFilter?.has(a.providerId) ?? true)
+  )) {
     results.push(await processInject(agent, projectDir, resolvedHomeDir, maestroSkillsRoot, globalChanged));
   }
   return results;
@@ -769,14 +782,47 @@ export async function removeAgentBlocks(
   projectDir = process.cwd(),
   targetScope: AgentConfigTargetScope = "all",
   homeDir?: string,
+  providerIds?: readonly AgentConfigSpec["providerId"][],
 ): Promise<RemoveResult[]> {
   const resolvedHomeDir = homeDir ?? homedir();
   const maestroSkillsRoot = resolveMaestroSkillsRoot(resolvedHomeDir);
+  const providerFilter = providerIds ? new Set(providerIds) : undefined;
   return Promise.all(
-    SUPPORTED_AGENTS
-      .filter((agent) => agentMatchesTargetScope(agent, targetScope))
+    SKILL_TARGET_AGENTS
+      .filter((agent) => agentMatchesTargetScope(agent, targetScope) && (providerFilter?.has(agent.providerId) ?? true))
       .map((agent) => processRemove(agent, projectDir, resolvedHomeDir, maestroSkillsRoot)),
   );
 }
 
 export { agentLegacyConfigPaths };
+
+async function ensureHermesExternalDirs(
+  agent: AgentConfigSpec,
+  projectDir: string,
+  homeDir: string,
+): Promise<boolean> {
+  const configPath = agentConfigPath(agent, projectDir, homeDir);
+  const sharedRoot = resolveAgentSkillsSharedRoot(homeDir);
+  const raw = await readText(configPath);
+  const parsed = raw?.trim()
+    ? parseYaml<Record<string, unknown>>(raw)
+    : {};
+  const skills = isRecord(parsed.skills) ? { ...parsed.skills } : {};
+  const current = Array.isArray(skills.external_dirs)
+    ? skills.external_dirs.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  if (current.includes(sharedRoot)) return false;
+
+  skills.external_dirs = [...current, sharedRoot];
+  const next = stringifyYaml({ ...parsed, skills });
+  await ensureDir(dirname(configPath));
+  if (raw !== undefined) {
+    await copyFile(configPath, `${configPath}.bak-${Date.now()}`);
+  }
+  await writeText(configPath, next);
+  return true;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
