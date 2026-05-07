@@ -35,7 +35,7 @@ describe("checkStatus", () => {
     });
   });
 
-  it("reports legacy handoff artifacts when .maestro/handoffs or .maestro/launches exist", async () => {
+  it("reports legacy handoff artifacts in the project dir, ignoring home-dir launches", async () => {
     const legacyDir = join(cwd, ".maestro", "handoffs");
     await mkdir(legacyDir, { recursive: true });
     await writeFile(join(legacyDir, "2026-04-20-001.json"), "{}\n");
@@ -43,6 +43,8 @@ describe("checkStatus", () => {
     const launchDir = join(cwd, ".maestro", "launches");
     await mkdir(launchDir, { recursive: true });
     await writeFile(join(launchDir, "2026-04-20-003.json"), "{}\n");
+    // Home-dir launches belong to other repos and must not bleed into this
+    // project's status output.
     const globalLaunchDir = join(homeDir, ".maestro", "launches");
     await mkdir(globalLaunchDir, { recursive: true });
     await writeFile(join(globalLaunchDir, "2026-04-20-004.json"), "{}\n");
@@ -54,6 +56,6 @@ describe("checkStatus", () => {
       { homeDir },
     );
 
-    expect(status.legacyHandoffCount).toBe(4);
+    expect(status.legacyHandoffCount).toBe(3);
   });
 });
