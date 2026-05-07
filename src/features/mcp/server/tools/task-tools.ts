@@ -28,12 +28,18 @@ interface RegisterDeps {
 
 export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
-    "task_list",
+    "maestro_task_list",
     {
       title: "List maestro tasks",
       description:
-        "List maestro tasks with optional filters. Returns paginated results sorted by createdAt ascending.",
+        "List maestro tasks with optional filters. Returns paginated results sorted by createdAt ascending. Read-only.",
       inputSchema: TaskListInput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -54,11 +60,18 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
   );
 
   server.registerTool(
-    "task_get",
+    "maestro_task_get",
     {
       title: "Get a maestro task",
-      description: "Fetch a single task by id. Returns an error when the task is not found.",
+      description:
+        "Fetch a single task by id. Returns code TASK_NOT_FOUND when the task does not exist. Read-only.",
       inputSchema: TaskGetInput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -67,7 +80,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         if (task === undefined) {
           return toCallToolResult(
             fail("TASK_NOT_FOUND", `Task ${args.id} not found`, [
-              "Confirm the id with task_list",
+              "Confirm the id with maestro_task_list",
             ]),
           );
         }
@@ -79,12 +92,18 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
   );
 
   server.registerTool(
-    "task_create",
+    "maestro_task_create",
     {
       title: "Create a maestro task",
       description:
-        "Create a new top-level task. Slug is derived from title automatically.",
+        "Create a new top-level task. Slug is derived from title automatically. Each call produces a new task.",
       inputSchema: TaskCreateInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -101,11 +120,18 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
   );
 
   server.registerTool(
-    "task_claim",
+    "maestro_task_claim",
     {
       title: "Claim a maestro task",
-      description: "Claim a pending task for the current MCP session.",
+      description:
+        "Claim a pending task for the current MCP session. Idempotent: claiming a task already owned by this session is a no-op.",
       inputSchema: TaskClaimInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -120,11 +146,18 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
   );
 
   server.registerTool(
-    "task_complete",
+    "maestro_task_complete",
     {
       title: "Complete a maestro task",
-      description: "Mark a task as completed. Optional summary is stored on the task receipt.",
+      description:
+        "Mark a task as completed. Optional summary is stored on the task receipt. Errors if the task is already completed.",
       inputSchema: TaskCompleteInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -143,12 +176,18 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
   );
 
   server.registerTool(
-    "task_block",
+    "maestro_task_block",
     {
       title: "Add blocker edges from this task",
       description:
         "Mark this task as blocking the listed tasks. Maintains bidirectional blocks/blockedBy. Detects cycles.",
       inputSchema: TaskBlockInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -166,11 +205,18 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
   );
 
   server.registerTool(
-    "task_unblock",
+    "maestro_task_unblock",
     {
       title: "Remove blocker edges from this task",
-      description: "Remove blocker edges that this task has on the listed tasks.",
+      description:
+        "Remove blocker edges that this task has on the listed tasks. Idempotent: unblocking missing edges is a no-op.",
       inputSchema: TaskUnblockInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {

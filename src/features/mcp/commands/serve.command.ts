@@ -16,10 +16,12 @@ export function registerMcpServeCommand(mcpCmd: Command, program: Command): void
     .action(async (opts: ServeOptions) => {
       const isJson = resolveJsonFlag(opts as { json?: boolean }, program);
       const transport = (opts.transport ?? "stdio").toLowerCase();
+      // Stdio MCP servers must keep stdout for protocol traffic only.
+      // All diagnostic output, including --json error payloads, goes to stderr.
       if (transport !== "stdio") {
         const message = `Transport "${transport}" is not supported yet. Only stdio is available.`;
-        if (isJson) console.log(JSON.stringify({ ok: false, error: message }));
-        else console.error(`[!!] ${message}`);
+        if (isJson) process.stderr.write(JSON.stringify({ ok: false, error: message }) + "\n");
+        else process.stderr.write(`[!!] ${message}\n`);
         process.exit(1);
       }
 
@@ -31,8 +33,8 @@ export function registerMcpServeCommand(mcpCmd: Command, program: Command): void
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (isJson) console.log(JSON.stringify({ ok: false, error: message }));
-        else console.error(`[!!] ${message}`);
+        if (isJson) process.stderr.write(JSON.stringify({ ok: false, error: message }) + "\n");
+        else process.stderr.write(`[!!] ${message}\n`);
         process.exit(1);
       }
     });

@@ -18,12 +18,18 @@ interface RegisterDeps {
 
 export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
-    "evidence_list",
+    "maestro_evidence_list",
     {
       title: "List evidence rows",
       description:
-        "List evidence rows for a task with optional kind/witness level filters. Paginated.",
+        "List evidence rows for a task with optional kind/witness level filters. Paginated. Read-only.",
       inputSchema: EvidenceListInput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -45,12 +51,18 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
   );
 
   server.registerTool(
-    "evidence_record",
+    "maestro_evidence_record",
     {
       title: "Record evidence for a task",
       description:
-        "Append an evidence row. Either pass `command`+`exitCode` for a command run or `note` for a manual note. Default witness level is agent-claimed-locally.",
+        "Append an evidence row. Either pass `command`+`exitCode` for a command run or `note` for a manual note. Default witness level is agent-claimed-locally. Each call appends a new row.",
       inputSchema: EvidenceRecordInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {

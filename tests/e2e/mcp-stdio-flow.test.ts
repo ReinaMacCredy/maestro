@@ -112,7 +112,7 @@ beforeAll(buildCompiledCli, BUILD_TIMEOUT_MS);
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-mcp-e2e-"));
   await initGitRepo(tmpDir);
-  // policy_check / verdict_request resolve HEAD via git, so we need at
+  // maestro_policy_check / maestro_verdict_request resolve HEAD via git, so we need at
   // least one commit. Create an empty initial commit for that.
   await runCommand(["git", "config", "user.email", "e2e@maestro.test"], tmpDir);
   await runCommand(["git", "config", "user.name", "E2E"], tmpDir);
@@ -157,45 +157,45 @@ afterAll(() => {
 describe("MCP stdio flow", () => {
   it("creates, gets, and lists a task", async () => {
     const c = client!;
-    const created = await c.call("task_create", { title: "e2e task" });
+    const created = await c.call("maestro_task_create", { title: "e2e task" });
     const taskId = (created.body as { task: { id: string } }).task.id;
     expect(taskId).toMatch(/^tsk-[0-9a-f]{6}$/);
 
-    const got = await c.call("task_get", { id: taskId });
+    const got = await c.call("maestro_task_get", { id: taskId });
     expect((got.body as { task: { id: string; title: string } }).task.title).toBe("e2e task");
 
-    const list = await c.call("task_list", {});
+    const list = await c.call("maestro_task_list", {});
     const items = (list.body as { items: { id: string }[] }).items;
     expect(items.some((t) => t.id === taskId)).toBe(true);
   });
 
   it("returns a TASK_NOT_FOUND error for an unknown id", async () => {
     const c = client!;
-    const r = await c.call("task_get", { id: "tsk-deadbe" });
+    const r = await c.call("maestro_task_get", { id: "tsk-deadbe" });
     expect(r.payload.isError).toBe(true);
     expect((r.body as { code: string }).code).toBe("TASK_NOT_FOUND");
   });
 
   it("claims a task and completes it", async () => {
     const c = client!;
-    const created = await c.call("task_create", { title: "claim-me" });
+    const created = await c.call("maestro_task_create", { title: "claim-me" });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
-    const claimed = await c.call("task_claim", { id: taskId });
+    const claimed = await c.call("maestro_task_claim", { id: taskId });
     const claimedTask = (claimed.body as { task: { assignee?: string; claimedAt?: string } }).task;
     expect(typeof claimedTask.assignee).toBe("string");
     expect(typeof claimedTask.claimedAt).toBe("string");
 
-    const completed = await c.call("task_complete", { id: taskId, summary: "done" });
+    const completed = await c.call("maestro_task_complete", { id: taskId, summary: "done" });
     expect((completed.body as { task: { status: string } }).task.status).toBe("completed");
   });
 
   it("records and lists evidence rows", async () => {
     const c = client!;
-    const created = await c.call("task_create", { title: "evidence-flow" });
+    const created = await c.call("maestro_task_create", { title: "evidence-flow" });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
-    const cmdEv = await c.call("evidence_record", {
+    const cmdEv = await c.call("maestro_evidence_record", {
       taskId,
       command: "echo ok",
       exitCode: 0,
@@ -203,10 +203,10 @@ describe("MCP stdio flow", () => {
     });
     expect((cmdEv.body as { evidence: { id: string } }).evidence.id).toMatch(/^evd-/);
 
-    const noteEv = await c.call("evidence_record", { taskId, note: "manual" });
+    const noteEv = await c.call("maestro_evidence_record", { taskId, note: "manual" });
     expect((noteEv.body as { evidence: { id: string } }).evidence.id).toMatch(/^evd-/);
 
-    const list = await c.call("evidence_list", { taskId });
+    const list = await c.call("maestro_evidence_list", { taskId });
     const items = (list.body as { items: { id: string }[] }).items;
     expect(items.length).toBeGreaterThanOrEqual(2);
   });
@@ -214,33 +214,33 @@ describe("MCP stdio flow", () => {
   it("maintains bidirectional block edges and detects self-block", async () => {
     const c = client!;
     const a = (
-      (await c.call("task_create", { title: "a" })).body as { task: { id: string } }
+      (await c.call("maestro_task_create", { title: "a" })).body as { task: { id: string } }
     ).task.id;
     const b = (
-      (await c.call("task_create", { title: "b" })).body as { task: { id: string } }
+      (await c.call("maestro_task_create", { title: "b" })).body as { task: { id: string } }
     ).task.id;
 
-    await c.call("task_block", { id: a, blockedTaskIds: [b] });
+    await c.call("maestro_task_block", { id: a, blockedTaskIds: [b] });
     const aAfter = (
-      (await c.call("task_get", { id: a })).body as {
+      (await c.call("maestro_task_get", { id: a })).body as {
         task: { blocks: string[] };
       }
     ).task.blocks;
     const bAfter = (
-      (await c.call("task_get", { id: b })).body as {
+      (await c.call("maestro_task_get", { id: b })).body as {
         task: { blockedBy: string[] };
       }
     ).task.blockedBy;
     expect(aAfter).toContain(b);
     expect(bAfter).toContain(a);
 
-    const selfBlock = await c.call("task_block", { id: a, blockedTaskIds: [a] });
+    const selfBlock = await c.call("maestro_task_block", { id: a, blockedTaskIds: [a] });
     expect(selfBlock.payload.isError).toBe(true);
   });
 
   it("shows, amends, and re-shows a contract", async () => {
     const c = client!;
-    const created = await c.call("task_create", { title: "contract-flow" });
+    const created = await c.call("maestro_task_create", { title: "contract-flow" });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
     // Seed a v1 contract directly. We need the real on-disk shape that
@@ -269,7 +269,7 @@ describe("MCP stdio flow", () => {
     };
     await writeFile(join(contractDir, "v1.json"), JSON.stringify(contract));
 
-    const show1 = await c.call("contract_show", { taskId });
+    const show1 = await c.call("maestro_contract_show", { taskId });
     expect(
       (
         show1.body as {
@@ -278,21 +278,21 @@ describe("MCP stdio flow", () => {
       ).contract.scope.filesExpected,
     ).toEqual(["src/foo.ts"]);
 
-    const amended = await c.call("contract_amend", {
+    const amended = await c.call("maestro_contract_amend", {
       taskId,
       addPaths: ["src/bar.ts"],
       reason: "scope creep",
     });
     expect((amended.body as { newVersion: number }).newVersion).toBe(2);
 
-    const show2 = await c.call("contract_show", { taskId });
+    const show2 = await c.call("maestro_contract_show", { taskId });
     const expectedAfter = (
       show2.body as { contract: { scope: { filesExpected: string[] } } }
     ).contract.scope.filesExpected;
     expect(expectedAfter).toContain("src/foo.ts");
     expect(expectedAfter).toContain("src/bar.ts");
 
-    const noChange = await c.call("contract_amend", {
+    const noChange = await c.call("maestro_contract_amend", {
       taskId,
       addPaths: ["src/bar.ts"],
       reason: "noop",
@@ -303,7 +303,7 @@ describe("MCP stdio flow", () => {
 
   it("requests a verdict and shows it back", async () => {
     const c = client!;
-    const created = await c.call("task_create", { title: "verdict-flow" });
+    const created = await c.call("maestro_task_create", { title: "verdict-flow" });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
     const contractDir = join(tmpDir, ".maestro", "contracts", taskId);
@@ -332,21 +332,21 @@ describe("MCP stdio flow", () => {
       }),
     );
 
-    const before = await c.call("verdict_show", { taskId });
+    const before = await c.call("maestro_verdict_show", { taskId });
     expect(before.payload.isError).toBe(true);
     expect((before.body as { code: string }).code).toBe("VERDICT_NOT_FOUND");
 
-    const requested = await c.call("verdict_request", { taskId });
+    const requested = await c.call("maestro_verdict_request", { taskId });
     const decision = (requested.body as { verdict: { decision: string } }).verdict.decision;
     expect(["PASS", "FAIL", "HUMAN", "BLOCK"]).toContain(decision);
 
-    const after = await c.call("verdict_show", { taskId });
+    const after = await c.call("maestro_verdict_show", { taskId });
     expect((after.body as { verdict: { decision: string } }).verdict.decision).toBe(decision);
   });
 
   it("computes policy effective risk class for a task with a contract", async () => {
     const c = client!;
-    const created = await c.call("task_create", { title: "policy-flow" });
+    const created = await c.call("maestro_task_create", { title: "policy-flow" });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
     const contractDir = join(tmpDir, ".maestro", "contracts", taskId);
@@ -375,9 +375,9 @@ describe("MCP stdio flow", () => {
       }),
     );
 
-    const r = await c.call("policy_check", { taskId });
+    const r = await c.call("maestro_policy_check", { taskId });
     if (r.payload.isError) {
-      throw new Error(`policy_check returned error: ${JSON.stringify(r.body)}`);
+      throw new Error(`maestro_policy_check returned error: ${JSON.stringify(r.body)}`);
     }
     const body = r.body as {
       effectiveRiskClass: string;
@@ -392,7 +392,7 @@ describe("MCP stdio flow", () => {
   it("rejects an empty title at the schema layer", async () => {
     const c = client!;
     const r = await c.rpc("tools/call", {
-      name: "task_create",
+      name: "maestro_task_create",
       arguments: { title: "" },
     });
     // The MCP SDK may surface a zod validation failure as a JSON-RPC
@@ -404,21 +404,21 @@ describe("MCP stdio flow", () => {
     expect(rejected).toBe(true);
   });
 
-  it("returns a stable error code when no contract exists for contract_show", async () => {
+  it("returns a stable error code when no contract exists for maestro_contract_show", async () => {
     const c = client!;
-    const created = await c.call("task_create", { title: "no-contract" });
+    const created = await c.call("maestro_task_create", { title: "no-contract" });
     const taskId = (created.body as { task: { id: string } }).task.id;
-    const r = await c.call("contract_show", { taskId });
+    const r = await c.call("maestro_contract_show", { taskId });
     expect(r.payload.isError).toBe(true);
     expect((r.body as { code: string }).code).toBe("CONTRACT_NOT_FOUND");
   });
 
   it("rejects unknown fields at the schema boundary (strict mode)", async () => {
     const c = client!;
-    // task_create with a typo'd 'missionID' (correct field would be
-    // 'missionId', but task_create no longer accepts it at all).
+    // maestro_task_create with a typo'd 'missionID' (correct field would be
+    // 'missionId', but maestro_task_create no longer accepts it at all).
     const r = await c.rpc("tools/call", {
-      name: "task_create",
+      name: "maestro_task_create",
       arguments: { title: "strict mode probe", missionID: "msn-abc123" },
     });
     const tooled = r.result as ToolPayload | undefined;

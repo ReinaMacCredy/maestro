@@ -10,12 +10,18 @@ interface RegisterDeps {
 
 export function registerVerdictTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
-    "verdict_show",
+    "maestro_verdict_show",
     {
       title: "Show a verdict",
       description:
-        "Show the latest verdict for a task, or a specific verdict version when `id` is provided.",
+        "Show the latest verdict for a task, or a specific verdict version when `id` is provided. Returns code VERDICT_NOT_FOUND when no verdict has been computed. Read-only.",
       inputSchema: VerdictShowInput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
@@ -26,7 +32,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
         if (verdict === undefined) {
           return toCallToolResult(
             fail("VERDICT_NOT_FOUND", `No verdict found for task ${args.taskId}`, [
-              "Compute one with verdict_request",
+              "Compute one with maestro_verdict_request",
             ]),
           );
         }
@@ -38,12 +44,18 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
   );
 
   server.registerTool(
-    "verdict_request",
+    "maestro_verdict_request",
     {
       title: "Compute a new verdict",
       description:
-        "Compute a new verdict for a task and persist it. Returns PASS/FAIL/HUMAN/BLOCK decision and full verdict payload.",
+        "Compute a new verdict for a task and persist it. Returns PASS/FAIL/HUMAN/BLOCK decision and full verdict payload. Each call writes a new verdict row.",
       inputSchema: VerdictRequestInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {
