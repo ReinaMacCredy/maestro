@@ -3,6 +3,7 @@ import { requestVerdict } from "@/features/verdict/index.js";
 import type { Services } from "@/services.js";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { VerdictRequestInput, VerdictShowInput } from "../schemas/inputs.js";
+import { VerdictOutput } from "../schemas/outputs.js";
 
 interface RegisterDeps {
   readonly getServices: () => Services;
@@ -16,6 +17,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
       description:
         "Show the latest verdict for a task, or a specific verdict version when `id` is provided. Returns code VERDICT_NOT_FOUND when no verdict has been computed. Read-only.",
       inputSchema: VerdictShowInput,
+      outputSchema: VerdictOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -50,6 +52,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
       description:
         "Compute a new verdict for a task and persist it. Returns PASS/FAIL/HUMAN/BLOCK decision and full verdict payload. Each call writes a new verdict row.",
       inputSchema: VerdictRequestInput,
+      outputSchema: VerdictOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

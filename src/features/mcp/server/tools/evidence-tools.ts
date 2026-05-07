@@ -11,6 +11,7 @@ import { fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import { detectMcpSessionId } from "../session.js";
 import { EvidenceListInput, EvidenceRecordInput } from "../schemas/inputs.js";
+import { EvidenceListOutput, EvidenceRecordOutput } from "../schemas/outputs.js";
 
 interface RegisterDeps {
   readonly getServices: () => Services;
@@ -24,6 +25,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
       description:
         "List evidence rows for a task with optional kind/witness level filters. Paginated. Read-only.",
       inputSchema: EvidenceListInput,
+      outputSchema: EvidenceListOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -57,6 +59,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
       description:
         "Append an evidence row. Either pass `command`+`exitCode` for a command run or `note` for a manual note. Default witness level is agent-claimed-locally. Each call appends a new row.",
       inputSchema: EvidenceRecordInput,
+      outputSchema: EvidenceRecordOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

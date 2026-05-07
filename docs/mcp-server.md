@@ -68,6 +68,12 @@ Failures set `isError: true` and the payload is `{ code, message, hints }`. Code
 
 Every tool's input schema is `strict`: unknown fields cause the call to fail rather than being silently dropped. A typo such as `missionID` (correct: `missionId`) on a tool that does not declare that field will return a tool error instead of succeeding with the typo'd field ignored. Match the field names documented above exactly.
 
+## Output schemas
+
+Every tool also declares an `outputSchema` that mirrors the success-path `structuredContent`. Clients can use this to type-check returned data without reading docs. Inner objects (Task, Evidence, Verdict, Contract) are open (`passthrough`) so that future field additions don't break older clients. Top-level wrappers (`{ task }`, `{ items, pagination }`, etc.) are closed.
+
+Output validation is skipped when `isError: true`, so error payloads (`{ code, message, hints }`) never have to satisfy the success schema.
+
 ## Project root resolution
 
 The server walks up from its working directory looking for a `.maestro/` directory. To override, set `MAESTRO_PROJECT_ROOT` before launch. The server fails fast with `Not in a maestro project` if no `.maestro/` ancestor exists.
@@ -85,5 +91,6 @@ maestro mcp check --json
 ## See also
 
 - `docs/mcp-setup.md` — wiring the server into Claude Code and Codex.
+- `docs/mcp-evaluation.xml` — 10 question/answer pairs that exercise every tool surface against the checked-in fixture at `tests/e2e/mcp-eval-fixture/`.
 - `skills/bundled/maestro-task/SKILL.md` — task-side MCP tool table and CLI fallback note.
 - `skills/bundled/maestro-verify/SKILL.md` — verification-side MCP tool table.

@@ -9,6 +9,7 @@ import {
 import type { Services } from "@/services.js";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { ContractAmendInput, ContractShowInput } from "../schemas/inputs.js";
+import { ContractAmendOutput, ContractShowOutput } from "../schemas/outputs.js";
 
 interface RegisterDeps {
   readonly getServices: () => Services;
@@ -22,6 +23,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
       description:
         "Show the current contract for a task, or a specific version when `version` is provided. Returns code CONTRACT_NOT_FOUND when no contract has been proposed. Read-only.",
       inputSchema: ContractShowInput,
+      outputSchema: ContractShowOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -74,6 +76,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
       description:
         "Add or remove paths from filesExpected on the current contract. Records a versioned amendment and a contract-amendment evidence row. Returns code NO_SCOPE_CHANGES if all paths are already covered. Each successful amend creates a new version.",
       inputSchema: ContractAmendInput,
+      outputSchema: ContractAmendOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

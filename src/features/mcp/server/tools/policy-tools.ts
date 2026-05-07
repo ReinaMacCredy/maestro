@@ -10,6 +10,7 @@ import {
 import type { Services } from "@/services.js";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { PolicyCheckInput } from "../schemas/inputs.js";
+import { PolicyCheckOutput } from "../schemas/outputs.js";
 
 interface RegisterDeps {
   readonly getServices: () => Services;
@@ -23,6 +24,7 @@ export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void
       description:
         "Compute the effective risk class, autopilot rules, and sensitive-path matches for a task's current diff. Read-only.",
       inputSchema: PolicyCheckInput,
+      outputSchema: PolicyCheckOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
