@@ -172,6 +172,15 @@ maestro task update <id> --status completed \
 
 `--reason` is persisted verbatim. Short, factual, no secrets. `--strict` blocks completion on a broken contract verdict.
 
+### Two outputs per close
+
+Every task receipt should answer two questions:
+
+1. **Product delta** — what changed in user-facing or product behavior?
+2. **Harness delta** — what should we change so the next agent has it easier? (memory ratchet, skill update, `maestro doctor` finding, friction note in `.maestro/MAESTRO.md`). Answer "none" if truly nothing.
+
+If the harness delta is non-trivial, capture it before the close so the next session inherits it. The product delta belongs in `--reason` / `--summary`; the harness delta usually goes through `maestro memory-correct`, a skill edit, or a follow-up task.
+
 ## Before claiming the task complete
 
 Run this loop before marking any task done:
