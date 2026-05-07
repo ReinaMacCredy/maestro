@@ -619,11 +619,17 @@ maestro evidence show evd-xxxxxx
 
 Evidence rows are linked to a task id and optionally to a contract criterion via `--criterion <id>`. Run `maestro evidence record --help` for the full flag set.
 
-## L2: Contract-Required Workflow
+## Trust Substrate
 
-L2 adds a lightweight trust substrate on top of the task and contract system. When L2 is engaged the agent workflow gains three new behaviors:
+Maestro's trust substrate is a stack of opt-in layers that turn agent claims into deterministic, auditable, gated decisions. Each layer is independently useful; together they compose. Contracts narrow the scope of work, the Trust Verifier checks the diff against that scope, the Verdict gates completion on witnessed evidence, CI makes the verdict authoritative, and the optional layers above (auto-merge, deploy safety, cross-task conflict) extend the same primitives outward.
 
-1. **Plan proposes a contract.** During `maestro-plan`, the plan must include a `proposed_contract` with `allowed_files`, `forbidden_paths`, `done_when` criteria, and an `amendment_budget`. This is not an amendment (Rule 6 — plan-time proposals are exempt); it seeds the contract that gets locked when the agent claims the task.
+The sections below cover each layer in turn. They are presented in the order a team typically adopts them, but every layer past contracts is opt-in and can be enabled independently.
+
+## Contracts and the Trust Verifier
+
+This is the foundation. A contract pins down what a task is allowed to touch; the Trust Verifier checks the diff against that contract. Three behaviors define this layer:
+
+1. **Plan proposes a contract.** During `maestro-plan`, the plan must include a `proposed_contract` with `allowed_files`, `forbidden_paths`, `done_when` criteria, and an `amendment_budget`. Plan-time proposals are not amendments — they seed the contract that gets locked when the agent claims the task.
 
 2. **Agent works within scope; amends on genuine discovery.** When work uncovers a file that lies outside the locked contract scope, the agent must amend before touching it:
 
@@ -631,7 +637,7 @@ L2 adds a lightweight trust substrate on top of the task and contract system. Wh
    maestro contract amend --task <id> --add-path src/new-file.ts --reason "discovered at runtime"
    ```
 
-   Each amendment writes a new versioned contract snapshot and a `contract-amended` Evidence row. The budget defaults are: `max_amendments: 3`, `max_paths_per_amendment: 5`. Amendments are versioned Evidence and never silent edits (Rules 3–7).
+   Each amendment writes a new versioned contract snapshot and a `contract-amended` Evidence row. The budget defaults are `max_amendments: 3`, `max_paths_per_amendment: 5`. Amendments are versioned Evidence and never silent edits.
 
 3. **Agent verifies before completing.** `maestro task verify` runs the Trust Verifier against the current diff and the locked contract:
 
@@ -641,7 +647,7 @@ L2 adds a lightweight trust substrate on top of the task and contract system. Wh
 
    The verifier runs 6 checks in parallel: scope adherence, lockfile parity, generated-file parity, sensitive-path policy, commit metadata, and secrets-in-diff. Findings are printed with severity (`info`, `warn`, `error`). `error` findings cause a non-zero exit code.
 
-### L2 CLI surface
+### CLI surface
 
 ```bash
 # Versioned contract inspection and amendment
@@ -661,16 +667,16 @@ maestro spec show --mission <id>
 maestro spec edit --mission <id>
 ```
 
-### L2 policy files
+### Policy files
 
 `maestro init` bootstraps two policy files committed under `.maestro/policies/`:
 
 - `sensitive-paths.yaml` — glob list; paths matching these globs trigger `checkSensitivePaths` findings. See `docs/sensitive-paths-defaults.md` for the 8 default globs and guidance on extending or relaxing them.
 - `owners.yaml` — three role lists (`policy_approver`, `ratchet_approver`, `sensitive_waiver`). See `docs/owners-yaml-format.md` for the schema reference.
 
-## L3: Risk Verdict
+## Verdicts and Risk Class
 
-L3 adds a deterministic verdict layer on top of the L2 trust substrate. After running `maestro task verify`, an agent requests a verdict that produces one of four outcomes:
+The verdict layer turns a verifier run into a deterministic gating decision. After `maestro task verify`, an agent requests a verdict that produces one of four outcomes:
 
 | Verdict | Meaning |
 |---|---|
@@ -679,12 +685,12 @@ L3 adds a deterministic verdict layer on top of the L2 trust substrate. After ru
 | `HUMAN` | Criteria are met but the effective risk class or autopilot policy requires a human reviewer before the task can be sealed. |
 | `BLOCK` | A hard blocker is active: broken contract, `critical` risk class with no human signoff, or a policy loosening still in its 30-day soak window. |
 
-### Witness Levels
+### Witness levels
 
 Every Evidence row carries a `witness_level` that captures how trustworthy the claim is. The ladder, strongest to weakest:
 
 1. `witnessed-by-maestro` — Maestro itself ran the command and captured the result.
-2. `witnessed-by-ci` — A trusted CI gate ran the command and posted the result back. (Full wiring lands at L4.)
+2. `witnessed-by-ci` — A trusted CI gate ran the command and posted the result back.
 3. `agent-claimed-locally` — The agent self-reported a local run; Maestro did not observe it. Default for schema v1 evidence rows.
 4. `agent-claimed-and-not-reproducible` — A manual note; cannot be reproduced. Weakest level.
 
@@ -692,19 +698,19 @@ The Risk Engine demotes `PASS` to `HUMAN` if any evidence row's witness level is
 
 See `docs/witness-levels.md` for the full reference.
 
-### Risk Class
+### Risk class
 
-The Risk Engine derives a risk class from deterministic diff signals and takes the higher of agent-proposed vs Maestro-derived (Rule 1: an agent can never lower the derived class). The four levels are `low`, `medium`, `high`, and `critical`. See `docs/risk-class-derivation.md` for the signal-to-class mapping table.
+The Risk Engine derives a risk class from deterministic diff signals and takes the higher of agent-proposed vs Maestro-derived. An agent can never lower the derived class. The four levels are `low`, `medium`, `high`, and `critical`. See `docs/risk-class-derivation.md` for the signal-to-class mapping table.
 
 ### ProofMap
 
 `maestro task proof --task <id>` produces a per-criterion coverage map: for each acceptance criterion in the linked Spec, it shows which Evidence rows satisfy it and at what witness level.
 
-### Asymmetric Policy Editing
+### Asymmetric policy editing
 
 Policy tightenings (stricter rules, lower budgets) take effect immediately. Policy loosenings (relaxed rules, higher budgets) soak for 30 days before becoming effective. Pending loosenings accumulate in `.maestro/policies/.pending-loosenings.json` (gitignored). Use `maestro policy pending` to inspect.
 
-### L3 CLI surface
+### CLI surface
 
 ```bash
 # Verdict
@@ -722,21 +728,21 @@ maestro policy check --task <id>
 maestro policy pending
 ```
 
-### L3 policy files
+### Policy files
 
-`maestro init` bootstraps three additional policy files committed under `.maestro/policies/`:
+`maestro init` bootstraps three additional policy files under `.maestro/policies/`:
 
-- `risk.yaml` — extends or tightens the ROADMAP-default signal-to-class mapping. Absent means ROADMAP defaults apply.
+- `risk.yaml` — extends or tightens the default signal-to-class mapping. Absent means defaults apply.
 - `autopilot.yaml` — per-risk-class required witness level and auto-pass eligibility.
 - `release.yaml` — release-gate rules (e.g., minimum witness level required before a release commit is stamped).
 
 See `docs/policy-format.md` for the schema reference for all five policy files.
 
-## L4: Autopilot Inner Loop (No Merge)
+## The Pre-Claim Loop
 
-L4 closes the inner agent loop: the agent runs plan, implement, verify, and verdict steps without human intervention; humans still review and merge. The verify-verdict-fix/handoff/stop cycle is enforced by the tools, not by convention.
+The pre-claim loop closes the inner agent loop: the agent runs plan, implement, verify, and verdict steps without human intervention; humans still review and merge. The cycle is enforced by the tools, not by convention.
 
-### The pre-claim ritual (L4.2)
+### The pre-claim ritual
 
 Before claiming any non-trivial task done, the agent runs this ordered loop:
 
@@ -746,15 +752,15 @@ Before claiming any non-trivial task done, the agent runs this ordered loop:
 4. **ProofMap** — run `maestro task proof` and confirm every acceptance criterion is covered.
 5. **Verdict** — run `maestro verdict request` and branch on the exit code.
 
-The canonical source for this ritual is the `maestro-verify` skill (see below).
+The canonical source for this ritual is the `maestro-verify` bundled skill — read it when in doubt about the verification protocol.
 
-### Plan-check (L4.1)
+### Plan-check
 
 `maestro plan check` evaluates a plan file against the locked contract and spec before any code is written. It catches three classes of problems:
 
 - **`scope-widens`** — the plan intends to touch files outside `contract.scope.filesExpected`. Resolve by narrowing the intended files or amending the contract before coding.
 - **`missing-proof`** — an acceptance criterion from the Spec has no entry in the plan's `proofSet`. Every criterion needs a planned proof strategy.
-- **`risk-class-too-low`** — the plan's declared `riskClass` is lower than what the intended file set triggers. Raise it to match (Rule 1 plan-time gate).
+- **`risk-class-too-low`** — the plan's declared `riskClass` is lower than what the intended file set triggers. Raise it to match.
 
 The verb always exits 0. Findings in the output must be resolved before implementation begins. A clean plan-check does not guarantee a passing verdict; it means the plan is internally consistent.
 
@@ -763,17 +769,17 @@ maestro plan check --task <id> --plan-file ./plan.yaml
 maestro plan check --task <id> --plan-file ./plan.yaml --json
 ```
 
-### AI Reviewer Evidence (L4.3)
+### AI Reviewer Evidence
 
 Agents can record reviewer findings as structured evidence via `maestro evidence record --kind ai-review`. Three reviewer kinds are available: `bug` (correctness, edge cases, regressions), `security` (auth, input validation, secrets, injection), and `architecture` (boundary violations, coupling, abstraction misuse).
 
-**Rule 1 applies:** any `error`-severity finding raises the effective risk class by one notch. A `security`-reviewer `error` always lifts to `critical`. A clean review (zero `error` findings) never lowers the deterministic baseline derived from diff signals.
+Any `error`-severity finding raises the effective risk class by one notch. A `security`-reviewer `error` always lifts to `critical`. A clean review (zero `error` findings) never lowers the deterministic baseline derived from diff signals.
 
 See `docs/ai-reviewer-protocol.md` for the finding schema, confidence semantics, and recording guidance.
 
-### Threat-Model Evidence (L4.3a)
+### Threat-model evidence
 
-When the diff intersects security-relevant sensitive paths, the Verdict is `HUMAN` with reason `threat-model-required` unless a `threat-model` Evidence row is present (Edge Case 12). Produce the threat-model document and record it before requesting a verdict:
+When the diff intersects security-relevant sensitive paths, the Verdict is `HUMAN` with reason `threat-model-required` unless a `threat-model` Evidence row is present. Produce the threat-model document and record it before requesting a verdict:
 
 ```bash
 maestro evidence record --task <id> --kind threat-model \
@@ -782,7 +788,7 @@ maestro evidence record --task <id> --kind threat-model \
 
 See `docs/threat-model-format.md` for the schema (assets, threatCategories, mitigations, residualRisk) and examples.
 
-### Cost Budgets (L4.4)
+### Cost budgets
 
 Contracts can declare cost limits: `maxRetries`, `maxWallClockSeconds`, and `maxTokens`. When any limit is exceeded, run-state at `.maestro/runs/<task-id>/state.json` (gitignored) is marked exhausted and the next `verdict request` returns `BLOCK` (exit 3) with reason `cost-budget-exhausted`. Check consumption at any time:
 
@@ -793,15 +799,11 @@ maestro task budget --task <id> --json
 
 `retryCount` increments automatically on each `FAIL` or `HUMAN` verdict.
 
-### Mission Control autopilot view (L4.6)
+### Mission Control autopilot view
 
 In mission mode, Mission Control gains an `autopilot` screen that projects the current verify/verdict state across all active tasks in the mission. Use `maestro mission-control --preview autopilot --size 120x40 --format plain` to inspect it non-interactively.
 
-### maestro-verify skill (L4.5)
-
-`maestro-verify` is a new bundled skill (7th in the bundle) that is the canonical source for the verification protocol. `maestro-task`, `maestro-plan`, and `maestro-handoff` cross-reference it. When in doubt about verification steps, read `maestro-verify`.
-
-### L4 CLI surface
+### CLI surface
 
 ```bash
 # Plan-check
@@ -823,18 +825,22 @@ maestro evidence record --task <id> --kind threat-model \
   --threat-model-file <path>
 ```
 
-## Quick Start: L5 (CI is the authoritative verifier)
+## CI Integration
+
+Local Maestro is advisory; CI Maestro is authoritative. The PR check status posted by `maestro ci verify` is the merge gate.
 
 1. Bootstrap your repo with `maestro setup` — the maestro-setup skill installs `.github/workflows/maestro-verify.yml` from its bundled template (when `.github/` exists).
 2. Pin the Maestro binary version in the workflow (default: latest tagged release).
 3. Open a PR. GitHub Actions runs `maestro ci verify`, which runs Trust Verifier, ingests CI job results as `witnessed-by-ci` Evidence, computes the Verdict, and posts a GitHub Check.
 4. Merge when the check is green. Use `maestro verdict show --pr <n>` locally to inspect the latest verdict for a PR (looked up by current HEAD tree SHA).
 
+Verdicts are bound to (pr, tree_sha), so squashes survive but force-pushes to a different tree invalidate them.
+
 See `docs/ci-integration.md` for the full reference (workflow template, env contract, witness ingestion, troubleshooting).
 
-## L6: Auto-Merge for Declared Safe Scope
+## Auto-Merge
 
-L6 adds a deterministic auto-merge gate on top of the CI verdict layer. When all 8 eligibility predicates pass, `maestro merge auto` triggers `gh pr merge --auto` without further human intervention. Auto-merge applies to roughly 5–15% of merged PRs in practice — only those where the diff is small-scope, fully CI-witnessed, and the autopilot policy explicitly opts in for the relevant risk class.
+When all 8 eligibility predicates pass, `maestro merge auto` triggers `gh pr merge --auto` without further human intervention. Auto-merge applies to roughly 5–15% of merged PRs in practice — only those where the diff is small-scope, fully CI-witnessed, and the autopilot policy explicitly opts in for the relevant risk class.
 
 ### Opt-in
 
@@ -848,8 +854,6 @@ autoMergeAllowed:
   critical: false
 ```
 
-The `autoMergeAllowed` field existed from L3. L6 is the first layer that consumes it.
-
 ### Eligibility predicates
 
 All 8 must pass for `merge auto` to trigger. In canonical check order:
@@ -861,7 +865,7 @@ All 8 must pass for `merge auto` to trigger. In canonical check order:
 | `evidence-witness-too-weak` | All gating evidence rows must be at `witnessed-by-ci` or stronger |
 | `forbidden-paths-touched` | Diff must not intersect `contract.scope.filesForbidden` |
 | `sensitive-paths-untouched-without-waiver` | If diff touches sensitive paths, a `verdict-override` waiver must exist |
-| `rollback-not-witnessed` | A `rollback-exercised` Evidence row at `witnessed-by-ci` must exist (producer ships at L7.5) |
+| `rollback-not-witnessed` | When the spec declares a rollout plan or a `deploy-readiness` row exists, a successful `rollback-exercised` Evidence row at `witnessed-by-ci` or stronger must exist |
 | `review-ack-missing` | HUMAN verdicts at `>=medium` risk require a `review-ack` Evidence row |
 | `spec-score-below-threshold` | If a Spec is linked, its quality score must be 1.0 |
 
@@ -882,13 +886,13 @@ Exit codes for `merge auto`: 0 = eligible and triggered, 1 = ineligible (reasons
 
 See `docs/auto-merge-eligibility.md` for the full predicate reference and "Why isn't my PR auto-merging?" troubleshooting. See `docs/override-flow.md` for override authorization, audit trail, and no-silent-pass guarantees.
 
-## L7: Deploy Safety
+## Deploy Safety
 
-L7 is opt-in and reachable from L5 — building L7 phases does not require shipping L6 first. Producing `deploy-readiness` and `runtime-signal` Evidence does not by itself flip Verdict semantics; teams wire the new Evidence into `policies/risk.yaml` if they want it to gate.
+Deploy Safety is opt-in. Producing `deploy-readiness` and `runtime-signal` Evidence does not by itself flip Verdict semantics; teams wire the new Evidence into `policies/risk.yaml` if they want it to gate.
 
-### Spec schema v2: `runtime_signals` and `rollout_plan`
+### Spec schema: `runtime_signals` and `rollout_plan`
 
-Spec schema v2 (introduced in L7.1) adds two optional fields: `runtime_signals` (array of `RuntimeSignal` — name, provider, query, threshold) and `rollout_plan` (feature flag name, canary stages, rollback command). v1 Specs forward-migrate at read time with empty arrays and no rollout plan.
+The spec adds two optional fields: `runtime_signals` (array of `RuntimeSignal` — name, provider, query, threshold) and `rollout_plan` (feature flag name, canary stages, rollback command). Older specs forward-migrate at read time with empty arrays and no rollout plan.
 
 ### `maestro deploy gate`
 
@@ -898,7 +902,7 @@ Runs four checks and records a `deploy-readiness` Evidence row. Exits 0 when all
 |---|---|
 | `feature_flag` | `Spec.rollout_plan.feature_flag` is a non-empty string |
 | `canary_plan` | `Spec.rollout_plan.canary.stages` has at least one stage |
-| `rollback` | A `rollback-exercised` Evidence row at `witnessed-by-ci` or stronger exists |
+| `rollback` | A successful `rollback-exercised` Evidence row at `witnessed-by-ci` or stronger exists |
 | `owner` | `owners.yaml.deploy_approver` has at least one entry |
 
 `deploy gate` does NOT mutate the Verdict. Teams add a `deploy-readiness` signal to `policies/risk.yaml` if they want it to block a PR.
@@ -909,13 +913,13 @@ Runs the provided shell command, records a `rollback-exercised` Evidence row, an
 
 ### `maestro runtime check`
 
-Queries each signal declared in `Spec.runtime_signals` via the configured provider (Prometheus at L7). Records one `runtime-signal` Evidence row per signal. Exit code is always 0; `pass=false` rows are advisory at L7 unless wired into risk policy.
+Queries each signal declared in `Spec.runtime_signals` via the configured provider (Prometheus). Records one `runtime-signal` Evidence row per signal. Exit code is always 0; `pass=false` rows are advisory unless wired into risk policy.
 
 Provider base URL precedence: `--provider-base-url` flag → `MAESTRO_PROMETHEUS_URL` env → `http://localhost:9090`.
 
 ### `owners.yaml` — `deploy_approver` role
 
-L7 adds a fourth role to `owners.yaml`. The `deploy_approver` list is checked by `deploy gate` (owner check). See `docs/owners-yaml-format.md` for the full schema. CI Maestro's PR-author check also verifies that the committer is not self-approving their own deploy.
+`owners.yaml` has a fourth role: `deploy_approver`. The list is checked by `deploy gate` (owner check). See `docs/owners-yaml-format.md` for the full schema. CI Maestro's PR-author check also verifies that the committer is not self-approving their own deploy.
 
 ### CLI shapes
 
@@ -927,21 +931,21 @@ maestro runtime check --task <id> [--provider-base-url <url>] [--json]
 
 See `docs/deploy-gate.md` for the full check enumeration, `Spec.rollout_plan` reference, and troubleshooting. See `docs/runtime-monitoring.md` for the `RuntimeMonitorPort` reference and Prometheus adapter guide.
 
-## L8 (trimmed): Cross-Task Conflict + Trust Benchmark
+## Cross-Task Conflict and Trust Benchmarks
 
-L8 is a trimmed release — the full learning loop (autopsy, ratchet CLI, sunset machinery) is intentionally not in this slice. The two features that shipped are:
+Two features extend the trust substrate horizontally — one across PRs, one across edge cases.
 
-### L8.1: Cross-task conflict detection
+### Cross-task conflict detection
 
-`maestro ci verify` now checks whether other open PRs touch any of the same file paths as the current PR. When overlap is detected, it records a `kind=cross-task-conflict` Evidence row at `witnessed-by-ci` and passes it to the Risk Engine. The Risk Engine raises the effective risk class one tier per signal (capped at `critical`; multiple conflict rows still produce only a one-tier raise total).
+`maestro ci verify` checks whether other open PRs touch any of the same file paths as the current PR. When overlap is detected, it records a `kind=cross-task-conflict` Evidence row at `witnessed-by-ci` and passes it to the Risk Engine. The Risk Engine raises the effective risk class one tier per signal (capped at `critical`; multiple conflict rows still produce only a one-tier raise total).
 
 Detection is file-path-level: a path counts as overlapping when it appears in both this PR's changed-file list and at least one other open PR's changed-file list. The check is non-fatal on API errors — a failed `gh api` call logs a warning and skips the record without failing the verify step.
 
 See `docs/cross-task-conflict.md` for the port/adapter/use-case flow, payload schema, and troubleshooting.
 
-### L8.2: Trust benchmark corpus seed
+### Trust benchmark corpus
 
-`tests/e2e/trust-benchmark/` is a new end-to-end regression corpus of 9 scenarios drawn from the master edge-case list (32 total). The corpus covers: out-of-scope edits, generated-file drift, sensitive-path violations, security-thin diffs, amendment creep, proof not tied to criteria, rebase/squash verdict identity, deploy-gate decision authority, and PR self-weakening. Each scenario includes a positive assertion (mitigation fires) and a negative assertion (mitigation does not fire without the trigger).
+`tests/e2e/trust-benchmark/` is an end-to-end regression corpus of 9 scenarios drawn from a master edge-case list of 32. The corpus covers: out-of-scope edits, generated-file drift, sensitive-path violations, security-thin diffs, amendment creep, proof not tied to criteria, rebase/squash verdict identity, deploy-gate decision authority, and PR self-weakening. Each scenario includes a positive assertion (mitigation fires) and a negative assertion (mitigation does not fire without the trigger).
 
 ```bash
 bun test tests/e2e/trust-benchmark/
@@ -949,9 +953,9 @@ bun test tests/e2e/trust-benchmark/
 
 See `docs/trust-benchmark.md` for the full scenario table, fixture pattern, and how to add new scenarios.
 
-### Deferred from L8
+### Roadmap
 
-The following phases are intentionally not in this release and will ship when teams ask maestro to learn from incidents: autopsy generator, `maestro ratchet` review/approve/sunset CLI, N≥2 broad-promotion guard for ratchet rules, and sunset/decay machinery.
+The following capabilities are not in this release and will ship when teams ask maestro to learn from incidents: autopsy generator, `maestro ratchet` review/approve/sunset CLI, N≥2 broad-promotion guard for ratchet rules, and sunset/decay machinery.
 
 ## Common Commands
 
@@ -1170,7 +1174,7 @@ In-depth references live under [`docs/`](docs/):
 | Risk class derivation from diff signals | [`risk-class-derivation.md`](docs/risk-class-derivation.md) |
 | Witness levels (the trust ladder) | [`witness-levels.md`](docs/witness-levels.md) |
 | Policy file schemas (risk, autopilot, release, sensitive paths, owners) | [`policy-format.md`](docs/policy-format.md), [`sensitive-paths-defaults.md`](docs/sensitive-paths-defaults.md), [`owners-yaml-format.md`](docs/owners-yaml-format.md) |
-| AI Reviewer protocol (Rule 1, veto-only) | [`ai-reviewer-protocol.md`](docs/ai-reviewer-protocol.md) |
+| AI Reviewer protocol (veto-only; raises class but never lowers it) | [`ai-reviewer-protocol.md`](docs/ai-reviewer-protocol.md) |
 | Threat-model schema | [`threat-model-format.md`](docs/threat-model-format.md) |
 | Cross-task conflict detection | [`cross-task-conflict.md`](docs/cross-task-conflict.md) |
 | Deploy gate (4 checks + `Spec.rollout_plan`) | [`deploy-gate.md`](docs/deploy-gate.md) |
