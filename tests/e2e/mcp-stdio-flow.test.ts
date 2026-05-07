@@ -412,4 +412,19 @@ describe("MCP stdio flow", () => {
     expect(r.payload.isError).toBe(true);
     expect((r.body as { code: string }).code).toBe("CONTRACT_NOT_FOUND");
   });
+
+  it("rejects unknown fields at the schema boundary (strict mode)", async () => {
+    const c = client!;
+    // task_create with a typo'd 'missionID' (correct field would be
+    // 'missionId', but task_create no longer accepts it at all).
+    const r = await c.rpc("tools/call", {
+      name: "task_create",
+      arguments: { title: "strict mode probe", missionID: "msn-abc123" },
+    });
+    const tooled = r.result as ToolPayload | undefined;
+    const rejected =
+      r.error !== undefined ||
+      (tooled !== undefined && tooled.isError === true);
+    expect(rejected).toBe(true);
+  });
 });

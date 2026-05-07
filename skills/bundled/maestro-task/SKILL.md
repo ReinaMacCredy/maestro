@@ -383,6 +383,8 @@ If your runtime exposes maestro MCP tools, prefer them over the CLI verbs above 
 
 If MCP is not available (no `maestro_*` tool prefix in your tool list), fall back to the CLI verbs documented above.
 
+MCP input schemas are strict: unknown fields fail rather than getting silently dropped. Match the documented field names exactly; if a tool errors on what looks like a valid call, check spelling first (e.g., `missionId` not `missionID`).
+
 ## Reference
 
 - `./reference/plan-conversion.md`: longer examples mapping markdown plans to task batches
