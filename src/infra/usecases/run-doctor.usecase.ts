@@ -1,3 +1,5 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
 import { listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
@@ -15,14 +17,23 @@ export async function runDoctor(
   dir: string,
   options: CountLegacyHandoffFilesOptions = {},
 ): Promise<DoctorCheck[]> {
-  const [gitAvailable, projectConfig, globalConfig, configLayers, legacyHandoffCount] =
-    await Promise.all([
-      git.isRepo(dir),
-      config.exists("project", dir),
-      config.exists("global", dir),
-      config.loadLayers(dir),
-      countLegacyHandoffFiles(dir, options),
-    ]);
+  const [
+    gitAvailable,
+    projectConfig,
+    globalConfig,
+    configLayers,
+    legacyHandoffCount,
+    emptyFeatureDirs,
+    oversizedRootDocs,
+  ] = await Promise.all([
+    git.isRepo(dir),
+    config.exists("project", dir),
+    config.exists("global", dir),
+    config.loadLayers(dir),
+    countLegacyHandoffFiles(dir, options),
+    findEmptyFeatureDirs(dir),
+    findOversizedRootDocs(dir),
+  ]);
 
   const doctorChecks: DoctorCheck[] = [
     {
@@ -63,5 +74,120 @@ export async function runDoctor(
     });
   }
 
+  for (const featureDir of emptyFeatureDirs) {
+    doctorChecks.push({
+      name: `empty-feature-${featureDir}`,
+      status: "warn",
+      message: `src/features/${featureDir}/ has no .ts files; either populate or remove the directory`,
+      fix: `Implement the feature under src/features/${featureDir}/, or delete the directory if it was a stub`,
+    });
+  }
+
+  for (const doc of oversizedRootDocs) {
+    doctorChecks.push({
+      name: `oversized-root-doc-${doc.name.replaceAll(".", "-")}`,
+      status: "warn",
+      message: `${doc.name} (${doc.lineCount} lines) is at the repo root; planning docs of this size belong under docs/`,
+      fix: `Move ${doc.name} to docs/proposals/ (or delete if executed)`,
+    });
+  }
+
   return doctorChecks;
+}
+
+/**
+ * Finds direct subdirectories of `<dir>/src/features` that contain zero `.ts`
+ * files anywhere in their tree. These are stub directories that imply a
+ * feature exists when none does.
+ */
+async function findEmptyFeatureDirs(dir: string): Promise<string[]> {
+  const featuresRoot = join(dir, "src", "features");
+  let entries: string[];
+  try {
+    entries = await readdir(featuresRoot);
+  } catch {
+    return [];
+  }
+
+  const empty: string[] = [];
+  await Promise.all(
+    entries.map(async (entry) => {
+      const sub = join(featuresRoot, entry);
+      let entryStat;
+      try {
+        entryStat = await stat(sub);
+      } catch {
+        return;
+      }
+      if (!entryStat.isDirectory()) return;
+      if (await containsTsFile(sub)) return;
+      empty.push(entry);
+    }),
+  );
+  return empty.sort();
+}
+
+async function containsTsFile(dir: string): Promise<boolean> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.endsWith(".ts")) return true;
+    if (entry.isDirectory()) {
+      if (await containsTsFile(join(dir, entry.name))) return true;
+    }
+  }
+  return false;
+}
+
+const ROOT_DOC_ALLOWLIST = new Set([
+  "README.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "CHANGELOG.md",
+  "ROADMAP.md",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "LICENSE",
+  "LICENSE.md",
+]);
+
+const ROOT_DOC_LINE_LIMIT = 500;
+
+/**
+ * Returns root-level *.md files exceeding ROOT_DOC_LINE_LIMIT that are not in
+ * the allowlist of canonical project files. Catches planning/proposal docs
+ * that should live under docs/.
+ */
+async function findOversizedRootDocs(
+  dir: string,
+): Promise<{ name: string; lineCount: number }[]> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const candidates = entries.filter(
+    (e) => e.isFile() && e.name.endsWith(".md") && !ROOT_DOC_ALLOWLIST.has(e.name),
+  );
+
+  const results = await Promise.all(
+    candidates.map(async (entry) => {
+      try {
+        const text = await readFile(join(dir, entry.name), "utf8");
+        const lineCount = text.split("\n").length;
+        if (lineCount > ROOT_DOC_LINE_LIMIT) {
+          return { name: entry.name, lineCount };
+        }
+      } catch {}
+      return undefined;
+    }),
+  );
+
+  return results.filter((r): r is { name: string; lineCount: number } => r !== undefined);
 }

@@ -94,6 +94,56 @@ describe("runDoctor", () => {
     });
   });
 
+  it("warns for each empty src/features/* subdirectory", async () => {
+    await mkdir(join(cwd, "src", "features", "ghost", "commands"), { recursive: true });
+    await mkdir(join(cwd, "src", "features", "ghost", "domain"), { recursive: true });
+    await mkdir(join(cwd, "src", "features", "real"), { recursive: true });
+    await writeFile(join(cwd, "src", "features", "real", "index.ts"), "export {};\n");
+
+    const checks = await runDoctor(
+      mockGit(),
+      mockConfig({ exists: async () => true }),
+      cwd,
+      { homeDir },
+    );
+
+    const ghost = checks.find((c) => c.name === "empty-feature-ghost");
+    expect(ghost).toMatchObject({ status: "warn" });
+    expect(ghost?.message).toContain("ghost");
+    expect(checks.find((c) => c.name === "empty-feature-real")).toBeUndefined();
+  });
+
+  it("stays silent when src/features/ does not exist", async () => {
+    const checks = await runDoctor(
+      mockGit(),
+      mockConfig({ exists: async () => true }),
+      cwd,
+      { homeDir },
+    );
+    expect(checks.some((c) => c.name.startsWith("empty-feature-"))).toBe(false);
+  });
+
+  it("warns for oversized root markdown docs not in allowlist", async () => {
+    const big = "a\n".repeat(700);
+    await writeFile(join(cwd, "PROPOSAL.md"), big);
+    await writeFile(join(cwd, "README.md"), big); // allowlisted
+    await writeFile(join(cwd, "TINY.md"), "small\n");
+
+    const checks = await runDoctor(
+      mockGit(),
+      mockConfig({ exists: async () => true }),
+      cwd,
+      { homeDir },
+    );
+
+    const proposal = checks.find((c) => c.name === "oversized-root-doc-PROPOSAL-md");
+    expect(proposal).toMatchObject({ status: "warn" });
+    expect(proposal?.message).toContain("701");
+    expect(proposal?.fix).toContain("docs/proposals/");
+    expect(checks.some((c) => c.name === "oversized-root-doc-README-md")).toBe(false);
+    expect(checks.some((c) => c.name === "oversized-root-doc-TINY-md")).toBe(false);
+  });
+
   it("warns when legacy handoff or launch artifacts are still present", async () => {
     await mkdir(join(cwd, ".maestro", "handoffs"), { recursive: true });
     await writeFile(join(cwd, ".maestro", "handoffs", "2026-04-20-001.json"), "{}\n");
