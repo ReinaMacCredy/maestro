@@ -64,6 +64,10 @@ Failures set `isError: true` and the payload is `{ code, message, hints }`. Code
 
 `task_list` and `evidence_list` accept `limit` (default 20, max 100) and `offset` (default 0). Responses include a `pagination: { total, limit, offset, hasMore }` block.
 
+## Strict input validation
+
+Every tool's input schema is `strict`: unknown fields cause the call to fail rather than being silently dropped. A typo such as `missionID` (correct: `missionId`) on a tool that does not declare that field will return a tool error instead of succeeding with the typo'd field ignored. Match the field names documented above exactly.
+
 ## Project root resolution
 
 The server walks up from its working directory looking for a `.maestro/` directory. To override, set `MAESTRO_PROJECT_ROOT` before launch. The server fails fast with `Not in a maestro project` if no `.maestro/` ancestor exists.

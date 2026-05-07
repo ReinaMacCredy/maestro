@@ -14,83 +14,111 @@ const witnessLevel = z.enum([
 ]);
 const riskClass = z.enum(["low", "medium", "high", "critical"]);
 
-export const TaskListInput = {
-  missionId: missionId.optional(),
-  status: taskStatus.optional(),
-  limit: z.number().int().min(1).max(100).optional(),
-  offset: z.number().int().min(0).optional(),
-};
+export const TaskListInput = z
+  .object({
+    missionId: missionId.optional(),
+    status: taskStatus.optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    offset: z.number().int().min(0).optional(),
+  })
+  .strict();
 
-export const TaskGetInput = {
-  id: taskId,
-};
+export const TaskGetInput = z
+  .object({
+    id: taskId,
+  })
+  .strict();
 
-export const TaskCreateInput = {
-  title: z.string().min(1).max(200),
-  description: z.string().optional(),
-};
+export const TaskCreateInput = z
+  .object({
+    title: z.string().min(1).max(200),
+    description: z.string().optional(),
+  })
+  .strict();
 
-export const TaskClaimInput = {
-  id: taskId,
-};
+export const TaskClaimInput = z
+  .object({
+    id: taskId,
+  })
+  .strict();
 
-export const TaskCompleteInput = {
-  id: taskId,
-  summary: z.string().optional(),
-};
+export const TaskCompleteInput = z
+  .object({
+    id: taskId,
+    summary: z.string().optional(),
+  })
+  .strict();
 
-export const TaskBlockInput = {
-  id: taskId,
-  blockedTaskIds: z.array(taskId).min(1),
-  force: z.boolean().optional(),
-};
+export const TaskBlockInput = z
+  .object({
+    id: taskId,
+    blockedTaskIds: z.array(taskId).min(1),
+    force: z.boolean().optional(),
+  })
+  .strict();
 
-export const TaskUnblockInput = {
-  id: taskId,
-  blockedTaskIds: z.array(taskId).min(1),
-  force: z.boolean().optional(),
-};
+export const TaskUnblockInput = z
+  .object({
+    id: taskId,
+    blockedTaskIds: z.array(taskId).min(1),
+    force: z.boolean().optional(),
+  })
+  .strict();
 
-export const EvidenceListInput = {
-  taskId: taskId,
-  kind: z.string().optional(),
-  witnessLevel: witnessLevel.optional(),
-  limit: z.number().int().min(1).max(100).optional(),
-  offset: z.number().int().min(0).optional(),
-};
+export const EvidenceListInput = z
+  .object({
+    taskId: taskId,
+    kind: z.string().optional(),
+    witnessLevel: witnessLevel.optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    offset: z.number().int().min(0).optional(),
+  })
+  .strict();
 
-export const EvidenceRecordInput = {
-  taskId: taskId,
-  command: z.string().optional(),
-  exitCode: z.number().int().optional(),
-  note: z.string().optional(),
-  witnessLevel: witnessLevel.optional(),
-};
+export const EvidenceRecordInput = z
+  .object({
+    taskId: taskId,
+    command: z.string().optional(),
+    exitCode: z.number().int().optional(),
+    note: z.string().optional(),
+    witnessLevel: witnessLevel.optional(),
+  })
+  .strict();
 
-export const VerdictShowInput = {
-  taskId: taskId,
-  id: verdictId.optional(),
-};
+export const VerdictShowInput = z
+  .object({
+    taskId: taskId,
+    id: verdictId.optional(),
+  })
+  .strict();
 
-export const VerdictRequestInput = {
-  taskId: taskId,
-  base: z.string().optional(),
-};
+export const VerdictRequestInput = z
+  .object({
+    taskId: taskId,
+    base: z.string().optional(),
+  })
+  .strict();
 
-export const ContractShowInput = {
-  taskId: taskId,
-  version: z.number().int().min(1).optional(),
-};
+export const ContractShowInput = z
+  .object({
+    taskId: taskId,
+    version: z.number().int().min(1).optional(),
+  })
+  .strict();
 
-export const ContractAmendInput = {
-  taskId: taskId,
-  addPaths: z.array(z.string()).optional(),
-  removePaths: z.array(z.string()).optional(),
-  reason: z.string().min(1),
-};
+export const ContractAmendInput = z
+  .object({
+    taskId: taskId,
+    addPaths: z.array(z.string()).optional(),
+    removePaths: z.array(z.string()).optional(),
+    reason: z.string().min(1),
+  })
+  .strict();
 
-export const PolicyCheckInput = {
-  taskId: taskId,
-};
+export const PolicyCheckInput = z
+  .object({
+    taskId: taskId,
+  })
+  .strict();
 
 export { taskId, missionId, verdictId, evidenceId };
