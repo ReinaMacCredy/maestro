@@ -10,12 +10,12 @@ const missionId = z
   .describe("A maestro mission id like 'msn-abc123'.");
 const verdictId = z
   .string()
-  .regex(/^vdt-[a-z0-9]+$/, "Invalid verdict id")
-  .describe("A maestro verdict id like 'vdt-abc123'.");
+  .regex(/^vrd-\d{13}-[0-9a-f]{6}$/, "Invalid verdict id")
+  .describe("A maestro verdict id like 'vrd-1714747200123-a1b2c3'.");
 const evidenceId = z
   .string()
-  .regex(/^evd-[a-z0-9]+$/, "Invalid evidence id")
-  .describe("A maestro evidence id like 'evd-abc123'.");
+  .regex(/^evd-\d{13}-[0-9a-f]{6}$/, "Invalid evidence id")
+  .describe("A maestro evidence id like 'evd-1714747200123-a1b2c3'.");
 
 const taskStatus = z
   .enum(["pending", "in_progress", "completed"])

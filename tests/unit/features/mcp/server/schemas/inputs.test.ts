@@ -190,9 +190,15 @@ describe("VerdictShowInput / VerdictRequestInput", () => {
     expect(
       VerdictShowInput.safeParse({
         taskId: "tsk-abc123",
-        id: "vdt-abc123",
+        id: "vrd-1714747200123-a1b2c3",
       }).success,
     ).toBe(true);
+    expect(
+      VerdictShowInput.safeParse({
+        taskId: "tsk-abc123",
+        id: "vdt-abc123",
+      }).success,
+    ).toBe(false);
     expect(
       VerdictShowInput.safeParse({
         taskId: "tsk-abc123",
