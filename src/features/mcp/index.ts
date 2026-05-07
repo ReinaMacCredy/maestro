@@ -6,7 +6,7 @@ export {
   buildMaestroAgentMcpConfigEntry,
   configureAgentRuntime,
   defaultAgentRuntimeTargets,
-  resolveStartMjsInstallPath,
+  resolveMaestroBinaryInstallPath,
   type AgentMcpEntry,
   type AgentRuntimeTarget,
   type ConfigureRuntimeResult,
