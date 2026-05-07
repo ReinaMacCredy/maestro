@@ -50,11 +50,10 @@ export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void
 
         const baseRef = contract.claimedAtCommit ?? (await resolveDefaultBase());
         const headSha = await resolveHeadSha();
-        const cwd = process.cwd();
 
         const [changedPaths, riskPolicy, autopilotPolicy, releasePolicy, sensitiveGlobs] =
           await Promise.all([
-            services.gitAnchor.collectChangedPaths(cwd, baseRef, headSha),
+            services.gitAnchor.collectChangedPaths(services.projectRoot, baseRef, headSha),
             services.getEffectiveRiskPolicy(),
             services.getEffectiveAutopilotPolicy(),
             services.getEffectiveReleasePolicy(),

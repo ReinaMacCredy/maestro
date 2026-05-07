@@ -2,7 +2,6 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   listEvidence,
   recordEvidence,
-  type EvidenceKind,
   type EvidenceListFilter,
   type WitnessLevel,
 } from "@/features/evidence/index.js";
@@ -38,7 +37,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
         const services = deps.getServices();
         const filter: EvidenceListFilter = {
           task_id: args.taskId,
-          ...(args.kind !== undefined ? { kind: args.kind as EvidenceKind } : {}),
+          ...(args.kind !== undefined ? { kind: args.kind } : {}),
         };
         let rows = await listEvidence(services.evidenceStore, filter);
         if (args.witnessLevel !== undefined) {
@@ -83,12 +82,23 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
           });
           return toCallToolResult(ok({ evidence: row }));
         }
-        const note = args.note ?? "";
+        // Schema refine guarantees exactly one of command/note is set, and the
+        // `note` schema enforces min(1) — so by this branch `args.note` is
+        // always a non-empty string. Treat absence as a programmer error
+        // rather than silently producing an empty manual-note row.
+        if (args.note === undefined) {
+          return toCallToolResult(
+            fromMaestroError(
+              new Error("EvidenceRecordInput refine bypassed: neither command nor note set"),
+              "EVIDENCE_RECORD_FAILED",
+            ),
+          );
+        }
         const row = await recordEvidence<"manual-note">(services.evidenceStore, {
           task_id: args.taskId,
           session_id: sessionId,
           kind: "manual-note",
-          payload: { note },
+          payload: { note: args.note },
           witness_level: witnessLevel,
         });
         return toCallToolResult(ok({ evidence: row }));
