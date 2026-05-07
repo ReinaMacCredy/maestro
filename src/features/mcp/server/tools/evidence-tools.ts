@@ -57,7 +57,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
     {
       title: "Record evidence for a task",
       description:
-        "Append an evidence row. Either pass `command`+`exitCode` for a command run or `note` for a manual note. Default witness level is agent-claimed-locally. Each call appends a new row.",
+        "Append an evidence row. Provide exactly one of: `command`+`exitCode` for a command run, or `note` for a manual note. Passing both, neither, or `command` without `exitCode` is rejected at the schema layer. Default witness level is agent-claimed-locally. Each call appends a new row.",
       inputSchema: EvidenceRecordInput,
       outputSchema: EvidenceRecordOutput,
       annotations: {

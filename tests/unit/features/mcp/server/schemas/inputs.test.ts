@@ -70,6 +70,31 @@ describe("TaskListInput", () => {
     expect(TaskListInput.safeParse({ status: "fubar" }).success).toBe(false);
   });
 
+  it("validates the type enum", () => {
+    expect(TaskListInput.safeParse({ type: "bug" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ type: "feature" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ type: "spike" }).success).toBe(false);
+  });
+
+  it("validates the priority literal range", () => {
+    for (const p of [0, 1, 2, 3, 4]) {
+      expect(TaskListInput.safeParse({ priority: p }).success).toBe(true);
+    }
+    expect(TaskListInput.safeParse({ priority: 5 }).success).toBe(false);
+    expect(TaskListInput.safeParse({ priority: -1 }).success).toBe(false);
+  });
+
+  it("accepts label / parentId / assignee filters", () => {
+    expect(TaskListInput.safeParse({ label: "release-prep" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ parentId: "tsk-aa0001" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ assignee: "session:ada" }).success).toBe(true);
+  });
+
+  it("rejects empty-string label or assignee", () => {
+    expect(TaskListInput.safeParse({ label: "" }).success).toBe(false);
+    expect(TaskListInput.safeParse({ assignee: "" }).success).toBe(false);
+  });
+
   it("clamps limit to 1..100", () => {
     expect(TaskListInput.safeParse({ limit: 0 }).success).toBe(false);
     expect(TaskListInput.safeParse({ limit: 101 }).success).toBe(false);
@@ -181,6 +206,35 @@ describe("EvidenceListInput / EvidenceRecordInput", () => {
         note: "verified manually",
       }).success,
     ).toBe(true);
+  });
+
+  it("EvidenceRecordInput rejects passing both command and note", () => {
+    const r = EvidenceRecordInput.safeParse({
+      taskId: "tsk-abc123",
+      command: "bun test",
+      exitCode: 0,
+      note: "and also a note",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toContain("exactly one");
+    }
+  });
+
+  it("EvidenceRecordInput rejects passing neither command nor note", () => {
+    const r = EvidenceRecordInput.safeParse({ taskId: "tsk-abc123" });
+    expect(r.success).toBe(false);
+  });
+
+  it("EvidenceRecordInput rejects command without exitCode", () => {
+    const r = EvidenceRecordInput.safeParse({
+      taskId: "tsk-abc123",
+      command: "bun test",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.message.includes("exitCode"))).toBe(true);
+    }
   });
 });
 

@@ -6,7 +6,9 @@ import {
   listTasks,
   unblockTasks,
   type ListTasksFilters,
+  type TaskPriority,
   type TaskStatus,
+  type TaskType,
 } from "@/features/task/index.js";
 import type { Services } from "@/services.js";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
@@ -33,7 +35,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "List maestro tasks",
       description:
-        "List maestro tasks with optional filters. Returns paginated results sorted by createdAt ascending. Read-only.",
+        "List maestro tasks with optional filters (missionId, status, type, priority, label, parentId, assignee). Returns paginated results sorted by createdAt ascending. Read-only.",
       inputSchema: TaskListInput,
       outputSchema: TaskListOutput,
       annotations: {
@@ -48,6 +50,11 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         const services = deps.getServices();
         const filters: ListTasksFilters = {
           ...(args.status !== undefined ? { status: args.status as TaskStatus } : {}),
+          ...(args.type !== undefined ? { type: args.type as TaskType } : {}),
+          ...(args.priority !== undefined ? { priority: args.priority as TaskPriority } : {}),
+          ...(args.label !== undefined ? { label: args.label } : {}),
+          ...(args.parentId !== undefined ? { parentId: args.parentId } : {}),
+          ...(args.assignee !== undefined ? { assignee: args.assignee } : {}),
         };
         const tasks = await listTasks(services.taskStore, filters);
         const filtered = args.missionId
@@ -128,7 +135,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "Claim a maestro task",
       description:
-        "Claim a pending task for the current MCP session. Idempotent: claiming a task already owned by this session is a no-op.",
+        "Claim a pending task for the current MCP session. Idempotent when this session already owns the task. Error codes: TASK_NOT_FOUND, OWNERSHIP_CONFLICT.",
       inputSchema: TaskClaimInput,
       outputSchema: TaskOutput,
       annotations: {
@@ -155,7 +162,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "Complete a maestro task",
       description:
-        "Mark a task as completed. Optional summary is stored on the task receipt. Errors if the task is already completed.",
+        "Mark a task as completed. Optional summary is stored on the task receipt. Error codes: TASK_NOT_FOUND, ALREADY_COMPLETED, OWNERSHIP_CONFLICT.",
       inputSchema: TaskCompleteInput,
       outputSchema: TaskOutput,
       annotations: {
@@ -186,7 +193,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "Add blocker edges from this task",
       description:
-        "Mark this task as blocking the listed tasks. Maintains bidirectional blocks/blockedBy. Detects cycles.",
+        "Mark this task as blocking the listed tasks. Maintains bidirectional blocks/blockedBy. Error codes: TASK_NOT_FOUND, SELF_BLOCK, CYCLE_DETECTED, OWNERSHIP_CONFLICT.",
       inputSchema: TaskBlockInput,
       outputSchema: TaskOutput,
       annotations: {

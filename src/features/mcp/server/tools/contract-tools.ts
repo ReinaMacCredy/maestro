@@ -74,7 +74,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
     {
       title: "Amend a task contract scope",
       description:
-        "Add or remove paths from filesExpected on the current contract. Records a versioned amendment and a contract-amendment evidence row. Returns code NO_SCOPE_CHANGES if all paths are already covered. Each successful amend creates a new version.",
+        "Add or remove paths from filesExpected on the current contract. Records a versioned amendment and a contract-amendment evidence row. Error codes: CONTRACT_NOT_FOUND, NO_SCOPE_CHANGES, VALIDATION_ERROR. Each successful amend creates a new version.",
       inputSchema: ContractAmendInput,
       outputSchema: ContractAmendOutput,
       annotations: {
