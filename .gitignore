@@ -47,6 +47,7 @@ feedback.jsonl
 
 # Claude Code agent worktrees: transient scratch space for parallel agents
 .claude/worktrees/
+**/.claude/worktrees/
 
 # The Desktop App for Maestro is still under development.
 /apps/
