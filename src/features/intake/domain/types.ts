@@ -20,7 +20,6 @@ export type IntakeFlag =
 export type IntakeLane = "tiny" | "normal" | "high-risk";
 
 export interface IntakeInput {
-  readonly summary: string;
   readonly intendedPaths: readonly string[];
   /** Flags the agent declares up front. Combined with auto-detected flags. */
   readonly declaredFlags?: readonly IntakeFlag[];
@@ -33,5 +32,11 @@ export interface IntakeResult {
   readonly autoDetectedFlags: readonly IntakeFlag[];
   readonly declaredFlags: readonly IntakeFlag[];
   readonly hardGatesTriggered: readonly IntakeFlag[];
+  /**
+   * True when the verdict pipeline will require a `threat-model` Evidence row
+   * for a passing verdict. Mirrors the `requiresThreatModel` predicate in
+   * compute-risk.ts so intake and verdict agree before code is written.
+   */
+  readonly threatModelRequired: boolean;
   readonly recommendedNextStep: string;
 }

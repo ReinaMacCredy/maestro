@@ -38,6 +38,7 @@ describe("intake command", () => {
     expect(parsed.lane).toBe("tiny");
     expect(parsed.derivedRiskClass).toBeDefined();
     expect(parsed.recommendedNextStep).toBeDefined();
+    expect(parsed.threatModelRequired).toBe(false);
   });
 
   it("escalates to high-risk when an auth path is intended", async () => {
