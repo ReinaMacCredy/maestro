@@ -12,7 +12,7 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 
 | Tool | Behavior |
 |------|----------|
-| `maestro_task_list` | Paginated list, optional filters: `missionId`, `status`, `limit`, `offset`. |
+| `maestro_task_list` | Paginated list. Filters: `missionId`, `status`, `type`, `priority`, `label`, `parentId`, `assignee`, plus `limit`/`offset`. |
 | `maestro_task_get` | Fetch one task by id. Returns `code: TASK_NOT_FOUND` if missing. |
 | `maestro_task_create` | Create a top-level task. Slug derived from title. |
 | `maestro_task_claim` | Claim a task for the current MCP session. Session id is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, `CODEX_THREAD_ID`, falling back to `<user>@<host>`. |
@@ -24,7 +24,7 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 
 | Tool | Behavior |
 |------|----------|
-| `maestro_evidence_record` | Record either a command result (`command` + `exitCode`) or a manual note (`note`). Optional `witnessLevel`. |
+| `maestro_evidence_record` | Record either a command result (`command` + `exitCode`) or a manual note (`note`). Exactly one of those two forms — passing both, neither, or `command` without `exitCode` is rejected at the schema layer. Optional `witnessLevel`. |
 | `maestro_evidence_list` | Paginated list, optional `kind` and `witnessLevel` filters. |
 
 ### Contract
@@ -58,7 +58,22 @@ Successful calls return a `tools/call` result whose first content block is JSON 
 }
 ```
 
-Failures set `isError: true` and the payload is `{ code, message, hints }`. Codes are stable (`TASK_NOT_FOUND`, `CONTRACT_NOT_FOUND`, `VERDICT_NOT_FOUND`, `CYCLE_DETECTED`, `OWNERSHIP_CONFLICT`, `NO_SCOPE_CHANGES`, `VALIDATION_ERROR`, etc.) and safe to branch on.
+Failures set `isError: true` and the payload is `{ code, message, hints }`. Codes are stable and safe to branch on. The full set surfaced today:
+
+| Code | Source |
+|------|--------|
+| `TASK_NOT_FOUND` | task lookup miss; thrown explicitly by the task-error factory |
+| `CONTRACT_NOT_FOUND` | contract show/amend on a task with no contract |
+| `CONTRACT_VERSION_NOT_FOUND` | `version` argument doesn't match any stored version |
+| `VERDICT_NOT_FOUND` | verdict show on a task with no computed verdict |
+| `ALREADY_COMPLETED` | mutating a task that has already been completed |
+| `OWNERSHIP_CONFLICT` | claim/mutate of a task owned by a different session |
+| `CYCLE_DETECTED` | task block would create a cycle in the blocker graph |
+| `SELF_BLOCK` | task tries to block itself |
+| `NO_SCOPE_CHANGES` | contract amend whose add/remove paths produce no diff |
+| `VALIDATION_ERROR` | other validation failures (e.g. empty addPaths and removePaths) |
+
+The MCP layer prefers explicit codes attached at the throw site (via `MaestroError.code`) and falls back to message-pattern matching only for legacy throw sites. Adding a new error code in the domain is opt-in and doesn't risk silently shadowing an existing one.
 
 ## Pagination
 

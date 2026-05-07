@@ -20,6 +20,12 @@ const evidenceId = z
 const taskStatus = z
   .enum(["pending", "in_progress", "completed"])
   .describe("Filter by task status.");
+const taskType = z
+  .enum(["task", "bug", "feature", "epic", "chore"])
+  .describe("Filter by task type.");
+const taskPriority = z
+  .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+  .describe("Filter by priority (0=critical, 4=backlog).");
 const witnessLevel = z
   .enum([
     "witnessed-by-maestro",
@@ -50,6 +56,19 @@ export const TaskListInput = z
   .object({
     missionId: missionId.optional(),
     status: taskStatus.optional(),
+    type: taskType.optional(),
+    priority: taskPriority.optional(),
+    label: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Filter to tasks carrying this label (exact match)."),
+    parentId: taskId.optional(),
+    assignee: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Filter by assignee/session id."),
     limit,
     offset,
   })
@@ -136,6 +155,7 @@ export const EvidenceRecordInput = z
     taskId,
     command: z
       .string()
+      .min(1)
       .optional()
       .describe(
         "Shell command that was executed. Pair with exitCode. Mutually exclusive with note.",
@@ -147,13 +167,28 @@ export const EvidenceRecordInput = z
       .describe("Exit code of the command (0=success). Required when command is set."),
     note: z
       .string()
+      .min(1)
       .optional()
       .describe(
         "Free-text note for manual evidence (e.g. 'Verified UI on staging'). Mutually exclusive with command.",
       ),
     witnessLevel: witnessLevel.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (d) => (d.command !== undefined) !== (d.note !== undefined),
+    {
+      message: "Provide exactly one of: command (with exitCode) or note",
+      path: ["command"],
+    },
+  )
+  .refine(
+    (d) => d.command === undefined || d.exitCode !== undefined,
+    {
+      message: "exitCode is required when command is provided",
+      path: ["exitCode"],
+    },
+  );
 
 export const VerdictShowInput = z
   .object({

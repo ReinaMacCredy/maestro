@@ -59,23 +59,356 @@ const WitnessLevelSchema = z.enum([
   "agent-claimed-and-not-reproducible",
 ]);
 
+// Evidence payloads — one schema per `kind`. Used as a discriminated union so
+// clients can pattern-match without a runtime guard. Each payload object stays
+// `.passthrough()` so future fields don't break older clients.
+const SeveritySchema = z.enum(["info", "warn", "error"]);
+
+const evidencePayloadByKind = {
+  command: z
+    .object({
+      command: z.string(),
+      exit: z.number().int(),
+      log_path: z.string().optional(),
+      duration_ms: z.number().optional(),
+      criterion_id: z.string().optional(),
+    })
+    .passthrough(),
+  "manual-note": z
+    .object({
+      note: z.string(),
+      criterion_id: z.string().optional(),
+    })
+    .passthrough(),
+  verifier: z
+    .object({
+      check: z.string(),
+      severity: SeveritySchema,
+      paths: z.array(z.string()),
+      details: z.string().optional(),
+    })
+    .passthrough(),
+  "contract-amendment": z
+    .object({
+      amendmentId: z.string(),
+      addedPaths: z.array(z.string()),
+      removedPaths: z.array(z.string()),
+      reason: z.string(),
+    })
+    .passthrough(),
+  "contract-amendment-blocked": z
+    .object({
+      reason: z.enum(["budget_exhausted", "forbidden_path", "validation"]),
+      attemptedPaths: z.array(z.string()),
+      details: z.string().optional(),
+    })
+    .passthrough(),
+  "ai-review": z
+    .object({
+      reviewer: z.enum(["bug", "security", "architecture"]),
+      findings: z.array(
+        z
+          .object({
+            severity: SeveritySchema,
+            message: z.string(),
+            paths: z.array(z.string()).optional(),
+            suggestion: z.string().optional(),
+          })
+          .passthrough(),
+      ),
+      confidence: z.number(),
+      criterion_id: z.string().optional(),
+    })
+    .passthrough(),
+  "plan-check": z
+    .object({
+      planFileSha: z.string(),
+      findings: z.array(
+        z
+          .object({
+            check: z.string(),
+            severity: SeveritySchema,
+            message: z.string(),
+          })
+          .passthrough(),
+      ),
+      errorCount: z.number().int(),
+      warnCount: z.number().int(),
+    })
+    .passthrough(),
+  "threat-model": z
+    .object({
+      assets: z.array(z.string()),
+      threatCategories: z.array(z.string()),
+      mitigations: z.array(
+        z
+          .object({ threat: z.string(), mitigation: z.string() })
+          .passthrough(),
+      ),
+      residualRisk: z.enum(["low", "medium", "high"]),
+      criterion_id: z.string().optional(),
+      source_file: z.string().optional(),
+    })
+    .passthrough(),
+  "review-ack": z
+    .object({
+      verdictId: z.string(),
+      ackedBy: z.string(),
+      criteria: z.array(z.string()),
+    })
+    .passthrough(),
+  "rollback-exercised": z
+    .object({
+      command: z.string(),
+      exit: z.number().int(),
+    })
+    .passthrough(),
+  "verdict-override": z
+    .object({
+      verdictId: z.string(),
+      overriddenBy: z.string(),
+      reason: z.string(),
+    })
+    .passthrough(),
+  "runtime-signal": z
+    .object({
+      signal_name: z.string(),
+      provider: z.string(),
+      query: z.string(),
+      value: z.number(),
+      threshold: z.number(),
+      operator: z.string(),
+      pass: z.boolean(),
+      sampled_at: isoTimestamp,
+      note: z.string().optional(),
+    })
+    .passthrough(),
+  "deploy-readiness": z
+    .object({
+      task_id: z.string(),
+      checks: z
+        .object({
+          feature_flag: z.object({ ok: z.boolean(), value: z.string().optional() }).passthrough(),
+          canary_plan: z.object({ ok: z.boolean(), stages: z.number().optional() }).passthrough(),
+          rollback: z
+            .object({ ok: z.boolean(), witness_evidence_id: z.string().optional() })
+            .passthrough(),
+          owner: z
+            .object({ ok: z.boolean(), approvers: z.array(z.string()).optional() })
+            .passthrough(),
+        })
+        .passthrough(),
+      gate: z.enum(["pass", "fail"]),
+    })
+    .passthrough(),
+  "cross-task-conflict": z
+    .object({
+      thisPr: z.number().int(),
+      conflictingPrs: z.array(z.number().int()),
+      overlappingPaths: z.array(z.string()),
+    })
+    .passthrough(),
+} as const;
+
+const EvidenceKindSchema = z.enum([
+  "command",
+  "manual-note",
+  "verifier",
+  "contract-amendment",
+  "contract-amendment-blocked",
+  "ai-review",
+  "plan-check",
+  "threat-model",
+  "review-ack",
+  "rollback-exercised",
+  "verdict-override",
+  "runtime-signal",
+  "deploy-readiness",
+  "cross-task-conflict",
+]);
+
 const EvidenceSchema = z
-  .object({
-    schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-    id: z.string(),
-    task_id: z.string(),
-    session_id: z.string().optional(),
-    kind: z.string(),
-    witness_level: WitnessLevelSchema,
-    created_at: isoTimestamp,
-    payload: z.record(z.unknown()).describe("Kind-specific payload; shape varies by `kind`."),
-  })
-  .passthrough()
-  .describe("A maestro evidence row.");
+  .discriminatedUnion("kind", [
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("command"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind.command,
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("manual-note"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["manual-note"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("verifier"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind.verifier,
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("contract-amendment"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["contract-amendment"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("contract-amendment-blocked"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["contract-amendment-blocked"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("ai-review"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["ai-review"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("plan-check"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["plan-check"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("threat-model"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["threat-model"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("review-ack"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["review-ack"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("rollback-exercised"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["rollback-exercised"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("verdict-override"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["verdict-override"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("runtime-signal"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["runtime-signal"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("deploy-readiness"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["deploy-readiness"],
+    }).passthrough(),
+    z.object({
+      schema_version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+      id: z.string(),
+      task_id: z.string(),
+      session_id: z.string().optional(),
+      kind: z.literal("cross-task-conflict"),
+      witness_level: WitnessLevelSchema,
+      created_at: isoTimestamp,
+      payload: evidencePayloadByKind["cross-task-conflict"],
+    }).passthrough(),
+  ])
+  .describe(
+    "A maestro evidence row, discriminated by `kind`. Each kind carries a typed payload; passthrough on the inner objects keeps it forward-compatible.",
+  );
 
 const RiskClassSchema = z.enum(["low", "medium", "high", "critical"]);
 
 const VerdictDecisionSchema = z.enum(["PASS", "FAIL", "HUMAN", "BLOCK"]);
+
+const VerdictCategorySchema = z.enum([
+  "trust",
+  "evidence",
+  "policy",
+  "risk",
+  "amendment",
+  "cost-budget",
+]);
+
+const VerdictReasonCodeSchema = z.enum([
+  "cost-budget-exhausted",
+  "trust-findings-error",
+  "amendment-budget-high",
+  "effective-risk-critical",
+  "evidence-witness-level-insufficient",
+  "auto-merge-not-allowed",
+  "all-checks-passed",
+  "threat-model-required",
+]);
+
+const VerdictReasonSchema = z
+  .object({
+    category: VerdictCategorySchema,
+    code: VerdictReasonCodeSchema,
+    message: z.string(),
+    evidenceIds: z.array(z.string()).optional(),
+    findingChecks: z.array(z.string()).optional(),
+    findingPaths: z.array(z.string()).optional(),
+    policyRuleIds: z.array(z.string()).optional(),
+  })
+  .passthrough();
 
 const VerdictSchema = z
   .object({
@@ -94,7 +427,7 @@ const VerdictSchema = z
     decision: VerdictDecisionSchema,
     proposedRiskClass: RiskClassSchema.optional(),
     effectiveRiskClass: RiskClassSchema,
-    reasons: z.array(z.record(z.unknown())),
+    reasons: z.array(VerdictReasonSchema),
     evidenceConsulted: z.array(z.string()),
     policiesConsulted: z.array(
       z
