@@ -325,7 +325,7 @@ describe("task verify", () => {
   });
 
   describe("no contract proposed", () => {
-    it("throws MaestroError with /no contract/i", async () => {
+    it("emits a no-contract advisory and exits 2 (warn) for the tiny-lane case", async () => {
       const deps = makeDeps({
         contractVersionStore: mockContractVersionStore(undefined),
       });
@@ -333,10 +333,43 @@ describe("task verify", () => {
       const taskCmd = program.command("task");
       registerTaskVerifyCommand(taskCmd, program, { getServices: () => deps });
 
+      const written: string[] = [];
+      const originalWrite = process.stdout.write.bind(process.stdout);
+      process.stdout.write = ((chunk: unknown) => {
+        if (typeof chunk === "string") written.push(chunk);
+        return true;
+      }) as typeof process.stdout.write;
+
       captureConsole();
-      await expect(
-        program.parseAsync(["node", "maestro", "task", "verify", "--task", TASK_ID, "--base", "abc123"]),
-      ).rejects.toThrow(/no contract/i);
+      let exitCode: number | undefined;
+      const originalExit = process.exit.bind(process);
+      process.exit = ((code?: number) => {
+        exitCode = code;
+        throw new Error("__exit__");
+      }) as typeof process.exit;
+
+      try {
+        await program.parseAsync([
+          "node", "maestro", "task", "verify", "--task", TASK_ID, "--base", "abc123", "--json",
+        ]);
+      } catch (e) {
+        // process.exit shim throws
+        if ((e as Error).message !== "__exit__") throw e;
+      } finally {
+        process.stdout.write = originalWrite;
+        process.exit = originalExit;
+      }
+
+      expect(exitCode).toBe(2);
+      const parsed = JSON.parse(written.join("")) as {
+        findings: TrustFinding[];
+        counts: Record<string, number>;
+        advisory: { warning: string; taskId: string };
+      };
+      expect(parsed.findings).toEqual([]);
+      expect(parsed.counts).toMatchObject({ error: 0, warn: 1, info: 0 });
+      expect(parsed.advisory.warning).toBe("no-contract");
+      expect(parsed.advisory.taskId).toBe(TASK_ID);
     });
   });
 });
