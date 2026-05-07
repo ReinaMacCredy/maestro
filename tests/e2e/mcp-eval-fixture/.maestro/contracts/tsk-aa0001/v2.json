@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 2,
+  "id": "c-aa0001",
+  "taskId": "tsk-aa0001",
+  "repoRoot": ".",
+  "status": "amended",
+  "createdAt": "2025-09-01T08:00:00.000Z",
+  "lockedAt": "2025-09-01T08:00:01.000Z",
+  "intent": "Validate Stripe webhook signatures before processing events.",
+  "scope": {
+    "filesExpected": ["src/payments/webhook.ts", "src/payments/webhook.test.ts"],
+    "filesForbidden": []
+  },
+  "doneWhen": [
+    {
+      "id": "dw-aa0001",
+      "text": "Webhook rejects requests with invalid signatures",
+      "kind": "manual"
+    }
+  ],
+  "amendments": [
+    {
+      "id": "a-aa0001",
+      "at": "2025-09-05T10:00:00.000Z",
+      "by": "session:ada",
+      "reason": "Add the colocated test file that the verifier flagged.",
+      "before": {
+        "scope": {
+          "filesExpected": ["src/payments/webhook.ts"],
+          "filesForbidden": []
+        }
+      },
+      "after": {
+        "scope": {
+          "filesExpected": ["src/payments/webhook.ts", "src/payments/webhook.test.ts"],
+          "filesForbidden": []
+        }
+      }
+    }
+  ],
+  "createdBy": "session:ada",
+  "lockedBy": "session:ada",
+  "configSnapshot": {
+    "strict": false,
+    "overlapPolicy": "annotate",
+    "rebaseFallback": "best-effort",
+    "staleReclaimContractPolicy": "inherit"
+  },
+  "missionId": "msn-billing",
+  "riskClass": "high"
+}

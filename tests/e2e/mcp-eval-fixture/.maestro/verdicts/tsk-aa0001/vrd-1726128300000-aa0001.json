@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "vrd-1726128300000-aa0001",
+  "taskId": "tsk-aa0001",
+  "subject": { "tree_sha": "tree-aa0001fixture" },
+  "contractVersion": 2,
+  "computedAt": "2025-09-12T10:05:00.000Z",
+  "decision": "PASS",
+  "effectiveRiskClass": "high",
+  "reasons": [
+    {
+      "category": "evidence",
+      "code": "all-checks-passed",
+      "message": "All acceptance criteria met with witnessed evidence."
+    }
+  ],
+  "evidenceConsulted": [
+    "evd-1726128000001-aa0001",
+    "evd-1726128000002-aa0002",
+    "evd-1726128000003-aa0003",
+    "evd-1726128000004-aa0004"
+  ],
+  "policiesConsulted": [],
+  "trustVerifier": { "findingsCount": 0, "errors": 0, "warns": 0, "infos": 0 }
+}

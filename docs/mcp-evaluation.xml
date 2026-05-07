@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Evaluation suite for the maestro MCP server.
+
+  These 10 questions exercise every MCP surface (task, evidence, contract,
+  verdict, policy) using realistic, multi-step queries. Each answer is a
+  single string that the evaluator can check via direct string comparison.
+
+  All answers are stable: they are derived from a checked-in fixture at
+  `tests/e2e/mcp-eval-fixture/`. To run the evaluation, point the MCP
+  server at that directory:
+
+      MAESTRO_PROJECT_ROOT=tests/e2e/mcp-eval-fixture maestro mcp serve
+
+  or pass `--project-root tests/e2e/mcp-eval-fixture`. The fixture contains
+  a fully populated `.maestro/` tree with tasks, contracts, evidence, and
+  verdicts whose state is tracked in git.
+-->
+<evaluation>
+  <qa_pair>
+    <question>How many maestro tasks belong to the mission with id `msn-billing`? Answer with a single integer.</question>
+    <answer>2</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Within the mission `msn-launch`, exactly one task has status `completed`. What is its title? Provide the title verbatim.</question>
+    <answer>Wire feature flag for v2 endpoint</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Across all tasks in the project, exactly one task carries both the label `security` and the label `payments`. What is its slug? Provide the slug verbatim (the full `verb/kebab-tail` form).</question>
+    <answer>implement/stripe-webhook</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Inspect the contract for task `tsk-aa0001`. How many distinct versions of the contract exist? Answer with a single integer.</question>
+    <answer>2</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What `riskClass` is recorded on the current contract for task `tsk-aa0001`? Answer one of: low, medium, high, critical.</question>
+    <answer>high</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>For task `tsk-aa0001`, how many evidence rows have witness level `witnessed-by-ci`? Answer with a single integer.</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>For task `tsk-cc0001`, how many evidence rows have kind `command`? Answer with a single integer.</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What decision is recorded on the most recent verdict for task `tsk-bb0001`? Answer one of: PASS, FAIL, HUMAN, BLOCK.</question>
+    <answer>HUMAN</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Task `tsk-cc0002` has exactly one evidence row of kind `threat-model`. What `residualRisk` value is recorded in that row's payload? Answer one of: low, medium, high.</question>
+    <answer>low</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many maestro tasks across the entire project have status `completed`? Answer with a single integer.</question>
+    <answer>4</answer>
+  </qa_pair>
+</evaluation>
