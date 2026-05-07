@@ -44,14 +44,30 @@ export function registerTaskVerifyCommand(
       if (contract === undefined) {
         const draft = await readDraftContract(services.contractStore, taskId);
         if (draft !== undefined) {
+          // Drafted-but-unlocked is a real misconfiguration — keep error semantics.
           throw new MaestroError(
             `Contract ${draft.id} for task ${taskId} is in draft status — lock it first`,
             [`maestro task contract lock ${taskId}`],
           );
         }
-        throw new MaestroError(`No contract proposed for task ${taskId}`, [
-          "Run 'maestro task contract new <taskId>' to create one, or propose via maestro-plan skill",
-        ]);
+        // No contract at all is the tiny-lane case (intake → patch directly).
+        // Emit an advisory warning and exit 2 (warn) instead of error so the
+        // verifier doesn't block tiny-lane completion. Callers who *require*
+        // a contract should run plan check / verdict request, both of which
+        // correctly fail when no contract exists.
+        const advisory = {
+          warning: "no-contract",
+          taskId,
+          message: `No contract proposed for task ${taskId}; verifier skipped`,
+          hint: "Run 'maestro task contract new <taskId>' if this task needs a contract; tiny-lane changes from `maestro intake` typically do not.",
+        } as const;
+        if (isJson) {
+          process.stdout.write(JSON.stringify({ findings: [], counts: { error: 0, warn: 1, info: 0 }, advisory }) + "\n");
+        } else {
+          console.log(`Trust Verifier: skipped — ${advisory.message}`);
+          console.log(`  ${advisory.hint}`);
+        }
+        process.exit(2);
       }
 
       // Prefer the contract's lock-commit so brownfield repos don't pull
