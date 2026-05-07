@@ -7,6 +7,12 @@ import {
   resolveInstallDir,
   resolveInstalledBinaryName,
 } from "../src/infra/usecases/install-release-binary.usecase.js";
+import {
+  buildMaestroAgentMcpConfigEntry,
+  configureAgentRuntime,
+  defaultAgentRuntimeTargets,
+  resolveMaestroBinaryInstallPath,
+} from "../src/features/mcp/usecases/configure-agent-runtime.usecase.js";
 
 const platform = process.platform;
 const binaryName = resolveInstalledBinaryName(platform);
@@ -46,3 +52,32 @@ if (resolvedOnPath) {
     console.log(`     Add ${installDir} to your user PATH to use maestro from any shell`);
   }
 }
+
+// MCP server: configure detected agent runtimes (Claude Code, Codex) to
+// launch the Bun-compiled maestro binary directly. The binary embeds its
+// own runtime, so no separate Node bundle is required.
+const binaryPath = resolveMaestroBinaryInstallPath(installDir, platform);
+const configEntry = buildMaestroAgentMcpConfigEntry(binaryPath);
+const runtimeResults = defaultAgentRuntimeTargets().map((target) =>
+  configureAgentRuntime(target, configEntry, { createIfMissing: false }),
+);
+for (const r of runtimeResults) {
+  switch (r.action) {
+    case "skipped-no-runtime":
+      console.log(`[--] ${r.target.name}: not detected (skipping ${r.target.configPath})`);
+      break;
+    case "created":
+      console.log(`[ok] ${r.target.name}: created ${r.target.configPath}`);
+      break;
+    case "updated":
+      console.log(`[ok] ${r.target.name}: updated ${r.target.configPath}`);
+      break;
+    case "unchanged":
+      console.log(`[ok] ${r.target.name}: already configured (${r.target.configPath})`);
+      break;
+    case "error":
+      console.log(`[!!] ${r.target.name}: failed to write ${r.target.configPath}: ${r.error}`);
+      break;
+  }
+}
+console.log("     Restart your agent runtime to pick up the new MCP server.");
