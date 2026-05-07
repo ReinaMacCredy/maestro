@@ -469,6 +469,7 @@ describe("L7 deploy-safety flow (compiled binary)", () => {
       const result = await runCompiled(
         ["deploy", "rollback", "--task", taskId, "--command", "echo ok"],
         dir,
+        { env: { GITHUB_ACTIONS: "" } },
       );
 
       expect(result.exitCode).toBe(0);

@@ -333,7 +333,7 @@ describe("task + handoff pickup CLI", () => {
     expect(expectJson<{ status: string }>(sourceTask).status).toBe("in_progress");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("allows explicit standalone pickup for a foreign task-linked packet", async () => {
+  it("refuses cross-workspace --standalone pickup of a task-linked packet and leaves the source task untouched", async () => {
     const { sharedHome, projectA, projectB } = await setupCrossProjectRepos(tmpDir);
 
     const created = await runCli(["task", "create", "project-a standalone override", "--json"], projectA, {
@@ -346,7 +346,7 @@ describe("task + handoff pickup CLI", () => {
       env: baseEnv(sharedHome),
     });
     expect(started.exitCode).toBe(0);
-    const before = expectJson<{ assignee?: string }>(await runCli(["task", "show", task.id, "--json"], projectA, {
+    const before = expectJson<{ assignee?: string; status: string }>(await runCli(["task", "show", task.id, "--json"], projectA, {
       env: baseEnv(sharedHome),
     }));
 
@@ -368,22 +368,18 @@ describe("task + handoff pickup CLI", () => {
       projectB,
       { env: baseEnv(sharedHome) },
     );
-    expect(picked.exitCode).toBe(0);
-    const payload = expectJson<{
-      pickedUpByAgent?: string;
-      pickedUpBySessionId?: string;
-      consumedAt?: string;
-    }>(picked);
-    expect(payload.consumedAt).toBeDefined();
-    expect(payload.pickedUpByAgent).toBe("claude");
-    expect(picked.stderr).toContain(`Linked task ${task.id} was left unchanged`);
+    expect(picked.exitCode).not.toBe(0);
+    const errPayload = expectJson<{ error: string; hints: string[] }>(picked);
+    expect(errPayload.error).toContain("project-a");
+    expect(errPayload.error).toContain(`remains linked to task ${task.id}`);
+    expect(errPayload.hints.join("\n")).toContain("--standalone does not bypass this");
 
     const sourceTask = await runCli(["task", "show", task.id, "--json"], projectA, {
       env: baseEnv(sharedHome),
     });
     expect(sourceTask.exitCode).toBe(0);
     const after = expectJson<{ assignee?: string; status: string }>(sourceTask);
-    expect(after.status).toBe("in_progress");
+    expect(after.status).toBe(before.status);
     expect(after.assignee).toBe(before.assignee);
   }, SLOW_CLI_TIMEOUT_MS);
 

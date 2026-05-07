@@ -310,10 +310,11 @@ describe("task contract compiled E2E", () => {
         "expand checks",
         "--session",
         "compiled-silent-owner",
+        "--editor",
+        `bun '${editorPath}'`,
         "--silent",
       ],
       tmpDir,
-      { env: { EDITOR: `bun '${editorPath}'` } },
     );
     expect(amended.stdout).toBe(`${contract.id} [ok]`);
 
