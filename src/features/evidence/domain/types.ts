@@ -12,7 +12,10 @@ export type EvidenceKind =
   | "verdict-override"
   | "runtime-signal"
   | "deploy-readiness"
-  | "cross-task-conflict";
+  | "cross-task-conflict"
+  | "lint-violation"
+  | "session-start"
+  | "session-exit";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -177,6 +180,33 @@ export interface CrossTaskConflictPayload {
   readonly overlappingPaths: readonly string[];
 }
 
+/**
+ * Payload for a single architecture-lint violation. Recorded by `task verify`,
+ * `ci verify`, and `session start`/`session exit` whenever an architecture
+ * rule fires at error severity. Kept queryable as its own kind so C-1's
+ * `task introspect` can list "open lints" without parsing verifier-finding text.
+ */
+export interface LintViolationPayload {
+  readonly ruleId: string;
+  readonly file: string;
+  readonly line?: number;
+  readonly snippet?: string;
+  readonly message: string;
+  readonly remediation: string;
+}
+
+export interface SessionStartPayload {
+  readonly taskId: string;
+  readonly headSha: string;
+}
+
+export interface SessionExitPayload {
+  readonly taskId: string;
+  readonly lintViolations: number;
+  readonly baselineClean: boolean;
+  readonly dirtyTree: boolean;
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -192,6 +222,9 @@ interface EvidencePayloadByKind {
   readonly "runtime-signal": RuntimeSignalPayload;
   readonly "deploy-readiness": DeployReadinessPayload;
   readonly "cross-task-conflict": CrossTaskConflictPayload;
+  readonly "lint-violation": LintViolationPayload;
+  readonly "session-start": SessionStartPayload;
+  readonly "session-exit": SessionExitPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

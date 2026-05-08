@@ -11,6 +11,11 @@ import {
   readDraftContract,
 } from "@/features/task/usecases/read-current-contract-with-backfill.js";
 import { getServices, type Services } from "@/services.js";
+import {
+  isArchitectureRuleId,
+  type ArchitectureRuleId,
+} from "@/features/verify";
+import type { LintViolationPayload } from "@/features/evidence";
 
 interface TaskVerifyDeps {
   readonly getServices: () => Pick<
@@ -124,6 +129,22 @@ export function registerTaskVerifyCommand(
         ),
       );
 
+      // 7b. Mirror architecture-lint findings as `lint-violation` rows so
+      // C-1's `task introspect` can list "open lints" without parsing
+      // verifier-kind text. Mirrors witness level of the verifier rows above.
+      await Promise.all(
+        allFindings
+          .filter((f) => isArchitectureRuleId(f.check))
+          .map((finding) =>
+            recordEvidence(services.evidenceStore, {
+              task_id: taskId,
+              kind: "lint-violation",
+              witness_level: "agent-claimed-locally",
+              payload: lintPayloadFromFinding(finding),
+            }),
+          ),
+      );
+
       // 8. Print output
       const counts = countBySeverity(allFindings);
 
@@ -147,6 +168,37 @@ export function registerTaskVerifyCommand(
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
+
+function lintPayloadFromFinding(finding: TrustFinding): LintViolationPayload {
+  const ruleId = finding.check as ArchitectureRuleId;
+  const file = finding.paths[0] ?? "";
+  // Trust Verifier flattens lint context into `details` as
+  // "<message> — line <n> — > <snippet> — <remediation>". Recover the
+  // pieces by splitting on the same separator.
+  const parts = (finding.details ?? "").split(" — ");
+  const message = parts[0] ?? finding.check;
+  const remediation = parts[parts.length - 1] ?? "";
+  let line: number | undefined;
+  let snippet: string | undefined;
+  for (const part of parts.slice(1, -1)) {
+    const lineMatch = part.match(/^line\s+(\d+)$/);
+    if (lineMatch && lineMatch[1]) {
+      line = Number.parseInt(lineMatch[1], 10);
+      continue;
+    }
+    if (part.startsWith("> ")) {
+      snippet = part.slice(2);
+    }
+  }
+  return {
+    ruleId,
+    file,
+    ...(line !== undefined ? { line } : {}),
+    ...(snippet !== undefined ? { snippet } : {}),
+    message,
+    remediation,
+  };
+}
 
 interface FindingCounts {
   readonly error: number;

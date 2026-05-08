@@ -264,12 +264,56 @@ Recorded evidence appears in `maestro task show` and the Mission Control task de
 maestro status --json
 maestro task ready --json --compact --limit 5
 maestro task show <id-or-slug>
+maestro task introspect <id-or-slug>     # full context: spec, verdict, budget, lints, blockers
 maestro task mine
 maestro task stuck --older-than 4h
 maestro task similar <id>
 ```
 
 `task show` and `task update` accept either `tsk-<id>` or a track slug like `implement/foo`. `task list --tracks` prints just the track headers (slugs + slugless legacy ids), one per line.
+
+### When to use `task introspect`
+
+Call `maestro task introspect <id>` when you need a single read-only digest
+of the full task surface — task + spec acceptance criteria + non-goals +
+latest verdict + cost-budget status + open lint violations + active
+blockers + last 5 evidence rows + recent commits since the last
+`session-start` anchor. Use it:
+
+- After context loss (compaction or fresh shell) to re-orient on a task
+  without re-reading the conversation.
+- Before committing to work on a task to confirm what "done" requires.
+- As a sanity check before requesting the final verdict.
+
+Output is structured markdown by default; `--json` returns the same view as a
+parseable object.
+
+## Session lifecycle
+
+Two verbs anchor non-trivial work to a specific task:
+
+- `maestro session start <taskId>` — runs the baseline architecture-lint
+  pass, optionally invokes `maestro:setup`/`maestro:verify` package-json
+  scripts (when defined), writes an orient digest at
+  `.maestro/runs/<taskId>/orient.md`, and records a `session-start`
+  evidence row whose `headSha` payload anchors "recent commits" for future
+  introspection.
+- `maestro session exit <taskId>` — re-runs the baseline arch-lint pass,
+  reads the latest verdict, checks the working tree, writes
+  `.maestro/runs/<taskId>/progress.md`, and records a `session-exit`
+  evidence row. Exit code: `0` clean, `1` baseline regressed, `2`
+  arch-lint error-severity violations present.
+
+When to call:
+
+- At the start of any non-trivial task: `maestro session start <id>`.
+- At the end before requesting the final verdict: `maestro session exit <id>`.
+- After compaction or any context loss to re-orient: `maestro task introspect <id>`.
+
+`session start` blocks if the baseline arch-lint pass has error-severity
+violations. Recover by reverting the unhealthy commit or
+`git reset --hard <last-green-tag>` before retrying. The explicit
+`maestro recover` verb arrives in Phase 2.
 
 ## Status view
 

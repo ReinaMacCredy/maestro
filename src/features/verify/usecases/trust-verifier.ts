@@ -8,6 +8,7 @@ import { checkSensitivePaths } from "./checks/check-sensitive-paths.js";
 import { checkCommitMetadata } from "./checks/check-commit-metadata.js";
 import { checkSecretsInDiff } from "./checks/check-secrets-in-diff.js";
 import { checkNonEmptyDiff } from "./checks/check-non-empty-diff.js";
+import { checkArchitectureLints } from "./checks/check-architecture-lints.js";
 
 export interface TrustVerifierInput {
   readonly contract: Contract;
@@ -25,7 +26,7 @@ export interface TrustVerifierDeps {
 }
 
 /**
- * Runs all 7 trust checks in parallel and returns a flat list of findings.
+ * Runs all 8 trust checks in parallel and returns a flat list of findings.
  * This function is deterministic given the same inputs — it performs no writes
  * and does not mutate any shared state.
  */
@@ -41,6 +42,7 @@ export async function runTrustVerifier(
     sensitiveFindings,
     metadataFindings,
     secretFindings,
+    archLintFindings,
   ] = await Promise.all([
     Promise.resolve(checkNonEmptyDiff(input.diff)),
     checkScope(input.diff.changedPaths, input.contract),
@@ -49,6 +51,7 @@ export async function runTrustVerifier(
     checkSensitivePaths(input.diff.changedPaths, input.projectRoot),
     checkCommitMetadata(input.diff.base, input.diff.head, input.projectRoot, deps.gitSignatureProbe),
     checkSecretsInDiff(input.diff.addedLines),
+    checkArchitectureLints(input.diff, input.projectRoot),
   ]);
 
   const findings: readonly TrustFinding[] = [
@@ -59,6 +62,7 @@ export async function runTrustVerifier(
     ...sensitiveFindings,
     ...metadataFindings,
     ...secretFindings,
+    ...archLintFindings,
   ];
 
   return { findings };

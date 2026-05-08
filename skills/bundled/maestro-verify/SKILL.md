@@ -59,22 +59,41 @@ witness_thresholds:
 
 See `docs/witness-levels.md` for the full ladder, Risk Engine consumption rules, and policy interaction.
 
+### Evidence kinds added in Phase 1 of the harness pivot
+
+| Kind | Recorded by | Purpose |
+|---|---|---|
+| `lint-violation` | `task verify` (agent-claimed-locally), `ci verify` (witnessed-by-ci), `session start`/`exit` (witnessed-by-maestro) | One row per architecture-lint finding, queryable by `task introspect` |
+| `session-start` | `maestro session start` (witnessed-by-maestro) | Anchors `headSha` for "recent commits since session" calculation |
+| `session-exit` | `maestro session exit` (witnessed-by-maestro) | Records baseline arch-lint count and dirty-tree state at session close |
+
 ---
 
 ## Trust Verifier Scope
 
-`maestro task verify` runs 6 deterministic checks against the current diff and the locked contract:
+`maestro task verify` runs 8 deterministic checks against the current diff and the locked contract:
 
 | Check | What it catches |
 |---|---|
+| `non-empty-diff` | Empty diff against the resolved base |
 | `scope` | Changed paths outside `contract.scope.filesExpected` |
 | `lockfile` | Lockfile edited when the contract does not permit it |
 | `generated` | Generated files hand-edited |
 | `sensitive-paths` | Paths matched by `policies/sensitive-paths.yaml` |
 | `commit-metadata` | Commit messages not following Conventional Commits |
 | `secrets` | Secret-like strings introduced in the diff |
+| `architecture-lints` | Repo-shape invariants (no-runner-inversion, single-opentui-render, mission-control-readonly, no-hand-edit-generated) |
 
 Each finding carries severity `error`, `warn`, or `info`. Address every `error` finding before requesting a Verdict.
+
+The `architecture-lints` group enforces:
+
+- `no-runner-inversion` (error): Maestro must not spawn Claude or Codex CLIs as subprocesses.
+- `single-opentui-render` (error): `root.render()` may be called at most once per process.
+- `mission-control-readonly` (warn): Mission Control snapshot/preview/render-check paths must not write.
+- `no-hand-edit-generated` (error): generated template files require a matching edit under `skills/built-in/**` or `skills/bundled/**`.
+
+See `docs/architecture-lints.md` for full rule semantics, escape-hatch syntax, and instructions for adding new rules. Run `bun run lint:arch` to invoke the same library standalone.
 
 ```bash
 maestro task verify --task <id>

@@ -106,7 +106,31 @@ per-criterion coverage map that shows which evidence rows satisfy each acceptanc
 criterion and at what witness level, making the gap visible before a verdict is
 requested.
 
+## Phase 1 evidence kinds and their witness levels
+
+D-1 / C-1 / E-1 introduce three new `EvidenceKind`s. Each is recorded at a
+specific witness level depending on which surface emitted it.
+
+| Evidence kind     | Emitter                          | Witness level                  |
+|-------------------|----------------------------------|--------------------------------|
+| `lint-violation`  | `maestro task verify`            | `agent-claimed-locally`        |
+| `lint-violation`  | `maestro ci verify`              | `witnessed-by-ci`              |
+| `lint-violation`  | `maestro session start` / `exit` | `witnessed-by-maestro`         |
+| `session-start`   | `maestro session start`          | `witnessed-by-maestro`         |
+| `session-exit`    | `maestro session exit`           | `witnessed-by-maestro`         |
+
+`lint-violation` rows are observational mirrors of architecture-lint findings
+(see `docs/architecture-lints.md`). Their witness level reflects which surface
+ran the lint, not the lint result itself: a violation seen by CI is more
+trustworthy than one self-reported by the agent's local `task verify` run, and
+one Maestro produced during `session start` / `exit` is the strongest signal.
+
+`session-start` and `session-exit` rows anchor a task's session lifecycle. They
+are always `witnessed-by-maestro` because Maestro itself runs the session
+verbs — there is no agent-reported variant.
+
 ## See also
 
 - `docs/risk-class-derivation.md` — how the effective risk class is computed from diff signals.
 - `docs/policy-format.md` — full schema for `autopilot.yaml` and the other policy files.
+- `docs/architecture-lints.md` — the four D-1 architecture rules and how they produce `lint-violation` evidence.

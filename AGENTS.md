@@ -129,6 +129,38 @@ maestro task verify --task <id> --base <git-ref>
 maestro task verify --task <id> --json
 ```
 
+`task verify` runs 8 Trust Verifier checks (the 8th group is the architecture lints from `bun run lint:arch`). Architecture-lint findings at `error` severity also produce `lint-violation` evidence rows at `agent-claimed-locally`, queryable via `maestro task introspect`.
+
+## CLI VERBS — TASK INTROSPECT (Phase 1)
+```bash
+maestro task introspect <id-or-slug>
+maestro task introspect <id-or-slug> --json
+```
+
+Read-only digest: spec acceptance criteria + non-goals, latest verdict, cost-budget status, open lint violations, active blockers, last 5 evidence rows, and recent commits since the last `session-start` anchor. Use after context loss to re-orient on a task.
+
+## CLI VERBS — SESSION (Phase 1)
+```bash
+maestro session whoami [--json] [-q]
+maestro session start <taskId> [--json]
+maestro session exit <taskId> [--json]
+```
+
+`session whoami` keeps the legacy detection behavior; bare `maestro session` continues to work as a `whoami` alias for backward compatibility.
+
+`session start` writes an orient digest at `.maestro/runs/<taskId>/orient.md`, runs the baseline architecture-lint pass, optionally invokes `maestro:setup` and `maestro:verify` package-json scripts, and records a `session-start` evidence row at `witnessed-by-maestro` whose `headSha` payload anchors "recent commits" calculation. Blocks when the baseline arch lint has error-severity violations.
+
+`session exit` re-runs the baseline arch-lint pass, reads the latest verdict, checks the working tree, writes `.maestro/runs/<taskId>/progress.md`, and records a `session-exit` evidence row. Exit codes: `0` clean, `1` baseline regressed, `2` arch-lint error-severity violations present. Warnings on dirty tree or FAIL/BLOCK verdict do not block the exit.
+
+## CLI VERBS — LINT (Phase 1)
+```bash
+bun run lint:arch                        # standalone, no diff (3 file-scan rules)
+bun run lint:arch -- --base main         # diff-aware (enables no-hand-edit-generated rule)
+bun run lint:arch -- --json
+```
+
+Same library powers Trust Verifier's 8th check. See `docs/architecture-lints.md`.
+
 ## CLI VERBS — SPEC (L2)
 ```bash
 maestro spec show --mission <id>

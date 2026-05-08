@@ -18,6 +18,9 @@ export type {
   RuntimeSignalPayload,
   DeployReadinessPayload,
   CrossTaskConflictPayload,
+  LintViolationPayload,
+  SessionStartPayload,
+  SessionExitPayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,

@@ -75,6 +75,14 @@ export type {
   TaskInspectionDeps,
   TaskInspectionView,
 } from "./usecases/inspect-task.usecase.js";
+export {
+  composeTaskIntrospection,
+  formatTaskIntrospectionMarkdown,
+} from "./usecases/compose-task-introspection.usecase.js";
+export type {
+  TaskIntrospectionDeps,
+  TaskIntrospectionView,
+} from "./usecases/compose-task-introspection.usecase.js";
 export { listTasks } from "./usecases/list-tasks.usecase.js";
 export { updateTask } from "./usecases/update-task.usecase.js";
 export { claimTask } from "./usecases/claim-task.usecase.js";
