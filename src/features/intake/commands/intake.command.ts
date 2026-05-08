@@ -46,6 +46,11 @@ export function registerIntakeCommand(
             `Valid flags: ${Array.from(VALID_FLAGS).join(", ")}`,
           ]);
         }
+        if (acc.includes(val as IntakeFlag)) {
+          throw new MaestroError(`Duplicate intake flag: ${val}`, [
+            "Each --flag value can be provided at most once.",
+          ]);
+        }
         acc.push(val as IntakeFlag);
         return acc;
       },

@@ -27,9 +27,13 @@ export function registerMcpServeCommand(mcpCmd: Command, program: Command): void
 
       const { startStdioMcpServer } = await import("../server/mcp-server.js");
       try {
+        // Always re-initialize services from the server's resolved root.
+        // The CLI's preAction hook initialized services from process.cwd(),
+        // which can disagree with MAESTRO_PROJECT_ROOT when the runtime
+        // launches us from a different directory and scopes us via env.
         await startStdioMcpServer({
           projectRoot: opts.projectRoot,
-          initializeServices: opts.projectRoot !== undefined,
+          initializeServices: true,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

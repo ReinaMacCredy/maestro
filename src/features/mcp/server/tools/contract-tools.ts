@@ -115,9 +115,14 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
         const { result: newFilesExpected, skipped: skippedAddPaths } =
           applyPathChanges(before.scope.filesExpected, addPaths, removePaths);
 
+        // Compare as sets so simultaneous remove+re-add of the same path
+        // (which reorders the array but leaves the semantic scope intact)
+        // doesn't trigger a spurious amendment.
+        const beforeSet = new Set(before.scope.filesExpected);
+        const afterSet = new Set(newFilesExpected);
         const scopeChanged =
-          newFilesExpected.length !== before.scope.filesExpected.length ||
-          newFilesExpected.some((p, i) => p !== before.scope.filesExpected[i]);
+          beforeSet.size !== afterSet.size ||
+          [...beforeSet].some((p) => !afterSet.has(p));
 
         if (!scopeChanged) {
           return toCallToolResult(

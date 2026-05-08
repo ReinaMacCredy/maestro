@@ -72,12 +72,16 @@ export async function requestVerdict(
   };
   const [baseRef, headSha] = await Promise.all([resolveBase(), resolveHeadSha()]);
 
-  const cwd = process.cwd();
+  // Anchor git operations to the resolved project root, not runtime cwd. The
+  // MCP transport is launched by agent runtimes from their own working
+  // directory and scoped via MAESTRO_PROJECT_ROOT, so cwd may diverge from
+  // the project being verified.
+  const repoRoot = deps.projectRoot;
 
   const [changedPaths, addedLines, evidenceRows, riskPolicy, autopilotPolicy, releasePolicy, sensitivePathsPolicy, spec] =
     await Promise.all([
-      deps.gitAnchor.collectChangedPaths(cwd, baseRef, headSha),
-      deps.gitAnchor.collectAddedLines(cwd, baseRef, headSha),
+      deps.gitAnchor.collectChangedPaths(repoRoot, baseRef, headSha),
+      deps.gitAnchor.collectAddedLines(repoRoot, baseRef, headSha),
       deps.evidenceStore.list({ task_id: taskId }),
       deps.getEffectiveRiskPolicy(),
       deps.getEffectiveAutopilotPolicy(),
@@ -114,7 +118,7 @@ export async function requestVerdict(
 
   // Stamp subject with tree SHA so verdicts are bound to diff content,
   // not a specific commit hash. Squash survives; force-push invalidates.
-  const treeSha = await deps.gitAnchor.resolveTreeSha(cwd);
+  const treeSha = await deps.gitAnchor.resolveTreeSha(repoRoot);
   const subject: VerdictSubject = { tree_sha: treeSha, ...(args.pr !== undefined ? { pr: args.pr } : {}) };
   const verdict: Verdict = { ...rawVerdict, subject };
 

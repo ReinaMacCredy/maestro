@@ -135,7 +135,9 @@ async function containsTsFile(dir: string): Promise<boolean> {
     return false;
   }
   for (const entry of entries) {
-    if (entry.isFile() && entry.name.endsWith(".ts")) return true;
+    if (entry.isFile() && (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx"))) {
+      return true;
+    }
     if (entry.isDirectory()) {
       if (await containsTsFile(join(dir, entry.name))) return true;
     }
@@ -184,7 +186,12 @@ async function findOversizedRootDocs(
         if (lineCount > ROOT_DOC_LINE_LIMIT) {
           return { name: entry.name, lineCount };
         }
-      } catch {}
+      } catch (err) {
+        // Surface read failures (permission errors, transient FS issues)
+        // instead of silently dropping the candidate from the doctor report.
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[doctor] skipped ${entry.name}: ${message}\n`);
+      }
       return undefined;
     }),
   );
