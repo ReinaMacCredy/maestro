@@ -55,25 +55,6 @@ function makePendingLoosening(overrides: Partial<PendingLoosening>): PendingLoos
   };
 }
 
-function makePastLoosening(overrides: Partial<PendingLoosening>): PendingLoosening {
-  const pastTime = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-  const effectiveAt = new Date(pastTime.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  return {
-    commitSha: "def456",
-    commitTime: pastTime.toISOString(),
-    effectiveAt,
-    kind: "autopilot",
-    file: ".maestro/policies/autopilot.yaml",
-    edit: {
-      description: "old loosening",
-      path: "autoMergeAllowed.low",
-      oldValue: false,
-      newValue: true,
-    },
-    ...overrides,
-  };
-}
-
 // --- Tests ---
 
 describe("buildEffectivePolicyServices: autopilot", () => {

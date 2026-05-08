@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { Command } from "commander";
 import { registerVerdictCommand } from "@/features/verdict/commands/verdict.command.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
@@ -8,9 +8,6 @@ import type { Owners } from "@/features/policy/index.js";
 import { mockEvidenceStore } from "../../../../helpers/mocks.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { VerdictOverridePayload } from "@/features/evidence/index.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
-import type { Contract } from "@/features/task/index.js";
-
 // ─── Console capture ──────────────────────────────────────────────────────────
 
 const originalConsoleLog = console.log;
@@ -39,28 +36,6 @@ function makeVerdict(overrides: Partial<Verdict> = {}): Verdict {
     policiesConsulted: [],
     trustVerifier: { findingsCount: 0, errors: 0, warns: 0, infos: 0 },
     ...overrides,
-  };
-}
-
-function makeContract(): Contract {
-  return {
-    schemaVersion: CONTRACT_SCHEMA_VERSION,
-    id: "c-000001",
-    taskId: "tsk-aaaaaa",
-    repoRoot: "/repo",
-    status: "locked",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    intent: "Test",
-    scope: { filesExpected: [], filesForbidden: [] },
-    doneWhen: [],
-    amendments: [],
-    createdBy: "agent",
-    configSnapshot: {
-      strict: true,
-      overlapPolicy: "fail",
-      rebaseFallback: "best-effort",
-      staleReclaimContractPolicy: "inherit",
-    },
   };
 }
 

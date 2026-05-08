@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import type { GitSignatureProbePort } from "../ports/git-signature.port.js";
 
 export class GitSignatureAdapter implements GitSignatureProbePort {

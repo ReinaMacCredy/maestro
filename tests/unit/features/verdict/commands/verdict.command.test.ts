@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { Command } from "commander";
 import { registerVerdictCommand } from "@/features/verdict/commands/verdict.command.js";
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
@@ -96,7 +96,7 @@ function fakeContractVersionStore(contract?: Contract): ContractVersionStorePort
     write: async () => {},
     readCurrent: async () => contract,
     readVersion: async () => contract,
-    history: async () => (contract !== undefined ? [contract] : []),
+    history: async () => (contract ? [contract] : []),
   };
 }
 

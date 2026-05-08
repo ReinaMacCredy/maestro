@@ -6,7 +6,6 @@ import { loadRiskPolicy } from "@/features/policy/usecases/load-risk-policy.usec
 import { DEFAULT_RISK_POLICY } from "@/features/policy/domain/risk-policy-defaults.js";
 import { MaestroError } from "@/shared/errors.js";
 import { PROJECT_BOOTSTRAP_TEMPLATES } from "@/infra/domain/bootstrap-templates.js";
-import { parseYaml } from "@/shared/lib/yaml.js";
 import type { RiskPolicy } from "@/features/policy/index.js";
 
 let tmpDir: string;

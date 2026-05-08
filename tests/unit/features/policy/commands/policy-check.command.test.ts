@@ -53,7 +53,7 @@ function fakeContractVersionStore(contract?: Contract): ContractVersionStorePort
     write: async () => {},
     readCurrent: async () => contract,
     readVersion: async () => contract,
-    history: async () => (contract !== undefined ? [contract] : []),
+    history: async () => (contract ? [contract] : []),
   };
 }
 

@@ -8,7 +8,7 @@ export function escapeMarkdownBoundaries(content: string): string {
     .replace(/^\t+/gm, (match) => "\\t".repeat(match.length))
     .replace(/^( {4,})/gm, (match) => "\\" + match)
     .replace(/^(<!--)/gm, "\\$1")
-    .replace(/^(-->)/gm, "\\$1");
+    .replace(/^(--!?>)/gm, "\\$1");
 }
 
 function stripPromptMarkup(content: string): string {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFile, mkdir, rm } from "node:fs/promises";
+import { writeFile, mkdtemp, rm } from "node:fs/promises";
 import { Command } from "commander";
 import { registerPlanCheckCommand } from "@/features/plan/commands/plan-check.command.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
@@ -80,8 +80,7 @@ function fakeEvidenceStore(): EvidenceStorePort & { appended: EvidenceRow[] } {
 let tmpDir: string;
 
 beforeEach(async () => {
-  tmpDir = join(tmpdir(), `plan-check-test-${Date.now()}`);
-  await mkdir(tmpDir, { recursive: true });
+  tmpDir = await mkdtemp(join(tmpdir(), "plan-check-test-"));
 });
 
 afterEach(async () => {
