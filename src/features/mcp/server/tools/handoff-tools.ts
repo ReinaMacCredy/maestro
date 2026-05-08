@@ -9,7 +9,6 @@ import {
   type HandoffRecord,
 } from "@/features/handoff/index.js";
 import { buildTaskOwnerId } from "@/features/task/index.js";
-import { MaestroError } from "@/shared/errors.js";
 import type { z } from "zod";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
@@ -44,18 +43,6 @@ function applyHandoffFilters(
     filtered = filtered.filter((r) => r.agent === args.agent);
   }
   return filtered;
-}
-
-function hintsFrom(err: unknown): readonly string[] {
-  return err instanceof MaestroError ? err.hints : [];
-}
-
-function messageFrom(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback;
-}
-
-function lowerMessage(err: unknown): string {
-  return err instanceof Error ? err.message.toLowerCase() : "";
 }
 
 export function registerHandoffTools(server: McpServer, deps: RegisterDeps): void {
@@ -124,18 +111,6 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         });
         return toCallToolResult(ok({ record }));
       } catch (err) {
-        if (lowerMessage(err).includes("not found")) {
-          const hints = hintsFrom(err);
-          return toCallToolResult(
-            fail(
-              "HANDOFF_NOT_FOUND",
-              messageFrom(err, `Handoff ${args.id} not found`),
-              hints.length > 0
-                ? hints
-                : ["Run maestro_handoff_list to see available packets"],
-            ),
-          );
-        }
         return toCallToolResult(fromMaestroError(err, "HANDOFF_SHOW_FAILED"));
       }
     },
@@ -224,54 +199,6 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
           }),
         );
       } catch (err) {
-        const lower = lowerMessage(err);
-        if (lower.includes("handoff not found") || lower.includes("handoff packet not found")) {
-          const hints = hintsFrom(err);
-          return toCallToolResult(
-            fail(
-              "HANDOFF_NOT_FOUND",
-              messageFrom(err, `Handoff ${args.id} not found`),
-              hints.length > 0
-                ? hints
-                : ["Run maestro_handoff_list to see available packets"],
-            ),
-          );
-        }
-        if (lower.includes("already consumed")) {
-          return toCallToolResult(
-            fail("ALREADY_CONSUMED", messageFrom(err, "Handoff already consumed"), hintsFrom(err)),
-          );
-        }
-        if (lower.includes("belongs to project")) {
-          return toCallToolResult(
-            fail(
-              "CROSS_PROJECT_PICKUP",
-              messageFrom(err, "Handoff is linked to a task from another project"),
-              hintsFrom(err),
-            ),
-          );
-        }
-        if (
-          lower.includes("is already finished") ||
-          lower.includes("is already completed and cannot be resumed")
-        ) {
-          return toCallToolResult(
-            fail(
-              "HANDOFF_TASK_COMPLETED",
-              messageFrom(err, "Linked task is already completed"),
-              hintsFrom(err),
-            ),
-          );
-        }
-        if (lower.includes("is blocked and cannot be resumed")) {
-          return toCallToolResult(
-            fail(
-              "HANDOFF_TASK_BLOCKED",
-              messageFrom(err, "Linked task is blocked"),
-              hintsFrom(err),
-            ),
-          );
-        }
         return toCallToolResult(fromMaestroError(err, "HANDOFF_PICKUP_FAILED"));
       }
     },

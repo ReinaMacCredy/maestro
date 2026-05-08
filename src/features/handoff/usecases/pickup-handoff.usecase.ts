@@ -44,7 +44,11 @@ export async function pickupHandoff(
 ): Promise<PickupHandoffResult> {
   const storedLaunch = await deps.handoffStore.get(input.id);
   if (!storedLaunch) {
-    throw new MaestroError(`Handoff not found: ${input.id}`);
+    throw new MaestroError(
+      `Handoff not found: ${input.id}`,
+      ["Run `maestro handoff list` to see available packets"],
+      "HANDOFF_NOT_FOUND",
+    );
   }
   const launch = await reconcileHandoffRecord(
     {
@@ -57,6 +61,8 @@ export async function pickupHandoff(
   if (launch.consumedAt) {
     throw new MaestroError(
       `Handoff ${input.id} was already consumed by ${launch.pickedUpByAgent ?? "another agent"} at ${launch.consumedAt}`,
+      [],
+      "ALREADY_CONSUMED",
     );
   }
 
@@ -76,6 +82,7 @@ export async function pickupHandoff(
           `Pick it up from the source project to preserve task ownership: ${buildSourceProjectPickupCommand(sourceProjectRoot, input.id)}`,
           `--standalone does not bypass this; run it from ${sourceProjectRoot} if you only want prompt-only consumption`,
         ],
+        "CROSS_PROJECT_PICKUP",
       );
     }
   }
@@ -93,6 +100,7 @@ export async function pickupHandoff(
         `Inspect the packet with: maestro handoff show ${input.id}`,
         "Reopen the task and create a fresh handoff if more work is needed",
       ],
+      "HANDOFF_TASK_COMPLETED",
     );
   }
 
@@ -111,16 +119,20 @@ export async function pickupHandoff(
     };
   }
   if (beforeTask.status === "completed") {
-    throw new MaestroError(`Task ${taskId} is already completed and cannot be resumed from handoff ${input.id}`, [
-      "Reopen the task first if you intend to continue working on it",
-    ]);
+    throw new MaestroError(
+      `Task ${taskId} is already completed and cannot be resumed from handoff ${input.id}`,
+      ["Reopen the task first if you intend to continue working on it"],
+      "HANDOFF_TASK_COMPLETED",
+    );
   }
 
   const unresolvedBlockers = getUnresolvedBlockerIds(beforeTask, tasks);
   if (unresolvedBlockers.length > 0) {
-    throw new MaestroError(`Task ${taskId} is blocked and cannot be resumed`, [
-      `Unresolved blockers: ${unresolvedBlockers.join(", ")}`,
-    ]);
+    throw new MaestroError(
+      `Task ${taskId} is blocked and cannot be resumed`,
+      [`Unresolved blockers: ${unresolvedBlockers.join(", ")}`],
+      "HANDOFF_TASK_BLOCKED",
+    );
   }
 
   const consumed = await deps.handoffStore.consume({
