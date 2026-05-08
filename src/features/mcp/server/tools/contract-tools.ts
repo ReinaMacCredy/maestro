@@ -6,14 +6,10 @@ import {
   generateContractAmendmentId,
   getCurrentContract,
 } from "@/features/task/index.js";
-import type { Services } from "@/services.js";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { ContractAmendInput, ContractShowInput } from "../schemas/inputs.js";
 import { ContractAmendOutput, ContractShowOutput } from "../schemas/outputs.js";
-
-interface RegisterDeps {
-  readonly getServices: () => Services;
-}
+import type { RegisterDeps } from "./types.js";
 
 export function registerContractTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
@@ -179,13 +175,15 @@ function applyPathChanges(
 ): { result: string[]; skipped: string[] } {
   const removeSet = new Set(remove);
   const result = existing.filter((p) => !removeSet.has(p));
+  const present = new Set(result);
   const skipped: string[] = [];
   for (const p of add) {
-    if (result.includes(p) || matchesAnyGlob(result, p)) {
+    if (present.has(p) || matchesAnyGlob(result, p)) {
       skipped.push(p);
       continue;
     }
     result.push(p);
+    present.add(p);
   }
   return { result, skipped };
 }

@@ -3,18 +3,12 @@ import {
   listEvidence,
   recordEvidence,
   type EvidenceListFilter,
-  type WitnessLevel,
 } from "@/features/evidence/index.js";
-import type { Services } from "@/services.js";
 import { fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
-import { detectMcpSessionId } from "../session.js";
 import { EvidenceListInput, EvidenceRecordInput } from "../schemas/inputs.js";
 import { EvidenceListOutput, EvidenceRecordOutput } from "../schemas/outputs.js";
-
-interface RegisterDeps {
-  readonly getServices: () => Services;
-}
+import type { RegisterDeps } from "./types.js";
 
 export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
@@ -69,9 +63,8 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
     async (args) => {
       try {
         const services = deps.getServices();
-        const sessionId = detectMcpSessionId();
-        const witnessLevel: WitnessLevel =
-          (args.witnessLevel as WitnessLevel | undefined) ?? "agent-claimed-locally";
+        const { sessionId } = deps;
+        const witnessLevel = args.witnessLevel ?? "agent-claimed-locally";
         if (args.command !== undefined) {
           const row = await recordEvidence<"command">(services.evidenceStore, {
             task_id: args.taskId,
@@ -82,10 +75,6 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
           });
           return toCallToolResult(ok({ evidence: row }));
         }
-        // Schema refine guarantees exactly one of command/note is set, and the
-        // `note` schema enforces min(1) — so by this branch `args.note` is
-        // always a non-empty string. Treat absence as a programmer error
-        // rather than silently producing an empty manual-note row.
         if (args.note === undefined) {
           return toCallToolResult(
             fromMaestroError(

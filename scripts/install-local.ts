@@ -1,5 +1,4 @@
 import { chmod, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileExists } from "../src/shared/lib/fs.js";
@@ -55,16 +54,12 @@ if (resolvedOnPath) {
   }
 }
 
-// MCP server: configure detected agent runtimes (Claude Code, Codex) to
-// launch the Bun-compiled maestro binary directly. We shell out to the
-// agent CLIs (`claude mcp add -s user`, `codex mcp add`) so the entry lands
-// in the location each runtime actually reads — `~/.claude.json` for Claude
-// Code, `~/.codex/config.toml` for Codex. The binary embeds its own runtime,
-// so no separate Node bundle is required.
+// Shell out to each agent CLI so the entry lands in the file the runtime
+// actually reads, not a sibling we hand-write.
 const binaryPath = resolveMaestroBinaryInstallPath(installDir, platform);
 const configEntry = buildMaestroAgentMcpConfigEntry(binaryPath);
-const runtimeResults = defaultAgentRuntimeTargets().map((target) =>
-  configureAgentRuntime(target, configEntry),
+const runtimeResults = await Promise.all(
+  defaultAgentRuntimeTargets().map((target) => configureAgentRuntime(target, configEntry)),
 );
 for (const r of runtimeResults) {
   switch (r.action) {
@@ -87,11 +82,11 @@ for (const r of runtimeResults) {
 }
 
 // Migration hint for installs from <= 0.75.0 that wrote to paths the agents
-// don't actually read. Don't auto-delete — print so the user can clean up.
+// don't actually read. Don't auto-delete; print so the user can clean up.
 const home = homedir();
-const orphans = [join(home, ".claude", "mcp.json"), join(home, ".codex", "mcp.json")].filter(
-  (p) => existsSync(p),
-);
+const candidates = [join(home, ".claude", "mcp.json"), join(home, ".codex", "mcp.json")];
+const orphans = (await Promise.all(candidates.map(async (p) => ((await fileExists(p)) ? p : undefined))))
+  .filter((p): p is string => p !== undefined);
 if (orphans.length > 0) {
   console.log("");
   console.log("[note] Found leftover MCP config files from a previous install:");

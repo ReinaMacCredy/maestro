@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -11,8 +11,10 @@ import {
   readCodexMaestro,
   resolveMaestroBinaryInstallPath,
   type AgentRuntimeTarget,
-  type RunCliResult,
 } from "@/features/mcp/usecases/configure-agent-runtime.usecase.js";
+import type { ShellResult } from "@/shared/lib/shell.js";
+
+const ok: ShellResult = { exitCode: 0, stdout: "", stderr: "" };
 
 describe("buildMaestroAgentMcpConfigEntry", () => {
   it("returns the binary path as command and ['mcp','serve'] as args", () => {
@@ -69,17 +71,17 @@ describe("readClaudeUserScopeMaestro", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns undefined when the file does not exist", () => {
-    expect(readClaudeUserScopeMaestro(join(root, "missing.json"))).toBeUndefined();
+  it("returns undefined when the file does not exist", async () => {
+    expect(await readClaudeUserScopeMaestro(join(root, "missing.json"))).toBeUndefined();
   });
 
-  it("returns undefined when there is no maestro entry", () => {
+  it("returns undefined when there is no maestro entry", async () => {
     const path = join(root, ".claude.json");
     writeFileSync(path, JSON.stringify({ mcpServers: { other: { command: "/x" } } }));
-    expect(readClaudeUserScopeMaestro(path)).toBeUndefined();
+    expect(await readClaudeUserScopeMaestro(path)).toBeUndefined();
   });
 
-  it("reads command and args from the top-level mcpServers.maestro entry", () => {
+  it("reads command and args from the top-level mcpServers.maestro entry", async () => {
     const path = join(root, ".claude.json");
     writeFileSync(
       path,
@@ -88,16 +90,16 @@ describe("readClaudeUserScopeMaestro", () => {
         mcpServers: { maestro: { command: "/abs/maestro", args: ["mcp", "serve"] } },
       }),
     );
-    expect(readClaudeUserScopeMaestro(path)).toEqual({
+    expect(await readClaudeUserScopeMaestro(path)).toEqual({
       command: "/abs/maestro",
       args: ["mcp", "serve"],
     });
   });
 
-  it("treats malformed JSON as a thrown error", () => {
+  it("treats malformed JSON as a thrown error", async () => {
     const path = join(root, ".claude.json");
     writeFileSync(path, "{ not json");
-    expect(() => readClaudeUserScopeMaestro(path)).toThrow();
+    await expect(readClaudeUserScopeMaestro(path)).rejects.toThrow();
   });
 });
 
@@ -110,11 +112,11 @@ describe("readCodexMaestro", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns undefined when the file does not exist", () => {
-    expect(readCodexMaestro(join(root, "missing.toml"))).toBeUndefined();
+  it("returns undefined when the file does not exist", async () => {
+    expect(await readCodexMaestro(join(root, "missing.toml"))).toBeUndefined();
   });
 
-  it("returns undefined when there is no [mcp_servers.maestro] table", () => {
+  it("returns undefined when there is no [mcp_servers.maestro] table", async () => {
     const path = join(root, "config.toml");
     writeFileSync(
       path,
@@ -122,10 +124,10 @@ describe("readCodexMaestro", () => {
         "\n",
       ),
     );
-    expect(readCodexMaestro(path)).toBeUndefined();
+    expect(await readCodexMaestro(path)).toBeUndefined();
   });
 
-  it("reads command and args from a [mcp_servers.maestro] table", () => {
+  it("reads command and args from a [mcp_servers.maestro] table", async () => {
     const path = join(root, "config.toml");
     writeFileSync(
       path,
@@ -141,13 +143,13 @@ describe("readCodexMaestro", () => {
         "",
       ].join("\n"),
     );
-    expect(readCodexMaestro(path)).toEqual({
+    expect(await readCodexMaestro(path)).toEqual({
       command: "/abs/maestro",
       args: ["mcp", "serve"],
     });
   });
 
-  it("stops at the next [...] heading and ignores later tables' command keys", () => {
+  it("stops at the next [...] heading and ignores later tables' command keys", async () => {
     const path = join(root, "config.toml");
     writeFileSync(
       path,
@@ -159,10 +161,10 @@ describe("readCodexMaestro", () => {
         "",
       ].join("\n"),
     );
-    expect(readCodexMaestro(path)?.command).toBe("/correct");
+    expect((await readCodexMaestro(path))?.command).toBe("/correct");
   });
 
-  it("supports the quoted-key form [mcp_servers.\"maestro\"]", () => {
+  it("supports the quoted-key form [mcp_servers.\"maestro\"]", async () => {
     const path = join(root, "config.toml");
     writeFileSync(
       path,
@@ -170,19 +172,19 @@ describe("readCodexMaestro", () => {
         "\n",
       ),
     );
-    expect(readCodexMaestro(path)).toEqual({
+    expect(await readCodexMaestro(path)).toEqual({
       command: "/abs/maestro",
       args: ["mcp", "serve"],
     });
   });
 
-  it("strips inline comments after the value", () => {
+  it("strips inline comments after the value", async () => {
     const path = join(root, "config.toml");
     writeFileSync(
       path,
       ["[mcp_servers.maestro]", 'command = "/abs/maestro" # set by maestro install', ""].join("\n"),
     );
-    expect(readCodexMaestro(path)?.command).toBe("/abs/maestro");
+    expect((await readCodexMaestro(path))?.command).toBe("/abs/maestro");
   });
 });
 
@@ -209,28 +211,28 @@ describe("configureAgentRuntime", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns 'skipped-no-runtime' when the CLI is not on PATH", () => {
-    const r = configureAgentRuntime(claudeTarget, entry, {
+  it("returns 'skipped-no-runtime' when the CLI is not on PATH", async () => {
+    const r = await configureAgentRuntime(claudeTarget, entry, {
       which: () => null,
-      runCli: () => {
+      runCli: async () => {
         throw new Error("should not be called");
       },
     });
     expect(r.action).toBe("skipped-no-runtime");
   });
 
-  it("returns 'created' and runs `claude mcp add ... -s user` when no existing entry", () => {
+  it("returns 'created' and runs `claude mcp add ... -s user` when no existing entry", async () => {
     const path = join(root, ".claude.json");
     writeFileSync(path, JSON.stringify({}));
     const calls: string[][] = [];
-    const r = configureAgentRuntime(
+    const r = await configureAgentRuntime(
       { ...claudeTarget, configPath: path },
       entry,
       {
         which: () => "/usr/local/bin/claude",
-        runCli: (argv) => {
+        runCli: async (argv) => {
           calls.push([...argv]);
-          return { exitCode: 0, stderr: "" };
+          return ok;
         },
       },
     );
@@ -240,7 +242,7 @@ describe("configureAgentRuntime", () => {
     ]);
   });
 
-  it("returns 'unchanged' and does not run any CLI when the existing entry matches", () => {
+  it("returns 'unchanged' and does not run any CLI when the existing entry matches", async () => {
     const path = join(root, ".claude.json");
     writeFileSync(
       path,
@@ -249,14 +251,14 @@ describe("configureAgentRuntime", () => {
       }),
     );
     const calls: string[][] = [];
-    const r = configureAgentRuntime(
+    const r = await configureAgentRuntime(
       { ...claudeTarget, configPath: path },
       entry,
       {
         which: () => "/usr/local/bin/claude",
-        runCli: (argv) => {
+        runCli: async (argv) => {
           calls.push([...argv]);
-          return { exitCode: 0, stderr: "" };
+          return ok;
         },
       },
     );
@@ -264,21 +266,21 @@ describe("configureAgentRuntime", () => {
     expect(calls).toEqual([]);
   });
 
-  it("returns 'updated' and runs remove + add when the existing entry drifts", () => {
+  it("returns 'updated' and runs remove + add when the existing entry drifts", async () => {
     const path = join(root, ".claude.json");
     writeFileSync(
       path,
       JSON.stringify({ mcpServers: { maestro: { command: "/old/maestro", args: ["mcp", "serve"] } } }),
     );
     const calls: string[][] = [];
-    const r = configureAgentRuntime(
+    const r = await configureAgentRuntime(
       { ...claudeTarget, configPath: path },
       entry,
       {
         which: () => "/usr/local/bin/claude",
-        runCli: (argv) => {
+        runCli: async (argv) => {
           calls.push([...argv]);
-          return { exitCode: 0, stderr: "" };
+          return ok;
         },
       },
     );
@@ -289,18 +291,18 @@ describe("configureAgentRuntime", () => {
     ]);
   });
 
-  it("uses the codex argv shape (no -s flag) when targeting Codex", () => {
+  it("uses the codex argv shape (no -s flag) when targeting Codex", async () => {
     const path = join(root, "config.toml");
     writeFileSync(path, "");
     const calls: string[][] = [];
-    const r = configureAgentRuntime(
+    const r = await configureAgentRuntime(
       { ...codexTarget, configPath: path },
       entry,
       {
         which: () => "/usr/local/bin/codex",
-        runCli: (argv) => {
+        runCli: async (argv) => {
           calls.push([...argv]);
-          return { exitCode: 0, stderr: "" };
+          return ok;
         },
       },
     );
@@ -310,51 +312,35 @@ describe("configureAgentRuntime", () => {
     ]);
   });
 
-  it("returns 'error' with the CLI stderr when add fails", () => {
+  it("returns 'error' with the CLI stderr when add fails", async () => {
     const path = join(root, ".claude.json");
     writeFileSync(path, JSON.stringify({}));
-    const r = configureAgentRuntime(
+    const r = await configureAgentRuntime(
       { ...claudeTarget, configPath: path },
       entry,
       {
         which: () => "/usr/local/bin/claude",
-        runCli: (): RunCliResult => ({ exitCode: 1, stderr: "boom" }),
+        runCli: async () => ({ exitCode: 1, stdout: "", stderr: "boom" }),
       },
     );
     expect(r.action).toBe("error");
     expect(r.error).toMatch(/exited 1: boom/);
   });
 
-  it("returns 'error' when the existing config file is malformed JSON", () => {
+  it("returns 'error' when the existing config file is malformed JSON", async () => {
     const path = join(root, ".claude.json");
     writeFileSync(path, "{ not json");
-    const r = configureAgentRuntime(
+    const r = await configureAgentRuntime(
       { ...claudeTarget, configPath: path },
       entry,
       {
         which: () => "/usr/local/bin/claude",
-        runCli: () => {
+        runCli: async () => {
           throw new Error("should not be called");
         },
       },
     );
     expect(r.action).toBe("error");
     expect(typeof r.error).toBe("string");
-  });
-});
-
-describe("install-script integration: parent dir auto-creation no longer required", () => {
-  it("Codex target points at ~/.codex/config.toml even when parent dir is absent (codex CLI handles creation)", () => {
-    const targets = defaultAgentRuntimeTargets("/nonexistent");
-    const codex = targets.find((t) => t.kind === "codex");
-    expect(codex?.configPath).toBe("/nonexistent/.codex/config.toml");
-  });
-
-  it("supports caller-supplied dummy home for tests by passing via defaultAgentRuntimeTargets(home)", () => {
-    const tmpHome = mkdtempSync(join(tmpdir(), "maestro-home-"));
-    mkdirSync(join(tmpHome, ".codex"));
-    const targets = defaultAgentRuntimeTargets(tmpHome);
-    expect(targets[1]?.configPath).toBe(join(tmpHome, ".codex", "config.toml"));
-    rmSync(tmpHome, { recursive: true, force: true });
   });
 });
