@@ -456,6 +456,65 @@ const ContractSchema = z
   .passthrough()
   .describe("A maestro contract version.");
 
+const HandoffStatusSchema = z.enum([
+  "launching",
+  "launched",
+  "completed",
+  "failed",
+  "consumed",
+]);
+
+const HandoffAgentSchema = z.enum(["codex", "claude", "hermes"]);
+
+const HandoffWorktreeSchema = z
+  .object({
+    slug: z.string(),
+    baseBranch: z.string(),
+    branch: z.string(),
+    path: z.string(),
+  })
+  .passthrough();
+
+const HandoffRefsSchema = z
+  .object({
+    missionId: z.string().optional(),
+    featureId: z.string().optional(),
+    milestoneId: z.string().optional(),
+    taskId: z.string().optional(),
+    projectRoot: z.string().optional(),
+  })
+  .passthrough();
+
+const HandoffRecordSchema = z
+  .object({
+    id: z.string(),
+    createdAt: isoTimestamp,
+    task: z.string(),
+    name: z.string(),
+    agent: HandoffAgentSchema,
+    model: z.string(),
+    status: HandoffStatusSchema,
+    wait: z.boolean(),
+    sourceDir: z.string(),
+    targetDir: z.string(),
+    promptPath: z.string(),
+    outputPath: z.string(),
+    command: z.array(z.string()),
+    refs: HandoffRefsSchema,
+    createdByAgent: z.string().optional(),
+    createdBySessionId: z.string().optional(),
+    pickedUpByAgent: z.string().optional(),
+    pickedUpBySessionId: z.string().optional(),
+    pickedUpAt: isoTimestamp.optional(),
+    consumedAt: isoTimestamp.optional(),
+    worktree: HandoffWorktreeSchema.optional(),
+    pid: z.number().optional(),
+    exitCode: z.number().optional(),
+    errorMessage: z.string().optional(),
+  })
+  .passthrough()
+  .describe("A maestro handoff packet record.");
+
 const PaginationSchema = z
   .object({
     total: z.number().int().min(0),
@@ -512,6 +571,40 @@ export const ContractAmendOutput = z
     amendmentId: z.string(),
     newVersion: z.number().int().min(1),
     skippedAddPaths: z.array(z.string()),
+  })
+  .strict();
+
+export const HandoffListOutput = z
+  .object({
+    items: z.array(HandoffRecordSchema),
+    pagination: PaginationSchema,
+  })
+  .strict();
+
+export const HandoffShowOutput = z
+  .object({
+    record: HandoffRecordSchema,
+  })
+  .strict();
+
+export const HandoffPickupOutput = z
+  .object({
+    record: HandoffRecordSchema,
+    taskId: z.string().optional(),
+    ownerId: z.string().optional(),
+    contractTransferWarning: z.string().optional(),
+    unlinkedTaskId: z.string().optional(),
+  })
+  .strict();
+
+export const HandoffOpenForTaskOutput = z
+  .object({
+    taskId: z.string(),
+    handoffIds: z
+      .array(z.string())
+      .describe(
+        "Handoff ids of open packets linked to this task, newest first. Empty when the task has no open packet.",
+      ),
   })
   .strict();
 

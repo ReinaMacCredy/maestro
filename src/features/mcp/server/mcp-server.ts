@@ -6,6 +6,7 @@ import { findMaestroProjectRoot } from "./project.js";
 import { detectMcpSessionId } from "./session.js";
 import { registerContractTools } from "./tools/contract-tools.js";
 import { registerEvidenceTools } from "./tools/evidence-tools.js";
+import { registerHandoffTools } from "./tools/handoff-tools.js";
 import { registerPolicyTools } from "./tools/policy-tools.js";
 import { registerTaskTools } from "./tools/task-tools.js";
 import type { RegisterDeps } from "./tools/types.js";
@@ -52,6 +53,7 @@ export function buildMaestroMcpServer(options: McpServerOptions = {}): {
   registerVerdictTools(server, deps);
   registerContractTools(server, deps);
   registerPolicyTools(server, deps);
+  registerHandoffTools(server, deps);
 
   return { server, services, projectRoot };
 }

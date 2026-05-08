@@ -161,6 +161,15 @@ Pickup auto-claims a linked task only when the current working directory matches
 
 Pickup semantics including stale-claim transfer and contract inheritance live in `./reference/pickup.md`.
 
+## MCP equivalents
+
+When invoked from an MCP-connected agent, the read and pickup verbs are also exposed as tools on the maestro MCP server. Launching new packets is intentionally CLI-only.
+
+- `maestro_handoff_list` — read-only, project-scoped, paginated. Optional filters: `openOnly` (boolean, mirrors `--open`), `displayState` (`open|consumed|completed|failed`, mutually exclusive with `openOnly`), `taskId` (filter to packets linked to a specific task), `agent` (`codex|claude|hermes`).
+- `maestro_handoff_show` — read-only, project-scoped. Takes `{ id }`. Returns code `HANDOFF_NOT_FOUND` when the packet does not exist or belongs to another project.
+- `maestro_handoff_open_for_task` — read-only, project-scoped. Takes `{ taskId }`. Returns ids of open packets linked to that task, newest first. Use this when resuming work on a known task to find a waiting packet without scanning the full list.
+- `maestro_handoff_pickup` — takes `{ id, actorAgent, actorSessionId?, ownerId?, standalone? }`. `actorSessionId` defaults to the MCP session id (`MAESTRO_SESSION_ID`/`CLAUDECODE_SESSION_ID`/`CODEX_THREAD_ID`, else `username@host`); `ownerId` defaults to `buildTaskOwnerId(actorAgent, actorSessionId)`. Error codes: `HANDOFF_NOT_FOUND`, `ALREADY_CONSUMED`, `CROSS_PROJECT_PICKUP`, `HANDOFF_TASK_COMPLETED`, `HANDOFF_TASK_BLOCKED`, `OWNERSHIP_CONFLICT`.
+
 ## Reference
 
 - `./reference/brief-template.md`: longer brief example with a realistic scenario
