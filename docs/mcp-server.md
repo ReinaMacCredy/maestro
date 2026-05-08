@@ -96,12 +96,17 @@ The server walks up from its working directory looking for a `.maestro/` directo
 ## Running standalone
 
 ```bash
-maestro mcp serve            # stdio transport, default
-maestro mcp check            # introspect installed binary + agent runtime configs
+maestro mcp serve                                  # stdio transport, default
+maestro mcp serve --project-root /abs/path         # override project root detection
+maestro mcp check                                  # introspect installed binary + agent runtime configs
 maestro mcp check --json
 ```
 
-`mcp serve` reads JSON-RPC over stdin and writes responses to stdout; logs go to stderr. There is no HTTP/SSE transport at this time.
+`mcp serve` reads JSON-RPC over stdin and writes responses to stdout; diagnostic output and protocol errors go to stderr so the stdout channel stays reserved for protocol traffic. The `--transport` flag accepts `stdio` (the only supported value today). HTTP and SSE transports are not implemented.
+
+`--project-root` and `MAESTRO_PROJECT_ROOT` serve the same purpose; the flag wins when both are set.
+
+`mcp check` exits `1` when the installed binary is missing, `0` otherwise. It reports each runtime as `[ok]` (configured and current), `[stale]` (configured but pointing at a different binary path), or `not configured`.
 
 ## See also
 

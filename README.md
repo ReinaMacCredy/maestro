@@ -131,7 +131,7 @@ This syncs bundled Maestro skills into Codex, Claude Code, Hermes, and the share
 maestro init
 ```
 
-This creates the local `.maestro/` workspace for the current repository.
+This creates the local `.maestro/` workspace for the current repository, seeds default policy files, and writes `.maestro/MAESTRO.md` — a read-order compass that points fresh agents at the right files (this compass → root `AGENTS.md` → `.maestro/tasks/NOW.md` → `maestro status --json` → policies → specs).
 
 ### 2. Create a mission plan file
 
@@ -645,7 +645,7 @@ This is the foundation. A contract pins down what a task is allowed to touch; th
    maestro task verify --task <id>
    ```
 
-   The verifier runs 6 checks in parallel: scope adherence, lockfile parity, generated-file parity, sensitive-path policy, commit metadata, and secrets-in-diff. Findings are printed with severity (`info`, `warn`, `error`). `error` findings cause a non-zero exit code.
+   The verifier runs 6 checks in parallel: scope adherence, lockfile parity, generated-file parity, sensitive-path policy, commit metadata, and secrets-in-diff. Findings are printed with severity (`info`, `warn`, `error`). Exit codes: `0` when no `error` findings, `1` when at least one `error` finding, `2` when the task has no locked contract (warn — use `maestro task contract new` to create one).
 
 ### CLI surface
 
@@ -746,13 +746,33 @@ The pre-claim loop closes the inner agent loop: the agent runs plan, implement, 
 
 Before claiming any non-trivial task done, the agent runs this ordered loop:
 
-1. **Plan** — write a plan file and run `maestro plan check` to catch problems before code is written.
-2. **Implement** — write code and record evidence after each verification command.
-3. **Verify** — run `maestro task verify` and address every `error` finding.
-4. **ProofMap** — run `maestro task proof` and confirm every acceptance criterion is covered.
-5. **Verdict** — run `maestro verdict request` and branch on the exit code.
+1. **Intake** — run `maestro intake --paths <paths>` to classify the work as `tiny`, `normal`, or `high-risk` before writing code. The output drives the next step (patch directly, batch-create tasks, or build a Spec + threat-model).
+2. **Plan** — write a plan file and run `maestro plan check` to catch problems before code is written.
+3. **Implement** — write code and record evidence after each verification command.
+4. **Verify** — run `maestro task verify` and address every `error` finding.
+5. **ProofMap** — run `maestro task proof` and confirm every acceptance criterion is covered.
+6. **Verdict** — run `maestro verdict request` and branch on the exit code.
 
 The canonical source for this ritual is the `maestro-verify` bundled skill — read it when in doubt about the verification protocol.
+
+### Intake
+
+`maestro intake` is a deterministic plan-time risk classifier. It returns a lane and a recommended next step before code is written, using the same risk-class derivation rules as the Verdict layer.
+
+| Lane | Trigger | Next step |
+|---|---|---|
+| `tiny` | 0–1 risk flags, no hard gate | Patch directly, run validation, close with reason. |
+| `normal` | 2–3 risk flags, no hard gate | Create a task via `maestro task plan` and follow the standard pre-claim loop. |
+| `high-risk` | Any hard gate, or 4+ flags | Build a Spec with acceptance criteria, plus a `threat-model` Evidence row when the diff intersects sensitive paths. |
+
+Hard gates (any one promotes to `high-risk`): `auth`, `authz`, `data-model`, `audit-security`, `external-systems`. The classifier auto-detects flags from the intended file paths against the effective risk policy and sensitive-path globs; declared flags are merged on top.
+
+```bash
+maestro intake --paths src/auth/session.ts --flag auth
+maestro intake --paths src/foo.ts,src/bar.ts --json
+```
+
+Exit code is always 0; agents react to `lane`, `derivedRiskClass`, `threatModelRequired`, and `recommendedNextStep` in the output.
 
 ### Plan-check
 
@@ -957,6 +977,52 @@ See `docs/trust-benchmark.md` for the full scenario table, fixture pattern, and 
 
 The following capabilities are not in this release and will ship when teams ask maestro to learn from incidents: autopsy generator, `maestro ratchet` review/approve/sunset CLI, N≥2 broad-promotion guard for ratchet rules, and sunset/decay machinery.
 
+## MCP Server
+
+Maestro ships a Model Context Protocol (MCP) server that exposes its core verbs to MCP-aware agent runtimes. Agents call `maestro_task_create`, `maestro_evidence_record`, `maestro_verdict_request`, and so on as structured tools instead of shelling out to the CLI and parsing text. The server is the same maestro binary, run with `maestro mcp serve` over stdio.
+
+### Tool surface
+
+14 tools across 5 surfaces, each a 1:1 wrapper around an existing maestro use case:
+
+| Surface | Tools |
+|---|---|
+| Task | `maestro_task_list`, `maestro_task_get`, `maestro_task_create`, `maestro_task_claim`, `maestro_task_complete`, `maestro_task_block`, `maestro_task_unblock` |
+| Evidence | `maestro_evidence_record`, `maestro_evidence_list` |
+| Contract | `maestro_contract_show`, `maestro_contract_amend` |
+| Verdict | `maestro_verdict_show`, `maestro_verdict_request` |
+| Policy | `maestro_policy_check` |
+
+`maestro_task_list` and `maestro_evidence_list` are paginated (`limit`/`offset` in, `pagination: { total, limit, offset, hasMore }` out). Every tool declares both a strict `inputSchema` (unknown fields error rather than being silently dropped) and an `outputSchema` mirroring the success-path `structuredContent`. Failures set `isError: true` with a stable `{ code, message, hints }` payload — clients branch on `code` (`TASK_NOT_FOUND`, `ALREADY_COMPLETED`, `OWNERSHIP_CONFLICT`, `CYCLE_DETECTED`, `CONTRACT_NOT_FOUND`, …).
+
+### Auto-configure on install
+
+`maestro install` and `bun run release:local` register the MCP entry with each supported runtime by shelling out to the runtime's own CLI (`claude mcp add -s user`, `codex mcp add`). Detection is CLI-on-`PATH`: a runtime whose CLI is not on `PATH` is silently skipped, so the install does not litter configs onto machines that don't have the runtime.
+
+The entry lands in the canonical file each runtime actually reads:
+
+| Runtime | Config file |
+|---|---|
+| Claude Code (user scope) | `~/.claude.json` (top-level `mcpServers.maestro`) |
+| Codex | `~/.codex/config.toml` (`[mcp_servers.maestro]` table) |
+
+### CLI surface
+
+```bash
+maestro mcp serve                                  # stdio transport, default
+maestro mcp serve --project-root /abs/path         # override project root detection
+maestro mcp check                                  # verify installed binary + runtime configs
+maestro mcp check --json
+```
+
+`mcp serve` reads JSON-RPC over stdin and writes responses to stdout; logs and errors go to stderr to keep the protocol channel clean. `mcp check` reports `[ok]`, `[stale]`, or `not configured` per runtime and exits `1` when the binary is missing.
+
+### Project scoping
+
+The server walks up from its working directory looking for `.maestro/`. To override, set `MAESTRO_PROJECT_ROOT` in the entry's `env` block (or pass `--project-root` when running standalone). The session id reported on writes is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, or `CODEX_THREAD_ID`, falling back to `<user>@<host>`.
+
+See [`docs/mcp-server.md`](docs/mcp-server.md) for the full tool and error-code reference, and [`docs/mcp-setup.md`](docs/mcp-setup.md) for the manual configuration path and troubleshooting.
+
 ## Common Commands
 
 | Command | Use it when you want to... |
@@ -964,7 +1030,7 @@ The following capabilities are not in this release and will ship when teams ask 
 | `maestro init` | Create local project state. |
 | `maestro install` | Initialize global config and inject supported agent instruction blocks. |
 | `maestro update` | Upgrade the local binary to the latest release and refresh agent instruction blocks. |
-| `maestro doctor` | Check whether the local environment is configured correctly. |
+| `maestro doctor` | Check whether the local environment is configured correctly. Includes harness-drift checks for empty mission feature directories and oversized root docs. |
 | `maestro providers list` / `maestro providers doctor` | Inspect runtime and skill-target provider configuration. |
 | `maestro skills list` / `maestro skills install <source>` | Discover, inspect, install, remove, and sync AgentSkills-compatible skills. |
 | `maestro status` | Inspect the current Maestro state quickly. |
@@ -978,6 +1044,7 @@ The following capabilities are not in this release and will ship when teams ask 
 | `maestro mission-control --preview` | Render a read-only dashboard preview in the terminal. |
 | `maestro mission-control --json` | Get a machine-readable snapshot of mission state. |
 | `maestro mission-control --render-check --size 120x40` | Validate TUI render integrity non-interactively. |
+| `maestro intake --paths <list>` | Classify intended work as `tiny`, `normal`, or `high-risk` before writing code. |
 | `maestro task ready` | List actionable pending tasks with no unresolved blockers. |
 | `maestro task claim <id>` | Take ownership of a task for the current session. |
 | `maestro task update <id> --status in_progress` / `--status completed --reason "..."` | Start or finish a task. |
@@ -988,6 +1055,8 @@ The following capabilities are not in this release and will ship when teams ask 
 | `maestro evidence record --task <id> --kind manual-note --note "..."` | Log a free-form manual note as evidence. |
 | `maestro evidence list --task <id>` | List all evidence rows for a task. |
 | `maestro evidence show <evidence-id>` | Show one evidence row by id. |
+| `maestro mcp serve` | Start the MCP server on stdio. Agents launch this; you do not start it manually. |
+| `maestro mcp check` | Verify the installed maestro binary and the canonical agent runtime config files. |
 | `maestro principle list` / `principle add` | Inspect or register a behavioral principle. |
 | `maestro bundle export <mission-id> --out ./review.mission.tar.gz` | Package a mission + artifacts as a portable archive. |
 | `maestro bundle inspect <path>` | Print a mission bundle's manifest without extracting. |
@@ -1183,7 +1252,7 @@ In-depth references live under [`docs/`](docs/):
 | MCP server tools and result shapes | [`mcp-server.md`](docs/mcp-server.md) |
 | MCP setup for Claude Code and Codex | [`mcp-setup.md`](docs/mcp-setup.md) |
 
-The agent-facing protocol is documented inside the bundled skills under [`skills/bundled/`](skills/bundled/) — `maestro-verify` is the canonical verification protocol; `maestro-task`, `maestro-plan`, `maestro-mission`, `maestro-handoff`, `maestro-brainstorm`, and `maestro-setup` cross-reference it.
+The agent-facing protocol is documented inside the bundled skills under [`skills/bundled/`](skills/bundled/). `maestro-verify` is the canonical verification protocol; `maestro-intake`, `maestro-task`, `maestro-plan`, `maestro-mission`, `maestro-handoff`, `maestro-brainstorm`, `maestro-qa`, and `maestro-setup` cross-reference it. `maestro install` syncs all of them into `~/.claude/skills/` and `~/.codex/skills/`.
 
 ## Contributing
 
