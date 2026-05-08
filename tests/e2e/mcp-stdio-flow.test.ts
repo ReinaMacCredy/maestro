@@ -65,18 +65,19 @@ class McpStdioClient {
   async rpc(method: string, params: unknown = {}): Promise<JsonRpcResponse> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, resolve);
       const timer = setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
           reject(new Error(`RPC ${method} timed out (id=${id})`));
         }
       }, 10_000);
-      const msg = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
-      this.proc.stdin.write(msg, () => {
-        // resolve handler clears the timer indirectly via promise resolution
-        timer.unref?.();
+      timer.unref?.();
+      this.pending.set(id, (msg) => {
+        clearTimeout(timer);
+        resolve(msg);
       });
+      const payload = JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n";
+      this.proc.stdin.write(payload);
     });
   }
 

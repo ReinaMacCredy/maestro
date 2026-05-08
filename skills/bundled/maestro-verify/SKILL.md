@@ -526,6 +526,6 @@ Verification verbs are also exposed via MCP for runtimes that prefer structured 
 | `maestro_contract_show` | `maestro contract show --task <id>` | Optional `version` argument for historical reads |
 | `maestro_contract_amend` | `maestro contract amend --task <id>` | `addPaths` / `removePaths` arrays + `reason` |
 | `maestro_policy_check` | `maestro policy check --task <id>` | Returns effective risk class and required witness level |
-| `maestro_evidence_record` | `maestro evidence record --task <id>` | Same kinds (command, manual-note) |
+| `maestro_evidence_record` | `maestro evidence record --task <id>` | Structured input for `command` and `manual-note` only; other kinds (`ai-review`, `threat-model`, `plan-check`, `deploy-readiness`, `rollback-exercised`, `cross-task-conflict`, `runtime-signal`, `review-ack`, `verdict-override`) require the CLI |
 
 When acting through MCP, the return shapes are JSON; do not parse them as CLI text. CLI exit codes have no MCP analog — instead, success vs failure is signalled by the tool result's `isError` flag and `code` string.

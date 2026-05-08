@@ -7,7 +7,6 @@
   "witness_level": "witnessed-by-maestro",
   "created_at": "2025-10-04T15:00:00.002Z",
   "payload": {
-    "task_id": "tsk-bb0001",
     "checks": {
       "feature_flag": { "ok": true, "value": "enable_v2_endpoint" },
       "canary_plan": { "ok": true, "stages": 3 },
