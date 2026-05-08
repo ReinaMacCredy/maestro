@@ -1,11 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import type { Command } from "commander";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveInstallDir } from "@/infra/usecases/install-release-binary.usecase.js";
 import {
   buildMaestroAgentMcpConfigEntry,
+  defaultAgentRuntimeTargets,
+  entriesEqual,
+  readMaestroEntry,
   resolveMaestroBinaryInstallPath,
 } from "../usecases/configure-agent-runtime.usecase.js";
 
@@ -36,41 +37,20 @@ export function registerMcpCheckCommand(mcpCmd: Command, program: Command): void
       const isJson = resolveJsonFlag(opts as { json?: boolean }, program);
       const installDir = resolveInstallDir();
       const binaryPath = resolveMaestroBinaryInstallPath(installDir);
-
-      const candidates: { name: string; path: string }[] = [
-        { name: "Claude Code", path: join(homedir(), ".claude", "mcp.json") },
-        { name: "Codex", path: join(homedir(), ".codex", "mcp.json") },
-      ];
-
       const expectedEntry = buildMaestroAgentMcpConfigEntry(binaryPath);
-      const agentRuntimes: AgentRuntimeStatus[] = candidates.map((c) => {
-        if (!existsSync(c.path)) {
-          return {
-            name: c.name,
-            configPath: c.path,
-            configured: false,
-            maestroEntryMatchesInstall: null,
-          };
-        }
-        let configured = false;
-        let matches = false;
+
+      const agentRuntimes: AgentRuntimeStatus[] = defaultAgentRuntimeTargets().map((target) => {
+        let existing;
         try {
-          const raw = JSON.parse(readFileSync(c.path, "utf8"));
-          const existing = raw?.mcpServers?.maestro;
-          configured = Boolean(existing);
-          if (existing) {
-            matches =
-              existing.command === expectedEntry.command &&
-              JSON.stringify(existing.args ?? []) === JSON.stringify(expectedEntry.args);
-          }
+          existing = readMaestroEntry(target);
         } catch {
-          configured = false;
+          existing = undefined;
         }
         return {
-          name: c.name,
-          configPath: c.path,
-          configured,
-          maestroEntryMatchesInstall: configured ? matches : null,
+          name: target.name,
+          configPath: target.configPath,
+          configured: Boolean(existing),
+          maestroEntryMatchesInstall: existing ? entriesEqual(existing, expectedEntry) : null,
         };
       });
 
