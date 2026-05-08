@@ -70,7 +70,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
             task_id: args.taskId,
             session_id: sessionId,
             kind: "command",
-            payload: { command: args.command, exit: args.exitCode ?? 0 },
+            payload: { command: args.command, exit: args.exitCode! },
             witness_level: witnessLevel,
           });
           return toCallToolResult(ok({ evidence: row }));
