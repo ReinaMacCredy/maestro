@@ -27,14 +27,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opentui/core": "0.1.105",
-    "@opentui/react": "0.1.105",
+    "@opentui/core": "0.2.5",
+    "@opentui/react": "0.2.5",
     "cli-spinners": "^3.4.0",
     "commander": "^14.0.3",
-    "react": "19.2.5",
+    "react": "19.2.6",
     "react-devtools-core": "^7.0.1",
     "ws": "^8.18.0",
-    "yaml": "^2.7.0",
+    "yaml": "^2.8.4",
     "zod": "^3.24.0"
   },
   "devDependencies": {
