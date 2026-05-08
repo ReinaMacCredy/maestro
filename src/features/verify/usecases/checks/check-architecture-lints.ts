@@ -6,7 +6,12 @@ export type ArchitectureRuleId =
   | "no-runner-inversion"
   | "single-opentui-render"
   | "mission-control-readonly"
-  | "no-hand-edit-generated";
+  | "no-hand-edit-generated"
+  | "composition-only-in-services-ts"
+  | "task-vs-mission-separation"
+  | "file-size-limit"
+  | "no-bare-console-log"
+  | "kebab-case-filenames";
 
 export type ArchitectureSeverity = "info" | "warn" | "error";
 
@@ -51,6 +56,28 @@ const REMEDIATION: Record<ArchitectureRuleId, string> = {
     "Edit source under skills/built-in/ or skills/bundled/ and run " +
     "`bun run sync:built-in-skills` or `bun run sync:bundled-skills`. " +
     "`bun run check:bundled-skills` enforces parity in CI.",
+  "composition-only-in-services-ts":
+    "Cross-feature composition (importing another feature's `services.ts`) " +
+    "must happen only in the global composition root `src/services.ts`. " +
+    "Move the dependency wiring there and have the consuming feature take " +
+    "the resulting port through its own services.ts.",
+  "task-vs-mission-separation":
+    "The `task` and `mission` features model different lifecycles and must " +
+    "not import each other directly. Move shared logic into a shared module " +
+    "(or compose at `src/services.ts`); never reach across.",
+  "file-size-limit":
+    "Files over 800 source lines are hard to navigate and review. Split " +
+    "the file along feature/responsibility lines; if the size is intrinsic " +
+    "(e.g. generated code), exclude it via the rule's allow comment.",
+  "no-bare-console-log":
+    "Bare `console.log` calls in `src/**` leak into agent-facing output and " +
+    "production logs. Use structured logging (e.g. `output()` helper, " +
+    "`stderr` for diagnostics) or guard with a debug flag. Test files and " +
+    "scripts/ are exempt.",
+  "kebab-case-filenames":
+    "Source files under `src/**` should use kebab-case (e.g. " +
+    "`task-introspect.command.ts`, not `taskIntrospect.command.ts`). " +
+    "PascalCase is reserved for `.tsx` components.",
 };
 
 const SCAN_GLOB = "src/**/*.{ts,tsx}";
@@ -324,13 +351,37 @@ export async function checkArchitectureRules(
   input: ArchitectureLintInput,
 ): Promise<ArchitectureViolation[]> {
   const { repoRoot, diff } = input;
-  const [runner, render, readonly] = await Promise.all([
+  const [
+    runner,
+    render,
+    readonly,
+    composition,
+    taskMission,
+    fileSize,
+    consoleLog,
+    kebabCase,
+  ] = await Promise.all([
     checkNoRunnerInversion(repoRoot),
     checkSingleOpenTuiRender(repoRoot),
     checkMissionControlReadonly(repoRoot),
+    checkCompositionOnlyInServicesTs(repoRoot),
+    checkTaskVsMissionSeparation(repoRoot),
+    checkFileSizeLimit(repoRoot),
+    checkNoBareConsoleLog(repoRoot),
+    checkKebabCaseFilenames(repoRoot),
   ]);
   const generated = checkNoHandEditGenerated(diff);
-  return [...runner, ...render, ...readonly, ...generated];
+  return [
+    ...runner,
+    ...render,
+    ...readonly,
+    ...composition,
+    ...taskMission,
+    ...fileSize,
+    ...consoleLog,
+    ...kebabCase,
+    ...generated,
+  ];
 }
 
 export function violationToTrustFinding(
@@ -368,6 +419,175 @@ export function isArchitectureRuleId(value: string): value is ArchitectureRuleId
     value === "no-runner-inversion" ||
     value === "single-opentui-render" ||
     value === "mission-control-readonly" ||
-    value === "no-hand-edit-generated"
+    value === "no-hand-edit-generated" ||
+    value === "composition-only-in-services-ts" ||
+    value === "task-vs-mission-separation" ||
+    value === "file-size-limit" ||
+    value === "no-bare-console-log" ||
+    value === "kebab-case-filenames"
   );
+}
+
+const VALUE_IMPORT_RE = /^\s*import\s+(?!type\b)[^"';]*?from\s+["']((?:\.{1,2}\/|@\/)[^"']+)["']/gm;
+const SERVICES_DEEP_IMPORT_RE = /\/features\/([^/]+)\/services(?:\.[cm]?[jt]sx?)?$/;
+
+async function checkCompositionOnlyInServicesTs(
+  repoRoot: string,
+): Promise<ArchitectureViolation[]> {
+  const out: ArchitectureViolation[] = [];
+  const glob = new Glob("src/**/*.{ts,tsx}");
+  for await (const relPath of glob.scan({ cwd: repoRoot })) {
+    if (shouldSkipPath(relPath)) continue;
+    const posix = toPosix(relPath);
+    if (posix === "src/services.ts") continue;
+    const text = await Bun.file(join(repoRoot, relPath)).text();
+    const stripped = stripComments(text);
+    VALUE_IMPORT_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = VALUE_IMPORT_RE.exec(stripped)) !== null) {
+      const spec = m[1] ?? "";
+      const sm = spec.match(SERVICES_DEEP_IMPORT_RE);
+      if (!sm) continue;
+      const otherFeature = sm[1] ?? "";
+      const ownFeature = posix.match(/^src\/features\/([^/]+)\//)?.[1];
+      if (ownFeature === otherFeature) continue;
+      const { line, snippet } = lineOf(text, text.indexOf(m[0]));
+      if (isAllowedAt(text, line, "composition-only-in-services-ts")) continue;
+      out.push({
+        ruleId: "composition-only-in-services-ts",
+        severity: "warn",
+        file: posix,
+        line,
+        snippet,
+        message: `Cross-feature import of \`${spec}\` outside the composition root`,
+        remediation: REMEDIATION["composition-only-in-services-ts"],
+      });
+    }
+  }
+  return out;
+}
+
+const FILE_SIZE_LIMIT = 800;
+const CONSOLE_LOG_RE = /\bconsole\s*\.\s*(log|info|debug|warn)\s*\(/g;
+const TUI_RENDER_PATH_PREFIX = "src/tui/";
+
+async function checkFileSizeLimit(
+  repoRoot: string,
+): Promise<ArchitectureViolation[]> {
+  const out: ArchitectureViolation[] = [];
+  const glob = new Glob(SCAN_GLOB);
+  for await (const relPath of glob.scan({ cwd: repoRoot })) {
+    if (shouldSkipPath(relPath)) continue;
+    const posix = toPosix(relPath);
+    if (posix === "src/infra/domain/built-in-skill-templates.ts") continue;
+    if (posix === "src/infra/domain/bundled-skill-templates.ts") continue;
+    const file = Bun.file(join(repoRoot, relPath));
+    // size is a cheap header read; only fall through to a full read when the
+    // byte heuristic can't rule the file out (avg >= 40 bytes/line means a
+    // file <= 32_000 bytes can never exceed an 800-line cap).
+    if (file.size < FILE_SIZE_LIMIT * 40) continue;
+    const text = await file.text();
+    const lineCount = text.split("\n").length;
+    if (lineCount <= FILE_SIZE_LIMIT) continue;
+    if (isAllowedAt(text, 1, "file-size-limit")) continue;
+    out.push({
+      ruleId: "file-size-limit",
+      severity: "info",
+      file: posix,
+      line: 1,
+      message: `File has ${lineCount} lines (soft limit: ${FILE_SIZE_LIMIT})`,
+      remediation: REMEDIATION["file-size-limit"],
+    });
+  }
+  return out;
+}
+
+async function checkNoBareConsoleLog(
+  repoRoot: string,
+): Promise<ArchitectureViolation[]> {
+  const out: ArchitectureViolation[] = [];
+  const glob = new Glob(SCAN_GLOB);
+  for await (const relPath of glob.scan({ cwd: repoRoot })) {
+    if (shouldSkipPath(relPath)) continue;
+    const posix = toPosix(relPath);
+    if (posix.startsWith(TUI_RENDER_PATH_PREFIX)) continue;
+    const text = await Bun.file(join(repoRoot, relPath)).text();
+    const stripped = stripComments(text);
+    CONSOLE_LOG_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = CONSOLE_LOG_RE.exec(stripped)) !== null) {
+      const method = m[1] ?? "log";
+      const { line, snippet } = lineOf(stripped, m.index);
+      const origLine = lineOf(text, text.indexOf(m[0])).line;
+      if (isAllowedAt(text, origLine, "no-bare-console-log")) continue;
+      out.push({
+        ruleId: "no-bare-console-log",
+        severity: "info",
+        file: posix,
+        line,
+        snippet,
+        message: `Bare \`console.${method}\` call in src/`,
+        remediation: REMEDIATION["no-bare-console-log"],
+      });
+    }
+  }
+  return out;
+}
+
+async function checkKebabCaseFilenames(
+  repoRoot: string,
+): Promise<ArchitectureViolation[]> {
+  const out: ArchitectureViolation[] = [];
+  // .tsx is exempt: PascalCase component filenames are conventional there.
+  const glob = new Glob(SCAN_GLOB);
+  for await (const relPath of glob.scan({ cwd: repoRoot })) {
+    if (shouldSkipPath(relPath)) continue;
+    const posix = toPosix(relPath);
+    if (posix.endsWith(".tsx")) continue;
+    const base = posix.split("/").at(-1) ?? "";
+    const stem = base.replace(/\.ts$/, "");
+    if (/^[a-z0-9]+(?:[-.][a-z0-9]+)*$/.test(stem)) continue;
+    out.push({
+      ruleId: "kebab-case-filenames",
+      severity: "info",
+      file: posix,
+      message: `File \`${base}\` is not kebab-case`,
+      remediation: REMEDIATION["kebab-case-filenames"],
+    });
+  }
+  return out;
+}
+
+async function checkTaskVsMissionSeparation(
+  repoRoot: string,
+): Promise<ArchitectureViolation[]> {
+  const out: ArchitectureViolation[] = [];
+  const glob = new Glob("src/features/{task,mission}/**/*.{ts,tsx}");
+  for await (const relPath of glob.scan({ cwd: repoRoot })) {
+    if (shouldSkipPath(relPath)) continue;
+    const posix = toPosix(relPath);
+    const ownFeature = posix.match(/^src\/features\/(task|mission)\//)?.[1];
+    if (ownFeature !== "task" && ownFeature !== "mission") continue;
+    const otherFeature = ownFeature === "task" ? "mission" : "task";
+    const text = await Bun.file(join(repoRoot, relPath)).text();
+    const stripped = stripComments(text);
+    VALUE_IMPORT_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = VALUE_IMPORT_RE.exec(stripped)) !== null) {
+      const spec = m[1] ?? "";
+      if (!new RegExp(`/features/${otherFeature}(?:/|$|["'])`).test(spec)) continue;
+      const { line, snippet } = lineOf(text, text.indexOf(m[0]));
+      if (isAllowedAt(text, line, "task-vs-mission-separation")) continue;
+      out.push({
+        ruleId: "task-vs-mission-separation",
+        severity: "warn",
+        file: posix,
+        line,
+        snippet,
+        message: `\`${ownFeature}\` feature imports \`${otherFeature}\` (\`${spec}\`)`,
+        remediation: REMEDIATION["task-vs-mission-separation"],
+      });
+    }
+  }
+  return out;
 }

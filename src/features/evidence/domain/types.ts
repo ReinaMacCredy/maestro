@@ -15,7 +15,10 @@ export type EvidenceKind =
   | "cross-task-conflict"
   | "lint-violation"
   | "session-start"
-  | "session-exit";
+  | "session-exit"
+  | "recovery"
+  | "doc-gardening"
+  | "ralph-iteration";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -207,6 +210,34 @@ export interface SessionExitPayload {
   readonly dirtyTree: boolean;
 }
 
+export interface RecoveryPayload {
+  readonly taskId: string;
+  readonly fromCommit: string;
+  readonly toCommit: string;
+  readonly anchorVerdictId?: string;
+  readonly droppedRunState: boolean;
+  readonly reason: "verdict-anchored" | "explicit-ref" | "head-revert";
+}
+
+export interface DocGardeningPayload {
+  readonly staleReferences: readonly {
+    readonly file: string;
+    readonly line: number;
+    readonly reference: string;
+    readonly kind: "missing-file" | "missing-symbol" | "moved-path" | "broken-link";
+  }[];
+  readonly scannedFiles: number;
+  readonly prCreated?: number;
+}
+
+export interface RalphIterationPayload {
+  readonly iteration: number;
+  readonly findingsHash: string;
+  readonly findingsCount: number;
+  readonly stuck: boolean;
+  readonly sources: readonly ("trust-verifier" | "ai-review" | "lint-arch" | "threat-model")[];
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -225,6 +256,9 @@ interface EvidencePayloadByKind {
   readonly "lint-violation": LintViolationPayload;
   readonly "session-start": SessionStartPayload;
   readonly "session-exit": SessionExitPayload;
+  readonly recovery: RecoveryPayload;
+  readonly "doc-gardening": DocGardeningPayload;
+  readonly "ralph-iteration": RalphIterationPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

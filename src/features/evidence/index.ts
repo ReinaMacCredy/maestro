@@ -21,6 +21,9 @@ export type {
   LintViolationPayload,
   SessionStartPayload,
   SessionExitPayload,
+  RecoveryPayload,
+  DocGardeningPayload,
+  RalphIterationPayload,
 } from "./domain/types.js";
 export {
   WITNESS_LEVEL_ORDER,

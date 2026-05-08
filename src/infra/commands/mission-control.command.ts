@@ -71,6 +71,8 @@ export function registerMissionControlCommand(program: Command): void {
     .option("--mission <id>", "Mission ID (auto-selects if omitted)")
     .option("--json", "Output snapshot as JSON")
       .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, cfg, deps, mem)`)
+      .option("--screen <name>", "Alias for --preview <name> (programmatic surface)")
+      .option("--filter <key=value>", "Narrow JSON output by key (supported: task=<id>, feature=<id>)", collectFilters, {})
       .option("--feature <id>", "Select a feature for dashboard, features, or dependencies previews")
     .option("--size <WxH>", "Render dimensions (e.g. 120x40); overrides terminal detection")
     .option("--format <type>", "Output format: plain or ansi (default: auto-detect TTY)")
@@ -87,9 +89,11 @@ export function registerMissionControlCommand(program: Command): void {
   `)
         .action(async (opts) => {
           const isJson = resolveJsonFlag(opts, program);
-          const previewScreen = resolvePreviewScreen(opts.preview);
+          const previewArg = opts.preview ?? (typeof opts.screen === "string" ? opts.screen : undefined);
+          const previewScreen = resolvePreviewScreen(previewArg);
           const renderSize = parseSize(opts.size);
           const renderFormat = validateFormat(opts.format);
+          const filters: Record<string, string> = (opts.filter as Record<string, string>) ?? {};
 
         if (isJson && previewScreen) {
         throw new MaestroError("Choose either --json or --preview", [
@@ -146,7 +150,11 @@ export function registerMissionControlCommand(program: Command): void {
           redactSnapshotForReadOutput(await snapshotLoader.load(options));
 
         if (isJson) {
-          output(true, await loadReadSnapshot(buildMissionControlSnapshotDemand({ mode: "json" })), () => []);
+          const snapshot = await loadReadSnapshot(buildMissionControlSnapshotDemand({ mode: "json" }));
+          const payload = Object.keys(filters).length > 0
+            ? { filter: filters, snapshot, narrow: narrowSnapshot(snapshot, filters) }
+            : snapshot;
+          output(true, payload, () => []);
           return;
         }
 
@@ -334,5 +342,93 @@ function redactSnapshotForReadOutput(
   return {
     ...snapshot,
     eventStream: snapshot.eventStream,
+  };
+}
+
+function collectFilters(
+  raw: string,
+  acc: Record<string, string> = {},
+): Record<string, string> {
+  const idx = raw.indexOf("=");
+  if (idx === -1) {
+    throw new MaestroError(`Invalid --filter value \`${raw}\` (missing \`=\`)`, [
+      "Use --filter key=value (e.g. --filter task=tsk-abc123)",
+    ]);
+  }
+  const key = raw.slice(0, idx).trim();
+  const value = raw.slice(idx + 1).trim();
+  if (!key) {
+    throw new MaestroError(`Invalid --filter value \`${raw}\` (empty key)`, [
+      "Use --filter key=value (e.g. --filter task=tsk-abc123)",
+    ]);
+  }
+  if (!value) {
+    throw new MaestroError(`Invalid --filter value \`${raw}\` (empty value for \`${key}\`)`, [
+      "Use --filter key=value (e.g. --filter task=tsk-abc123)",
+    ]);
+  }
+  return { ...acc, [key]: value };
+}
+
+export interface NarrowResult {
+  readonly task?: {
+    readonly id: string;
+    readonly status?: string;
+    readonly title?: string;
+  };
+  readonly feature?: {
+    readonly id: string;
+    readonly title?: string;
+    readonly status?: string;
+  };
+  readonly progressLog: readonly MissionControlSnapshot["progressLog"][number][];
+  readonly eventStream: readonly NonNullable<MissionControlSnapshot["eventStream"]>[number][];
+}
+
+function findTaskInBoard(
+  snapshot: MissionControlSnapshot,
+  taskId: string,
+): { id: string; title: string; status: string } | undefined {
+  const columns = snapshot.taskBoard?.columns;
+  if (!columns) return undefined;
+  for (const items of Object.values(columns)) {
+    const found = items.find((t) => t.id === taskId);
+    if (found) return { id: found.id, title: found.title, status: found.status };
+  }
+  return undefined;
+}
+
+function narrowSnapshot(
+  snapshot: MissionControlSnapshot,
+  filters: Record<string, string>,
+): NarrowResult {
+  const taskId = filters.task;
+  const featureId = filters.feature;
+  const matches = (entry: { title: string; detail?: string }): boolean => {
+    const haystack = entry.detail ? `${entry.title} ${entry.detail}` : entry.title;
+    if (taskId !== undefined && haystack.includes(taskId)) return true;
+    if (featureId !== undefined && haystack.includes(featureId)) return true;
+    return false;
+  };
+
+  const taskRow = taskId
+    ? findTaskInBoard(snapshot, taskId)
+    : undefined;
+  const featureRow = featureId
+    ? snapshot.features.find((f) => f.id === featureId)
+    : undefined;
+
+  const progressLog = snapshot.progressLog.filter(matches);
+  const eventStream = (snapshot.eventStream ?? []).filter(matches);
+
+  return {
+    task: taskRow
+      ? { id: taskRow.id, status: taskRow.status, title: taskRow.title }
+      : undefined,
+    feature: featureRow
+      ? { id: featureRow.id, title: featureRow.title, status: featureRow.status }
+      : undefined,
+    progressLog,
+    eventStream,
   };
 }

@@ -161,6 +161,82 @@ bun run lint:arch -- --json
 
 Same library powers Trust Verifier's 8th check. See `docs/architecture-lints.md`.
 
+## CLI VERBS — RECOVER (Phase 2)
+```bash
+maestro recover --task <id>                 # reset to last PASS verdict's tree
+maestro recover --task <id> --to <commit>   # reset to an explicit ref
+maestro recover --task <id> --dry-run       # plan without applying
+maestro recover --task <id> --force         # ignore dirty tree (destructive)
+maestro recover --task <id> --json
+```
+
+Resolves the last `PASS` verdict for the task, finds a commit whose tree
+matches `verdict.subject.tree_sha`, runs `git reset --hard`, removes
+`.maestro/runs/<id>/`, and records a `recovery` evidence row at
+`witnessed-by-maestro`. Refuses to run on a dirty tree unless `--force`.
+
+## CLI VERBS — RALPH (Phase 2)
+```bash
+maestro ralph review --task <id> [--stuck-threshold <n>] [--json]
+```
+
+Convergence oracle. Aggregates arch-lint, verifier, AI review, and
+threat-model findings; computes a stable `findingsHash`; records a
+`ralph-iteration` evidence row at `witnessed-by-maestro`. Exit codes: 0
+converged (no error-severity findings), 1 not converged, 2 stuck (same hash
+across `--stuck-threshold` iterations, default 3).
+
+## CLI VERBS — GC (Phase 2)
+```bash
+maestro gc doc-gardening [--task <id>] [--json]
+```
+
+Scans `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/**/*.md`, `.maestro/**/*.md`,
+`skills/**/*.md` for path references that don't resolve. Records a
+`doc-gardening` evidence row when `--task` is provided. Phase 4 adds
+`gc slop-cleanup` and `gc plan-regen`.
+
+Schedule recipes for nightly GC sweeps live in `docs/schedule-recipes.md`.
+
+## CLI VERBS — STATE (Phase 3)
+```bash
+maestro state since <iso> [--until <iso>] [--task <id>] [--json]
+```
+
+Streams a chronological event view across stores: every `Evidence` row and
+every `Verdict` whose timestamp falls in the window. With `--task <id>`,
+narrows to one task. Useful for "what happened on this branch since the last
+session-start?" queries.
+
+## CLI VERBS — MISSION CONTROL FILTER (Phase 3)
+```bash
+maestro mission-control --json --filter task=<id>
+maestro mission-control --json --filter feature=<id> --filter task=<id>
+maestro mission-control --screen <name> --size 120x40 --format plain
+```
+
+`--screen <name>` is an alias for `--preview <name>` framed as the
+programmatic surface. `--filter key=value` narrows the JSON output: when
+filters are present, the JSON wraps the full snapshot under `.snapshot` and
+adds a `.narrow` field with just the matching task/feature row plus filtered
+`progressLog` and `eventStream` entries. Filters are AND-combined.
+
+## ARCHITECTURE LINTS — Phase 3 additions
+
+Two new rules added in audit mode (`severity: warn`):
+
+- `composition-only-in-services-ts` — value (non-`import type`) imports of any
+  feature's `services.ts` are only allowed in the global composition root
+  (`src/services.ts`). Move dependency wiring to the root.
+- `task-vs-mission-separation` — `src/features/task/**` and
+  `src/features/mission/**` must not import each other.
+
+Both are warn-severity initially; promotion to error follows the audit-mode
+→ soak → block ramp documented in `docs/architecture-lints.md`. The first two
+plan-listed rules (`no-deep-cross-feature-imports`, `feature-public-via-index`)
+are already enforced as errors by `bun run check:boundaries`; the lint
+library does not duplicate those checks.
+
 ## CLI VERBS — SPEC (L2)
 ```bash
 maestro spec show --mission <id>
@@ -264,6 +340,61 @@ maestro runtime check --task <id> [--provider-base-url <url>] [--json]
 Queries each signal declared in `Spec.runtime_signals` via the configured provider (currently Prometheus). Records one `runtime-signal` Evidence row per signal. Exit code is always 0; `pass=false` rows are advisory at L7 (teams wire them into risk policy to make them gate). Provider base URL precedence: `--provider-base-url` flag → `MAESTRO_PROMETHEUS_URL` env → `http://localhost:9090`.
 
 See `docs/runtime-monitoring.md` for the `RuntimeMonitorPort` reference, Prometheus adapter guide, and how to add new adapters.
+
+## CLI VERBS — GC (Phase 2 / 4)
+```bash
+maestro gc doc-gardening [--task <id>] [--json]
+maestro gc slop-cleanup [--min-severity info|warn|error] [--json]
+maestro gc plan-regen --task <id> [--json]
+```
+
+`gc doc-gardening` scans repo docs for stale path references and broken local links; records `doc-gardening` evidence when `--task` is supplied.
+
+`gc slop-cleanup` runs the architecture-lint corpus across the full repo and groups violations by file (top-10 offenders, by-rule counts, by-severity buckets). Read-only; no PR opened.
+
+`gc plan-regen --task <id>` reports plan-vs-state drift: missing plan file, missing acceptance-criteria coverage, evidence post-dating the last PASS verdict, recorded lint-violations, and active blockers.
+
+## CLI VERBS — CONTRACT SPRINT (Phase 4)
+```bash
+maestro contract sprint --task <id> [--propose <text>] [--proposed-by <actor>] [--json]
+```
+
+Prints a sprint snapshot (criteria progress, amendment-budget remaining, recent amendments). With `--propose <text>`, records a `manual-note` evidence row tagged as a sprint-contract proposal. Does NOT mutate the contract — agents/humans review and apply via `maestro contract amend`.
+
+## CLI VERBS — INSPECT (Phase 5)
+```bash
+maestro inspect <taskId> [--tail <n>] [--json]
+```
+
+Read-only post-mortem snapshot. Reads `.maestro/runs/<taskId>/{orient,progress,plan}.md` plus `state.json`, lists last `--tail` evidence rows (default 10), and the verdict history. No mutation.
+
+## CLI VERBS — WORKTREE (Phase 5)
+```bash
+maestro worktree create <slug> [--base <branch>] [--prefix <pre>] [--json]
+```
+
+Wraps `git worktree add -b <prefix>/<slug>` and provisions an isolated `.maestro/runs/` directory inside the new worktree. Default base is `main`, default prefix is `feat`.
+
+## CLI VERBS — RECOVER / RALPH / STATE (Phase 2/3)
+```bash
+maestro recover --task <id> [--to <commit>] [--force] [--dry-run] [--json]
+maestro ralph review --task <id> [--stuck-threshold <n>] [--json]
+maestro state since <iso> [--until <iso>] [--task <id>] [--json]
+maestro mission-control --json [--filter task=<id>] [--filter feature=<id>]
+maestro mission-control --screen <name> [--feature <id>]
+```
+
+`recover` walks verdict history backward to the last PASS, resets the working tree to that commit's tree, drops `.maestro/runs/<id>/`, and records a `recovery` evidence row. `--dry-run` previews without mutation.
+
+`ralph review` is the convergence oracle. Aggregates Trust Verifier + AI Reviewer + lint:arch findings, hashes them, and records a `ralph-iteration` evidence row. Exit codes: 0 converged, 1 not converged, 2 stuck (same finding-hash for N consecutive iterations).
+
+`state since <iso>` aggregates Evidence + Verdict events across tasks, sorted chronologically.
+
+`mission-control --filter` narrows JSON output by `task=<id>` or `feature=<id>` (supports repeated flags); `--screen <name>` is a programmatic alias for `--preview <name>`.
+
+## ARCHITECTURE LINTS — Phase 4 (taste, audit-only)
+
+`file-size-limit`, `no-bare-console-log`, `kebab-case-filenames` ship at `severity: info` and do not fail Trust Verifier. They surface in `bun run lint:arch` and `gc slop-cleanup`. See `docs/architecture-lints.md` for promotion criteria.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

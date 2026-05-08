@@ -6,6 +6,10 @@ import { getServices, type Services } from "@/services.js";
 import { amendContract } from "../usecases/amend-contract.usecase.js";
 import { getCurrentContract } from "../usecases/get-current-contract.usecase.js";
 import { getContractHistory } from "../usecases/get-contract-history.usecase.js";
+import {
+  contractSprint,
+  formatContractSprintLines,
+} from "../usecases/contract-sprint.usecase.js";
 import { generateContractAmendmentId } from "../domain/contract/contract-state.js";
 import type { Contract, ContractAmendment } from "../domain/contract/contract-types.js";
 
@@ -15,6 +19,7 @@ interface ContractL2Deps {
     "contractVersionStore" | "contractStore" | "evidenceStore"
   >;
   readonly amendContract: typeof amendContract;
+  readonly contractSprint?: typeof contractSprint;
 }
 
 export function registerContractL2Command(
@@ -28,6 +33,41 @@ export function registerContractL2Command(
   registerShowSubcommand(contractCmd, program, deps);
   registerAmendSubcommand(contractCmd, program, deps);
   registerHistorySubcommand(contractCmd, program, deps);
+  registerSprintSubcommand(contractCmd, program, deps);
+}
+
+function registerSprintSubcommand(
+  parent: Command,
+  root: Command,
+  deps: ContractL2Deps,
+): void {
+  parent
+    .command("sprint")
+    .description(
+      "Show sprint snapshot (criteria, amendment budget) and optionally record a proposal",
+    )
+    .requiredOption("--task <id>", "Task id")
+    .option("--propose <text>", "Record a sprint-contract proposal as evidence")
+    .option("--proposed-by <actor>", "Optional actor id for the proposal")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = deps.getServices();
+      const isJson = resolveJsonFlag(opts, root);
+      const fn = deps.contractSprint ?? contractSprint;
+      const result = await fn(
+        {
+          contractVersionStore: services.contractVersionStore,
+          contractStore: services.contractStore,
+          evidenceStore: services.evidenceStore,
+        },
+        {
+          taskId: opts.task,
+          ...(typeof opts.propose === "string" ? { propose: opts.propose } : {}),
+          ...(typeof opts.proposedBy === "string" ? { proposedBy: opts.proposedBy } : {}),
+        },
+      );
+      output(isJson, result, formatContractSprintLines);
+    });
 }
 
 // ─── show ────────────────────────────────────────────────────────────────────

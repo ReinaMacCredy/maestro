@@ -241,6 +241,8 @@ describe("isArchitectureRuleId", () => {
     expect(isArchitectureRuleId("single-opentui-render")).toBe(true);
     expect(isArchitectureRuleId("mission-control-readonly")).toBe(true);
     expect(isArchitectureRuleId("no-hand-edit-generated")).toBe(true);
+    expect(isArchitectureRuleId("composition-only-in-services-ts")).toBe(true);
+    expect(isArchitectureRuleId("task-vs-mission-separation")).toBe(true);
   });
 
   it("rejects unrelated check IDs", () => {
@@ -265,5 +267,68 @@ Bun.spawn(["claude"]);`,
     expect(hit).toBeDefined();
     expect(typeof hit!.line).toBe("number");
     expect(hit!.snippet).toContain("Bun.spawn");
+  });
+});
+
+describe("composition-only-in-services-ts", () => {
+  it("warns on cross-feature value imports of feature/services outside src/services.ts", async () => {
+    await writeSrc(
+      "src/features/a/usecases/x.ts",
+      `import { somethingComposed } from "@/features/b/services.js";\nexport const z = somethingComposed;\n`,
+    );
+    const violations = await checkArchitectureRules({ repoRoot });
+    const hits = violations.filter((v) => v.ruleId === "composition-only-in-services-ts");
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.severity).toBe("warn");
+  });
+
+  it("ignores `import type` of services.ts", async () => {
+    await writeSrc(
+      "src/features/a/usecases/x.ts",
+      `import type { B } from "@/features/b/services.js";\nexport type C = B;\n`,
+    );
+    const violations = await checkArchitectureRules({ repoRoot });
+    expect(violations.filter((v) => v.ruleId === "composition-only-in-services-ts")).toEqual([]);
+  });
+
+  it("does not warn for src/services.ts itself", async () => {
+    await writeSrc(
+      "src/services.ts",
+      `import { x } from "@/features/b/services.js";\nexport const z = x;\n`,
+    );
+    const violations = await checkArchitectureRules({ repoRoot });
+    expect(violations.filter((v) => v.ruleId === "composition-only-in-services-ts")).toEqual([]);
+  });
+});
+
+describe("task-vs-mission-separation", () => {
+  it("warns when src/features/task imports from src/features/mission", async () => {
+    await writeSrc(
+      "src/features/task/usecases/x.ts",
+      `import { something } from "@/features/mission/index.js";\nexport const z = something;\n`,
+    );
+    const violations = await checkArchitectureRules({ repoRoot });
+    const hits = violations.filter((v) => v.ruleId === "task-vs-mission-separation");
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.severity).toBe("warn");
+  });
+
+  it("warns when src/features/mission imports from src/features/task", async () => {
+    await writeSrc(
+      "src/features/mission/usecases/x.ts",
+      `import { something } from "@/features/task/index.js";\nexport const z = something;\n`,
+    );
+    const violations = await checkArchitectureRules({ repoRoot });
+    const hits = violations.filter((v) => v.ruleId === "task-vs-mission-separation");
+    expect(hits.length).toBe(1);
+  });
+
+  it("does not warn when other features import either", async () => {
+    await writeSrc(
+      "src/features/c/usecases/x.ts",
+      `import { something } from "@/features/task/index.js";\nimport { other } from "@/features/mission/index.js";\nexport const z = [something, other];\n`,
+    );
+    const violations = await checkArchitectureRules({ repoRoot });
+    expect(violations.filter((v) => v.ruleId === "task-vs-mission-separation")).toEqual([]);
   });
 });

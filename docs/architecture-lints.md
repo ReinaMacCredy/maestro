@@ -91,6 +91,38 @@ Evidence row is recorded:
 `task introspect <id>` reads these rows to display "open lints" without
 re-running the lint pass. See `docs/witness-levels.md` for the full ladder.
 
+## Rules (Phase 3)
+
+Phase 3 ships two new rules at `severity: warn` (audit mode). They share the
+library and emit `lint-violation` evidence at the same witness levels.
+
+### `composition-only-in-services-ts` — warn
+
+Cross-feature value imports of another feature's `services.ts` (e.g.
+`import { x } from "@/features/foo/services.js"`) belong in the global
+composition root `src/services.ts`. Other files should depend on ports, not
+directly compose another feature's services.
+
+The rule scans `src/**/*.ts` and ignores `import type` declarations (those
+do not import code). `src/services.ts` itself is exempt.
+
+Per-line escape: `// lint-arch-allow: composition-only-in-services-ts`.
+
+### `task-vs-mission-separation` — warn
+
+`src/features/task/**` and `src/features/mission/**` model different
+lifecycles and must not import each other. Shared logic belongs in a shared
+module (or composed via `src/services.ts`).
+
+The rule scans `src/features/{task,mission}/**` for cross-feature imports of
+the opposite feature.
+
+Per-line escape: `// lint-arch-allow: task-vs-mission-separation`.
+
+The first two plan-listed Phase 3 rules (`no-deep-cross-feature-imports`,
+`feature-public-via-index`) are already enforced as errors by
+`bun run check:boundaries` — the lint library does not duplicate those.
+
 ## Adding a new rule
 
 1. Add a new `ArchitectureRuleId` literal in
@@ -106,5 +138,52 @@ re-running the lint pass. See `docs/witness-levels.md` for the full ladder.
 5. Add tests under `tests/unit/features/verify/usecases/checks/check-architecture-lints.test.ts`.
 6. Update this document.
 
-Phase 2 and beyond add Tier 2 (advisory-promote) and Tier 3 (taste) rules
-under the same library.
+## Rules (Phase 4 — taste)
+
+Phase 4 ships three taste-level rules at `severity: info` (audit-only). They
+flag stylistic drift; CI does not fail on `info` findings, but they show up in
+`bun run lint:arch` output and in `gc slop-cleanup` reports.
+
+### `file-size-limit` — info
+
+Files in `src/**/*.{ts,tsx}` over 800 lines are flagged. Generated template
+files (`built-in-skill-templates.ts`, `bundled-skill-templates.ts`) are
+exempt. Per-line escape: `// lint-arch-allow: file-size-limit`.
+
+### `no-bare-console-log` — info
+
+Bare `console.log/info/debug/warn` calls under `src/**` (excluding `src/tui/**`
+where the OpenTUI render loop legitimately uses console output). Use the
+`output()` helper or stderr for diagnostics. Per-line escape:
+`// lint-arch-allow: no-bare-console-log`.
+
+### `kebab-case-filenames` — info
+
+`.ts` files under `src/**` should be kebab-case. `.tsx` files are exempt
+(PascalCase component filenames are conventional in React/JSX).
+
+## Phase 4 verbs that consume the lint library
+
+- `maestro gc slop-cleanup` — aggregates all rule violations into a per-file
+  slop report. Optional `--min-severity warn|error|info`.
+- `maestro gc plan-regen --task <id>` — checks plan-vs-state drift (no plan
+  file, missing acceptance-criteria coverage, evidence after last PASS,
+  blockers active, recorded lint violations).
+- `maestro contract sprint --task <id>` — sprint snapshot (criteria progress,
+  amendment budget, recent amendments). `--propose <text>` records a proposal
+  as `manual-note` evidence; does not mutate the contract.
+
+## Phase 5 verbs
+
+- `maestro inspect <taskId>` — post-mortem snapshot (run-dir artifacts,
+  recent evidence, verdict history). Read-only.
+- `maestro worktree create <slug> [--base <branch>] [--prefix <pre>]` — wraps
+  `git worktree add` and provisions an isolated `.maestro/runs/` directory.
+
+## Audit mode → soak → block
+
+New rules ship at `severity: warn` (Phase 3) or `severity: info` (Phase 4) so
+they appear in lint output and `task introspect` "open lints" without
+failing Trust Verifier or blocking a verdict. After a soak window where main
+has zero violations under the rule, promote to `severity: error` by editing
+the rule's `severity` field and updating the remediation.

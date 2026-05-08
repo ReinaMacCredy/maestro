@@ -69,6 +69,12 @@ import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
 import { registerSkillsCommand } from "./features/skills/index.js";
 import { registerIntakeCommand } from "./features/intake/index.js";
 import { registerMcpCommand } from "./features/mcp/index.js";
+import { registerRecoverCommand } from "./features/recover/index.js";
+import { registerGcCommand } from "./features/gc/index.js";
+import { registerRalphCommand } from "./features/ralph/index.js";
+import { registerStateCommand } from "./features/state/index.js";
+import { registerWorktreeCommand } from "./features/worktree/index.js";
+import { registerInspectCommand } from "./features/inspect/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -130,6 +136,12 @@ registerCiVerifyCommand(ciCmd, program);
 
 registerReviewCommand(program);
 registerIntakeCommand(program);
+registerRecoverCommand(program);
+registerGcCommand(program);
+registerRalphCommand(program);
+registerStateCommand(program);
+registerWorktreeCommand(program);
+registerInspectCommand(program);
 
 const mergeCmd = program
   .command("merge")

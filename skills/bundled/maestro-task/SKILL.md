@@ -410,7 +410,103 @@ maestro task prune --dry-run
 maestro task prune [--keep N] [--candidates-only|--continuations-only] [--all]
 ```
 
+Reset working tree to a known-green state (Phase 2):
+```bash
+maestro recover --task <id>                  # reset to last PASS verdict's tree
+maestro recover --task <id> --to <commit>    # reset to an explicit ref
+maestro recover --task <id> --dry-run        # show plan without applying
+maestro recover --task <id> --force          # bypass dirty-tree check (destructive)
+```
+
+`recover` finds the latest PASS verdict for the task, resolves its `tree_sha`
+to a commit, runs `git reset --hard`, drops `.maestro/runs/<id>/`, and records
+a `recovery` Evidence row at `witnessed-by-maestro`. Refuses to run when the
+working tree is dirty unless `--force`.
+
+Convergence loop (Phase 2):
+```bash
+maestro ralph review --task <id>                         # run convergence oracle
+maestro ralph review --task <id> --stuck-threshold 3     # custom stuck threshold
+```
+
+`ralph review` aggregates findings from arch lints, the Trust Verifier, AI
+review, and threat-model evidence. Records a `ralph-iteration` Evidence row
+with a stable `findingsHash`. Exits 0 when converged (no error-severity
+findings), 1 when not converged, 2 when *stuck* — i.e. the same hash has
+shown up `--stuck-threshold` (default 3) iterations in a row, signalling the
+loop is not making progress.
+
 Deeper recovery patterns live in `./reference/recovery.md`. The full command surface lives in `./reference/commands.md`.
+
+## Garbage collection
+
+On-demand GC verbs scan the repo for problems and either report them or open
+fixup PRs. Phase 2 ships `gc doc-gardening`:
+
+```bash
+maestro gc doc-gardening                  # report stale path/link references
+maestro gc doc-gardening --task <id>      # also record findings as evidence
+maestro gc doc-gardening --json
+```
+
+Scans `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/**/*.md`, `.maestro/**/*.md`,
+and `skills/**/*.md` for path references that don't resolve. Records a
+`doc-gardening` Evidence row when `--task` is supplied.
+
+Phase 4 adds two more GC verbs:
+
+```bash
+maestro gc slop-cleanup [--min-severity info|warn|error] [--json]
+maestro gc plan-regen --task <id> [--json]
+```
+
+`gc slop-cleanup` runs the architecture-lint corpus across `src/**` and
+groups violations by file. The output lists by-rule and by-severity counts
+plus the top 10 offending files. Read-only — no PR opened, no mutation.
+
+`gc plan-regen --task <id>` reports plan-vs-state drift: no plan file
+found, missing acceptance-criteria coverage in the plan, evidence rows
+recorded after the last PASS verdict, recorded `lint-violation` rows, and
+active blockers.
+
+## Sprint contract (Phase 4)
+
+```bash
+maestro contract sprint --task <id>                     # snapshot
+maestro contract sprint --task <id> --propose "..."     # record proposal as evidence
+```
+
+The sprint snapshot includes criteria progress, amendment-budget remaining,
+and the 5 most recent amendments. `--propose` records a `manual-note`
+evidence row tagged as a sprint-contract proposal. It does NOT mutate the
+contract — humans/agents review and apply via `maestro contract amend` if
+approved.
+
+## Inspect a run (Phase 5)
+
+After a session ends or after compaction, use `inspect` to pull a post-mortem
+view without re-running anything:
+
+```bash
+maestro inspect <task-id>            # last 10 evidence rows + verdict history + run-dir artifacts
+maestro inspect <task-id> --tail 20  # widen the tail
+```
+
+Reads `.maestro/runs/<id>/{orient,progress,plan}.md` plus `state.json`,
+recent evidence rows, and the verdict history. Read-only.
+
+## Worktree create (Phase 5)
+
+For larger features, create an isolated worktree so the main checkout stays
+clean:
+
+```bash
+maestro worktree create harness-pivot                  # base=main, prefix=feat
+maestro worktree create fix-x --base develop --prefix fix
+```
+
+Wraps `git worktree add -b <prefix>/<slug>` and provisions an empty
+`.maestro/runs/` directory inside the new tree.
 
 ## MCP tools (when available)
 
