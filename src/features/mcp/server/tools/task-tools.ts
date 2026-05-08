@@ -6,14 +6,9 @@ import {
   listTasks,
   unblockTasks,
   type ListTasksFilters,
-  type TaskPriority,
-  type TaskStatus,
-  type TaskType,
 } from "@/features/task/index.js";
-import type { Services } from "@/services.js";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
-import { detectMcpSessionId } from "../session.js";
 import {
   TaskBlockInput,
   TaskClaimInput,
@@ -24,10 +19,7 @@ import {
   TaskUnblockInput,
 } from "../schemas/inputs.js";
 import { TaskListOutput, TaskOutput } from "../schemas/outputs.js";
-
-interface RegisterDeps {
-  readonly getServices: () => Services;
-}
+import type { RegisterDeps } from "./types.js";
 
 export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
@@ -49,9 +41,9 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       try {
         const services = deps.getServices();
         const filters: ListTasksFilters = {
-          ...(args.status !== undefined ? { status: args.status as TaskStatus } : {}),
-          ...(args.type !== undefined ? { type: args.type as TaskType } : {}),
-          ...(args.priority !== undefined ? { priority: args.priority as TaskPriority } : {}),
+          ...(args.status !== undefined ? { status: args.status } : {}),
+          ...(args.type !== undefined ? { type: args.type } : {}),
+          ...(args.priority !== undefined ? { priority: args.priority } : {}),
           ...(args.label !== undefined ? { label: args.label } : {}),
           ...(args.parentId !== undefined ? { parentId: args.parentId } : {}),
           ...(args.assignee !== undefined ? { assignee: args.assignee } : {}),
@@ -148,7 +140,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     async (args) => {
       try {
         const services = deps.getServices();
-        const sessionId = detectMcpSessionId();
+        const { sessionId } = deps;
         const task = await claimTask(services.taskStore, args.id, { sessionId });
         return toCallToolResult(ok({ task }));
       } catch (err) {
@@ -175,7 +167,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     async (args) => {
       try {
         const services = deps.getServices();
-        const sessionId = detectMcpSessionId();
+        const { sessionId } = deps;
         const result = await services.taskStore.update(
           args.id,
           { status: "completed", summary: args.summary },
@@ -206,7 +198,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     async (args) => {
       try {
         const services = deps.getServices();
-        const sessionId = detectMcpSessionId();
+        const { sessionId } = deps;
         const task = await blockTasks(services.taskStore, args.id, args.blockedTaskIds, {
           sessionId,
           force: args.force,
@@ -236,7 +228,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     async (args) => {
       try {
         const services = deps.getServices();
-        const sessionId = detectMcpSessionId();
+        const { sessionId } = deps;
         const task = await unblockTasks(services.taskStore, args.id, args.blockedTaskIds, {
           sessionId,
           force: args.force,

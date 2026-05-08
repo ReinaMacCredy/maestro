@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { readText } from "@/shared/lib/fs.js";
+import { execArgv, type ShellResult } from "@/shared/lib/shell.js";
 
 export interface AgentMcpEntry {
   readonly command: string;
@@ -22,17 +23,31 @@ export interface ConfigureRuntimeResult {
   readonly error?: string;
 }
 
-export interface RunCliResult {
-  readonly exitCode: number;
-  readonly stderr: string;
-}
-
 export interface ConfigureRuntimeDeps {
   readonly which?: (cmd: string) => string | null;
-  readonly runCli?: (argv: readonly string[]) => RunCliResult;
+  readonly runCli?: (argv: string[]) => Promise<ShellResult>;
 }
 
 const SERVER_KEY = "maestro";
+
+interface RuntimeKindConfig {
+  readonly addExtraFlags: readonly string[];
+  readonly removeExtraFlags: readonly string[];
+  readonly readEntry: (configPath: string) => Promise<AgentMcpEntry | undefined>;
+}
+
+const RUNTIME_KIND_CONFIG: Record<RuntimeKind, RuntimeKindConfig> = {
+  "claude-code": {
+    addExtraFlags: ["-s", "user"],
+    removeExtraFlags: ["-s", "user"],
+    readEntry: readClaudeUserScopeMaestro,
+  },
+  codex: {
+    addExtraFlags: [],
+    removeExtraFlags: [],
+    readEntry: readCodexMaestro,
+  },
+};
 
 export function resolveMaestroBinaryInstallPath(
   installDir: string,
@@ -65,22 +80,18 @@ export function defaultAgentRuntimeTargets(home: string = homedir()): readonly A
   ];
 }
 
-export function readMaestroEntry(target: AgentRuntimeTarget): AgentMcpEntry | undefined {
-  switch (target.kind) {
-    case "claude-code":
-      return readClaudeUserScopeMaestro(target.configPath);
-    case "codex":
-      return readCodexMaestro(target.configPath);
-  }
+export async function readMaestroEntry(target: AgentRuntimeTarget): Promise<AgentMcpEntry | undefined> {
+  return RUNTIME_KIND_CONFIG[target.kind].readEntry(target.configPath);
 }
 
-export function configureAgentRuntime(
+export async function configureAgentRuntime(
   target: AgentRuntimeTarget,
   entry: AgentMcpEntry,
   deps: ConfigureRuntimeDeps = {},
-): ConfigureRuntimeResult {
+): Promise<ConfigureRuntimeResult> {
   const whichFn = deps.which ?? defaultWhich;
-  const runCli = deps.runCli ?? defaultRunCli;
+  const runCli = deps.runCli ?? execArgv;
+  const kindConfig = RUNTIME_KIND_CONFIG[target.kind];
 
   if (!whichFn(target.cliBinary)) {
     return { target, action: "skipped-no-runtime" };
@@ -88,7 +99,7 @@ export function configureAgentRuntime(
 
   let existing: AgentMcpEntry | undefined;
   try {
-    existing = readMaestroEntry(target);
+    existing = await kindConfig.readEntry(target.configPath);
   } catch (err) {
     return { target, action: "error", error: err instanceof Error ? err.message : String(err) };
   }
@@ -98,8 +109,8 @@ export function configureAgentRuntime(
   }
 
   if (existing) {
-    const removeArgv = buildRemoveArgv(target);
-    const removeResult = runCli(removeArgv);
+    const removeArgv = [target.cliBinary, "mcp", "remove", SERVER_KEY, ...kindConfig.removeExtraFlags];
+    const removeResult = await runCli(removeArgv);
     if (removeResult.exitCode !== 0) {
       return {
         target,
@@ -109,8 +120,17 @@ export function configureAgentRuntime(
     }
   }
 
-  const addArgv = buildAddArgv(target, entry);
-  const addResult = runCli(addArgv);
+  const addArgv = [
+    target.cliBinary,
+    "mcp",
+    "add",
+    SERVER_KEY,
+    ...kindConfig.addExtraFlags,
+    "--",
+    entry.command,
+    ...entry.args,
+  ];
+  const addResult = await runCli(addArgv);
   if (addResult.exitCode !== 0) {
     return {
       target,
@@ -122,27 +142,9 @@ export function configureAgentRuntime(
   return { target, action: existing ? "updated" : "created" };
 }
 
-function buildAddArgv(target: AgentRuntimeTarget, entry: AgentMcpEntry): readonly string[] {
-  switch (target.kind) {
-    case "claude-code":
-      return [target.cliBinary, "mcp", "add", SERVER_KEY, "-s", "user", "--", entry.command, ...entry.args];
-    case "codex":
-      return [target.cliBinary, "mcp", "add", SERVER_KEY, "--", entry.command, ...entry.args];
-  }
-}
-
-function buildRemoveArgv(target: AgentRuntimeTarget): readonly string[] {
-  switch (target.kind) {
-    case "claude-code":
-      return [target.cliBinary, "mcp", "remove", SERVER_KEY, "-s", "user"];
-    case "codex":
-      return [target.cliBinary, "mcp", "remove", SERVER_KEY];
-  }
-}
-
-export function readClaudeUserScopeMaestro(configPath: string): AgentMcpEntry | undefined {
-  if (!existsSync(configPath)) return undefined;
-  const raw = readFileSync(configPath, "utf8");
+export async function readClaudeUserScopeMaestro(configPath: string): Promise<AgentMcpEntry | undefined> {
+  const raw = await readText(configPath);
+  if (raw === undefined) return undefined;
   const json = JSON.parse(raw);
   const servers = json?.mcpServers;
   if (!servers || typeof servers !== "object") return undefined;
@@ -155,17 +157,16 @@ export function readClaudeUserScopeMaestro(configPath: string): AgentMcpEntry | 
   return { command, args };
 }
 
-export function readCodexMaestro(configPath: string): AgentMcpEntry | undefined {
-  if (!existsSync(configPath)) return undefined;
-  const raw = readFileSync(configPath, "utf8");
+export async function readCodexMaestro(configPath: string): Promise<AgentMcpEntry | undefined> {
+  const raw = await readText(configPath);
+  if (raw === undefined) return undefined;
   const headerRe = /^\s*\[\s*mcp_servers\.\s*"?maestro"?\s*\]\s*$/;
   const lines = raw.split(/\r?\n/);
   let inSection = false;
   let command: string | undefined;
   let args: string[] | undefined;
   for (const line of lines) {
-    const stripped = stripInlineComment(line);
-    const trimmed = stripped.trim();
+    const trimmed = stripInlineComment(line).trim();
     if (trimmed.startsWith("[")) {
       if (inSection) break;
       if (headerRe.test(trimmed)) inSection = true;
@@ -173,7 +174,7 @@ export function readCodexMaestro(configPath: string): AgentMcpEntry | undefined 
     }
     if (!inSection || trimmed.length === 0) continue;
     const cm = /^command\s*=\s*"((?:[^"\\]|\\.)*)"\s*$/.exec(trimmed);
-    if (cm && cm[1] !== undefined) command = unescapeTomlBasicString(cm[1]);
+    if (cm && cm[1] !== undefined) command = unescapeTomlPath(cm[1]);
     const am = /^args\s*=\s*\[(.*)\]\s*$/.exec(trimmed);
     if (am && am[1] !== undefined) args = parseTomlStringArray(am[1]);
   }
@@ -197,55 +198,26 @@ function stripInlineComment(line: string): string {
 
 function parseTomlStringArray(inner: string): string[] {
   const out: string[] = [];
-  const re = /"((?:[^"\\]|\\.)*)"/g;
-  for (const match of inner.matchAll(re)) out.push(unescapeTomlBasicString(match[1] ?? ""));
+  for (const match of inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)) out.push(unescapeTomlPath(match[1] ?? ""));
   return out;
 }
 
-function unescapeTomlBasicString(s: string): string {
-  return s.replace(/\\(.)/g, (_, ch) => {
-    switch (ch) {
-      case "n":
-        return "\n";
-      case "t":
-        return "\t";
-      case "r":
-        return "\r";
-      case '"':
-        return '"';
-      case "\\":
-        return "\\";
-      default:
-        return ch;
-    }
-  });
+// We only ever read paths and CLI argv, so the only escape sequences that
+// can appear in practice are \" and \\. Other TOML escapes (\n, \t, etc.)
+// are not handled; if they ever appeared we would surface them literally.
+function unescapeTomlPath(s: string): string {
+  return s.replace(/\\(["\\])/g, "$1");
 }
 
 export function entriesEqual(a: AgentMcpEntry, b: AgentMcpEntry): boolean {
   if (a.command !== b.command) return false;
-  const aArgs = a.args ?? [];
-  const bArgs = b.args ?? [];
-  if (aArgs.length !== bArgs.length) return false;
-  for (let i = 0; i < aArgs.length; i++) {
-    if (aArgs[i] !== bArgs[i]) return false;
+  if (a.args.length !== b.args.length) return false;
+  for (let i = 0; i < a.args.length; i++) {
+    if (a.args[i] !== b.args[i]) return false;
   }
   return true;
 }
 
 function defaultWhich(cmd: string): string | null {
   return Bun.which(cmd);
-}
-
-function defaultRunCli(argv: readonly string[]): RunCliResult {
-  const [cmd, ...rest] = argv;
-  if (!cmd) return { exitCode: 1, stderr: "empty argv" };
-  const proc = Bun.spawnSync({
-    cmd: [cmd, ...rest],
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return {
-    exitCode: proc.exitCode ?? 1,
-    stderr: proc.stderr.toString(),
-  };
 }

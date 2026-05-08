@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
 import type { Command } from "commander";
+import { fileExists } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveInstallDir } from "@/infra/usecases/install-release-binary.usecase.js";
 import {
@@ -39,26 +39,28 @@ export function registerMcpCheckCommand(mcpCmd: Command, program: Command): void
       const binaryPath = resolveMaestroBinaryInstallPath(installDir);
       const expectedEntry = buildMaestroAgentMcpConfigEntry(binaryPath);
 
-      const agentRuntimes: AgentRuntimeStatus[] = defaultAgentRuntimeTargets().map((target) => {
-        let existing;
-        try {
-          existing = readMaestroEntry(target);
-        } catch {
-          existing = undefined;
-        }
-        return {
-          name: target.name,
-          configPath: target.configPath,
-          configured: Boolean(existing),
-          maestroEntryMatchesInstall: existing ? entriesEqual(existing, expectedEntry) : null,
-        };
-      });
+      const agentRuntimes: AgentRuntimeStatus[] = await Promise.all(
+        defaultAgentRuntimeTargets().map(async (target) => {
+          let existing;
+          try {
+            existing = await readMaestroEntry(target);
+          } catch {
+            existing = undefined;
+          }
+          return {
+            name: target.name,
+            configPath: target.configPath,
+            configured: Boolean(existing),
+            maestroEntryMatchesInstall: existing ? entriesEqual(existing, expectedEntry) : null,
+          };
+        }),
+      );
 
       const { VERSION } = await import("@/shared/version.js");
       const result: CheckResult = {
         version: VERSION,
         binaryPath,
-        binaryExists: existsSync(binaryPath),
+        binaryExists: await fileExists(binaryPath),
         agentRuntimes,
       };
 

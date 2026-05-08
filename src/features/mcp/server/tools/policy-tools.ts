@@ -7,14 +7,10 @@ import {
   readCurrentContractWithBackfill,
   type RiskClass,
 } from "@/features/task/index.js";
-import type { Services } from "@/services.js";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { PolicyCheckInput } from "../schemas/inputs.js";
 import { PolicyCheckOutput } from "../schemas/outputs.js";
-
-interface RegisterDeps {
-  readonly getServices: () => Services;
-}
+import type { RegisterDeps } from "./types.js";
 
 export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(

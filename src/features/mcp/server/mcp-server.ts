@@ -3,10 +3,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { getServices, initServices, type Services } from "@/services.js";
 import { VERSION } from "@/shared/version.js";
 import { findMaestroProjectRoot } from "./project.js";
+import { detectMcpSessionId } from "./session.js";
 import { registerContractTools } from "./tools/contract-tools.js";
 import { registerEvidenceTools } from "./tools/evidence-tools.js";
 import { registerPolicyTools } from "./tools/policy-tools.js";
 import { registerTaskTools } from "./tools/task-tools.js";
+import type { RegisterDeps } from "./tools/types.js";
 import { registerVerdictTools } from "./tools/verdict-tools.js";
 
 export interface McpServerOptions {
@@ -41,7 +43,10 @@ export function buildMaestroMcpServer(options: McpServerOptions = {}): {
     },
   );
 
-  const deps = { getServices: () => services };
+  const deps: RegisterDeps = {
+    getServices: () => services,
+    sessionId: detectMcpSessionId(),
+  };
   registerTaskTools(server, deps);
   registerEvidenceTools(server, deps);
   registerVerdictTools(server, deps);

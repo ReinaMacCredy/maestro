@@ -210,23 +210,6 @@ const evidencePayloadByKind = {
     .passthrough(),
 } as const;
 
-const EvidenceKindSchema = z.enum([
-  "command",
-  "manual-note",
-  "verifier",
-  "contract-amendment",
-  "contract-amendment-blocked",
-  "ai-review",
-  "plan-check",
-  "threat-model",
-  "review-ack",
-  "rollback-exercised",
-  "verdict-override",
-  "runtime-signal",
-  "deploy-readiness",
-  "cross-task-conflict",
-]);
-
 const EvidenceSchema = z
   .discriminatedUnion("kind", [
     z.object({

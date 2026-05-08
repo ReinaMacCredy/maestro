@@ -1,13 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { requestVerdict } from "@/features/verdict/index.js";
-import type { Services } from "@/services.js";
 import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
 import { VerdictRequestInput, VerdictShowInput } from "../schemas/inputs.js";
 import { VerdictOutput } from "../schemas/outputs.js";
-
-interface RegisterDeps {
-  readonly getServices: () => Services;
-}
+import type { RegisterDeps } from "./types.js";
 
 export function registerVerdictTools(server: McpServer, deps: RegisterDeps): void {
   server.registerTool(
