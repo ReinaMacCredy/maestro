@@ -6,10 +6,12 @@ export {
   buildMaestroAgentMcpConfigEntry,
   configureAgentRuntime,
   defaultAgentRuntimeTargets,
+  readMaestroEntry,
   resolveMaestroBinaryInstallPath,
   type AgentMcpEntry,
   type AgentRuntimeTarget,
   type ConfigureRuntimeResult,
+  type RuntimeKind,
 } from "./usecases/configure-agent-runtime.usecase.js";
 
 export { buildMaestroMcpServer, startStdioMcpServer } from "./server/mcp-server.js";
