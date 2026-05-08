@@ -129,7 +129,7 @@ function normalizePromptStores(
 }
 
 function isAgentPromptStores(value: AgentPromptStores | CorrectionStorePort): value is AgentPromptStores {
-  return typeof value === "object" && value !== null && (
+  return (
     "correctionStore" in value
     || "learningStore" in value
     || "principleStore" in value
@@ -377,7 +377,7 @@ describe("generateAgentPrompt", () => {
         missionStore,
         featureStore,
         assertionStore,
-          tmpDir,
+        tmpDir,
         missionId,
         "f1",
       );
@@ -393,8 +393,8 @@ describe("generateAgentPrompt", () => {
       );
     }
 
-      expect(errorThrown).toBe(true);
-    });
+    expect(errorThrown).toBe(true);
+  });
 
     it("rejects agent types with path traversal", async () => {
       const missionStore = new FsMissionStoreAdapter(tmpDir);

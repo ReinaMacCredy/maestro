@@ -11,10 +11,9 @@
  * State is persisted to a JSON file so tests can assert on it after running
  * the compiled CLI.
  */
-import { mkdir, chmod, writeFile, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, chmod, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { rm } from "node:fs/promises";
 
 export interface CheckRunRecord {
   readonly id: number;
@@ -326,7 +325,7 @@ process.exit(1);
 // ─── public API ───────────────────────────────────────────────────────────────
 
 export async function createFakeGhShim(): Promise<FakeGhShim> {
-  const tmpBase = join(tmpdir(), `maestro-fake-gh-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const tmpBase = await mkdtemp(join(tmpdir(), "maestro-fake-gh-"));
   const binDir = join(tmpBase, "bin");
   const stateFile = join(tmpBase, "gh-state.json");
 

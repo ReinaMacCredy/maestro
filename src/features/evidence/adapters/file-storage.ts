@@ -29,7 +29,6 @@ import type {
 } from "../ports/storage.js";
 
 const EVIDENCE_DIR = "evidence";
-const CURRENT_SCHEMA_VERSION = 3;
 const ACCEPTED_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([1, 2, 3]);
 
 export class FsEvidenceStoreAdapter implements EvidenceStorePort {

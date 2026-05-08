@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { Command } from "commander";
 import { registerTaskProofCommand } from "@/features/task/commands/task-proof.command.js";
 import { mockEvidenceStore, mockTaskStore, mockContractStore } from "../../../../helpers/mocks.js";

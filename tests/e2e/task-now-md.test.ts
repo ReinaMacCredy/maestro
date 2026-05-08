@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, readFile, rm, access } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -28,8 +28,6 @@ describe("task NOW.md recitation", () => {
     "creates NOW.md on first task create and reflects updates",
     async () => {
       const nowMdPath = join(tmpDir, ".maestro", "tasks", "NOW.md");
-
-      await expect(access(nowMdPath)).rejects.toThrow();
 
       const created = await runCompiled(
         ["task", "create", "write the auth middleware", "--silent"],

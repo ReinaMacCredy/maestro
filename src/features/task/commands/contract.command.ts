@@ -507,7 +507,6 @@ const KNOWN_CONTRACT_DRAFT_SCOPE_KEYS = [
 // in R27. Aggregating both top-level and scope-level unknowns into one
 // MaestroError keeps the user from playing whack-a-mole.
 function rejectUnknownContractDraftKeys(template: ContractDraftTemplate): void {
-  if (typeof template !== "object" || template === null) return;
   const messages: string[] = [];
   const hints: string[] = [];
 
@@ -550,7 +549,6 @@ function rejectUnknownContractDraftKeys(template: ContractDraftTemplate): void {
 // surfacing when a user explicitly passed --allow-unknown-keys but kept
 // typo'd keys around.
 function warnUnknownContractDraftKeys(template: ContractDraftTemplate): void {
-  if (typeof template !== "object" || template === null) return;
   const topUnknown = Object.keys(template).filter(
     (k) => !(KNOWN_CONTRACT_DRAFT_KEYS as readonly string[]).includes(k),
   );

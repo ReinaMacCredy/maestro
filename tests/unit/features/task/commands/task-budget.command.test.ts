@@ -61,39 +61,6 @@ function fakeRunStateStore(state: RunState | undefined): RunStateStorePort {
   };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function buildCommand(
-  contract: Contract | undefined,
-  runState: RunState | undefined,
-): { program: Command; output: string[] } {
-  const lines: string[] = [];
-  const program = new Command();
-  program.exitOverride();
-
-  const taskCmd = program.command("task");
-
-  registerTaskBudgetCommand(taskCmd, program, {
-    getServices: () => ({
-      contractVersionStore: fakeContractVersionStore(contract),
-      runStateStore: fakeRunStateStore(runState),
-    }),
-  });
-
-  // Capture stdout
-  const originalWrite = process.stdout.write.bind(process.stdout);
-  const originalLog = console.log.bind(console);
-
-  console.log = (...args: unknown[]) => {
-    lines.push(args.map(String).join(" "));
-  };
-
-  return {
-    program,
-    output: lines,
-  };
-}
-
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("registerTaskBudgetCommand", () => {

@@ -4,7 +4,6 @@ import { chmod, copyFile, lstat, readdir, realpath } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
-  SUPPORTED_AGENTS,
   SKILL_TARGET_AGENTS,
   agentConfigPath,
   agentConfigDirPath,
