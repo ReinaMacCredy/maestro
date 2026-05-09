@@ -26,7 +26,7 @@ import { sanitizeInlinePromptContent, sanitizePromptContent } from "@/shared/lib
 import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
-import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
+import { resolveSkillDirectoryName } from "@/features/verify/index.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;

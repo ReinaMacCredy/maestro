@@ -6,7 +6,7 @@ import { VERSION } from "@/shared/version.js";
 import { MaestroError } from "@/shared/errors.js";
 import { removeIfExists } from "@/shared/lib/fs.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
-import { assertNoDeprecatedVersionFlag } from "@/shared/lib/deprecated-version-flag.js";
+import { assertNoDeprecatedVersionFlag } from "@/infra/lib/deprecated-version-flag.js";
 import { initServices } from "./services.js";
 import { checkForUpdate, isNewerSemver } from "@/infra/usecases/check-for-update.usecase.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";

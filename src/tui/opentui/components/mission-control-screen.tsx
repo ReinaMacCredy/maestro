@@ -2,7 +2,7 @@ import { TextAttributes, type MouseEvent } from "@opentui/core";
 import { sanitizeTerminalText } from "@/shared/lib/sanitize.js";
 
 import type { AppState } from "../../state/reducer.js";
-import { truncate } from "../../format.js";
+import { truncate } from "../../shared/format.js";
 import type {
   InfoModalOptions,
   MenuModalOptions,

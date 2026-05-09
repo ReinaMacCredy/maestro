@@ -2,7 +2,7 @@ import { basename } from "node:path";
 import { buildMemoryStats, type CorrectionStorePort, type LearningStorePort } from "@/features/memory";
 import { getGraphContext, type ProjectGraphStorePort } from "@/features/graph";
 import type { RatchetStorePort } from "@/features/memory-ratchet";
-import { cached, setCachedEntry, type CacheEntry } from "@/tui/lib/snapshot-poll-cache.js";
+import { cached, setCachedEntry, type CacheEntry } from "@/tui/state/snapshot-poll-cache.js";
 import type { MissionControlMemorySnapshot } from "./types.js";
 
 const MEMORY_SNAPSHOT_TTL_MS = 30_000;

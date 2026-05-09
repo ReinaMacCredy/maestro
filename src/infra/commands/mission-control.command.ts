@@ -17,7 +17,7 @@ import {
   type SnapshotBuildOptions,
 } from "@/tui/state/snapshot.js";
 import { buildMissionControlSnapshotDemand } from "@/tui/state/snapshot-demand.js";
-import { CachingGitPort, CachingConfigPort } from "@/tui/lib/snapshot-poll-cache.js";
+import { CachingGitPort, CachingConfigPort } from "@/tui/state/snapshot-poll-cache.js";
 import type { MissionControlSnapshot } from "@/tui/state/types.js";
 import {
   PREVIEW_SCREENS,

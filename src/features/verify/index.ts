@@ -17,3 +17,9 @@ export type {
   ArchitectureViolation,
   ArchitectureLintInput,
 } from "./usecases/checks/check-architecture-lints.js";
+export { isMaestroSubstratePath } from "./lib/substrate-paths.js";
+export {
+  resolveSkillDirectoryName,
+  decodeSkillDirectoryName,
+  isManagedSkillDirectoryName,
+} from "./lib/skill-path.js";

@@ -11,7 +11,7 @@
 
 import { join, relative } from "node:path";
 import { readText } from "@/shared/lib/fs.js";
-import { decodeSkillDirectoryName } from "@/shared/lib/skill-path.js";
+import { decodeSkillDirectoryName } from "@/features/verify/index.js";
 import {
   collectSkillTemplates,
   normalizeLineEndings,

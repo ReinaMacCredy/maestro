@@ -1,7 +1,7 @@
 import type { AgentSlug } from "@/features/session";
 import type { MemoryConfig } from "@/features/memory";
 import type { WorkflowTemplate } from "@/features/mission";
-import type { UiConfig } from "@/shared/domain/ui-config.js";
+import type { UiConfig } from "@/tui/shared/ui-config.js";
 
 export interface MaestroConfig {
   readonly defaultAgent?: AgentSlug;

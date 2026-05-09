@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
-import { listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
+import { listIgnoredProjectConfigKeys } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "@/features/handoff";
 
