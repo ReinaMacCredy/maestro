@@ -704,6 +704,8 @@ export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchor
     windowsOverlap: async () => false,
     collectChangedPaths: async () => [],
     collectAddedLines: async () => [],
+    collectUntrackedFiles: async () => [],
+    resolveTreeSha: async () => "tree-sha-123",
     ...overrides,
   };
 }

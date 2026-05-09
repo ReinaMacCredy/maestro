@@ -34,8 +34,16 @@ function noteDeps(options: {
           branch: "main",
           recentCommits: [],
           changedFiles: [],
+          fileChanges: [],
           workingTreeClean: true,
           diffStat: "+0 -0",
+        }),
+        getCurrentBranch: async () => "main",
+        createWorktree: async () => ({
+          slug: "test",
+          baseBranch: "main",
+          branch: "feat/test",
+          path: "/tmp/test",
         }),
       },
       notesStore: {

@@ -89,6 +89,21 @@ export class CachingGitPort implements GitPort {
     setCachedEntry(this.isRepoByCwd, cwd, value, this.isRepoTtlMs);
     return value;
   }
+
+  async getCurrentBranch(cwd: string): Promise<string> {
+    return this.inner.getCurrentBranch(cwd);
+  }
+
+  async createWorktree(
+    cwd: string,
+    input: {
+      readonly slug: string;
+      readonly baseBranch: string;
+      readonly branchPrefix: string;
+    },
+  ): Promise<import("@/infra/domain/git-types.js").GitWorktree> {
+    return this.inner.createWorktree(cwd, input);
+  }
 }
 
 // ---------------------------------------------------------------------------

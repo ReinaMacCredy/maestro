@@ -29,7 +29,7 @@ import { readCurrentContractWithBackfill } from "@/features/task/index.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore">;
+  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore" | "contractStore" | "contractVersionStore">;
   readonly recordEvidence: typeof recordEvidence;
 }
 

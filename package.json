@@ -23,7 +23,11 @@
     "deploy": "bun run bump && bun run test && bun run release:local",
     "dev": "bun run src/index.ts",
     "tui:dev": "bun scripts/tui-dev.ts",
+    "pretest": "bun run build",
     "test": "bun test --path-ignore-patterns 'apps/desktop/**'",
+    "test:unit": "bun test tests/unit --concurrent",
+    "test:integration": "bun test tests/integration",
+    "test:e2e": "bun test tests/e2e",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
