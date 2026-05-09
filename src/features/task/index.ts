@@ -53,11 +53,33 @@ export type {
   CandidateStorePort,
   CreateCandidateInput,
 } from "./ports/candidate-store.port.js";
+export type {
+  ContractStorePort,
+  ContractStoreQueryPort,
+} from "./ports/contract-store.port.js";
+export type { GitAnchorPort } from "./ports/git-anchor.port.js";
 export { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
 export { FsCandidateStoreAdapter } from "./adapters/fs-candidate-store.adapter.js";
 export { FsTaskContinuationStoreAdapter } from "./adapters/fs-task-continuation-store.adapter.js";
 export { FsTaskContinuationHistoryStoreAdapter } from "./adapters/fs-task-continuation-history-store.adapter.js";
-export type { Contract, RiskClass, ContractAmendment } from "./domain/contract/contract-types.js";
+export type {
+  Contract,
+  RiskClass,
+  ContractAmendment,
+  ContractStatus,
+  ContractScope,
+  DoneWhenCriterion,
+  ContractVerdict,
+  ContractIndexEntry,
+  CreateContractRecordInput,
+  DeleteContractRecordInput,
+  ActorId,
+  AmendmentBudget,
+  CostBudget,
+  ContractOwnershipTransfer,
+  AmendmentSnapshot,
+  ContractConfigSnapshot,
+} from "./domain/contract/contract-types.js";
 export { generateContractAmendmentId } from "./domain/contract/contract-state.js";
 export type { RunState } from "./domain/run-state.js";
 export type { RunStateStorePort, RunStateDelta } from "./ports/run-state-store.port.js";
