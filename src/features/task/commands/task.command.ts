@@ -46,7 +46,7 @@ import type {
   TaskReceipt,
   UpdateTaskInput,
 } from "../domain/task-types.js";
-import type { Contract } from "../domain/contract/contract-types.js";
+import type { Contract, ContractVerdict } from "../domain/contract/contract-types.js";
 import { TASK_STATUSES, TASK_TYPES, buildTaskReceipt, indexTasksById } from "../domain/task-types.js";
 import {
   buildCreateInput,
@@ -2146,12 +2146,7 @@ function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
   );
 }
 
-function formatVerdictHint(verdict: {
-  readonly outOfScopeFiles: readonly string[];
-  readonly forbiddenTouched: readonly string[];
-  readonly unmetCriteria: readonly Array<{ readonly text: string }>;
-  readonly capExceeded?: { readonly actual: number; readonly cap: number };
-}): string {
+function formatVerdictHint(verdict: ContractVerdict): string {
   if (verdict.outOfScopeFiles.length > 0) {
     return `Out of scope: ${verdict.outOfScopeFiles.join(", ")}`;
   }
@@ -2159,7 +2154,7 @@ function formatVerdictHint(verdict: {
     return `Forbidden files touched: ${verdict.forbiddenTouched.join(", ")}`;
   }
   if (verdict.unmetCriteria.length > 0) {
-    return `Unmet criteria: ${verdict.unmetCriteria.map((item) => item.text).join(" | ")}`;
+    return `Unmet criteria: ${verdict.unmetCriteria.map((item: { text: string }) => item.text).join(" | ")}`;
   }
   if (verdict.capExceeded) {
     return `Touched ${verdict.capExceeded.actual} files, exceeding the cap of ${verdict.capExceeded.cap}`;

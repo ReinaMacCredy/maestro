@@ -747,7 +747,7 @@ function readTemplateScope(template: ContractDraftTemplate): ContractScope {
 
 function readTemplateDoneWhen(
   template: ContractDraftTemplate,
-): readonly Array<{ readonly id?: string; readonly text: string; readonly kind?: DoneWhenCriterion["kind"] }> {
+): Array<{ readonly id?: string; readonly text: string; readonly kind?: DoneWhenCriterion["kind"] }> {
   if (template.doneWhen === undefined) return [];
   if (!Array.isArray(template.doneWhen)) {
     throw new MaestroError("Invalid contract draft: doneWhen must be an array", [
