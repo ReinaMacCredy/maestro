@@ -43,7 +43,7 @@ beforeAll(buildCompiledCli, BUILD_TIMEOUT_MS);
 
 const tempDirs: string[] = [];
 const shims: FakeGhShim[] = [];
-const servers: Server[] = [];
+const servers: Server<unknown>[] = [];
 
 afterEach(async () => {
   for (const d of tempDirs.splice(0)) {

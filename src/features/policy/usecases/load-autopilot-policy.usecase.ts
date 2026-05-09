@@ -37,6 +37,7 @@ interface AutopilotPolicyYaml {
   readonly version?: unknown;
   readonly auto_merge_allowed?: unknown;
   readonly required_witness_level?: unknown;
+  [key: string]: unknown;
 }
 
 function assertKnownClassKey(key: string, fieldName: string): asserts key is RiskClass {

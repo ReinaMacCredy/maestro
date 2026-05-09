@@ -23,6 +23,7 @@ interface RiskPolicyYaml {
   readonly description?: unknown;
   readonly version?: unknown;
   readonly rows?: unknown;
+  [key: string]: unknown;
 }
 
 function isRiskClass(val: unknown): val is RiskClass {

@@ -50,8 +50,8 @@ function spawnGh(
   }
 
   return {
-    stdout: proc.stdout.toString().trim(),
-    stderr: proc.stderr.toString().trim(),
+    stdout: proc.stdout?.toString().trim() ?? "",
+    stderr: proc.stderr?.toString().trim() ?? "",
     exitCode: proc.exitCode ?? 1,
   };
 }

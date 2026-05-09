@@ -103,8 +103,10 @@ function summarizeEvidence(e: EvidenceRow): string {
 }
 
 function evidenceDetail(e: EvidenceRow): string | undefined {
-  const payload = e.payload as unknown as Record<string, unknown> | undefined;
-  if (!payload) return undefined;
+  // Payload is a discriminated union but TypeScript doesn't narrow it in switch.
+  // Safe to access properties dynamically since we check types at runtime.
+  const payload = e.payload as any;
+  if (!payload || typeof payload !== "object") return undefined;
   switch (e.kind) {
     case "ai-review": {
       const reviewer = typeof payload.reviewer === "string" ? payload.reviewer : undefined;

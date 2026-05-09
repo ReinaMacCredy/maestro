@@ -53,7 +53,8 @@ export interface CreateContractInput {
   readonly repoRoot: string;
   readonly intent: string;
   readonly scope: ContractScope;
-  readonly doneWhen: readonly Array<{
+  readonly doneWhen: ReadonlyArray<{
+    readonly id?: string;
     readonly text: string;
     readonly kind?: DoneWhenCriterion["kind"];
   }>;
@@ -67,7 +68,7 @@ export interface EditContractInput {
   readonly ref: string;
   readonly intent: string;
   readonly scope: ContractScope;
-  readonly doneWhen: readonly Array<{
+  readonly doneWhen: ReadonlyArray<{
     readonly id?: string;
     readonly text: string;
     readonly kind?: DoneWhenCriterion["kind"];

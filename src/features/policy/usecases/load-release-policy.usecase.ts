@@ -20,6 +20,7 @@ interface ReleasePolicyYaml {
   readonly version?: unknown;
   readonly require_signed_commits?: unknown;
   readonly require_proof_map_complete?: unknown;
+  [key: string]: unknown;
 }
 
 function parseBooleanField(raw: unknown, fieldName: string): boolean {

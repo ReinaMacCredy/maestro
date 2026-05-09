@@ -102,7 +102,7 @@ function parseGitLog(output: string): Array<{ sha: string; commitEpoch: number; 
     }
     // Header line: "<sha> <epoch>"
     const headerMatch = /^([0-9a-f]{40}) (\d+)$/.exec(line.trim());
-    if (headerMatch) {
+    if (headerMatch && headerMatch[1] && headerMatch[2]) {
       if (current) commits.push(current);
       current = {
         sha: headerMatch[1],

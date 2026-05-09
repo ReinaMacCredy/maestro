@@ -21,6 +21,7 @@ export type VerdictReasonCode =
   | "amendment-budget-high"
   | "effective-risk-critical"
   | "evidence-witness-level-insufficient"
+  | "proof-map-incomplete"
   | "auto-merge-not-allowed"
   | "all-checks-passed"
   | "threat-model-required";

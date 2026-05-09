@@ -128,7 +128,7 @@ function revertSensitivePathsLoosening(
   const { edit } = loosening;
   // "globs[<glob>]" — glob was removed; re-add it
   const removedMatch = edit.path ? /^globs\[(.+)\]$/.exec(edit.path) : null;
-  if (!removedMatch) return globs;
+  if (!removedMatch || !removedMatch[1]) return globs;
   const glob = removedMatch[1];
   if (globs.includes(glob)) return globs;
   return [...globs, glob];
