@@ -130,7 +130,7 @@ function makeProgram(opts: {
         infos: 0,
       }),
       gitAnchor: {
-        resolveRepoRoot: async (cwd) => cwd,
+        resolveRepoRoot: async (cwd: string) => cwd,
         resolveHeadCommit: async () => "HEAD",
         resolveTreeSha: async () => "tree-sha-abc",
         collectTouchedFiles: async () => ({
