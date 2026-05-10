@@ -24,7 +24,7 @@ function riskClassScore(cls: string): number {
   return (RISK_CLASS_ORDER as readonly string[]).indexOf(cls);
 }
 
-function parseOrEmpty<T>(yaml: string): T {
+function parseOrEmpty<T = unknown>(yaml: string): T {
   if (!yaml.trim()) return {} as T;
   try {
     return (parseYaml<T>(yaml) ?? {}) as T;

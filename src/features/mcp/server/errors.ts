@@ -6,7 +6,7 @@ export interface McpToolError {
   readonly hints: readonly string[];
 }
 
-export interface McpToolSuccess<T> {
+export interface McpToolSuccess<T = unknown> {
   readonly ok: true;
   readonly data: T;
 }
@@ -16,9 +16,9 @@ export interface McpToolFailure {
   readonly error: McpToolError;
 }
 
-export type McpToolResult<T> = McpToolSuccess<T> | McpToolFailure;
+export type McpToolResult<T = unknown> = McpToolSuccess<T> | McpToolFailure;
 
-export function ok<T>(data: T): McpToolSuccess<T> {
+export function ok<T = unknown>(data: T): McpToolSuccess<T> {
   return { ok: true, data };
 }
 
@@ -56,7 +56,7 @@ function deriveErrorCode(message: string, fallback: string): string {
   return fallback;
 }
 
-export function toCallToolResult<T>(result: McpToolResult<T>): {
+export function toCallToolResult<T = unknown>(result: McpToolResult<T>): {
   content: { type: "text"; text: string }[];
   structuredContent?: Record<string, unknown>;
   isError?: boolean;

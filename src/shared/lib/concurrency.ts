@@ -5,7 +5,7 @@
  * Use this instead of `Promise.all(items.map(...))` when the per-item work
  * touches a rate-limited resource (GitHub API, fs handle pool, network).
  */
-export async function mapWithConcurrency<T, R>(
+export async function mapWithConcurrency<T = unknown, R = unknown>(
   items: readonly T[],
   limit: number,
   fn: (item: T, index: number) => Promise<R>,

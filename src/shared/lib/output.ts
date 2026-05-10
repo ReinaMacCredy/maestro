@@ -4,7 +4,7 @@
  */
 import { sanitizeTerminalText } from "@/shared/lib/sanitize.js";
 
-export function output<T>(
+export function output<T = unknown>(
   json: boolean,
   data: T,
   formatter: (d: T) => string[],

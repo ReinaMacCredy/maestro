@@ -27,7 +27,7 @@ export async function readTextOrStdin(path: string): Promise<string | undefined>
   return readText(path);
 }
 
-export async function readJson<T>(path: string): Promise<T | undefined> {
+export async function readJson<T = unknown>(path: string): Promise<T | undefined> {
   try {
     return await Bun.file(path).json() as T;
   } catch (err: unknown) {
