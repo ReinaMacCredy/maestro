@@ -92,15 +92,15 @@ describe("toCallToolResult", () => {
   it("renders success content as JSON text and structured payload", () => {
     const out = toCallToolResult(ok({ a: 1 }));
     expect(out.isError).toBeUndefined();
-    expect(out.content[0].type).toBe("text");
-    expect(JSON.parse(out.content[0].text)).toEqual({ a: 1 });
+    expect(out.content[0]?.type).toBe("text");
+    expect(JSON.parse(out.content[0]?.text)).toEqual({ a: 1 });
     expect(out.structuredContent).toEqual({ a: 1 });
   });
 
   it("renders failure with isError=true and code/message/hints in payload", () => {
     const out = toCallToolResult(fail("CODE", "msg", ["hint"]));
     expect(out.isError).toBe(true);
-    const parsed = JSON.parse(out.content[0].text);
+    const parsed = JSON.parse(out.content[0]?.text);
     expect(parsed.code).toBe("CODE");
     expect(parsed.message).toBe("msg");
     expect(parsed.hints).toEqual(["hint"]);

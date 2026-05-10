@@ -20,9 +20,9 @@ describe("checkLockfileParity", () => {
     await writeFile(join(tmpDir, "bun.lock"), "");
     const findings = await checkLockfileParity(["package.json", "src/foo.ts"], tmpDir);
     expect(findings).toHaveLength(1);
-    expect(findings[0].check).toBe("lockfile-parity");
-    expect(findings[0].severity).toBe("error");
-    expect(findings[0].details).toMatch(/bun\.lock/);
+    expect(findings[0]?.check).toBe("lockfile-parity");
+    expect(findings[0]?.severity).toBe("error");
+    expect(findings[0]?.details).toMatch(/bun\.lock/);
   });
 
   it("bun.lock without package.json in diff — emits error finding", async () => {
@@ -30,8 +30,8 @@ describe("checkLockfileParity", () => {
     await writeFile(join(tmpDir, "bun.lock"), "");
     const findings = await checkLockfileParity(["bun.lock"], tmpDir);
     expect(findings).toHaveLength(1);
-    expect(findings[0].check).toBe("lockfile-parity");
-    expect(findings[0].severity).toBe("error");
+    expect(findings[0]?.check).toBe("lockfile-parity");
+    expect(findings[0]?.severity).toBe("error");
   });
 
   it("both package.json and bun.lock in diff — clean", async () => {
@@ -59,6 +59,6 @@ describe("checkLockfileParity", () => {
     await writeFile(join(tmpDir, "pnpm-lock.yaml"), "");
     const findings = await checkLockfileParity(["pnpm-lock.yaml"], tmpDir);
     expect(findings).toHaveLength(1);
-    expect(findings[0].severity).toBe("error");
+    expect(findings[0]?.severity).toBe("error");
   });
 });

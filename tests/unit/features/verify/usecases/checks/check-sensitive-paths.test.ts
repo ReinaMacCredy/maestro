@@ -30,9 +30,9 @@ describe("checkSensitivePaths", () => {
     await writeSensitivePaths(["secrets/**", "*.pem"]);
     const findings = await checkSensitivePaths(["secrets/key.pem", "src/foo.ts"], tmpDir);
     expect(findings).toHaveLength(1);
-    expect(findings[0].check).toBe("sensitive-paths");
-    expect(findings[0].severity).toBe("warn");
-    expect(findings[0].paths).toContain("secrets/key.pem");
+    expect(findings[0]?.check).toBe("sensitive-paths");
+    expect(findings[0]?.severity).toBe("warn");
+    expect(findings[0]?.paths).toContain("secrets/key.pem");
   });
 
   it("policy file present but no diff path matches — empty findings", async () => {
@@ -45,9 +45,9 @@ describe("checkSensitivePaths", () => {
     await writeSensitivePaths(["*.pem", "*.key"]);
     const findings = await checkSensitivePaths(["cert.pem", "id.key", "src/ok.ts"], tmpDir);
     expect(findings).toHaveLength(1);
-    expect(findings[0].paths).toContain("cert.pem");
-    expect(findings[0].paths).toContain("id.key");
-    expect(findings[0].paths).not.toContain("src/ok.ts");
+    expect(findings[0]?.paths).toContain("cert.pem");
+    expect(findings[0]?.paths).toContain("id.key");
+    expect(findings[0]?.paths).not.toContain("src/ok.ts");
   });
 
   it("empty paths list in policy — returns empty findings", async () => {

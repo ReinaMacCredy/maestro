@@ -15,9 +15,9 @@ describe("checkSecretsInDiff", () => {
       "+const AWS_KEY = 'AKIAIOSFODNN7EXAMPLE';",
     ]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].check).toBe("secrets-in-diff");
-    expect(findings[0].severity).toBe("error");
-    expect(findings[0].details).toMatch(/aws-access-key-id/);
+    expect(findings[0]?.check).toBe("secrets-in-diff");
+    expect(findings[0]?.severity).toBe("error");
+    expect(findings[0]?.details).toMatch(/aws-access-key-id/);
   });
 
   it("GitHub PAT — emits error finding", () => {
@@ -25,7 +25,7 @@ describe("checkSecretsInDiff", () => {
       "+const token = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZaBcDeFgHiJ';",
     ]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].details).toMatch(/github-pat/);
+    expect(findings[0]?.details).toMatch(/github-pat/);
   });
 
   it("Slack token — emits error finding", () => {
@@ -33,7 +33,7 @@ describe("checkSecretsInDiff", () => {
       "+const slack = 'xoxb-abcdefghij-1234567890';",
     ]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].details).toMatch(/slack-token/);
+    expect(findings[0]?.details).toMatch(/slack-token/);
   });
 
   it("PEM private key block — emits error finding", () => {
@@ -41,7 +41,7 @@ describe("checkSecretsInDiff", () => {
       "+-----BEGIN RSA PRIVATE KEY-----",
     ]);
     expect(findings).toHaveLength(1);
-    expect(findings[0].details).toMatch(/pem-private-key/);
+    expect(findings[0]?.details).toMatch(/pem-private-key/);
   });
 
   it("high-entropy string near 'secret' keyword — emits error finding", () => {

@@ -81,8 +81,8 @@ describe("maestro policy pending", () => {
     const json = JSON.parse(lines.join("\n")) as PendingLoosening[];
     expect(Array.isArray(json)).toBe(true);
     expect(json).toHaveLength(1);
-    expect(json[0].kind).toBe("autopilot");
-    expect(json[0].commitSha).toBe(loosening.commitSha);
+    expect(json[0]?.kind).toBe("autopilot");
+    expect(json[0]?.commitSha).toBe(loosening.commitSha);
   });
 
   it("shows 'No pending loosenings.' when list is empty (text mode)", async () => {

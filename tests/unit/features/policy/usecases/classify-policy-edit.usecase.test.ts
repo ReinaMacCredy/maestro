@@ -19,7 +19,7 @@ rows:
 `.trim();
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "risk" });
     expect(result.tightenings).toHaveLength(1);
-    expect(result.tightenings[0].description).toContain("touches-secrets");
+    expect(result.tightenings[0]?.description).toContain("touches-secrets");
     expect(result.loosenings).toHaveLength(0);
   });
 
@@ -38,7 +38,7 @@ rows:
 `.trim();
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "risk" });
     expect(result.loosenings).toHaveLength(1);
-    expect(result.loosenings[0].description).toContain("touches-secrets");
+    expect(result.loosenings[0]?.description).toContain("touches-secrets");
     expect(result.tightenings).toHaveLength(0);
   });
 
@@ -47,7 +47,7 @@ rows:
     const newYaml = `rows:\n  - signal: changes-lockfile\n    derived_class: high`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "risk" });
     expect(result.tightenings).toHaveLength(1);
-    expect(result.tightenings[0].description).toMatch(/raised/);
+    expect(result.tightenings[0]?.description).toMatch(/raised/);
     expect(result.loosenings).toHaveLength(0);
   });
 
@@ -56,7 +56,7 @@ rows:
     const newYaml = `rows:\n  - signal: changes-lockfile\n    derived_class: low`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "risk" });
     expect(result.loosenings).toHaveLength(1);
-    expect(result.loosenings[0].description).toMatch(/lowered/);
+    expect(result.loosenings[0]?.description).toMatch(/lowered/);
     expect(result.tightenings).toHaveLength(0);
   });
 
@@ -96,7 +96,7 @@ describe("classifyPolicyEdit: autopilot", () => {
     const newYaml = `auto_merge_allowed:\n  low: false\n  medium: false\n  high: false\n  critical: false`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "autopilot" });
     expect(result.tightenings).toHaveLength(1);
-    expect(result.tightenings[0].description).toContain("auto_merge_allowed.low");
+    expect(result.tightenings[0]?.description).toContain("auto_merge_allowed.low");
     expect(result.loosenings).toHaveLength(0);
   });
 
@@ -105,7 +105,7 @@ describe("classifyPolicyEdit: autopilot", () => {
     const newYaml = `auto_merge_allowed:\n  low: true\n  medium: false\n  high: false\n  critical: false`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "autopilot" });
     expect(result.loosenings).toHaveLength(1);
-    expect(result.loosenings[0].description).toContain("auto_merge_allowed.low");
+    expect(result.loosenings[0]?.description).toContain("auto_merge_allowed.low");
     expect(result.tightenings).toHaveLength(0);
   });
 
@@ -114,7 +114,7 @@ describe("classifyPolicyEdit: autopilot", () => {
     const newYaml = `required_witness_level:\n  high: witnessed-by-maestro`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "autopilot" });
     expect(result.tightenings).toHaveLength(1);
-    expect(result.tightenings[0].description).toMatch(/raised/);
+    expect(result.tightenings[0]?.description).toMatch(/raised/);
     expect(result.loosenings).toHaveLength(0);
   });
 
@@ -123,7 +123,7 @@ describe("classifyPolicyEdit: autopilot", () => {
     const newYaml = `required_witness_level:\n  high: agent-claimed-locally`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "autopilot" });
     expect(result.loosenings).toHaveLength(1);
-    expect(result.loosenings[0].description).toMatch(/lowered/);
+    expect(result.loosenings[0]?.description).toMatch(/lowered/);
     expect(result.tightenings).toHaveLength(0);
   });
 });
@@ -136,7 +136,7 @@ describe("classifyPolicyEdit: release", () => {
     const newYaml = `require_signed_commits: true`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "release" });
     expect(result.tightenings).toHaveLength(1);
-    expect(result.tightenings[0].description).toContain("require_signed_commits");
+    expect(result.tightenings[0]?.description).toContain("require_signed_commits");
     expect(result.loosenings).toHaveLength(0);
   });
 
@@ -145,7 +145,7 @@ describe("classifyPolicyEdit: release", () => {
     const newYaml = `require_signed_commits: false`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "release" });
     expect(result.loosenings).toHaveLength(1);
-    expect(result.loosenings[0].description).toContain("require_signed_commits");
+    expect(result.loosenings[0]?.description).toContain("require_signed_commits");
     expect(result.tightenings).toHaveLength(0);
   });
 
@@ -174,7 +174,7 @@ describe("classifyPolicyEdit: sensitive-paths", () => {
     const newYaml = `globs:\n  - "src/**"\n  - ".env*"`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "sensitive-paths" });
     expect(result.tightenings).toHaveLength(1);
-    expect(result.tightenings[0].description).toContain(".env*");
+    expect(result.tightenings[0]?.description).toContain(".env*");
     expect(result.loosenings).toHaveLength(0);
   });
 
@@ -183,7 +183,7 @@ describe("classifyPolicyEdit: sensitive-paths", () => {
     const newYaml = `globs:\n  - "src/**"`;
     const result = classifyPolicyEdit({ oldYaml, newYaml, kind: "sensitive-paths" });
     expect(result.loosenings).toHaveLength(1);
-    expect(result.loosenings[0].description).toContain(".env*");
+    expect(result.loosenings[0]?.description).toContain(".env*");
     expect(result.tightenings).toHaveLength(0);
   });
 });

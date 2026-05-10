@@ -39,10 +39,10 @@ describe("loadRiskPolicy", () => {
     expect(policy.id).toBe("risk-policy-custom");
     expect(policy.version).toBe("2");
     expect(policy.rows).toHaveLength(2);
-    expect(policy.rows[0].signal).toBe("diff-intersects-sensitive-security");
-    expect(policy.rows[0].derivedClass).toBe("critical");
-    expect(policy.rows[1].signal).toBe("diff-source-only");
-    expect(policy.rows[1].derivedClass).toBe("low");
+    expect(policy.rows[0]?.signal).toBe("diff-intersects-sensitive-security");
+    expect(policy.rows[0]?.derivedClass).toBe("critical");
+    expect(policy.rows[1]?.signal).toBe("diff-source-only");
+    expect(policy.rows[1]?.derivedClass).toBe("low");
   });
 
   it("throws MaestroError /risk.yaml malformed/ on malformed YAML", async () => {
@@ -84,8 +84,8 @@ describe("loadRiskPolicy", () => {
     expect(policy.rows).toHaveLength(DEFAULT_RISK_POLICY.rows.length);
 
     for (let i = 0; i < DEFAULT_RISK_POLICY.rows.length; i++) {
-      expect(policy.rows[i].signal).toBe(DEFAULT_RISK_POLICY.rows[i].signal);
-      expect(policy.rows[i].derivedClass).toBe(DEFAULT_RISK_POLICY.rows[i].derivedClass);
+      expect(policy.rows[i]?.signal).toBe(DEFAULT_RISK_POLICY.rows[i]?.signal);
+      expect(policy.rows[i]?.derivedClass).toBe(DEFAULT_RISK_POLICY.rows[i]?.derivedClass);
     }
   });
 

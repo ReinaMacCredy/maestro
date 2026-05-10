@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@opentui/react",
     "strict": true,
+    "strictNullChecks": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "skipLibCheck": true,

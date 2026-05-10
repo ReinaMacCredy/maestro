@@ -74,9 +74,9 @@ describe("buildProofMap", () => {
 
     expect(result.entries.length).toBe(3);
     expect(result.uncoveredCount).toBe(1);
-    expect(result.entries[0].covered).toBe(true);
-    expect(result.entries[1].covered).toBe(true);
-    expect(result.entries[2].covered).toBe(false);
+    expect(result.entries[0]?.covered).toBe(true);
+    expect(result.entries[1]?.covered).toBe(true);
+    expect(result.entries[2]?.covered).toBe(false);
   });
 
   it("no spec → entries: [], uncoveredCount: 0, no error", () => {
@@ -96,8 +96,8 @@ describe("buildProofMap", () => {
 
     const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: rows });
 
-    expect(result.entries[0].covered).toBe(false);
-    expect(result.entries[0].evidence).toHaveLength(0);
+    expect(result.entries[0]?.covered).toBe(false);
+    expect(result.entries[0]?.evidence).toHaveLength(0);
     expect(result.uncoveredCount).toBe(1);
   });
 
@@ -111,8 +111,8 @@ describe("buildProofMap", () => {
 
     const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: rows });
 
-    expect(result.entries[0].evidence).toHaveLength(3);
-    expect(result.entries[0].covered).toBe(true);
+    expect(result.entries[0]?.evidence).toHaveLength(3);
+    expect(result.entries[0]?.covered).toBe(true);
     expect(result.uncoveredCount).toBe(0);
   });
 
