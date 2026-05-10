@@ -25,7 +25,7 @@ Examples:
   maestro graph-context --json
 `)
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
         const services = deps.getServices();
         const isJson = opts.json ?? program.opts().json;
         const currentName = basename(process.cwd());

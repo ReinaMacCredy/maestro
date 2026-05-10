@@ -29,7 +29,7 @@ export class FsNowMdWriterAdapter {
     await writeText(this.nowMdPath(), content);
   }
 
-  private async loadContracts() {
+  private async loadContracts(): Promise<void> {
     if (!this.contractStore) {
       return new Map();
     }

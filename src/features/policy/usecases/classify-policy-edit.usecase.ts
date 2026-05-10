@@ -3,6 +3,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { WITNESS_LEVEL_ORDER } from "@/features/evidence/index.js";
 import { RISK_CLASS_ORDER } from "@/features/risk/index.js";
 import type { PolicyKind } from "../domain/policy-types.js";
+import { assertNever } from "@/shared/lib/assert-never.js";
 
 export interface PolicyEdit {
   readonly description: string;
@@ -289,5 +290,7 @@ export function classifyPolicyEdit(args: {
     case "owners":
       // owners changes are not safety policy — skip classification
       return { tightenings: [], loosenings: [] };
+    default:
+      return assertNever(args.kind);
   }
 }

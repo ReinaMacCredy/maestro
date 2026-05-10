@@ -76,7 +76,7 @@ Examples:
     .option("--witness <level>", "Override witness level (default: agent-claimed-locally)")
     .option("--session <id>", "Override session id (default: detected session)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
 
@@ -536,7 +536,7 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
     .option("--session <id>", "Filter by session id")
     .option("--kind <kind>", `Filter by kind (${EVIDENCE_KINDS.join("|")})`)
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
 
@@ -556,7 +556,7 @@ function registerShowCommand(parent: Command, root: Command, deps: EvidenceComma
     .command("show <id>")
     .description("Show one evidence row by id")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
 

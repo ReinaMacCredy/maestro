@@ -16,7 +16,7 @@ Examples:
     .option("--task <description>", "Task description for context matching")
     .option("--files <paths>", "Comma-separated file paths for glob matching")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = opts.json ?? program.opts().json;
 

@@ -37,7 +37,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const filters: ListTasksFilters = {
@@ -75,7 +75,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const task = await services.taskStore.get(args.id);
@@ -108,7 +108,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const task = await createTask(services.taskStore, {
@@ -137,7 +137,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const { sessionId } = deps;
@@ -164,7 +164,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const { sessionId } = deps;
@@ -195,7 +195,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const { sessionId } = deps;
@@ -225,7 +225,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const { sessionId } = deps;

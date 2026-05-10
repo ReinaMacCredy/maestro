@@ -34,7 +34,7 @@ function registerShowCommand(parent: Command, root: Command, deps: SpecCommandDe
     .description("Show the Spec for a Mission")
     .requiredOption("--mission <id>", "Mission id")
     .option("--json", "Output as JSON")
-    .action(async (opts: { mission: string; json?: boolean }) => {
+    .action(async (opts: { mission: string; json?: boolean }): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts as Record<string, unknown>, root)
         || (parent.opts().json as boolean | undefined) === true;
@@ -56,7 +56,7 @@ function registerEditCommand(parent: Command, root: Command, deps: SpecCommandDe
     .description("Create or edit the Spec for a Mission (opens $EDITOR)")
     .requiredOption("--mission <id>", "Mission id")
     .option("--json", "Output as JSON")
-    .action(async (opts: { mission: string; json?: boolean }) => {
+    .action(async (opts: { mission: string; json?: boolean }): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts as Record<string, unknown>, root)
         || (parent.opts().json as boolean | undefined) === true;

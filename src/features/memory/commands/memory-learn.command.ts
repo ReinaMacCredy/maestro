@@ -16,7 +16,7 @@ Examples:
 `)
     .option("--content <text>", "Learning content")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       if (!opts.content) {
         throw new MaestroError("--content is required", [
           'maestro memory-learn --content "what you learned"',

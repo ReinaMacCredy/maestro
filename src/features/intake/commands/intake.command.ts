@@ -80,7 +80,7 @@ Exit code is always 0; agents react to the lane in the output.
       paths?: string[];
       flag: IntakeFlag[];
       json?: boolean;
-    }) => {
+    }): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const paths: readonly string[] = opts.paths ?? [];
 

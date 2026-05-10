@@ -26,7 +26,7 @@ export function registerMilestoneCommand(program: Command): void {
     .description("List all milestones for a mission with progress")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -45,7 +45,7 @@ export function registerMilestoneCommand(program: Command): void {
     .description("Show detailed status for a specific milestone")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (milestoneId: string, opts) => {
+    .action(async (milestoneId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -65,7 +65,7 @@ export function registerMilestoneCommand(program: Command): void {
     .description("Seal a milestone after validation (requires all assertions to be passed or waived)")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (milestoneId: string, opts) => {
+    .action(async (milestoneId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 

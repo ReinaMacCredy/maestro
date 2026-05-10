@@ -15,7 +15,7 @@ Examples:
 `)
     .option("--summary <text>", "Compiled summary text")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       if (!opts.summary) {
         throw new MaestroError("--summary is required", [
           'maestro memory-compile --summary "compiled summary of learnings"',

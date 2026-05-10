@@ -20,7 +20,7 @@ Examples:
     .option("--globs <patterns>", "Comma-separated file glob patterns", "")
     .option("--severity <level>", "soft or hard", "soft")
     .option("--json", "Output as JSON")
-    .action(async (rule: string, opts) => {
+    .action(async (rule: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = opts.json ?? program.opts().json;
 

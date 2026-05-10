@@ -167,7 +167,7 @@ async function recomputeLoosenings(projectRoot: string): Promise<readonly Pendin
     // them concurrently so the per-commit cost is one round-trip per file
     // instead of two sequential `git show` calls.
     const fileResults = await Promise.all(
-      files.map(async (file) => {
+      files.map(async (file): Promise<void> => {
         const kind = kindFromFile(file);
         if (!kind || kind === "owners") return undefined;
         const [newYaml, oldYaml] = await Promise.all([

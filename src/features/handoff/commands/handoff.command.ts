@@ -37,7 +37,7 @@ export function registerHandoffCommand(program: Command): void {
     .option("--prompt-file <path>", "Path to a pre-written brief; skips auto-generation")
     .option("--wait", "Wait for the external agent to finish before returning")
     .option("--json", "Output as JSON")
-    .action(async (task: string | undefined, opts) => {
+    .action(async (task: string | undefined, opts): Promise<void> => {
       const promptFile = typeof opts.promptFile === "string" ? opts.promptFile : undefined;
       const name = typeof opts.name === "string" ? opts.name : undefined;
       // When the caller supplies a pre-written brief via --prompt-file, the
@@ -110,7 +110,7 @@ export function registerHandoffCommand(program: Command): void {
     .option("--session <id>", "Current session id when auto-detection is unavailable")
     .option("--standalone", "Consume the packet without resuming its linked task")
     .option("--json", "Output as JSON")
-    .action(async (opts, command: Command) => {
+    .action(async (opts, command: Command): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
@@ -166,7 +166,7 @@ export function registerHandoffCommand(program: Command): void {
     .description("List handoff packets")
     .option("--open", "Only show packets that have not been consumed")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
@@ -182,7 +182,7 @@ export function registerHandoffCommand(program: Command): void {
     .command("show <id>")
     .description("Show a handoff packet")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());

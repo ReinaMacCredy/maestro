@@ -15,7 +15,7 @@ Examples:
 `)
     .argument("<query>", "Search text")
     .option("--json", "Output as JSON")
-    .action(async (query: string, opts) => {
+    .action(async (query: string, opts): Promise<void> => {
       if (!query.trim()) {
         throw new MaestroError("Search query cannot be empty", [
           'maestro memory-search "keyword"',

@@ -13,7 +13,7 @@ export function registerMcpServeCommand(mcpCmd: Command, program: Command): void
     .description("Start the maestro MCP server (stdio transport)")
     .option("--transport <name>", "Transport: stdio (default)", "stdio")
     .option("--project-root <path>", "Override project root detection")
-    .action(async (opts: ServeOptions) => {
+    .action(async (opts: ServeOptions): Promise<void> => {
       const isJson = resolveJsonFlag(opts as { json?: boolean }, program);
       const transport = (opts.transport ?? "stdio").toLowerCase();
       // Stdio MCP servers must keep stdout for protocol traffic only.

@@ -18,7 +18,7 @@ export function registerSessionCommand(program: Command): void {
     .description("Session lifecycle and detection verbs (bare invocation = whoami)")
     .option("--json", "Output as JSON")
     .option("-q, --quiet", "Output just the session ID")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       await runWhoami(opts, program);
     })
     .addHelpText(
@@ -42,7 +42,7 @@ Examples:
     .description("Detect the current agent session")
     .option("--json", "Output as JSON")
     .option("-q, --quiet", "Output just the session ID")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       await runWhoami(opts, program);
     });
 

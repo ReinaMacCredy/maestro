@@ -33,7 +33,7 @@ export function registerReplyCommand(program: Command): void {
     .option("--source <tag>", "Free-form origin marker, e.g. 'cli' or 'agent:claude'")
     .option("--agent", "Mark this reply as agent-authored (default is human)")
     .option("--json", "Output as JSON")
-    .action(async (featureId: string, opts) => {
+    .action(async (featureId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const outcome = parseOutcome(opts.outcome);
@@ -64,7 +64,7 @@ export function registerReplyCommand(program: Command): void {
     .command("list")
     .description("List replies on disk (newest writtenAt first)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const replies = [...(await services.replyStore.list())].reverse();

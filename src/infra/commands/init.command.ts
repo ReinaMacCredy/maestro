@@ -10,7 +10,7 @@ export function registerInitCommand(program: Command): void {
     .description("Initialize maestro in the current project or globally")
     .option("--global", "Initialize global config at ~/.maestro/")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = opts.json ?? program.opts().json ?? false;
       const replacementPrompter = shouldPromptForReplacement(isJson)
@@ -62,7 +62,7 @@ function createReplacementPrompter(): {
   let defaultDecision: boolean | undefined;
 
   return {
-    confirmReplace: async (path: string) => {
+    confirmReplace: async (path: string): Promise<void> => {
       if (defaultDecision !== undefined) {
         return defaultDecision;
       }

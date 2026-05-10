@@ -87,7 +87,7 @@ export function registerMissionControlCommand(program: Command): void {
     maestro mission-control --render-check --size 120x40
     maestro mission-control --json
   `)
-        .action(async (opts) => {
+        .action(async (opts): Promise<void> => {
           const isJson = resolveJsonFlag(opts, program);
           const previewArg = opts.preview ?? (typeof opts.screen === "string" ? opts.screen : undefined);
           const previewScreen = resolvePreviewScreen(previewArg);
@@ -287,7 +287,7 @@ async function buildMissionSnapshot(
   missionId: string,
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
   options?: SnapshotBuildOptions,
-) {
+): Promise<MissionControlSnapshot> {
   const mission = await snapshotDeps.missions.get(missionId);
 
   if (!mission) {
@@ -312,7 +312,7 @@ export function createMissionControlSnapshotLoader(
   const cachedSnapshotDeps = { ...snapshotDeps, git: cachingGit, config: cachingConfig };
 
   return {
-      load: async (options) => {
+      load: async (options): Promise<void> => {
         if (!explicitMissionId && !resolvedMissionId) {
           resolvedMissionId = await cachedSnapshotDeps.missions.resolveMissionId();
         }
@@ -330,7 +330,7 @@ export async function loadMissionControlSnapshot(
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
   missionId?: string,
   options?: SnapshotBuildOptions,
-) {
+): Promise<MissionControlSnapshot> {
   return missionId
     ? buildMissionSnapshot(missionId, snapshotDeps, options)
     : buildHomeSnapshot(snapshotDeps, options);

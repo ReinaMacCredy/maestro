@@ -172,7 +172,7 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     .addOption(new Option("--assignee <name>").hideHelp())
     .option("--silent", "Print only the id (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (title: string, opts) => {
+    .action(async (title: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -241,7 +241,7 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id for --start (only with --start)")
     .option("--dry-run", "Validate + resolve references without writing any tasks")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -356,7 +356,7 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
     .option("--parent <id>", "Parent task id")
     .option("--blocked-by <ids>", "Comma-separated blocker task ids")
     .option("--json", "Output as JSON")
-    .action(async (title: string, opts) => {
+    .action(async (title: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -384,7 +384,7 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
     .command("show <id-or-slug>")
     .description("Show task details (accepts a tsk-XXX id or a track slug)")
     .option("--json", "Output as JSON")
-    .action(async (rawRef: string, opts) => {
+    .action(async (rawRef: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
@@ -429,7 +429,7 @@ function registerListCommand(taskCmd: Command, program: Command): void {
     .option("--limit <n>", "Maximum number of tasks to return")
     .option("--tracks", "Print only track headers (slug or tsk-id; one per line)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -461,7 +461,7 @@ function registerStatusCommand(taskCmd: Command, program: Command): void {
     .option("--track <slug>", "Restrict output to a single track by slug or tsk-id")
     .option("--no-compact", "Render the unsectioned grouped detail view")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -500,7 +500,7 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
     .option("--rederive", "Re-derive slugs that already exist (overwrites; intended for refreshing auto-derived slugs after a derivation algorithm change)")
     .option("--limit <n>", "Process at most N tasks")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const apply = opts.apply === true;
@@ -669,7 +669,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .addOption(new Option("--claim").hideHelp())
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (rawRef: string | undefined, opts) => {
+    .action(async (rawRef: string | undefined, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       // Accept either positional <id-or-slug> or --task <id>. If both are supplied,
@@ -883,7 +883,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
     .option("--stale-after <duration>", "Auto-release a dead owner's stale claim after this idle window (default 4h)")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);
@@ -939,7 +939,7 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);
@@ -986,7 +986,7 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
     .description("Release unresolved tasks owned by a dead or stale session")
     .option("--silent", "Print only '<id> <marker>' per released task (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (sessionId: string, opts) => {
+    .action(async (sessionId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const trimmedSessionId = sessionId.trim();
@@ -1020,7 +1020,7 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
     .description("Restore a completed task to the pending queue")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const reopened = await reopenTaskFlow({
@@ -1050,7 +1050,7 @@ function registerDeleteCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOptionalOwnershipSessionId(opts.session);
@@ -1087,7 +1087,7 @@ function registerPruneCommand(taskCmd: Command, program: Command): void {
     .option("--all", "Purge everything in the targeted directories")
     .option("--dry-run", "Report what would be purged without deleting")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       if (opts.candidatesOnly === true && opts.continuationsOnly === true) {
         throw new MaestroError(
           "Choose either --candidates-only or --continuations-only, not both",
@@ -1128,7 +1128,7 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, blockedTaskIds: string[], opts) => {
+    .action(async (id: string, blockedTaskIds: string[], opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
@@ -1206,7 +1206,7 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, blockedTaskIds: string[], opts) => {
+    .action(async (id: string, blockedTaskIds: string[], opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
@@ -1694,7 +1694,7 @@ function registerNextCommand(taskCmd: Command, program: Command): void {
     .option("--force", "Claim another task even if this session already holds one")
     .option("--session <id>", "Explicit session id (defaults to detected session)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);
@@ -1735,7 +1735,7 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
     .option("--no-hints", "Disable lesson hints surfaced from past completed tasks")
     .option("--compact", "Output compact JSON envelope for agents/scripts (use with --json)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       if (opts.compact === true && !isJson) {
@@ -1838,7 +1838,7 @@ async function collectStaleOwners(
 
   for (let index = 0; index < assignees.length; index += STALE_OWNER_LOOKUP_CONCURRENCY) {
     const chunk = assignees.slice(index, index + STALE_OWNER_LOOKUP_CONCURRENCY);
-    const statuses = await Promise.all(chunk.map(async (assignee) => {
+    const statuses = await Promise.all(chunk.map(async (assignee): Promise<void> => {
       const parsed = parseTaskOwnerId(assignee);
       if (!parsed) {
         return undefined;
@@ -2307,7 +2307,7 @@ function registerSimilarCommand(taskCmd: Command, program: Command): void {
     .description("Show past tasks with keyword overlap across title, completion reason, receipt text, and linked contract text")
     .option("--limit <n>", "Maximum results (default 5, 0 = unlimited)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const limit = opts.limit === undefined ? 5 : parseLimit(opts.limit) ?? 5;
@@ -2345,7 +2345,7 @@ function registerMineCommand(taskCmd: Command, program: Command): void {
     .option("--status <status>", `Filter by status (${TASK_STATUSES.join("|")})`)
     .option("--limit <n>", "Maximum tasks to return")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);
@@ -2366,7 +2366,7 @@ function registerStuckCommand(taskCmd: Command, program: Command): void {
     .description("List in_progress tasks with no activity for a while")
     .option("--older-than <duration>", "Inactivity threshold, e.g. 4h, 30m, 2d (default 4h)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -2397,7 +2397,7 @@ function registerHeartbeatCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);

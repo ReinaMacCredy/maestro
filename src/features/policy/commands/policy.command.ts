@@ -35,7 +35,7 @@ Examples:
   maestro policy pending --json
 `)
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, root);
       const projectRoot = resolveMaestroProjectRoot(process.cwd());
       const loosenings = await deps.detectPendingLoosenings({ projectRoot });

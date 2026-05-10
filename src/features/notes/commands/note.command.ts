@@ -31,7 +31,7 @@ Examples:
     .option("--content <text>", "Note content to append")
     .option("--list", "List saved notes")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
         const services = deps.getServices();
         const isJson = opts.json ?? program.opts().json;
 

@@ -43,7 +43,7 @@ Examples:
       `Comma-separated redaction scopes (${VALID_REDACT_SCOPES.join("|")})`,
     )
     .option("--json", "Output as JSON")
-    .action(async (missionId: string, opts) => {
+    .action(async (missionId: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const services = getServices();
       const redact = parseRedactScopes(opts.redact);
@@ -81,7 +81,7 @@ Examples:
   maestro bundle inspect ./review.mission.tar.gz --json
 `)
     .option("--json", "Output as JSON")
-    .action(async (path: string, opts) => {
+    .action(async (path: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const services = getServices();
 

@@ -40,7 +40,7 @@ export function registerMissionCommand(program: Command): void {
     .option("--file <path>", "Path to plan JSON file (use - for stdin)")
     .option("--workflow <template>", "Use a workflow template for milestone structure")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -102,7 +102,7 @@ export function registerMissionCommand(program: Command): void {
     .option("--status <status>", "Filter by status (draft, approved, executing, etc.)")
     .option("--limit <number>", "Limit the number of missions shown")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const hasExplicitLimit = opts.limit !== undefined;
@@ -124,7 +124,7 @@ export function registerMissionCommand(program: Command): void {
     .command("show <id>")
     .description("Show mission details with milestone progress")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -142,7 +142,7 @@ export function registerMissionCommand(program: Command): void {
     .command("approve <id>")
     .description("Approve a draft mission")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -159,7 +159,7 @@ export function registerMissionCommand(program: Command): void {
     .command("reject <id>")
     .description("Reject a draft mission")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -179,7 +179,7 @@ export function registerMissionCommand(program: Command): void {
     .option("--title <title>", "New title")
     .option("--description <desc>", "New description")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 

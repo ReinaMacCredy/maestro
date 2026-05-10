@@ -9,7 +9,7 @@ export function registerDoctorCommand(program: Command): void {
     .command("doctor")
     .description("Verify maestro dependencies and configuration")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const checks = await runDoctor(
         services.git,

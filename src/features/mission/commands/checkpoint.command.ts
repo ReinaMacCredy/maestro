@@ -25,7 +25,7 @@ export function registerCheckpointCommand(program: Command): void {
     .description("Save a timestamped snapshot of current mission state")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -45,7 +45,7 @@ export function registerCheckpointCommand(program: Command): void {
     .description("List all checkpoints for a mission (newest first)")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -63,7 +63,7 @@ export function registerCheckpointCommand(program: Command): void {
     .description("Load the latest checkpoint snapshot for a mission and restore changed state")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 

@@ -31,7 +31,7 @@ export function registerFeatureCommand(program: Command): void {
     .option("--milestone <id>", "Filter by milestone ID")
     .option("--status <status>", "Filter by status (pending, assigned, in-progress, review, done, blocked)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -64,7 +64,7 @@ export function registerFeatureCommand(program: Command): void {
     .option("--report <value>", "Agent report as inline JSON or @file.json")
     .option("--retry-reason <reason>", "Reason for retrying (when status is pending)")
     .option("--json", "Output as JSON")
-    .action(async (featureId: string, opts) => {
+    .action(async (featureId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -111,7 +111,7 @@ export function registerFeatureCommand(program: Command): void {
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--out <path>", "Write prompt to specified path (also writes to agents/{featureId}/prompt.md)")
     .option("--json", "Output as JSON")
-    .action(async (featureId: string, opts) => {
+    .action(async (featureId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 

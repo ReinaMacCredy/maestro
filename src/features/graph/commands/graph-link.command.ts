@@ -35,7 +35,7 @@ Examples:
     .option("--shared-types", "Projects share types")
     .option("--via <detail>", "Additional detail about the relationship")
     .option("--json", "Output as JSON")
-    .action(async (target: string, opts) => {
+    .action(async (target: string, opts): Promise<void> => {
       const isJson = opts.json ?? program.opts().json;
 
       let relation: GraphRelation | undefined;

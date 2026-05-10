@@ -111,7 +111,7 @@ async function findEmptyFeatureDirs(dir: string): Promise<string[]> {
 
   const empty: string[] = [];
   await Promise.all(
-    entries.map(async (entry) => {
+    entries.map(async (entry): Promise<void> => {
       const sub = join(featuresRoot, entry);
       let entryStat;
       try {
@@ -179,7 +179,7 @@ async function findOversizedRootDocs(
   );
 
   const results = await Promise.all(
-    candidates.map(async (entry) => {
+    candidates.map(async (entry): Promise<void> => {
       try {
         const text = await readFile(join(dir, entry.name), "utf8");
         const lineCount = text.split("\n").length;

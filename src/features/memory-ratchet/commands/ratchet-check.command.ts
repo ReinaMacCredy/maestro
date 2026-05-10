@@ -13,7 +13,7 @@ Examples:
   maestro ratchet-check --json
 `)
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = opts.json ?? program.opts().json;
 

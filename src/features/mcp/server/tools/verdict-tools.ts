@@ -21,7 +21,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const verdict = args.id
@@ -56,7 +56,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const verdict = await requestVerdict(

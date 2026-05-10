@@ -8,7 +8,7 @@ export function registerStatusCommand(program: Command): void {
     .command("status")
     .description("Show current maestro state")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const status = await checkStatus(

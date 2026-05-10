@@ -75,7 +75,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--allow-unknown-keys", "Warn instead of error on unknown contract draft keys")
     .option("--json", "Output as JSON")
-    .action(async (taskId: string, opts) => {
+    .action(async (taskId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const cwd = process.cwd();
@@ -106,7 +106,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
+    .action(async (ref: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
@@ -132,7 +132,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--allow-unknown-keys", "Warn instead of error on unknown contract draft keys")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
+    .action(async (ref: string, opts): Promise<void> => {
       await resolveDraftContractActor(ref, opts.session);
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
@@ -163,7 +163,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--task <id>", "[L2 flag — see hint below]")
     .option("--add-path <path>", "[L2 flag — see hint below]")
     .option("--remove-path <path>", "[L2 flag — see hint below]")
-    .action(async (ref: string | undefined, opts) => {
+    .action(async (ref: string | undefined, opts): Promise<void> => {
       if (opts.task !== undefined || opts.addPath !== undefined || opts.removePath !== undefined) {
         const taskId = opts.task ?? ref ?? "<task-id>";
         const flags: string[] = [];
@@ -215,7 +215,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .description("Show one contract by contract id or task id")
     .option("--format <format>", "Output format: md (default), json, or yaml")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
+    .action(async (ref: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
@@ -236,7 +236,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .command("verdict <ref>")
     .description("Preview the current verdict without closing the task")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
+    .action(async (ref: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
@@ -271,7 +271,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--status <status>", `Filter by status (${CONTRACT_STATUSES.join("|")})`)
     .option("--task <id>", "Filter by task id")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contracts = await services.contracts.list({
@@ -287,7 +287,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
+    .action(async (ref: string, opts): Promise<void> => {
       await resolveDraftContractActor(ref, opts.session);
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
@@ -303,7 +303,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .description("Reopen the completed task linked to a contract and reactivate the contract")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
+    .action(async (ref: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
@@ -334,7 +334,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, criterionId: string, opts) => {
+    .action(async (ref: string, criterionId: string, opts): Promise<void> => {
       if (opts.met === true && opts.unmet === true) {
         throw new MaestroError("Choose either --met or --unmet, not both");
       }
@@ -361,7 +361,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, text: string, opts) => {
+    .action(async (ref: string, text: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.amend({
@@ -382,7 +382,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, criterionId: string, opts) => {
+    .action(async (ref: string, criterionId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.amend({
@@ -1186,7 +1186,7 @@ async function resolveContractRef(ref: string): Promise<Contract | undefined> {
   return await services.contractStore.get(ref) ?? await services.contractStore.getByTaskId(ref);
 }
 
-async function resolveContractTask(ref: string) {
+async function resolveContractTask(ref: string): Promise<void> {
   const services = getServices();
   const task = await services.taskStore.get(ref);
   if (task) {

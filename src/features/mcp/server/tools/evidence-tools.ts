@@ -26,7 +26,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const filter: EvidenceListFilter = {
@@ -60,7 +60,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const { sessionId } = deps;

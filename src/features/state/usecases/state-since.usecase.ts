@@ -47,7 +47,7 @@ export async function stateSince(
   const tasks = args.taskId !== undefined ? [args.taskId] : await listTaskIds(deps);
 
   const collectors = await Promise.all(
-    tasks.map(async (taskId) => {
+    tasks.map(async (taskId): Promise<void> => {
       const [evidence, verdicts] = await Promise.all([
         deps.evidenceStore.list({ task_id: taskId }),
         deps.verdictStore.history(taskId),

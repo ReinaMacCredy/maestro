@@ -68,7 +68,7 @@ export async function scanDocGardening(
 
   const candidates: CandidateRef[] = [];
   await Promise.all(
-    files.map(async (file) => {
+    files.map(async (file): Promise<void> => {
       const absFile = isAbsolute(file) ? file : join(args.projectRoot, file);
       const text = (await read(absFile)) ?? "";
       const lines = text.split("\n");
@@ -92,7 +92,7 @@ export async function scanDocGardening(
   const uniqueTargets = [...new Set(candidates.map((c) => c.target))];
   const existence = new Map<string, boolean>();
   await Promise.all(
-    uniqueTargets.map(async (t) => {
+    uniqueTargets.map(async (t): Promise<void> => {
       existence.set(t, await exists(t));
     }),
   );

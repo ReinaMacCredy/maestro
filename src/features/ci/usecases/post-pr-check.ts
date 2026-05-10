@@ -1,6 +1,7 @@
 import type { CheckRunConclusion, GithubApiPort } from "../ports/github-api.port.js";
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
 import type { VerdictOverridePayload } from "@/features/evidence/index.js";
+import { assertNever } from "@/shared/lib/assert-never.js";
 
 export interface PostPrCheckDeps {
   readonly githubApi: GithubApiPort;
@@ -26,6 +27,7 @@ function conclusionFor(decision: VerdictDecision): CheckRunConclusion {
     case "FAIL":  return "failure";
     case "BLOCK": return "failure";
     case "HUMAN": return "action_required";
+    default: return assertNever(decision);
   }
 }
 

@@ -226,7 +226,7 @@ async function createHandoffWorktree(
   worktree: string | boolean,
   baseBranch: string | undefined,
   task: string,
-) {
+): Promise<GitWorktree> {
   const slug = normalizeWorktreeSlug(typeof worktree === "string" ? worktree : task);
   const resolvedBaseBranch = baseBranch ?? await git.getCurrentBranch(cwd);
   return git.createWorktree(cwd, {

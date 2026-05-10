@@ -26,7 +26,7 @@ export function registerValidateCommand(program: Command): void {
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--milestone <id>", "Filter by milestone ID")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
@@ -55,7 +55,7 @@ export function registerValidateCommand(program: Command): void {
     .option("--evidence <text>", "Evidence or notes for this result")
     .option("--reason <reason>", "Required when result is 'waived'")
     .option("--json", "Output as JSON")
-    .action(async (assertionId: string, opts) => {
+    .action(async (assertionId: string, opts): Promise<void> => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 

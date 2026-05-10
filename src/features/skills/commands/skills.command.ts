@@ -78,7 +78,7 @@ export function registerSkillsCommand(program: Command): void {
     .command("list")
     .option("--scope <scope>", "project|user|shared|all", "all")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const scope = parseScope(opts.scope);
       const result = await discoverSkills({ cwd: process.cwd(), homeDir: homedir(), scope });
@@ -95,7 +95,7 @@ export function registerSkillsCommand(program: Command): void {
   skills
     .command("inspect <name>")
     .option("--json", "Output as JSON")
-    .action(async (name: string, opts) => {
+    .action(async (name: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const result = await discoverSkills({ cwd: process.cwd(), homeDir: homedir(), scope: "all" });
       const skill = result.skills.find((candidate) => candidate.name === name);
@@ -112,7 +112,7 @@ export function registerSkillsCommand(program: Command): void {
     .option("--scope <scope>", "user|project|shared", "user")
     .option("--targets <targets>", "all or comma-separated codex,claude,hermes,agentskills", "all")
     .option("--json", "Output as JSON")
-    .action(async (source: string, opts) => {
+    .action(async (source: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const scope = parseInstallScope(opts.scope);
       const targets = parseTargets(opts.targets);
@@ -130,7 +130,7 @@ export function registerSkillsCommand(program: Command): void {
     .command("remove <name>")
     .option("--scope <scope>", "user|project|shared", "user")
     .option("--json", "Output as JSON")
-    .action(async (name: string, opts) => {
+    .action(async (name: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const scope = parseInstallScope(opts.scope);
       const result = await removeManagedSkill({ name, scope, cwd: process.cwd(), homeDir: homedir() });
@@ -145,7 +145,7 @@ export function registerSkillsCommand(program: Command): void {
     .command("sync")
     .option("--targets <targets>", "all or comma-separated codex,claude,hermes,agentskills", "all")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const targets = parseTargets(opts.targets);
       const bundled = await injectAgentBlocks(

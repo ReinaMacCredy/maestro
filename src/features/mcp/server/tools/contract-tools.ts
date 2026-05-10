@@ -27,7 +27,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         if (args.version !== undefined) {
@@ -80,7 +80,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const addPaths = args.addPaths ?? [];

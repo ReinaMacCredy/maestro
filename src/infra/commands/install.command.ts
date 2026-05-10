@@ -10,7 +10,7 @@ export function registerInstallCommand(program: Command): void {
     .command("install")
     .description("Initialize global config and inject agent instructions")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = getServices();
       const isJson = opts.json ?? program.opts().json;
 

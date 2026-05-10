@@ -28,7 +28,7 @@ export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const contract = await readCurrentContractWithBackfill(

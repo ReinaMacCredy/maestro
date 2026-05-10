@@ -52,7 +52,7 @@ Examples:
       verdict: string;
       criterion: string[];
       json?: boolean;
-    }) => {
+    }): Promise<void> => {
       const { task: taskId, verdict: verdictId, criterion: criteria } = opts;
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);

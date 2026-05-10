@@ -22,7 +22,7 @@ export function registerProvidersCommand(program: Command): void {
   providers
     .command("list")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const rows = listProviders();
       output(isJson, rows, formatProviderList);
@@ -32,7 +32,7 @@ export function registerProvidersCommand(program: Command): void {
     .command("doctor")
     .argument("[provider]", "Provider id or slug")
     .option("--json", "Output as JSON")
-    .action(async (provider: string | undefined, opts) => {
+    .action(async (provider: string | undefined, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const selected = provider
         ? [getProvider(provider)].filter((p): p is ProviderDescriptor => p !== undefined)

@@ -16,7 +16,7 @@ export function registerUninstallCommand(program: Command): void {
     .description("Remove bundled agent skills and optionally the maestro binary")
     .option("--agents-only", "Only remove bundled agent skills")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const isJson = opts.json ?? program.opts().json;
 
       const agentResults = await removeAgentBlocks(process.cwd(), "home");

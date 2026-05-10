@@ -16,7 +16,7 @@ Examples:
     .argument("<correctionId>", "ID of the correction to promote")
     .option("--check <pattern>", "Regex pattern to check for violations")
     .option("--json", "Output as JSON")
-    .action(async (correctionId: string, opts) => {
+    .action(async (correctionId: string, opts): Promise<void> => {
       if (!opts.check) {
         throw new MaestroError("--check is required", [
           'maestro ratchet-promote <id> --check "violation pattern"',

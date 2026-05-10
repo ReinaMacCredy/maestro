@@ -1,5 +1,6 @@
 import type { Verdict, VerdictDecision } from "./domain/types.js";
 import type { VerdictOverridePayload } from "@/features/evidence/index.js";
+import { assertNever } from "@/shared/lib/assert-never.js";
 
 export function exitCodeForDecision(decision: VerdictDecision): number {
   switch (decision) {
@@ -7,6 +8,7 @@ export function exitCodeForDecision(decision: VerdictDecision): number {
     case "FAIL": return 1;
     case "HUMAN": return 2;
     case "BLOCK": return 3;
+    default: return assertNever(decision);
   }
 }
 

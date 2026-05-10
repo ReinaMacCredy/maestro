@@ -61,7 +61,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         if (args.openOnly === true && args.displayState !== undefined) {
           return toCallToolResult(
@@ -102,7 +102,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const record = await showProjectHandoff(services.handoffStore, args.id, {
@@ -131,7 +131,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const ids = await listOpenHandoffsForTask(services.handoffStore, args.taskId, {
@@ -162,7 +162,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<void> => {
       try {
         const services = deps.getServices();
         const actorAgent: HandoffAgent = args.actorAgent;
