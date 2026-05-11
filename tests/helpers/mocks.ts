@@ -444,7 +444,7 @@ export function mockMissions(input: {
       features.set(featureId, updated);
       return updated;
     },
-    list: async (requestedMissionId, filter) => {
+    list: async (requestedMissionId, filter?) => {
       let all = [...features.values()].filter((feature) => feature.missionId === requestedMissionId);
       if (filter?.milestoneId) {
         all = all.filter((feature) => feature.milestoneId === filter.milestoneId);
@@ -685,7 +685,6 @@ export function mockContractStore(initial: readonly Contract[] = []): ContractSt
         taskId: input.taskId,
         status: input.status ?? "discarded",
         at: input.at,
-        reason: input.reason,
       });
       return deleted;
     },

@@ -114,6 +114,7 @@ function fakeGitAnchor(): GitAnchorPort {
     windowsOverlap: async () => false,
     collectChangedPaths: async () => [],
     collectAddedLines: async () => [],
+    collectUntrackedFiles: async () => [],
     resolveTreeSha: async () => "deadbeef1234567890abcdef1234567890abcdef",
   };
 }

@@ -158,6 +158,7 @@ function fakeGitAnchor(): GitAnchorPort {
     windowsOverlap: async () => false,
     collectChangedPaths: async () => [],
     collectAddedLines: async () => [],
+    collectUntrackedFiles: async () => [],
     resolveTreeSha: async () => "deadbeef",
   };
 }
@@ -174,6 +175,7 @@ interface FakeMergeServices {
   verdictStore: VerdictStorePort;
   evidenceStore: EvidenceStorePort;
   contractVersionStore: ContractVersionStorePort;
+  contractStore: ContractStorePort;
   gitAnchor: GitAnchorPort;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   specStore: SpecStorePort;
@@ -205,6 +207,7 @@ function makeEligibleServices(): { services: FakeMergeServices; githubApiCalls: 
     verdictStore: fakeVerdictStore(verdict),
     evidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
     contractVersionStore: fakeContractVersionStore(makeContract()),
+    contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     gitAnchor: fakeGitAnchor(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     specStore: fakeSpecStore(),
@@ -222,6 +225,7 @@ function makeIneligibleServices(): { services: FakeMergeServices; githubApiCalls
     verdictStore: fakeVerdictStore(verdict),
     evidenceStore: fakeEvidenceStore(),
     contractVersionStore: fakeContractVersionStore(makeContract()),
+    contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     gitAnchor: fakeGitAnchor(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     specStore: fakeSpecStore(),
@@ -413,6 +417,7 @@ describe("merge auto — verdict identity is bound to (pr, tree_sha)", () => {
       },
       evidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
       contractVersionStore: fakeContractVersionStore(makeContract()),
+      contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       gitAnchor: fakeGitAnchor(),
       getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
       specStore: fakeSpecStore(),
@@ -452,6 +457,7 @@ describe("merge auto — verdict identity is bound to (pr, tree_sha)", () => {
       },
       evidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
       contractVersionStore: fakeContractVersionStore(makeContract()),
+      contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       gitAnchor: fakeGitAnchor(),
       getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
       specStore: fakeSpecStore(),
