@@ -3,7 +3,7 @@
  * Registers: maestro mission-control [--mission <id>] [--json] [--preview [screen]]
  */
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 // renderDashboard / renderPreviewFrame / runRenderCheck pull the OpenTUI +
@@ -64,7 +64,16 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   autopilot: "autopilot",
 };
 
-export function registerMissionControlCommand(program: Command): void {
+interface MissionControlCommandDeps {
+  // Mission Control aggregates ~20 service keys to build snapshotDeps, so it
+  // takes the full Services type rather than a long Pick<...>.
+  readonly getServices: () => Services;
+}
+
+export function registerMissionControlCommand(
+  program: Command,
+  deps: MissionControlCommandDeps = { getServices },
+): void {
   program
     .command("mission-control")
     .description("Interactive mission control dashboard")
@@ -116,7 +125,7 @@ export function registerMissionControlCommand(program: Command): void {
           ]);
         }
 
-      const services = getServices();
+      const services = deps.getServices();
         const snapshotDeps = {
           missions: services.missions,
           missionStore: services.missionStore,

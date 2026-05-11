@@ -1,17 +1,24 @@
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { initMaestro } from "../usecases/init.usecase.js";
 import { injectAgentBlocks } from "@/infra/usecases/manage-agents.usecase.js";
 import { formatAgentResults, output } from "@/shared/lib/output.js";
 import { resolveInstallDir } from "../usecases/install-release-binary.usecase.js";
 
-export function registerInstallCommand(program: Command): void {
+interface InstallCommandDeps {
+  readonly getServices: () => Pick<Services, "config">;
+}
+
+export function registerInstallCommand(
+  program: Command,
+  deps: InstallCommandDeps = { getServices },
+): void {
   program
     .command("install")
     .description("Initialize global config and inject agent instructions")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       const [initResult, agentResults] = await Promise.all([

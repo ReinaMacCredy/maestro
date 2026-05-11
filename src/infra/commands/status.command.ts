@@ -1,15 +1,22 @@
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { checkStatus } from "@/infra/usecases/check-status.usecase.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 
-export function registerStatusCommand(program: Command): void {
+interface StatusCommandDeps {
+  readonly getServices: () => Pick<Services, "config" | "git">;
+}
+
+export function registerStatusCommand(
+  program: Command,
+  deps: StatusCommandDeps = { getServices },
+): void {
   program
     .command("status")
     .description("Show current maestro state")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const status = await checkStatus(
         services.config,

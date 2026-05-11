@@ -1,17 +1,24 @@
 import type { Command } from "commander";
 import { createInterface } from "node:readline/promises";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { initMaestro } from "../usecases/init.usecase.js";
 import { output } from "@/shared/lib/output.js";
 
-export function registerInitCommand(program: Command): void {
+interface InitCommandDeps {
+  readonly getServices: () => Pick<Services, "config">;
+}
+
+export function registerInitCommand(
+  program: Command,
+  deps: InitCommandDeps = { getServices },
+): void {
   program
     .command("init")
     .description("Initialize maestro in the current project or globally")
     .option("--global", "Initialize global config at ~/.maestro/")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json ?? false;
       const replacementPrompter = shouldPromptForReplacement(isJson)
         ? createReplacementPrompter()

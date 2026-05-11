@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { detectSession } from "../usecases/detect-session.usecase.js";
 import { output } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -7,7 +7,14 @@ import type { AgentSession } from "../domain/types.js";
 import { registerSessionStartCommand } from "./session-start.command.js";
 import { registerSessionExitCommand } from "./session-exit.command.js";
 
-export function registerSessionCommand(program: Command): void {
+interface SessionCommandDeps {
+  readonly getServices: () => Pick<Services, "sessionDetect">;
+}
+
+export function registerSessionCommand(
+  program: Command,
+  deps: SessionCommandDeps = { getServices },
+): void {
   // The parent `session` command keeps the legacy `whoami` behavior when
   // invoked bare (`maestro session`, `maestro session --json`,
   // `maestro session --quiet`) so existing CI/automation scripts do not
@@ -19,7 +26,7 @@ export function registerSessionCommand(program: Command): void {
     .option("--json", "Output as JSON")
     .option("-q, --quiet", "Output just the session ID")
     .action(async (opts): Promise<void> => {
-      await runWhoami(opts, program);
+      await runWhoami(deps, opts, program);
     })
     .addHelpText(
       "after",
@@ -43,7 +50,7 @@ Examples:
     .option("--json", "Output as JSON")
     .option("-q, --quiet", "Output just the session ID")
     .action(async (opts): Promise<void> => {
-      await runWhoami(opts, program);
+      await runWhoami(deps, opts, program);
     });
 
   registerSessionStartCommand(sessionCmd, program);
@@ -51,10 +58,11 @@ Examples:
 }
 
 async function runWhoami(
+  deps: SessionCommandDeps,
   opts: { json?: boolean; quiet?: boolean },
   program: Command,
 ): Promise<void> {
-  const services = getServices();
+  const services = deps.getServices();
   const isJson = opts.json ?? program.opts().json;
 
   const result = await detectSession(services.sessionDetect, {
