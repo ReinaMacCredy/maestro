@@ -3,7 +3,7 @@
  * Implements CLI commands: mission create|list|show|approve|reject|update
  */
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   createMission,
@@ -37,7 +37,7 @@ interface MissionCommandDeps {
 
 export function registerMissionCommand(
   program: Command,
-  deps: MissionCommandDeps = { getServices },
+  deps: MissionCommandDeps,
 ): void {
   const missionCmd = program
     .command("mission")

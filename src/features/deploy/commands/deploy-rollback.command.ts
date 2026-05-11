@@ -1,15 +1,15 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
-import { recordEvidence } from "@/features/evidence/index.js";
+import { type Services } from "@/services.js";
+import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/index.js";
 import type { RollbackExercisedPayload, WitnessLevel } from "@/features/evidence/index.js";
 
 interface DeployRollbackCommandDeps {
   readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore">;
-  readonly recordEvidence: typeof recordEvidence;
-  readonly spawnSync: (cmd: string) => { exitCode: number };
-  readonly isCI: () => boolean;
+  readonly recordEvidence?: typeof defaultRecordEvidence;
+  readonly spawnSync?: (cmd: string) => { exitCode: number };
+  readonly isCI?: () => boolean;
 }
 
 function defaultSpawnSync(cmd: string): { exitCode: number } {
@@ -17,17 +17,12 @@ function defaultSpawnSync(cmd: string): { exitCode: number } {
   return { exitCode: result.exitCode ?? 1 };
 }
 
-const defaultDeps: DeployRollbackCommandDeps = {
-  getServices,
-  recordEvidence,
-  spawnSync: defaultSpawnSync,
-  isCI: () => process.env.GITHUB_ACTIONS === "true",
-};
+const defaultIsCI = (): boolean => process.env.GITHUB_ACTIONS === "true";
 
 export function registerDeployRollbackCommand(
   parent: Command,
   program: Command,
-  deps: DeployRollbackCommandDeps = defaultDeps,
+  deps: DeployRollbackCommandDeps,
 ): void {
   parent
     .command("rollback")
@@ -47,9 +42,9 @@ export function registerDeployRollbackCommand(
         ]);
       }
 
-      const { exitCode } = deps.spawnSync(cmd);
+      const { exitCode } = (deps.spawnSync ?? defaultSpawnSync)(cmd);
 
-      const witnessLevel: WitnessLevel = deps.isCI()
+      const witnessLevel: WitnessLevel = (deps.isCI ?? defaultIsCI)()
         ? "witnessed-by-ci"
         : "witnessed-by-maestro";
 
@@ -58,7 +53,7 @@ export function registerDeployRollbackCommand(
         exit: exitCode,
       };
 
-      const row = await deps.recordEvidence(services.evidenceStore, {
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, {
         task_id: taskId,
         kind: "rollback-exercised",
         payload,

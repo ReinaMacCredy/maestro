@@ -47,6 +47,7 @@ describe("maestro policy pending", () => {
   it("lists a pending loosening in text mode", async () => {
     const loosening = makePendingLoosening();
     const deps = {
+      getServices: (() => ({})) as never,
       detectPendingLoosenings: async () => [loosening] as readonly PendingLoosening[],
     };
 
@@ -67,6 +68,7 @@ describe("maestro policy pending", () => {
   it("outputs JSON array in --json mode", async () => {
     const loosening = makePendingLoosening();
     const deps = {
+      getServices: (() => ({})) as never,
       detectPendingLoosenings: async () => [loosening] as readonly PendingLoosening[],
     };
 
@@ -86,6 +88,7 @@ describe("maestro policy pending", () => {
 
   it("shows 'No pending loosenings.' when list is empty (text mode)", async () => {
     const deps = {
+      getServices: (() => ({})) as never,
       detectPendingLoosenings: async () => [] as readonly PendingLoosening[],
     };
 
@@ -102,6 +105,7 @@ describe("maestro policy pending", () => {
 
   it("outputs empty array in --json mode when no loosenings", async () => {
     const deps = {
+      getServices: (() => ({})) as never,
       detectPendingLoosenings: async () => [] as readonly PendingLoosening[],
     };
 

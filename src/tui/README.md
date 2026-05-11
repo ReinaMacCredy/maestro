@@ -33,7 +33,7 @@ The important boundary is that the snapshot is the source of truth for display d
 
 ### 1. Command registration
 
-`src/index.ts` calls `registerMissionControlCommand`, so every Mission Control entry point starts from the normal CLI boot path after `initServices(process.cwd())`.
+`src/index.ts` calls `registerMissionControlCommand`, so every Mission Control entry point starts from the normal CLI boot path with services lazily composed by `createServices(resolveMaestroProjectRoot(process.cwd()))`.
 
 ### 2. Command handling
 

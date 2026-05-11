@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { checkStatus } from "@/infra/usecases/check-status.usecase.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 
@@ -9,7 +9,7 @@ interface StatusCommandDeps {
 
 export function registerStatusCommand(
   program: Command,
-  deps: StatusCommandDeps = { getServices },
+  deps: StatusCommandDeps,
 ): void {
   program
     .command("status")

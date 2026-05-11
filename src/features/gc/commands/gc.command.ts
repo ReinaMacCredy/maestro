@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { scanDocGardening, type DocGardeningResult } from "../usecases/doc-gardening.usecase.js";
 import {
   scanSlopCleanup,
@@ -17,7 +17,7 @@ interface GcDeps {
 
 export function registerGcCommand(
   program: Command,
-  deps: GcDeps = { getServices },
+  deps: GcDeps,
 ): void {
   const gcCmd = program
     .command("gc")

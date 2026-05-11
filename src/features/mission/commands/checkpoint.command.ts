@@ -3,7 +3,7 @@
  * Implements CLI commands: checkpoint save|list|load
  */
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   saveCheckpoint,
@@ -23,7 +23,7 @@ interface CheckpointCommandDeps {
 
 export function registerCheckpointCommand(
   program: Command,
-  deps: CheckpointCommandDeps = { getServices },
+  deps: CheckpointCommandDeps,
 ): void {
   const checkpointCmd = program
     .command("checkpoint")

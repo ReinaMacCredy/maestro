@@ -7,7 +7,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { removeIfExists } from "@/shared/lib/fs.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { assertNoDeprecatedVersionFlag } from "@/infra/lib/deprecated-version-flag.js";
-import { initServices } from "./services.js";
+import { createServices, type Services } from "./services.js";
 import { checkForUpdate, isNewerSemver } from "@/infra/usecases/check-for-update.usecase.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
 import { registerStatusCommand } from "@/infra/commands/status.command.js";
@@ -76,87 +76,96 @@ import { registerStateCommand } from "./features/state/index.js";
 import { registerWorktreeCommand } from "./features/worktree/index.js";
 import { registerInspectCommand } from "./features/inspect/index.js";
 
+// One process-wide cache for the composed Services graph. The thunk stays
+// lazy so `--version`, `--help`, and other info-only paths never bootstrap
+// the per-feature service builders.
+let cachedServices: Services | undefined;
+const getServices = (): Services => {
+  if (!cachedServices) {
+    cachedServices = createServices(resolveMaestroProjectRoot(process.cwd()));
+  }
+  return cachedServices;
+};
+const deps = { getServices };
+
 export const program = new Command()
   .name("maestro")
   .description("Conductor CLI -- shared mission, feature, and memory state for cross-agent workflows")
   .version(formatVersionOutputForArgv())
   .option("--json", "Output as JSON")
-  .exitOverride()
-  .hook("preAction", () => {
-    initServices(resolveMaestroProjectRoot(process.cwd()));
-  });
+  .exitOverride();
 
-registerInitCommand(program);
-registerStatusCommand(program);
-registerDoctorCommand(program);
-registerNoteCommand(program);
-registerSessionCommand(program);
-registerInstallCommand(program);
+registerInitCommand(program, deps);
+registerStatusCommand(program, deps);
+registerDoctorCommand(program, deps);
+registerNoteCommand(program, deps);
+registerSessionCommand(program, deps);
+registerInstallCommand(program, deps);
 registerUpdateCommand(program);
 registerUninstallCommand(program);
 registerProvidersCommand(program);
 registerSkillsCommand(program);
 registerMcpCommand(program);
-registerMissionCommand(program);
-registerFeatureCommand(program);
-registerValidateCommand(program);
-registerMilestoneCommand(program);
-registerCheckpointCommand(program);
-registerMemoryCorrectCommand(program);
-registerMemoryRecallCommand(program);
-registerMemorySearchCommand(program);
-registerMemoryLearnCommand(program);
-registerMemoryCompileCommand(program);
-registerRatchetCheckCommand(program);
-registerRatchetPromoteCommand(program);
-registerMemoryStatsCommand(program);
-registerMemoryLintCommand(program);
-registerGraphLinkCommand(program);
-registerGraphContextCommand(program);
-registerHandoffCommand(program);
-registerTaskCommand(program);
-registerReplyCommand(program);
-registerPrincipleCommand(program);
-registerBundleCommand(program);
-registerEvidenceCommand(program);
-registerSpecCommand(program);
-registerContractL2Command(program);
-registerPolicyCommand(program);
-registerVerdictCommand(program);
+registerMissionCommand(program, deps);
+registerFeatureCommand(program, deps);
+registerValidateCommand(program, deps);
+registerMilestoneCommand(program, deps);
+registerCheckpointCommand(program, deps);
+registerMemoryCorrectCommand(program, deps);
+registerMemoryRecallCommand(program, deps);
+registerMemorySearchCommand(program, deps);
+registerMemoryLearnCommand(program, deps);
+registerMemoryCompileCommand(program, deps);
+registerRatchetCheckCommand(program, deps);
+registerRatchetPromoteCommand(program, deps);
+registerMemoryStatsCommand(program, deps);
+registerMemoryLintCommand(program, deps);
+registerGraphLinkCommand(program, deps);
+registerGraphContextCommand(program, deps);
+registerHandoffCommand(program, deps);
+registerTaskCommand(program, deps);
+registerReplyCommand(program, deps);
+registerPrincipleCommand(program, deps);
+registerBundleCommand(program, deps);
+registerEvidenceCommand(program, deps);
+registerSpecCommand(program, deps);
+registerContractL2Command(program, deps);
+registerPolicyCommand(program, deps);
+registerVerdictCommand(program, deps);
 
 const planCmd = program
   .command("plan")
   .description("Plan-time checks for agent tasks");
-registerPlanCheckCommand(planCmd, program);
+registerPlanCheckCommand(planCmd, program, deps);
 
 const ciCmd = program
   .command("ci")
   .description("CI integration — runs the verdict pipeline in CI mode");
-registerCiVerifyCommand(ciCmd, program);
+registerCiVerifyCommand(ciCmd, program, deps);
 
-registerReviewCommand(program);
-registerIntakeCommand(program);
-registerRecoverCommand(program);
-registerGcCommand(program);
-registerRalphCommand(program);
-registerStateCommand(program);
-registerWorktreeCommand(program);
-registerInspectCommand(program);
+registerReviewCommand(program, deps);
+registerIntakeCommand(program, deps);
+registerRecoverCommand(program, deps);
+registerGcCommand(program, deps);
+registerRalphCommand(program, deps);
+registerStateCommand(program, deps);
+registerWorktreeCommand(program, deps);
+registerInspectCommand(program, deps);
 
 const mergeCmd = program
   .command("merge")
   .description("Merge controls — auto-merge eligibility and trigger");
-registerMergeAutoCommand(mergeCmd, program);
+registerMergeAutoCommand(mergeCmd, program, deps);
 
 const deployCmd = program
   .command("deploy")
   .description("Deploy safety commands — rollback and gate controls");
-registerDeployCommand(deployCmd, program);
+registerDeployCommand(deployCmd, program, deps);
 
 const runtimeCmd = program
   .command("runtime")
   .description("Runtime signal checks — query providers and record Evidence");
-registerRuntimeCheckCommand(runtimeCmd, program);
+registerRuntimeCheckCommand(runtimeCmd, program, deps);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,
@@ -207,7 +216,7 @@ async function maybeRegisterMissionControl(argv: readonly string[]): Promise<voi
   }
   if (needsMissionControl) {
     const mod = await import("@/infra/commands/mission-control.command.js");
-    mod.registerMissionControlCommand(program);
+    mod.registerMissionControlCommand(program, deps);
   }
 }
 

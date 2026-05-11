@@ -28,11 +28,11 @@ function captureConsole(): {
 async function loadRegisterSessionCommand(sessionDetect: {
   detect: (cwd: string) => Promise<unknown>;
 }) {
-  mock.module("@/services.js", () => ({
-    getServices: () => ({ sessionDetect }),
-  }));
-
-  return import(`@/features/session/commands/session.command.ts?test=${Date.now()}-${Math.random()}`);
+  const mod = await import("@/features/session/commands/session.command.js");
+  const deps = { getServices: () => ({ sessionDetect } as never) };
+  return {
+    registerSessionCommand: (program: Command): void => mod.registerSessionCommand(program, deps),
+  };
 }
 
 afterEach(() => {

@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import type { MemoryStats } from "../domain/memory-types.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { getMemoryStats } from "../usecases/memory-stats.usecase.js";
 
 interface MemoryStatsCommandDeps {
@@ -13,7 +13,7 @@ interface MemoryStatsCommandDeps {
 
 export function registerMemoryStatsCommand(
   program: Command,
-  deps: MemoryStatsCommandDeps = { getServices },
+  deps: MemoryStatsCommandDeps,
 ): void {
   program
     .command("memory-stats")

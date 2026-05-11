@@ -8,7 +8,7 @@
  */
 import type { Command } from "commander";
 import { readFile } from "node:fs/promises";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { writeAgentReply } from "../usecases/write-reply.usecase.js";
@@ -23,7 +23,7 @@ interface ReplyCommandDeps {
 
 export function registerReplyCommand(
   program: Command,
-  deps: ReplyCommandDeps = { getServices },
+  deps: ReplyCommandDeps,
 ): void {
   const replyCmd = program
     .command("reply")

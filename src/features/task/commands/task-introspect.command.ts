@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { listOpenProjectHandoffIdsForTask } from "@/features/handoff";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import {
   composeTaskIntrospection,
   formatTaskIntrospectionMarkdown,
@@ -29,7 +29,7 @@ interface TaskIntrospectDeps {
 export function registerTaskIntrospectCommand(
   taskCmd: Command,
   program: Command,
-  deps: TaskIntrospectDeps = { getServices },
+  deps: TaskIntrospectDeps,
 ): void {
   taskCmd
     .command("introspect <id-or-slug>")

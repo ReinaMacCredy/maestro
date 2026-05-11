@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { searchMemory, type SearchResult } from "../usecases/memory-search.usecase.js";
 
 interface MemorySearchCommandDeps {
@@ -10,7 +10,7 @@ interface MemorySearchCommandDeps {
 
 export function registerMemorySearchCommand(
   program: Command,
-  deps: MemorySearchCommandDeps = { getServices },
+  deps: MemorySearchCommandDeps,
 ): void {
   program
     .command("memory-search")

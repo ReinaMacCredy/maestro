@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
-import { recordEvidence, type RecordEvidenceInput } from "../usecases/record-evidence.usecase.js";
+import { type Services } from "@/services.js";
+import { recordEvidence as defaultRecordEvidence, type RecordEvidenceInput } from "../usecases/record-evidence.usecase.js";
 import { listEvidence } from "../usecases/list-evidence.usecase.js";
 import { isEvidenceId } from "../domain/evidence-id.js";
 import { readText } from "@/shared/lib/fs.js";
@@ -30,7 +30,7 @@ import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
   readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore" | "contractStore" | "contractVersionStore">;
-  readonly recordEvidence: typeof recordEvidence;
+  readonly recordEvidence?: typeof defaultRecordEvidence;
 }
 
 const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note", "ai-review", "plan-check", "threat-model"];
@@ -38,7 +38,7 @@ const AI_REVIEWER_KINDS: readonly AIReviewerKind[] = ["bug", "security", "archit
 
 export function registerEvidenceCommand(
   program: Command,
-  deps: EvidenceCommandDeps = { getServices, recordEvidence },
+  deps: EvidenceCommandDeps,
 ): void {
   const evidenceCmd = program
     .command("evidence")
@@ -81,7 +81,7 @@ Examples:
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
 
       const input = await buildRecordInput(services, opts);
-      const row = await deps.recordEvidence(services.evidenceStore, input);
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, input);
       output(isJson, row, (r) => formatEvidenceRow(r, "Evidence recorded"));
     });
 }

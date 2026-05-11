@@ -4,7 +4,7 @@ import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
 import { readCurrentContractWithBackfill } from "@/features/task/index.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { autoMergeEligible } from "../usecases/auto-merge-eligible.usecase.js";
 
 interface MergeAutoCommandDeps {
@@ -25,7 +25,7 @@ interface MergeAutoCommandDeps {
 export function registerMergeAutoCommand(
   parent: Command,
   program: Command,
-  deps: MergeAutoCommandDeps = { getServices },
+  deps: MergeAutoCommandDeps,
 ): void {
   parent
     .command("auto")

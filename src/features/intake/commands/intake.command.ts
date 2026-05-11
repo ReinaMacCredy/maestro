@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { classifyIntake } from "../usecases/classify-intake.usecase.js";
 import type { IntakeFlag, IntakeResult } from "../domain/types.js";
 
@@ -27,7 +27,7 @@ interface IntakeCommandDeps {
 
 export function registerIntakeCommand(
   program: Command,
-  deps: IntakeCommandDeps = { getServices },
+  deps: IntakeCommandDeps,
 ): void {
   program
     .command("intake")

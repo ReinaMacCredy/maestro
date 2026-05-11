@@ -3,7 +3,7 @@
  * Implements CLI commands: validate show|update
  */
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   showAssertions,
@@ -20,7 +20,7 @@ interface ValidateCommandDeps {
 
 export function registerValidateCommand(
   program: Command,
-  deps: ValidateCommandDeps = { getServices },
+  deps: ValidateCommandDeps,
 ): void {
   const validationCmd = program
     .command("validate")

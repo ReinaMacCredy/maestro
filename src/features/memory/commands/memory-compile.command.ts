@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { compileLearnings, type CompileResult } from "../usecases/memory-compile.usecase.js";
 
 interface MemoryCompileCommandDeps {
@@ -10,7 +10,7 @@ interface MemoryCompileCommandDeps {
 
 export function registerMemoryCompileCommand(
   program: Command,
-  deps: MemoryCompileCommandDeps = { getServices },
+  deps: MemoryCompileCommandDeps,
 ): void {
   program
     .command("memory-compile")

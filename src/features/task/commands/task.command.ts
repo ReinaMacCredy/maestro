@@ -1,7 +1,7 @@
 import { homedir, userInfo } from "node:os";
 import { basename } from "node:path";
 import { Command, Option } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
@@ -109,7 +109,7 @@ export interface TaskCommandDeps {
 
 export function registerTaskCommand(
   program: Command,
-  deps: TaskCommandDeps = { getServices },
+  deps: TaskCommandDeps,
 ): void {
   const taskCmd = program
     .command("task")
@@ -139,11 +139,11 @@ Typical loop:
   registerBackfillSlugsCommand(taskCmd, program, deps);
   registerUpdateCommand(taskCmd, program, deps);
   registerClaimCommand(taskCmd, program, deps);
-  registerContractCommand(taskCmd, program);
-  registerTaskVerifyCommand(taskCmd, program);
-  registerTaskProofCommand(taskCmd, program);
-  registerTaskBudgetCommand(taskCmd, program);
-  registerTaskIntrospectCommand(taskCmd, program);
+  registerContractCommand(taskCmd, program, deps);
+  registerTaskVerifyCommand(taskCmd, program, deps);
+  registerTaskProofCommand(taskCmd, program, deps);
+  registerTaskBudgetCommand(taskCmd, program, deps);
+  registerTaskIntrospectCommand(taskCmd, program, deps);
   registerUnclaimCommand(taskCmd, program, deps);
   registerReleaseOwnedCommand(taskCmd, program, deps);
   registerBlockCommand(taskCmd, program, deps);

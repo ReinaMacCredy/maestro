@@ -5,7 +5,7 @@ import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { writeText, readText } from "@/shared/lib/fs.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { createSpec } from "../usecases/create-spec.usecase.js";
 import { updateSpec } from "../usecases/update-spec.usecase.js";
 import type { Spec, AcceptanceCriterion } from "../domain/types.js";
@@ -17,7 +17,7 @@ interface SpecCommandDeps {
 
 export function registerSpecCommand(
   program: Command,
-  deps: SpecCommandDeps = { getServices },
+  deps: SpecCommandDeps,
 ): void {
   const specCmd = program
     .command("spec")

@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import type { RawLearningEntry } from "../domain/memory-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { appendLearning } from "../usecases/memory-learn.usecase.js";
 
 interface MemoryLearnCommandDeps {
@@ -11,7 +11,7 @@ interface MemoryLearnCommandDeps {
 
 export function registerMemoryLearnCommand(
   program: Command,
-  deps: MemoryLearnCommandDeps = { getServices },
+  deps: MemoryLearnCommandDeps,
 ): void {
   program
     .command("memory-learn")

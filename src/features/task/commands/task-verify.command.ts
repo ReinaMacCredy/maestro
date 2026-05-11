@@ -10,7 +10,7 @@ import {
   readCurrentContractWithBackfill,
   readDraftContract,
 } from "@/features/task/usecases/read-current-contract-with-backfill.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import {
   isArchitectureRuleId,
   type ArchitectureRuleId,
@@ -27,7 +27,7 @@ interface TaskVerifyDeps {
 export function registerTaskVerifyCommand(
   taskCmd: Command,
   program: Command,
-  deps: TaskVerifyDeps = { getServices },
+  deps: TaskVerifyDeps,
 ): void {
   taskCmd
     .command("verify")

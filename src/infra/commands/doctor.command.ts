@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { output } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
@@ -10,7 +10,7 @@ interface DoctorCommandDeps {
 
 export function registerDoctorCommand(
   program: Command,
-  deps: DoctorCommandDeps = { getServices },
+  deps: DoctorCommandDeps,
 ): void {
   program
     .command("doctor")

@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import {
   createWorktreeForTask,
   formatCreateWorktreeLines,
@@ -12,7 +12,7 @@ interface WorktreeDeps {
 
 export function registerWorktreeCommand(
   program: Command,
-  deps: WorktreeDeps = { getServices },
+  deps: WorktreeDeps,
 ): void {
   const worktreeCmd = program
     .command("worktree")

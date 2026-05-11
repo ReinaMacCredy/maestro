@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { sessionExit } from "../usecases/session-exit.usecase.js";
 
 interface SessionExitDeps {
@@ -14,7 +14,7 @@ interface SessionExitDeps {
 export function registerSessionExitCommand(
   sessionCmd: Command,
   program: Command,
-  deps: SessionExitDeps = { getServices },
+  deps: SessionExitDeps,
 ): void {
   sessionCmd
     .command("exit <taskId>")

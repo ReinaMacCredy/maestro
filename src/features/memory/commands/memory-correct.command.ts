@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import type { Correction } from "../domain/memory-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { captureCorrection } from "../usecases/memory-correct.usecase.js";
 
 interface MemoryCorrectCommandDeps {
@@ -11,7 +11,7 @@ interface MemoryCorrectCommandDeps {
 
 export function registerMemoryCorrectCommand(
   program: Command,
-  deps: MemoryCorrectCommandDeps = { getServices },
+  deps: MemoryCorrectCommandDeps,
 ): void {
   program
     .command("memory-correct")

@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { detectSession } from "../usecases/detect-session.usecase.js";
 import { output } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -8,12 +8,12 @@ import { registerSessionStartCommand } from "./session-start.command.js";
 import { registerSessionExitCommand } from "./session-exit.command.js";
 
 interface SessionCommandDeps {
-  readonly getServices: () => Pick<Services, "sessionDetect">;
+  readonly getServices: () => Services;
 }
 
 export function registerSessionCommand(
   program: Command,
-  deps: SessionCommandDeps = { getServices },
+  deps: SessionCommandDeps,
 ): void {
   // The parent `session` command keeps the legacy `whoami` behavior when
   // invoked bare (`maestro session`, `maestro session --json`,
@@ -53,8 +53,8 @@ Examples:
       await runWhoami(deps, opts, program);
     });
 
-  registerSessionStartCommand(sessionCmd, program);
-  registerSessionExitCommand(sessionCmd, program);
+  registerSessionStartCommand(sessionCmd, program, deps);
+  registerSessionExitCommand(sessionCmd, program, deps);
 }
 
 async function runWhoami(

@@ -3,7 +3,7 @@
  * Implements CLI commands: feature list|update
  */
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   listFeatures,
@@ -32,7 +32,7 @@ interface FeatureCommandDeps {
 
 export function registerFeatureCommand(
   program: Command,
-  deps: FeatureCommandDeps = { getServices },
+  deps: FeatureCommandDeps,
 ): void {
   const featureCmd = program
     .command("feature")

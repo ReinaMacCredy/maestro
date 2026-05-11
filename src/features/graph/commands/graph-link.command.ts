@@ -2,23 +2,20 @@ import { basename } from "node:path";
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
-import { linkProjects, type LinkResult } from "../usecases/graph-link.usecase.js";
+import { type Services } from "@/services.js";
+import { linkProjects as defaultLinkProjects, type LinkResult } from "../usecases/graph-link.usecase.js";
 import type { GraphRelation } from "../domain/types.js";
 
 const VALID_RELATIONS: readonly GraphRelation[] = ["exposes", "consumes", "shared-types"];
 
 interface GraphLinkCommandDeps {
   readonly getServices: () => Pick<Services, "projectGraphStore">;
-  readonly linkProjects: typeof linkProjects;
+  readonly linkProjects?: typeof defaultLinkProjects;
 }
 
 export function registerGraphLinkCommand(
   program: Command,
-  deps: GraphLinkCommandDeps = {
-    getServices,
-    linkProjects,
-  },
+  deps: GraphLinkCommandDeps,
 ): void {
   program
     .command("graph-link")
@@ -53,7 +50,7 @@ Examples:
         const services = deps.getServices();
         const cwd = process.cwd();
 
-        const result = await deps.linkProjects(services.projectGraphStore, {
+        const result = await (deps.linkProjects ?? defaultLinkProjects)(services.projectGraphStore, {
           targetName: target,
           relation,
           detail: opts.via,

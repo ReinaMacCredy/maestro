@@ -2,12 +2,12 @@ import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
-import { getServices, type Services } from "@/services.js";
-import { amendContract } from "../usecases/amend-contract.usecase.js";
+import { type Services } from "@/services.js";
+import { amendContract as defaultAmendContract } from "../usecases/amend-contract.usecase.js";
 import { getCurrentContract } from "../usecases/get-current-contract.usecase.js";
 import { getContractHistory } from "../usecases/get-contract-history.usecase.js";
 import {
-  contractSprint,
+  contractSprint as defaultContractSprint,
   formatContractSprintLines,
 } from "../usecases/contract-sprint.usecase.js";
 import { generateContractAmendmentId } from "../domain/contract/contract-state.js";
@@ -18,13 +18,13 @@ interface ContractL2Deps {
     Services,
     "contractVersionStore" | "contractStore" | "evidenceStore"
   >;
-  readonly amendContract: typeof amendContract;
-  readonly contractSprint?: typeof contractSprint;
+  readonly amendContract?: typeof defaultAmendContract;
+  readonly contractSprint?: typeof defaultContractSprint;
 }
 
 export function registerContractL2Command(
   program: Command,
-  deps: ContractL2Deps = { getServices, amendContract },
+  deps: ContractL2Deps,
 ): void {
   const contractCmd = program
     .command("contract")
@@ -53,7 +53,7 @@ function registerSprintSubcommand(
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root);
-      const fn = deps.contractSprint ?? contractSprint;
+      const fn = deps.contractSprint ?? defaultContractSprint;
       const result = await fn(
         {
           contractVersionStore: services.contractVersionStore,
@@ -267,7 +267,7 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
         },
       };
 
-      const { newVersion } = await deps.amendContract(
+      const { newVersion } = await (deps.amendContract ?? defaultAmendContract)(
         services.contractVersionStore,
         services.contractStore,
         services.evidenceStore,

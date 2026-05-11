@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { homedir, userInfo } from "node:os";
 import { basename } from "node:path";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import {
   DEFAULT_HANDOFF_MODELS,
   launchHandoff,
@@ -40,7 +40,7 @@ interface HandoffCommandDeps {
 
 export function registerHandoffCommand(
   program: Command,
-  deps: HandoffCommandDeps = { getServices },
+  deps: HandoffCommandDeps,
 ): void {
   const handoffCmd = program
     .command("handoff")

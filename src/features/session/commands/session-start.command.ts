@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { listOpenProjectHandoffIdsForTask } from "@/features/handoff";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { sessionStart } from "../usecases/session-start.usecase.js";
 
 interface SessionStartDeps {
@@ -25,7 +25,7 @@ interface SessionStartDeps {
 export function registerSessionStartCommand(
   sessionCmd: Command,
   program: Command,
-  deps: SessionStartDeps = { getServices },
+  deps: SessionStartDeps,
 ): void {
   sessionCmd
     .command("start <taskId>")

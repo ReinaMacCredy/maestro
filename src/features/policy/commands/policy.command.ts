@@ -1,24 +1,26 @@
 import type { Command } from "commander";
+import type { Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { detectPendingLoosenings } from "../usecases/detect-pending-loosenings.usecase.js";
+import { detectPendingLoosenings as defaultDetectPendingLoosenings } from "../usecases/detect-pending-loosenings.usecase.js";
 import type { PendingLoosening } from "../usecases/detect-pending-loosenings.usecase.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { registerPolicyCheckCommand } from "./policy-check.command.js";
 
 interface PolicyPendingDeps {
-  readonly detectPendingLoosenings: (opts: { projectRoot: string }) => Promise<readonly PendingLoosening[]>;
+  readonly getServices: () => Services;
+  readonly detectPendingLoosenings?: (opts: { projectRoot: string }) => Promise<readonly PendingLoosening[]>;
 }
 
 export function registerPolicyCommand(
   program: Command,
-  deps: PolicyPendingDeps = { detectPendingLoosenings },
+  deps: PolicyPendingDeps,
 ): void {
   const policyCmd = program
     .command("policy")
     .description("Policy management and inspection");
 
   registerPolicyPendingCommand(policyCmd, program, deps);
-  registerPolicyCheckCommand(policyCmd, program);
+  registerPolicyCheckCommand(policyCmd, program, deps);
 }
 
 function registerPolicyPendingCommand(
@@ -38,7 +40,7 @@ Examples:
     .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, root);
       const projectRoot = resolveMaestroProjectRoot(process.cwd());
-      const loosenings = await deps.detectPendingLoosenings({ projectRoot });
+      const loosenings = await (deps.detectPendingLoosenings ?? defaultDetectPendingLoosenings)({ projectRoot });
       output(isJson, loosenings, formatLoosenings);
     });
 }

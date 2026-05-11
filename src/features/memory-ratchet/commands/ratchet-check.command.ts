@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { checkRatchet, type RatchetCheckResult } from "../usecases/ratchet-check.usecase.js";
 
 interface RatchetCheckCommandDeps {
@@ -9,7 +9,7 @@ interface RatchetCheckCommandDeps {
 
 export function registerRatchetCheckCommand(
   program: Command,
-  deps: RatchetCheckCommandDeps = { getServices },
+  deps: RatchetCheckCommandDeps,
 ): void {
   program
     .command("ratchet-check")

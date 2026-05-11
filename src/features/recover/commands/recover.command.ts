@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { recoverTask, type RecoverResult } from "../usecases/recover.usecase.js";
 
 interface RecoverDeps {
@@ -12,7 +12,7 @@ interface RecoverDeps {
 
 export function registerRecoverCommand(
   program: Command,
-  deps: RecoverDeps = { getServices },
+  deps: RecoverDeps,
 ): void {
   program
     .command("recover")

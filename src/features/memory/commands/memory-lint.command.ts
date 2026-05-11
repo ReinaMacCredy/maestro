@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { lintMemory, type LintResult } from "../usecases/memory-lint.usecase.js";
 
 interface MemoryLintCommandDeps {
@@ -9,7 +9,7 @@ interface MemoryLintCommandDeps {
 
 export function registerMemoryLintCommand(
   program: Command,
-  deps: MemoryLintCommandDeps = { getServices },
+  deps: MemoryLintCommandDeps,
 ): void {
   program
     .command("memory-lint")

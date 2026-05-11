@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { exportBundle } from "../usecases/export-bundle.usecase.js";
 import { inspectBundle } from "../usecases/inspect-bundle.usecase.js";
 import type {
@@ -25,7 +25,7 @@ interface BundleCommandDeps {
 
 export function registerBundleCommand(
   program: Command,
-  deps: BundleCommandDeps = { getServices },
+  deps: BundleCommandDeps,
 ): void {
   const bundleCmd = program
     .command("bundle")

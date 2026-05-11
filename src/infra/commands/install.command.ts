@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { initMaestro } from "../usecases/init.usecase.js";
 import { injectAgentBlocks } from "@/infra/usecases/manage-agents.usecase.js";
 import { formatAgentResults, output } from "@/shared/lib/output.js";
@@ -11,7 +11,7 @@ interface InstallCommandDeps {
 
 export function registerInstallCommand(
   program: Command,
-  deps: InstallCommandDeps = { getServices },
+  deps: InstallCommandDeps,
 ): void {
   program
     .command("install")

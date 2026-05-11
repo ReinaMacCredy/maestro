@@ -3,7 +3,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import type { RiskClass } from "@/features/task/index.js";
 import { maxRiskClass } from "@/features/risk/index.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
@@ -79,7 +79,7 @@ function printPolicyCheckResult(result: PolicyCheckResult): void {
 export function registerPolicyCheckCommand(
   policyCmd: Command,
   program: Command,
-  deps: PolicyCheckCommandDeps = { getServices },
+  deps: PolicyCheckCommandDeps,
 ): void {
   policyCmd
     .command("check")

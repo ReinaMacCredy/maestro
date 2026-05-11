@@ -3,7 +3,7 @@
  * Registers: maestro mission-control [--mission <id>] [--json] [--preview [screen]]
  */
 import type { Command } from "commander";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 // renderDashboard / renderPreviewFrame / runRenderCheck pull the OpenTUI +
@@ -72,7 +72,7 @@ interface MissionControlCommandDeps {
 
 export function registerMissionControlCommand(
   program: Command,
-  deps: MissionControlCommandDeps = { getServices },
+  deps: MissionControlCommandDeps,
 ): void {
   program
     .command("mission-control")

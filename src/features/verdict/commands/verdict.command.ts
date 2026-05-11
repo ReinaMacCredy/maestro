@@ -2,10 +2,10 @@ import os from "node:os";
 import type { Command } from "commander";
 import { resolveJsonFlag, output } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
-import { getServices, type Services } from "@/services.js";
-import { recordEvidence } from "@/features/evidence/index.js";
+import { type Services } from "@/services.js";
+import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/index.js";
 import type { EvidenceStorePort, VerdictOverridePayload } from "@/features/evidence/index.js";
-import { loadOwnersFromBase } from "@/features/policy/index.js";
+import { loadOwnersFromBase as defaultLoadOwnersFromBase } from "@/features/policy/index.js";
 import type { Owners } from "@/features/policy/index.js";
 import { resolveDefaultBase } from "@/shared/lib/git-base.js";
 import type { Verdict } from "../domain/types.js";
@@ -44,17 +44,12 @@ interface VerdictCommandDeps {
   >;
   readonly getUsername?: () => string;
   readonly loadOwnersFromBase?: (base: string, projectRoot: string) => Promise<Owners> | Owners;
-  readonly recordEvidence?: typeof recordEvidence;
+  readonly recordEvidence?: typeof defaultRecordEvidence;
 }
 
 export function registerVerdictCommand(
   program: Command,
-  deps: VerdictCommandDeps = {
-    getServices,
-    getUsername: () => os.userInfo().username,
-    loadOwnersFromBase,
-    recordEvidence,
-  },
+  deps: VerdictCommandDeps,
 ): void {
   const verdictCmd = program
     .command("verdict")
@@ -216,7 +211,7 @@ Examples:
         : await resolveDefaultBase();
 
       // Load owners from base branch (Rule 12 — not from PR head)
-      const loadOwnersFn = deps.loadOwnersFromBase ?? loadOwnersFromBase;
+      const loadOwnersFn = deps.loadOwnersFromBase ?? defaultLoadOwnersFromBase;
       const owners = await loadOwnersFn(base, services.projectRoot);
 
       // Authorization check: invoking user must be in sensitive_waiver
@@ -247,7 +242,7 @@ Examples:
         reason,
       };
 
-      const recordFn = deps.recordEvidence ?? recordEvidence;
+      const recordFn = deps.recordEvidence ?? defaultRecordEvidence;
       const row = await recordFn(services.evidenceStore, {
         task_id: taskId,
         kind: "verdict-override",

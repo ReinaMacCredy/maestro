@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import {
   inspectRun,
   formatInspectRunLines,
@@ -15,7 +15,7 @@ interface InspectDeps {
 
 export function registerInspectCommand(
   program: Command,
-  deps: InspectDeps = { getServices },
+  deps: InspectDeps,
 ): void {
   program
     .command("inspect <taskId>")

@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { recallMemory, type RecallResult } from "../usecases/memory-recall.usecase.js";
 
 interface MemoryRecallCommandDeps {
@@ -9,7 +9,7 @@ interface MemoryRecallCommandDeps {
 
 export function registerMemoryRecallCommand(
   program: Command,
-  deps: MemoryRecallCommandDeps = { getServices },
+  deps: MemoryRecallCommandDeps,
 ): void {
   program
     .command("memory-recall")

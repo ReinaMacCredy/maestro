@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { checkCostBudget } from "../usecases/check-cost-budget.js";
 import { readCurrentContractWithBackfill } from "../usecases/read-current-contract-with-backfill.js";
 
@@ -14,7 +14,7 @@ interface TaskBudgetDeps {
 export function registerTaskBudgetCommand(
   taskCmd: Command,
   program: Command,
-  deps: TaskBudgetDeps = { getServices },
+  deps: TaskBudgetDeps,
 ): void {
   taskCmd
     .command("budget")

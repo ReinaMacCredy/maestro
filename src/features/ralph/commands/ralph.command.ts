@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { ralphReview, type RalphReviewResult } from "../usecases/ralph-review.usecase.js";
 import type { RalphIterationPayload } from "@/features/evidence";
 
@@ -10,7 +10,7 @@ interface RalphDeps {
 
 export function registerRalphCommand(
   program: Command,
-  deps: RalphDeps = { getServices },
+  deps: RalphDeps,
 ): void {
   const ralphCmd = program
     .command("ralph")

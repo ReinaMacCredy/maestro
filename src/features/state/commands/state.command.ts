@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import {
   formatStateSinceLines,
   stateSince,
@@ -15,7 +15,7 @@ interface StateDeps {
 
 export function registerStateCommand(
   program: Command,
-  deps: StateDeps = { getServices },
+  deps: StateDeps,
 ): void {
   const stateCmd = program
     .command("state")

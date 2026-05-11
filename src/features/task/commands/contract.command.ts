@@ -4,7 +4,7 @@ import { fstatSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { fileExists, readTextOrStdin, writeText } from "@/shared/lib/fs.js";
@@ -69,7 +69,7 @@ export interface ContractCommandDeps {
 export function registerContractCommand(
   taskCmd: Command,
   program: Command,
-  deps: ContractCommandDeps = { getServices },
+  deps: ContractCommandDeps,
 ): void {
   const contractCmd = taskCmd
     .command("contract")

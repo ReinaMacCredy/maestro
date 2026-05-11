@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { createInterface } from "node:readline/promises";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { initMaestro } from "../usecases/init.usecase.js";
 import { output } from "@/shared/lib/output.js";
 
@@ -10,7 +10,7 @@ interface InitCommandDeps {
 
 export function registerInitCommand(
   program: Command,
-  deps: InitCommandDeps = { getServices },
+  deps: InitCommandDeps,
 ): void {
   program
     .command("init")

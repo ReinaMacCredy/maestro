@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { promoteToRatchet, type PromoteResult } from "../usecases/ratchet-promote.usecase.js";
 
 interface RatchetPromoteCommandDeps {
@@ -10,7 +10,7 @@ interface RatchetPromoteCommandDeps {
 
 export function registerRatchetPromoteCommand(
   program: Command,
-  deps: RatchetPromoteCommandDeps = { getServices },
+  deps: RatchetPromoteCommandDeps,
 ): void {
   program
     .command("ratchet-promote")
