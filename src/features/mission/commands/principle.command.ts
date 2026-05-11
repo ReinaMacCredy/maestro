@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import type {
@@ -14,7 +14,14 @@ import {
   PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
 } from "../usecases/principle-effectiveness.usecase.js";
 
-export function registerPrincipleCommand(program: Command): void {
+interface PrincipleCommandDeps {
+  readonly getServices: () => Pick<Services, "principleStore">;
+}
+
+export function registerPrincipleCommand(
+  program: Command,
+  deps: PrincipleCommandDeps = { getServices },
+): void {
   const principleCmd = program
     .command("principle")
     .description("Behavioral principle management")
@@ -26,7 +33,7 @@ export function registerPrincipleCommand(program: Command): void {
     .option("--profile <profile>", "Filter by milestone profile")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const profile = typeof opts.profile === "string" ? parsePrincipleProfile(opts.profile) : undefined;
 
@@ -50,7 +57,7 @@ export function registerPrincipleCommand(program: Command): void {
     .option("--source <source>", "Source attribution (karpathy | custom)", "custom")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const raw: CreatePrincipleInput = {
@@ -88,7 +95,7 @@ export function registerPrincipleCommand(program: Command): void {
     .option("--json", "Output as JSON")
     .option("--all", "Include principles that fall below the small-sample threshold")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const [principles, outcomes] = await Promise.all([
@@ -119,7 +126,7 @@ export function registerPrincipleCommand(program: Command): void {
     .description("Remove a principle by id")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const removed = await services.principleStore.remove(id);

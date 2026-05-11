@@ -3,7 +3,7 @@
  * Implements CLI commands: milestone list|status|seal
  */
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   listMilestones,
@@ -15,7 +15,14 @@ import {
 } from "../usecases/milestone-lifecycle.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
-export function registerMilestoneCommand(program: Command): void {
+interface MilestoneCommandDeps {
+  readonly getServices: () => Pick<Services, "missionStore" | "featureStore" | "assertionStore">;
+}
+
+export function registerMilestoneCommand(
+  program: Command,
+  deps: MilestoneCommandDeps = { getServices },
+): void {
   const milestoneCmd = program
     .command("milestone")
     .description("Milestone lifecycle management")
@@ -27,7 +34,7 @@ export function registerMilestoneCommand(program: Command): void {
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await listMilestones(
@@ -46,7 +53,7 @@ export function registerMilestoneCommand(program: Command): void {
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
     .action(async (milestoneId: string, opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await getMilestoneStatus(
@@ -66,7 +73,7 @@ export function registerMilestoneCommand(program: Command): void {
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
     .action(async (milestoneId: string, opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await sealMilestone(

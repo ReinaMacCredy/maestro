@@ -3,7 +3,7 @@
  * Implements CLI commands: validate show|update
  */
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   showAssertions,
@@ -14,7 +14,14 @@ import {
 import { MaestroError } from "@/shared/errors.js";
 import type { Assertion } from "../domain/mission-types.js";
 
-export function registerValidateCommand(program: Command): void {
+interface ValidateCommandDeps {
+  readonly getServices: () => Pick<Services, "missionStore" | "assertionStore">;
+}
+
+export function registerValidateCommand(
+  program: Command,
+  deps: ValidateCommandDeps = { getServices },
+): void {
   const validationCmd = program
     .command("validate")
     .description("Validation lifecycle management")
@@ -27,7 +34,7 @@ export function registerValidateCommand(program: Command): void {
     .option("--milestone <id>", "Filter by milestone ID")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       if (!opts.mission) {
@@ -56,7 +63,7 @@ export function registerValidateCommand(program: Command): void {
     .option("--reason <reason>", "Required when result is 'waived'")
     .option("--json", "Output as JSON")
     .action(async (assertionId: string, opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       if (!opts.mission) {
