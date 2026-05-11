@@ -1,10 +1,17 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { compileLearnings, type CompileResult } from "../usecases/memory-compile.usecase.js";
 
-export function registerMemoryCompileCommand(program: Command): void {
+interface MemoryCompileCommandDeps {
+  readonly getServices: () => Pick<Services, "learningStore">;
+}
+
+export function registerMemoryCompileCommand(
+  program: Command,
+  deps: MemoryCompileCommandDeps = { getServices },
+): void {
   program
     .command("memory-compile")
     .description("Compile raw learnings into a summary")
@@ -22,7 +29,7 @@ Examples:
         ]);
       }
 
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       const result = await compileLearnings(services.learningStore, opts.summary);

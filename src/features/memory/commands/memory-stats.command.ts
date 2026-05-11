@@ -1,10 +1,20 @@
 import type { Command } from "commander";
 import type { MemoryStats } from "../domain/memory-types.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { getMemoryStats } from "../usecases/memory-stats.usecase.js";
 
-export function registerMemoryStatsCommand(program: Command): void {
+interface MemoryStatsCommandDeps {
+  readonly getServices: () => Pick<
+    Services,
+    "correctionStore" | "learningStore" | "ratchetStore" | "projectGraphStore"
+  >;
+}
+
+export function registerMemoryStatsCommand(
+  program: Command,
+  deps: MemoryStatsCommandDeps = { getServices },
+): void {
   program
     .command("memory-stats")
     .description("Show memory system statistics")
@@ -15,7 +25,7 @@ Examples:
 `)
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       const stats = await getMemoryStats(

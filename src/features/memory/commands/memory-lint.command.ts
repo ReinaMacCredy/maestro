@@ -1,9 +1,16 @@
 import type { Command } from "commander";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { lintMemory, type LintResult } from "../usecases/memory-lint.usecase.js";
 
-export function registerMemoryLintCommand(program: Command): void {
+interface MemoryLintCommandDeps {
+  readonly getServices: () => Pick<Services, "correctionStore" | "learningStore" | "ratchetStore">;
+}
+
+export function registerMemoryLintCommand(
+  program: Command,
+  deps: MemoryLintCommandDeps = { getServices },
+): void {
   program
     .command("memory-lint")
     .description("Check memory system health")
@@ -14,7 +21,7 @@ Examples:
 `)
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       const result = await lintMemory(
