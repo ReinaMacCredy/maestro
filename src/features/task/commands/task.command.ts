@@ -94,6 +94,7 @@ import { registerTaskVerifyCommand } from "./task-verify.command.js";
 import { registerTaskProofCommand } from "./task-proof.command.js";
 import { registerTaskBudgetCommand } from "./task-budget.command.js";
 import { registerTaskIntrospectCommand } from "./task-introspect.command.js";
+import { registerTaskObserveCommand } from "./task-observe.command.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
 
 interface ContinuationEditInput {
@@ -144,6 +145,7 @@ Typical loop:
   registerTaskProofCommand(taskCmd, program, deps);
   registerTaskBudgetCommand(taskCmd, program, deps);
   registerTaskIntrospectCommand(taskCmd, program, deps);
+  registerTaskObserveCommand(taskCmd, program, deps);
   registerUnclaimCommand(taskCmd, program, deps);
   registerReleaseOwnedCommand(taskCmd, program, deps);
   registerBlockCommand(taskCmd, program, deps);

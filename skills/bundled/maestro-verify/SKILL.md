@@ -457,6 +457,17 @@ interface RuntimeSignalPayload {
 
 Advisory at L7: `pass=false` does not flip the Verdict by default. Teams add `runtime-signal` to the evidence gate in `policies/risk.yaml` to make failing signals blocking.
 
+### Distinct from dev-time observability
+
+`runtime check` is a release gate driven by `Spec.runtime_signals`; it
+produces `runtime-signal` Evidence and runs once before the deploy
+decision. For *ad-hoc* per-worktree observability while implementing, use
+`maestro task observe metrics <promql>` and `maestro task observe logs`
+instead (see `maestro-task` skill). Dev observations are advisory and
+produce `manual-note` evidence tagged `[dev-observation]` only when
+`--record` is set — they never gate the Verdict. Full reference:
+`docs/dev-observability.md`.
+
 Provider base URL precedence: `--provider-base-url` flag → `MAESTRO_PROMETHEUS_URL` env → `http://localhost:9090`.
 
 See `docs/runtime-monitoring.md` for the full reference and adapter guide.

@@ -299,6 +299,34 @@ parseable object.
   `maestro ralph review --task <id> --stuck-threshold 1` to confirm
   convergence.
 
+### Dev-time observability with `task observe`
+
+Use `maestro task observe` for ad-hoc, per-worktree observability *while
+you work*: query a metric or tail a log without leaving the loop. It is
+distinct from `maestro runtime check`, which gates deploys.
+
+```bash
+maestro task observe metrics 'rate(http_requests_total[1m])' --task <id>
+maestro task observe metrics 'up' --task <id> --provider-base-url http://prom:9090
+maestro task observe logs --task <id> --log-file /tmp/dev.log --lines 20 --filter ERROR
+```
+
+- Provider URL precedence: `--provider-base-url` > `MAESTRO_PROMETHEUS_URL`
+  > `http://localhost:9090`.
+- Log path precedence: `--log-file` > `MAESTRO_DEV_LOG_FILE` > error.
+- `--record` writes a `manual-note` evidence row tagged
+  `[dev-observation]` at `agent-claimed-locally`. The row is advisory; it
+  does not gate the verdict.
+
+When to call:
+
+- Before editing, to baseline error rate or a custom counter.
+- After edits, to confirm the new path is live before requesting the verdict.
+- When `task introspect` surfaces `loopWarning`, to see *why* the same
+  command keeps failing.
+
+See `docs/dev-observability.md`.
+
 ## Session lifecycle
 
 Two verbs anchor non-trivial work to a specific task:
