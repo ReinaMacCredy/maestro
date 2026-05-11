@@ -5,6 +5,7 @@ import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.j
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { EvidenceRow, VerdictOverridePayload } from "@/features/evidence/index.js";
@@ -13,6 +14,8 @@ import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/poli
 import type { RiskServices } from "@/features/risk/services.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
 import type { Contract } from "@/features/task/index.js";
+import type { SpecStorePort } from "@/features/spec/ports/storage.js";
+import { mockContractStore } from "../../../../helpers/mocks.js";
 
 // ─── Console capture ──────────────────────────────────────────────────────────
 
@@ -122,6 +125,7 @@ function fakeGitAnchor(treeSha = "deadbeef1234567890abcdef1234567890abcdef"): Gi
     collectChangedPaths: async () => [],
     collectAddedLines: async () => [],
     resolveTreeSha: async () => treeSha,
+    collectUntrackedFiles: async () => [],
   };
 }
 
@@ -172,8 +176,10 @@ function fakeRunStateStore(): RunStateStorePort {
 interface ServicesLike {
   verdictStore: VerdictStorePort;
   contractVersionStore: ContractVersionStorePort;
+  contractStore: ContractStorePort;
   runStateStore: RunStateStorePort;
   evidenceStore: EvidenceStorePort;
+  specStore: SpecStorePort;
   getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
@@ -195,8 +201,10 @@ function makeServices(
   return {
     verdictStore: fakeVerdictStore(initialVerdicts),
     contractVersionStore: fakeContractVersionStore(makeContract()),
+    contractStore: mockContractStore(),
     runStateStore: fakeRunStateStore(),
     evidenceStore: fakeEvidenceStore(evidenceRows),
+    specStore: { read: async () => undefined, write: async () => {}, list: async () => [] },
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     getEffectiveReleasePolicy: async () => makeReleasePolicy(),

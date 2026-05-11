@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { assertNoDeprecatedVersionFlag } from "@/shared/lib/deprecated-version-flag.js";
+import { assertNoDeprecatedVersionFlag } from "@/infra/lib/deprecated-version-flag.js";
 import { MaestroError } from "@/shared/errors.js";
 
 const argv = (...rest: string[]): readonly string[] => ["bun", "maestro", ...rest];

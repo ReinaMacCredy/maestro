@@ -95,7 +95,6 @@ describe("captureMissionControlFrame", () => {
         gitAvailable: true,
         checks: [],
         missionDirectory: null,
-        agentTypes: [],
         backgroundMode: "terminal",
       },
       configInspector: null,
@@ -158,7 +157,6 @@ describe("captureMissionControlFrame", () => {
           gitAvailable: true,
           checks: [],
           missionDirectory: null,
-          agentTypes: [],
           backgroundMode: "terminal",
         },
       };
@@ -217,7 +215,6 @@ describe("captureMissionControlFrame", () => {
           gitAvailable: true,
           checks: [],
           missionDirectory: null,
-          agentTypes: [],
           backgroundMode: "terminal",
         },
       };
@@ -281,7 +278,6 @@ describe("captureMissionControlFrame", () => {
         gitAvailable: true,
         checks: [],
         missionDirectory: null,
-        agentTypes: [],
         backgroundMode: "terminal",
       },
     };
@@ -339,7 +335,6 @@ describe("captureMissionControlFrame", () => {
         gitAvailable: true,
         checks: [],
         missionDirectory: null,
-        agentTypes: [],
         backgroundMode: "terminal",
       },
       agentGrid: [

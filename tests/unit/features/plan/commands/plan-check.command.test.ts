@@ -219,7 +219,7 @@ describe("registerPlanCheckCommand", () => {
 
     await program.parseAsync(["node", "maestro", "plan", "check", "--task", "tsk-aaaaaa", "--plan-file", planPath]);
 
-    const payload = evidenceStore.appended[0]!.payload as { findings: Array<{ check: string }> };
+    const payload = evidenceStore.appended[0]!.payload as unknown as { findings: Array<{ check: string }> };
     expect(payload.findings.some((f) => f.check === "scope-widens")).toBe(true);
   });
 });

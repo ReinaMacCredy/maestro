@@ -89,7 +89,7 @@ describe("amendContract", () => {
     ]);
     expect(amended.doneWhen).toHaveLength(2);
     expect(amended.doneWhen[0]).toEqual({
-      id: locked.doneWhen[0]?.id,
+      id: locked.doneWhen[0]!.id,
       text: "contract and tests exist",
       kind: "manual",
     });

@@ -262,7 +262,7 @@ describe("Missions", () => {
 
     await expect(missions.resolveSingleActionableContext()).resolves.toEqual({
       mission,
-      milestone: mission.milestones[0],
+      milestone: mission.milestones[0]!,
       feature,
       assertions: [assertion],
     });

@@ -6,6 +6,7 @@ import type { RunState } from "@/features/task";
 import type { Verdict } from "@/features/verdict";
 import type { Contract } from "@/features/task";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
+import { mockContractStore } from "../../../helpers/mocks.js";
 
 // ---- minimal fake factories ----
 
@@ -64,7 +65,7 @@ function makeContract(taskId: string, intent?: string, maxRetries?: number, maxW
     doneWhen: [],
     amendments: [],
     createdBy: "agent",
-    configSnapshot: { strict: false, overlapPolicy: "annotate", rebaseFallback: "best-effort" },
+    configSnapshot: { strict: false, overlapPolicy: "annotate", rebaseFallback: "best-effort", staleReclaimContractPolicy: "inherit" },
     ...(maxRetries !== undefined || maxWallClock !== undefined
       ? { costBudget: { maxRetries: maxRetries ?? 5, maxWallClockSeconds: maxWallClock ?? 3600 } }
       : {}),
@@ -92,6 +93,7 @@ function makeDeps(opts: {
       readLatest: async (taskId) => verdicts[taskId],
       readVersion: async () => undefined,
       history: async () => [],
+      findByTreeSha: async () => [],
     },
     runStateStore: {
       read: async (taskId) => runStates[taskId],
@@ -104,6 +106,7 @@ function makeDeps(opts: {
       readVersion: async () => undefined,
       history: async () => [],
     },
+    contractStore: mockContractStore(),
   };
 }
 

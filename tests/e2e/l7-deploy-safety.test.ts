@@ -391,7 +391,7 @@ async function commitFile(dir: string, relPath: string, content = "// test\n"): 
  * The fixture responds to /api/v1/query with the configured metric value.
  */
 function startPrometheusFixture(metricValue: string): {
-  server: Server;
+  server: Server<unknown>;
   port: number;
   requestLog: string[];
 } {
@@ -415,7 +415,7 @@ function startPrometheusFixture(metricValue: string): {
     },
   });
 
-  return { server, port: server.port, requestLog };
+  return { server, port: server.port!, requestLog };
 }
 
 // ─── Scenarios ─────────────────────────────────────────────────────────────────

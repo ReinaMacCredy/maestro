@@ -70,7 +70,7 @@ describe("buildProofMap", () => {
       makeManualNoteRow({ id: "ev-002", task_id: "tsk-001", criterion_id: "c-002" }),
     ];
 
-    const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: rows });
+    const result = buildProofMap({ taskId: "tsk-001", spec, contract: undefined, evidenceRows: rows });
 
     expect(result.entries.length).toBe(3);
     expect(result.uncoveredCount).toBe(1);
@@ -80,7 +80,7 @@ describe("buildProofMap", () => {
   });
 
   it("no spec → entries: [], uncoveredCount: 0, no error", () => {
-    const result = buildProofMap({ taskId: "tsk-002", spec: undefined, evidenceRows: [] });
+    const result = buildProofMap({ taskId: "tsk-002", spec: undefined, contract: undefined, evidenceRows: [] });
 
     expect(result.entries).toEqual([]);
     expect(result.uncoveredCount).toBe(0);
@@ -94,7 +94,7 @@ describe("buildProofMap", () => {
       makeCommandRow({ id: "ev-001", task_id: "tsk-001" }), // no criterion_id
     ];
 
-    const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: rows });
+    const result = buildProofMap({ taskId: "tsk-001", spec, contract: undefined, evidenceRows: rows });
 
     expect(result.entries[0]?.covered).toBe(false);
     expect(result.entries[0]?.evidence).toHaveLength(0);
@@ -109,7 +109,7 @@ describe("buildProofMap", () => {
       makeManualNoteRow({ id: "ev-003", task_id: "tsk-001", criterion_id: "c-001" }),
     ];
 
-    const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: rows });
+    const result = buildProofMap({ taskId: "tsk-001", spec, contract: undefined, evidenceRows: rows });
 
     expect(result.entries[0]?.evidence).toHaveLength(3);
     expect(result.entries[0]?.covered).toBe(true);
@@ -118,7 +118,7 @@ describe("buildProofMap", () => {
 
   it("missionId is populated from spec.mission_id", () => {
     const spec = makeSpec([{ id: "c-001", text: "works" }]);
-    const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: [] });
+    const result = buildProofMap({ taskId: "tsk-001", spec, contract: undefined, evidenceRows: [] });
 
     expect(result.missionId).toBe("msn-001");
   });

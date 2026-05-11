@@ -25,11 +25,12 @@ function makeSuccessBody(rawValue: string): unknown {
 }
 
 function stubFetch(body: unknown, status = 200): typeof fetch {
-  return async (_url: string | URL | Request) => ({
+  const fn = (async (_url: string | URL | Request) => ({
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
-  } as Response);
+  } as Response)) as typeof fetch;
+  return fn;
 }
 
 describe("PrometheusRuntimeMonitor.query", () => {

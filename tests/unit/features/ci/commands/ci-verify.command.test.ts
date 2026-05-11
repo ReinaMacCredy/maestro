@@ -18,6 +18,7 @@ import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/poli
 import type { RiskServices } from "@/features/risk/services.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
 import type { Contract } from "@/features/task/index.js";
+import { mockContractStore } from "../../../../helpers/mocks.js";
 
 // ─── Console capture ──────────────────────────────────────────────────────────
 
@@ -190,7 +191,7 @@ function makeServices(verdict: Verdict): FakeServices {
   return {
     verdictStore: fakeVerdictStore(verdict),
     contractVersionStore: fakeContractVersionStore(),
-    contractStore: { read: async () => undefined, write: async () => {} },
+    contractStore: mockContractStore(),
     runStateStore: fakeRunStateStore(),
     evidenceStore: fakeEvidenceStore(),
     specStore: { read: async () => undefined, write: async () => {}, list: async () => [] },

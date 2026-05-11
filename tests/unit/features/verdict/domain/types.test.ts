@@ -20,7 +20,7 @@ describe("Verdict types", () => {
       reasons: [
         {
           category: "trust",
-          code: "SCOPE_OK",
+          code: "all-checks-passed",
           message: "All files in scope",
           evidenceIds: ["evd-1714747200123-a1b2c3"],
           findingChecks: ["check-scope"],

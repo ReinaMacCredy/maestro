@@ -35,17 +35,15 @@ function makeSnapshot(): MissionControlSnapshot {
     milestones: [],
     activeFeature: null,
     session: null,
-    pendingHandoffs: [],
     configSummary: null,
     configInspector: {
-      tabs: ["overview", "effective", "project", "global", "defaults", "agents", "plan", "doctor", "memory"],
+      tabs: ["overview", "effective", "project", "global", "defaults", "plan", "doctor", "memory"],
       rowsByTab: {
         overview: [],
         effective: [],
         project: [],
         global: [],
         defaults: [],
-        agents: [],
         plan: [],
         doctor: [],
         memory: [

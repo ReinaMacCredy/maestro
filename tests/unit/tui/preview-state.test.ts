@@ -110,7 +110,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       gitAvailable: true,
       checks: [],
       missionDirectory: ".maestro/missions/2026-04-02-001",
-      agentTypes: ["test-skill"],
       backgroundMode: "solid",
     },
     progressLog: [],

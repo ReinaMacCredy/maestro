@@ -26,22 +26,24 @@ describe("buildBatchInputSchema", () => {
   it("defines BatchTaskInput with title required", () => {
     const schema = buildBatchInputSchema();
     const defs = schema.$defs as Record<string, { required: string[]; properties: Record<string, unknown> }>;
-    expect(defs.BatchTaskInput.required).toEqual(["title"]);
-    expect(defs.BatchTaskInput.properties).toHaveProperty("title");
-    expect(defs.BatchTaskInput.properties).toHaveProperty("type");
-    expect(defs.BatchTaskInput.properties).toHaveProperty("priority");
-    expect(defs.BatchTaskInput.properties).toHaveProperty("labels");
-    expect(defs.BatchTaskInput.properties).toHaveProperty("parent");
-    expect(defs.BatchTaskInput.properties).toHaveProperty("blockedBy");
-    expect(defs.BatchTaskInput.properties).toHaveProperty("slug");
+    const batchTaskInput = defs.BatchTaskInput!;
+    expect(batchTaskInput.required).toEqual(["title"]);
+    expect(batchTaskInput.properties).toHaveProperty("title");
+    expect(batchTaskInput.properties).toHaveProperty("type");
+    expect(batchTaskInput.properties).toHaveProperty("priority");
+    expect(batchTaskInput.properties).toHaveProperty("labels");
+    expect(batchTaskInput.properties).toHaveProperty("parent");
+    expect(batchTaskInput.properties).toHaveProperty("blockedBy");
+    expect(batchTaskInput.properties).toHaveProperty("slug");
   });
 
   it("enumerates the same task types and priorities the validator accepts", () => {
     const schema = buildBatchInputSchema();
     const defs = schema.$defs as Record<string, { properties: Record<string, { enum?: unknown[] }> }>;
-    const typeEnum = defs.BatchTaskInput.properties.type.enum ?? [];
+    const batchTaskInput = defs.BatchTaskInput!;
+    const typeEnum = batchTaskInput.properties.type!.enum ?? [];
     expect(typeEnum).toEqual(expect.arrayContaining(["task", "bug", "feature", "epic", "chore"]));
-    const priorityEnum = defs.BatchTaskInput.properties.priority.enum ?? [];
+    const priorityEnum = batchTaskInput.properties.priority!.enum ?? [];
     expect(priorityEnum).toEqual([0, 1, 2, 3, 4]);
   });
 

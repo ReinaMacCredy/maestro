@@ -459,8 +459,10 @@ describe("ContractWorkflows", () => {
         {
           id: "am-000001",
           at: "2026-04-20T00:01:30.000Z",
-          actorId: "agent-a",
+          by: "agent-a",
           reason: "first amendment used the budget",
+          before: {},
+          after: {},
         },
       ],
     });
@@ -577,8 +579,10 @@ describe("ContractWorkflows", () => {
         {
           id: "am-000001",
           at: "2026-04-20T00:01:30.000Z",
-          actorId: "agent-a",
+          by: "agent-a",
           reason: "first amendment used the budget",
+          before: {},
+          after: {},
         },
       ],
     });
@@ -645,8 +649,10 @@ describe("ContractWorkflows", () => {
         {
           id: "am-000001",
           at: "2026-04-20T00:01:30.000Z",
-          actorId: "agent-a",
+          by: "agent-a",
           reason: "first amendment used the budget",
+          before: {},
+          after: {},
         },
       ],
     });

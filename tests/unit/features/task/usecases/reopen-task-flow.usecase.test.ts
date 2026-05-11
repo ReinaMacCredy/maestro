@@ -127,7 +127,7 @@ function createContinuationStore(state: { active?: unknown; reopened: number }):
     archiveCompleted: unused,
     reopen: async () => {
       state.reopened += 1;
-      return false;
+      return undefined;
     },
     delete: unused,
     deleteCompleted: unused,

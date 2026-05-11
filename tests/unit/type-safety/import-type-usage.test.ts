@@ -55,7 +55,7 @@ describe("Type Import Usage", () => {
       const lines = content.split("\n");
 
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        const line = lines[i]!.trim();
 
         // Skip if already using 'import type'
         if (line.startsWith("import type")) continue;
@@ -149,7 +149,7 @@ describe("Type Import Usage", () => {
       const lines = content.split("\n");
 
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        const line = lines[i]!.trim();
 
         // Skip if already using 'import type'
         if (line.startsWith("import type")) continue;
