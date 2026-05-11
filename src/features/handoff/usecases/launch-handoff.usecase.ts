@@ -12,6 +12,7 @@ import type {
 import { DEFAULT_HANDOFF_MODELS } from "@/features/handoff";
 import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
 import type { GitPort } from "@/infra/ports/git.port.js";
+import type { GitWorktree } from "@/infra/domain/git-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readText, writeText } from "@/shared/lib/fs.js";
 import { buildHandoffPrompt } from "./build-handoff-prompt.usecase.js";

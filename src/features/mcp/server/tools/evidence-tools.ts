@@ -4,7 +4,7 @@ import {
   recordEvidence,
   type EvidenceListFilter,
 } from "@/features/evidence/index.js";
-import { fromMaestroError, ok, toCallToolResult } from "../errors.js";
+import { fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import { EvidenceListInput, EvidenceRecordInput } from "../schemas/inputs.js";
 import { EvidenceListOutput, EvidenceRecordOutput } from "../schemas/outputs.js";
@@ -26,7 +26,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const filter: EvidenceListFilter = {
@@ -60,7 +60,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const { sessionId } = deps;

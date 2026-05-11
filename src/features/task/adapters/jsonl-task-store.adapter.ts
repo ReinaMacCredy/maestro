@@ -101,7 +101,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   async create(input: CreateTaskInput): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
 
       if (input.parentId !== undefined && !tasks.has(input.parentId)) {
@@ -156,7 +156,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   ): Promise<readonly Task[]> {
     if (inputs.length === 0) return [];
 
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<readonly Task[]> => {
       const tasks = await this.readAll();
 
       const generatedIds = generateUniqueIds(inputs.length, tasks);
@@ -255,7 +255,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   async update(id: string, patch: UpdateTaskInput, opts: TaskMutationInput = {}): Promise<UpdateTaskResult> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<UpdateTaskResult> => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
       if (!existing) {
@@ -320,7 +320,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     sessionId: string,
     opts: { force?: boolean; checkBusy?: boolean } = {},
   ): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
       if (!existing) {
@@ -365,7 +365,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   async unclaim(id: string, sessionId: string, opts: { force?: boolean } = {}): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
       if (!existing) {
@@ -395,7 +395,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     blockedTaskIds: readonly string[],
     opts: TaskMutationInput = {},
   ): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
       const blocker = tasks.get(id);
       if (!blocker) {
@@ -442,7 +442,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     blockedTaskIds: readonly string[],
     opts: TaskMutationInput = {},
   ): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
       const blocker = tasks.get(id);
       if (!blocker) {
@@ -522,7 +522,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   ): Promise<readonly Task[]> {
     if (updates.length === 0) return [];
 
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<readonly Task[]> => {
       const tasks = await this.readAll();
 
       const seenIds = new Set<string>();
@@ -579,7 +579,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   async syncMetadata(id: string, patch: TaskMetadataPatch): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
       if (!existing) {
@@ -610,7 +610,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   async releaseOwned(sessionId: string): Promise<readonly Task[]> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<readonly Task[]> => {
       const tasks = await this.readAll();
       let clock: string | undefined;
       const released: Task[] = [];
@@ -636,7 +636,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   async heartbeat(id: string, sessionId: string, opts: { force?: boolean } = {}): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
       if (!existing) {
@@ -666,7 +666,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   async reopen(id: string): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
       if (!existing) {
@@ -696,7 +696,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   async delete(id: string): Promise<Task> {
-    return this.withLock(async (): Promise<void> => {
+    return this.withLock(async (): Promise<Task> => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
       if (!existing) {

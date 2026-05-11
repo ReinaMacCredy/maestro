@@ -10,7 +10,7 @@ import {
 } from "@/features/handoff/index.js";
 import { buildTaskOwnerId } from "@/features/task/index.js";
 import type { z } from "zod";
-import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
+import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import {
   HandoffListInput,
@@ -61,7 +61,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         if (args.openOnly === true && args.displayState !== undefined) {
           return toCallToolResult(
@@ -102,7 +102,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const record = await showProjectHandoff(services.handoffStore, args.id, {
@@ -131,7 +131,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const ids = await listOpenHandoffsForTask(services.handoffStore, args.taskId, {
@@ -162,7 +162,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const actorAgent: HandoffAgent = args.actorAgent;

@@ -40,7 +40,7 @@ export function registerMcpCheckCommand(mcpCmd: Command, program: Command): void
       const expectedEntry = buildMaestroAgentMcpConfigEntry(binaryPath);
 
       const agentRuntimes: AgentRuntimeStatus[] = await Promise.all(
-        defaultAgentRuntimeTargets().map(async (target): Promise<void> => {
+        defaultAgentRuntimeTargets().map(async (target): Promise<AgentRuntimeStatus> => {
           let existing;
           try {
             existing = await readMaestroEntry(target);

@@ -7,7 +7,7 @@ import {
   readCurrentContractWithBackfill,
   type RiskClass,
 } from "@/features/task/index.js";
-import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
+import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { PolicyCheckInput } from "../schemas/inputs.js";
 import { PolicyCheckOutput } from "../schemas/outputs.js";
 import type { RegisterDeps } from "./types.js";
@@ -28,7 +28,7 @@ export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const contract = await readCurrentContractWithBackfill(

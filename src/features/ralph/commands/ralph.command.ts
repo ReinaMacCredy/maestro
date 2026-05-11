@@ -29,7 +29,7 @@ export function registerRalphCommand(
       const result = await ralphReview(
         {
           evidenceStore: services.evidenceStore,
-          previousIterations: async (): Promise<void> => {
+          previousIterations: async (): Promise<readonly { iteration: number; findingsHash: string }[]> => {
             const rows = await services.evidenceStore.list({
               task_id: opts.task,
               kind: "ralph-iteration",

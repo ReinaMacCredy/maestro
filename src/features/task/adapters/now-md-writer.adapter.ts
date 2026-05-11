@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { ContractStoreQueryPort } from "../ports/contract-store.port.js";
 import type { Task } from "../domain/task-types.js";
+import type { Contract } from "../domain/contract/contract-types.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, writeText } from "@/shared/lib/fs.js";
 import { buildNowMd } from "../domain/now-md-format.js";
@@ -29,7 +30,7 @@ export class FsNowMdWriterAdapter {
     await writeText(this.nowMdPath(), content);
   }
 
-  private async loadContracts(): Promise<void> {
+  private async loadContracts(): Promise<ReadonlyMap<string, Contract> | undefined> {
     if (!this.contractStore) {
       return new Map();
     }

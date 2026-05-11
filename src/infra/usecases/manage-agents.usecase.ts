@@ -244,7 +244,7 @@ async function writeBundledSkill(
   const manifestPath = join(skillDir, MANIFEST_FILENAME);
   const prevManifest = await readBundledSkillManifest(manifestPath);
 
-  const perFile = await Promise.all(template.files.map(async (file): Promise<void> => {
+  const perFile = await Promise.all(template.files.map(async (file): Promise<{ path: string; manifestHash: string; changed: boolean; preserved: boolean }> => {
     const absolute = join(skillDir, file.path);
     const executable = file.executable === true;
     const shippedHash = contentHash(file.content);
@@ -382,7 +382,7 @@ async function removeStaleBundledSkillDirs(skillRoot: string): Promise<string[]>
   const entries = (await readdir(skillRoot, { withFileTypes: true }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
-  const results = await Promise.all(entries.map(async (entry): Promise<void> => {
+  const results = await Promise.all(entries.map(async (entry): Promise<string | undefined> => {
     if (!entry.isDirectory()) return undefined;
     if (!entry.name.startsWith(BUNDLED_SKILL_PREFIX)) return undefined;
     if (BUNDLED_SKILL_NAME_SET.has(entry.name)) return undefined;
@@ -494,7 +494,7 @@ async function migrateRealDirToSymlink(
   });
 
   const userEditCandidates = await Promise.all(
-    Object.entries(manifest.fileHashes).map(async ([relativePath, prevHash]): Promise<void> => {
+    Object.entries(manifest.fileHashes).map(async ([relativePath, prevHash]): Promise<{ relativePath: string; content: string } | undefined> => {
       const absolute = await resolveManagedManifestPath(resolvedRealDir, realSkillDirPath, relativePath);
       if (!absolute) return undefined;
       const existing = await readText(absolute);
@@ -509,7 +509,7 @@ async function migrateRealDirToSymlink(
   // current value. If maestro tree differs from the agent's edit AND from the
   // shipped baseline (prevHash), another agent has already migrated a
   // conflicting edit in this run.
-  const divergenceChecks = await Promise.all(userEdits.map(async (edit): Promise<void> => {
+  const divergenceChecks = await Promise.all(userEdits.map(async (edit): Promise<string | undefined> => {
     const targetFile = join(target, edit.relativePath);
     const existingInMaestro = await readText(targetFile);
     if (existingInMaestro === undefined) return undefined;
@@ -704,7 +704,7 @@ async function processRemove(
     cleanupLegacyMaestroMd(agent, projectDir, homeDir),
   ]);
 
-  const removed = await Promise.all(managedEntries.map(async (entry): Promise<void> =>
+  const removed = await Promise.all(managedEntries.map(async (entry): Promise<string | undefined> =>
     (await removeManagedSkillEntry(entry)) ? entry.name : undefined,
   ));
   const removedNames = removed.filter((name): name is string => name !== undefined);

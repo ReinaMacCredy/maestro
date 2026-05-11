@@ -1,4 +1,4 @@
-import type { EvidenceStorePort, EvidenceRow } from "@/features/evidence";
+import type { EvidenceStorePort, EvidenceRow, EvidenceKind } from "@/features/evidence";
 import type { VerdictStorePort, Verdict } from "@/features/verdict";
 import type { TaskQueryPort } from "@/features/task";
 
@@ -47,7 +47,7 @@ export async function stateSince(
   const tasks = args.taskId !== undefined ? [args.taskId] : await listTaskIds(deps);
 
   const collectors = await Promise.all(
-    tasks.map(async (taskId): Promise<void> => {
+    tasks.map(async (taskId): Promise<{ taskId: string; evidence: readonly EvidenceRow<EvidenceKind>[]; verdicts: readonly Verdict[] }> => {
       const [evidence, verdicts] = await Promise.all([
         deps.evidenceStore.list({ task_id: taskId }),
         deps.verdictStore.history(taskId),

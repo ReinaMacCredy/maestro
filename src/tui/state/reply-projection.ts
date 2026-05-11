@@ -98,7 +98,7 @@ function buildPrincipleRecorder(
   const principleStore = deps.principleStore;
   if (!principleStore || !handoffsCache || !outcomesCache) return undefined;
 
-  return async (featureId, outcome): Promise<void> => {
+  return async (featureId, outcome): Promise<{ recorded: number; complete: boolean }> => {
     const resolved = outcome === "completed" ? "helpful" : "unhelpful";
     try {
       const recentHandoffs = handoffsCache

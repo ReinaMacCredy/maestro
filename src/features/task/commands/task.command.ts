@@ -1838,7 +1838,7 @@ async function collectStaleOwners(
 
   for (let index = 0; index < assignees.length; index += STALE_OWNER_LOOKUP_CONCURRENCY) {
     const chunk = assignees.slice(index, index + STALE_OWNER_LOOKUP_CONCURRENCY);
-    const statuses = await Promise.all(chunk.map(async (assignee): Promise<void> => {
+    const statuses = await Promise.all(chunk.map(async (assignee): Promise<string | undefined> => {
       const parsed = parseTaskOwnerId(assignee);
       if (!parsed) {
         return undefined;

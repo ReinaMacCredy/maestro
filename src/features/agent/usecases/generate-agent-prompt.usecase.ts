@@ -246,7 +246,7 @@ async function loadPreviousMilestoneReports(
     (feature) => feature.milestoneId === prevMilestone.id && feature.status === "done",
   );
 
-  const reports = (await Promise.all(prevFeatures.map(async (feature): Promise<void> => {
+  const reports = (await Promise.all(prevFeatures.map(async (feature): Promise<PreviousMilestoneReport | undefined> => {
     const reportPath = join(
       baseDir,
       MAESTRO_DIR,

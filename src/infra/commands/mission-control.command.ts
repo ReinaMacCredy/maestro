@@ -312,7 +312,7 @@ export function createMissionControlSnapshotLoader(
   const cachedSnapshotDeps = { ...snapshotDeps, git: cachingGit, config: cachingConfig };
 
   return {
-      load: async (options): Promise<void> => {
+      load: async (options): Promise<MissionControlSnapshot> => {
         if (!explicitMissionId && !resolvedMissionId) {
           resolvedMissionId = await cachedSnapshotDeps.missions.resolveMissionId();
         }

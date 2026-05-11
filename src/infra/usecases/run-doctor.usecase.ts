@@ -179,7 +179,7 @@ async function findOversizedRootDocs(
   );
 
   const results = await Promise.all(
-    candidates.map(async (entry): Promise<void> => {
+    candidates.map(async (entry): Promise<{ name: string; lineCount: number } | undefined> => {
       try {
         const text = await readFile(join(dir, entry.name), "utf8");
         const lineCount = text.split("\n").length;

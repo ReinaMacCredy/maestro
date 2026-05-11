@@ -44,7 +44,7 @@ export async function inspectRun(
 
   if (runDirExists) {
     const known = await Promise.all(
-      ARTIFACT_FILES.map(async (name): Promise<void> => {
+      ARTIFACT_FILES.map(async (name): Promise<RunArtifact | undefined> => {
         const full = join(runDir, name);
         if (!(await fileExists(full))) return undefined;
         const text = (await readText(full)) ?? "";

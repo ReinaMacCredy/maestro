@@ -75,7 +75,7 @@ export async function resolveHeadSha(): Promise<string> {
   const cwd = process.cwd();
   const cached = headShaCache.get(cwd);
   if (cached) return cached;
-  const promise = (async (): Promise<void> => {
+  const promise = (async (): Promise<string> => {
     const head = await execArgv(["git", "rev-parse", "HEAD"]);
     return head.exitCode === 0 && head.stdout ? head.stdout : "HEAD";
   })();

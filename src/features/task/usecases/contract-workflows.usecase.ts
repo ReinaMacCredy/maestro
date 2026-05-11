@@ -857,7 +857,7 @@ async function detectContractOverlap(
   const results: (string | undefined)[] = [];
   for (let i = 0; i < candidates.length; i += overlapConcurrency) {
     const chunk = candidates.slice(i, i + overlapConcurrency);
-    const chunkResults = await Promise.all(chunk.map(async (candidate): Promise<void> => {
+    const chunkResults = await Promise.all(chunk.map(async (candidate): Promise<string | undefined> => {
       const overlaps = await gitAnchor.windowsOverlap({
         repoRoot: runtimeRepoRoot,
         left: {
@@ -905,7 +905,7 @@ async function listStrictReopenBlockingContractIds(
   const results: (string | undefined)[] = [];
   for (let i = 0; i < candidates.length; i += overlapConcurrency) {
     const chunk = candidates.slice(i, i + overlapConcurrency);
-    const chunkResults = await Promise.all(chunk.map(async (candidate): Promise<void> => {
+    const chunkResults = await Promise.all(chunk.map(async (candidate): Promise<string | undefined> => {
       const overlaps = await gitAnchor.windowsOverlap({
         repoRoot: contract.repoRoot,
         left: {

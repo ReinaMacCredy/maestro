@@ -18,6 +18,12 @@ export interface McpToolFailure {
 
 export type McpToolResult<T = unknown> = McpToolSuccess<T> | McpToolFailure;
 
+export type CallToolResult = {
+  content: { type: "text"; text: string }[];
+  structuredContent?: Record<string, unknown>;
+  isError?: boolean;
+};
+
 export function ok<T = unknown>(data: T): McpToolSuccess<T> {
   return { ok: true, data };
 }
@@ -56,11 +62,7 @@ function deriveErrorCode(message: string, fallback: string): string {
   return fallback;
 }
 
-export function toCallToolResult<T = unknown>(result: McpToolResult<T>): {
-  content: { type: "text"; text: string }[];
-  structuredContent?: Record<string, unknown>;
-  isError?: boolean;
-} {
+export function toCallToolResult<T = unknown>(result: McpToolResult<T>): CallToolResult {
   if (result.ok) {
     return {
       content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],

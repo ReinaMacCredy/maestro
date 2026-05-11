@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { requestVerdict } from "@/features/verdict/index.js";
-import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
+import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { VerdictRequestInput, VerdictShowInput } from "../schemas/inputs.js";
 import { VerdictOutput } from "../schemas/outputs.js";
 import type { RegisterDeps } from "./types.js";
@@ -21,7 +21,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const verdict = args.id
@@ -56,7 +56,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const verdict = await requestVerdict(

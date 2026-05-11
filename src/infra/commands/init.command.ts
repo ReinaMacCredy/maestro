@@ -62,7 +62,7 @@ function createReplacementPrompter(): {
   let defaultDecision: boolean | undefined;
 
   return {
-    confirmReplace: async (path: string): Promise<void> => {
+    confirmReplace: async (path: string): Promise<boolean> => {
       if (defaultDecision !== undefined) {
         return defaultDecision;
       }

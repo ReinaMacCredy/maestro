@@ -27,6 +27,7 @@ import type {
   CostBudget,
   DoneWhenCriterion,
 } from "../domain/contract/contract-types.js";
+import type { Task } from "../domain/task-types.js";
 import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
 import { buildTaskOwnerId } from "../usecases/task-continuation.usecase.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
@@ -1186,7 +1187,7 @@ async function resolveContractRef(ref: string): Promise<Contract | undefined> {
   return await services.contractStore.get(ref) ?? await services.contractStore.getByTaskId(ref);
 }
 
-async function resolveContractTask(ref: string): Promise<void> {
+async function resolveContractTask(ref: string): Promise<Task | undefined> {
   const services = getServices();
   const task = await services.taskStore.get(ref);
   if (task) {

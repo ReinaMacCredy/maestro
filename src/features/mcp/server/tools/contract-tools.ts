@@ -6,7 +6,7 @@ import {
   generateContractAmendmentId,
   getCurrentContract,
 } from "@/features/task/index.js";
-import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
+import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { ContractAmendInput, ContractShowInput } from "../schemas/inputs.js";
 import { ContractAmendOutput, ContractShowOutput } from "../schemas/outputs.js";
 import type { RegisterDeps } from "./types.js";
@@ -27,7 +27,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         if (args.version !== undefined) {
@@ -80,7 +80,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
         openWorldHint: false,
       },
     },
-    async (args): Promise<void> => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const addPaths = args.addPaths ?? [];

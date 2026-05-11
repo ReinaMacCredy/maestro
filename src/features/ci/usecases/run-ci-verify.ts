@@ -108,7 +108,7 @@ export async function runCiVerify(
       const FILES_CONCURRENCY = 4;
       const [thisPrFiles, otherPrFiles] = await Promise.all([
         githubApi.getPullRequestFiles({ repository, pr: resolvedPr }),
-        mapWithConcurrency(otherPrs, FILES_CONCURRENCY, async (pr): Promise<void> => ({
+        mapWithConcurrency(otherPrs, FILES_CONCURRENCY, async (pr): Promise<{ pr: number; files: readonly string[] }> => ({
           pr,
           files: await githubApi.getPullRequestFiles({ repository, pr }),
         })),
