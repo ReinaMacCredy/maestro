@@ -7,7 +7,7 @@ import type { EvidenceRow } from "@/features/evidence/index.js";
 
 function makeSpec(criteria: Array<{ id: string; text: string }>): Spec {
   return {
-    schema_version: 1,
+    schema_version: 2,
     mission_id: "msn-001",
     acceptance_criteria: criteria,
     non_goals: [],

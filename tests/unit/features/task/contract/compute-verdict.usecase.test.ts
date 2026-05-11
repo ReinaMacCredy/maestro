@@ -99,6 +99,18 @@ describe("computeContractVerdictForTask", () => {
         expect(input.right.closedAtCommit).toBe(older.closedAtCommit);
         return false;
       },
+      async collectChangedPaths() {
+        return [];
+      },
+      async collectAddedLines() {
+        return [];
+      },
+      async collectUntrackedFiles() {
+        return [];
+      },
+      async resolveTreeSha() {
+        return "tree123";
+      },
     };
 
     const contracts = buildContractWorkflows(
@@ -160,6 +172,18 @@ describe("computeContractVerdictForTask", () => {
       async windowsOverlap() {
         return true;
       },
+      async collectChangedPaths() {
+        return [];
+      },
+      async collectAddedLines() {
+        return [];
+      },
+      async collectUntrackedFiles() {
+        return [];
+      },
+      async resolveTreeSha() {
+        return "tree123";
+      },
     };
 
     const contracts = buildContractWorkflows(
@@ -203,6 +227,18 @@ describe("computeContractVerdictForTask", () => {
       async windowsOverlap(input) {
         expect(input.repoRoot).toBe(trustedRepoRoot);
         return false;
+      },
+      async collectChangedPaths() {
+        return [];
+      },
+      async collectAddedLines() {
+        return [];
+      },
+      async collectUntrackedFiles() {
+        return [];
+      },
+      async resolveTreeSha() {
+        return "tree123";
       },
     };
 

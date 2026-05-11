@@ -13,7 +13,6 @@ function makePendingLoosening(): PendingLoosening {
     commitSha: "abc123def456abc123def456abc123def456abc1",
     commitTime: new Date().toISOString(),
     effectiveAt,
-    oldYaml: "required_witness_level:\n  high: witnessed-by-maestro",
     kind: "autopilot",
     file: ".maestro/policies/autopilot.yaml",
     edit: {
@@ -26,7 +25,7 @@ function makePendingLoosening(): PendingLoosening {
 }
 
 // Capture console.log calls
-function captureLog(fn: () => Promise<void>): Promise<string[]> {
+function captureLog(fn: () => Promise<unknown>): Promise<string[]> {
   const lines: string[] = [];
   const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     lines.push(args.map(String).join(" "));

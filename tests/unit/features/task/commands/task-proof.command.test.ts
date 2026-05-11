@@ -42,7 +42,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 
 function makeSpec(overrides: Partial<Spec> = {}): Spec {
   return {
-    schema_version: 1,
+    schema_version: 2,
     mission_id: MISSION_ID,
     acceptance_criteria: [
       { id: "c-001", text: "Feature works end-to-end" },

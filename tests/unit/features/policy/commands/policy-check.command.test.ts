@@ -66,6 +66,8 @@ function fakeGitAnchor(changedPaths: string[] = []): GitAnchorPort {
     windowsOverlap: async () => false,
     collectChangedPaths: async () => changedPaths,
     collectAddedLines: async () => [],
+    collectUntrackedFiles: async () => [],
+    resolveTreeSha: async () => "tree123",
   };
 }
 

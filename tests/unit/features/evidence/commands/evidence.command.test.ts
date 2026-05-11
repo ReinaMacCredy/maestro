@@ -692,7 +692,7 @@ describe("evidence show", () => {
       { id: "crt-0000000000003-ccddeeff", text: "Gamma" },
     ];
     const spec: Spec = {
-      schema_version: 1,
+      schema_version: 2,
       mission_id: missionId,
       acceptance_criteria: criteria,
       non_goals: [],
@@ -731,7 +731,7 @@ describe("evidence show", () => {
     const id2 = "crt-0000000000002-bbccddee";
     const id3 = "crt-0000000000003-ccddeeff";
     const spec: Spec = {
-      schema_version: 1,
+      schema_version: 2,
       mission_id: missionId,
       acceptance_criteria: [
         { id: id1, text: "Alpha" },
@@ -778,7 +778,7 @@ describe("evidence show", () => {
     const missionId = "2026-05-04-003";
     const criterionId = "crt-0000000000001-aabbccdd";
     const spec: Spec = {
-      schema_version: 1,
+      schema_version: 2,
       mission_id: missionId,
       acceptance_criteria: [{ id: criterionId, text: "Alpha" }],
       non_goals: [],

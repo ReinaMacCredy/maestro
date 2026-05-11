@@ -8,9 +8,12 @@ import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.j
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
+import type { SpecStorePort } from "@/features/spec/ports/storage.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
+import type { GithubApiPort } from "@/features/ci/ports/github-api.port.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { RiskServices } from "@/features/risk/services.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
@@ -166,8 +169,10 @@ function fakeRiskServices(verdict: Verdict): RiskServices {
 interface FakeServices {
   verdictStore: VerdictStorePort;
   contractVersionStore: ContractVersionStorePort;
+  contractStore: ContractStorePort;
   runStateStore: RunStateStorePort;
   evidenceStore: EvidenceStorePort;
+  specStore: SpecStorePort;
   getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
@@ -176,6 +181,7 @@ interface FakeServices {
   deriveRiskClassFromDiff: RiskServices["deriveRiskClassFromDiff"];
   runTrustVerifier: (input: unknown) => Promise<{ findings: [] }>;
   gitAnchor: GitAnchorPort;
+  githubApi: GithubApiPort;
   projectRoot: string;
 }
 
@@ -184,8 +190,10 @@ function makeServices(verdict: Verdict): FakeServices {
   return {
     verdictStore: fakeVerdictStore(verdict),
     contractVersionStore: fakeContractVersionStore(),
+    contractStore: { read: async () => undefined, write: async () => {} },
     runStateStore: fakeRunStateStore(),
     evidenceStore: fakeEvidenceStore(),
+    specStore: { read: async () => undefined, write: async () => {}, list: async () => [] },
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     getEffectiveReleasePolicy: async () => makeReleasePolicy(),
@@ -194,6 +202,14 @@ function makeServices(verdict: Verdict): FakeServices {
     deriveRiskClassFromDiff: riskServices.deriveRiskClassFromDiff,
     runTrustVerifier: async () => ({ findings: [] }),
     gitAnchor: fakeGitAnchor(),
+    githubApi: {
+      getPullRequestAuthor: async () => "test-user",
+      postCheckRun: async () => ({ id: 1 }),
+      patchCheckRun: async () => {},
+      triggerAutoMerge: async () => {},
+      listOpenPullRequests: async () => [],
+      getPullRequestFiles: async () => [],
+    },
     projectRoot: "/tmp/test-project",
   };
 }

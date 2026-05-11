@@ -444,7 +444,7 @@ export function mockMissions(input: {
       features.set(featureId, updated);
       return updated;
     },
-    list: async (requestedMissionId, filter?) => {
+    list: async (requestedMissionId, filter?: { milestoneId?: string; status?: string }) => {
       let all = [...features.values()].filter((feature) => feature.missionId === requestedMissionId);
       if (filter?.milestoneId) {
         all = all.filter((feature) => feature.milestoneId === filter.milestoneId);

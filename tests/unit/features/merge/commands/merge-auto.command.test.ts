@@ -5,6 +5,7 @@ import type { Verdict } from "@/features/verdict/domain/types.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import type { EvidenceRow, EvidenceStorePort } from "@/features/evidence/index.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { GithubApiPort } from "@/features/ci/ports/github-api.port.js";
 import type { AutopilotPolicy } from "@/features/policy/index.js";

@@ -25,7 +25,7 @@ import {
 import { MaestroError } from "@/shared/errors.js";
 import type { MilestoneInput } from "@/features/mission";
 import type { PrincipleStorePort } from "@/features/mission";
-import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
+import { resolveSkillDirectoryName } from "@/features/verify/lib/skill-path.js";
 
 let tmpDir: string;
 
