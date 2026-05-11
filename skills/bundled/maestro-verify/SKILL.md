@@ -211,6 +211,23 @@ Evidence consulted: 4
 Trust verifier: 1 findings (1 errors, 0 warns, 0 infos)
 ```
 
+### Reason-field diagnostics
+
+The `reasons[]` array surfaces three diagnostic codes you must read on every
+non-PASS verdict (full reference: `docs/edge-cases.md`):
+
+- `proof-map-incomplete` — listed alongside any FAIL or HUMAN reason
+  whenever acceptance criteria lack covering evidence. Record one
+  `evidence record --kind command --criterion <ac-id>` row per uncovered
+  criterion before re-requesting.
+- `cost-budget-exhausted` — the BLOCK reason names the exhausted limit
+  (`costBudget.maxRetries`, `maxWallClockSeconds`, or `maxTokens`) and the
+  machine code is mirrored into `findingChecks[0]`. Use that to branch in
+  scripts and to know which knob to amend.
+- `auto-merge-not-allowed` — the policy gate; not a defect. Combine with
+  any `proof-map-incomplete` to know whether to handoff or to first close
+  the coverage gap.
+
 ---
 
 ## Cost-Budget Monitoring

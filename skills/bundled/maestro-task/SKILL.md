@@ -288,6 +288,17 @@ blockers + last 5 evidence rows + recent commits since the last
 Output is structured markdown by default; `--json` returns the same view as a
 parseable object.
 
+**Watch for these introspection fields after compaction or long runs**
+(documented in `docs/edge-cases.md`):
+
+- `anchor.stale=true` — the last `session-start` head SHA is no longer
+  reachable. Re-anchor via `maestro session start <id>` before trusting
+  "recent commits".
+- `loopWarning` — the same `(kind, payloadHash)` row repeated three or more
+  times without a verdict-request boundary. Change approach or run
+  `maestro ralph review --task <id> --stuck-threshold 1` to confirm
+  convergence.
+
 ## Session lifecycle
 
 Two verbs anchor non-trivial work to a specific task:

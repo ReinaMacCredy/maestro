@@ -1,4 +1,4 @@
-import type { Contract, RiskClass } from "@/features/task/index.js";
+import type { Contract, RiskClass, CostBudgetExhaustionReason } from "@/features/task/index.js";
 import type { AIReviewPayload, EvidenceRow } from "@/features/evidence/index.js";
 import { compareWitnessLevel } from "@/features/evidence/index.js";
 import type { Spec } from "@/features/spec/index.js";
@@ -20,6 +20,10 @@ export interface ComputeRiskInput {
   readonly amendmentCount: number;
   readonly blockedAmendments?: number;
   readonly costBudgetExhausted?: boolean;
+  /** Specific limit that was exceeded; surfaced in the BLOCK verdict reason so
+   * agents see *which* limit hit (Edge Case 4). When absent, the reason falls
+   * back to the generic exhausted message. */
+  readonly costBudgetReason?: CostBudgetExhaustionReason;
   readonly matchedRiskPolicySignal?: string;
   /** Linked Spec (when the task is associated with a mission). Consulted for
    * release.yaml `require_proof_map_complete` enforcement. */
@@ -53,6 +57,7 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     derivedRiskClass,
     amendmentCount,
     costBudgetExhausted,
+    costBudgetReason,
     matchedRiskPolicySignal,
     spec,
   } = input;
@@ -88,7 +93,7 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
 
   // 1. BLOCK on cost-budget exhaustion (Rule 11).
   if (costBudgetExhausted === true) {
-    reasons.push(REASONS.costBudgetExhausted());
+    reasons.push(REASONS.costBudgetExhausted(costBudgetReason));
     return buildVerdict("BLOCK", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
@@ -100,6 +105,7 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
       findingChecks: errors.map((f) => f.check),
       findingPaths,
     }));
+    appendProofMapDiagnostic(reasons, spec, contract, evidenceRows);
     return buildVerdict("FAIL", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
@@ -162,12 +168,35 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
   // 7. HUMAN if policy disallows auto-merge for this risk class.
   if (autopilotPolicy.autoMergeAllowed[effectiveRiskClass] === false) {
     reasons.push(REASONS.autoMergeNotAllowed(effectiveRiskClass));
+    appendProofMapDiagnostic(reasons, spec, contract, evidenceRows);
     return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
   }
 
   // 8. PASS.
   reasons.push(REASONS.allChecksPassed());
   return buildVerdict("PASS", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
+}
+
+/**
+ * Edge Case 3 (ProofMap holes): when a verdict is non-PASS for an unrelated
+ * reason (trust errors or auto-merge disallowed), still surface which
+ * acceptance criteria lack covering evidence. The reason field is the
+ * agent-facing diagnostic; without it agents thrash on the visible failure
+ * while shipping with silent coverage gaps.
+ *
+ * Idempotent: skips the push when the proof map is complete OR when a
+ * proofMapIncomplete reason has already been recorded earlier in the chain.
+ */
+function appendProofMapDiagnostic(
+  reasons: VerdictReason[],
+  spec: Spec | undefined,
+  contract: Contract,
+  evidenceRows: readonly EvidenceRow[],
+): void {
+  const uncovered = uncoveredCriteria(spec, contract, evidenceRows);
+  if (uncovered.length === 0) return;
+  if (reasons.some((r) => r.code === "proof-map-incomplete")) return;
+  reasons.push(REASONS.proofMapIncomplete({ uncoveredIds: uncovered }));
 }
 
 function uncoveredCriteria(

@@ -1,4 +1,4 @@
-import type { RiskClass } from "@/features/task/index.js";
+import type { CostBudgetExhaustionReason, RiskClass } from "@/features/task/index.js";
 import type { VerdictReason } from "@/features/verdict/index.js";
 
 /**
@@ -8,15 +8,25 @@ import type { VerdictReason } from "@/features/verdict/index.js";
  * existing tests assert only on `reason.code`, never on `reason.message`.
  */
 
-export function costBudgetExhausted(): VerdictReason {
+const COST_BUDGET_LIMIT_LABEL: Record<CostBudgetExhaustionReason, string> = {
+  "max-retries": "maxRetries",
+  "max-wall-clock": "maxWallClockSeconds",
+  "max-tokens": "maxTokens",
+};
+
+export function costBudgetExhausted(reason?: CostBudgetExhaustionReason): VerdictReason {
+  const limitClause = reason !== undefined
+    ? `Exhausted limit: \`costBudget.${COST_BUDGET_LIMIT_LABEL[reason]}\` (reason=${reason}). `
+    : "";
   return {
     category: "cost-budget",
     code: "cost-budget-exhausted",
     message:
-      "Cost budget exhausted; further execution blocked. " +
+      `Cost budget exhausted; further execution blocked. ${limitClause}` +
       "Run `maestro task budget --task <id>` to inspect the limits, " +
       "amend the contract's costBudget via `maestro contract amend` " +
       "to raise the cap, or escalate to a human via `maestro handoff create`.",
+    ...(reason !== undefined ? { findingChecks: [reason] } : {}),
   };
 }
 
@@ -85,7 +95,7 @@ export function proofMapIncomplete(args: {
   return {
     category: "evidence",
     code: "proof-map-incomplete",
-    message: `Release policy requires a complete proof map; ${args.uncoveredIds.length} acceptance criterion/criteria are uncovered: ${args.uncoveredIds.join(", ")}.`,
+    message: `${args.uncoveredIds.length} acceptance criterion/criteria lack covering evidence: ${args.uncoveredIds.join(", ")}. Record covering evidence with \`maestro evidence record\` carrying the matching criterion_id in the payload.`,
   };
 }
 

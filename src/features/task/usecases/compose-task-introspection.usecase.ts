@@ -36,6 +36,18 @@ export interface TaskIntrospectionDeps {
     repoRoot: string,
     anchorSha: string,
   ) => Promise<readonly { sha: string; subject: string }[]>;
+  readonly checkCommitReachable?: (repoRoot: string, sha: string) => Promise<boolean>;
+}
+
+export interface AnchorStatus {
+  readonly sha: string;
+  readonly stale: boolean;
+}
+
+export interface LoopWarning {
+  readonly kind: string;
+  readonly payloadHash: string;
+  readonly count: number;
 }
 
 export interface TaskIntrospectionView extends TaskInspectionView {
@@ -48,6 +60,8 @@ export interface TaskIntrospectionView extends TaskInspectionView {
   readonly recentEvidence: readonly EvidenceRow[];
   readonly recentCommits: readonly { sha: string; subject: string }[];
   readonly sessionAnchorSha?: string;
+  readonly anchor?: AnchorStatus;
+  readonly loopWarning?: LoopWarning;
 }
 
 export async function composeTaskIntrospection(
@@ -89,12 +103,23 @@ export async function composeTaskIntrospection(
     .slice(0, 5);
 
   const sessionAnchorSha = findLatestSessionAnchorSha(allEvidence);
-  const recentCommits = sessionAnchorSha
+  const anchorReachable = sessionAnchorSha
+    ? await (deps.checkCommitReachable ?? defaultCheckCommitReachable)(
+        deps.repoRoot,
+        sessionAnchorSha,
+      )
+    : true;
+  const recentCommits = sessionAnchorSha && anchorReachable
     ? await (deps.resolveCommitsSince ?? defaultResolveCommitsSince)(
         deps.repoRoot,
         sessionAnchorSha,
       )
     : [];
+  const anchor: AnchorStatus | undefined = sessionAnchorSha
+    ? { sha: sessionAnchorSha, stale: !anchorReachable }
+    : undefined;
+
+  const loopWarning = detectLoopWarning(allEvidence);
 
   const view: TaskIntrospectionView = {
     ...inspection,
@@ -105,8 +130,63 @@ export async function composeTaskIntrospection(
     ...(lastVerdict !== undefined ? { lastVerdict } : {}),
     ...(budgetCheck !== undefined ? { budgetCheck } : {}),
     ...(sessionAnchorSha !== undefined ? { sessionAnchorSha } : {}),
+    ...(anchor !== undefined ? { anchor } : {}),
+    ...(loopWarning !== undefined ? { loopWarning } : {}),
   };
   return view;
+}
+
+function detectLoopWarning(rows: readonly EvidenceRow[]): LoopWarning | undefined {
+  const ordered = [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  let runKind: string | undefined;
+  let runHash: string | undefined;
+  let runCount = 0;
+  let bestWarning: LoopWarning | undefined;
+  for (const row of ordered) {
+    if (row.kind === "verdict-requested" || row.kind === "session-start" || row.kind === "session-exit") {
+      runKind = undefined;
+      runHash = undefined;
+      runCount = 0;
+      continue;
+    }
+    const hash = stableHash(row.kind, row.payload);
+    if (runKind === row.kind && runHash === hash) {
+      runCount += 1;
+    } else {
+      runKind = row.kind;
+      runHash = hash;
+      runCount = 1;
+    }
+    if (runCount >= 3) {
+      bestWarning = { kind: row.kind, payloadHash: hash, count: runCount };
+    }
+  }
+  return bestWarning;
+}
+
+function stableHash(kind: string, payload: unknown): string {
+  let str: string;
+  try {
+    str = JSON.stringify(payload);
+  } catch {
+    str = String(payload);
+  }
+  let h = 0;
+  const combined = `${kind}|${str}`;
+  for (let i = 0; i < combined.length; i++) {
+    h = (h * 31 + combined.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(16);
+}
+
+async function defaultCheckCommitReachable(repoRoot: string, sha: string): Promise<boolean> {
+  const proc = Bun.spawnSync({
+    cmd: ["git", "cat-file", "-e", `${sha}^{commit}`],
+    cwd: repoRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return proc.exitCode === 0;
 }
 
 function findLatestSessionAnchorSha(rows: readonly EvidenceRow[]): string | undefined {
@@ -231,12 +311,22 @@ export function formatTaskIntrospectionMarkdown(
   lines.push("## Recent commits (last 5 since last session-start)");
   if (view.sessionAnchorSha === undefined) {
     lines.push("No session-start evidence found; commit history unavailable.");
+  } else if (view.anchor?.stale === true) {
+    lines.push(`anchor: stale (commit ${view.anchor.sha.slice(0, 7)} not reachable)`);
+    lines.push("Recovery hint: re-run `maestro session start` to anchor at HEAD.");
   } else if (view.recentCommits.length === 0) {
     lines.push("(no commits since session anchor)");
   } else {
     for (const c of view.recentCommits) {
       lines.push(`- ${c.sha.slice(0, 7)} ${c.subject}`);
     }
+  }
+  lines.push("");
+
+  if (view.loopWarning !== undefined) {
+    lines.push("## Loop warning");
+    lines.push(`loopWarning: kind=${view.loopWarning.kind} count=${view.loopWarning.count} payloadHash=${view.loopWarning.payloadHash}`);
+    lines.push("Recovery hint: review the last verdict reason, change approach, or run `maestro ralph review --stuck-threshold 1`.");
   }
 
   return lines.join("\n");

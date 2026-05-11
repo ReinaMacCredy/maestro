@@ -168,6 +168,7 @@ describe("composeTaskIntrospection", () => {
     const view = await composeTaskIntrospection(
       {
         ...deps(),
+        checkCommitReachable: async () => true,
         resolveCommitsSince: async (repoRoot, anchorSha) => {
           calls.push({ repoRoot, anchorSha });
           return [{ sha: "abc1234", subject: "wip" }];

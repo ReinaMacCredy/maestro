@@ -76,6 +76,10 @@ import { registerStateCommand } from "./features/state/index.js";
 import { registerWorktreeCommand } from "./features/worktree/index.js";
 import { registerInspectCommand } from "./features/inspect/index.js";
 import { registerSetupCommand } from "./features/setup/index.js";
+import {
+  checkSkillBinaryParity,
+  renderDriftError,
+} from "./features/setup/usecases/check-skill-binary-parity.usecase.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -195,6 +199,57 @@ export async function cleanupStaleWindowsBinary(
   } catch {}
 }
 
+/**
+ * Edge Case 5 (skill-binary drift): when an agent invokes a verb the binary
+ * doesn't have, Commander emits a bare "unknown command" line. If the verb is
+ * one the installed skill bundle expected, that bare line leaves agents
+ * thrashing. Run the same drift check that `maestro setup --check` runs, and
+ * if the missing verb appears in the skill bundle, print the canonical hint
+ * to stderr.
+ *
+ * Lazy import to keep the cold path off `--help` / `--version`.
+ */
+function maybePrintSkillDriftHint(argv: readonly string[]): void {
+  const verbCandidate = extractFailingVerb(argv);
+  if (!verbCandidate) return;
+  try {
+    const knownVerbs = new Set<string>();
+    const walk = (cmd: Command, prefix: string): void => {
+      for (const child of cmd.commands) {
+        const name = child.name();
+        const full = prefix ? `${prefix} ${name}` : name;
+        knownVerbs.add(name);
+        knownVerbs.add(full);
+        walk(child, full);
+      }
+    };
+    walk(program, "");
+    for (const lazy of ["mission-control"]) knownVerbs.add(lazy);
+    const report = checkSkillBinaryParity({ knownVerbs });
+    const match = report.findings.find((f) => verbMatches(f.verb, verbCandidate));
+    if (match) {
+      console.error(renderDriftError(match, VERSION));
+    }
+  } catch {
+    // Skill-drift hinting is best-effort; never let it mask the underlying
+    // CommanderError exit.
+  }
+}
+
+function extractFailingVerb(argv: readonly string[]): string | undefined {
+  for (let i = 2; i < argv.length; i++) {
+    const token = argv[i];
+    if (!token || token.startsWith("-")) continue;
+    return token;
+  }
+  return undefined;
+}
+
+function verbMatches(skillVerb: string, argvVerb: string): boolean {
+  const head = skillVerb.split(/\s+/)[0];
+  return head === argvVerb;
+}
+
 // Bound on how long we'll wait for an in-flight background refresh after the
 // user's command finishes. Healthy networks finish well under this; slow ones
 // get aborted so a stuck fetch can't pin the event loop until its own 8s
@@ -244,6 +299,9 @@ async function main(): Promise<void> {
   } catch (err) {
     refreshController.abort();
     if (err instanceof CommanderError) {
+      if (err.code === "commander.unknownCommand") {
+        maybePrintSkillDriftHint(process.argv);
+      }
       process.exit(err.exitCode);
     }
     if (err instanceof MaestroError) {
