@@ -8,43 +8,26 @@ import { PROJECT_BOOTSTRAP_TEMPLATES } from "@/infra/domain/bootstrap-templates.
 // content that `maestro init` writes, which is a separate surface.
 
 describe("PROJECT_BOOTSTRAP_TEMPLATES", () => {
-  it("mirrors contract guidance into the bootstrap AGENTS template", () => {
+  it("ships a TOC-style bootstrap AGENTS template under the size budget", () => {
     const agentsTemplate = PROJECT_BOOTSTRAP_TEMPLATES.find((template) => template.path === ".maestro/AGENTS.md");
-    expect(agentsTemplate?.content).toContain(".maestro/tasks/contracts/");
-    expect(agentsTemplate?.content).toContain(".maestro/tasks/contract-templates/");
-    expect(agentsTemplate?.content).toContain("maestro task contract new <id>");
-    expect(agentsTemplate?.content).toContain("maestro task contract lock <id>");
-    expect(agentsTemplate?.content).toContain("new/edit/lock/discard/amend/criteria");
-    expect(agentsTemplate?.content).toContain("maestro task contract verdict <id>");
-    expect(agentsTemplate?.content).toContain("maestro task contract amend <id> --reason");
-    expect(agentsTemplate?.content).toContain("maestro task contract criteria mark <id> <criterionId> --met");
-    expect(agentsTemplate?.content).toContain("--session <id>");
-    expect(agentsTemplate?.content).toContain("--strict");
-    expect(agentsTemplate?.content).toContain("stored verdict");
-    expect(agentsTemplate?.content).toContain("contracts.overlapPolicy: annotate");
-    expect(agentsTemplate?.content).toContain("reactivates its contract");
-    expect(agentsTemplate?.content).toContain("Previously amended contracts reopen as amended");
-    expect(agentsTemplate?.content).toContain("staleReclaimContractPolicy: block");
+    expect(agentsTemplate).toBeDefined();
+    const content = agentsTemplate!.content;
+    const lineCount = (content.endsWith("\n") ? content.slice(0, -1) : content).split("\n").length;
+    expect(lineCount).toBeLessThanOrEqual(100);
+    expect(content).toContain("long-running agent harness");
+    expect(content).toContain("docs/harness-positioning.md");
+    expect(content).toContain("docs/cli-reference.md");
   });
 
-  it("mirrors the PR 35 shared task loop guidance into the bootstrap AGENTS template", () => {
+  it("includes pointer-style task-system entries in the bootstrap AGENTS template", () => {
     const agentsTemplate = PROJECT_BOOTSTRAP_TEMPLATES.find((template) => template.path === ".maestro/AGENTS.md");
-    expect(agentsTemplate?.content).toContain("## Shared Task Loop");
-    expect(agentsTemplate?.content).toContain("maestro task ready --json --compact --limit 5");
-    expect(agentsTemplate?.content).toContain("maestro task show <id>");
-    expect(agentsTemplate?.content).toContain("maestro task claim <id> --contract-required");
-    expect(agentsTemplate?.content).toContain("maestro task claim <id> --no-contract");
-    expect(agentsTemplate?.content).toContain('--summary "<receipt summary>"');
-    expect(agentsTemplate?.content).toContain('--surprise "<gotcha>"');
-    expect(agentsTemplate?.content).toContain("--verified-by <name>");
-    expect(agentsTemplate?.content).toContain("maestro task similar <id>");
-    expect(agentsTemplate?.content).toContain("maestro task mine");
-    expect(agentsTemplate?.content).toContain("maestro task stuck [--older-than 4h]");
-    expect(agentsTemplate?.content).toContain("maestro task heartbeat <id>");
-    expect(agentsTemplate?.content).toContain("maestro task claim <id> [--stale-after 4h]");
-    expect(agentsTemplate?.content).toContain("MAESTRO_TASK_SILENT=1");
-    expect(agentsTemplate?.content).toContain("maestro task prune --dry-run");
-    expect(agentsTemplate?.content).toContain(".maestro/tasks/NOW.md");
+    const content = agentsTemplate!.content;
+    expect(content).toContain(".maestro/tasks/contracts/");
+    expect(content).toContain(".maestro/tasks/contract-templates/");
+    expect(content).toContain("maestro intake");
+    expect(content).toContain("maestro plan check");
+    expect(content).toContain("maestro verdict request");
+    expect(content).toContain("maestro recover");
   });
 
   it("ships the default contract draft template in bootstrap assets", () => {

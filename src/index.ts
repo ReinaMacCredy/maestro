@@ -75,6 +75,7 @@ import { registerRalphCommand } from "./features/ralph/index.js";
 import { registerStateCommand } from "./features/state/index.js";
 import { registerWorktreeCommand } from "./features/worktree/index.js";
 import { registerInspectCommand } from "./features/inspect/index.js";
+import { registerSetupCommand } from "./features/setup/index.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -151,6 +152,7 @@ registerRalphCommand(program, deps);
 registerStateCommand(program, deps);
 registerWorktreeCommand(program, deps);
 registerInspectCommand(program, deps);
+registerSetupCommand(program, deps);
 
 const mergeCmd = program
   .command("merge")
