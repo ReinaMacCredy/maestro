@@ -124,11 +124,42 @@ function toPosix(p: string): string {
   return p.replace(/\\/g, "/");
 }
 
+/**
+ * Replace `// ...` line comments and `/* ... *\/` block comments with spaces,
+ * preserving byte offsets and line counts so callers that map `match.index`
+ * back to the original text keep working. String-literal contents are not
+ * masked — heuristic lint rules tolerate occasional false positives there.
+ */
 function stripComments(text: string): string {
-  // Strip line comments only — block-comment removal is fragile and not
-  // necessary because the rules below match call expressions that don't
-  // appear inside JSDoc.
-  return text.replace(/^\s*\/\/.*$/gm, "");
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    const next = text[i + 1];
+    if (c === "/" && next === "/") {
+      out += "  ";
+      i += 2;
+      while (i < text.length && text[i] !== "\n") {
+        out += " ";
+        i++;
+      }
+    } else if (c === "/" && next === "*") {
+      out += "  ";
+      i += 2;
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) {
+        out += text[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      if (i < text.length) {
+        out += "  ";
+        i += 2;
+      }
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return out;
 }
 
 function lineOf(text: string, index: number): { line: number; snippet: string } {
@@ -235,10 +266,18 @@ interface FunctionBodyRange {
   readonly bodyEnd: number;
 }
 
+/**
+ * Find function-body ranges by name. Brace counting runs against a
+ * comment-masked copy (same length as `text`) so `/* } *\/` inside a JSDoc
+ * doesn't unbalance the depth tracker. String/template-literal contents are
+ * still unmasked — out of scope for these scanned mission-control functions,
+ * which don't embed `{`/`}` chars in string literals.
+ */
 function extractFunctionBodies(
   text: string,
   names: readonly string[],
 ): FunctionBodyRange[] {
+  const masked = stripComments(text);
   const ranges: FunctionBodyRange[] = [];
   for (const name of names) {
     const re = new RegExp(
@@ -246,15 +285,15 @@ function extractFunctionBodies(
       "g",
     );
     let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null) {
-      const openParen = text.indexOf("(", m.index);
+    while ((m = re.exec(masked)) !== null) {
+      const openParen = masked.indexOf("(", m.index);
       if (openParen === -1) continue;
-      const openBrace = text.indexOf("{", openParen);
+      const openBrace = masked.indexOf("{", openParen);
       if (openBrace === -1) continue;
       let depth = 0;
       let i = openBrace;
-      for (; i < text.length; i++) {
-        const ch = text[i];
+      for (; i < masked.length; i++) {
+        const ch = masked[i];
         if (ch === "{") depth++;
         else if (ch === "}") {
           depth--;
