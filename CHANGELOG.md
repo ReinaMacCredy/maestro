@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.80.15 - prod polish: warn-once for missing config.yaml on task create
+
+Closes the last LOW Round-7 friction item so the agent loop is fully
+clean. Also re-validated and triaged the remaining Round-7 LOW finding:
+`mission-control --preview tasks` was reported as "renders home screen
+not tasks"; the task-board modal does in fact render as an overlay with
+all tasks visible. The `HOME` section indicator reflects the underlying
+screen, not the modal kind. No change needed — the brownfield UAT
+agent missed the overlay while skim-reading the header.
+
+### Fixed
+
+- **`task create` no longer reshouts the missing-config banner on every
+  call.** The "No .maestro/config.yaml found — run 'maestro init'"
+  warning previously fired on every human-text `task create` in an
+  un-init'd project, which the Round-7 UAT flagged as LOW noise for
+  scripts that issue many creates in a row. Now the warning fires only
+  on the first task in the project (i.e. `task create` finds zero
+  existing tasks before the create). Subsequent creates stay quiet,
+  since by then the agent has clearly seen the verb works and the
+  prompt to init no longer changes behavior. `--json` and `--silent`
+  paths remain unaffected.
+
 ## 0.80.14 - UAT round-7: duplicate-flag silent-pick fix + task-complete shim + handoff help text
 
 Round-7 UAT (greenfield + brownfield, real MCP server, v0.80.13 binary)

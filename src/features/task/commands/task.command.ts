@@ -233,6 +233,10 @@ function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCom
       const parentId = opts.parent !== undefined
         ? (await resolveTaskRef(services.taskStore, opts.parent)).id
         : undefined;
+      // Snapshot before the create so the init-warning only fires when
+      // this is truly the agent's first task in the project.
+      const existingTasksBefore = await listTasks(services.taskStore, {});
+      const isFirstTask = existingTasksBefore.length === 0;
       const input = buildCreateInput(title, {
         description: opts.description,
         type: opts.type,
@@ -263,15 +267,22 @@ function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCom
       }
 
       output(isJson, task, formatTaskSummary);
-      await maybeWarnMissingProjectConfig(services.projectRoot, isJson);
+      await maybeWarnMissingProjectConfig(services.projectRoot, isJson, isFirstTask);
     });
 }
 
 async function maybeWarnMissingProjectConfig(
   projectRoot: string,
   isJson: boolean,
+  isFirstTask: boolean,
 ): Promise<void> {
   if (isJson) return;
+  // Once the agent has at least one prior task in this project, the
+  // create verb has clearly worked without an explicit init. Reshouting
+  // the same banner on every subsequent create is just noise — surface
+  // it only on the first task in a fresh `.maestro/` so the prompt lands
+  // when it would actually change behavior.
+  if (!isFirstTask) return;
   const configPath = pathJoin(projectRoot, ".maestro", "config.yaml");
   if (await fileExists(configPath)) return;
   warn("No .maestro/config.yaml found — run 'maestro init' to enable mission-control and policies");
