@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { mapWithConcurrency } from "@/shared/lib/concurrency.js";
 import { execArgv } from "@/shared/lib/shell.js";
 import { estimateTokensAuto } from "@/shared/lib/token-estimate.js";
 
@@ -37,14 +38,25 @@ const PROBES: readonly VerbProbe[] = [
   { verb: "handoff list", args: ["handoff", "list", "--json"], fullArgs: ["handoff", "list", "--json", "--full", "--all"] },
 ];
 
+interface ProbeInvocation {
+  readonly verb: string;
+  readonly mode: "default" | "full";
+  readonly args: readonly string[];
+}
+
+const PROBE_CONCURRENCY = 4;
+
 export async function inspectTokenBudget(): Promise<TokenBudgetResult> {
   const bin = resolveCliBin();
-  const rows = await Promise.all(
-    PROBES.flatMap((probe) => {
-      const tasks = [measure(bin, probe.verb, "default", probe.args)];
-      if (probe.fullArgs) tasks.push(measure(bin, probe.verb, "full", probe.fullArgs));
-      return tasks;
-    }),
+  const invocations: ProbeInvocation[] = PROBES.flatMap((probe) => {
+    const entries: ProbeInvocation[] = [
+      { verb: probe.verb, mode: "default", args: probe.args },
+    ];
+    if (probe.fullArgs) entries.push({ verb: probe.verb, mode: "full", args: probe.fullArgs });
+    return entries;
+  });
+  const rows = await mapWithConcurrency(invocations, PROBE_CONCURRENCY, (inv) =>
+    measure(bin, inv.verb, inv.mode, inv.args),
   );
   const totals = { defaultBytes: 0, fullBytes: 0, defaultTokens: 0, fullTokens: 0 };
   for (const row of rows) {
