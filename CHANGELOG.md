@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.80.5 - omit dead fields from MCP responses (research-grounded null/empty pruning)
+
+Token-budget pass two — apply the TOON-style "omit null and empty fields
+entirely" pattern that Anthropic context-engineering and MCP community
+guidance both call out as the highest-ROI cut on agent-facing responses.
+
+### Changed
+
+- **`maestro_policy_check`** omits `matchedRiskPolicyRow` entirely when no
+  policy row matched. Previously emitted `"matchedRiskPolicyRow": null`,
+  ~28 bytes of zero-information overhead on every successful call.
+- **`maestro_contract_amend`** omits `skippedAddPaths` when the array is
+  empty. Most amendments don't skip paths; emitting `"skippedAddPaths":[]`
+  was pure noise.
+
+Both are non-breaking: agents that already truthy-checked these fields
+(`if (response.matchedRiskPolicyRow)`) work unchanged.
+
 ## 0.80.4 - skills list --full drops body (876 KB savings)
 
 Doctrine-aligned regression: `skills list --full` was emitting every

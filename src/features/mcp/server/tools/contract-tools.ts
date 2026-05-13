@@ -155,7 +155,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
           ok({
             amendmentId,
             newVersion,
-            skippedAddPaths,
+            ...(skippedAddPaths.length > 0 ? { skippedAddPaths } : {}),
           }),
         );
       } catch (err) {
