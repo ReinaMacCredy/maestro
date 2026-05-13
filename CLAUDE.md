@@ -11,6 +11,7 @@ Harness positioning: see `docs/harness-positioning.md`. The skill bundle in
 - Local Maestro is advisory; CI Maestro is authoritative. The PR check posted by `maestro ci verify` is the merge gate. See `docs/ci-integration.md`.
 - Auto-merge requires PASS + Spec score 1.0 + `autoMergeAllowed.<class>: true`. See `docs/auto-merge-eligibility.md`.
 - Deploy gate, runtime monitor, rollback witness, cross-task conflict — each emits a typed Evidence kind. See `docs/deploy-gate.md`, `docs/runtime-monitoring.md`, `docs/cross-task-conflict.md`.
+- Agent-facing list verbs are lean by default; `--full` / `view: "full"` recovers the verbose shape. See `docs/token-budget.md`.
 
 ## Always release + link locally when testing
 ```bash

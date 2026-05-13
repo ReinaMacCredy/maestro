@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServices, type Services } from "@/services.js";
 import { VERSION } from "@/shared/version.js";
+import { installToolErrorInterceptor } from "./intercept-errors.js";
 import { findMaestroProjectRoot } from "./project.js";
 import { detectMcpSessionId } from "./session.js";
 import { registerContractTools } from "./tools/contract-tools.js";
@@ -46,6 +47,7 @@ export function buildMaestroMcpServer(options: McpServerOptions = {}): {
   registerContractTools(server, deps);
   registerPolicyTools(server, deps);
   registerHandoffTools(server, deps);
+  installToolErrorInterceptor(server);
 
   return { server, services, projectRoot };
 }

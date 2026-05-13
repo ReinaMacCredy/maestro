@@ -81,6 +81,20 @@ export interface Task {
   readonly updatedAt: string;
 }
 
+/** Lean projection of {@link Task} for list endpoints. */
+export interface TaskSummary {
+  readonly slug?: string;
+  readonly id: string;
+  readonly title: string;
+  readonly status: TaskStatus;
+  readonly type: TaskType;
+  readonly priority: TaskPriority;
+  readonly blockedByCount: number;
+  readonly parentId?: string;
+  readonly missionId?: string;
+  readonly assignee?: string;
+}
+
 // ============================
 // Create / update inputs
 // ============================

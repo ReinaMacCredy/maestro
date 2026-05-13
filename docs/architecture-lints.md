@@ -175,7 +175,7 @@ where the OpenTUI render loop legitimately uses console output). Use the
 
 ## Phase 5 verbs
 
-- `maestro inspect <taskId>` — post-mortem snapshot (run-dir artifacts,
+- `maestro inspect run <taskId>` — post-mortem snapshot (run-dir artifacts,
   recent evidence, verdict history). Read-only.
 - `maestro worktree create <slug> [--base <branch>] [--prefix <pre>]` — wraps
   `git worktree add` and provisions an isolated `.maestro/runs/` directory.

@@ -4,10 +4,10 @@ import {
   recordEvidence,
   type EvidenceListFilter,
 } from "@/features/evidence/index.js";
+import { summarizeEvidence } from "@/shared/lib/projection.js";
 import { fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import { EvidenceListInput, EvidenceRecordInput } from "../schemas/inputs.js";
-import { EvidenceListOutput, EvidenceRecordOutput } from "../schemas/outputs.js";
 import type { RegisterDeps } from "./types.js";
 
 export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): void {
@@ -16,9 +16,8 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
     {
       title: "List evidence rows",
       description:
-        "List evidence rows for a task with optional kind/witness level filters. Paginated. Read-only.",
+        "List evidence rows for a task. Filters: kind, witnessLevel. Paginated (default limit 20). view='summary' (default) returns id+task_id+kind+witness_level+created_at; view='full' includes the typed payload. Read-only.",
       inputSchema: EvidenceListInput,
-      outputSchema: EvidenceListOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -38,7 +37,10 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
           rows = rows.filter((r) => r.witness_level === args.witnessLevel);
         }
         const page = paginate(rows, args.limit, args.offset);
-        return toCallToolResult(ok(page));
+        const projected = args.view === "full"
+          ? page
+          : { ...page, items: page.items.map(summarizeEvidence) };
+        return toCallToolResult(ok(projected));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "EVIDENCE_LIST_FAILED"));
       }
@@ -52,7 +54,6 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
       description:
         "Append an evidence row. Provide exactly one of: `command`+`exitCode` for a command run, or `note` for a manual note. Passing both, neither, or `command` without `exitCode` is rejected at the schema layer. Default witness level is agent-claimed-locally. Each call appends a new row.",
       inputSchema: EvidenceRecordInput,
-      outputSchema: EvidenceRecordOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

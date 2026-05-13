@@ -527,8 +527,8 @@ After a session ends or after compaction, use `inspect` to pull a post-mortem
 view without re-running anything:
 
 ```bash
-maestro inspect <task-id>            # last 10 evidence rows + verdict history + run-dir artifacts
-maestro inspect <task-id> --tail 20  # widen the tail
+maestro inspect run <task-id>            # last 10 evidence rows + verdict history + run-dir artifacts
+maestro inspect run <task-id> --tail 20  # widen the tail
 ```
 
 Reads `.maestro/runs/<id>/{orient,progress,plan}.md` plus `state.json`,

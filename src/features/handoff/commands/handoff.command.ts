@@ -21,6 +21,7 @@ import {
 } from "@/features/task";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
+import { summarizeHandoff } from "@/shared/lib/projection.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 
 interface HandoffCommandDeps {
@@ -184,17 +185,33 @@ export function registerHandoffCommand(
     .command("list")
     .description("List handoff packets")
     .option("--open", "Only show packets that have not been consumed")
+    .option("--limit <n>", "Maximum packets to return (default 20 for --json)")
+    .option("--all", "Disable the default --json limit (return every match)")
+    .option("--full", "Include all fields (refs, command, paths) in --json (default: lean summary)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const isFull = opts.full === true;
+      const wantAll = opts.all === true;
+      const explicitLimit = opts.limit !== undefined
+        ? Number.parseInt(String(opts.limit), 10)
+        : undefined;
+      const effectiveLimit = explicitLimit ?? (isJson && !wantAll ? 20 : undefined);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
       const records = await listProjectHandoffs(services.handoffStore, {
         openOnly: Boolean(opts.open),
         taskStore: services.taskStore,
         currentProjectRoot,
       });
-      output(isJson, records, formatHandoffList);
+      const sliced = effectiveLimit !== undefined && effectiveLimit > 0
+        ? records.slice(0, effectiveLimit)
+        : records;
+      if (isJson && !isFull) {
+        output(true, sliced.map(summarizeHandoff), () => []);
+        return;
+      }
+      output(isJson, sliced, formatHandoffList);
     });
 
   handoffCmd

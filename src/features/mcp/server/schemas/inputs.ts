@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PROJECTION_VIEWS } from "@/shared/lib/projection.js";
 
 const taskId = z
   .string()
@@ -76,6 +77,12 @@ const limit = z
   .max(100)
   .optional()
   .describe("Page size, 1..100. Defaults to 20 when omitted.");
+const view = z
+  .enum(PROJECTION_VIEWS)
+  .optional()
+  .describe(
+    "Projection: 'summary' (default) returns lean per-item shape for token-budget; 'full' returns detail-grade items.",
+  );
 const offset = z
   .number()
   .int()
@@ -102,6 +109,7 @@ export const TaskListInput = z
       .describe("Filter by assignee/session id."),
     limit,
     offset,
+    view,
   })
   .strict();
 
@@ -173,6 +181,7 @@ export const EvidenceListInput = z
     witnessLevel: witnessLevel.optional(),
     limit,
     offset,
+    view,
   })
   .strict();
 
@@ -300,6 +309,7 @@ export const HandoffListInput = z
       .describe("Filter by launching agent (the receiving session's agent)."),
     limit,
     offset,
+    view,
   })
   .strict();
 

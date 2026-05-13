@@ -328,14 +328,20 @@ tagged as a sprint-contract proposal. Does NOT mutate the contract.
 
 ---
 
-## inspect (Phase 5)
+## inspect
 
 ```bash
-maestro inspect <taskId> [--tail <n>] [--json]
+maestro inspect run <taskId> [--tail <n>] [--json]
+maestro inspect token-budget [--json]
 ```
 
-Read-only post-mortem snapshot of `.maestro/runs/<taskId>/{orient,progress,plan}.md`
-+ `state.json` + last `--tail` evidence rows + verdict history.
+`inspect run` is a read-only post-mortem snapshot of
+`.maestro/runs/<taskId>/{orient,progress,plan}.md` + `state.json` + last
+`--tail` evidence rows + verdict history.
+
+`inspect token-budget` measures bytes and estimated tokens for each
+agent-facing list verb (defaults + `--full` variants). Use as a regression
+guard for the token-budget doctrine; see `docs/token-budget.md`.
 
 ---
 

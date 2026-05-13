@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import { summarizeEvidence } from "@/shared/lib/projection.js";
 import { type Services } from "@/services.js";
 import { recordEvidence as defaultRecordEvidence, type RecordEvidenceInput } from "../usecases/record-evidence.usecase.js";
 import { listEvidence } from "../usecases/list-evidence.usecase.js";
@@ -535,10 +536,19 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
     .option("--task <id>", "Filter by task id")
     .option("--session <id>", "Filter by session id")
     .option("--kind <kind>", `Filter by kind (${EVIDENCE_KINDS.join("|")})`)
+    .option("--limit <n>", "Maximum rows to return (default 20 for --json)")
+    .option("--all", "Disable the default --json limit (return every match)")
+    .option("--full", "Include the typed payload in --json output (default: lean summary)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
+      const isFull = opts.full === true;
+      const wantAll = opts.all === true;
+      const explicitLimit = opts.limit !== undefined
+        ? Number.parseInt(String(opts.limit), 10)
+        : undefined;
+      const effectiveLimit = explicitLimit ?? (isJson && !wantAll ? 20 : undefined);
 
       const filter: EvidenceListFilter = {
         ...(opts.task !== undefined ? { task_id: opts.task as string } : {}),
@@ -547,7 +557,15 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
       };
 
       const rows = await listEvidence(services.evidenceStore, filter);
-      output(isJson, rows, formatEvidenceList);
+      const sliced = effectiveLimit !== undefined && effectiveLimit > 0
+        ? rows.slice(0, effectiveLimit)
+        : rows;
+
+      if (isJson && !isFull) {
+        output(true, sliced.map(summarizeEvidence), () => []);
+        return;
+      }
+      output(isJson, sliced, formatEvidenceList);
     });
 }
 

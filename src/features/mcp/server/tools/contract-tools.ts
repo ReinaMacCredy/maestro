@@ -8,7 +8,6 @@ import {
 } from "@/features/task/index.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { ContractAmendInput, ContractShowInput } from "../schemas/inputs.js";
-import { ContractAmendOutput, ContractShowOutput } from "../schemas/outputs.js";
 import type { RegisterDeps } from "./types.js";
 
 export function registerContractTools(server: McpServer, deps: RegisterDeps): void {
@@ -19,7 +18,6 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
       description:
         "Show the current contract for a task, or a specific version when `version` is provided. Returns code CONTRACT_NOT_FOUND when no contract has been proposed. Read-only.",
       inputSchema: ContractShowInput,
-      outputSchema: ContractShowOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -40,7 +38,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
               fail(
                 "CONTRACT_VERSION_NOT_FOUND",
                 `Contract version ${args.version} not found for task ${args.taskId}`,
-                ["Inspect history via the CLI: maestro contract history"],
+                { hints: ["Inspect history via the CLI: maestro contract history"] },
               ),
             );
           }
@@ -53,9 +51,9 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
         );
         if (current === undefined) {
           return toCallToolResult(
-            fail("CONTRACT_NOT_FOUND", `No contract found for task ${args.taskId}`, [
-              "Create one with the contract verbs in the CLI",
-            ]),
+            fail("CONTRACT_NOT_FOUND", `No contract found for task ${args.taskId}`, {
+              hints: ["Create one with the contract verbs in the CLI"],
+            }),
           );
         }
         return toCallToolResult(ok({ contract: current }));
@@ -72,7 +70,6 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
       description:
         "Add or remove paths from filesExpected on the current contract. Records a versioned amendment and a contract-amendment evidence row. Error codes: CONTRACT_NOT_FOUND, NO_SCOPE_CHANGES, VALIDATION_ERROR. Each successful amend creates a new version.",
       inputSchema: ContractAmendInput,
-      outputSchema: ContractAmendOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -90,7 +87,7 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
             fail(
               "VALIDATION_ERROR",
               "At least one of addPaths or removePaths must be provided",
-              ["Pass addPaths or removePaths to mutate the contract"],
+              { hints: ["Pass addPaths or removePaths to mutate the contract"] },
             ),
           );
         }
@@ -102,9 +99,9 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
         );
         if (before === undefined) {
           return toCallToolResult(
-            fail("CONTRACT_NOT_FOUND", `No contract found for task ${args.taskId}`, [
-              "Propose a contract before amending",
-            ]),
+            fail("CONTRACT_NOT_FOUND", `No contract found for task ${args.taskId}`, {
+              hints: ["Propose a contract before amending"],
+            }),
           );
         }
 
@@ -122,9 +119,9 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
 
         if (!scopeChanged) {
           return toCallToolResult(
-            fail("NO_SCOPE_CHANGES", "No scope changes to apply", [
-              "All paths are already covered or were absent",
-            ]),
+            fail("NO_SCOPE_CHANGES", "No scope changes to apply", {
+              hints: ["All paths are already covered or were absent"],
+            }),
           );
         }
 

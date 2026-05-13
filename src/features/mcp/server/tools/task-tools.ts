@@ -7,6 +7,7 @@ import {
   unblockTasks,
   type ListTasksFilters,
 } from "@/features/task/index.js";
+import { summarizeTask } from "@/shared/lib/projection.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import {
@@ -18,7 +19,6 @@ import {
   TaskListInput,
   TaskUnblockInput,
 } from "../schemas/inputs.js";
-import { TaskListOutput, TaskOutput } from "../schemas/outputs.js";
 import type { RegisterDeps } from "./types.js";
 
 export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
@@ -27,9 +27,8 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "List maestro tasks",
       description:
-        "List maestro tasks with optional filters (missionId, status, type, priority, label, parentId, assignee). Returns paginated results sorted by createdAt ascending. Read-only.",
+        "List tasks. Filters: missionId, status, type, priority, label, parentId, assignee. Paginated (default limit 20, max 100). view='summary' (default) returns slug+id+title+status+type+priority+blockedByCount; view='full' returns the full Task. Sorted by createdAt asc. Read-only.",
       inputSchema: TaskListInput,
-      outputSchema: TaskListOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -53,7 +52,10 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           ? tasks.filter((t) => t.missionId === args.missionId)
           : tasks;
         const page = paginate(filtered, args.limit, args.offset);
-        return toCallToolResult(ok(page));
+        const projected = args.view === "full"
+          ? page
+          : { ...page, items: page.items.map(summarizeTask) };
+        return toCallToolResult(ok(projected));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_LIST_FAILED"));
       }
@@ -67,7 +69,6 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       description:
         "Fetch a single task by id. Returns code TASK_NOT_FOUND when the task does not exist. Read-only.",
       inputSchema: TaskGetInput,
-      outputSchema: TaskOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -81,9 +82,9 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         const task = await services.taskStore.get(args.id);
         if (task === undefined) {
           return toCallToolResult(
-            fail("TASK_NOT_FOUND", `Task ${args.id} not found`, [
-              "Confirm the id with maestro_task_list",
-            ]),
+            fail("TASK_NOT_FOUND", `Task ${args.id} not found`, {
+              hints: ["Confirm the id with maestro_task_list"],
+            }),
           );
         }
         return toCallToolResult(ok({ task }));
@@ -100,7 +101,6 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       description:
         "Create a new top-level task. Slug is derived from title automatically. Each call produces a new task.",
       inputSchema: TaskCreateInput,
-      outputSchema: TaskOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -129,7 +129,6 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       description:
         "Claim a pending task for the current MCP session. Idempotent when this session already owns the task. Error codes: TASK_NOT_FOUND, OWNERSHIP_CONFLICT.",
       inputSchema: TaskClaimInput,
-      outputSchema: TaskOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -156,7 +155,6 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       description:
         "Mark a task as completed. Optional summary is stored on the task receipt. Error codes: TASK_NOT_FOUND, ALREADY_COMPLETED, OWNERSHIP_CONFLICT.",
       inputSchema: TaskCompleteInput,
-      outputSchema: TaskOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -187,7 +185,6 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       description:
         "Mark this task as blocking the listed tasks. Maintains bidirectional blocks/blockedBy. Error codes: TASK_NOT_FOUND, SELF_BLOCK, CYCLE_DETECTED, OWNERSHIP_CONFLICT.",
       inputSchema: TaskBlockInput,
-      outputSchema: TaskOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -217,7 +214,6 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       description:
         "Remove blocker edges that this task has on the listed tasks. Idempotent: unblocking missing edges is a no-op.",
       inputSchema: TaskUnblockInput,
-      outputSchema: TaskOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

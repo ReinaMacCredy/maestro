@@ -41,6 +41,30 @@ export interface SkillRecord {
   readonly body: string;
 }
 
+/**
+ * Lean projection of {@link SkillRecord} for `skills list` JSON output.
+ * The full SKILL.md `body` is the dominant byte source (~1 MB on the maestro
+ * repo); list endpoints drop it. `skills inspect <name>` still returns the
+ * full record. `--full` on `skills list` recovers the old shape.
+ */
+export interface SkillSummary {
+  readonly name: string;
+  readonly description: string;
+  readonly scope: SkillRecord["scope"];
+  readonly source: string;
+  readonly path: string;
+}
+
+function summarizeSkill(skill: SkillRecord): SkillSummary {
+  return {
+    name: skill.name,
+    description: skill.description,
+    scope: skill.scope,
+    source: skill.source,
+    path: skill.path,
+  };
+}
+
 export interface SkillDiagnostic {
   readonly level: "warning" | "error";
   readonly message: string;
@@ -77,13 +101,19 @@ export function registerSkillsCommand(program: Command): void {
   skills
     .command("list")
     .option("--scope <scope>", "project|user|shared|all", "all")
+    .option("--full", "Include SKILL.md body in JSON output (verbose; default summary)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const scope = parseScope(opts.scope);
+      const isFull = opts.full === true;
       const result = await discoverSkills({ cwd: process.cwd(), homeDir: homedir(), scope });
       if (isJson) {
-        output(true, result, formatSkillDiscoveryResult);
+        const projected = {
+          skills: isFull ? result.skills : result.skills.map(summarizeSkill),
+          diagnostics: result.diagnostics,
+        };
+        output(true, projected, formatSkillDiscoveryResult);
         return;
       }
       for (const diagnostic of result.diagnostics) {
@@ -767,10 +797,14 @@ function formatSkillList(skills: readonly SkillRecord[]): string[] {
 }
 
 function formatSkillDiscoveryResult(result: {
-  readonly skills: readonly SkillRecord[];
+  readonly skills: readonly (SkillRecord | SkillSummary)[];
   readonly diagnostics: readonly SkillDiagnostic[];
 }): string[] {
-  return formatSkillList(result.skills);
+  if (result.skills.length === 0) return ["No skills found"];
+  return [
+    `[ok] ${result.skills.length} skill(s)`,
+    ...result.skills.map((skill) => `  ${skill.name}  ${skill.scope}  ${skill.path}`),
+  ];
 }
 
 function formatSkillInspect(skill: SkillRecord): string[] {

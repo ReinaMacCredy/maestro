@@ -9,7 +9,6 @@ import {
 } from "@/features/task/index.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { PolicyCheckInput } from "../schemas/inputs.js";
-import { PolicyCheckOutput } from "../schemas/outputs.js";
 import type { RegisterDeps } from "./types.js";
 
 export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void {
@@ -20,7 +19,6 @@ export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void
       description:
         "Compute the effective risk class, autopilot rules, and sensitive-path matches for a task's current diff. Read-only.",
       inputSchema: PolicyCheckInput,
-      outputSchema: PolicyCheckOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -38,9 +36,9 @@ export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void
         );
         if (contract === undefined) {
           return toCallToolResult(
-            fail("CONTRACT_NOT_FOUND", `No contract found for task ${args.taskId}`, [
-              "Create a contract before running policy_check",
-            ]),
+            fail("CONTRACT_NOT_FOUND", `No contract found for task ${args.taskId}`, {
+              hints: ["Create a contract before running policy_check"],
+            }),
           );
         }
 

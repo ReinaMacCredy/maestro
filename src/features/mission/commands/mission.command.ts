@@ -5,6 +5,7 @@
 import type { Command } from "commander";
 import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import { summarizeMission } from "@/shared/lib/projection.js";
 import {
   createMission,
   expandWorkflowTemplate,
@@ -110,20 +111,32 @@ export function registerMissionCommand(
     .command("list")
     .description("List all missions")
     .option("--status <status>", "Filter by status (draft, approved, executing, etc.)")
-    .option("--limit <number>", "Limit the number of missions shown")
+    .option("--limit <number>", "Limit the number of missions shown (default 20 for --json)")
+    .option("--all", "Disable the default --json limit (return every match)")
+    .option("--full", "Include nested milestones/features in --json output (default: lean summary)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const hasExplicitLimit = opts.limit !== undefined;
+      const isFull = opts.full === true;
+      const wantAll = opts.all === true;
+      const explicitLimit = hasExplicitLimit
+        ? Number.parseInt(String(opts.limit), 10)
+        : undefined;
+      const effectiveLimit = explicitLimit ?? (isJson && !wantAll ? 20 : undefined);
 
       const missions = await listMissions(services.missionStore, {
         status: opts.status,
-        limit: hasExplicitLimit ? Number.parseInt(String(opts.limit), 10) : undefined,
+        limit: effectiveLimit,
       });
 
       if (isJson) {
-        output(true, missions, () => []);
+        if (isFull) {
+          output(true, missions, () => []);
+          return;
+        }
+        output(true, missions.map(summarizeMission), () => []);
         return;
       }
 

@@ -4,6 +4,8 @@ export interface McpToolError {
   readonly code: string;
   readonly message: string;
   readonly hints: readonly string[];
+  /** Single offending argument name (e.g. "taskId") for INVALID_ARG. */
+  readonly arg?: string;
 }
 
 export interface McpToolSuccess<T = unknown> {
@@ -28,8 +30,21 @@ export function ok<T = unknown>(data: T): McpToolSuccess<T> {
   return { ok: true, data };
 }
 
-export function fail(code: string, message: string, hints: readonly string[] = []): McpToolFailure {
-  return { ok: false, error: { code, message, hints } };
+export interface FailOptions {
+  readonly hints?: readonly string[];
+  readonly arg?: string;
+}
+
+export function fail(
+  code: string,
+  message: string,
+  options: FailOptions = {},
+): McpToolFailure {
+  const hints = options.hints ?? [];
+  return {
+    ok: false,
+    error: { code, message, hints, ...(options.arg !== undefined ? { arg: options.arg } : {}) },
+  };
 }
 
 export function fromMaestroError(err: unknown, fallbackCode = "MAESTRO_ERROR"): McpToolFailure {
@@ -38,12 +53,12 @@ export function fromMaestroError(err: unknown, fallbackCode = "MAESTRO_ERROR"): 
     // pre-date this convention fall back to message-pattern heuristics so we
     // don't lose code routing for legacy throw sites.
     const code = err.code ?? deriveErrorCode(err.message, fallbackCode);
-    return fail(code, err.message, err.hints);
+    return fail(code, err.message, { hints: err.hints });
   }
   if (err instanceof Error) {
-    return fail(fallbackCode, err.message, []);
+    return fail(fallbackCode, err.message);
   }
-  return fail(fallbackCode, String(err), []);
+  return fail(fallbackCode, String(err));
 }
 
 function deriveErrorCode(message: string, fallback: string): string {
@@ -69,14 +84,18 @@ export function toCallToolResult<T = unknown>(result: McpToolResult<T>): CallToo
       structuredContent: result.data as Record<string, unknown>,
     };
   }
-  const errorPayload = {
+  const errorPayload: Record<string, unknown> = {
     code: result.error.code,
     message: result.error.message,
-    hints: result.error.hints,
   };
+  if (result.error.hints.length > 0) {
+    errorPayload.hints = result.error.hints;
+  }
+  if (result.error.arg !== undefined) {
+    errorPayload.arg = result.error.arg;
+  }
   return {
-    content: [{ type: "text", text: JSON.stringify(errorPayload, null, 2) }],
-    structuredContent: errorPayload,
+    content: [{ type: "text", text: JSON.stringify(errorPayload) }],
     isError: true,
   };
 }

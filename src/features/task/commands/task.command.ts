@@ -5,6 +5,7 @@ import { type Services } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
+import { summarizeTask } from "@/shared/lib/projection.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
@@ -44,6 +45,7 @@ import type {
   Task,
   TaskMutationInput,
   TaskReceipt,
+  TaskSummary,
   UpdateTaskInput,
 } from "../domain/task-types.js";
 import type { Contract, ContractVerdict } from "../domain/contract/contract-types.js";
@@ -435,12 +437,18 @@ function registerListCommand(taskCmd: Command, program: Command, deps: TaskComma
     .option("--label <label>", "Filter by label (single)")
     .option("--parent <id>", "Filter by parent task id")
     .option("--assignee <name>", "Filter by assignee")
-    .option("--limit <n>", "Maximum number of tasks to return")
+    .option("--limit <n>", "Maximum number of tasks to return (default 20 for --json)")
+    .option("--all", "Disable the default --json limit (return every match)")
+    .option("--full", "Include every Task field in --json output (default: lean summary)")
     .option("--tracks", "Print only track headers (slug or tsk-id; one per line)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const isFull = opts.full === true;
+      const explicitLimit = parseLimit(opts.limit);
+      const wantAll = opts.all === true;
+      const effectiveLimit = explicitLimit ?? (isJson && !wantAll ? 20 : undefined);
 
       const filters: ListTasksFilters = {
         status: parseStatus(opts.status),
@@ -449,13 +457,17 @@ function registerListCommand(taskCmd: Command, program: Command, deps: TaskComma
         label: opts.label,
         parentId: opts.parent,
         assignee: opts.assignee,
-        limit: parseLimit(opts.limit),
+        limit: effectiveLimit,
       };
 
       const tasks = await listTasks(services.taskStore, filters);
       if (opts.tracks === true) {
         const tracks = formatTaskTrackList(tasks);
         output(isJson, tracks, (value) => value);
+        return;
+      }
+      if (isJson && !isFull) {
+        output(true, tasks.map(summarizeTask), () => []);
         return;
       }
       output(isJson, tasks, formatTaskList);
@@ -469,10 +481,12 @@ function registerStatusCommand(taskCmd: Command, program: Command, deps: TaskCom
     .option("--all", "Include completed tasks (rendered with 'v' glyph)")
     .option("--track <slug>", "Restrict output to a single track by slug or tsk-id")
     .option("--no-compact", "Render the unsectioned grouped detail view")
+    .option("--full", "Include full Task objects in --json tasksById (default: summary digest)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const isFull = opts.full === true;
 
       const tasks = await services.taskStore.all();
       const projection = groupTasksByTrack(tasks, {
@@ -481,7 +495,7 @@ function registerStatusCommand(taskCmd: Command, program: Command, deps: TaskCom
       });
 
       if (isJson) {
-        output(true, toTaskStatusJson(projection), () => []);
+        output(true, toTaskStatusJson(projection, isFull), () => []);
         return;
       }
       const lines = formatTaskStatusView(projection, {
@@ -492,12 +506,53 @@ function registerStatusCommand(taskCmd: Command, program: Command, deps: TaskCom
     });
 }
 
+interface TaskStatusJsonSummaryTrack {
+  readonly identifier: string;
+  readonly slug?: string;
+  readonly task: TaskSummary;
+  readonly steps: readonly TaskSummary[];
+}
+
 function toTaskStatusJson(
   projection: TaskStatusProjection,
-): Omit<TaskStatusProjection, "tasksById"> & { readonly tasksById: Record<string, Task> } {
+  includeFullTasks: boolean,
+):
+  | (Omit<TaskStatusProjection, "tasksById"> & { readonly tasksById: Record<string, Task> })
+  | {
+      readonly header: TaskStatusProjection["header"];
+      readonly tracks: readonly TaskStatusJsonSummaryTrack[];
+      readonly orphans: readonly TaskSummary[];
+      readonly tasksById: Record<string, TaskSummary>;
+    } {
+  if (includeFullTasks) {
+    return {
+      ...projection,
+      tasksById: Object.fromEntries(projection.tasksById),
+    };
+  }
+  const visibleIds = new Set<string>();
+  for (const track of projection.tracks) {
+    visibleIds.add(track.task.id);
+    for (const step of track.steps) visibleIds.add(step.id);
+    for (const id of track.task.blockedBy) visibleIds.add(id);
+    for (const step of track.steps) for (const id of step.blockedBy) visibleIds.add(id);
+  }
+  for (const orphan of projection.orphans) visibleIds.add(orphan.id);
+
   return {
-    ...projection,
-    tasksById: Object.fromEntries(projection.tasksById),
+    header: projection.header,
+    tracks: projection.tracks.map((track) => ({
+      identifier: track.identifier,
+      ...(track.slug !== undefined ? { slug: track.slug } : {}),
+      task: summarizeTask(track.task),
+      steps: track.steps.map(summarizeTask),
+    })),
+    orphans: projection.orphans.map(summarizeTask),
+    tasksById: Object.fromEntries(
+      [...projection.tasksById.entries()]
+        .filter(([id]) => visibleIds.has(id))
+        .map(([id, task]) => [id, summarizeTask(task)]),
+    ),
   };
 }
 
@@ -2394,10 +2449,12 @@ function registerStuckCommand(taskCmd: Command, program: Command, deps: TaskComm
     .command("stuck")
     .description("List in_progress tasks with no activity for a while")
     .option("--older-than <duration>", "Inactivity threshold, e.g. 4h, 30m, 2d (default 4h)")
+    .option("--full", "Include every Task field in --json output (default: lean summary)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const isFull = opts.full === true;
 
       const thresholdMs = typeof opts.olderThan === "string"
         ? parseDuration(opts.olderThan, "--older-than")
@@ -2410,6 +2467,10 @@ function registerStuckCommand(taskCmd: Command, program: Command, deps: TaskComm
         .slice()
         .sort((a, b) => (a.lastActivityAt ?? a.updatedAt).localeCompare(b.lastActivityAt ?? b.updatedAt));
 
+      if (isJson && !isFull) {
+        output(true, stuck.map(summarizeTask), () => []);
+        return;
+      }
       output(isJson, stuck, formatTaskList);
     });
 }

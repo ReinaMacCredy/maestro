@@ -575,4 +575,22 @@ describe("MCP stdio flow", () => {
       (tooled !== undefined && tooled.isError === true);
     expect(rejected).toBe(true);
   });
+
+  it("returns lean INVALID_ARG shape for missing required args", async () => {
+    const c = client!;
+    const r = await c.rpc("tools/call", {
+      name: "maestro_evidence_list",
+      arguments: {},
+    });
+    const wire = JSON.stringify(r);
+    // Doctrine target: full JSON-RPC line for a single missing arg < 200 B.
+    expect(wire.length).toBeLessThan(200);
+    const payload = r.result as ToolPayload;
+    expect(payload.isError).toBe(true);
+    expect(payload.structuredContent).toBeUndefined();
+    const body = JSON.parse(payload.content[0]!.text) as Record<string, unknown>;
+    expect(body.code).toBe("INVALID_ARG");
+    expect(body.arg).toBe("taskId");
+    expect(typeof body.message).toBe("string");
+  });
 });

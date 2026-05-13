@@ -273,3 +273,13 @@ export interface EvidenceRow<K extends EvidenceKind = EvidenceKind> {
   readonly created_at: string;
   readonly payload: EvidencePayload<K>;
 }
+
+/** Lean projection of {@link EvidenceRow} for list endpoints. */
+export interface EvidenceSummary {
+  readonly id: string;
+  readonly task_id: string;
+  readonly kind: EvidenceKind;
+  readonly witness_level: WitnessLevel;
+  readonly created_at: string;
+  readonly session_id?: string;
+}
