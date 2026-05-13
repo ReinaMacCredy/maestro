@@ -23,7 +23,7 @@ export function installToolErrorInterceptor(server: McpServer): void {
   const handlers = holder.server._requestHandlers;
   const original = handlers.get("tools/call");
   if (original === undefined) return;
-  handlers.set("tools/call", async (request, extra) => {
+  handlers.set("tools/call", async (request, extra): Promise<unknown> => {
     const result = await original(request, extra);
     return rewriteInvalidParamsError(result);
   });
