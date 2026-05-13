@@ -84,7 +84,11 @@ async function measure(
 function resolveCliBin(): string {
   const envBin = process.env.MAESTRO_BIN;
   if (envBin && envBin.length > 0) return envBin;
-  if (process.argv[0]?.endsWith("maestro")) return process.argv[0];
+  const execPath = process.execPath;
+  if (execPath && execPath.endsWith("/maestro")) return execPath;
+  if (process.argv[0]?.endsWith("/maestro") || process.argv[0]?.endsWith("\\maestro")) {
+    return process.argv[0];
+  }
   return resolve(process.cwd(), "dist/maestro");
 }
 

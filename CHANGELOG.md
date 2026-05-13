@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.80.2 - UAT round-2 follow-ups: token-budget probe binary, slug-aware claim/unclaim
+
+Round-2 UAT against v0.80.1 confirmed all five round-1 fixes held, then
+surfaced two new issues:
+
+### Fixed
+
+- **`maestro inspect token-budget`** now resolves its self-binary via
+  `process.execPath` first, then falls back to `process.argv[0]` and only
+  finally to `dist/maestro`. Previously the probe would silently fail (every
+  row marked `[err]`, 0 bytes) when run from the installed binary without
+  `MAESTRO_BIN` set, defeating the purpose of the regression guard.
+- **`maestro task claim`** and **`maestro task unclaim`** now accept slugs
+  in addition to task ids (parity with `task update`, `task show`). Previously
+  these verbs would reject any slug with "task not found," forcing users to
+  call `task list --json` to harvest the numeric id first.
+
 ## 0.80.1 - UAT-driven friction fixes: lean skills list, future-verb parity, install-hooks UX
 
 Real-scenario greenfield + brownfield UAT (sub-agent first-time users) flagged

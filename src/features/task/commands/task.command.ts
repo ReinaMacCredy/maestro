@@ -941,8 +941,8 @@ function registerUpdateCommand(taskCmd: Command, program: Command, deps: TaskCom
 
 function registerClaimCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
-    .command("claim <id>")
-    .description("Claim exclusive ownership of a task")
+    .command("claim <id-or-slug>")
+    .description("Claim exclusive ownership of a task (accepts tsk-XXX or slug)")
     .option("--force", "Take over a task already claimed by another session")
     .option("--busy-check", "Reject the claim if this session already owns unresolved work")
     .option("--contract-required", "Always print the contract reminder note after claim")
@@ -951,13 +951,14 @@ function registerClaimCommand(taskCmd: Command, program: Command, deps: TaskComm
     .option("--stale-after <duration>", "Auto-release a dead owner's stale claim after this idle window (default 4h)")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts): Promise<void> => {
+    .action(async (rawRef: string, opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session, deps);
       if (opts.contractRequired === true && opts.contract === false) {
         throw new MaestroError("Choose either --contract-required or --no-contract, not both");
       }
+      const id = (await resolveTaskRef(services.taskStore, rawRef)).id;
       await maybeReleaseStaleOwnedTasks(deps, [sessionId]);
       await maybeReleaseStaleClaim(id, sessionId, opts.staleAfter, deps);
       const previous = await services.taskStore.get(id);
@@ -1001,16 +1002,17 @@ function registerClaimCommand(taskCmd: Command, program: Command, deps: TaskComm
 
 function registerUnclaimCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
-    .command("unclaim <id>")
-    .description("Release task ownership")
+    .command("unclaim <id-or-slug>")
+    .description("Release task ownership (accepts tsk-XXX or slug)")
     .option("--force", "Release a task owned by another session")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts): Promise<void> => {
+    .action(async (rawRef: string, opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session, deps);
+      const id = (await resolveTaskRef(services.taskStore, rawRef)).id;
       const previous = await services.taskStore.get(id);
 
       const unclaimed = await unclaimTask(services.taskStore, id, {
