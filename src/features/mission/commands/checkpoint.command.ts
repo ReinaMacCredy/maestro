@@ -3,7 +3,7 @@
  * Implements CLI commands: checkpoint save|list|load
  */
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   saveCheckpoint,
@@ -14,7 +14,17 @@ import {
   type LoadCheckpointResult,
 } from "../usecases/checkpoint-lifecycle.usecase.js";
 
-export function registerCheckpointCommand(program: Command): void {
+interface CheckpointCommandDeps {
+  readonly getServices: () => Pick<
+    Services,
+    "missionStore" | "featureStore" | "assertionStore" | "checkpointStore"
+  >;
+}
+
+export function registerCheckpointCommand(
+  program: Command,
+  deps: CheckpointCommandDeps,
+): void {
   const checkpointCmd = program
     .command("checkpoint")
     .description("Checkpoint lifecycle management - save/load mission state snapshots")
@@ -25,8 +35,8 @@ export function registerCheckpointCommand(program: Command): void {
     .description("Save a timestamped snapshot of current mission state")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await saveCheckpoint(
@@ -45,8 +55,8 @@ export function registerCheckpointCommand(program: Command): void {
     .description("List all checkpoints for a mission (newest first)")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await listCheckpoints(
@@ -63,8 +73,8 @@ export function registerCheckpointCommand(program: Command): void {
     .description("Load the latest checkpoint snapshot for a mission and restore changed state")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await loadCheckpoint(

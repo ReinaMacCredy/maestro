@@ -102,7 +102,7 @@ function parseGitLog(output: string): Array<{ sha: string; commitEpoch: number; 
     }
     // Header line: "<sha> <epoch>"
     const headerMatch = /^([0-9a-f]{40}) (\d+)$/.exec(line.trim());
-    if (headerMatch) {
+    if (headerMatch && headerMatch[1] && headerMatch[2]) {
       if (current) commits.push(current);
       current = {
         sha: headerMatch[1],
@@ -167,7 +167,7 @@ async function recomputeLoosenings(projectRoot: string): Promise<readonly Pendin
     // them concurrently so the per-commit cost is one round-trip per file
     // instead of two sequential `git show` calls.
     const fileResults = await Promise.all(
-      files.map(async (file) => {
+      files.map(async (file): Promise<{ file: string; kind: "risk" | "autopilot" | "release" | "sensitive-paths"; newYaml: string; oldYaml: string } | undefined> => {
         const kind = kindFromFile(file);
         if (!kind || kind === "owners") return undefined;
         const [newYaml, oldYaml] = await Promise.all([

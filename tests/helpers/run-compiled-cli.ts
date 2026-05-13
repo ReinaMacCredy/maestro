@@ -45,11 +45,33 @@ export async function runCompiled(
  * reuse the first result. This avoids hammering Windows with repeated
  * `rename dist/maestro.exe` calls that intermittently fail with EPERM
  * due to transient file locks (antivirus / lingering handles).
+ *
+ * OPTIMIZATION: Checks if binary exists and is recent (< 5 min old) before
+ * rebuilding. This allows `pretest` script to build once, and all test
+ * processes can skip the rebuild if the binary is fresh.
  */
 let buildPromise: Promise<void> | null = null;
 export async function buildCompiledCli(): Promise<void> {
   if (!buildPromise) {
     buildPromise = (async () => {
+      // Check if binary exists and is recent (< 5 min old)
+      try {
+        const file = Bun.file(DIST_CLI);
+        const exists = await file.exists();
+        if (exists) {
+          const stat = await file.stat();
+          const ageMs = Date.now() - stat.mtime.getTime();
+          const FRESHNESS_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+          if (ageMs < FRESHNESS_THRESHOLD_MS) {
+            // Binary is fresh, skip rebuild
+            return;
+          }
+        }
+      } catch {
+        // Binary doesn't exist or stat failed, need to build
+      }
+      
+      // Binary is stale or missing, rebuild
       const result = await runCommand(["bun", "run", "build"], REPO_ROOT);
       expect(result).toMatchObject({ exitCode: 0 });
     })().catch((err) => {

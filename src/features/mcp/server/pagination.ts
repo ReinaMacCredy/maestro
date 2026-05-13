@@ -8,12 +8,12 @@ export interface PaginationMeta {
   readonly hasMore: boolean;
 }
 
-export interface PageResult<T> {
+export interface PageResult<T = unknown> {
   readonly items: readonly T[];
   readonly pagination: PaginationMeta;
 }
 
-export function paginate<T>(
+export function paginate<T = unknown>(
   items: readonly T[],
   limit: number | undefined,
   offset: number | undefined,

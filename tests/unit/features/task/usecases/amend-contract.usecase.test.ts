@@ -79,7 +79,7 @@ describe("amendContract", () => {
     const rows = await evidenceStore.list({ task_id: "tsk-a1b2c3" });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.kind).toBe("contract-amendment");
-    const payload = rows[0]?.payload as { amendmentId: string; addedPaths: string[] };
+    const payload = rows[0]?.payload as unknown as { amendmentId: string; addedPaths: string[] };
     expect(payload.amendmentId).toBe("a-000001");
     expect(payload.addedPaths).toEqual(["src/new-file.ts"]);
   });

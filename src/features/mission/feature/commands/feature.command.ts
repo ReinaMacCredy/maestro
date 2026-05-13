@@ -3,7 +3,7 @@
  * Implements CLI commands: feature list|update
  */
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   listFeatures,
@@ -18,7 +18,22 @@ import {
 } from "@/features/agent";
 import { MaestroError } from "@/shared/errors.js";
 
-export function registerFeatureCommand(program: Command): void {
+interface FeatureCommandDeps {
+  readonly getServices: () => Pick<
+    Services,
+    | "missionStore"
+    | "featureStore"
+    | "missions"
+    | "correctionStore"
+    | "learningStore"
+    | "principleStore"
+  >;
+}
+
+export function registerFeatureCommand(
+  program: Command,
+  deps: FeatureCommandDeps,
+): void {
   const featureCmd = program
     .command("feature")
     .description("Feature lifecycle management")
@@ -31,8 +46,8 @@ export function registerFeatureCommand(program: Command): void {
     .option("--milestone <id>", "Filter by milestone ID")
     .option("--status <status>", "Filter by status (pending, assigned, in-progress, review, done, blocked)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       if (!opts.mission) {
@@ -64,8 +79,8 @@ export function registerFeatureCommand(program: Command): void {
     .option("--report <value>", "Agent report as inline JSON or @file.json")
     .option("--retry-reason <reason>", "Reason for retrying (when status is pending)")
     .option("--json", "Output as JSON")
-    .action(async (featureId: string, opts) => {
-      const services = getServices();
+    .action(async (featureId: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       if (!opts.mission) {
@@ -111,8 +126,8 @@ export function registerFeatureCommand(program: Command): void {
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--out <path>", "Write prompt to specified path (also writes to agents/{featureId}/prompt.md)")
     .option("--json", "Output as JSON")
-    .action(async (featureId: string, opts) => {
-      const services = getServices();
+    .action(async (featureId: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       if (!opts.mission) {

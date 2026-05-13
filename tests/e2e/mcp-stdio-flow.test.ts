@@ -8,7 +8,7 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -123,7 +123,9 @@ beforeEach(async () => {
 
   server = spawn(DIST_CLI, ["mcp", "serve"], {
     cwd: tmpDir,
-    env: { ...process.env, MAESTRO_PROJECT_ROOT: tmpDir },
+    // HOME override isolates the handoff store (which roots at homedir())
+    // so seeded handoff packets stay in tmpDir/.maestro/handoff/.
+    env: { ...process.env, MAESTRO_PROJECT_ROOT: tmpDir, HOME: tmpDir },
     stdio: ["pipe", "pipe", "pipe"],
   });
   stderrBuf = "";
@@ -414,6 +416,151 @@ describe("MCP stdio flow", () => {
     expect((r.body as { code: string }).code).toBe("CONTRACT_NOT_FOUND");
   });
 
+  it("lists, shows, and picks up a standalone handoff packet", async () => {
+    const c = client!;
+    // The MCP server resolves projectRoot via realpath; macOS tmpdir is a
+    // symlink to /private/var/..., so the seeded record's refs.projectRoot
+    // must use the realpath'd path for `isHandoffInProject` to match.
+    const realTmpDir = await realpath(tmpDir);
+    const handoffId = "swift-otter-1";
+    const handoffDir = join(tmpDir, ".maestro", "handoff", handoffId);
+    await mkdir(handoffDir, { recursive: true });
+    const record = {
+      id: handoffId,
+      createdAt: new Date().toISOString(),
+      task: "ship the thing",
+      name: "ship the thing",
+      agent: "codex",
+      model: "gpt-5.4",
+      status: "launched",
+      wait: false,
+      sourceDir: realTmpDir,
+      targetDir: realTmpDir,
+      promptPath: join(".maestro", "handoff", handoffId, "prompt.md"),
+      outputPath: join(".maestro", "handoff", handoffId, "output.log"),
+      command: ["codex"],
+      refs: { projectRoot: realTmpDir },
+    };
+    await writeFile(join(handoffDir, "handoff.json"), JSON.stringify(record));
+    await writeFile(join(handoffDir, "prompt.md"), "## task\nship the thing\n");
+    await writeFile(join(handoffDir, "output.log"), "");
+
+    const list = await c.call("maestro_handoff_list", { openOnly: true });
+    const items = (list.body as { items: { id: string }[] }).items;
+    expect(items.some((r) => r.id === handoffId)).toBe(true);
+
+    // displayState=open is the explicit form of openOnly=true; same coverage.
+    const listByState = await c.call("maestro_handoff_list", { displayState: "open" });
+    const stateItems = (listByState.body as { items: { id: string }[] }).items;
+    expect(stateItems.some((r) => r.id === handoffId)).toBe(true);
+
+    // agent filter narrows correctly.
+    const listByAgent = await c.call("maestro_handoff_list", { agent: "codex" });
+    expect((listByAgent.body as { items: { id: string }[] }).items.some((r) => r.id === handoffId)).toBe(true);
+    const listByOtherAgent = await c.call("maestro_handoff_list", { agent: "claude" });
+    expect((listByOtherAgent.body as { items: { id: string }[] }).items.some((r) => r.id === handoffId)).toBe(false);
+
+    // openOnly + displayState combination is rejected by the handler with a
+    // stable error code (the schema layer accepts both so SDK can serialize
+    // properties for tools/list).
+    const conflict = await c.call("maestro_handoff_list", {
+      openOnly: true,
+      displayState: "consumed",
+    });
+    expect(conflict.payload.isError).toBe(true);
+    expect((conflict.body as { code: string }).code).toBe("INVALID_FILTER_COMBINATION");
+
+    const shown = await c.call("maestro_handoff_show", { id: handoffId });
+    expect((shown.body as { record: { id: string; agent: string } }).record.id).toBe(handoffId);
+    expect((shown.body as { record: { agent: string } }).record.agent).toBe("codex");
+
+    const missing = await c.call("maestro_handoff_show", { id: "missing-pkt-9" });
+    expect(missing.payload.isError).toBe(true);
+    expect((missing.body as { code: string }).code).toBe("HANDOFF_NOT_FOUND");
+
+    // open_for_task on a packet with no taskId returns an empty list.
+    const noTaskOpen = await c.call("maestro_handoff_open_for_task", {
+      taskId: "tsk-deadbeef",
+    });
+    expect((noTaskOpen.body as { handoffIds: string[] }).handoffIds).toEqual([]);
+
+    const picked = await c.call("maestro_handoff_pickup", {
+      id: handoffId,
+      actorAgent: "codex",
+      actorSessionId: "e2e-session",
+      standalone: true,
+    });
+    const pickedRecord = (picked.body as { record: { status: string; consumedAt?: string } }).record;
+    expect(pickedRecord.status).toBe("consumed");
+    expect(typeof pickedRecord.consumedAt).toBe("string");
+
+    const replay = await c.call("maestro_handoff_pickup", {
+      id: handoffId,
+      actorAgent: "codex",
+      actorSessionId: "e2e-session",
+      standalone: true,
+    });
+    expect(replay.payload.isError).toBe(true);
+    expect((replay.body as { code: string }).code).toBe("ALREADY_CONSUMED");
+  });
+
+  it("returns CROSS_PROJECT_PICKUP when a task-linked packet is picked up from a foreign project", async () => {
+    const c = client!;
+    const handoffId = "wise-fox-2";
+    const realTmpDir = await realpath(tmpDir);
+    const handoffDir = join(tmpDir, ".maestro", "handoff", handoffId);
+    await mkdir(handoffDir, { recursive: true });
+    // sourceDir / refs.projectRoot point at a *different* project than the
+    // running MCP server's project. The pickup use-case must refuse and
+    // surface a CROSS_PROJECT_PICKUP error.
+    const foreignProject = join(realTmpDir, "foreign-project-not-real");
+    const record = {
+      id: handoffId,
+      createdAt: new Date().toISOString(),
+      task: "from another tree",
+      name: "from another tree",
+      agent: "claude",
+      model: "opus",
+      status: "launched",
+      wait: false,
+      sourceDir: foreignProject,
+      targetDir: foreignProject,
+      promptPath: join(".maestro", "handoff", handoffId, "prompt.md"),
+      outputPath: join(".maestro", "handoff", handoffId, "output.log"),
+      command: ["claude"],
+      refs: { projectRoot: foreignProject, taskId: "tsk-foreign1" },
+    };
+    await writeFile(join(handoffDir, "handoff.json"), JSON.stringify(record));
+    await writeFile(join(handoffDir, "prompt.md"), "## task\n");
+    await writeFile(join(handoffDir, "output.log"), "");
+
+    // The packet is project-scoped so `show` from this project returns
+    // HANDOFF_NOT_FOUND.
+    const blocked = await c.call("maestro_handoff_show", { id: handoffId });
+    expect(blocked.payload.isError).toBe(true);
+    expect((blocked.body as { code: string }).code).toBe("HANDOFF_NOT_FOUND");
+
+    // Pickup goes through `handoffStore.get()` directly (not the project
+    // scope filter), so the cross-project guard in pickup-handoff.usecase.ts
+    // fires and the handler must surface CROSS_PROJECT_PICKUP with hints
+    // preserved from the underlying MaestroError.
+    const cross = await c.call("maestro_handoff_pickup", {
+      id: handoffId,
+      actorAgent: "claude",
+      actorSessionId: "e2e-cross-session",
+    });
+    expect(cross.payload.isError).toBe(true);
+    const crossBody = cross.body as {
+      code: string;
+      message: string;
+      hints: string[];
+    };
+    expect(crossBody.code).toBe("CROSS_PROJECT_PICKUP");
+    expect(crossBody.message).toContain("belongs to project");
+    expect(crossBody.hints.length).toBeGreaterThan(0);
+    expect(crossBody.hints.some((h) => h.includes("source project"))).toBe(true);
+  });
+
   it("rejects unknown fields at the schema boundary (strict mode)", async () => {
     const c = client!;
     // maestro_task_create with a typo'd 'missionID' (correct field would be
@@ -427,5 +574,23 @@ describe("MCP stdio flow", () => {
       r.error !== undefined ||
       (tooled !== undefined && tooled.isError === true);
     expect(rejected).toBe(true);
+  });
+
+  it("returns lean INVALID_ARG shape for missing required args", async () => {
+    const c = client!;
+    const r = await c.rpc("tools/call", {
+      name: "maestro_evidence_list",
+      arguments: {},
+    });
+    const wire = JSON.stringify(r);
+    // Doctrine target: full JSON-RPC line for a single missing arg < 200 B.
+    expect(wire.length).toBeLessThan(200);
+    const payload = r.result as ToolPayload;
+    expect(payload.isError).toBe(true);
+    expect(payload.structuredContent).toBeUndefined();
+    const body = JSON.parse(payload.content[0]!.text) as Record<string, unknown>;
+    expect(body.code).toBe("INVALID_ARG");
+    expect(body.arg).toBe("taskId");
+    expect(typeof body.message).toBe("string");
   });
 });

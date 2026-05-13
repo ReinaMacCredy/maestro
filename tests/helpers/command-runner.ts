@@ -26,7 +26,7 @@ export async function runCommand(
     env: options.env ? { ...process.env, ...options.env } : process.env,
   });
 
-  if (typeof options.stdin === "string" && proc.stdin) {
+  if (typeof options.stdin === "string" && proc.stdin && typeof proc.stdin !== "number") {
     proc.stdin.write(options.stdin);
     await proc.stdin.end();
   }

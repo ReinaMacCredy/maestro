@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
-import { recordEvidence } from "@/features/evidence/index.js";
+import { type Services } from "@/services.js";
+import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/index.js";
 import type { RuntimeSignalPayload } from "@/features/evidence/index.js";
 import { PrometheusRuntimeMonitor } from "../adapters/prometheus.adapter.js";
 import { checkRuntimeSignals } from "../usecases/check-runtime-signals.usecase.js";
@@ -10,20 +10,17 @@ import type { RuntimeMonitorPort } from "../ports/monitor.port.js";
 
 interface RuntimeCheckCommandDeps {
   readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "specStore">;
-  readonly recordEvidence: typeof recordEvidence;
-  readonly buildMonitor: (baseUrl: string) => RuntimeMonitorPort;
+  readonly recordEvidence?: typeof defaultRecordEvidence;
+  readonly buildMonitor?: (baseUrl: string) => RuntimeMonitorPort;
 }
 
-const defaultDeps: RuntimeCheckCommandDeps = {
-  getServices,
-  recordEvidence,
-  buildMonitor: (baseUrl: string) => new PrometheusRuntimeMonitor(baseUrl),
-};
+const defaultBuildMonitor = (baseUrl: string): RuntimeMonitorPort =>
+  new PrometheusRuntimeMonitor(baseUrl);
 
 export function registerRuntimeCheckCommand(
   parent: Command,
   program: Command,
-  deps: RuntimeCheckCommandDeps = defaultDeps,
+  deps: RuntimeCheckCommandDeps,
 ): void {
   parent
     .command("check")
@@ -69,7 +66,7 @@ export function registerRuntimeCheckCommand(
         process.env.MAESTRO_PROMETHEUS_URL ??
         "http://localhost:9090";
 
-      const monitor = deps.buildMonitor(baseUrl);
+      const monitor = (deps.buildMonitor ?? defaultBuildMonitor)(baseUrl);
       const now = () => new Date();
 
       const outcomes = await checkRuntimeSignals({ signals, monitor, now });
@@ -106,7 +103,7 @@ export function registerRuntimeCheckCommand(
               note,
             };
 
-        const row = await deps.recordEvidence(services.evidenceStore, {
+        const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, {
           task_id: taskId,
           kind: "runtime-signal",
           payload,

@@ -154,6 +154,7 @@ function fakeGitAnchor(changedPaths: string[] = [], addedLines: string[] = [], t
     collectChangedPaths: async () => changedPaths,
     collectAddedLines: async () => addedLines,
     resolveTreeSha: async () => treeSha,
+    collectUntrackedFiles: async () => [],
   };
 }
 

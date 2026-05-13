@@ -14,7 +14,7 @@ import {
   type MissionReport,
   getValidFeatureTransitions,
 } from "@/features/mission";
-import { getMissionControlBackgroundMode } from "@/shared/domain/ui-config.js";
+import { getMissionControlBackgroundMode } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck, StatusReport } from "@/infra/domain/status-types.js";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";

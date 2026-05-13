@@ -29,6 +29,7 @@ describe("config-edit usecase", () => {
     );
 
     const layers = await adapter.loadLayers(dir);
-    expect(layers.project?.workers?.codex?.enabled).toBe(false);
+    const project = layers.project as unknown as { workers?: { codex?: { enabled?: boolean } } };
+    expect(project?.workers?.codex?.enabled).toBe(false);
   });
 });

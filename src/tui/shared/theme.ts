@@ -4,7 +4,7 @@
  */
 import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult, MilestoneKind, MilestoneProfile } from "@/features/mission";
 import type { TaskStatus } from "@/features/task";
-import type { InferredAgentStatus } from "./state/screen-types.js";
+import type { InferredAgentStatus } from "../state/screen-types.js";
 
 // ── Palette (256-color) ─────────────────────────────
 

@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { exportBundle } from "../usecases/export-bundle.usecase.js";
 import { inspectBundle } from "../usecases/inspect-bundle.usecase.js";
 import type {
@@ -16,17 +16,31 @@ const VALID_REDACT_SCOPES: readonly BundleRedactScope[] = [
   "replies",
 ];
 
-export function registerBundleCommand(program: Command): void {
+interface BundleCommandDeps {
+  readonly getServices: () => Pick<
+    Services,
+    "missions" | "replyStore" | "handoffStore" | "archive" | "sessionDetect"
+  >;
+}
+
+export function registerBundleCommand(
+  program: Command,
+  deps: BundleCommandDeps,
+): void {
   const bundleCmd = program
     .command("bundle")
     .description("Package a mission and its artifacts as a portable archive")
     .option("--json", "Output as JSON");
 
-  registerExportCommand(bundleCmd, program);
-  registerInspectCommand(bundleCmd, program);
+  registerExportCommand(bundleCmd, program, deps);
+  registerInspectCommand(bundleCmd, program, deps);
 }
 
-function registerExportCommand(bundleCmd: Command, program: Command): void {
+function registerExportCommand(
+  bundleCmd: Command,
+  program: Command,
+  deps: BundleCommandDeps,
+): void {
   bundleCmd
     .command("export <missionId>")
     .description("Export a mission as a .mission.tar.gz bundle")
@@ -43,9 +57,9 @@ Examples:
       `Comma-separated redaction scopes (${VALID_REDACT_SCOPES.join("|")})`,
     )
     .option("--json", "Output as JSON")
-    .action(async (missionId: string, opts) => {
+    .action(async (missionId: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
-      const services = getServices();
+      const services = deps.getServices();
       const redact = parseRedactScopes(opts.redact);
 
       const result = await exportBundle(
@@ -71,7 +85,11 @@ Examples:
     });
 }
 
-function registerInspectCommand(bundleCmd: Command, program: Command): void {
+function registerInspectCommand(
+  bundleCmd: Command,
+  program: Command,
+  deps: BundleCommandDeps,
+): void {
   bundleCmd
     .command("inspect <path>")
     .description("Print the manifest of a mission bundle without extracting it")
@@ -81,9 +99,9 @@ Examples:
   maestro bundle inspect ./review.mission.tar.gz --json
 `)
     .option("--json", "Output as JSON")
-    .action(async (path: string, opts) => {
+    .action(async (path: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
-      const services = getServices();
+      const services = deps.getServices();
 
       const manifest = await inspectBundle({ archive: services.archive }, path);
 

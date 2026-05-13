@@ -44,9 +44,9 @@ describe("checkScope", () => {
     });
     const findings = checkScope(["docs/README.md"], contract);
     expect(findings).toHaveLength(1);
-    expect(findings[0].check).toBe("scope");
-    expect(findings[0].severity).toBe("error");
-    expect(findings[0].paths).toContain("docs/README.md");
+    expect(findings[0]?.check).toBe("scope");
+    expect(findings[0]?.severity).toBe("error");
+    expect(findings[0]?.paths).toContain("docs/README.md");
   });
 
   it("forbidden path — emits error finding with forbidden details", () => {
@@ -55,10 +55,10 @@ describe("checkScope", () => {
     });
     const findings = checkScope([".env", "src/foo.ts"], contract);
     expect(findings).toHaveLength(1);
-    expect(findings[0].check).toBe("scope");
-    expect(findings[0].severity).toBe("error");
-    expect(findings[0].paths).toContain(".env");
-    expect(findings[0].details).toMatch(/filesForbidden/);
+    expect(findings[0]?.check).toBe("scope");
+    expect(findings[0]?.severity).toBe("error");
+    expect(findings[0]?.paths).toContain(".env");
+    expect(findings[0]?.details).toMatch(/filesForbidden/);
   });
 
   it("filesExpected=[**] allows all paths", () => {
@@ -108,6 +108,6 @@ describe("checkScope", () => {
     // forbidden match takes priority; no out-of-scope finding
     const forbiddenFindings = findings.filter((f) => f.paths.includes("src/secret.ts"));
     expect(forbiddenFindings).toHaveLength(1);
-    expect(forbiddenFindings[0].details).toMatch(/filesForbidden/);
+    expect(forbiddenFindings[0]?.details).toMatch(/filesForbidden/);
   });
 });

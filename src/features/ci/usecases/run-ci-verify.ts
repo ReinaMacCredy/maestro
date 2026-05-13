@@ -13,6 +13,8 @@ import { detectCrossTaskConflict } from "./detect-cross-task-conflict.js";
 import { requestVerdict } from "@/features/verdict/index.js";
 import type { RequestVerdictDeps } from "@/features/verdict/index.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
+import { checkArchitectureRules } from "@/features/verify";
+import type { LintViolationPayload } from "@/features/evidence/domain/types.js";
 import { loadOwnersFromBase } from "@/features/policy/index.js";
 import type { GithubApiPort } from "../ports/github-api.port.js";
 import type { CiEnv } from "../domain/ci-env.js";
@@ -106,7 +108,7 @@ export async function runCiVerify(
       const FILES_CONCURRENCY = 4;
       const [thisPrFiles, otherPrFiles] = await Promise.all([
         githubApi.getPullRequestFiles({ repository, pr: resolvedPr }),
-        mapWithConcurrency(otherPrs, FILES_CONCURRENCY, async (pr) => ({
+        mapWithConcurrency(otherPrs, FILES_CONCURRENCY, async (pr): Promise<{ pr: number; files: readonly string[] }> => ({
           pr,
           files: await githubApi.getPullRequestFiles({ repository, pr }),
         })),
@@ -137,6 +139,56 @@ export async function runCiVerify(
     { taskId, base: resolvedBase, pr: resolvedPr },
     deps.verdictDeps,
   );
+
+  // Record architecture-lint findings as `lint-violation` evidence at
+  // `witnessed-by-ci`, so C-1's `task introspect` can surface "open lints"
+  // raised by CI runs. Diff-aware rule (`no-hand-edit-generated`) is enabled
+  // when GITHUB_BASE_REF is available; otherwise it self-skips with an info
+  // finding (not an error), which we drop below.
+  try {
+    const projectRoot = deps.projectRoot ?? deps.verdictDeps.projectRoot;
+    let lintDiff: { base: string; changedPaths: readonly string[] } | undefined;
+    if (resolvedBase) {
+      const headCommit = await deps.verdictDeps.gitAnchor.resolveHeadCommit(projectRoot);
+      if (headCommit !== undefined) {
+        lintDiff = {
+          base: resolvedBase,
+          changedPaths: await deps.verdictDeps.gitAnchor.collectChangedPaths(
+            projectRoot,
+            resolvedBase,
+            headCommit,
+          ),
+        };
+      }
+    }
+    const violations = await checkArchitectureRules({
+      repoRoot: projectRoot,
+      ...(lintDiff ? { diff: lintDiff } : {}),
+    });
+    await Promise.all(
+      violations
+        .filter((v) => v.severity === "error" || v.severity === "warn")
+        .map((v) => {
+          const payload: LintViolationPayload = {
+            ruleId: v.ruleId,
+            file: v.file,
+            ...(v.line !== undefined ? { line: v.line } : {}),
+            ...(v.snippet !== undefined ? { snippet: v.snippet } : {}),
+            message: v.message,
+            remediation: v.remediation,
+          };
+          return recordEvidence(deps.evidenceStore, {
+            task_id: taskId,
+            kind: "lint-violation",
+            payload,
+            witness_level: "witnessed-by-ci",
+          });
+        }),
+    );
+  } catch {
+    // Non-fatal: lint-violation recording is observational; verdict already
+    // reflects the underlying findings via the Trust Verifier.
+  }
 
   const outputPath = deps.env.outputPath;
   if (typeof outputPath === "string" && outputPath.length > 0) {

@@ -66,10 +66,18 @@ beforeEach(async () => {
       branch: "main",
       recentCommits: [],
       changedFiles: ["src/index.ts"],
+      fileChanges: [],
       workingTreeClean: false,
       diffStat: "+1 -0",
     }),
     isRepo: async () => true,
+    getCurrentBranch: async () => "main",
+    createWorktree: async () => ({
+      slug: "test",
+      baseBranch: "main",
+      branch: "feat/test",
+      path: "/tmp/test",
+    }),
   } satisfies GitPort;
 
   const missionStore = new FsMissionStoreAdapter(tmpDir);

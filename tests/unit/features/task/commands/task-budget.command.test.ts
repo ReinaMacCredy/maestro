@@ -88,6 +88,7 @@ describe("registerTaskBudgetCommand", () => {
       getServices: () => ({
         contractVersionStore: fakeContractVersionStore(undefined),
         runStateStore: fakeRunStateStore(undefined),
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       }),
     });
 
@@ -109,6 +110,7 @@ describe("registerTaskBudgetCommand", () => {
       getServices: () => ({
         contractVersionStore: fakeContractVersionStore(contract),
         runStateStore: fakeRunStateStore(state),
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       }),
     });
 
@@ -134,6 +136,7 @@ describe("registerTaskBudgetCommand", () => {
       getServices: () => ({
         contractVersionStore: fakeContractVersionStore(contract),
         runStateStore: fakeRunStateStore(state),
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       }),
     });
 
@@ -160,6 +163,7 @@ describe("registerTaskBudgetCommand", () => {
       getServices: () => ({
         contractVersionStore: fakeContractVersionStore(contract),
         runStateStore: fakeRunStateStore(state),
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       }),
     });
 
@@ -195,6 +199,7 @@ describe("registerTaskBudgetCommand", () => {
       getServices: () => ({
         contractVersionStore: fakeContractVersionStore(contract),
         runStateStore: fakeRunStateStore(state),
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       }),
     });
 
@@ -221,6 +226,7 @@ describe("registerTaskBudgetCommand", () => {
       getServices: () => ({
         contractVersionStore: fakeContractVersionStore(contract),
         runStateStore: fakeRunStateStore(state),
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       }),
     });
 
@@ -248,6 +254,7 @@ describe("registerTaskBudgetCommand", () => {
       getServices: () => ({
         contractVersionStore: fakeContractVersionStore(contract),
         runStateStore: fakeRunStateStore(state),
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       }),
     });
 
@@ -273,6 +280,7 @@ describe("registerTaskBudgetCommand", () => {
       getServices: () => ({
         contractVersionStore: fakeContractVersionStore(contract),
         runStateStore: fakeRunStateStore(state),
+        contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       }),
     });
 

@@ -63,9 +63,9 @@ describe("checkCommitMetadata", () => {
       makeProbe(UNSIGNED_OUTPUT),
     );
     expect(findings).toHaveLength(1);
-    expect(findings[0].check).toBe("commit-metadata");
-    expect(findings[0].severity).toBe("info");
-    expect(findings[0].details).toMatch(/def5678/);
+    expect(findings[0]?.check).toBe("commit-metadata");
+    expect(findings[0]?.severity).toBe("info");
+    expect(findings[0]?.details).toMatch(/def5678/);
   });
 
   it("mixed output — only lists unsigned commits", async () => {
@@ -76,8 +76,8 @@ describe("checkCommitMetadata", () => {
       makeProbe(MIXED_OUTPUT),
     );
     expect(findings).toHaveLength(1);
-    expect(findings[0].details).toMatch(/def5678/);
-    expect(findings[0].details).not.toMatch(/abc1234/);
+    expect(findings[0]?.details).toMatch(/def5678/);
+    expect(findings[0]?.details).not.toMatch(/abc1234/);
   });
 
   it("empty log output — empty findings", async () => {

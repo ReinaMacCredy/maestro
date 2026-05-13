@@ -98,7 +98,7 @@ function makeRollbackEvidence(overrides: Partial<EvidenceRow> = {}): EvidenceRow
 
 function makeSpec(overrides: Partial<Spec> = {}): Spec {
   return {
-    schema_version: 1,
+    schema_version: 2,
     mission_id: "2026-05-05-001",
     acceptance_criteria: [{ id: "cr-1", text: "Tests pass" }],
     non_goals: [{ text: "No new dependencies" }],

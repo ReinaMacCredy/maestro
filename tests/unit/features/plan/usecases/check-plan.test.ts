@@ -29,7 +29,7 @@ function makeContract(filesExpected: string[] = []): Contract {
 
 function makeSpec(criterionIds: string[]): Spec {
   return {
-    schema_version: 1,
+    schema_version: 2,
     mission_id: "mission-001",
     acceptance_criteria: criterionIds.map((id) => ({ id, text: `Criterion ${id}` })),
     non_goals: [],

@@ -26,7 +26,7 @@ import { sanitizeInlinePromptContent, sanitizePromptContent } from "@/shared/lib
 import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
-import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
+import { resolveSkillDirectoryName } from "@/features/verify/index.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;
@@ -246,7 +246,7 @@ async function loadPreviousMilestoneReports(
     (feature) => feature.milestoneId === prevMilestone.id && feature.status === "done",
   );
 
-  const reports = (await Promise.all(prevFeatures.map(async (feature) => {
+  const reports = (await Promise.all(prevFeatures.map(async (feature): Promise<PreviousMilestoneReport | undefined> => {
     const reportPath = join(
       baseDir,
       MAESTRO_DIR,

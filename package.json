@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.75.0",
+  "version": "0.79.4",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
@@ -15,6 +15,7 @@
     "check:bundled-skills": "bun scripts/sync-bundled-skills.ts --check",
     "sync:bundled-skills": "bun scripts/sync-bundled-skills.ts",
     "check:agent-spec": "bun scripts/check-agent-spec.ts",
+    "lint:arch": "bun scripts/lint/run-arch-lint.ts",
     "ci": "bun scripts/ci.ts",
     "ci:dry": "bun scripts/ci.ts --dry-run",
     "install:local": "bun scripts/install-local.ts",
@@ -22,7 +23,11 @@
     "deploy": "bun run bump && bun run test && bun run release:local",
     "dev": "bun run src/index.ts",
     "tui:dev": "bun scripts/tui-dev.ts",
+    "pretest": "bun run build",
     "test": "bun test --path-ignore-patterns 'apps/desktop/**'",
+    "test:unit": "bun test tests/unit --concurrent",
+    "test:integration": "bun test tests/integration",
+    "test:e2e": "bun test tests/e2e",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

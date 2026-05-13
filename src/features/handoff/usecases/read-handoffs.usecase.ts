@@ -85,9 +85,11 @@ async function readHandoffById(
 ): Promise<HandoffRecord> {
   const record = await store.get(id);
   if (!record || !isRecordVisible(record, options)) {
-    throw new MaestroError(`Handoff packet not found: ${id}`, [
-      "Run `maestro handoff list` to see available packets",
-    ]);
+    throw new MaestroError(
+      `Handoff packet not found: ${id}`,
+      ["Run `maestro handoff list` to see available packets"],
+      "HANDOFF_NOT_FOUND",
+    );
   }
   return reconcileHandoffRecords(store, [record], options).then((records) => records[0]!);
 }

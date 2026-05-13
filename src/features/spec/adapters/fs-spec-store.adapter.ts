@@ -72,7 +72,7 @@ export class FsSpecStoreAdapter implements SpecStorePort {
         path: join(this.dir(), entry.name),
       }));
     const settled = await Promise.all(
-      candidates.map(async ({ missionId, path }) => {
+      candidates.map(async ({ missionId, path }): Promise<Spec | undefined> => {
         const raw = await readJson<unknown>(path).catch(() => undefined);
         const spec = coerceSpec(raw);
         if (!spec || spec.mission_id !== missionId) return undefined;

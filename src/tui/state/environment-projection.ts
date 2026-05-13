@@ -2,7 +2,7 @@ import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { DoctorCheck, StatusReport } from "@/infra/domain/status-types.js";
-import { listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
+import { listIgnoredProjectConfigKeys } from "@/tui/shared/ui-config.js";
 
 export async function buildMissionControlEnvironmentSummary(
   config: ConfigPort,

@@ -2,10 +2,17 @@ import type { Command } from "commander";
 import type { Correction } from "../domain/memory-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { captureCorrection } from "../usecases/memory-correct.usecase.js";
 
-export function registerMemoryCorrectCommand(program: Command): void {
+interface MemoryCorrectCommandDeps {
+  readonly getServices: () => Pick<Services, "correctionStore">;
+}
+
+export function registerMemoryCorrectCommand(
+  program: Command,
+  deps: MemoryCorrectCommandDeps,
+): void {
   program
     .command("memory-correct")
     .description("Capture a correction rule for future sessions")
@@ -20,8 +27,8 @@ Examples:
     .option("--globs <patterns>", "Comma-separated file glob patterns", "")
     .option("--severity <level>", "soft or hard", "soft")
     .option("--json", "Output as JSON")
-    .action(async (rule: string, opts) => {
-      const services = getServices();
+    .action(async (rule: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       if (!opts.trigger && !opts.globs) {

@@ -23,6 +23,7 @@ import {
   resolveMaestroExternalSkillsRoot,
 } from "@/shared/domain/defaults.js";
 import { execArgv } from "@/shared/lib/shell.js";
+import { firstSentence, truncateText } from "@/shared/lib/truncate.js";
 import { listSkillTargetProviders, type ProviderId } from "@/infra/domain/providers.js";
 import { injectAgentBlocks } from "@/infra/usecases/manage-agents.usecase.js";
 
@@ -39,6 +40,31 @@ export interface SkillRecord {
   readonly source: string;
   readonly metadata: Record<string, unknown>;
   readonly body: string;
+}
+
+/**
+ * Lean projection of {@link SkillRecord} for `skills list` JSON output.
+ * Drops `body` (~1 MB across the catalog), `path` (absolute and unactionable
+ * — agents address skills by `name`), and truncates `description` to the
+ * first sentence. `--full` recovers the pre-doctrine shape; `skills inspect
+ * <name>` returns the full record.
+ */
+export interface SkillSummary {
+  readonly name: string;
+  readonly description: string;
+  readonly scope: SkillRecord["scope"];
+  readonly source: string;
+}
+
+const SKILL_DESCRIPTION_MAX = 200;
+
+function summarizeSkill(skill: SkillRecord): SkillSummary {
+  return {
+    name: skill.name,
+    description: truncateText(firstSentence(skill.description), SKILL_DESCRIPTION_MAX),
+    scope: skill.scope,
+    source: skill.source,
+  };
 }
 
 export interface SkillDiagnostic {
@@ -77,13 +103,19 @@ export function registerSkillsCommand(program: Command): void {
   skills
     .command("list")
     .option("--scope <scope>", "project|user|shared|all", "all")
+    .option("--full", "Include SKILL.md body in JSON output (verbose; default summary)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const scope = parseScope(opts.scope);
+      const isFull = opts.full === true;
       const result = await discoverSkills({ cwd: process.cwd(), homeDir: homedir(), scope });
       if (isJson) {
-        output(true, result, formatSkillDiscoveryResult);
+        const projected = {
+          skills: isFull ? result.skills : result.skills.map(summarizeSkill),
+          diagnostics: result.diagnostics,
+        };
+        output(true, projected, formatSkillDiscoveryResult);
         return;
       }
       for (const diagnostic of result.diagnostics) {
@@ -95,7 +127,7 @@ export function registerSkillsCommand(program: Command): void {
   skills
     .command("inspect <name>")
     .option("--json", "Output as JSON")
-    .action(async (name: string, opts) => {
+    .action(async (name: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const result = await discoverSkills({ cwd: process.cwd(), homeDir: homedir(), scope: "all" });
       const skill = result.skills.find((candidate) => candidate.name === name);
@@ -112,7 +144,7 @@ export function registerSkillsCommand(program: Command): void {
     .option("--scope <scope>", "user|project|shared", "user")
     .option("--targets <targets>", "all or comma-separated codex,claude,hermes,agentskills", "all")
     .option("--json", "Output as JSON")
-    .action(async (source: string, opts) => {
+    .action(async (source: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const scope = parseInstallScope(opts.scope);
       const targets = parseTargets(opts.targets);
@@ -130,7 +162,7 @@ export function registerSkillsCommand(program: Command): void {
     .command("remove <name>")
     .option("--scope <scope>", "user|project|shared", "user")
     .option("--json", "Output as JSON")
-    .action(async (name: string, opts) => {
+    .action(async (name: string, opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const scope = parseInstallScope(opts.scope);
       const result = await removeManagedSkill({ name, scope, cwd: process.cwd(), homeDir: homedir() });
@@ -145,7 +177,7 @@ export function registerSkillsCommand(program: Command): void {
     .command("sync")
     .option("--targets <targets>", "all or comma-separated codex,claude,hermes,agentskills", "all")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const targets = parseTargets(opts.targets);
       const bundled = await injectAgentBlocks(
@@ -767,10 +799,14 @@ function formatSkillList(skills: readonly SkillRecord[]): string[] {
 }
 
 function formatSkillDiscoveryResult(result: {
-  readonly skills: readonly SkillRecord[];
+  readonly skills: readonly (SkillRecord | SkillSummary)[];
   readonly diagnostics: readonly SkillDiagnostic[];
 }): string[] {
-  return formatSkillList(result.skills);
+  if (result.skills.length === 0) return ["No skills found"];
+  return [
+    `[ok] ${result.skills.length} skill(s)`,
+    ...result.skills.map((skill) => `  ${skill.name}  ${skill.scope}  ${skill.path}`),
+  ];
 }
 
 function formatSkillInspect(skill: SkillRecord): string[] {

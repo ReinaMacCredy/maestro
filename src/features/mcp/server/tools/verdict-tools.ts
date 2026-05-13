@@ -1,8 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { requestVerdict } from "@/features/verdict/index.js";
-import { fail, fromMaestroError, ok, toCallToolResult } from "../errors.js";
+import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { VerdictRequestInput, VerdictShowInput } from "../schemas/inputs.js";
-import { VerdictOutput } from "../schemas/outputs.js";
 import type { RegisterDeps } from "./types.js";
 
 export function registerVerdictTools(server: McpServer, deps: RegisterDeps): void {
@@ -13,7 +12,6 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
       description:
         "Show the latest verdict for a task, or a specific verdict version when `id` is provided. Returns code VERDICT_NOT_FOUND when no verdict has been computed. Read-only.",
       inputSchema: VerdictShowInput,
-      outputSchema: VerdictOutput,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -21,7 +19,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const verdict = args.id
@@ -29,9 +27,9 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
           : await services.verdictStore.readLatest(args.taskId);
         if (verdict === undefined) {
           return toCallToolResult(
-            fail("VERDICT_NOT_FOUND", `No verdict found for task ${args.taskId}`, [
-              "Compute one with maestro_verdict_request",
-            ]),
+            fail("VERDICT_NOT_FOUND", `No verdict found for task ${args.taskId}`, {
+              hints: ["Compute one with maestro_verdict_request"],
+            }),
           );
         }
         return toCallToolResult(ok({ verdict }));
@@ -48,7 +46,6 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
       description:
         "Compute a new verdict for a task and persist it. Returns PASS/FAIL/HUMAN/BLOCK decision and full verdict payload. Each call writes a new verdict row.",
       inputSchema: VerdictRequestInput,
-      outputSchema: VerdictOutput,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -56,7 +53,7 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
         openWorldHint: false,
       },
     },
-    async (args) => {
+    async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
         const verdict = await requestVerdict(

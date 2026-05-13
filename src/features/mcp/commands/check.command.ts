@@ -33,14 +33,14 @@ export function registerMcpCheckCommand(mcpCmd: Command, program: Command): void
     .command("check")
     .description("Verify maestro MCP server installation and agent runtime configuration")
     .option("--json", "Output as JSON")
-    .action(async (opts: CheckOptions) => {
+    .action(async (opts: CheckOptions): Promise<void> => {
       const isJson = resolveJsonFlag(opts as { json?: boolean }, program);
       const installDir = resolveInstallDir();
       const binaryPath = resolveMaestroBinaryInstallPath(installDir);
       const expectedEntry = buildMaestroAgentMcpConfigEntry(binaryPath);
 
       const agentRuntimes: AgentRuntimeStatus[] = await Promise.all(
-        defaultAgentRuntimeTargets().map(async (target) => {
+        defaultAgentRuntimeTargets().map(async (target): Promise<AgentRuntimeStatus> => {
           let existing;
           try {
             existing = await readMaestroEntry(target);

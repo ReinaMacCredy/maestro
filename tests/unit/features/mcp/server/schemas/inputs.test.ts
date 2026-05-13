@@ -4,6 +4,10 @@ import {
   ContractShowInput,
   EvidenceListInput,
   EvidenceRecordInput,
+  HandoffListInput,
+  HandoffOpenForTaskInput,
+  HandoffPickupInput,
+  HandoffShowInput,
   PolicyCheckInput,
   TaskBlockInput,
   TaskClaimInput,
@@ -309,5 +313,84 @@ describe("PolicyCheckInput", () => {
   it("requires taskId", () => {
     expect(PolicyCheckInput.safeParse({}).success).toBe(false);
     expect(PolicyCheckInput.safeParse({ taskId: "tsk-abc123" }).success).toBe(true);
+  });
+});
+
+describe("HandoffListInput", () => {
+  it("accepts an empty payload", () => {
+    expect(HandoffListInput.safeParse({}).success).toBe(true);
+  });
+
+  it("validates handoff agent enum", () => {
+    expect(HandoffListInput.safeParse({ agent: "codex" }).success).toBe(true);
+    expect(HandoffListInput.safeParse({ agent: "claude" }).success).toBe(true);
+    expect(HandoffListInput.safeParse({ agent: "hermes" }).success).toBe(true);
+    expect(HandoffListInput.safeParse({ agent: "gpt" }).success).toBe(false);
+  });
+
+  it("validates displayState enum", () => {
+    for (const s of ["open", "consumed", "completed", "failed"]) {
+      expect(HandoffListInput.safeParse({ displayState: s }).success).toBe(true);
+    }
+    expect(HandoffListInput.safeParse({ displayState: "draft" }).success).toBe(false);
+  });
+
+  it("filters by linked task id", () => {
+    expect(HandoffListInput.safeParse({ taskId: "tsk-abc123" }).success).toBe(true);
+    expect(HandoffListInput.safeParse({ taskId: "bogus" }).success).toBe(false);
+  });
+
+  it("schema accepts openOnly + displayState together (handler enforces mutual-exclusion)", () => {
+    // The schema stays a plain ZodObject so the SDK can serialize properties
+    // for `tools/list`. Mutual-exclusion is enforced by the handler with code
+    // INVALID_FILTER_COMBINATION (covered in handoff-tools tests).
+    expect(
+      HandoffListInput.safeParse({ openOnly: true, displayState: "consumed" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects unknown fields (strict)", () => {
+    expect(HandoffListInput.safeParse({ statuss: "open" }).success).toBe(false);
+  });
+});
+
+describe("HandoffShowInput / HandoffOpenForTaskInput", () => {
+  it("HandoffShowInput accepts handoff id formats", () => {
+    expect(HandoffShowInput.safeParse({ id: "bold-otter-1" }).success).toBe(true);
+    expect(HandoffShowInput.safeParse({ id: "2026-05-08-001" }).success).toBe(true);
+    expect(HandoffShowInput.safeParse({ id: "Bold-Otter-1" }).success).toBe(false);
+  });
+
+  it("HandoffOpenForTaskInput requires a valid task id", () => {
+    expect(HandoffOpenForTaskInput.safeParse({}).success).toBe(false);
+    expect(HandoffOpenForTaskInput.safeParse({ taskId: "tsk-abc123" }).success).toBe(true);
+    expect(HandoffOpenForTaskInput.safeParse({ taskId: "task-abc123" }).success).toBe(false);
+  });
+});
+
+describe("HandoffPickupInput", () => {
+  it("requires id and actorAgent", () => {
+    expect(HandoffPickupInput.safeParse({}).success).toBe(false);
+    expect(
+      HandoffPickupInput.safeParse({ id: "bold-otter-1", actorAgent: "codex" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects unknown actorAgent values", () => {
+    expect(
+      HandoffPickupInput.safeParse({ id: "bold-otter-1", actorAgent: "gpt" }).success,
+    ).toBe(false);
+  });
+
+  it("accepts optional standalone, ownerId, actorSessionId", () => {
+    expect(
+      HandoffPickupInput.safeParse({
+        id: "bold-otter-1",
+        actorAgent: "claude",
+        actorSessionId: "session:1",
+        ownerId: "claude:session:1",
+        standalone: true,
+      }).success,
+    ).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { formatElapsed, formatTokens, formatRelativeTime, truncate } from "@/tui/format.js";
+import { formatElapsed, formatTokens, formatRelativeTime, truncate } from "@/tui/shared/format.js";
 
 describe("formatElapsed", () => {
   it("formats 0 seconds", () => {

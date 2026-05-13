@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isMaestroSubstratePath } from "@/shared/lib/maestro-substrate-paths.js";
+import { isMaestroSubstratePath } from "@/features/verify/lib/substrate-paths.js";
 
 describe("isMaestroSubstratePath", () => {
   it("recognises the .maestro root and any path beneath it", () => {

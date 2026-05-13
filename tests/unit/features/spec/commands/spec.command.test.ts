@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from "bun:test";
 import { Command } from "commander";
-import { registerSpecCommand } from "@/features/spec/commands/spec.command.js";
+import { registerSpecCommand, type SpecCommandDeps } from "@/features/spec/commands/spec.command.js";
 import { createSpec } from "@/features/spec/usecases/create-spec.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { SpecStorePort } from "@/features/spec/ports/storage.js";
@@ -39,9 +39,10 @@ function makeProgram(specStore: SpecStorePort): Command {
   const program = new Command().name("maestro").option("--json", "Output as JSON").exitOverride();
   // spec show tests don't touch missions; cast a stub through unknown.
   const missions = { get: async () => undefined } as unknown as ReturnType<
-    Parameters<typeof registerSpecCommand>[1]["getServices"]
+    SpecCommandDeps["getServices"]
   >["missions"];
-  registerSpecCommand(program, { getServices: () => ({ specStore, missions }) });
+  const deps = { getServices: () => ({ specStore, missions }) };
+  registerSpecCommand(program, deps);
   return program;
 }
 

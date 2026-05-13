@@ -4,7 +4,7 @@ import { fstatSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { fileExists, readTextOrStdin, writeText } from "@/shared/lib/fs.js";
@@ -27,6 +27,7 @@ import type {
   CostBudget,
   DoneWhenCriterion,
 } from "../domain/contract/contract-types.js";
+import type { Task } from "../domain/task-types.js";
 import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
 import { buildTaskOwnerId } from "../usecases/task-continuation.usecase.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
@@ -61,7 +62,15 @@ interface ContractVerdictPreview {
   readonly criteria: readonly DoneWhenCriterion[];
 }
 
-export function registerContractCommand(taskCmd: Command, program: Command): void {
+export interface ContractCommandDeps {
+  readonly getServices: () => Services;
+}
+
+export function registerContractCommand(
+  taskCmd: Command,
+  program: Command,
+  deps: ContractCommandDeps,
+): void {
   const contractCmd = taskCmd
     .command("contract")
     .description("Task contract draft, lock, and inspection commands");
@@ -75,8 +84,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--allow-unknown-keys", "Warn instead of error on unknown contract draft keys")
     .option("--json", "Output as JSON")
-    .action(async (taskId: string, opts) => {
-      const services = getServices();
+    .action(async (taskId: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const cwd = process.cwd();
       const config = await services.config.load(resolveMaestroProjectRoot(cwd));
@@ -89,12 +98,12 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         intent: readTemplateIntent(template),
         scope: readTemplateScope(template),
         doneWhen: readTemplateDoneWhen(template),
-        createdBy: await resolveDraftContractActor(taskId, opts.session),
+        createdBy: await resolveDraftContractActor(taskId, opts.session, deps),
         configSnapshot: buildContractConfigSnapshot(config),
         ...(amendmentBudget ? { amendmentBudget } : {}),
         ...(costBudget ? { costBudget } : {}),
       });
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -106,17 +115,17 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
-      const services = getServices();
+    .action(async (ref: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
       const contract = await services.contracts.lock({
         ref,
-        actorId: await resolveDraftContractActor(ref, opts.session),
+        actorId: await resolveDraftContractActor(ref, opts.session, deps),
         claimedAtCommit: await services.gitAnchor.resolveHeadCommit(process.cwd()),
         configSnapshot: buildContractConfigSnapshot(config),
       });
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
       warnScopeOverlap(contract, opts);
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
@@ -132,9 +141,9 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--allow-unknown-keys", "Warn instead of error on unknown contract draft keys")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
-      await resolveDraftContractActor(ref, opts.session);
-      const services = getServices();
+    .action(async (ref: string, opts): Promise<void> => {
+      await resolveDraftContractActor(ref, opts.session, deps);
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
       const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract), Boolean(opts.allowUnknownKeys));
@@ -144,7 +153,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         scope: readTemplateScope(template),
         doneWhen: readTemplateDoneWhen(template),
       });
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
 
       if (emitContractSilentSuccess(isJson, opts, edited)) return;
       output(isJson, edited, formatContractDetail);
@@ -163,7 +172,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--task <id>", "[L2 flag — see hint below]")
     .option("--add-path <path>", "[L2 flag — see hint below]")
     .option("--remove-path <path>", "[L2 flag — see hint below]")
-    .action(async (ref: string | undefined, opts) => {
+    .action(async (ref: string | undefined, opts): Promise<void> => {
       if (opts.task !== undefined || opts.addPath !== undefined || opts.removePath !== undefined) {
         const taskId = opts.task ?? ref ?? "<task-id>";
         const flags: string[] = [];
@@ -191,20 +200,20 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
           "Pass --reason '<why>' to record why the contract changed",
         ]);
       }
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
       const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract), Boolean(opts.allowUnknownKeys));
       const amended = await services.contracts.amend({
         kind: "replace",
         ref,
-        actorId: await resolveActiveContractActor(ref, opts.session),
+        actorId: await resolveActiveContractActor(ref, opts.session, deps),
         reason: opts.reason,
         intent: readTemplateIntent(template),
         scope: readTemplateScope(template),
         doneWhen: readTemplateDoneWhen(template),
       });
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
 
       if (emitContractSilentSuccess(isJson, opts, amended)) return;
       output(isJson, amended, formatContractDetail);
@@ -215,8 +224,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .description("Show one contract by contract id or task id")
     .option("--format <format>", "Output format: md (default), json, or yaml")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
-      const services = getServices();
+    .action(async (ref: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
 
@@ -236,8 +245,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .command("verdict <ref>")
     .description("Preview the current verdict without closing the task")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
-      const services = getServices();
+    .action(async (ref: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
       assertContractCanPreviewVerdict(contract);
@@ -271,8 +280,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--status <status>", `Filter by status (${CONTRACT_STATUSES.join("|")})`)
     .option("--task <id>", "Filter by task id")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contracts = await services.contracts.list({
         status: parseContractStatus(opts.status),
@@ -287,12 +296,12 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
-      await resolveDraftContractActor(ref, opts.session);
-      const services = getServices();
+    .action(async (ref: string, opts): Promise<void> => {
+      await resolveDraftContractActor(ref, opts.session, deps);
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.discard(ref);
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -303,8 +312,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .description("Reopen the completed task linked to a contract and reactivate the contract")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, opts) => {
-      const services = getServices();
+    .action(async (ref: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.load(ref);
       const reopened = await reopenTaskFlow({
@@ -314,7 +323,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         contractStore: services.contractStore,
         contracts: services.contracts,
       }, contract.taskId);
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
 
       const payload = reopened.contract ?? await services.contracts.load(contract.id);
       if (emitContractSilentSuccess(isJson, opts, payload)) return;
@@ -334,22 +343,22 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, criterionId: string, opts) => {
+    .action(async (ref: string, criterionId: string, opts): Promise<void> => {
       if (opts.met === true && opts.unmet === true) {
         throw new MaestroError("Choose either --met or --unmet, not both");
       }
 
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.amend({
         kind: "markCriterion",
         ref,
         criterionId,
-        actorId: await resolveActiveContractActor(ref, opts.session),
+        actorId: await resolveActiveContractActor(ref, opts.session, deps),
         met: opts.unmet === true ? false : true,
         evidence: opts.evidence,
       });
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -361,16 +370,16 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, text: string, opts) => {
-      const services = getServices();
+    .action(async (ref: string, text: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.amend({
         kind: "addCriterion",
         ref,
         text,
-        actorId: await resolveActiveContractActor(ref, opts.session),
+        actorId: await resolveActiveContractActor(ref, opts.session, deps),
       });
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -382,16 +391,16 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (ref: string, criterionId: string, opts) => {
-      const services = getServices();
+    .action(async (ref: string, criterionId: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await services.contracts.amend({
         kind: "removeCriterion",
         ref,
         criterionId,
-        actorId: await resolveActiveContractActor(ref, opts.session),
+        actorId: await resolveActiveContractActor(ref, opts.session, deps),
       });
-      await refreshContractNowMd();
+      await refreshContractNowMd(deps);
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -747,7 +756,7 @@ function readTemplateScope(template: ContractDraftTemplate): ContractScope {
 
 function readTemplateDoneWhen(
   template: ContractDraftTemplate,
-): readonly Array<{ readonly id?: string; readonly text: string; readonly kind?: DoneWhenCriterion["kind"] }> {
+): Array<{ readonly id?: string; readonly text: string; readonly kind?: DoneWhenCriterion["kind"] }> {
   if (template.doneWhen === undefined) return [];
   if (!Array.isArray(template.doneWhen)) {
     throw new MaestroError("Invalid contract draft: doneWhen must be an array", [
@@ -1065,8 +1074,8 @@ function emitContractSilentSuccess(
   return true;
 }
 
-async function resolveContractActor(ref: string): Promise<string> {
-  const services = getServices();
+async function resolveContractActor(ref: string, deps: ContractCommandDeps): Promise<string> {
+  const services = deps.getServices();
   const task = await services.taskStore.get(ref);
   if (task) {
     return task.assignee ?? "user";
@@ -1088,9 +1097,10 @@ async function resolveContractActor(ref: string): Promise<string> {
 async function resolveDraftContractActor(
   ref: string,
   explicitSessionId: string | undefined,
+  deps: ContractCommandDeps,
 ): Promise<string> {
-  const task = await resolveContractTask(ref);
-  const currentActorId = await resolveOptionalContractActorSessionId(explicitSessionId);
+  const task = await resolveContractTask(ref, deps);
+  const currentActorId = await resolveOptionalContractActorSessionId(explicitSessionId, deps);
 
   if (!task?.assignee) {
     return currentActorId ?? "user";
@@ -1114,16 +1124,17 @@ async function resolveDraftContractActor(
 async function resolveActiveContractActor(
   ref: string,
   explicitSessionId: string | undefined,
+  deps: ContractCommandDeps,
 ): Promise<string> {
-  const services = getServices();
-  const contract = await resolveContractRef(ref);
+  const services = deps.getServices();
+  const contract = await resolveContractRef(ref, deps);
   if (!contract || !isActiveContract(contract)) {
-    return resolveContractActor(ref);
+    return resolveContractActor(ref, deps);
   }
 
   const task = await services.taskStore.get(contract.taskId);
   const ownerId = task?.assignee ?? contract.lockedBy ?? contract.createdBy ?? "user";
-  const currentActorId = await resolveOptionalContractActorSessionId(explicitSessionId);
+  const currentActorId = await resolveOptionalContractActorSessionId(explicitSessionId, deps);
 
   if (ownerId === "user") {
     return currentActorId ?? "user";
@@ -1147,6 +1158,7 @@ async function resolveActiveContractActor(
 
 async function resolveOptionalContractActorSessionId(
   explicitSessionId: string | undefined,
+  deps: ContractCommandDeps,
 ): Promise<string | undefined> {
   if (explicitSessionId !== undefined) {
     const trimmed = explicitSessionId.trim();
@@ -1158,7 +1170,7 @@ async function resolveOptionalContractActorSessionId(
     return trimmed;
   }
 
-  const services = getServices();
+  const services = deps.getServices();
   const session = await services.sessionDetect.detect(process.cwd());
   if (session) {
     return buildTaskOwnerId(session.agent, session.sessionId);
@@ -1181,25 +1193,25 @@ function fallbackContractUserId(): string {
   }
 }
 
-async function resolveContractRef(ref: string): Promise<Contract | undefined> {
-  const services = getServices();
+async function resolveContractRef(ref: string, deps: ContractCommandDeps): Promise<Contract | undefined> {
+  const services = deps.getServices();
   return await services.contractStore.get(ref) ?? await services.contractStore.getByTaskId(ref);
 }
 
-async function resolveContractTask(ref: string) {
-  const services = getServices();
+async function resolveContractTask(ref: string, deps: ContractCommandDeps): Promise<Task | undefined> {
+  const services = deps.getServices();
   const task = await services.taskStore.get(ref);
   if (task) {
     return task;
   }
 
-  const contract = await resolveContractRef(ref);
+  const contract = await resolveContractRef(ref, deps);
   return contract ? await services.taskStore.get(contract.taskId) : undefined;
 }
 
-async function refreshContractNowMd(): Promise<void> {
+async function refreshContractNowMd(deps: ContractCommandDeps): Promise<void> {
   try {
-    const services = getServices();
+    const services = deps.getServices();
     await services.taskNowMdWriter.write(await services.taskStore.all());
   } catch {
     // NOW.md is derived output; never block a contract mutation on it.

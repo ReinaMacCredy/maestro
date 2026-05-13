@@ -5,7 +5,7 @@ import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { writeText, readText } from "@/shared/lib/fs.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { createSpec } from "../usecases/create-spec.usecase.js";
 import { updateSpec } from "../usecases/update-spec.usecase.js";
 import type { Spec, AcceptanceCriterion } from "../domain/types.js";
@@ -17,7 +17,7 @@ interface SpecCommandDeps {
 
 export function registerSpecCommand(
   program: Command,
-  deps: SpecCommandDeps = { getServices },
+  deps: SpecCommandDeps,
 ): void {
   const specCmd = program
     .command("spec")
@@ -34,7 +34,7 @@ function registerShowCommand(parent: Command, root: Command, deps: SpecCommandDe
     .description("Show the Spec for a Mission")
     .requiredOption("--mission <id>", "Mission id")
     .option("--json", "Output as JSON")
-    .action(async (opts: { mission: string; json?: boolean }) => {
+    .action(async (opts: { mission: string; json?: boolean }): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts as Record<string, unknown>, root)
         || (parent.opts().json as boolean | undefined) === true;
@@ -56,7 +56,7 @@ function registerEditCommand(parent: Command, root: Command, deps: SpecCommandDe
     .description("Create or edit the Spec for a Mission (opens $EDITOR)")
     .requiredOption("--mission <id>", "Mission id")
     .option("--json", "Output as JSON")
-    .action(async (opts: { mission: string; json?: boolean }) => {
+    .action(async (opts: { mission: string; json?: boolean }): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts as Record<string, unknown>, root)
         || (parent.opts().json as boolean | undefined) === true;

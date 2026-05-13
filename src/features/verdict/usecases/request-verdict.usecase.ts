@@ -58,7 +58,8 @@ export async function requestVerdict(
   // Read current run-state early so cost-budget exhaustion is checked before
   // any expensive git/policy operations (BLOCK is the first decision step).
   const runState = await deps.runStateStore.read(taskId);
-  const costBudgetExhausted = checkCostBudget(contract, runState).exhausted;
+  const costBudgetCheck = checkCostBudget(contract, runState);
+  const costBudgetExhausted = costBudgetCheck.exhausted;
 
   // Prefer the contract's lock-commit (claimedAtCommit) over branch heuristics
   // so brownfield repos don't pull pre-existing files into the diff and trigger
@@ -112,6 +113,7 @@ export async function requestVerdict(
     derivedRiskClass: derivedRiskResult.class,
     amendmentCount: contract.amendments.length,
     costBudgetExhausted,
+    ...(costBudgetCheck.reason !== undefined ? { costBudgetReason: costBudgetCheck.reason } : {}),
     matchedRiskPolicySignal: derivedRiskResult.matchedRow.signal,
     spec,
   });

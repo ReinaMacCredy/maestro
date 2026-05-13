@@ -1,7 +1,7 @@
 import { parse, stringify } from "yaml";
 import { MaestroError } from "@/shared/errors.js";
 
-export function parseYaml<T>(content: string): T {
+export function parseYaml<T = unknown>(content: string): T {
   return parse(content) as T;
 }
 

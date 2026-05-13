@@ -89,7 +89,7 @@ export interface FileLockOptions {
   readonly timeoutHints: readonly string[];
 }
 
-export async function withFileLock<T>(
+export async function withFileLock<T = unknown>(
   options: FileLockOptions,
   fn: () => Promise<T>,
 ): Promise<T> {

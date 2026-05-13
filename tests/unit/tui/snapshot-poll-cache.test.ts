@@ -6,13 +6,11 @@ import {
   CachingConfigPort,
   makeEntry,
   setCachedEntry,
-} from "@/tui/lib/snapshot-poll-cache.js";
+} from "@/tui/state/snapshot-poll-cache.js";
 
 function makeLayers(projectDir: string): ConfigLayers {
   const effective: MaestroConfig = {
-    execution: {
-      defaultAgent: projectDir,
-    },
+    defaultAgent: projectDir as MaestroConfig["defaultAgent"],
   };
 
   return {
@@ -47,9 +45,9 @@ describe("CachingConfigPort", () => {
     const second = await port.loadLayers("/tmp/project-b");
     const third = await port.loadLayers("/tmp/project-a");
 
-    expect(first.effective.execution?.defaultAgent).toBe("/tmp/project-a");
-    expect(second.effective.execution?.defaultAgent).toBe("/tmp/project-b");
-    expect(third.effective.execution?.defaultAgent).toBe("/tmp/project-a");
+    expect(first.effective.defaultAgent).toBe("/tmp/project-a");
+    expect(second.effective.defaultAgent).toBe("/tmp/project-b");
+    expect(third.effective.defaultAgent).toBe("/tmp/project-a");
     expect(loadLayersCalls).toBe(2);
   });
 

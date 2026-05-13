@@ -6,8 +6,8 @@ import { VERSION } from "@/shared/version.js";
 import { MaestroError } from "@/shared/errors.js";
 import { removeIfExists } from "@/shared/lib/fs.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
-import { assertNoDeprecatedVersionFlag } from "@/shared/lib/deprecated-version-flag.js";
-import { initServices } from "./services.js";
+import { assertNoDeprecatedVersionFlag } from "@/infra/lib/deprecated-version-flag.js";
+import { createServices, type Services } from "./services.js";
 import { checkForUpdate, isNewerSemver } from "@/infra/usecases/check-for-update.usecase.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
 import { registerStatusCommand } from "@/infra/commands/status.command.js";
@@ -69,82 +69,109 @@ import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
 import { registerSkillsCommand } from "./features/skills/index.js";
 import { registerIntakeCommand } from "./features/intake/index.js";
 import { registerMcpCommand } from "./features/mcp/index.js";
+import { registerRecoverCommand } from "./features/recover/index.js";
+import { registerGcCommand } from "./features/gc/index.js";
+import { registerRalphCommand } from "./features/ralph/index.js";
+import { registerStateCommand } from "./features/state/index.js";
+import { registerWorktreeCommand } from "./features/worktree/index.js";
+import { registerInspectCommand } from "./features/inspect/index.js";
+import { registerSetupCommand } from "./features/setup/index.js";
+import {
+  checkSkillBinaryParity,
+  renderDriftError,
+} from "./features/setup/usecases/check-skill-binary-parity.usecase.js";
+
+// One process-wide cache for the composed Services graph. The thunk stays
+// lazy so `--version`, `--help`, and other info-only paths never bootstrap
+// the per-feature service builders.
+let cachedServices: Services | undefined;
+const getServices = (): Services => {
+  if (!cachedServices) {
+    cachedServices = createServices(resolveMaestroProjectRoot(process.cwd()));
+  }
+  return cachedServices;
+};
+const deps = { getServices };
 
 export const program = new Command()
   .name("maestro")
   .description("Conductor CLI -- shared mission, feature, and memory state for cross-agent workflows")
   .version(formatVersionOutputForArgv())
   .option("--json", "Output as JSON")
-  .exitOverride()
-  .hook("preAction", () => {
-    initServices(resolveMaestroProjectRoot(process.cwd()));
-  });
+  .exitOverride();
 
-registerInitCommand(program);
-registerStatusCommand(program);
-registerDoctorCommand(program);
-registerNoteCommand(program);
-registerSessionCommand(program);
-registerInstallCommand(program);
+registerInitCommand(program, deps);
+registerStatusCommand(program, deps);
+registerDoctorCommand(program, deps);
+registerNoteCommand(program, deps);
+registerSessionCommand(program, deps);
+registerInstallCommand(program, deps);
 registerUpdateCommand(program);
 registerUninstallCommand(program);
 registerProvidersCommand(program);
 registerSkillsCommand(program);
 registerMcpCommand(program);
-registerMissionCommand(program);
-registerFeatureCommand(program);
-registerValidateCommand(program);
-registerMilestoneCommand(program);
-registerCheckpointCommand(program);
-registerMemoryCorrectCommand(program);
-registerMemoryRecallCommand(program);
-registerMemorySearchCommand(program);
-registerMemoryLearnCommand(program);
-registerMemoryCompileCommand(program);
-registerRatchetCheckCommand(program);
-registerRatchetPromoteCommand(program);
-registerMemoryStatsCommand(program);
-registerMemoryLintCommand(program);
-registerGraphLinkCommand(program);
-registerGraphContextCommand(program);
-registerHandoffCommand(program);
-registerTaskCommand(program);
-registerReplyCommand(program);
-registerPrincipleCommand(program);
-registerBundleCommand(program);
-registerEvidenceCommand(program);
-registerSpecCommand(program);
-registerContractL2Command(program);
-registerPolicyCommand(program);
-registerVerdictCommand(program);
+registerMissionCommand(program, deps);
+registerFeatureCommand(program, deps);
+registerValidateCommand(program, deps);
+registerMilestoneCommand(program, deps);
+registerCheckpointCommand(program, deps);
+registerMemoryCorrectCommand(program, deps);
+registerMemoryRecallCommand(program, deps);
+registerMemorySearchCommand(program, deps);
+registerMemoryLearnCommand(program, deps);
+registerMemoryCompileCommand(program, deps);
+registerRatchetCheckCommand(program, deps);
+registerRatchetPromoteCommand(program, deps);
+registerMemoryStatsCommand(program, deps);
+registerMemoryLintCommand(program, deps);
+registerGraphLinkCommand(program, deps);
+registerGraphContextCommand(program, deps);
+registerHandoffCommand(program, deps);
+registerTaskCommand(program, deps);
+registerReplyCommand(program, deps);
+registerPrincipleCommand(program, deps);
+registerBundleCommand(program, deps);
+registerEvidenceCommand(program, deps);
+registerSpecCommand(program, deps);
+registerContractL2Command(program, deps);
+registerPolicyCommand(program, deps);
+registerVerdictCommand(program, deps);
 
 const planCmd = program
   .command("plan")
   .description("Plan-time checks for agent tasks");
-registerPlanCheckCommand(planCmd, program);
+registerPlanCheckCommand(planCmd, program, deps);
 
 const ciCmd = program
   .command("ci")
   .description("CI integration — runs the verdict pipeline in CI mode");
-registerCiVerifyCommand(ciCmd, program);
+registerCiVerifyCommand(ciCmd, program, deps);
 
-registerReviewCommand(program);
-registerIntakeCommand(program);
+registerReviewCommand(program, deps);
+registerIntakeCommand(program, deps);
+registerRecoverCommand(program, deps);
+registerGcCommand(program, deps);
+registerRalphCommand(program, deps);
+registerStateCommand(program, deps);
+registerWorktreeCommand(program, deps);
+registerInspectCommand(program, deps);
+registerSetupCommand(program, deps);
 
 const mergeCmd = program
   .command("merge")
   .description("Merge controls — auto-merge eligibility and trigger");
-registerMergeAutoCommand(mergeCmd, program);
+registerMergeAutoCommand(mergeCmd, program, deps);
 
 const deployCmd = program
   .command("deploy")
   .description("Deploy safety commands — rollback and gate controls");
-registerDeployCommand(deployCmd, program);
+registerDeployCommand(deployCmd, program, deps);
 
 const runtimeCmd = program
   .command("runtime")
   .description("Runtime signal checks — query providers and record Evidence");
-registerRuntimeCheckCommand(runtimeCmd, program);
+registerRuntimeCheckCommand(runtimeCmd, program, deps);
 
 export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,
@@ -172,6 +199,57 @@ export async function cleanupStaleWindowsBinary(
   } catch {}
 }
 
+/**
+ * Edge Case 5 (skill-binary drift): when an agent invokes a verb the binary
+ * doesn't have, Commander emits a bare "unknown command" line. If the verb is
+ * one the installed skill bundle expected, that bare line leaves agents
+ * thrashing. Run the same drift check that `maestro setup --check` runs, and
+ * if the missing verb appears in the skill bundle, print the canonical hint
+ * to stderr.
+ *
+ * Lazy import to keep the cold path off `--help` / `--version`.
+ */
+function maybePrintSkillDriftHint(argv: readonly string[]): void {
+  const verbCandidate = extractFailingVerb(argv);
+  if (!verbCandidate) return;
+  try {
+    const knownVerbs = new Set<string>();
+    const walk = (cmd: Command, prefix: string): void => {
+      for (const child of cmd.commands) {
+        const name = child.name();
+        const full = prefix ? `${prefix} ${name}` : name;
+        knownVerbs.add(name);
+        knownVerbs.add(full);
+        walk(child, full);
+      }
+    };
+    walk(program, "");
+    for (const lazy of ["mission-control"]) knownVerbs.add(lazy);
+    const report = checkSkillBinaryParity({ knownVerbs });
+    const match = report.findings.find((f) => verbMatches(f.verb, verbCandidate));
+    if (match) {
+      console.error(renderDriftError(match, VERSION));
+    }
+  } catch {
+    // Skill-drift hinting is best-effort; never let it mask the underlying
+    // CommanderError exit.
+  }
+}
+
+function extractFailingVerb(argv: readonly string[]): string | undefined {
+  for (let i = 2; i < argv.length; i++) {
+    const token = argv[i];
+    if (!token || token.startsWith("-")) continue;
+    return token;
+  }
+  return undefined;
+}
+
+function verbMatches(skillVerb: string, argvVerb: string): boolean {
+  const head = skillVerb.split(/\s+/)[0];
+  return head === argvVerb;
+}
+
 // Bound on how long we'll wait for an in-flight background refresh after the
 // user's command finishes. Healthy networks finish well under this; slow ones
 // get aborted so a stuck fetch can't pin the event loop until its own 8s
@@ -195,7 +273,7 @@ async function maybeRegisterMissionControl(argv: readonly string[]): Promise<voi
   }
   if (needsMissionControl) {
     const mod = await import("@/infra/commands/mission-control.command.js");
-    mod.registerMissionControlCommand(program);
+    mod.registerMissionControlCommand(program, deps);
   }
 }
 
@@ -221,6 +299,9 @@ async function main(): Promise<void> {
   } catch (err) {
     refreshController.abort();
     if (err instanceof CommanderError) {
+      if (err.code === "commander.unknownCommand") {
+        maybePrintSkillDriftHint(process.argv);
+      }
       process.exit(err.exitCode);
     }
     if (err instanceof MaestroError) {

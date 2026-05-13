@@ -7,7 +7,7 @@ import type {
 } from "@/features/mission";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import type { GitFileChange } from "@/infra/domain/git-types.js";
-import type { MissionControlBackgroundMode } from "@/shared/domain/ui-config.js";
+import type { MissionControlBackgroundMode } from "@/tui/shared/ui-config.js";
 import type {
   CompiledLearnings,
   Correction,

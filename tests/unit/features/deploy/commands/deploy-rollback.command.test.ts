@@ -11,9 +11,12 @@ import type { Task } from "@/features/task";
 const STUB_TASK: Task = {
   id: "tsk-aaaaaa",
   title: "Stub task",
-  type: "track",
-  status: "in-progress",
-  priority: "medium",
+  type: "task",
+  status: "in_progress",
+  priority: 2,
+  labels: [],
+  blocks: [],
+  blockedBy: [],
   createdAt: "2026-05-05T00:00:00.000Z",
   updatedAt: "2026-05-05T00:00:00.000Z",
 };
@@ -34,11 +37,11 @@ function makeProgram(opts: {
 
   registerDeployRollbackCommand(deployCmd, program, {
     getServices: () => ({ evidenceStore, taskStore }),
-    recordEvidence: async (
+    recordEvidence: async <K extends import("@/features/evidence/index.js").EvidenceKind>(
       s: EvidenceStorePort,
-      input: RecordEvidenceInput,
-    ): Promise<EvidenceRow> => {
-      const row: EvidenceRow = {
+      input: RecordEvidenceInput<K>,
+    ): Promise<EvidenceRow<K>> => {
+      const row: EvidenceRow<K> = {
         schema_version: 3,
         id: "evd-test01",
         task_id: input.task_id,
@@ -46,7 +49,7 @@ function makeProgram(opts: {
         witness_level: input.witness_level,
         created_at: "2026-05-05T08:00:00.000Z",
         payload: input.payload,
-      };
+      } as EvidenceRow<K>;
       await s.append(row);
       return row;
     },

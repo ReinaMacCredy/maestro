@@ -16,7 +16,7 @@ export function registerUpdateCommand(program: Command): void {
     .option("--force", "Reinstall even when already on the latest published release")
     .option("--check", "Print whether a newer release is available; exit 2 if newer, 0 otherwise. Does not download.")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const isJson = opts.json ?? program.opts().json;
 
       if (opts.check) {

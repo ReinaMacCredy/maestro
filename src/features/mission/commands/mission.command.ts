@@ -3,8 +3,9 @@
  * Implements CLI commands: mission create|list|show|approve|reject|update
  */
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import { summarizeMission } from "@/shared/lib/projection.js";
 import {
   createMission,
   expandWorkflowTemplate,
@@ -28,7 +29,17 @@ interface MissionListTextView {
   readonly truncated: boolean;
 }
 
-export function registerMissionCommand(program: Command): void {
+interface MissionCommandDeps {
+  readonly getServices: () => Pick<
+    Services,
+    "config" | "missionStore" | "featureStore" | "assertionStore"
+  >;
+}
+
+export function registerMissionCommand(
+  program: Command,
+  deps: MissionCommandDeps,
+): void {
   const missionCmd = program
     .command("mission")
     .description("Mission lifecycle management")
@@ -40,8 +51,8 @@ export function registerMissionCommand(program: Command): void {
     .option("--file <path>", "Path to plan JSON file (use - for stdin)")
     .option("--workflow <template>", "Use a workflow template for milestone structure")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       if (!opts.file) {
@@ -100,20 +111,32 @@ export function registerMissionCommand(program: Command): void {
     .command("list")
     .description("List all missions")
     .option("--status <status>", "Filter by status (draft, approved, executing, etc.)")
-    .option("--limit <number>", "Limit the number of missions shown")
+    .option("--limit <number>", "Limit the number of missions shown (default 20 for --json)")
+    .option("--all", "Disable the default --json limit (return every match)")
+    .option("--full", "Include nested milestones/features in --json output (default: lean summary)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const hasExplicitLimit = opts.limit !== undefined;
+      const isFull = opts.full === true;
+      const wantAll = opts.all === true;
+      const explicitLimit = hasExplicitLimit
+        ? Number.parseInt(String(opts.limit), 10)
+        : undefined;
+      const effectiveLimit = explicitLimit ?? (isJson && !wantAll ? 20 : undefined);
 
       const missions = await listMissions(services.missionStore, {
         status: opts.status,
-        limit: hasExplicitLimit ? Number.parseInt(String(opts.limit), 10) : undefined,
+        limit: effectiveLimit,
       });
 
       if (isJson) {
-        output(true, missions, () => []);
+        if (isFull) {
+          output(true, missions, () => []);
+          return;
+        }
+        output(true, missions.map(summarizeMission), () => []);
         return;
       }
 
@@ -124,8 +147,8 @@ export function registerMissionCommand(program: Command): void {
     .command("show <id>")
     .description("Show mission details with milestone progress")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const report = await generateMissionReport(
@@ -142,8 +165,8 @@ export function registerMissionCommand(program: Command): void {
     .command("approve <id>")
     .description("Approve a draft mission")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const mission = await approveMission(services.missionStore, id);
@@ -159,8 +182,8 @@ export function registerMissionCommand(program: Command): void {
     .command("reject <id>")
     .description("Reject a draft mission")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const mission = await rejectMission(services.missionStore, id);
@@ -179,8 +202,8 @@ export function registerMissionCommand(program: Command): void {
     .option("--title <title>", "New title")
     .option("--description <desc>", "New description")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const input: UpdateMissionInput = {

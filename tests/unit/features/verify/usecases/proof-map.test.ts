@@ -7,7 +7,7 @@ import type { EvidenceRow } from "@/features/evidence/index.js";
 
 function makeSpec(criteria: Array<{ id: string; text: string }>): Spec {
   return {
-    schema_version: 1,
+    schema_version: 2,
     mission_id: "msn-001",
     acceptance_criteria: criteria,
     non_goals: [],
@@ -70,17 +70,17 @@ describe("buildProofMap", () => {
       makeManualNoteRow({ id: "ev-002", task_id: "tsk-001", criterion_id: "c-002" }),
     ];
 
-    const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: rows });
+    const result = buildProofMap({ taskId: "tsk-001", spec, contract: undefined, evidenceRows: rows });
 
     expect(result.entries.length).toBe(3);
     expect(result.uncoveredCount).toBe(1);
-    expect(result.entries[0].covered).toBe(true);
-    expect(result.entries[1].covered).toBe(true);
-    expect(result.entries[2].covered).toBe(false);
+    expect(result.entries[0]?.covered).toBe(true);
+    expect(result.entries[1]?.covered).toBe(true);
+    expect(result.entries[2]?.covered).toBe(false);
   });
 
   it("no spec → entries: [], uncoveredCount: 0, no error", () => {
-    const result = buildProofMap({ taskId: "tsk-002", spec: undefined, evidenceRows: [] });
+    const result = buildProofMap({ taskId: "tsk-002", spec: undefined, contract: undefined, evidenceRows: [] });
 
     expect(result.entries).toEqual([]);
     expect(result.uncoveredCount).toBe(0);
@@ -94,10 +94,10 @@ describe("buildProofMap", () => {
       makeCommandRow({ id: "ev-001", task_id: "tsk-001" }), // no criterion_id
     ];
 
-    const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: rows });
+    const result = buildProofMap({ taskId: "tsk-001", spec, contract: undefined, evidenceRows: rows });
 
-    expect(result.entries[0].covered).toBe(false);
-    expect(result.entries[0].evidence).toHaveLength(0);
+    expect(result.entries[0]?.covered).toBe(false);
+    expect(result.entries[0]?.evidence).toHaveLength(0);
     expect(result.uncoveredCount).toBe(1);
   });
 
@@ -109,16 +109,16 @@ describe("buildProofMap", () => {
       makeManualNoteRow({ id: "ev-003", task_id: "tsk-001", criterion_id: "c-001" }),
     ];
 
-    const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: rows });
+    const result = buildProofMap({ taskId: "tsk-001", spec, contract: undefined, evidenceRows: rows });
 
-    expect(result.entries[0].evidence).toHaveLength(3);
-    expect(result.entries[0].covered).toBe(true);
+    expect(result.entries[0]?.evidence).toHaveLength(3);
+    expect(result.entries[0]?.covered).toBe(true);
     expect(result.uncoveredCount).toBe(0);
   });
 
   it("missionId is populated from spec.mission_id", () => {
     const spec = makeSpec([{ id: "c-001", text: "works" }]);
-    const result = buildProofMap({ taskId: "tsk-001", spec, evidenceRows: [] });
+    const result = buildProofMap({ taskId: "tsk-001", spec, contract: undefined, evidenceRows: [] });
 
     expect(result.missionId).toBe("msn-001");
   });

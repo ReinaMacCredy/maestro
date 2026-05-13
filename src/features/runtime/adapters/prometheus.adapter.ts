@@ -1,6 +1,7 @@
 import type { RuntimeSignal, RuntimeSignalOperator } from "@/features/spec";
 import type { RuntimeSignalResult } from "../domain/types.js";
 import type { RuntimeMonitorPort } from "../ports/monitor.port.js";
+import { assertNever } from "@/shared/lib/assert-never.js";
 
 export class PrometheusRuntimeMonitor implements RuntimeMonitorPort {
   constructor(
@@ -50,5 +51,6 @@ function compare(a: number, op: RuntimeSignalOperator, b: number): boolean {
     case ">=": return a >= b;
     case "<=": return a <= b;
     case "==": return a === b;
+    default: return assertNever(op);
   }
 }

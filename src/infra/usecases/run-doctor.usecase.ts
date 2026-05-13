@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
-import { listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
+import { listIgnoredProjectConfigKeys } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "@/features/handoff";
 
@@ -111,7 +111,7 @@ async function findEmptyFeatureDirs(dir: string): Promise<string[]> {
 
   const empty: string[] = [];
   await Promise.all(
-    entries.map(async (entry) => {
+    entries.map(async (entry): Promise<void> => {
       const sub = join(featuresRoot, entry);
       let entryStat;
       try {
@@ -179,7 +179,7 @@ async function findOversizedRootDocs(
   );
 
   const results = await Promise.all(
-    candidates.map(async (entry) => {
+    candidates.map(async (entry): Promise<{ name: string; lineCount: number } | undefined> => {
       try {
         const text = await readFile(join(dir, entry.name), "utf8");
         const lineCount = text.split("\n").length;

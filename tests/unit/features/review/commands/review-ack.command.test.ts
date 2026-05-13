@@ -14,11 +14,11 @@ function makeProgram(
   const program = new Command().exitOverride();
   registerReviewCommand(program, {
     getServices: () => ({ evidenceStore: store }),
-    recordEvidence: async (
+    recordEvidence: async <K extends import("@/features/evidence/index.js").EvidenceKind>(
       s: EvidenceStorePort,
-      input: RecordEvidenceInput,
-    ): Promise<EvidenceRow> => {
-      const row: EvidenceRow = {
+      input: RecordEvidenceInput<K>,
+    ): Promise<EvidenceRow<K>> => {
+      const row: EvidenceRow<K> = {
         schema_version: 3,
         id: "evd-test01",
         task_id: input.task_id,

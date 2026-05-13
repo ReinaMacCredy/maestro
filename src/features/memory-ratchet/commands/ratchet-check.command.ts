@@ -1,9 +1,16 @@
 import type { Command } from "commander";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { checkRatchet, type RatchetCheckResult } from "../usecases/ratchet-check.usecase.js";
 
-export function registerRatchetCheckCommand(program: Command): void {
+interface RatchetCheckCommandDeps {
+  readonly getServices: () => Pick<Services, "ratchetStore">;
+}
+
+export function registerRatchetCheckCommand(
+  program: Command,
+  deps: RatchetCheckCommandDeps,
+): void {
   program
     .command("ratchet-check")
     .description("Run the regression ratchet suite")
@@ -13,8 +20,8 @@ Examples:
   maestro ratchet-check --json
 `)
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       const result = await checkRatchet(services.ratchetStore, process.cwd());

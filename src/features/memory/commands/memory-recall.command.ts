@@ -1,9 +1,16 @@
 import type { Command } from "commander";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { recallMemory, type RecallResult } from "../usecases/memory-recall.usecase.js";
 
-export function registerMemoryRecallCommand(program: Command): void {
+interface MemoryRecallCommandDeps {
+  readonly getServices: () => Pick<Services, "correctionStore" | "learningStore">;
+}
+
+export function registerMemoryRecallCommand(
+  program: Command,
+  deps: MemoryRecallCommandDeps,
+): void {
   program
     .command("memory-recall")
     .description("Recall relevant corrections and learnings for a task")
@@ -16,8 +23,8 @@ Examples:
     .option("--task <description>", "Task description for context matching")
     .option("--files <paths>", "Comma-separated file paths for glob matching")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       const filePaths = opts.files

@@ -124,7 +124,7 @@ async function readTaskDir(taskDir: string, taskId: string): Promise<readonly Ev
   const rows = await mapWithConcurrency(
     candidates,
     PER_TASK_READ_CONCURRENCY,
-    async ({ evidenceId, path }) => {
+    async ({ evidenceId, path }): Promise<EvidenceRow | undefined> => {
       const row = await tryReadRow(path);
       if (row && row.id === evidenceId && row.task_id === taskId) {
         return row;

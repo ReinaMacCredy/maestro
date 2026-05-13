@@ -8,9 +8,10 @@ import { CONTRACT_SCHEMA_VERSION, type AmendmentBudget, type Contract, type Cont
 import { proposeContract } from "@/features/task/usecases/propose-contract.usecase.js";
 import { amendContract } from "@/features/task/usecases/amend-contract.usecase.js";
 import { registerContractL2Command } from "@/features/task/commands/contract-l2.command.js";
-import { mockEvidenceStore } from "../../../../helpers/mocks.js";
+import { mockEvidenceStore, mockContractStore } from "../../../../helpers/mocks.js";
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -62,11 +63,12 @@ function makeProgram(): Command {
 interface TestDeps {
   readonly store: FsContractVersionStoreAdapter;
   readonly evidenceStore: EvidenceStorePort;
+  readonly contractStore: ContractStorePort;
 }
 
-function makeDeps(store: ContractVersionStorePort, evidenceStore: EvidenceStorePort) {
+function makeDeps(store: ContractVersionStorePort, evidenceStore: EvidenceStorePort, contractStore: ContractStorePort) {
   return {
-    getServices: () => ({ contractVersionStore: store, evidenceStore }),
+    getServices: () => ({ contractVersionStore: store, evidenceStore, contractStore }),
     amendContract,
   };
 }
@@ -96,7 +98,8 @@ beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "contract-l2-cmd-"));
   const store = new FsContractVersionStoreAdapter(tmpDir);
   const evidenceStore = mockEvidenceStore();
-  deps = { store, evidenceStore };
+  const contractStore = mockContractStore();
+  deps = { store, evidenceStore, contractStore };
 
   // Seed: propose v1
   const budget: AmendmentBudget = {
@@ -133,7 +136,7 @@ describe("contract show", () => {
   it("defaults to current version (v3)", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID]);
 
@@ -145,7 +148,7 @@ describe("contract show", () => {
   it("shows v1 when --at-version 1", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--at-version", "1"]);
 
@@ -157,7 +160,7 @@ describe("contract show", () => {
   it("exits non-zero and prints clear error for --at-version 999", async () => {
     captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     let thrown: unknown;
     try {
@@ -175,7 +178,7 @@ describe("contract show", () => {
   it("returns valid JSON with --json", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--json"]);
 
@@ -187,7 +190,7 @@ describe("contract show", () => {
   it("returns specific version JSON with --at-version 1 --json", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     await program.parseAsync(["node", "maestro", "contract", "show", "--task", TASK_ID, "--at-version", "1", "--json"]);
 
@@ -203,7 +206,7 @@ describe("contract amend", () => {
   it("succeeds within budget and prints new version", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     await program.parseAsync([
       "node", "maestro", "contract", "amend",
@@ -231,7 +234,7 @@ describe("contract amend", () => {
 
     captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     let thrown: unknown;
     try {
@@ -263,7 +266,7 @@ describe("contract amend", () => {
 
     captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(forbiddenStore, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(forbiddenStore, deps.evidenceStore, deps.contractStore));
 
     let thrown: unknown;
     try {
@@ -284,7 +287,7 @@ describe("contract amend", () => {
   it("returns valid JSON with --json on success", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     await program.parseAsync([
       "node", "maestro", "contract", "amend",
@@ -307,7 +310,7 @@ describe("contract history", () => {
   it("returns 3 versions in ascending order (v1, v2, v3)", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     await program.parseAsync(["node", "maestro", "contract", "history", "--task", TASK_ID]);
 
@@ -323,7 +326,7 @@ describe("contract history", () => {
   it("returns valid JSON array with --json", async () => {
     const { logs } = captureConsole();
     const program = makeProgram();
-    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore));
+    registerContractL2Command(program, makeDeps(deps.store, deps.evidenceStore, deps.contractStore));
 
     await program.parseAsync(["node", "maestro", "contract", "history", "--task", TASK_ID, "--json"]);
 

@@ -71,11 +71,11 @@ function makeProgram(opts: {
 
   registerRuntimeCheckCommand(runtimeCmd, program, {
     getServices: () => ({ evidenceStore, taskStore, specStore }),
-    recordEvidence: async (
+    recordEvidence: async <K extends import("@/features/evidence/index.js").EvidenceKind>(
       s: EvidenceStorePort,
-      input: RecordEvidenceInput,
-    ): Promise<EvidenceRow> => {
-      const row: EvidenceRow = {
+      input: RecordEvidenceInput<K>,
+    ): Promise<EvidenceRow<K>> => {
+      const row: EvidenceRow<K> = {
         schema_version: 3,
         id: `evd-test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         task_id: input.task_id,

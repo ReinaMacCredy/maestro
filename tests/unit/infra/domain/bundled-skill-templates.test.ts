@@ -120,13 +120,13 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(planSkill.content).toContain("## Persist the plan");
   });
 
-  it("ships maestro-setup with managed-marker and report contracts", () => {
+  it("ships maestro-setup with managed-marker, report, and setup-CLI contracts", () => {
     const setup = BUNDLED_SKILL_TEMPLATES.find((template) => template.name === "maestro-setup");
     expect(setup).toBeDefined();
 
     const skill = setup!.files.find((file) => file.path === "SKILL.md")!;
     expect(skill.content).toContain("name: maestro-setup");
-    expect(skill.content).toContain("Skill-first, CLI-second");
+    expect(skill.content).toContain("long-running agent harness");
     expect(skill.content).toContain("<!-- maestro-setup:start -->");
     expect(skill.content).toContain("<!-- maestro-setup:end -->");
     expect(skill.content).toContain("<!-- maestro-setup:generated:start -->");
@@ -143,7 +143,10 @@ Before non-trivial work:
   instruction file and report the conflict.
 <!-- maestro-setup:end -->`);
     expect(skill.content).toContain(".maestro/setup-report.md");
-    expect(skill.content).toContain("maestro setup --dry-run --json");
+    expect(skill.content).toContain("maestro setup --check");
+    expect(skill.content).toContain("maestro setup --self-test");
+    expect(skill.content).toContain("maestro setup --install-hooks");
+    expect(skill.content).toContain("Skill-binary drift detection");
 
     const planningTemplate = setup!.files.find((file) => file.path === "reference/context-templates/planning.md");
     expect(planningTemplate?.content).toContain("Approved implementation plans live under `.maestro/plans/`");

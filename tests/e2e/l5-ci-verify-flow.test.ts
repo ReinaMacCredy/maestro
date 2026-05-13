@@ -431,7 +431,7 @@ describe("L5 ci verify flow (compiled binary)", () => {
         ["verdict", "show", "--task", taskId, "--pr", "1", "--json"],
         dir,
         // PATH doesn't matter here; verdict show doesn't call gh.
-        { env: { ...process.env } },
+        { env: process.env as Record<string, string> },
       );
       expect(showResult.exitCode).toBe(0);
       const shown = expectJson<{ id: string; subject?: { tree_sha: string } }>(showResult);
@@ -527,7 +527,7 @@ describe("L5 ci verify flow (compiled binary)", () => {
       const showResult = await runCompiled(
         ["verdict", "show", "--task", taskId, "--pr", "1", "--json"],
         dir,
-        { env: { ...process.env } },
+        { env: process.env as Record<string, string> },
       );
       expect(showResult.exitCode).toBe(0);
       const shown = expectJson<{ id: string; subject?: { tree_sha: string } }>(showResult);

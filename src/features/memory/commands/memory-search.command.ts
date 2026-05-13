@@ -1,10 +1,17 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { searchMemory, type SearchResult } from "../usecases/memory-search.usecase.js";
 
-export function registerMemorySearchCommand(program: Command): void {
+interface MemorySearchCommandDeps {
+  readonly getServices: () => Pick<Services, "correctionStore" | "learningStore">;
+}
+
+export function registerMemorySearchCommand(
+  program: Command,
+  deps: MemorySearchCommandDeps,
+): void {
   program
     .command("memory-search")
     .description("Search corrections and learnings by text")
@@ -15,14 +22,14 @@ Examples:
 `)
     .argument("<query>", "Search text")
     .option("--json", "Output as JSON")
-    .action(async (query: string, opts) => {
+    .action(async (query: string, opts): Promise<void> => {
       if (!query.trim()) {
         throw new MaestroError("Search query cannot be empty", [
           'maestro memory-search "keyword"',
         ]);
       }
 
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       const result = await searchMemory(

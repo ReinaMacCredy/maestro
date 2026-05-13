@@ -6,6 +6,7 @@ import { CONTRACT_SCHEMA_VERSION, type Contract } from "@/features/task/domain/c
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { TrustFinding, TrustVerifierResult } from "@/features/verify/domain/types.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ function makeProgram(): Command {
 
 interface TestDeps {
   readonly contractVersionStore: ContractVersionStorePort;
+  readonly contractStore: ContractStorePort;
   readonly evidenceStore: EvidenceStorePort;
   readonly gitAnchor: GitAnchorPort;
   readonly runTrustVerifier: (input: unknown) => Promise<TrustVerifierResult>;
@@ -65,6 +67,7 @@ interface TestDeps {
 function makeDeps(opts: Partial<TestDeps> = {}): TestDeps {
   return {
     contractVersionStore: opts.contractVersionStore ?? mockContractVersionStore(makeBaseContract()),
+    contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     evidenceStore: opts.evidenceStore ?? mockEvidenceStore(),
     gitAnchor: opts.gitAnchor ?? mockGitAnchor({
       collectChangedPaths: async () => ["src/feature.ts"],

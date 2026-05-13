@@ -8,7 +8,7 @@
  */
 import type { Command } from "commander";
 import { readFile } from "node:fs/promises";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { writeAgentReply } from "../usecases/write-reply.usecase.js";
@@ -17,7 +17,14 @@ import { REPLY_OUTCOMES } from "../domain/reply-types.js";
 import type { AgentReport } from "../../domain/mission-types.js";
 import { AgentReportSchema } from "../../domain/mission-validators.js";
 
-export function registerReplyCommand(program: Command): void {
+interface ReplyCommandDeps {
+  readonly getServices: () => Pick<Services, "replyStore">;
+}
+
+export function registerReplyCommand(
+  program: Command,
+  deps: ReplyCommandDeps,
+): void {
   const replyCmd = program
     .command("reply")
     .description("Record an agent reply for a feature (outcome + optional report)")
@@ -33,8 +40,8 @@ export function registerReplyCommand(program: Command): void {
     .option("--source <tag>", "Free-form origin marker, e.g. 'cli' or 'agent:claude'")
     .option("--agent", "Mark this reply as agent-authored (default is human)")
     .option("--json", "Output as JSON")
-    .action(async (featureId: string, opts) => {
-      const services = getServices();
+    .action(async (featureId: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const outcome = parseOutcome(opts.outcome);
       const report = await loadReport(opts.reportFile);
@@ -64,8 +71,8 @@ export function registerReplyCommand(program: Command): void {
     .command("list")
     .description("List replies on disk (newest writtenAt first)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const replies = [...(await services.replyStore.list())].reverse();
       output(isJson, replies, formatReplyList);

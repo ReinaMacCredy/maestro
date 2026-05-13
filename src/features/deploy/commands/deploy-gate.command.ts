@@ -1,12 +1,12 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { resolveDefaultBase } from "@/shared/lib/git-base.js";
-import { getServices, type Services } from "@/services.js";
-import { recordEvidence } from "@/features/evidence/index.js";
+import { resolveDefaultBase as defaultResolveDefaultBase } from "@/shared/lib/git-base.js";
+import { type Services } from "@/services.js";
+import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/index.js";
 import { compareWitnessLevel } from "@/features/evidence/index.js";
 import type { DeployReadinessPayload, WitnessLevel, EvidenceStorePort } from "@/features/evidence/index.js";
-import { loadOwnersFromBase } from "@/features/policy/index.js";
+import { loadOwnersFromBase as defaultLoadOwnersFromBase } from "@/features/policy/index.js";
 import type { Owners } from "@/features/policy/index.js";
 import type { Spec } from "@/features/spec/index.js";
 import type { RecordEvidenceInput } from "@/features/evidence/index.js";
@@ -19,27 +19,21 @@ export interface DeployGateCommandDeps {
     "evidenceStore" | "taskStore" | "specStore" | "projectRoot"
   >;
 
-  readonly recordEvidence: (
+  readonly recordEvidence?: (
     store: EvidenceStorePort,
     input: RecordEvidenceInput,
   ) => Promise<EvidenceRow>;
-  readonly loadOwnersFromBase: (base: string, projectRoot: string) => Promise<Owners> | Owners;
-  readonly resolveDefaultBase: () => Promise<string>;
-  readonly isCI: () => boolean;
+  readonly loadOwnersFromBase?: (base: string, projectRoot: string) => Promise<Owners> | Owners;
+  readonly resolveDefaultBase?: () => Promise<string>;
+  readonly isCI?: () => boolean;
 }
 
-const defaultDeps: DeployGateCommandDeps = {
-  getServices,
-  recordEvidence,
-  loadOwnersFromBase,
-  resolveDefaultBase,
-  isCI: () => process.env.GITHUB_ACTIONS === "true",
-};
+const defaultIsCI = (): boolean => process.env.GITHUB_ACTIONS === "true";
 
 export function registerDeployGateCommand(
   parent: Command,
   program: Command,
-  deps: DeployGateCommandDeps = defaultDeps,
+  deps: DeployGateCommandDeps,
 ): void {
   parent
     .command("gate")
@@ -61,10 +55,10 @@ export function registerDeployGateCommand(
 
       const base: string = typeof opts.base === "string" && opts.base.length > 0
         ? opts.base
-        : await deps.resolveDefaultBase();
+        : await (deps.resolveDefaultBase ?? defaultResolveDefaultBase)();
 
       // Rule 12: load owners from base, not PR head, so self-promotion is rejected.
-      const owners = await deps.loadOwnersFromBase(base, services.projectRoot);
+      const owners = await (deps.loadOwnersFromBase ?? defaultLoadOwnersFromBase)(base, services.projectRoot);
 
       let spec: Spec | undefined;
       if (task.missionId !== undefined) {
@@ -83,7 +77,7 @@ export function registerDeployGateCommand(
 
       const result = checkDeployReadiness({ spec, rollbackEvidence, owners });
 
-      const witnessLevel: WitnessLevel = deps.isCI()
+      const witnessLevel: WitnessLevel = (deps.isCI ?? defaultIsCI)()
         ? "witnessed-by-ci"
         : "agent-claimed-locally";
 
@@ -98,7 +92,7 @@ export function registerDeployGateCommand(
         gate: result.gate,
       };
 
-      const row = await deps.recordEvidence(services.evidenceStore, {
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, {
         task_id: taskId,
         kind: "deploy-readiness",
         payload,

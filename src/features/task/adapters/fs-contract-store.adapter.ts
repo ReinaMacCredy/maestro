@@ -100,7 +100,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
   }
 
   async create(input: CreateContractRecordInput): Promise<Contract> {
-    return this.withLock(async () => {
+    return this.withLock(async (): Promise<Contract> => {
       const index = await this.readIndex();
       const existingByTaskEntry = this.findLatestTaskIndexEntry(input.taskId, index);
       const existingByTask = existingByTaskEntry
@@ -164,7 +164,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
   }
 
   async save(contract: Contract): Promise<Contract> {
-    return this.withLock(async () => {
+    return this.withLock(async (): Promise<Contract> => {
       const validated = validateContract({
         ...contract,
         repoRoot: normalizeStoredContractRepoRoot(contract.repoRoot),
@@ -188,7 +188,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
 
   async delete(id: string, input: DeleteContractRecordInput): Promise<boolean> {
     assertSafeSegment(id, "contract id", CONTRACT_ID_PATTERN, "'c-' followed by 6 hex characters");
-    return this.withLock(async () => {
+    return this.withLock(async (): Promise<boolean> => {
       const removed = await removeIfExists(this.contractPath(id));
       await this.appendIndex({
         id,

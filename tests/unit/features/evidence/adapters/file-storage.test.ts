@@ -188,8 +188,8 @@ describe("FsEvidenceStoreAdapter", () => {
       const v1Id = generateEvidenceId();
       const taskDir = join(tmpDir, ".maestro", "evidence", "tsk-aaaaaa");
       await mkdir(taskDir, { recursive: true });
-      const v1Row = {
-        schema_version: 1,
+      const v1Row: EvidenceRow = {
+        schema_version: 1 as const,
         id: v1Id,
         task_id: "tsk-aaaaaa",
         kind: "command",

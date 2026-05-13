@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { homedir, userInfo } from "node:os";
 import { basename } from "node:path";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import {
   DEFAULT_HANDOFF_MODELS,
   launchHandoff,
@@ -21,9 +21,28 @@ import {
 } from "@/features/task";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
+import { summarizeHandoff } from "@/shared/lib/projection.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 
-export function registerHandoffCommand(program: Command): void {
+interface HandoffCommandDeps {
+  readonly getServices: () => Pick<
+    Services,
+    | "missions"
+    | "git"
+    | "handoffStore"
+    | "handoffLaunchers"
+    | "taskStore"
+    | "contracts"
+    | "taskContinuationStore"
+    | "taskContinuationHistory"
+    | "sessionDetect"
+  >;
+}
+
+export function registerHandoffCommand(
+  program: Command,
+  deps: HandoffCommandDeps,
+): void {
   const handoffCmd = program
     .command("handoff")
     .description("Launch or pick up standalone task handoff packets")
@@ -37,7 +56,7 @@ export function registerHandoffCommand(program: Command): void {
     .option("--prompt-file <path>", "Path to a pre-written brief; skips auto-generation")
     .option("--wait", "Wait for the external agent to finish before returning")
     .option("--json", "Output as JSON")
-    .action(async (task: string | undefined, opts) => {
+    .action(async (task: string | undefined, opts): Promise<void> => {
       const promptFile = typeof opts.promptFile === "string" ? opts.promptFile : undefined;
       const name = typeof opts.name === "string" ? opts.name : undefined;
       // When the caller supplies a pre-written brief via --prompt-file, the
@@ -55,10 +74,10 @@ export function registerHandoffCommand(program: Command): void {
         ]);
       }
 
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const agent = parseAgent(opts.agent);
-      const linkedTask = await resolveLinkedTask(typeof opts.taskId === "string" ? opts.taskId : undefined);
+      const linkedTask = await resolveLinkedTask(deps, typeof opts.taskId === "string" ? opts.taskId : undefined);
       const result = await launchHandoff({
         missions: services.missions,
         git: services.git,
@@ -110,11 +129,11 @@ export function registerHandoffCommand(program: Command): void {
     .option("--session <id>", "Current session id when auto-detection is unavailable")
     .option("--standalone", "Consume the packet without resuming its linked task")
     .option("--json", "Output as JSON")
-    .action(async (opts, command: Command) => {
-      const services = getServices();
+    .action(async (opts, command: Command): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
-      const handoffId = await resolvePickupId(typeof opts.id === "string" ? opts.id : undefined);
+      const handoffId = await resolvePickupId(deps, typeof opts.id === "string" ? opts.id : undefined);
       const launch = await services.handoffStore.get(handoffId);
       if (!launch) {
         throw new MaestroError(`Handoff not found: ${handoffId}`);
@@ -122,6 +141,7 @@ export function registerHandoffCommand(program: Command): void {
       const standalone = Boolean(opts.standalone);
       const requireSession = Boolean(launch.refs.taskId) && !standalone;
       const actor = await resolvePickupActor(
+        deps,
         opts,
         command.parent?.opts(),
         { requireSession, fallbackAgent: launch.agent },
@@ -165,25 +185,41 @@ export function registerHandoffCommand(program: Command): void {
     .command("list")
     .description("List handoff packets")
     .option("--open", "Only show packets that have not been consumed")
+    .option("--limit <n>", "Maximum packets to return (default 20 for --json)")
+    .option("--all", "Disable the default --json limit (return every match)")
+    .option("--full", "Include all fields (refs, command, paths) in --json (default: lean summary)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const isFull = opts.full === true;
+      const wantAll = opts.all === true;
+      const explicitLimit = opts.limit !== undefined
+        ? Number.parseInt(String(opts.limit), 10)
+        : undefined;
+      const effectiveLimit = explicitLimit ?? (isJson && !wantAll ? 20 : undefined);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
       const records = await listProjectHandoffs(services.handoffStore, {
         openOnly: Boolean(opts.open),
         taskStore: services.taskStore,
         currentProjectRoot,
       });
-      output(isJson, records, formatHandoffList);
+      const sliced = effectiveLimit !== undefined && effectiveLimit > 0
+        ? records.slice(0, effectiveLimit)
+        : records;
+      if (isJson && !isFull) {
+        output(true, sliced.map(summarizeHandoff), () => []);
+        return;
+      }
+      output(isJson, sliced, formatHandoffList);
     });
 
   handoffCmd
     .command("show <id>")
     .description("Show a handoff packet")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
       const record = await showProjectHandoff(services.handoffStore, id, {
@@ -208,12 +244,15 @@ function parseAgent(value: unknown): HandoffAgent {
   ]);
 }
 
-async function resolveLinkedTask(explicitTaskId: string | undefined): Promise<{
+async function resolveLinkedTask(
+  deps: HandoffCommandDeps,
+  explicitTaskId: string | undefined,
+): Promise<{
   readonly taskId?: string;
   readonly summary?: TaskContinuationSummary;
   readonly recentEvents: readonly TaskContinuationEvent[];
 }> {
-  const services = getTaskServices();
+  const services = deps.getServices();
   if (!explicitTaskId) {
     // Auto-link only fires for tasks actually in_progress. `listActive` can
     // surface continuations for pending tasks that were claimed-then-
@@ -262,12 +301,15 @@ async function resolveLinkedTask(explicitTaskId: string | undefined): Promise<{
   };
 }
 
-async function resolvePickupId(explicitId: string | undefined): Promise<string> {
+async function resolvePickupId(
+  deps: HandoffCommandDeps,
+  explicitId: string | undefined,
+): Promise<string> {
   if (explicitId) {
     return explicitId;
   }
 
-  const services = getServices();
+  const services = deps.getServices();
   const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
   const open = await listProjectHandoffs(services.handoffStore, {
     openOnly: true,
@@ -295,6 +337,7 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
 }
 
 async function resolvePickupActor(
+  deps: HandoffCommandDeps,
   opts: { agent?: unknown; session?: unknown },
   inherited: { agent?: unknown } | undefined,
   mode: { readonly requireSession: boolean; readonly fallbackAgent: HandoffAgent },
@@ -308,7 +351,7 @@ async function resolvePickupActor(
   const explicitAgent = typeof rawAgent === "string" ? rawAgent.trim() : undefined;
   const explicitSession = typeof rawSession === "string" ? rawSession.trim() : undefined;
 
-  const services = getServices();
+  const services = deps.getServices();
   const detected = await services.sessionDetect.detect(process.cwd());
 
   if (mode.requireSession) {
@@ -511,11 +554,3 @@ function formatHandoffDetail(record: HandoffRecord): string[] {
   return lines;
 }
 
-function getTaskServices() {
-  const services = getServices();
-  return {
-    taskStore: services.taskStore,
-    taskContinuationStore: services.taskContinuationStore,
-    taskContinuationHistory: services.taskContinuationHistory,
-  };
-}

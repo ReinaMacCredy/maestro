@@ -51,7 +51,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         gitAvailable: true,
         checks: [],
         missionDirectory: ".maestro/missions/2026-03-30-001",
-        agentTypes: ["test"],
         backgroundMode: "solid",
       },
       progressLog: [],
@@ -271,7 +270,7 @@ describe("reduce", () => {
         const state = makeState({
           snapshot: makeSnapshot({
             configInspector: {
-              tabs: ["overview", "effective", "project", "global", "defaults", "agents", "plan", "doctor", "memory"],
+              tabs: ["overview", "effective", "project", "global", "defaults", "plan", "doctor", "memory"],
               rowsByTab: {
                 overview: [],
                 effective: [{
@@ -294,7 +293,6 @@ describe("reduce", () => {
                 project: [],
                 global: [],
                 defaults: [],
-                agents: [],
                 plan: [],
                 doctor: [],
                 memory: [],
@@ -760,7 +758,7 @@ describe("reduce", () => {
         const state = makeState({
           snapshot: makeSnapshot({
             configInspector: {
-              tabs: ["overview", "effective", "project", "global", "defaults", "agents", "plan", "doctor", "memory"],
+              tabs: ["overview", "effective", "project", "global", "defaults", "plan", "doctor", "memory"],
               rowsByTab: {
                 overview: [{
                   keyPath: "execution.stopOnFailure",
@@ -783,7 +781,6 @@ describe("reduce", () => {
                 project: [],
                 global: [],
                 defaults: [],
-                agents: [],
                 plan: [],
                 doctor: [],
                 memory: [],
@@ -817,7 +814,7 @@ describe("reduce", () => {
         const state = makeState({
           snapshot: makeSnapshot({
             configInspector: {
-              tabs: ["overview", "effective", "project", "global", "defaults", "agents", "plan", "doctor", "memory"],
+              tabs: ["overview", "effective", "project", "global", "defaults", "plan", "doctor", "memory"],
               rowsByTab: {
                 overview: [{
                   keyPath: "ui.missionControl.backgroundMode",
@@ -840,7 +837,6 @@ describe("reduce", () => {
                 project: [],
                 global: [],
                 defaults: [],
-                agents: [],
                 plan: [],
                 doctor: [],
                 memory: [],
@@ -874,7 +870,7 @@ describe("reduce", () => {
         const state = makeState({
           snapshot: makeSnapshot({
             configInspector: {
-              tabs: ["overview", "effective", "project", "global", "defaults", "agents", "plan", "doctor", "memory"],
+              tabs: ["overview", "effective", "project", "global", "defaults", "plan", "doctor", "memory"],
               rowsByTab: {
                 overview: [{
                   keyPath: "execution.stopOnFailure",
@@ -897,7 +893,6 @@ describe("reduce", () => {
                 project: [],
                 global: [],
                 defaults: [],
-                agents: [],
                 plan: [],
                 doctor: [],
                 memory: [],
@@ -932,7 +927,7 @@ describe("reduce", () => {
         const state = makeState({
           snapshot: makeSnapshot({
             configInspector: {
-              tabs: ["overview", "effective", "project", "global", "defaults", "agents", "plan", "doctor", "memory"],
+              tabs: ["overview", "effective", "project", "global", "defaults", "plan", "doctor", "memory"],
               rowsByTab: {
                 overview: [{
                   keyPath: "ui.missionControl.backgroundMode",
@@ -955,7 +950,6 @@ describe("reduce", () => {
                 project: [],
                 global: [],
                 defaults: [],
-                agents: [],
                 plan: [],
                 doctor: [],
                 memory: [],

@@ -90,7 +90,7 @@ describe("detectPendingLoosenings", () => {
     );
     expect(witnessLoosenings.length).toBeGreaterThanOrEqual(1);
 
-    const l = witnessLoosenings[0];
+    const l = witnessLoosenings[0]!;
     expect(l.kind).toBe("autopilot");
     expect(l.file).toBe(AUTOPILOT_PATH);
     expect(l.edit.oldValue).toBe("witnessed-by-maestro");

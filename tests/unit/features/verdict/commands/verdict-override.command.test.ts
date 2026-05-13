@@ -5,9 +5,10 @@ import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
 import type { Owners } from "@/features/policy/index.js";
-import { mockEvidenceStore } from "../../../../helpers/mocks.js";
+import { mockContractStore, mockEvidenceStore } from "../../../../helpers/mocks.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { VerdictOverridePayload } from "@/features/evidence/index.js";
+import type { RiskClass } from "@/features/task/index.js";
 // ─── Console capture ──────────────────────────────────────────────────────────
 
 const originalConsoleLog = console.log;
@@ -86,64 +87,72 @@ function makeProgram(opts: {
     policyApprovers: [],
     ratchetApprovers: [],
     sensitiveWaivers: opts.baseWaivers ?? opts.sensitiveWaivers ?? [],
+    deployApprovers: [],
   };
 
   const program = new Command().exitOverride();
-  registerVerdictCommand(program, {
-    getServices: () => ({
-      verdictStore,
-      evidenceStore,
-      contractVersionStore: {
-        readLatest: async () => undefined,
-        readVersion: async () => undefined,
-        write: async () => {},
-        history: async () => [],
-      },
-      runStateStore: {
-        read: async () => undefined,
-        write: async () => {},
-      },
-      getEffectiveRiskPolicy: async () => ({
-        rules: [],
-        loaded: false,
-        source: "default",
+  
+  const services = {
+    verdictStore,
+    evidenceStore,
+    contractVersionStore: {
+      readLatest: async () => undefined,
+      readVersion: async () => undefined,
+      write: async () => {},
+      history: async () => [],
+    },
+    contractStore: mockContractStore(),
+    specStore: { read: async () => undefined, write: async () => {}, list: async () => [] },
+    runStateStore: {
+      read: async () => undefined,
+      write: async () => {},
+    },
+    getEffectiveRiskPolicy: async () => ({
+      rules: [],
+      loaded: false,
+      source: "default",
+    }),
+    getEffectiveAutopilotPolicy: async () => ({
+      threshold: "witnessed-by-maestro",
+      allowedRiskClasses: [],
+      loaded: false,
+      source: "default",
+    }),
+    getEffectiveReleasePolicy: async () => ({
+      loaded: false,
+      source: "default",
+    }),
+    getEffectiveSensitivePathsGlobs: async () => [] as readonly string[],
+    computeRisk: async () => ({ riskClass: "low" satisfies RiskClass, signals: [] }),
+    deriveRiskClassFromDiff: async (): Promise<RiskClass> => "low",
+    runTrustVerifier: async () => ({
+      passed: true,
+      findings: [],
+      findingsCount: 0,
+      errors: 0,
+      warns: 0,
+      infos: 0,
+    }),
+    gitAnchor: {
+      resolveRepoRoot: async (cwd: string) => cwd,
+      resolveHeadCommit: async () => "HEAD",
+      resolveTreeSha: async () => "tree-sha-abc",
+      collectTouchedFiles: async () => ({
+        gitAvailable: true,
+        actualFilesTouched: [],
+        closedAtCommit: "HEAD",
       }),
-      getEffectiveAutopilotPolicy: async () => ({
-        threshold: "witnessed-by-maestro",
-        allowedRiskClasses: [],
-        loaded: false,
-        source: "default",
-      }),
-      getEffectiveReleasePolicy: async () => ({
-        loaded: false,
-        source: "default",
-      }),
-      getEffectiveSensitivePathsGlobs: async () => [] as readonly string[],
-      computeRisk: async () => ({ riskClass: "low", signals: [] }),
-      deriveRiskClassFromDiff: async () => "low" as const,
-      runTrustVerifier: async () => ({
-        passed: true,
-        findings: [],
-        findingsCount: 0,
-        errors: 0,
-        warns: 0,
-        infos: 0,
-      }),
-      gitAnchor: {
-        resolveRepoRoot: async (cwd) => cwd,
-        resolveHeadCommit: async () => "HEAD",
-        resolveTreeSha: async () => "tree-sha-abc",
-        collectTouchedFiles: async () => ({
-          gitAvailable: true,
-          actualFilesTouched: [],
-          closedAtCommit: "HEAD",
-        }),
-        windowsOverlap: async () => false,
-        collectChangedPaths: async () => [],
-        collectAddedLines: async () => [],
-      },
-      projectRoot: "/repo",
-    } as ReturnType<Parameters<typeof registerVerdictCommand>[1]["getServices"]>),
+      windowsOverlap: async () => false,
+      collectChangedPaths: async () => [],
+      collectAddedLines: async () => [],
+      collectUntrackedFiles: async () => [],
+    },
+    projectRoot: "/repo",
+  } as unknown as ReturnType<NonNullable<Parameters<typeof registerVerdictCommand>[1]>["getServices"]>;
+
+  type VerdictDeps = NonNullable<Parameters<typeof registerVerdictCommand>[1]>;
+  const deps: VerdictDeps = {
+    getServices: () => services,
     getUsername: () => opts.username ?? "alice",
     loadOwnersFromBase: (_base, _root) => owners,
     recordEvidence: async (store, input) => {
@@ -159,7 +168,9 @@ function makeProgram(opts: {
       await store.append(row);
       return row;
     },
-  });
+  };
+
+  registerVerdictCommand(program, deps);
 
   return { program, evidenceStore, exitCode: capturedExitCode, errorLines, logLines };
 }

@@ -72,6 +72,20 @@ export interface HandoffRecord {
   readonly errorMessage?: string;
 }
 
+/** Lean projection of {@link HandoffRecord} for list endpoints. */
+export interface HandoffSummary {
+  readonly name: string;
+  readonly id: string;
+  readonly status: HandoffStatus;
+  readonly task: string;
+  readonly agent: HandoffAgent;
+  readonly model: string;
+  readonly createdAt: string;
+  readonly wait: boolean;
+  readonly taskId?: string;
+  readonly missionId?: string;
+}
+
 export interface HandoffLaunchRequest {
   readonly prompt: string;
   readonly targetDir: string;

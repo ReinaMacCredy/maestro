@@ -21,7 +21,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
     },
     tokenCounters: null,
     session: null,
-    pendingHandoffs: [],
     configSummary: null,
     activeFeature: null,
     features: [],

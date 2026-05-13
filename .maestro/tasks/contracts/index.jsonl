@@ -1,0 +1,3 @@
+{"id":"c-abc123","taskId":"tsk-555628","status":"amended","at":"2026-05-07T11:22:20.278Z"}
+{"id":"c-abc123","taskId":"tsk-d6be1d","status":"amended","at":"2026-05-07T11:22:53.827Z"}
+{"id":"c-abc123","taskId":"tsk-555628","status":"discarded","at":"2026-05-07T11:23:38.868Z","reason":"task_deleted"}

@@ -105,7 +105,7 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
       return VERDICT_ID_PATTERN.test(verdictId);
     });
     const settled = await Promise.all(
-      candidates.map(async (entry) => {
+      candidates.map(async (entry): Promise<Verdict | undefined> => {
         try {
           const raw = await readJson<unknown>(join(taskDir, entry.name));
           if (raw === undefined) return undefined;

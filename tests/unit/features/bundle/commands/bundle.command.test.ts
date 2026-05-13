@@ -127,7 +127,8 @@ let archive: RecordingArchive;
 
 async function loadRegisterBundleCommand() {
   archive = new RecordingArchive();
-  mock.module("@/services.js", () => ({
+  const mod = await import("@/features/bundle/commands/bundle.command.js");
+  const deps = {
     getServices: () => ({
       missionStore,
       featureStore,
@@ -138,9 +139,11 @@ async function loadRegisterBundleCommand() {
       handoffStore,
       archive,
       sessionDetect: undefined,
-    }),
-  }));
-  return import(`@/features/bundle/commands/bundle.command.ts?test=${Date.now()}-${Math.random()}`);
+    } as never),
+  };
+  return {
+    registerBundleCommand: (program: Command): void => mod.registerBundleCommand(program, deps),
+  };
 }
 
 beforeEach(async () => {

@@ -45,11 +45,11 @@ export interface Services extends
   readonly projectRoot: string;
 }
 
-let instance: Services | undefined;
-
-export function initServices(projectDir: string): Services {
-  const policyServices = buildPolicyServices(projectDir);
-  instance = {
+export function createServices(
+  projectDir: string,
+  overrides?: Partial<Services>,
+): Services {
+  const base: Services = {
     ...buildInfraServices(projectDir),
     ...buildSessionServices(),
     ...buildNotesServices(projectDir),
@@ -62,7 +62,7 @@ export function initServices(projectDir: string): Services {
     ...buildBundleServices(),
     ...buildEvidenceServices(projectDir),
     ...buildSpecServices(projectDir),
-    ...policyServices,
+    ...buildPolicyServices(projectDir),
     ...buildVerifyServices(projectDir),
     ...buildRiskServices(),
     ...buildVerdictServices(projectDir),
@@ -73,12 +73,5 @@ export function initServices(projectDir: string): Services {
     ...buildRuntimeServices(),
     projectRoot: projectDir,
   };
-  return instance;
-}
-
-export function getServices(): Services {
-  if (!instance) {
-    throw new Error("Services not initialized. Call initServices() first.");
-  }
-  return instance;
+  return overrides ? { ...base, ...overrides } : base;
 }

@@ -64,7 +64,7 @@ export class FsCandidateStoreAdapter implements CandidateStorePort {
 
     const candidateReads = entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-      .map(async (entry) => {
+      .map(async (entry): Promise<unknown> => {
         try {
           return await readJson<unknown>(join(this.candidatesDir(), entry.name));
         } catch {

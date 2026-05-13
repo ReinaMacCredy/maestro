@@ -1,5 +1,5 @@
 import type { Feature } from "@/features/mission";
-import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "@/shared/domain/ui-config.js";
+import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { ConfigScope, ConfigLayers } from "@/infra/ports/config.port.js";

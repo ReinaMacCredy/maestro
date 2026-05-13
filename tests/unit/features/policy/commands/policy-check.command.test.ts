@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { registerPolicyCheckCommand } from "@/features/policy/commands/policy-check.command.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { RiskServices } from "@/features/risk/services.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
@@ -65,6 +66,8 @@ function fakeGitAnchor(changedPaths: string[] = []): GitAnchorPort {
     windowsOverlap: async () => false,
     collectChangedPaths: async () => changedPaths,
     collectAddedLines: async () => [],
+    collectUntrackedFiles: async () => [],
+    resolveTreeSha: async () => "tree123",
   };
 }
 
@@ -109,6 +112,7 @@ function makeReleasePolicy(overrides: Partial<ReleasePolicy> = {}): ReleasePolic
 
 interface ServicesLike {
   contractVersionStore: ContractVersionStorePort;
+  contractStore: ContractStorePort;
   getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
@@ -120,6 +124,7 @@ interface ServicesLike {
 function makeServices(overrides: Partial<ServicesLike> = {}): ServicesLike {
   return {
     contractVersionStore: fakeContractVersionStore(makeContract()),
+    contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     getEffectiveReleasePolicy: async () => makeReleasePolicy(),

@@ -561,7 +561,7 @@ describe("compiled task feature E2E", () => {
       await runCompiled(["task", "q", "JWT password middleware"], tmpDir);
       await runCompiled(["task", "q", "Protected routes"], tmpDir);
 
-      const ready = await runCompiled(["task", "ready", "--json"], tmpDir);
+      const ready = await runCompiled(["task", "ready", "--json", "--full"], tmpDir);
       const briefings = expectJson<Array<{
         title: string;
         hints: Array<{ sourceTaskId: string; matchedKeywords: string[] }>;

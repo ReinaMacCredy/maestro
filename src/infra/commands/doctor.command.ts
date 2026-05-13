@@ -1,16 +1,23 @@
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { output } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 
-export function registerDoctorCommand(program: Command): void {
+interface DoctorCommandDeps {
+  readonly getServices: () => Pick<Services, "git" | "config">;
+}
+
+export function registerDoctorCommand(
+  program: Command,
+  deps: DoctorCommandDeps,
+): void {
   program
     .command("doctor")
     .description("Verify maestro dependencies and configuration")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const checks = await runDoctor(
         services.git,
         services.config,

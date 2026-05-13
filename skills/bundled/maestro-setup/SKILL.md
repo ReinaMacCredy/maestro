@@ -1,17 +1,17 @@
 ---
 name: maestro-setup
-description: Set up a repository for Maestro-guided, human-in-the-loop agent work. Use when a project needs Maestro-owned context docs, evidence-first onboarding, root AGENTS.md guidance, language style guides, or a setup report before implementation work begins.
+description: Set up a repository as a long-running agent harness. Use when a project needs Maestro-owned context docs, evidence-first onboarding, root AGENTS.md guidance, language style guides, host-runtime session hooks, drift detection, or a setup report before implementation work begins.
 ---
 
 # Maestro Setup
 
-Use this skill to create or refresh Maestro-owned project context. This is the
-canonical v1 setup behavior. Future `maestro setup` CLI commands must match this
-skill's behavior rather than inventing a separate setup model.
+Use this skill to create or refresh a long-running agent harness in a project.
+Skill and CLI mirror each other: `maestro setup` exposes drift detection and
+host-runtime hook install; the skill owns the content-generation flow.
 
 ## Core Contract
 
-- Skill-first, CLI-second. Do not add or assume a `maestro setup` CLI command.
+- Skill owns content; CLI owns audit + hooks + self-test.
 - Non-interactive by default. Do not ask questions during ordinary setup.
 - Evidence-first. Infer from repo files and mark uncertain facts as TODO.
 - Keep substantial setup content under `.maestro/context/`.
@@ -19,6 +19,28 @@ skill's behavior rather than inventing a separate setup model.
 - Preserve user content outside managed markers.
 - Overwrite `.maestro/setup-report.md` on each run.
 - Do not fetch from the web. Use frozen snapshots in `reference/styleguides/`.
+
+## Setup CLI Surface
+
+- `maestro setup --check` — read-only audit. Detects host runtimes (`.claude/`,
+  `.codex/`, `.cursor/`), AGENTS.md size against the TOC budget (default 160
+  lines hard, 140 warn), required docs (`docs/harness-positioning.md`,
+  `docs/schedule-recipes.md`), `owners.yaml` role coverage, orphan run dirs,
+  and bundled-skill verb drift vs the local binary. Exit 0 clean, 1 with any
+  `error`-severity findings.
+- `maestro setup --self-test` — sandboxed self-test in a tmpdir. Provisions
+  a synthetic task layout, exercises the evidence store, and reports
+  step-by-step pass/fail. Never writes to the project's `.maestro/`.
+- `maestro setup --install-hooks` — installs `SessionStart` / `SessionEnd`
+  hook stubs into detected host-runtime settings files. Idempotent: re-running
+  reports `already-present`.
+- TOC size-budget enforcement: bootstrap writes refuse to emit an
+  `.maestro/AGENTS.md` over the hard limit (defaults to 160 lines, configurable
+  via `.maestro/config.json` `tocSizeBudget`). Warns at the soft limit.
+- Skill-binary drift detection: bundled skill SKILL.md verbs are scanned and
+  compared against the running binary's command tree. Drift surfaces as
+  `Skill expects "<verb>"; binary v<n> does not have it. Run "maestro update"
+  or downgrade the skill bundle.`
 
 ## Managed Markers
 

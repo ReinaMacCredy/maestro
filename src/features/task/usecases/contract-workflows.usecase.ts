@@ -53,7 +53,8 @@ export interface CreateContractInput {
   readonly repoRoot: string;
   readonly intent: string;
   readonly scope: ContractScope;
-  readonly doneWhen: readonly Array<{
+  readonly doneWhen: ReadonlyArray<{
+    readonly id?: string;
     readonly text: string;
     readonly kind?: DoneWhenCriterion["kind"];
   }>;
@@ -67,7 +68,7 @@ export interface EditContractInput {
   readonly ref: string;
   readonly intent: string;
   readonly scope: ContractScope;
-  readonly doneWhen: readonly Array<{
+  readonly doneWhen: ReadonlyArray<{
     readonly id?: string;
     readonly text: string;
     readonly kind?: DoneWhenCriterion["kind"];
@@ -856,7 +857,7 @@ async function detectContractOverlap(
   const results: (string | undefined)[] = [];
   for (let i = 0; i < candidates.length; i += overlapConcurrency) {
     const chunk = candidates.slice(i, i + overlapConcurrency);
-    const chunkResults = await Promise.all(chunk.map(async (candidate) => {
+    const chunkResults = await Promise.all(chunk.map(async (candidate): Promise<string | undefined> => {
       const overlaps = await gitAnchor.windowsOverlap({
         repoRoot: runtimeRepoRoot,
         left: {
@@ -904,7 +905,7 @@ async function listStrictReopenBlockingContractIds(
   const results: (string | undefined)[] = [];
   for (let i = 0; i < candidates.length; i += overlapConcurrency) {
     const chunk = candidates.slice(i, i + overlapConcurrency);
-    const chunkResults = await Promise.all(chunk.map(async (candidate) => {
+    const chunkResults = await Promise.all(chunk.map(async (candidate): Promise<string | undefined> => {
       const overlaps = await gitAnchor.windowsOverlap({
         repoRoot: contract.repoRoot,
         left: {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { postPrCheck } from "@/features/ci/usecases/post-pr-check.js";
 import type { PostPrCheckArgs, PostPrCheckDeps } from "@/features/ci/usecases/post-pr-check.js";
-import type { GithubApiPort, CheckRunInput } from "@/features/ci/ports/github-api.port.js";
+import type { GithubApiPort, CheckRunInput, CheckRunConclusion } from "@/features/ci/ports/github-api.port.js";
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
 import type { VerdictOverridePayload } from "@/features/evidence/index.js";
@@ -69,7 +69,7 @@ function makeArgs(
 // ─── Conclusion mapping ───────────────────────────────────────────────────────
 
 describe("postPrCheck — conclusion mapping", () => {
-  const cases: [VerdictDecision, string][] = [
+  const cases: [VerdictDecision, CheckRunConclusion][] = [
     ["PASS", "success"],
     ["FAIL", "failure"],
     ["BLOCK", "failure"],

@@ -2,10 +2,17 @@ import type { Command } from "commander";
 import type { RawLearningEntry } from "../domain/memory-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { appendLearning } from "../usecases/memory-learn.usecase.js";
 
-export function registerMemoryLearnCommand(program: Command): void {
+interface MemoryLearnCommandDeps {
+  readonly getServices: () => Pick<Services, "git" | "learningStore">;
+}
+
+export function registerMemoryLearnCommand(
+  program: Command,
+  deps: MemoryLearnCommandDeps,
+): void {
   program
     .command("memory-learn")
     .description("Append a learning entry for this session")
@@ -16,14 +23,14 @@ Examples:
 `)
     .option("--content <text>", "Learning content")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       if (!opts.content) {
         throw new MaestroError("--content is required", [
           'maestro memory-learn --content "what you learned"',
         ]);
       }
 
-      const services = getServices();
+      const services = deps.getServices();
       const isJson = opts.json ?? program.opts().json;
 
       const entry = await appendLearning(services.git, services.learningStore, {

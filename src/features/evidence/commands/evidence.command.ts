@@ -1,8 +1,9 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
-import { recordEvidence, type RecordEvidenceInput } from "../usecases/record-evidence.usecase.js";
+import { summarizeEvidence } from "@/shared/lib/projection.js";
+import { type Services } from "@/services.js";
+import { recordEvidence as defaultRecordEvidence, type RecordEvidenceInput } from "../usecases/record-evidence.usecase.js";
 import { listEvidence } from "../usecases/list-evidence.usecase.js";
 import { isEvidenceId } from "../domain/evidence-id.js";
 import { readText } from "@/shared/lib/fs.js";
@@ -29,8 +30,8 @@ import { readCurrentContractWithBackfill } from "@/features/task/index.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore">;
-  readonly recordEvidence: typeof recordEvidence;
+  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore" | "contractStore" | "contractVersionStore">;
+  readonly recordEvidence?: typeof defaultRecordEvidence;
 }
 
 const EVIDENCE_KINDS: readonly EvidenceKind[] = ["command", "manual-note", "ai-review", "plan-check", "threat-model"];
@@ -38,7 +39,7 @@ const AI_REVIEWER_KINDS: readonly AIReviewerKind[] = ["bug", "security", "archit
 
 export function registerEvidenceCommand(
   program: Command,
-  deps: EvidenceCommandDeps = { getServices, recordEvidence },
+  deps: EvidenceCommandDeps,
 ): void {
   const evidenceCmd = program
     .command("evidence")
@@ -76,12 +77,12 @@ Examples:
     .option("--witness <level>", "Override witness level (default: agent-claimed-locally)")
     .option("--session <id>", "Override session id (default: detected session)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
 
       const input = await buildRecordInput(services, opts);
-      const row = await deps.recordEvidence(services.evidenceStore, input);
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, input);
       output(isJson, row, (r) => formatEvidenceRow(r, "Evidence recorded"));
     });
 }
@@ -535,10 +536,19 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
     .option("--task <id>", "Filter by task id")
     .option("--session <id>", "Filter by session id")
     .option("--kind <kind>", `Filter by kind (${EVIDENCE_KINDS.join("|")})`)
+    .option("--limit <n>", "Maximum rows to return (default 20 for --json)")
+    .option("--all", "Disable the default --json limit (return every match)")
+    .option("--full", "Include the typed payload in --json output (default: lean summary)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
+      const isFull = opts.full === true;
+      const wantAll = opts.all === true;
+      const explicitLimit = opts.limit !== undefined
+        ? Number.parseInt(String(opts.limit), 10)
+        : undefined;
+      const effectiveLimit = explicitLimit ?? (isJson && !wantAll ? 20 : undefined);
 
       const filter: EvidenceListFilter = {
         ...(opts.task !== undefined ? { task_id: opts.task as string } : {}),
@@ -547,7 +557,15 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
       };
 
       const rows = await listEvidence(services.evidenceStore, filter);
-      output(isJson, rows, formatEvidenceList);
+      const sliced = effectiveLimit !== undefined && effectiveLimit > 0
+        ? rows.slice(0, effectiveLimit)
+        : rows;
+
+      if (isJson && !isFull) {
+        output(true, sliced.map(summarizeEvidence), () => []);
+        return;
+      }
+      output(isJson, sliced, formatEvidenceList);
     });
 }
 
@@ -556,7 +574,7 @@ function registerShowCommand(parent: Command, root: Command, deps: EvidenceComma
     .command("show <id>")
     .description("Show one evidence row by id")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
 

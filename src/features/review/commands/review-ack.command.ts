@@ -2,25 +2,21 @@ import os from "node:os";
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
-import { recordEvidence } from "@/features/evidence/index.js";
+import { type Services } from "@/services.js";
+import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/index.js";
 import type { ReviewAckPayload } from "@/features/evidence/index.js";
 
 interface ReviewAckCommandDeps {
   readonly getServices: () => Pick<Services, "evidenceStore">;
-  readonly recordEvidence: typeof recordEvidence;
-  readonly getUsername: () => string;
+  readonly recordEvidence?: typeof defaultRecordEvidence;
+  readonly getUsername?: () => string;
 }
 
-const defaultDeps: ReviewAckCommandDeps = {
-  getServices,
-  recordEvidence,
-  getUsername: () => os.userInfo().username,
-};
+const defaultGetUsername = (): string => os.userInfo().username;
 
 export function registerReviewCommand(
   program: Command,
-  deps: ReviewAckCommandDeps = defaultDeps,
+  deps: ReviewAckCommandDeps,
 ): void {
   const reviewCmd = program
     .command("review")
@@ -52,7 +48,7 @@ Examples:
       verdict: string;
       criterion: string[];
       json?: boolean;
-    }) => {
+    }): Promise<void> => {
       const { task: taskId, verdict: verdictId, criterion: criteria } = opts;
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
@@ -68,11 +64,11 @@ Examples:
 
       const payload: ReviewAckPayload = {
         verdictId,
-        ackedBy: deps.getUsername(),
+        ackedBy: (deps.getUsername ?? defaultGetUsername)(),
         criteria,
       };
 
-      const row = await deps.recordEvidence(services.evidenceStore, {
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, {
         task_id: taskId,
         kind: "review-ack",
         payload,

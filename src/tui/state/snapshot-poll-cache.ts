@@ -7,7 +7,7 @@ import type { ConfigPort, ConfigLayers, ConfigScope } from "@/infra/ports/config
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 
-export interface CacheEntry<T> {
+export interface CacheEntry<T = unknown> {
   readonly value: T;
   readonly expiresAt: number;
 }
@@ -15,17 +15,17 @@ export interface CacheEntry<T> {
 const DEFAULT_CACHE_ENTRY_LIMIT = 32;
 
 /** Returns the cached value if still fresh, otherwise undefined. */
-export function cached<T>(entry: CacheEntry<T> | undefined): T | undefined {
+export function cached<T = unknown>(entry: CacheEntry<T> | undefined): T | undefined {
   if (entry && entry.expiresAt > Date.now()) return entry.value;
   return undefined;
 }
 
 /** Build a new cache entry with an expiry `ttlMs` from now. */
-export function makeEntry<T>(value: T, ttlMs: number): CacheEntry<T> {
+export function makeEntry<T = unknown>(value: T, ttlMs: number): CacheEntry<T> {
   return { value, expiresAt: Date.now() + ttlMs };
 }
 
-export function pruneExpiredEntries<T>(
+export function pruneExpiredEntries<T = unknown>(
   cache: Map<string, CacheEntry<T>>,
   now = Date.now(),
 ): void {
@@ -36,7 +36,7 @@ export function pruneExpiredEntries<T>(
   }
 }
 
-export function setCachedEntry<T>(
+export function setCachedEntry<T = unknown>(
   cache: Map<string, CacheEntry<T>>,
   key: string,
   value: T,
@@ -88,6 +88,21 @@ export class CachingGitPort implements GitPort {
     const value = await this.inner.isRepo(cwd);
     setCachedEntry(this.isRepoByCwd, cwd, value, this.isRepoTtlMs);
     return value;
+  }
+
+  async getCurrentBranch(cwd: string): Promise<string> {
+    return this.inner.getCurrentBranch(cwd);
+  }
+
+  async createWorktree(
+    cwd: string,
+    input: {
+      readonly slug: string;
+      readonly baseBranch: string;
+      readonly branchPrefix: string;
+    },
+  ): Promise<import("@/infra/domain/git-types.js").GitWorktree> {
+    return this.inner.createWorktree(cwd, input);
   }
 }
 

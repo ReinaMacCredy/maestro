@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PROJECTION_VIEWS } from "@/shared/lib/projection.js";
 
 const taskId = z
   .string()
@@ -18,6 +19,16 @@ const evidenceId = z
   .string()
   .regex(/^evd-\d{13}-[0-9a-f]{6}$/, "Invalid evidence id")
   .describe("A maestro evidence id like 'evd-1714747200123-a1b2c3'.");
+const handoffId = z
+  .string()
+  .regex(
+    /^(\d{4}-\d{2}-\d{2}-\d{3}|[a-z]+-[a-z]+-\d+)$/,
+    "Invalid handoff id",
+  )
+  .describe("A maestro handoff id like 'bold-otter-1' or '2026-05-08-001'.");
+const handoffAgent = z
+  .enum(["codex", "claude", "hermes"])
+  .describe("Acting agent identifier when picking up a handoff.");
 
 const taskStatus = z
   .enum(["pending", "in_progress", "completed"])
@@ -66,6 +77,12 @@ const limit = z
   .max(100)
   .optional()
   .describe("Page size, 1..100. Defaults to 20 when omitted.");
+const view = z
+  .enum(PROJECTION_VIEWS)
+  .optional()
+  .describe(
+    "Projection: 'summary' (default) returns lean per-item shape for token-budget; 'full' returns detail-grade items.",
+  );
 const offset = z
   .number()
   .int()
@@ -92,6 +109,7 @@ export const TaskListInput = z
       .describe("Filter by assignee/session id."),
     limit,
     offset,
+    view,
   })
   .strict();
 
@@ -163,6 +181,7 @@ export const EvidenceListInput = z
     witnessLevel: witnessLevel.optional(),
     limit,
     offset,
+    view,
   })
   .strict();
 
@@ -263,4 +282,74 @@ export const PolicyCheckInput = z
   })
   .strict();
 
-export { taskId, missionId, verdictId, evidenceId };
+const handoffDisplayState = z
+  .enum(["open", "consumed", "completed", "failed"])
+  .describe(
+    "Handoff display state. 'open' = launching/launched and not consumed; 'consumed' = picked up; 'completed'/'failed' = launched session terminated.",
+  );
+
+export const HandoffListInput = z
+  .object({
+    openOnly: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, return only packets that have not been consumed. Equivalent to displayState='open'. Do not combine with displayState.",
+      ),
+    displayState: handoffDisplayState
+      .optional()
+      .describe(
+        "Filter by computed display state. Do not combine with openOnly.",
+      ),
+    taskId: taskId
+      .optional()
+      .describe("Filter to packets whose refs.taskId equals this task id."),
+    agent: handoffAgent
+      .optional()
+      .describe("Filter by launching agent (the receiving session's agent)."),
+    limit,
+    offset,
+    view,
+  })
+  .strict();
+
+export const HandoffShowInput = z
+  .object({
+    id: handoffId,
+  })
+  .strict();
+
+export const HandoffOpenForTaskInput = z
+  .object({
+    taskId,
+  })
+  .strict();
+
+export const HandoffPickupInput = z
+  .object({
+    id: handoffId,
+    actorAgent: handoffAgent,
+    actorSessionId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Session id to record on the pickup. Defaults to the MCP session id (MAESTRO_SESSION_ID/CLAUDECODE_SESSION_ID/CODEX_THREAD_ID, else username@host).",
+      ),
+    ownerId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional task owner id when resuming a task-linked packet. Defaults to buildTaskOwnerId(actorAgent, actorSessionId).",
+      ),
+    standalone: z
+      .boolean()
+      .optional()
+      .describe(
+        "Consume the packet without resuming its linked task. Required when picking up a packet from a different project than the one that created it.",
+      ),
+  })
+  .strict();
+
+export { taskId, missionId, verdictId, evidenceId, handoffId };

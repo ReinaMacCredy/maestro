@@ -1,10 +1,12 @@
 import { homedir, userInfo } from "node:os";
 import { basename } from "node:path";
 import { Command, Option } from "commander";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
+import { summarizeTask } from "@/shared/lib/projection.js";
+import { truncateText } from "@/shared/lib/truncate.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
@@ -13,7 +15,8 @@ import { claimTask } from "../usecases/claim-task.usecase.js";
 import { unclaimTask } from "../usecases/unclaim-task.usecase.js";
 import { blockTasks, unblockTasks } from "../usecases/manage-task-blockers.usecase.js";
 import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
-import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
+import { readyTaskPage, readyTasks, type TaskBriefing } from "../usecases/ready-tasks.usecase.js";
+import type { TaskHint } from "../usecases/match-candidates.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import { planTasks, validatePlanTasks } from "../usecases/plan-tasks.usecase.js";
 import { buildBatchInputSchema } from "../usecases/batch-input-schema.usecase.js";
@@ -44,9 +47,10 @@ import type {
   Task,
   TaskMutationInput,
   TaskReceipt,
+  TaskSummary,
   UpdateTaskInput,
 } from "../domain/task-types.js";
-import type { Contract } from "../domain/contract/contract-types.js";
+import type { Contract, ContractVerdict } from "../domain/contract/contract-types.js";
 import { TASK_STATUSES, TASK_TYPES, buildTaskReceipt, indexTasksById } from "../domain/task-types.js";
 import {
   buildCreateInput,
@@ -93,6 +97,8 @@ import { registerContractCommand } from "./contract.command.js";
 import { registerTaskVerifyCommand } from "./task-verify.command.js";
 import { registerTaskProofCommand } from "./task-proof.command.js";
 import { registerTaskBudgetCommand } from "./task-budget.command.js";
+import { registerTaskIntrospectCommand } from "./task-introspect.command.js";
+import { registerTaskObserveCommand } from "./task-observe.command.js";
 import { resolveTaskSilentMode } from "./command-silence.js";
 
 interface ContinuationEditInput {
@@ -102,7 +108,14 @@ interface ContinuationEditInput {
   readonly removeDecisions: readonly string[];
 }
 
-export function registerTaskCommand(program: Command): void {
+export interface TaskCommandDeps {
+  readonly getServices: () => Services;
+}
+
+export function registerTaskCommand(
+  program: Command,
+  deps: TaskCommandDeps,
+): void {
   const taskCmd = program
     .command("task")
     .description("Task lifecycle management (Claude-style blocker graph)")
@@ -121,37 +134,39 @@ Typical loop:
   task plan --file plan.json  ->  task next  ->  (work)  ->  task update <id> --status completed`,
   );
 
-  registerCreateCommand(taskCmd, program);
-  registerPlanCommand(taskCmd, program);
-  registerNextCommand(taskCmd, program);
-  registerQuickCommand(taskCmd, program);
-  registerShowCommand(taskCmd, program);
-  registerListCommand(taskCmd, program);
-  registerStatusCommand(taskCmd, program);
-  registerBackfillSlugsCommand(taskCmd, program);
-  registerUpdateCommand(taskCmd, program);
-  registerClaimCommand(taskCmd, program);
-  registerContractCommand(taskCmd, program);
-  registerTaskVerifyCommand(taskCmd, program);
-  registerTaskProofCommand(taskCmd, program);
-  registerTaskBudgetCommand(taskCmd, program);
-  registerUnclaimCommand(taskCmd, program);
-  registerReleaseOwnedCommand(taskCmd, program);
-  registerBlockCommand(taskCmd, program);
-  registerUnblockCommand(taskCmd, program);
-  registerReopenCommand(taskCmd, program);
-  registerDeleteCommand(taskCmd, program);
-  registerPruneCommand(taskCmd, program);
+  registerCreateCommand(taskCmd, program, deps);
+  registerPlanCommand(taskCmd, program, deps);
+  registerNextCommand(taskCmd, program, deps);
+  registerQuickCommand(taskCmd, program, deps);
+  registerShowCommand(taskCmd, program, deps);
+  registerListCommand(taskCmd, program, deps);
+  registerStatusCommand(taskCmd, program, deps);
+  registerBackfillSlugsCommand(taskCmd, program, deps);
+  registerUpdateCommand(taskCmd, program, deps);
+  registerClaimCommand(taskCmd, program, deps);
+  registerContractCommand(taskCmd, program, deps);
+  registerTaskVerifyCommand(taskCmd, program, deps);
+  registerTaskProofCommand(taskCmd, program, deps);
+  registerTaskBudgetCommand(taskCmd, program, deps);
+  registerTaskIntrospectCommand(taskCmd, program, deps);
+  registerTaskObserveCommand(taskCmd, program, deps);
+  registerUnclaimCommand(taskCmd, program, deps);
+  registerReleaseOwnedCommand(taskCmd, program, deps);
+  registerBlockCommand(taskCmd, program, deps);
+  registerUnblockCommand(taskCmd, program, deps);
+  registerReopenCommand(taskCmd, program, deps);
+  registerDeleteCommand(taskCmd, program, deps);
+  registerPruneCommand(taskCmd, program, deps);
   registerLegacyDepsCommand(taskCmd);
   registerCloseCommand(taskCmd);
-  registerReadyCommand(taskCmd, program);
-  registerSimilarCommand(taskCmd, program);
-  registerMineCommand(taskCmd, program);
-  registerStuckCommand(taskCmd, program);
-  registerHeartbeatCommand(taskCmd, program);
+  registerReadyCommand(taskCmd, program, deps);
+  registerSimilarCommand(taskCmd, program, deps);
+  registerMineCommand(taskCmd, program, deps);
+  registerStuckCommand(taskCmd, program, deps);
+  registerHeartbeatCommand(taskCmd, program, deps);
 }
 
-function registerCreateCommand(taskCmd: Command, program: Command): void {
+function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("create <title>")
     .description("Create a new task")
@@ -170,8 +185,8 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     .addOption(new Option("--assignee <name>").hideHelp())
     .option("--silent", "Print only the id (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (title: string, opts) => {
-      const services = getServices();
+    .action(async (title: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       if (opts.assignee !== undefined) {
@@ -189,8 +204,8 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
 
       let sessionId: string | undefined;
       if (initialStatus === "in_progress") {
-        sessionId = await resolveOwnershipSessionId(opts.session);
-        await maybeReleaseStaleOwnedTasks([sessionId]);
+        sessionId = await resolveOwnershipSessionId(opts.session, deps);
+        await maybeReleaseStaleOwnedTasks(deps, [sessionId]);
       }
 
       const parentId = opts.parent !== undefined
@@ -218,7 +233,7 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
         warnAutoClaimed(started, autoClaimed);
       }
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (opts.silent) {
         console.log(task.id);
@@ -229,7 +244,7 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerPlanCommand(taskCmd: Command, program: Command): void {
+function registerPlanCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("plan")
     .description("Create a batch of tasks atomically from a JSON plan")
@@ -239,8 +254,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id for --start (only with --start)")
     .option("--dry-run", "Validate + resolve references without writing any tasks")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       if (opts.schema === true) {
@@ -275,8 +290,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
             "Add a 'name' to the task you want to start, then pass it here",
           ]);
         }
-        sessionId = await resolveOwnershipSessionId(opts.session);
-        await maybeReleaseStaleOwnedTasks([sessionId]);
+        sessionId = await resolveOwnershipSessionId(opts.session, deps);
+        await maybeReleaseStaleOwnedTasks(deps, [sessionId]);
       }
 
       if (opts.dryRun === true) {
@@ -329,7 +344,7 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
         return lines;
       });
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
     });
 }
 
@@ -344,7 +359,7 @@ async function readPlanSource(path: string): Promise<string> {
   return content;
 }
 
-function registerQuickCommand(taskCmd: Command, program: Command): void {
+function registerQuickCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("q <title>")
     .description("Quick capture: create a task and print its id only")
@@ -354,8 +369,8 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
     .option("--parent <id>", "Parent task id")
     .option("--blocked-by <ids>", "Comma-separated blocker task ids")
     .option("--json", "Output as JSON")
-    .action(async (title: string, opts) => {
-      const services = getServices();
+    .action(async (title: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const input = buildCreateInput(title, {
@@ -367,7 +382,7 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
       });
       const task = await createTask(services.taskStore, input);
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (isJson) {
         output(true, { id: task.id }, () => []);
@@ -377,13 +392,13 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerShowCommand(taskCmd: Command, program: Command): void {
+function registerShowCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("show <id-or-slug>")
     .description("Show task details (accepts a tsk-XXX id or a track slug)")
     .option("--json", "Output as JSON")
-    .action(async (rawRef: string, opts) => {
-      const services = getServices();
+    .action(async (rawRef: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
 
@@ -414,7 +429,7 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerListCommand(taskCmd: Command, program: Command): void {
+function registerListCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("list")
     .description("List tasks with optional filters")
@@ -424,12 +439,18 @@ function registerListCommand(taskCmd: Command, program: Command): void {
     .option("--label <label>", "Filter by label (single)")
     .option("--parent <id>", "Filter by parent task id")
     .option("--assignee <name>", "Filter by assignee")
-    .option("--limit <n>", "Maximum number of tasks to return")
+    .option("--limit <n>", "Maximum number of tasks to return (default 20 for --json)")
+    .option("--all", "Disable the default --json limit (return every match)")
+    .option("--full", "Include every Task field in --json output (default: lean summary)")
     .option("--tracks", "Print only track headers (slug or tsk-id; one per line)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const isFull = opts.full === true;
+      const explicitLimit = parseLimit(opts.limit);
+      const wantAll = opts.all === true;
+      const effectiveLimit = explicitLimit ?? (isJson && !wantAll ? 20 : undefined);
 
       const filters: ListTasksFilters = {
         status: parseStatus(opts.status),
@@ -438,7 +459,7 @@ function registerListCommand(taskCmd: Command, program: Command): void {
         label: opts.label,
         parentId: opts.parent,
         assignee: opts.assignee,
-        limit: parseLimit(opts.limit),
+        limit: effectiveLimit,
       };
 
       const tasks = await listTasks(services.taskStore, filters);
@@ -447,21 +468,27 @@ function registerListCommand(taskCmd: Command, program: Command): void {
         output(isJson, tracks, (value) => value);
         return;
       }
+      if (isJson && !isFull) {
+        output(true, tasks.map(summarizeTask), () => []);
+        return;
+      }
       output(isJson, tasks, formatTaskList);
     });
 }
 
-function registerStatusCommand(taskCmd: Command, program: Command): void {
+function registerStatusCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("status")
     .description("Show tracks grouped by top-level slug with status glyphs")
     .option("--all", "Include completed tasks (rendered with 'v' glyph)")
     .option("--track <slug>", "Restrict output to a single track by slug or tsk-id")
     .option("--no-compact", "Render the unsectioned grouped detail view")
+    .option("--full", "Include full Task objects in --json tasksById (default: summary digest)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const isFull = opts.full === true;
 
       const tasks = await services.taskStore.all();
       const projection = groupTasksByTrack(tasks, {
@@ -470,7 +497,7 @@ function registerStatusCommand(taskCmd: Command, program: Command): void {
       });
 
       if (isJson) {
-        output(true, toTaskStatusJson(projection), () => []);
+        output(true, toTaskStatusJson(projection, isFull), () => []);
         return;
       }
       const lines = formatTaskStatusView(projection, {
@@ -481,16 +508,43 @@ function registerStatusCommand(taskCmd: Command, program: Command): void {
     });
 }
 
+interface TaskStatusJsonSummaryTrack {
+  readonly identifier: string;
+  readonly slug?: string;
+  readonly task: TaskSummary;
+  readonly steps?: readonly TaskSummary[];
+}
+
 function toTaskStatusJson(
   projection: TaskStatusProjection,
-): Omit<TaskStatusProjection, "tasksById"> & { readonly tasksById: Record<string, Task> } {
+  includeFullTasks: boolean,
+):
+  | (Omit<TaskStatusProjection, "tasksById"> & { readonly tasksById: Record<string, Task> })
+  | {
+      readonly header: TaskStatusProjection["header"];
+      readonly tracks: readonly TaskStatusJsonSummaryTrack[];
+      readonly orphans: readonly TaskSummary[];
+    } {
+  if (includeFullTasks) {
+    return {
+      ...projection,
+      tasksById: Object.fromEntries(projection.tasksById),
+    };
+  }
+  // Doctrine: digest (no `tasksById`). Recover the full lookup with `--full`.
   return {
-    ...projection,
-    tasksById: Object.fromEntries(projection.tasksById),
+    header: projection.header,
+    tracks: projection.tracks.map((track) => ({
+      identifier: track.identifier,
+      ...(track.slug !== undefined ? { slug: track.slug } : {}),
+      task: summarizeTask(track.task),
+      ...(track.steps.length > 0 ? { steps: track.steps.map(summarizeTask) } : {}),
+    })),
+    orphans: projection.orphans.map(summarizeTask),
   };
 }
 
-function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void {
+function registerBackfillSlugsCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("backfill-slugs")
     .description("Derive a slug for every top-level task that is missing one (legacy/pre-slug tasks)")
@@ -498,8 +552,8 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
     .option("--rederive", "Re-derive slugs that already exist (overwrites; intended for refreshing auto-derived slugs after a derivation algorithm change)")
     .option("--limit <n>", "Process at most N tasks")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const apply = opts.apply === true;
       const rederive = opts.rederive === true;
@@ -636,7 +690,7 @@ function registerBackfillSlugsCommand(taskCmd: Command, program: Command): void 
     });
 }
 
-function registerUpdateCommand(taskCmd: Command, program: Command): void {
+function registerUpdateCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("update [id-or-slug]")
     .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug; positional or --task)")
@@ -667,8 +721,8 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .addOption(new Option("--claim").hideHelp())
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (rawRef: string | undefined, opts) => {
-      const services = getServices();
+    .action(async (rawRef: string | undefined, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       // Accept either positional <id-or-slug> or --task <id>. If both are supplied,
       // require they refer to the same task; otherwise the user is confused about
@@ -737,7 +791,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         ]);
       }
 
-      const sessionId = await resolveSessionAndReleaseStale(opts.session);
+      const sessionId = await resolveSessionAndReleaseStale(opts.session, deps);
 
       // Hard rule 1: one task in_progress per session unless --force. Enforce
       // when transitioning to in_progress and the current session already
@@ -798,7 +852,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         await enforceContractCompletionPolicy(previous, patch, {
           strictFlag: opts.strict === true,
           noContract,
-        });
+        }, deps);
       }
       let updated: Task;
       let autoClaimed = false;
@@ -808,7 +862,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
           await preflightCompletedTaskRestart(previous, patch, {
             sessionId,
             force: opts.force === true,
-          });
+          }, deps);
           await reopenTaskFlow({
             taskStore: services.taskStore,
             continuationStore: services.taskContinuationStore,
@@ -841,7 +895,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
 
       warnAutoClaimed(updated, autoClaimed);
       if (hasTaskPatch) {
-        await maybeCaptureCompletionHint(updated);
+        await maybeCaptureCompletionHint(updated, deps);
       }
       await applyUpdateContinuation(
         {
@@ -853,6 +907,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         patch,
         autoClaimed,
         continuationEdits,
+        deps,
       );
 
       if (emitSilentSuccess(isJson, opts, updated)) return;
@@ -869,7 +924,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerClaimCommand(taskCmd: Command, program: Command): void {
+function registerClaimCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("claim <id>")
     .description("Claim exclusive ownership of a task")
@@ -881,15 +936,15 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
     .option("--stale-after <duration>", "Auto-release a dead owner's stale claim after this idle window (default 4h)")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveOwnershipSessionId(opts.session);
+      const sessionId = await resolveOwnershipSessionId(opts.session, deps);
       if (opts.contractRequired === true && opts.contract === false) {
         throw new MaestroError("Choose either --contract-required or --no-contract, not both");
       }
-      await maybeReleaseStaleOwnedTasks([sessionId]);
-      await maybeReleaseStaleClaim(id, sessionId, opts.staleAfter);
+      await maybeReleaseStaleOwnedTasks(deps, [sessionId]);
+      await maybeReleaseStaleClaim(id, sessionId, opts.staleAfter, deps);
       const previous = await services.taskStore.get(id);
 
       const claimed = await claimTask(services.taskStore, id, {
@@ -898,9 +953,9 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
         checkBusy: opts.busyCheck === true,
       });
       if (claimed.contractId) {
-        await maybeTransferClaimedContractOwnership(claimed.id, sessionId);
+        await maybeTransferClaimedContractOwnership(claimed.id, sessionId, deps);
       }
-      await maybeAttachClaimAnchor(claimed.id);
+      await maybeAttachClaimAnchor(claimed.id, deps);
       await syncTaskContinuation(
         {
           continuationStore: services.taskContinuationStore,
@@ -909,12 +964,12 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
         buildClaimContinuationInput(previous, claimed),
       );
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
       try {
         await maybeWarnMissingContractAfterClaim(claimed, {
           contractRequired: opts.contractRequired === true,
           noContract: opts.contract === false,
-        });
+        }, deps);
       } catch {
         // Contract reminder notes must not block a successful claim.
       }
@@ -929,7 +984,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerUnclaimCommand(taskCmd: Command, program: Command): void {
+function registerUnclaimCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("unclaim <id>")
     .description("Release task ownership")
@@ -937,10 +992,10 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveOwnershipSessionId(opts.session);
+      const sessionId = await resolveOwnershipSessionId(opts.session, deps);
       const previous = await services.taskStore.get(id);
 
       const unclaimed = await unclaimTask(services.taskStore, id, {
@@ -967,7 +1022,7 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
         },
       );
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (emitSilentSuccess(isJson, opts, unclaimed)) return;
 
@@ -978,14 +1033,14 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
+function registerReleaseOwnedCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("release-owned <sessionId>")
     .description("Release unresolved tasks owned by a dead or stale session")
     .option("--silent", "Print only '<id> <marker>' per released task (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (sessionId: string, opts) => {
-      const services = getServices();
+    .action(async (sessionId: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const trimmedSessionId = sessionId.trim();
       const beforeTasks = await services.taskStore.all();
@@ -993,7 +1048,7 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
       const released = await releaseMatchingOwnedTasks(services.taskStore, beforeTasks, trimmedSessionId);
       await syncRecoveredStaleOwnerTasks(services, before, released);
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (!isJson && resolveSilent(opts)) {
         released.forEach(printSilent);
@@ -1012,14 +1067,14 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerReopenCommand(taskCmd: Command, program: Command): void {
+function registerReopenCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("reopen <id>")
     .description("Restore a completed task to the pending queue")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const reopened = await reopenTaskFlow({
         taskStore: services.taskStore,
@@ -1028,7 +1083,7 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
         contractStore: services.contractStore,
         contracts: services.contracts,
       }, id);
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (emitSilentSuccess(isJson, opts, reopened.task)) return;
 
@@ -1040,7 +1095,7 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerDeleteCommand(taskCmd: Command, program: Command): void {
+function registerDeleteCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("delete <id>")
     .description("Delete a task and clean up its contract and continuation state")
@@ -1048,10 +1103,10 @@ function registerDeleteCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveOptionalOwnershipSessionId(opts.session);
+      const sessionId = await resolveOptionalOwnershipSessionId(opts.session, deps);
       const actor: TaskMutationInput = {
         ...(opts.force === true ? { force: true } : {}),
         ...(sessionId ? { sessionId } : {}),
@@ -1062,7 +1117,7 @@ function registerDeleteCommand(taskCmd: Command, program: Command): void {
         continuationHistory: services.taskContinuationHistory,
         contractStore: services.contractStore,
       }, id, actor);
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (emitSilentSuccess(isJson, opts, deleted)) return;
 
@@ -1075,7 +1130,7 @@ function registerDeleteCommand(taskCmd: Command, program: Command): void {
 
 const DEFAULT_PRUNE_KEEP = 500;
 
-function registerPruneCommand(taskCmd: Command, program: Command): void {
+function registerPruneCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("prune")
     .description("Bound local per-machine task state (candidates + completed continuations)")
@@ -1085,7 +1140,7 @@ function registerPruneCommand(taskCmd: Command, program: Command): void {
     .option("--all", "Purge everything in the targeted directories")
     .option("--dry-run", "Report what would be purged without deleting")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       if (opts.candidatesOnly === true && opts.continuationsOnly === true) {
         throw new MaestroError(
           "Choose either --candidates-only or --continuations-only, not both",
@@ -1100,7 +1155,7 @@ function registerPruneCommand(taskCmd: Command, program: Command): void {
           ? "continuations"
           : "both";
 
-      const services = getServices();
+      const services = deps.getServices();
       const report = await pruneLocalTaskState(
         {
           candidateStore: services.taskCandidateStore,
@@ -1118,7 +1173,7 @@ function registerPruneCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerBlockCommand(taskCmd: Command, program: Command): void {
+function registerBlockCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("block <id> <blockedTaskIds...>")
     .description("Mark this task as blocking the target task ids")
@@ -1126,10 +1181,10 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, blockedTaskIds: string[], opts) => {
-      const services = getServices();
+    .action(async (id: string, blockedTaskIds: string[], opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveSessionAndReleaseStale(opts.session);
+      const sessionId = await resolveSessionAndReleaseStale(opts.session, deps);
       const before = await services.taskStore.get(id);
       const updated = await blockTasks(
         services.taskStore,
@@ -1185,7 +1240,7 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
         },
       );
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (emitSilentSuccess(isJson, opts, updated)) return;
 
@@ -1196,7 +1251,7 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerUnblockCommand(taskCmd: Command, program: Command): void {
+function registerUnblockCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("unblock <id> <blockedTaskIds...>")
     .description("Remove blocker edges from this task to the target task ids")
@@ -1204,10 +1259,10 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, blockedTaskIds: string[], opts) => {
-      const services = getServices();
+    .action(async (id: string, blockedTaskIds: string[], opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveSessionAndReleaseStale(opts.session);
+      const sessionId = await resolveSessionAndReleaseStale(opts.session, deps);
       const updated = await unblockTasks(
         services.taskStore,
         id,
@@ -1259,7 +1314,7 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
         },
       );
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (emitSilentSuccess(isJson, opts, updated)) return;
 
@@ -1301,7 +1356,10 @@ function registerCloseCommand(taskCmd: Command): void {
 
 let warnedAboutFallbackSession = false;
 
-async function resolveOwnershipSessionId(explicitSessionId: string | undefined): Promise<string> {
+async function resolveOwnershipSessionId(
+  explicitSessionId: string | undefined,
+  deps: TaskCommandDeps,
+): Promise<string> {
   if (explicitSessionId !== undefined) {
     const trimmed = explicitSessionId.trim();
     if (trimmed.length === 0) {
@@ -1312,7 +1370,7 @@ async function resolveOwnershipSessionId(explicitSessionId: string | undefined):
     return trimmed;
   }
 
-  const services = getServices();
+  const services = deps.getServices();
   const session = await services.sessionDetect.detect(process.cwd());
   if (session) {
     return buildTaskOwnerId(session.agent, session.sessionId);
@@ -1358,20 +1416,24 @@ function fallbackSessionUserId(): string {
   return "default";
 }
 
-async function resolveOptionalOwnershipSessionId(explicitSessionId: string | undefined): Promise<string | undefined> {
+async function resolveOptionalOwnershipSessionId(
+  explicitSessionId: string | undefined,
+  deps: TaskCommandDeps,
+): Promise<string | undefined> {
   // Always produce a stable actor id, synthesizing a per-user fallback when
   // no env var / explicit session is available. Previously this function
   // could return undefined, which surfaced as "requires ownership context"
   // errors on update/heartbeat/unclaim paths that the skill documents as
   // bare forms.
-  return resolveOwnershipSessionId(explicitSessionId);
+  return resolveOwnershipSessionId(explicitSessionId, deps);
 }
 
 async function resolveSessionAndReleaseStale(
   explicitSessionId: string | undefined,
+  deps: TaskCommandDeps,
 ): Promise<string | undefined> {
-  const sessionId = await resolveOptionalOwnershipSessionId(explicitSessionId);
-  await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
+  const sessionId = await resolveOptionalOwnershipSessionId(explicitSessionId, deps);
+  await maybeReleaseStaleOwnedTasks(deps, sessionId ? [sessionId] : []);
   return sessionId;
 }
 
@@ -1379,8 +1441,9 @@ async function preflightCompletedTaskRestart(
   previous: Task,
   patch: UpdateTaskInput,
   actor: TaskMutationInput,
+  deps: TaskCommandDeps,
 ): Promise<void> {
-  const services = getServices();
+  const services = deps.getServices();
   const reopenedTask = buildPreflightReopenedTask(previous);
   const allTasks = await services.taskStore.all();
   const tasks = indexTasksById(allTasks.map((task) => task.id === reopenedTask.id ? reopenedTask : task));
@@ -1402,7 +1465,7 @@ function buildPreflightReopenedTask(previous: Task): Task {
 }
 
 async function releaseMatchingOwnedTasks(
-  taskStore: ReturnType<typeof getServices>["taskStore"],
+  taskStore: Services["taskStore"],
   tasks: readonly Task[],
   sessionId: string,
 ): Promise<readonly Task[]> {
@@ -1592,34 +1655,35 @@ function buildUpdateContinuationInput(
 }
 
 async function applyUpdateContinuation(
-  deps: Parameters<typeof syncTaskContinuation>[0],
+  continuationDeps: Parameters<typeof syncTaskContinuation>[0],
   previous: Task | undefined,
   updated: Task,
   patch: UpdateTaskInput,
   autoClaimed: boolean,
   edits: ContinuationEditInput,
+  deps: TaskCommandDeps,
 ): Promise<void> {
   const at = patch.status === undefined && !hasAnyPatchField(patch)
     ? new Date().toISOString()
     : updated.updatedAt;
-  const existing = await loadTaskContinuationSummary(deps.continuationStore, updated.id);
+  const existing = await loadTaskContinuationSummary(continuationDeps.continuationStore, updated.id);
   const keyDecisions = mergeDecisionEdits(existing?.keyDecisions ?? [], edits);
   const input = buildUpdateContinuationInput(previous, updated, patch, autoClaimed, edits, keyDecisions, at);
   const summary = buildTaskContinuationSummary(updated, existing, input.summary);
 
   if (updated.status === "completed") {
-    await deps.continuationStore.archiveCompleted(summary);
+    await continuationDeps.continuationStore.archiveCompleted(summary);
   } else {
-    await deps.continuationStore.upsertActive(summary);
+    await continuationDeps.continuationStore.upsertActive(summary);
   }
 
   for (const event of input.events) {
-    await deps.continuationHistory.append(updated.id, event);
+    await continuationDeps.continuationHistory.append(updated.id, event);
   }
 
-  await refreshNowMd();
+  await refreshNowMd(deps);
   if (updated.status === "completed" && updated.contractId) {
-    await maybeFinalizeTaskContract(updated);
+    await maybeFinalizeTaskContract(updated, deps);
   }
 }
 
@@ -1681,7 +1745,7 @@ function buildDecisionEvents(edits: ContinuationEditInput, at: string) {
   ];
 }
 
-function registerNextCommand(taskCmd: Command, program: Command): void {
+function registerNextCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("next")
     .description("Claim the next ready task for the current session (one at a time)")
@@ -1692,11 +1756,11 @@ function registerNextCommand(taskCmd: Command, program: Command): void {
     .option("--force", "Claim another task even if this session already holds one")
     .option("--session <id>", "Explicit session id (defaults to detected session)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveOwnershipSessionId(opts.session);
-      await maybeReleaseStaleOwnedTasks([sessionId]);
+      const sessionId = await resolveOwnershipSessionId(opts.session, deps);
+      await maybeReleaseStaleOwnedTasks(deps, [sessionId]);
 
       const filters: ReadyTasksFilters = {
         limit: parseLimit(opts.limit),
@@ -1720,7 +1784,7 @@ function registerNextCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerReadyCommand(taskCmd: Command, program: Command): void {
+function registerReadyCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("ready")
     .description("List actionable pending tasks with no unresolved blockers")
@@ -1732,9 +1796,10 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
     .option("--unassigned", "Only include unassigned tasks")
     .option("--no-hints", "Disable lesson hints surfaced from past completed tasks")
     .option("--compact", "Output compact JSON envelope for agents/scripts (use with --json)")
+    .option("--full", "Include full descriptions, hint reasons, and matchedKeywords in --json output")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       if (opts.compact === true && !isJson) {
         throw new MaestroError("Invalid flag combination: --compact requires --json", [
@@ -1742,8 +1807,9 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
         ]);
       }
       const useCompactJson = opts.compact === true;
+      const isFull = opts.full === true;
       const showHints = opts.hints !== false;
-      await maybeReleaseStaleOwnedTasks();
+      await maybeReleaseStaleOwnedTasks(deps);
 
       const filters: ReadyTasksFilters = {
         limit: parseLimit(opts.limit),
@@ -1769,12 +1835,39 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
         new Date(),
         showHints ? services.taskCandidateStore : undefined,
       );
+      if (isJson && !isFull) {
+        output(true, briefings.map(summarizeBriefing), () => []);
+        return;
+      }
       output(isJson, briefings, formatTaskBriefingList);
     });
 }
 
-async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []): Promise<void> {
-  const services = getServices();
+const READY_DESCRIPTION_MAX = 200;
+const READY_HINT_REASON_MAX = 120;
+
+type ReadyHintSummary = Omit<TaskHint, "matchedKeywords">;
+interface ReadyBriefingSummary extends Omit<TaskBriefing, "hints"> {
+  readonly hints: readonly ReadyHintSummary[];
+}
+
+function summarizeBriefing(briefing: TaskBriefing): ReadyBriefingSummary {
+  const { description, hints, ...rest } = briefing;
+  return {
+    ...rest,
+    ...(description !== undefined ? { description: truncateText(description, READY_DESCRIPTION_MAX) } : {}),
+    hints: hints.map(({ matchedKeywords: _matchedKeywords, reason, ...hintRest }) => ({
+      ...hintRest,
+      reason: truncateText(reason, READY_HINT_REASON_MAX),
+    })),
+  };
+}
+
+async function maybeReleaseStaleOwnedTasks(
+  deps: TaskCommandDeps,
+  skipAssignees: readonly string[] = [],
+): Promise<void> {
+  const services = deps.getServices();
   const tasks = await services.taskStore.all();
   const before = new Map(tasks.map((task) => [task.id, task] as const));
   const skipSet = new Set(skipAssignees);
@@ -1804,7 +1897,7 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
   for (const assignee of staleOwners) {
     const ownedTasks = tasksByAssignee.get(assignee) ?? [];
     try {
-      await assertStaleContractsReclaimable(ownedTasks);
+      await assertStaleContractsReclaimable(ownedTasks, deps);
       const released = await releaseOwnedTasks(services.taskStore, assignee);
       await syncRecoveredStaleOwnerTasks(services, before, released);
       if (released.length > 0) {
@@ -1822,21 +1915,21 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
   }
 
   if (refreshedNowMd) {
-    await refreshNowMd();
+    await refreshNowMd(deps);
   }
 }
 
 const STALE_OWNER_LOOKUP_CONCURRENCY = 8;
 
 async function collectStaleOwners(
-  services: ReturnType<typeof getServices>,
+  services: Services,
   assignees: readonly string[],
 ): Promise<readonly string[]> {
   const staleOwners = new Set<string>();
 
   for (let index = 0; index < assignees.length; index += STALE_OWNER_LOOKUP_CONCURRENCY) {
     const chunk = assignees.slice(index, index + STALE_OWNER_LOOKUP_CONCURRENCY);
-    const statuses = await Promise.all(chunk.map(async (assignee) => {
+    const statuses = await Promise.all(chunk.map(async (assignee): Promise<string | undefined> => {
       const parsed = parseTaskOwnerId(assignee);
       if (!parsed) {
         return undefined;
@@ -1856,7 +1949,7 @@ async function collectStaleOwners(
 }
 
 async function syncRecoveredStaleOwnerTasks(
-  services: ReturnType<typeof getServices>,
+  services: Services,
   before: ReadonlyMap<string, Task>,
   released: readonly Task[],
 ): Promise<void> {
@@ -1884,12 +1977,12 @@ async function syncRecoveredStaleOwnerTasks(
   }
 }
 
-async function maybeCaptureCompletionHint(task: Task): Promise<void> {
+async function maybeCaptureCompletionHint(task: Task, deps: TaskCommandDeps): Promise<void> {
   if (task.status !== "completed") {
     return;
   }
 
-  const services = getServices();
+  const services = deps.getServices();
   try {
     await captureTaskCandidate(services.taskCandidateStore, task);
   } catch (error) {
@@ -1898,9 +1991,9 @@ async function maybeCaptureCompletionHint(task: Task): Promise<void> {
   }
 }
 
-async function maybeAttachClaimAnchor(taskId: string): Promise<void> {
+async function maybeAttachClaimAnchor(taskId: string, deps: TaskCommandDeps): Promise<void> {
   try {
-    const services = getServices();
+    const services = deps.getServices();
     const claimedAtCommit = await services.gitAnchor.resolveHeadCommit(process.cwd());
     if (!claimedAtCommit) {
       return;
@@ -1917,12 +2010,13 @@ async function maybeWarnMissingContractAfterClaim(
     readonly contractRequired: boolean;
     readonly noContract: boolean;
   },
+  deps: TaskCommandDeps,
 ): Promise<void> {
   if (task.contractId || opts.noContract) {
     return;
   }
 
-  const services = getServices();
+  const services = deps.getServices();
   const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
   const policy = opts.contractRequired
     ? "required"
@@ -1945,8 +2039,9 @@ async function enforceContractCompletionPolicy(
   task: Task,
   patch: UpdateTaskInput,
   opts: { readonly strictFlag: boolean; readonly noContract: boolean },
+  deps: TaskCommandDeps,
 ): Promise<void> {
-  const services = getServices();
+  const services = deps.getServices();
   const config = await services.config.load(resolveMaestroProjectRoot(process.cwd()));
 
   if (!task.contractId) {
@@ -2040,10 +2135,10 @@ function completedTaskUpdateRequiresReopen(id: string): MaestroError {
   ]);
 }
 
-async function maybeFinalizeTaskContract(task: Task): Promise<void> {
+async function maybeFinalizeTaskContract(task: Task, deps: TaskCommandDeps): Promise<void> {
   let closed: Contract | undefined;
   try {
-    const services = getServices();
+    const services = deps.getServices();
     closed = await services.contracts.closeForTask(
       task,
       await services.gitAnchor.resolveRepoRoot(process.cwd()),
@@ -2144,12 +2239,7 @@ function surfaceBrokenContractRecovery(task: Task, contract: Contract): void {
   );
 }
 
-function formatVerdictHint(verdict: {
-  readonly outOfScopeFiles: readonly string[];
-  readonly forbiddenTouched: readonly string[];
-  readonly unmetCriteria: readonly Array<{ readonly text: string }>;
-  readonly capExceeded?: { readonly actual: number; readonly cap: number };
-}): string {
+function formatVerdictHint(verdict: ContractVerdict): string {
   if (verdict.outOfScopeFiles.length > 0) {
     return `Out of scope: ${verdict.outOfScopeFiles.join(", ")}`;
   }
@@ -2157,7 +2247,7 @@ function formatVerdictHint(verdict: {
     return `Forbidden files touched: ${verdict.forbiddenTouched.join(", ")}`;
   }
   if (verdict.unmetCriteria.length > 0) {
-    return `Unmet criteria: ${verdict.unmetCriteria.map((item) => item.text).join(" | ")}`;
+    return `Unmet criteria: ${verdict.unmetCriteria.map((item: { text: string }) => item.text).join(" | ")}`;
   }
   if (verdict.capExceeded) {
     return `Touched ${verdict.capExceeded.actual} files, exceeding the cap of ${verdict.capExceeded.cap}`;
@@ -2169,10 +2259,11 @@ function formatVerdictHint(verdict: {
 async function maybeTransferClaimedContractOwnership(
   taskId: string,
   newActor: string,
+  deps: TaskCommandDeps,
   reason: "claim_reclaim" | "handoff_pickup" = "claim_reclaim",
 ): Promise<void> {
   try {
-    const services = getServices();
+    const services = deps.getServices();
     await services.contracts.transferOwnership(taskId, newActor, reason);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -2180,9 +2271,9 @@ async function maybeTransferClaimedContractOwnership(
   }
 }
 
-async function refreshNowMd(): Promise<void> {
+async function refreshNowMd(deps: TaskCommandDeps): Promise<void> {
   try {
-    const services = getServices();
+    const services = deps.getServices();
     const tasks = await services.taskStore.all();
     await services.taskNowMdWriter.write(tasks);
   } catch {
@@ -2196,8 +2287,9 @@ async function maybeReleaseStaleClaim(
   taskId: string,
   newSessionId: string,
   staleAfterRaw: unknown,
+  deps: TaskCommandDeps,
 ): Promise<void> {
-  const services = getServices();
+  const services = deps.getServices();
   const task = await services.taskStore.get(taskId);
   if (!task || !task.assignee || task.assignee === newSessionId) {
     return;
@@ -2228,7 +2320,7 @@ async function maybeReleaseStaleClaim(
   const ownedTasks = (await services.taskStore.all()).filter((candidate) =>
     candidate.assignee === task.assignee && candidate.status !== "completed"
   );
-  await assertStaleContractsReclaimable(ownedTasks);
+  await assertStaleContractsReclaimable(ownedTasks, deps);
   const before = new Map(ownedTasks.map((ownedTask) => [ownedTask.id, ownedTask] as const));
   const released = await releaseOwnedTasks(services.taskStore, task.assignee);
   await syncRecoveredStaleOwnerTasks(services, before, released);
@@ -2247,8 +2339,11 @@ function lastStaleClaimActivityMs(task: Pick<Task, "lastActivityAt" | "updatedAt
   return Number.isFinite(fallback) ? fallback : undefined;
 }
 
-async function assertStaleContractsReclaimable(tasks: readonly Task[]): Promise<void> {
-  const services = getServices();
+async function assertStaleContractsReclaimable(
+  tasks: readonly Task[],
+  deps: TaskCommandDeps,
+): Promise<void> {
+  const services = deps.getServices();
   for (const task of tasks) {
     if (!task.contractId) {
       continue;
@@ -2304,14 +2399,14 @@ function emitSilentSuccess(
   return true;
 }
 
-function registerSimilarCommand(taskCmd: Command, program: Command): void {
+function registerSimilarCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("similar <id>")
     .description("Show past tasks with keyword overlap across title, completion reason, receipt text, and linked contract text")
     .option("--limit <n>", "Maximum results (default 5, 0 = unlimited)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const limit = opts.limit === undefined ? 5 : parseLimit(opts.limit) ?? 5;
 
@@ -2340,7 +2435,7 @@ function registerSimilarCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerMineCommand(taskCmd: Command, program: Command): void {
+function registerMineCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("mine")
     .description("List tasks owned by the current session")
@@ -2348,10 +2443,10 @@ function registerMineCommand(taskCmd: Command, program: Command): void {
     .option("--status <status>", `Filter by status (${TASK_STATUSES.join("|")})`)
     .option("--limit <n>", "Maximum tasks to return")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveOwnershipSessionId(opts.session);
+      const sessionId = await resolveOwnershipSessionId(opts.session, deps);
 
       const filters: ListTasksFilters = {
         status: parseStatus(opts.status),
@@ -2363,15 +2458,17 @@ function registerMineCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerStuckCommand(taskCmd: Command, program: Command): void {
+function registerStuckCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("stuck")
     .description("List in_progress tasks with no activity for a while")
     .option("--older-than <duration>", "Inactivity threshold, e.g. 4h, 30m, 2d (default 4h)")
+    .option("--full", "Include every Task field in --json output (default: lean summary)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const isFull = opts.full === true;
 
       const thresholdMs = typeof opts.olderThan === "string"
         ? parseDuration(opts.olderThan, "--older-than")
@@ -2384,6 +2481,10 @@ function registerStuckCommand(taskCmd: Command, program: Command): void {
         .slice()
         .sort((a, b) => (a.lastActivityAt ?? a.updatedAt).localeCompare(b.lastActivityAt ?? b.updatedAt));
 
+      if (isJson && !isFull) {
+        output(true, stuck.map(summarizeTask), () => []);
+        return;
+      }
       output(isJson, stuck, formatTaskList);
     });
 }
@@ -2392,7 +2493,7 @@ function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
 
-function registerHeartbeatCommand(taskCmd: Command, program: Command): void {
+function registerHeartbeatCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("heartbeat <id>")
     .description("Bump the task's lastActivityAt timestamp without any other state change")
@@ -2400,16 +2501,16 @@ function registerHeartbeatCommand(taskCmd: Command, program: Command): void {
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
-      const services = getServices();
+    .action(async (id: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveOwnershipSessionId(opts.session);
+      const sessionId = await resolveOwnershipSessionId(opts.session, deps);
 
       const task = await heartbeatTask(services.taskStore, id, sessionId, {
         force: opts.force === true,
       });
 
-      await refreshNowMd();
+      await refreshNowMd(deps);
 
       if (emitSilentSuccess(isJson, opts, task)) return;
 

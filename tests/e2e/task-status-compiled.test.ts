@@ -200,7 +200,7 @@ describe("compiled task status + plan slug conversion", () => {
           blockedTracks: number;
         };
         tracks: Array<{ identifier: string; slug?: string; task: { slug?: string } }>;
-        tasksById: Record<string, { id: string }>;
+        tasksById?: Record<string, { id: string }>;
       }>(statusJson);
       expect(projection.header).toEqual({
         open: 12,
@@ -212,7 +212,13 @@ describe("compiled task status + plan slug conversion", () => {
       });
       const slugs = projection.tracks.map((t) => t.identifier);
       expect(slugs).toContain("implement/worktree-config-lock-race");
-      expect(projection.tasksById[worktree!.id]?.id).toBe(worktree!.id);
+      expect(projection.tasksById).toBeUndefined();
+
+      const statusJsonFull = await runCompiled(["task", "status", "--json", "--full"], tmpDir);
+      const fullProjection = expectJson<{
+        tasksById: Record<string, { id: string }>;
+      }>(statusJsonFull);
+      expect(fullProjection.tasksById[worktree!.id]?.id).toBe(worktree!.id);
     },
     SLOW_CLI_TIMEOUT_MS,
   );

@@ -13,7 +13,6 @@ function makePendingLoosening(): PendingLoosening {
     commitSha: "abc123def456abc123def456abc123def456abc1",
     commitTime: new Date().toISOString(),
     effectiveAt,
-    oldYaml: "required_witness_level:\n  high: witnessed-by-maestro",
     kind: "autopilot",
     file: ".maestro/policies/autopilot.yaml",
     edit: {
@@ -26,7 +25,7 @@ function makePendingLoosening(): PendingLoosening {
 }
 
 // Capture console.log calls
-function captureLog(fn: () => Promise<void>): Promise<string[]> {
+function captureLog(fn: () => Promise<unknown>): Promise<string[]> {
   const lines: string[] = [];
   const spy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     lines.push(args.map(String).join(" "));
@@ -48,6 +47,7 @@ describe("maestro policy pending", () => {
   it("lists a pending loosening in text mode", async () => {
     const loosening = makePendingLoosening();
     const deps = {
+      getServices: (() => ({})) as never,
       detectPendingLoosenings: async () => [loosening] as readonly PendingLoosening[],
     };
 
@@ -68,6 +68,7 @@ describe("maestro policy pending", () => {
   it("outputs JSON array in --json mode", async () => {
     const loosening = makePendingLoosening();
     const deps = {
+      getServices: (() => ({})) as never,
       detectPendingLoosenings: async () => [loosening] as readonly PendingLoosening[],
     };
 
@@ -81,12 +82,13 @@ describe("maestro policy pending", () => {
     const json = JSON.parse(lines.join("\n")) as PendingLoosening[];
     expect(Array.isArray(json)).toBe(true);
     expect(json).toHaveLength(1);
-    expect(json[0].kind).toBe("autopilot");
-    expect(json[0].commitSha).toBe(loosening.commitSha);
+    expect(json[0]?.kind).toBe("autopilot");
+    expect(json[0]?.commitSha).toBe(loosening.commitSha);
   });
 
   it("shows 'No pending loosenings.' when list is empty (text mode)", async () => {
     const deps = {
+      getServices: (() => ({})) as never,
       detectPendingLoosenings: async () => [] as readonly PendingLoosening[],
     };
 
@@ -103,6 +105,7 @@ describe("maestro policy pending", () => {
 
   it("outputs empty array in --json mode when no loosenings", async () => {
     const deps = {
+      getServices: (() => ({})) as never,
       detectPendingLoosenings: async () => [] as readonly PendingLoosening[],
     };
 

@@ -45,7 +45,7 @@ export function buildMissions(
   return {
     get: (id) => missionStore.get(id),
 
-    async resolveMissionId(explicit) {
+    async resolveMissionId(explicit): Promise<string | undefined> {
       if (explicit) return explicit;
 
       const missions = [...await missionStore.list()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -57,7 +57,7 @@ export function buildMissions(
       return missions[0]!.id;
     },
 
-    async loadFullState(id) {
+    async loadFullState(id): Promise<MissionFullState> {
       const [mission, features, assertions, checkpoints] = await Promise.all([
         missionStore.get(id),
         featureStore.list(id),
@@ -72,7 +72,10 @@ export function buildMissions(
       return { mission, features, assertions, checkpoints };
     },
 
-    async loadByMilestone(id, milestoneId) {
+    async loadByMilestone(id, milestoneId): Promise<{
+      readonly features: readonly Feature[];
+      readonly assertions: readonly Assertion[];
+    }> {
       const [features, assertions] = await Promise.all([
         featureStore.list(id, { milestoneId }),
         assertionStore.listByMilestone(id, milestoneId),
@@ -81,7 +84,7 @@ export function buildMissions(
       return { features, assertions };
     },
 
-    async resolveSingleActionableContext() {
+    async resolveSingleActionableContext(): Promise<ActiveMissionContext | undefined> {
       const missions = await missionStore.list();
       const mission = missions.find(isActiveMission)
         ?? (missions.length === 1 ? missions[0] : undefined);

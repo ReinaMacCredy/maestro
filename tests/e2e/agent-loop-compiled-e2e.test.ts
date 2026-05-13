@@ -37,8 +37,8 @@ describe("agent session loop (plan -> next -> update)", () => {
     expect(result.exitCode).toBe(0);
     const schema = expectJson<Record<string, unknown>>(result);
     expect(schema.type).toBe("object");
-    const defs = schema.$defs as Record<string, { required: string[] }>;
-    expect(defs.BatchTaskInput.required).toEqual(["title"]);
+    const defs = schema.$defs as Record<string, { required: string[] }> | undefined;
+    expect(defs?.BatchTaskInput?.required).toEqual(["title"]);
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("errors when neither --file nor --schema is given", async () => {

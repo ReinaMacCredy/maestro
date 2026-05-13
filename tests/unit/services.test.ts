@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getServices, initServices } from "@/services";
+import { createServices } from "@/services";
 
 describe("services composition root", () => {
   it("imports feature service builders directly instead of feature public surfaces", async () => {
@@ -24,18 +24,9 @@ describe("services composition root", () => {
     expect(source).not.toContain('./features/task/index.js');
   });
 
-  it("throws when getServices is called before initialization", async () => {
-    const freshServicesModule = await import(`@/services?uninitialized=${Date.now()}`);
+  it("createServices returns a fresh, fully-populated Services graph", () => {
+    const services = createServices(process.cwd());
 
-    expect(() => freshServicesModule.getServices()).toThrow(
-      "Services not initialized. Call initServices() first.",
-    );
-  });
-
-  it("initializes and returns the shared service instance", () => {
-    const services = initServices(process.cwd());
-
-    expect(getServices()).toBe(services);
     expect(services).toMatchObject({
       config: expect.any(Object),
       git: expect.any(Object),
@@ -56,5 +47,18 @@ describe("services composition root", () => {
       gitAnchor: expect.any(Object),
       replyStore: expect.any(Object),
     });
+  });
+
+  it("createServices applies overrides on top of the base graph", () => {
+    const customGit = { sentinel: true } as never;
+    const services = createServices(process.cwd(), { git: customGit });
+
+    expect(services.git).toBe(customGit);
+  });
+
+  it("createServices returns a fresh instance each call (no module-level cache)", () => {
+    const a = createServices(process.cwd());
+    const b = createServices(process.cwd());
+    expect(a).not.toBe(b);
   });
 });

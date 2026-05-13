@@ -11,7 +11,7 @@ type SpawnSyncLike = (
 
 export function readInstalledVersion(
   bin: string,
-  spawnSyncImpl: SpawnSyncLike = Bun.spawnSync,
+  spawnSyncImpl: SpawnSyncLike = Bun.spawnSync as unknown as SpawnSyncLike,
 ): string {
   const proc = spawnSyncImpl([bin, "--version"], {
     stdout: "pipe",

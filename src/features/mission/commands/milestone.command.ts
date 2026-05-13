@@ -3,7 +3,7 @@
  * Implements CLI commands: milestone list|status|seal
  */
 import type { Command } from "commander";
-import { getServices } from "@/services.js";
+import { type Services } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   listMilestones,
@@ -15,7 +15,14 @@ import {
 } from "../usecases/milestone-lifecycle.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
-export function registerMilestoneCommand(program: Command): void {
+interface MilestoneCommandDeps {
+  readonly getServices: () => Pick<Services, "missionStore" | "featureStore" | "assertionStore">;
+}
+
+export function registerMilestoneCommand(
+  program: Command,
+  deps: MilestoneCommandDeps,
+): void {
   const milestoneCmd = program
     .command("milestone")
     .description("Milestone lifecycle management")
@@ -26,8 +33,8 @@ export function registerMilestoneCommand(program: Command): void {
     .description("List all milestones for a mission with progress")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await listMilestones(
@@ -45,8 +52,8 @@ export function registerMilestoneCommand(program: Command): void {
     .description("Show detailed status for a specific milestone")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (milestoneId: string, opts) => {
-      const services = getServices();
+    .action(async (milestoneId: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await getMilestoneStatus(
@@ -65,8 +72,8 @@ export function registerMilestoneCommand(program: Command): void {
     .description("Seal a milestone after validation (requires all assertions to be passed or waived)")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
-    .action(async (milestoneId: string, opts) => {
-      const services = getServices();
+    .action(async (milestoneId: string, opts): Promise<void> => {
+      const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
       const result = await sealMilestone(

@@ -4,7 +4,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { readText } from "@/shared/lib/fs.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import { deriveRiskClassFromDiff } from "@/features/risk/index.js";
 import { readCurrentContractWithBackfill, readDraftContract } from "@/features/task/index.js";
@@ -23,7 +23,7 @@ interface PlanCheckCommandDeps {
 export function registerPlanCheckCommand(
   parent: Command,
   program: Command,
-  deps: PlanCheckCommandDeps = { getServices },
+  deps: PlanCheckCommandDeps,
 ): void {
   parent
     .command("check")

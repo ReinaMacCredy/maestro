@@ -264,12 +264,95 @@ Recorded evidence appears in `maestro task show` and the Mission Control task de
 maestro status --json
 maestro task ready --json --compact --limit 5
 maestro task show <id-or-slug>
+maestro task introspect <id-or-slug>     # full context: spec, verdict, budget, lints, blockers
 maestro task mine
 maestro task stuck --older-than 4h
 maestro task similar <id>
 ```
 
 `task show` and `task update` accept either `tsk-<id>` or a track slug like `implement/foo`. `task list --tracks` prints just the track headers (slugs + slugless legacy ids), one per line.
+
+### When to use `task introspect`
+
+Call `maestro task introspect <id>` when you need a single read-only digest
+of the full task surface — task + spec acceptance criteria + non-goals +
+latest verdict + cost-budget status + open lint violations + active
+blockers + last 5 evidence rows + recent commits since the last
+`session-start` anchor. Use it:
+
+- After context loss (compaction or fresh shell) to re-orient on a task
+  without re-reading the conversation.
+- Before committing to work on a task to confirm what "done" requires.
+- As a sanity check before requesting the final verdict.
+
+Output is structured markdown by default; `--json` returns the same view as a
+parseable object.
+
+**Watch for these introspection fields after compaction or long runs**
+(documented in `docs/edge-cases.md`):
+
+- `anchor.stale=true` — the last `session-start` head SHA is no longer
+  reachable. Re-anchor via `maestro session start <id>` before trusting
+  "recent commits".
+- `loopWarning` — the same `(kind, payloadHash)` row repeated three or more
+  times without a verdict-request boundary. Change approach or run
+  `maestro ralph review --task <id> --stuck-threshold 1` to confirm
+  convergence.
+
+### Dev-time observability with `task observe`
+
+Use `maestro task observe` for ad-hoc, per-worktree observability *while
+you work*: query a metric or tail a log without leaving the loop. It is
+distinct from `maestro runtime check`, which gates deploys.
+
+```bash
+maestro task observe metrics 'rate(http_requests_total[1m])' --task <id>
+maestro task observe metrics 'up' --task <id> --provider-base-url http://prom:9090
+maestro task observe logs --task <id> --log-file /tmp/dev.log --lines 20 --filter ERROR
+```
+
+- Provider URL precedence: `--provider-base-url` > `MAESTRO_PROMETHEUS_URL`
+  > `http://localhost:9090`.
+- Log path precedence: `--log-file` > `MAESTRO_DEV_LOG_FILE` > error.
+- `--record` writes a `manual-note` evidence row tagged
+  `[dev-observation]` at `agent-claimed-locally`. The row is advisory; it
+  does not gate the verdict.
+
+When to call:
+
+- Before editing, to baseline error rate or a custom counter.
+- After edits, to confirm the new path is live before requesting the verdict.
+- When `task introspect` surfaces `loopWarning`, to see *why* the same
+  command keeps failing.
+
+See `docs/dev-observability.md`.
+
+## Session lifecycle
+
+Two verbs anchor non-trivial work to a specific task:
+
+- `maestro session start <taskId>` — runs the baseline architecture-lint
+  pass, optionally invokes `maestro:setup`/`maestro:verify` package-json
+  scripts (when defined), writes an orient digest at
+  `.maestro/runs/<taskId>/orient.md`, and records a `session-start`
+  evidence row whose `headSha` payload anchors "recent commits" for future
+  introspection.
+- `maestro session exit <taskId>` — re-runs the baseline arch-lint pass,
+  reads the latest verdict, checks the working tree, writes
+  `.maestro/runs/<taskId>/progress.md`, and records a `session-exit`
+  evidence row. Exit code: `0` clean, `1` baseline regressed, `2`
+  arch-lint error-severity violations present.
+
+When to call:
+
+- At the start of any non-trivial task: `maestro session start <id>`.
+- At the end before requesting the final verdict: `maestro session exit <id>`.
+- After compaction or any context loss to re-orient: `maestro task introspect <id>`.
+
+`session start` blocks if the baseline arch-lint pass has error-severity
+violations. Recover by reverting the unhealthy commit or
+`git reset --hard <last-green-tag>` before retrying. The explicit
+`maestro recover` verb arrives in Phase 2.
 
 ## Status view
 
@@ -366,7 +449,103 @@ maestro task prune --dry-run
 maestro task prune [--keep N] [--candidates-only|--continuations-only] [--all]
 ```
 
+Reset working tree to a known-green state (Phase 2):
+```bash
+maestro recover --task <id>                  # reset to last PASS verdict's tree
+maestro recover --task <id> --to <commit>    # reset to an explicit ref
+maestro recover --task <id> --dry-run        # show plan without applying
+maestro recover --task <id> --force          # bypass dirty-tree check (destructive)
+```
+
+`recover` finds the latest PASS verdict for the task, resolves its `tree_sha`
+to a commit, runs `git reset --hard`, drops `.maestro/runs/<id>/`, and records
+a `recovery` Evidence row at `witnessed-by-maestro`. Refuses to run when the
+working tree is dirty unless `--force`.
+
+Convergence loop (Phase 2):
+```bash
+maestro ralph review --task <id>                         # run convergence oracle
+maestro ralph review --task <id> --stuck-threshold 3     # custom stuck threshold
+```
+
+`ralph review` aggregates findings from arch lints, the Trust Verifier, AI
+review, and threat-model evidence. Records a `ralph-iteration` Evidence row
+with a stable `findingsHash`. Exits 0 when converged (no error-severity
+findings), 1 when not converged, 2 when *stuck* — i.e. the same hash has
+shown up `--stuck-threshold` (default 3) iterations in a row, signalling the
+loop is not making progress.
+
 Deeper recovery patterns live in `./reference/recovery.md`. The full command surface lives in `./reference/commands.md`.
+
+## Garbage collection
+
+On-demand GC verbs scan the repo for problems and either report them or open
+fixup PRs. Phase 2 ships `gc doc-gardening`:
+
+```bash
+maestro gc doc-gardening                  # report stale path/link references
+maestro gc doc-gardening --task <id>      # also record findings as evidence
+maestro gc doc-gardening --json
+```
+
+Scans `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/**/*.md`, `.maestro/**/*.md`,
+and `skills/**/*.md` for path references that don't resolve. Records a
+`doc-gardening` Evidence row when `--task` is supplied.
+
+Phase 4 adds two more GC verbs:
+
+```bash
+maestro gc slop-cleanup [--min-severity info|warn|error] [--json]
+maestro gc plan-regen --task <id> [--json]
+```
+
+`gc slop-cleanup` runs the architecture-lint corpus across `src/**` and
+groups violations by file. The output lists by-rule and by-severity counts
+plus the top 10 offending files. Read-only — no PR opened, no mutation.
+
+`gc plan-regen --task <id>` reports plan-vs-state drift: no plan file
+found, missing acceptance-criteria coverage in the plan, evidence rows
+recorded after the last PASS verdict, recorded `lint-violation` rows, and
+active blockers.
+
+## Sprint contract (Phase 4)
+
+```bash
+maestro contract sprint --task <id>                     # snapshot
+maestro contract sprint --task <id> --propose "..."     # record proposal as evidence
+```
+
+The sprint snapshot includes criteria progress, amendment-budget remaining,
+and the 5 most recent amendments. `--propose` records a `manual-note`
+evidence row tagged as a sprint-contract proposal. It does NOT mutate the
+contract — humans/agents review and apply via `maestro contract amend` if
+approved.
+
+## Inspect a run (Phase 5)
+
+After a session ends or after compaction, use `inspect` to pull a post-mortem
+view without re-running anything:
+
+```bash
+maestro inspect run <task-id>            # last 10 evidence rows + verdict history + run-dir artifacts
+maestro inspect run <task-id> --tail 20  # widen the tail
+```
+
+Reads `.maestro/runs/<id>/{orient,progress,plan}.md` plus `state.json`,
+recent evidence rows, and the verdict history. Read-only.
+
+## Worktree create (Phase 5)
+
+For larger features, create an isolated worktree so the main checkout stays
+clean:
+
+```bash
+maestro worktree create harness-pivot                  # base=main, prefix=feat
+maestro worktree create fix-x --base develop --prefix fix
+```
+
+Wraps `git worktree add -b <prefix>/<slug>` and provisions an empty
+`.maestro/runs/` directory inside the new tree.
 
 ## MCP tools (when available)
 

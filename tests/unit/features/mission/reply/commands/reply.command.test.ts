@@ -28,11 +28,11 @@ async function loadRegisterReplyCommand(replyStore: {
   write: (reply: Record<string, unknown>) => Promise<void>;
   list: () => Promise<readonly Record<string, unknown>[]>;
 }) {
-  mock.module("@/services.js", () => ({
-    getServices: () => ({ replyStore }),
-  }));
-
-  return import(`@/features/mission/reply/commands/reply.command.ts?test=${Date.now()}-${Math.random()}`);
+  const mod = await import("@/features/mission/reply/commands/reply.command.js");
+  const deps = { getServices: () => ({ replyStore } as never) };
+  return {
+    registerReplyCommand: (program: Command): void => mod.registerReplyCommand(program, deps),
+  };
 }
 
 beforeEach(async () => {

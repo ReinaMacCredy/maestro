@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
-import { getServices, type Services } from "@/services.js";
+import { type Services } from "@/services.js";
 import { exitCodeForDecision, printVerdict, requestVerdict } from "@/features/verdict/index.js";
 import { readCiEnv } from "../domain/ci-env.js";
 import { runCiVerify } from "../usecases/run-ci-verify.js";
@@ -30,7 +30,7 @@ interface CiVerifyCommandDeps {
 export function registerCiVerifyCommand(
   parent: Command,
   program: Command,
-  deps: CiVerifyCommandDeps = { getServices },
+  deps: CiVerifyCommandDeps,
 ): void {
   parent
     .command("verify")

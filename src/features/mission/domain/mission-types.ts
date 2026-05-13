@@ -187,6 +187,16 @@ export interface Mission {
   readonly completedMilestoneIds?: readonly string[];
 }
 
+/** Lean projection of {@link Mission} for list endpoints. */
+export interface MissionSummary {
+  readonly id: string;
+  readonly title: string;
+  readonly status: MissionStatus;
+  readonly milestoneCount: number;
+  readonly featureCount: number;
+  readonly updatedAt: string;
+}
+
 /** Checkpoint - saved state snapshot */
 export interface Checkpoint {
   readonly id: string;

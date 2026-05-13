@@ -2,10 +2,14 @@ import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
-import { getServices, type Services } from "@/services.js";
-import { amendContract } from "../usecases/amend-contract.usecase.js";
+import { type Services } from "@/services.js";
+import { amendContract as defaultAmendContract } from "../usecases/amend-contract.usecase.js";
 import { getCurrentContract } from "../usecases/get-current-contract.usecase.js";
 import { getContractHistory } from "../usecases/get-contract-history.usecase.js";
+import {
+  contractSprint as defaultContractSprint,
+  formatContractSprintLines,
+} from "../usecases/contract-sprint.usecase.js";
 import { generateContractAmendmentId } from "../domain/contract/contract-state.js";
 import type { Contract, ContractAmendment } from "../domain/contract/contract-types.js";
 
@@ -14,12 +18,13 @@ interface ContractL2Deps {
     Services,
     "contractVersionStore" | "contractStore" | "evidenceStore"
   >;
-  readonly amendContract: typeof amendContract;
+  readonly amendContract?: typeof defaultAmendContract;
+  readonly contractSprint?: typeof defaultContractSprint;
 }
 
 export function registerContractL2Command(
   program: Command,
-  deps: ContractL2Deps = { getServices, amendContract },
+  deps: ContractL2Deps,
 ): void {
   const contractCmd = program
     .command("contract")
@@ -28,6 +33,41 @@ export function registerContractL2Command(
   registerShowSubcommand(contractCmd, program, deps);
   registerAmendSubcommand(contractCmd, program, deps);
   registerHistorySubcommand(contractCmd, program, deps);
+  registerSprintSubcommand(contractCmd, program, deps);
+}
+
+function registerSprintSubcommand(
+  parent: Command,
+  root: Command,
+  deps: ContractL2Deps,
+): void {
+  parent
+    .command("sprint")
+    .description(
+      "Show sprint snapshot (criteria, amendment budget) and optionally record a proposal",
+    )
+    .requiredOption("--task <id>", "Task id")
+    .option("--propose <text>", "Record a sprint-contract proposal as evidence")
+    .option("--proposed-by <actor>", "Optional actor id for the proposal")
+    .option("--json", "Output as JSON")
+    .action(async (opts): Promise<void> => {
+      const services = deps.getServices();
+      const isJson = resolveJsonFlag(opts, root);
+      const fn = deps.contractSprint ?? defaultContractSprint;
+      const result = await fn(
+        {
+          contractVersionStore: services.contractVersionStore,
+          contractStore: services.contractStore,
+          evidenceStore: services.evidenceStore,
+        },
+        {
+          taskId: opts.task,
+          ...(typeof opts.propose === "string" ? { propose: opts.propose } : {}),
+          ...(typeof opts.proposedBy === "string" ? { proposedBy: opts.proposedBy } : {}),
+        },
+      );
+      output(isJson, result, formatContractSprintLines);
+    });
 }
 
 // ─── show ────────────────────────────────────────────────────────────────────
@@ -39,7 +79,7 @@ function registerShowSubcommand(parent: Command, root: Command, deps: ContractL2
     .requiredOption("--task <id>", "Task id")
     .option("--at-version <n>", "Show a specific version (default: current)", parsePositiveInt)
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root);
 
@@ -169,7 +209,7 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
     .option("--remove-path <p>", "Remove a path from the scope (repeat for multiple)", collect, [] as string[])
     .requiredOption("--reason <str>", "Reason for the amendment")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root);
 
@@ -227,7 +267,7 @@ function registerAmendSubcommand(parent: Command, root: Command, deps: ContractL
         },
       };
 
-      const { newVersion } = await deps.amendContract(
+      const { newVersion } = await (deps.amendContract ?? defaultAmendContract)(
         services.contractVersionStore,
         services.contractStore,
         services.evidenceStore,
@@ -282,7 +322,7 @@ function registerHistorySubcommand(parent: Command, root: Command, deps: Contrac
     .description("List all versioned contract snapshots for a task in ascending order")
     .requiredOption("--task <id>", "Task id")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, root);
 
