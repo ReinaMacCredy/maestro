@@ -349,11 +349,17 @@ function buildHomeActions(
     });
   }
 
-  actions.push({
-    label: "Run environment checks",
-    command: "maestro doctor",
-    detail: "Verify git and config health before starting work.",
-  });
+  // Only surface the doctor suggestion when something is actually wrong —
+  // showing it on a clean repo misleads users into thinking they need to
+  // run diagnostics on a healthy project.
+  const hasFailingCheck = checks.some((check) => check.status !== "ok");
+  if (hasFailingCheck) {
+    actions.push({
+      label: "Run environment checks",
+      command: "maestro doctor",
+      detail: "Verify git and config health before starting work.",
+    });
+  }
 
   return actions;
 }

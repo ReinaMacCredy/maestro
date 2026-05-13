@@ -551,18 +551,23 @@ Wraps `git worktree add -b <prefix>/<slug>` and provisions an empty
 
 If your runtime exposes maestro MCP tools, prefer them over the CLI verbs above — they return structured JSON without text parsing. The MCP server is a thin wrapper around the same use cases the CLI calls, so semantics are identical and the CLI examples in this skill remain the source of truth for behavior.
 
-| MCP tool | CLI equivalent |
-|----------|----------------|
-| `maestro_task_list`, `maestro_task_get` | `maestro task list`, `maestro task show` |
-| `maestro_task_create` | `maestro task create` (or `maestro task q` for quick capture) |
-| `maestro_task_claim`, `maestro_task_complete` | `maestro task claim`, `maestro task update --status completed` |
-| `maestro_task_block`, `maestro_task_unblock` | `maestro task block`, `maestro task unblock` |
-| `maestro_evidence_record`, `maestro_evidence_list` | `maestro evidence record`, `maestro evidence list` |
-| `maestro_contract_show`, `maestro_contract_amend` | `maestro contract show`, `maestro contract amend` |
+| MCP tool | CLI equivalent | When |
+|----------|----------------|------|
+| `maestro_task_list`, `maestro_task_get` | `maestro task list`, `maestro task show` | discovery |
+| `maestro_task_create` | `maestro task create` (or `maestro task q` for quick capture) | new work |
+| `maestro_task_claim`, `maestro_task_complete` | `maestro task claim`, `maestro task update --status completed` | lifecycle |
+| `maestro_task_block`, `maestro_task_unblock` | `maestro task block`, `maestro task unblock` | dependency edges |
+| `maestro_evidence_record`, `maestro_evidence_list` | `maestro evidence record`, `maestro evidence list` | proof rows |
+| `maestro_contract_show`, `maestro_contract_amend` | `maestro contract show`, `maestro contract amend` | scope mgmt |
+| `maestro_verdict_show`, `maestro_verdict_request` | `maestro verdict show`, `maestro verdict request` | gate decision |
+| `maestro_policy_check` | (CLI: rolled into `verdict request`) | risk + autopilot |
+| `maestro_handoff_list`, `maestro_handoff_show` | `maestro handoff list`, `maestro handoff show` | inbox |
+| `maestro_handoff_open_for_task` | (use `handoff_list --taskId`) | resume hint |
+| `maestro_handoff_pickup` | `maestro handoff pickup` | take ownership |
 
 If MCP is not available (no `maestro_*` tool prefix in your tool list), fall back to the CLI verbs documented above.
 
-MCP input schemas are strict: unknown fields fail rather than getting silently dropped. Match the documented field names exactly; if a tool errors on what looks like a valid call, check spelling first (e.g., `missionId` not `missionID`).
+MCP input schemas are strict: unknown fields fail rather than getting silently dropped. Match the documented field names exactly; if a tool errors on what looks like a valid call, check spelling first (e.g., `missionId` not `missionID`). The `task_get` tool takes `id`; cross-domain tools (`evidence_list`, `verdict_show`, `contract_show`) take `taskId`. `task_complete` accepts either `summary` or `reason` (alias for the CLI's `--reason`).
 
 ## Reference
 
