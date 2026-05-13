@@ -36,12 +36,22 @@ describe("extractKeywords", () => {
   });
 
   it("drops pure-numeric tokens", () => {
-    const result = extractKeywords("fix 42 bug and 2026 timeout");
+    const result = extractKeywords("argon2 42 hash and 2026 timeout");
     expect(result).not.toContain("42");
     expect(result).not.toContain("2026");
-    expect(result).toContain("fix");
-    expect(result).toContain("bug");
+    expect(result).toContain("argon2");
+    expect(result).toContain("hash");
     expect(result).toContain("timeout");
+  });
+
+  it("drops generic task verbs and meta-nouns that surface false-positive hints", () => {
+    const result = extractKeywords("fix bug add feature refactor task");
+    expect(result).not.toContain("fix");
+    expect(result).not.toContain("bug");
+    expect(result).not.toContain("add");
+    expect(result).not.toContain("feature");
+    expect(result).not.toContain("refactor");
+    expect(result).not.toContain("task");
   });
 
   it("dedupes while preserving first-occurrence order", () => {
@@ -64,8 +74,8 @@ describe("extractKeywords", () => {
   });
 
   it("handles snake_case and kebab-case by splitting on separators", () => {
-    const result = extractKeywords("fix_login_endpoint and jwt-middleware");
-    expect(result).toContain("fix");
+    const result = extractKeywords("authn_login_endpoint and jwt-middleware");
+    expect(result).toContain("authn");
     expect(result).toContain("login");
     expect(result).toContain("endpoint");
     expect(result).toContain("jwt");

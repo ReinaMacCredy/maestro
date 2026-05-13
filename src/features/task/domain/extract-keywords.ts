@@ -18,6 +18,12 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
   "all", "any", "both", "each", "few", "more", "most", "other", "some",
   "such", "nor", "not", "only", "own", "same", "too", "very", "just",
   "also", "than", "from",
+  // Generic task verbs and meta-nouns. These appear in nearly every task
+  // title, so matching on them surfaces unrelated tasks as false-positive
+  // hints. Drop them so candidate ranking keys off specific nouns instead.
+  "fix", "add", "remove", "bump", "ship", "make", "use", "run", "set",
+  "new", "old", "refactor", "rename", "move", "change", "drop", "task",
+  "tasks", "issue", "bug", "feature",
 ]);
 
 const MIN_KEYWORD_LENGTH = 3;

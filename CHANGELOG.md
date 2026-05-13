@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.80.8 - UAT round-3 mop-up: contract-lock hint upgrade, task-ready hint signal cleanup
+
+Last two carry-overs from round-3 UAT, addressed in one shot:
+
+### Changed
+
+- **Contract-lock failure hints now name the template path and CLI shortcut.**
+  The MaestroError raised when `maestro task contract lock` fails on a
+  draft was telling agents what was missing without telling them where to
+  find the schema. The error now points at
+  `.maestro/tasks/contract-templates/default.md` and surfaces the
+  `--from default` shortcut, in addition to the `contract show` repro
+  command.
+- **`task ready` hints filter out generic task-verb noise.** The keyword
+  extractor's stop-list now drops `fix`, `add`, `remove`, `bump`,
+  `refactor`, `task`, `bug`, `feature`, and other meta-nouns that
+  appeared in nearly every task title and so dominated the candidate
+  index. Hints surfaced by `task ready` (and `findSimilarTasks`) now key
+  off specific domain nouns — `argon2`, `jwt`, `middleware`, etc. —
+  instead of producing matches purely on shared verbs.
+
 ## 0.80.7 - UAT round-3 followups: MCP tool table coverage, doctor-suggestion gating
 
 Two more findings from round-3 UAT:
