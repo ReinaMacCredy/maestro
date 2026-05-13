@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.80.3 - token-budget doctrine: MCP success responses minified, no duplicate structuredContent
+
+Token optimization sweep grounded in the doctrine doc and Anthropic guidance
+on writing tools for agents.
+
+### Changed
+
+- **MCP success responses** drop the duplicate `structuredContent` field.
+  Per the existing doctrine ("text content in `content[0].text` is the
+  authoritative payload"), the typed copy was pure duplication. Removing it
+  cuts response size for every successful MCP tool call.
+- **MCP success responses** are minified (no `null, 2` pretty-print).
+  Indentation is pure whitespace overhead for agent consumers.
+
+### Removed
+
+- `src/features/mcp/server/schemas/outputs.ts` — dead `outputSchema` Zod
+  definitions that were never wired in.
+
+### Doc
+
+- `docs/token-budget.md` MCP section updated to reflect minified text and
+  no-`structuredContent` convention.
+
 ## 0.80.2 - UAT round-2 follow-ups: token-budget probe binary, slug-aware claim/unclaim
 
 Round-2 UAT against v0.80.1 confirmed all five round-1 fixes held, then

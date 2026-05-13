@@ -54,8 +54,10 @@ Human-readable CLI output is already concise and unchanged.
 - The `paginate()` envelope still surfaces `total` and `hasMore` so an
   agent that needs more knows to ask.
 
-Tool registrations no longer carry `outputSchema`. The text content in
-`content[0].text` is the authoritative payload.
+Tool registrations no longer carry `outputSchema`, and successful results no
+longer emit `structuredContent`. The text content in `content[0].text` is the
+sole authoritative payload. JSON is minified (no pretty-print indentation) so
+agents pay only for the payload bytes, not whitespace.
 
 Error rows use the doctrine shape:
 

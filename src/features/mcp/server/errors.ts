@@ -80,8 +80,7 @@ function deriveErrorCode(message: string, fallback: string): string {
 export function toCallToolResult<T = unknown>(result: McpToolResult<T>): CallToolResult {
   if (result.ok) {
     return {
-      content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
-      structuredContent: result.data as Record<string, unknown>,
+      content: [{ type: "text", text: JSON.stringify(result.data) }],
     };
   }
   const errorPayload: Record<string, unknown> = {
