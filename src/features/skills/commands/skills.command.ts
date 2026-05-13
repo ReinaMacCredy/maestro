@@ -23,6 +23,7 @@ import {
   resolveMaestroExternalSkillsRoot,
 } from "@/shared/domain/defaults.js";
 import { execArgv } from "@/shared/lib/shell.js";
+import { firstSentence, truncateText } from "@/shared/lib/truncate.js";
 import { listSkillTargetProviders, type ProviderId } from "@/infra/domain/providers.js";
 import { injectAgentBlocks } from "@/infra/usecases/manage-agents.usecase.js";
 
@@ -60,17 +61,10 @@ const SKILL_DESCRIPTION_MAX = 200;
 function summarizeSkill(skill: SkillRecord): SkillSummary {
   return {
     name: skill.name,
-    description: truncateDescription(skill.description),
+    description: truncateText(firstSentence(skill.description), SKILL_DESCRIPTION_MAX),
     scope: skill.scope,
     source: skill.source,
   };
-}
-
-function truncateDescription(value: string): string {
-  const firstSentence = value.match(/^.*?[.!?](?=\s|$)/);
-  const candidate = firstSentence?.[0] ?? value;
-  if (candidate.length <= SKILL_DESCRIPTION_MAX) return candidate;
-  return candidate.slice(0, SKILL_DESCRIPTION_MAX - 1).trimEnd() + "…";
 }
 
 export interface SkillDiagnostic {

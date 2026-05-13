@@ -6,6 +6,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { summarizeTask } from "@/shared/lib/projection.js";
+import { truncateText } from "@/shared/lib/truncate.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
@@ -15,6 +16,7 @@ import { unclaimTask } from "../usecases/unclaim-task.usecase.js";
 import { blockTasks, unblockTasks } from "../usecases/manage-task-blockers.usecase.js";
 import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
 import { readyTaskPage, readyTasks, type TaskBriefing } from "../usecases/ready-tasks.usecase.js";
+import type { TaskHint } from "../usecases/match-candidates.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import { planTasks, validatePlanTasks } from "../usecases/plan-tasks.usecase.js";
 import { buildBatchInputSchema } from "../usecases/batch-input-schema.usecase.js";
@@ -529,8 +531,7 @@ function toTaskStatusJson(
       tasksById: Object.fromEntries(projection.tasksById),
     };
   }
-  // Doctrine: digest (no `tasksById`). The map duplicated data already in
-  // `tracks[].task`/`steps[]`. Recover the full lookup with `--full`.
+  // Doctrine: digest (no `tasksById`). Recover the full lookup with `--full`.
   return {
     header: projection.header,
     tracks: projection.tracks.map((track) => ({
@@ -1845,21 +1846,21 @@ function registerReadyCommand(taskCmd: Command, program: Command, deps: TaskComm
 const READY_DESCRIPTION_MAX = 200;
 const READY_HINT_REASON_MAX = 120;
 
-function summarizeBriefing(briefing: TaskBriefing): Record<string, unknown> {
+type ReadyHintSummary = Omit<TaskHint, "matchedKeywords">;
+interface ReadyBriefingSummary extends Omit<TaskBriefing, "hints"> {
+  readonly hints: readonly ReadyHintSummary[];
+}
+
+function summarizeBriefing(briefing: TaskBriefing): ReadyBriefingSummary {
   const { description, hints, ...rest } = briefing;
   return {
     ...rest,
-    ...(description !== undefined ? { description: truncateReadyText(description, READY_DESCRIPTION_MAX) } : {}),
-    hints: hints.map(({ matchedKeywords: _omit, reason, ...hintRest }) => ({
+    ...(description !== undefined ? { description: truncateText(description, READY_DESCRIPTION_MAX) } : {}),
+    hints: hints.map(({ matchedKeywords: _matchedKeywords, reason, ...hintRest }) => ({
       ...hintRest,
-      reason: truncateReadyText(reason, READY_HINT_REASON_MAX),
+      reason: truncateText(reason, READY_HINT_REASON_MAX),
     })),
   };
-}
-
-function truncateReadyText(value: string, max: number): string {
-  if (value.length <= max) return value;
-  return value.slice(0, max - 1).trimEnd() + "…";
 }
 
 async function maybeReleaseStaleOwnedTasks(
