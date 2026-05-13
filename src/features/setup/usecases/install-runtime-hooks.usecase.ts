@@ -13,7 +13,7 @@ export interface InstallRuntimeHooksDeps {
   readonly write?: (path: string, content: string) => Promise<void>;
 }
 
-const SENTINEL = "// maestro-managed: session hooks";
+const SENTINEL = "<!-- maestro-managed: session hooks -->";
 
 export async function installRuntimeHooks(
   projectRoot: string,
@@ -35,28 +35,33 @@ async function installFor(
   const read = deps.read ?? readFileSafe;
   const write = deps.write ?? writeFileSafe;
 
-  const existing = await read(runtime.settingsFile);
+  const existing = await read(runtime.hooksFile);
   const payload = renderHookPayload(runtime.id);
 
   if (existing && existing.includes(SENTINEL)) {
-    return { runtime: runtime.id, file: runtime.settingsFile, status: "already-present" };
+    return { runtime: runtime.id, file: runtime.hooksFile, status: "already-present" };
   }
 
   const next = existing && existing.trim().length > 0
     ? mergeHookIntoExisting(existing, payload)
     : `${SENTINEL}\n${payload}\n`;
 
-  await write(runtime.settingsFile, next);
-  return { runtime: runtime.id, file: runtime.settingsFile, status: "installed" };
+  await write(runtime.hooksFile, next);
+  return { runtime: runtime.id, file: runtime.hooksFile, status: "installed" };
 }
 
 function renderHookPayload(runtime: DetectedHostRuntime["id"]): string {
   const startCmd = 'maestro session start "$TASK_ID"';
   const exitCmd = 'maestro session exit "$TASK_ID"';
   const lines = [
-    `// SessionStart -> ${startCmd}`,
-    `// SessionEnd   -> ${exitCmd}`,
-    `// Host runtime: ${runtime}`,
+    `# Maestro session hooks (${runtime})`,
+    "",
+    "This file is informational. To activate these hooks in the host runtime,",
+    "wire them into the runtime's native config (e.g. `hooks.SessionStart` /",
+    "`hooks.SessionEnd` in Claude Code's `settings.json`).",
+    "",
+    `- SessionStart -> \`${startCmd}\``,
+    `- SessionEnd   -> \`${exitCmd}\``,
   ];
   return lines.join("\n");
 }

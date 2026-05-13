@@ -17,7 +17,7 @@ describe("detectHostRuntimes", () => {
     const result = await detectHostRuntimes(tmp);
     expect(result).toHaveLength(1);
     expect(result[0]?.id).toBe("claude-code");
-    expect(result[0]?.settingsFile.endsWith("settings.json")).toBe(true);
+    expect(result[0]?.hooksFile.endsWith("maestro-hooks.md")).toBe(true);
   });
 
   it("detects all three runtimes when all dirs exist", async () => {

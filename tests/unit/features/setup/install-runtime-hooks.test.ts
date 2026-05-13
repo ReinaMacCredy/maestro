@@ -12,10 +12,20 @@ describe("installRuntimeHooks", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.runtime).toBe("claude-code");
     expect(results[0]?.status).toBe("installed");
-    const content = await readFile(join(tmp, ".claude/settings.json"), "utf8");
+    const content = await readFile(join(tmp, ".claude/maestro-hooks.md"), "utf8");
     expect(content).toContain("maestro-managed: session hooks");
     expect(content).toContain('maestro session start "$TASK_ID"');
     expect(content).toContain('maestro session exit "$TASK_ID"');
+  });
+
+  it("does not write to the host runtime's settings.json", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "setup-hooks-"));
+    await mkdir(join(tmp, ".claude"), { recursive: true });
+    await installRuntimeHooks(tmp);
+    const settingsExists = await readFile(join(tmp, ".claude/settings.json"), "utf8")
+      .then(() => true)
+      .catch(() => false);
+    expect(settingsExists).toBe(false);
   });
 
   it("is idempotent — re-running reports already-present", async () => {
@@ -26,13 +36,13 @@ describe("installRuntimeHooks", () => {
     expect(second[0]?.status).toBe("already-present");
   });
 
-  it("preserves prior settings when merging", async () => {
+  it("preserves prior contents when merging", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "setup-hooks-"));
     await mkdir(join(tmp, ".cursor"), { recursive: true });
-    await writeFile(join(tmp, ".cursor/settings.json"), "// pre-existing user setting\n", "utf8");
+    await writeFile(join(tmp, ".cursor/maestro-hooks.md"), "pre-existing note\n", "utf8");
     await installRuntimeHooks(tmp);
-    const content = await readFile(join(tmp, ".cursor/settings.json"), "utf8");
-    expect(content).toContain("pre-existing user setting");
+    const content = await readFile(join(tmp, ".cursor/maestro-hooks.md"), "utf8");
+    expect(content).toContain("pre-existing note");
     expect(content).toContain("maestro-managed: session hooks");
   });
 
