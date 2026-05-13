@@ -147,13 +147,15 @@ export const TaskCompleteInput = z
     summary: z
       .string()
       .optional()
-      .describe("Optional one-line completion summary stored on the task receipt."),
+      .describe(
+        "One-line completion summary stored on the task receipt. Either `summary` or `reason` is required at runtime — calls with neither are rejected with INVALID_ARG to keep future sessions from inheriting a context-free completion.",
+      ),
     // CLI uses `--reason`; accept it as an alias so agents that read CLI
     // docs and then call the MCP tool don't trip on naming drift.
     reason: z
       .string()
       .optional()
-      .describe("Alias for `summary` (matches the CLI's --reason flag)."),
+      .describe("Alias for `summary` (matches the CLI's --reason flag). Provide this OR `summary`; calls with neither are rejected."),
   })
   .strict();
 

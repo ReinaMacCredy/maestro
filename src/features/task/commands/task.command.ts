@@ -407,7 +407,8 @@ function registerQuickCommand(taskCmd: Command, program: Command, deps: TaskComm
 function registerShowCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("show <id-or-slug>")
-    .description("Show task details (accepts a tsk-XXX id or a track slug)")
+    .alias("get")
+    .description("Show task details (accepts a tsk-XXX id or a track slug). Aliased as `get` to match the MCP `maestro_task_get` tool name.")
     .option("--json", "Output as JSON")
     .action(async (rawRef: string, opts): Promise<void> => {
       const services = deps.getServices();

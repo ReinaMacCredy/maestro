@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.80.10 - UAT round-4 brownfield: receipt invariant, mission-control task awareness, state/get aliases
+
+Round-4 brownfield UAT reported one HIGH-severity issue plus two
+medium-impact items affecting first-time agent ergonomics. All fixed.
+
+### Fixed
+
+- **`maestro_task_complete` now rejects calls without `summary` or
+  `reason` (HIGH).** The MCP handler accepted `{id}` with no receipt
+  text, silently producing context-free completions that violated the
+  `maestro-task` skill's hard rule #2 ("Every completion carries
+  `--reason`"). Now returns `INVALID_ARG { arg: "summary" }` with hints
+  pointing at the rule. Mirrors the CLI invariant. Tool description and
+  schema describe the constraint up front.
+- **Mission Control is no longer task-blind on a task-only project.**
+  When `missions=0` and the task store has at least one task, the home
+  headline reports `N tasks in this project` (not "No missions yet"),
+  the summary directs the user to `maestro task status`, and the action
+  list includes "See task queue" instead of presenting "Initialize this
+  project" / "Run maestro doctor" as the only paths forward.
+- **`maestro state` (bare) now defaults to a 24-hour summary.** Was
+  exiting 1 with subcommand help on stderr — confusing for first-timers
+  who expected a state summary. `state since <iso>` still works; bare
+  `state` now executes `state since now-24h` and exits 0.
+- **`maestro task get` is an alias for `task show`.** Agents reading the
+  MCP `maestro_task_get` tool name no longer trip on the CLI naming
+  mismatch.
+
 ## 0.80.9 - UAT round-4 fixes: MC doctor stale hint, note positional, audit noise, advisory polish
 
 Round-4 UAT (real MCP, greenfield) reported zero HIGH-severity issues and
