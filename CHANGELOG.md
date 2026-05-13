@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.80.4 - skills list --full drops body (876 KB savings)
+
+Doctrine-aligned regression: `skills list --full` was emitting every
+SKILL.md body inline. The doctrine has always said "`skills list` exposes
+summary records; `skills inspect <name>` reads the `body`", so the
+verbose list path was silently violating it.
+
+### Fixed
+
+- **`skills list --full --json`** drops the `body` field. The new
+  `--full` projection still includes `description`, `path`, `root`,
+  `metadata`, `source`, `scope` — the bits the summary projection
+  drops — but bodies are exclusive to `skills inspect <name>`.
+- **`maestro inspect token-budget`** measures the difference:
+  `skills list --full` shrank from 988 KB / 281 K tokens to 83 KB /
+  24 K tokens — a 92 % cut on the worst-offending list verb.
+
+### Added
+
+- `SkillDetail` projection type (`Omit<SkillRecord, "body">`) and
+  `detailSkill()` helper alongside the existing `summarizeSkill()`.
+
 ## 0.80.3 - token-budget doctrine: MCP success responses minified, no duplicate structuredContent
 
 Token optimization sweep grounded in the doctrine doc and Anthropic guidance

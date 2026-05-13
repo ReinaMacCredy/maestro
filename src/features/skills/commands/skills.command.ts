@@ -46,8 +46,8 @@ export interface SkillRecord {
  * Lean projection of {@link SkillRecord} for `skills list` JSON output.
  * Drops `body` (~1 MB across the catalog), `path` (absolute and unactionable
  * — agents address skills by `name`), and truncates `description` to the
- * first sentence. `--full` recovers the pre-doctrine shape; `skills inspect
- * <name>` returns the full record.
+ * first sentence. `--full` recovers `path`/`root`/`metadata` but still drops
+ * `body`; `skills inspect <name>` is the only verb that returns the body.
  */
 export interface SkillSummary {
   readonly name: string;
@@ -55,6 +55,9 @@ export interface SkillSummary {
   readonly scope: SkillRecord["scope"];
   readonly source: string;
 }
+
+/** `--full` projection: every public field except `body`. */
+export type SkillDetail = Omit<SkillRecord, "body">;
 
 const SKILL_DESCRIPTION_MAX = 200;
 
@@ -65,6 +68,11 @@ function summarizeSkill(skill: SkillRecord): SkillSummary {
     scope: skill.scope,
     source: skill.source,
   };
+}
+
+function detailSkill(skill: SkillRecord): SkillDetail {
+  const { body: _body, ...rest } = skill;
+  return rest;
 }
 
 export interface SkillDiagnostic {
@@ -114,7 +122,7 @@ export function registerSkillsCommand(program: Command): void {
       const result = await discoverSkills({ cwd: process.cwd(), homeDir: homedir(), scope });
       if (isJson) {
         const projected = {
-          skills: isFull ? result.skills : result.skills.map(summarizeSkill),
+          skills: isFull ? result.skills.map(detailSkill) : result.skills.map(summarizeSkill),
           diagnostics: isVerbose
             ? result.diagnostics
             : result.diagnostics.filter((d) => d.level === "error"),
