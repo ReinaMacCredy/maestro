@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.80.12 - UAT round-6 mop-up: task introspect same-id edge case
+
+Round-6 UAT (greenfield + brownfield, real MCP server, v0.80.11 binary)
+declared the agent loop "good enough" — both agents returned `YES`.
+This release closes the single MED edge case greenfield surfaced.
+
+### Fixed
+
+- **`task introspect --task X X` (same id in both slots) now errors
+  cleanly.** Previously the duplication guard only fired when the
+  positional and `--task` values differed, so `--task tsk-abc tsk-abc`
+  silently succeeded and hid the fact that the caller was uncertain
+  which form the verb took. Now both same-value and differing-value
+  cases reject with the same "pass it just once" hint.
+
 ## 0.80.11 - UAT round-5: MC task-awareness ACTUALLY fires + setup, introspect, gc, verdict_request hardening
 
 Round-5 UAT (greenfield + brownfield, real MCP server connections) found

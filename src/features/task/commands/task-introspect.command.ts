@@ -50,9 +50,15 @@ export function registerTaskIntrospectCommand(
           "Or with the flag (matches `task verify` / `task proof`): `maestro task introspect --task <id>`",
         ]);
       }
-      if (positionalRef !== undefined && flagRef !== undefined && positionalRef !== flagRef) {
+      if (positionalRef !== undefined && flagRef !== undefined) {
+        // Reject the duplication whether the two values match or differ. Same
+        // value is still a smell — the caller is uncertain which form the
+        // verb takes, and silently accepting hides the disambiguation.
+        const detail = positionalRef === flagRef
+          ? `both as positional and --task ('${positionalRef}')`
+          : `as positional ('${positionalRef}') and --task ('${flagRef}')`;
         throw new MaestroError(
-          `Got task ref both as positional ('${positionalRef}') and --task ('${flagRef}')`,
+          `Got task ref ${detail}`,
           ["Pass it just once — either the positional or `--task`, not both"],
         );
       }
