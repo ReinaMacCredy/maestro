@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.80.0 - harness pivot: trust substrate, token-budget doctrine, lean MCP
+
+Three PRs land in this release: #56 (CodeQL alerts), #57 (handoff MCP
+tools), and #59 (the full harness pivot — phases 1–5, DI, setup, token-budget
+doctrine, plus runtime observability).
+
+### Added
+
+- **`maestro task observe`**: DevObservabilityPort verb for surfacing task
+  observation events to agents.
+- **`maestro inspect token-budget`**: probe-based measurement of CLI/MCP
+  output costs across the agent-facing verb catalog. Subprocess concurrency
+  is bounded to 4 workers.
+- **MCP `maestro_handoff_*` tools**: agents can `list`, `show`,
+  `open_for_task`, and `pickup` handoff packets without shelling out.
+- **Setup hardening**: `maestro setup --check`, `--self-test`, and
+  `--install-hooks` flows. Hook installation writes a memo to
+  `.<runtime>/maestro-hooks.md` (Maestro-owned markdown) instead of
+  appending non-JSON content into the host runtime's `settings.json`.
+- **Edge-case agent failure modes**: 5 distinct failure paths surfaced in
+  the regression corpus under `tests/e2e/edge-cases/`.
+
+### Changed
+
+- **Token-budget doctrine**: agent-facing list verbs are lean by default;
+  `--full` / `view: "full"` recovers the verbose shape. Touches `skills list`,
+  `task list`, `task status`, `task ready`, `task stuck`, `mission list`,
+  `evidence list`, `handoff list`. `inspect token-budget` baseline drops
+  51,488 → 35,469 tokens (-31.1%) without losing any data — full payload
+  remains available behind the opt-in flag.
+- **Flat MCP error shape**: `{ code, message, hints?, arg? }` replaces the
+  SDK's nested `InvalidParams` text. The interceptor reaches through the
+  SDK's private `_requestHandlers` map and degrades to no-op if a future SDK
+  version reshapes it.
+- **Full DI pass**: every command surface in the codebase now follows the
+  `*CommandDeps` factory pattern; the global composition root replaces the
+  prior singleton with `createServices(...)`.
+- **README** leads with "long-running agent harness"; "conductor" stays as
+  the daily-use framing.
+
+### Fixed
+
+- **CodeQL alerts on `main`** (PR #56): glob-match length + wildcard caps;
+  `escapeMarkdownBoundaries` covers the `--!>` HTML-comment terminator
+  variant; insecure-temp-file paths use `mkdtemp`; redundant type guards
+  dropped where types already exclude `null`/`undefined`; misleading
+  indentation tidied; dead helpers and imports removed.
+- **PR #59 review feedback** (gemini-code-assist): setup hook memo no
+  longer corrupts host JSON config; MCP interceptor guards private SDK
+  access defensively; architecture-lint `stripComments` now masks block
+  and inline `//` (preserving offsets), and `extractFunctionBodies` counts
+  braces over the comment-masked text; token-budget probes bounded to 4
+  concurrent subprocesses.
+
+### Internal
+
+- **Type strictness**: union-type switches exhaustively handle all cases;
+  every async function in `src/` declares an explicit `Promise<...>` return
+  type (enforced by a new test).
+- **Architecture lints** now mask block and inline `//` comments before
+  matching, eliminating a class of false-positive violations.
+- **`stripComments` rewritten** from `out += c` to pre-sized `string[]` +
+  `join("")` to remove an O(n²) hot path in the lint runner.
+- **Local `readFileSafe` helpers consolidated** onto the shared `readText`
+  in `@/shared/lib/fs`.
+- Net diff vs. v0.75.0: 358 files, +19,552 / -2,203 (mostly the pivot PR).
+
 ## 0.72.42 - parallelize verdict and spec store reads (same pattern, same win)
 
 `FsVerdictStoreAdapter` and `FsSpecStoreAdapter` had the same
