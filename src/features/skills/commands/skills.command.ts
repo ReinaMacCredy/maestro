@@ -43,26 +43,34 @@ export interface SkillRecord {
 
 /**
  * Lean projection of {@link SkillRecord} for `skills list` JSON output.
- * The full SKILL.md `body` is the dominant byte source (~1 MB on the maestro
- * repo); list endpoints drop it. `skills inspect <name>` still returns the
- * full record. `--full` on `skills list` recovers the old shape.
+ * Drops `body` (~1 MB across the catalog), `path` (absolute and unactionable
+ * — agents address skills by `name`), and truncates `description` to the
+ * first sentence. `--full` recovers the pre-doctrine shape; `skills inspect
+ * <name>` returns the full record.
  */
 export interface SkillSummary {
   readonly name: string;
   readonly description: string;
   readonly scope: SkillRecord["scope"];
   readonly source: string;
-  readonly path: string;
 }
+
+const SKILL_DESCRIPTION_MAX = 200;
 
 function summarizeSkill(skill: SkillRecord): SkillSummary {
   return {
     name: skill.name,
-    description: skill.description,
+    description: truncateDescription(skill.description),
     scope: skill.scope,
     source: skill.source,
-    path: skill.path,
   };
+}
+
+function truncateDescription(value: string): string {
+  const firstSentence = value.match(/^.*?[.!?](?=\s|$)/);
+  const candidate = firstSentence?.[0] ?? value;
+  if (candidate.length <= SKILL_DESCRIPTION_MAX) return candidate;
+  return candidate.slice(0, SKILL_DESCRIPTION_MAX - 1).trimEnd() + "…";
 }
 
 export interface SkillDiagnostic {
