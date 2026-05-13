@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.80.13 - prod polish: handoff-bare default, task-create --title alias
+
+Closes the two remaining LOW friction items surfaced across Round 5/6
+UAT so the agent loop is "production polish" clean. Both fixes are
+ergonomic — no semantic change to existing usage, just one new tolerant
+default and one alias.
+
+### Fixed
+
+- **`maestro handoff` (no args) now lists existing packets instead of
+  erroring.** Bare invocation with no positional, no `--prompt-file`,
+  and no launch flags (`--agent`, `--task-id`, `--model`, `--worktree`,
+  `--base`, `--wait`) is treated as a discovery query: agents
+  exploring the verb get the same output as `maestro handoff list`
+  rather than a "Task description required" error. Any explicit launch
+  signal still routes to the launch path, so a mis-typed task arg
+  can't silently become a list. `--json` returns the lean 20-item
+  summary used elsewhere.
+
+- **`maestro task create --title <title>` accepts the title via flag.**
+  Agents that pattern-match on `--title` (a common convention from
+  other task systems) no longer have to special-case `task create` as
+  positional-only. The positional form still works; passing both is
+  rejected with a "pass it just once" hint, matching the
+  `task introspect` / `task verify` / `task proof` `--task` vs
+  positional pattern.
+
 ## 0.80.12 - UAT round-6 mop-up: task introspect same-id edge case
 
 Round-6 UAT (greenfield + brownfield, real MCP server, v0.80.11 binary)

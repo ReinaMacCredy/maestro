@@ -59,6 +59,38 @@ export function registerHandoffCommand(
     .action(async (task: string | undefined, opts): Promise<void> => {
       const promptFile = typeof opts.promptFile === "string" ? opts.promptFile : undefined;
       const name = typeof opts.name === "string" ? opts.name : undefined;
+      const services = deps.getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      // Bare `maestro handoff` (no positional, no --prompt-file, no launch
+      // flags) is treated as a listing query: agents arriving fresh discover
+      // the verb without crashing into a "Task description required" error.
+      // Any explicit launch signal (positional, --prompt-file, --agent,
+      // --task-id, --model, --worktree, --base, --wait) still forces the
+      // launch path so a mis-typed task arg can't silently become a list.
+      const hasLaunchSignal = task !== undefined
+        || promptFile !== undefined
+        || opts.agent !== undefined
+        || opts.taskId !== undefined
+        || opts.model !== undefined
+        || opts.worktree !== undefined
+        || opts.base !== undefined
+        || opts.wait === true;
+      if (!hasLaunchSignal) {
+        const currentProjectRoot = resolveMaestroProjectRoot(process.cwd());
+        const records = await listProjectHandoffs(services.handoffStore, {
+          openOnly: false,
+          taskStore: services.taskStore,
+          currentProjectRoot,
+        });
+        if (isJson) {
+          output(true, records.slice(0, 20).map(summarizeHandoff), () => []);
+          return;
+        }
+        output(false, records, formatHandoffList);
+        return;
+      }
+
       // When the caller supplies a pre-written brief via --prompt-file, the
       // positional task arg is optional: the brief itself carries the task
       // description. Synthesize a short task string from --name (preferred)
@@ -71,11 +103,9 @@ export function registerHandoffCommand(
           "Use `maestro handoff <task>` to create a packet",
           "Or pass --prompt-file <path> to skip the positional (the brief is enough)",
           "Or use `maestro handoff pickup` to consume an existing packet",
+          "Or run `maestro handoff` (no args) to see existing packets",
         ]);
       }
-
-      const services = deps.getServices();
-      const isJson = resolveJsonFlag(opts, program);
       const agent = parseAgent(opts.agent);
       const linkedTask = await resolveLinkedTask(deps, typeof opts.taskId === "string" ? opts.taskId : undefined);
       const result = await launchHandoff({

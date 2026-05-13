@@ -169,8 +169,9 @@ Typical loop:
 
 function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
-    .command("create <title>")
+    .command("create [title]")
     .description("Create a new task")
+    .option("--title <title>", "Task title (alias for the positional arg)")
     .option("--description <text>", "Task description")
     .option("--type <type>", `Task type (${TASK_TYPES.join("|")})`)
     .option("--priority <n>", "Priority 0-4 (0=critical, 4=backlog)")
@@ -186,9 +187,28 @@ function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCom
     .addOption(new Option("--assignee <name>").hideHelp())
     .option("--silent", "Print only the id (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (title: string, opts): Promise<void> => {
+    .action(async (positionalTitle: string | undefined, opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+
+      const flagTitle = typeof opts.title === "string" ? opts.title.trim() : undefined;
+      const rawTitle = positionalTitle ?? flagTitle;
+      if (rawTitle === undefined || rawTitle.length === 0) {
+        throw new MaestroError("Pass a task title", [
+          "Positional: `maestro task create \"<title>\"`",
+          "Or with the flag: `maestro task create --title \"<title>\"`",
+        ]);
+      }
+      if (positionalTitle !== undefined && flagTitle !== undefined) {
+        const detail = positionalTitle === flagTitle
+          ? `both as positional and --title ('${positionalTitle}')`
+          : `as positional ('${positionalTitle}') and --title ('${flagTitle}')`;
+        throw new MaestroError(
+          `Got title ${detail}`,
+          ["Pass it just once — either the positional or `--title`, not both"],
+        );
+      }
+      const title = rawTitle;
 
       if (opts.assignee !== undefined) {
         throw taskUpdateOwnershipViaClaim();
