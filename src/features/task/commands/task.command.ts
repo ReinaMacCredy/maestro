@@ -14,7 +14,7 @@ import { claimTask } from "../usecases/claim-task.usecase.js";
 import { unclaimTask } from "../usecases/unclaim-task.usecase.js";
 import { blockTasks, unblockTasks } from "../usecases/manage-task-blockers.usecase.js";
 import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
-import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
+import { readyTaskPage, readyTasks, type TaskBriefing } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import { planTasks, validatePlanTasks } from "../usecases/plan-tasks.usecase.js";
 import { buildBatchInputSchema } from "../usecases/batch-input-schema.usecase.js";
@@ -1795,6 +1795,7 @@ function registerReadyCommand(taskCmd: Command, program: Command, deps: TaskComm
     .option("--unassigned", "Only include unassigned tasks")
     .option("--no-hints", "Disable lesson hints surfaced from past completed tasks")
     .option("--compact", "Output compact JSON envelope for agents/scripts (use with --json)")
+    .option("--full", "Include full descriptions, hint reasons, and matchedKeywords in --json output")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
@@ -1805,6 +1806,7 @@ function registerReadyCommand(taskCmd: Command, program: Command, deps: TaskComm
         ]);
       }
       const useCompactJson = opts.compact === true;
+      const isFull = opts.full === true;
       const showHints = opts.hints !== false;
       await maybeReleaseStaleOwnedTasks(deps);
 
@@ -1832,8 +1834,32 @@ function registerReadyCommand(taskCmd: Command, program: Command, deps: TaskComm
         new Date(),
         showHints ? services.taskCandidateStore : undefined,
       );
+      if (isJson && !isFull) {
+        output(true, briefings.map(summarizeBriefing), () => []);
+        return;
+      }
       output(isJson, briefings, formatTaskBriefingList);
     });
+}
+
+const READY_DESCRIPTION_MAX = 200;
+const READY_HINT_REASON_MAX = 120;
+
+function summarizeBriefing(briefing: TaskBriefing): Record<string, unknown> {
+  const { description, hints, ...rest } = briefing;
+  return {
+    ...rest,
+    ...(description !== undefined ? { description: truncateReadyText(description, READY_DESCRIPTION_MAX) } : {}),
+    hints: hints.map(({ matchedKeywords: _omit, reason, ...hintRest }) => ({
+      ...hintRest,
+      reason: truncateReadyText(reason, READY_HINT_REASON_MAX),
+    })),
+  };
+}
+
+function truncateReadyText(value: string, max: number): string {
+  if (value.length <= max) return value;
+  return value.slice(0, max - 1).trimEnd() + "…";
 }
 
 async function maybeReleaseStaleOwnedTasks(

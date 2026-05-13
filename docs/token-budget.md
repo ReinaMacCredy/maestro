@@ -36,7 +36,7 @@ agent's own work. This document codifies how we keep our footprint small.
 |------|---------------|--------------------|
 | `task list --json` | Summary, default `--limit 20` | `--full --all` |
 | `task status --json` | Digest (no `tasksById`) | `--full` |
-| `task ready --json` | Summary | (no full mode; already lean) |
+| `task ready --json` | Summary (truncated `description`, truncated `hint.reason`, no `hint.matchedKeywords`) | `--full` |
 | `task stuck --json` | Summary | `--full` |
 | `mission list --json` | Summary, default `--limit 20` | `--full --all` |
 | `evidence list --json` | Summary, default `--limit 20` | `--full --all` |
