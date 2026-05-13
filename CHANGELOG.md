@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.80.7 - UAT round-3 followups: MCP tool table coverage, doctor-suggestion gating
+
+Two more findings from round-3 UAT:
+
+### Changed
+
+- **`skills/bundled/maestro-task/SKILL.md`** documents all 18 MCP tools.
+  Was missing the verdict, policy, and handoff families (~7 tools).
+  Added a "When" column and explicit notes on the `id` vs `taskId`
+  parameter convention and the `summary`/`reason` alias on
+  `maestro_task_complete`.
+- **Mission Control** no longer suggests `maestro doctor` on a healthy
+  repo. The action is now gated on at least one failing doctor check —
+  showing it unconditionally misled first-time users into running
+  diagnostics on a clean project.
+
 ## 0.80.6 - UAT round-3 fixes (evidence_record schema, task verify exit, lean skills list, CLI/MCP parity)
 
 Round-3 UAT (greenfield + brownfield, real MCP server connection) found
