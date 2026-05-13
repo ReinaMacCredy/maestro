@@ -16,17 +16,35 @@ interface PrivateServerHolder {
  * the SDK's verbose InvalidParams error text into the doctrine shape:
  * `{ code: "INVALID_ARG", message, arg }`.
  *
+ * Reaches through `server._requestHandlers` because the SDK doesn't expose a
+ * public hook. Guarded so future SDK refactors degrade to no-op rather than
+ * crash — callers still get raw SDK errors, just not the rewritten shape.
+ *
  * Call after all tools are registered so the SDK has installed its handler.
  */
 export function installToolErrorInterceptor(server: McpServer): void {
-  const holder = server as unknown as PrivateServerHolder;
-  const handlers = holder.server._requestHandlers;
+  const handlers = resolveRequestHandlers(server);
+  if (handlers === undefined) return;
   const original = handlers.get("tools/call");
   if (original === undefined) return;
-  handlers.set("tools/call", async (request, extra): Promise<unknown> => {
-    const result = await original(request, extra);
-    return rewriteInvalidParamsError(result);
-  });
+  try {
+    handlers.set("tools/call", async (request, extra): Promise<unknown> => {
+      const result = await original(request, extra);
+      return rewriteInvalidParamsError(result);
+    });
+  } catch {
+    // SDK internals froze the map or rejected the set — leave the original
+    // handler in place rather than crash on startup.
+  }
+}
+
+function resolveRequestHandlers(server: McpServer): Map<string, RequestHandler> | undefined {
+  const holder = server as unknown as Partial<PrivateServerHolder>;
+  const inner = holder.server;
+  if (inner === undefined) return undefined;
+  const handlers = (inner as Partial<PrivateProtocol>)._requestHandlers;
+  if (!(handlers instanceof Map)) return undefined;
+  return handlers as Map<string, RequestHandler>;
 }
 
 const INPUT_VALIDATION_PREFIX = "MCP error -32602: Input validation error:";
