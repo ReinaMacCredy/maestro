@@ -62,7 +62,7 @@ describe("task completion receipt feeds hint keywords", () => {
     );
     const second = expectJson<{ id: string }>(secondCreate);
 
-    const readyResult = await runCli(["task", "ready", "--json"], tmpDir);
+    const readyResult = await runCli(["task", "ready", "--json", "--full"], tmpDir);
     const ready = expectJson<Array<{
       id: string;
       hints: Array<{ sourceTaskId: string; reason: string; matchedKeywords: readonly string[] }>;
