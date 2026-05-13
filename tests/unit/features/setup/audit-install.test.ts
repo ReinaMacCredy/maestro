@@ -59,4 +59,18 @@ describe("auditInstall", () => {
     const r = await auditInstall({ projectRoot: root, knownVerbs: new Set() });
     expect(r.findings.some((f) => f.code === "doc-missing")).toBe(false);
   });
+
+  it("warns project-not-initialized when .maestro/ is absent", async () => {
+    const root = await makeRepo({});
+    const r = await auditInstall({ projectRoot: root, knownVerbs: new Set() });
+    const finding = r.findings.find((f) => f.code === "project-not-initialized");
+    expect(finding).toBeDefined();
+    expect(finding?.severity).toBe("warn");
+  });
+
+  it("does not warn project-not-initialized once .maestro/ exists", async () => {
+    const root = await makeRepo({ withOwners: true });
+    const r = await auditInstall({ projectRoot: root, knownVerbs: new Set() });
+    expect(r.findings.some((f) => f.code === "project-not-initialized")).toBe(false);
+  });
 });

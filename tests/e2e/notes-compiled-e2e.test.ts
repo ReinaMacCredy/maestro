@@ -117,11 +117,11 @@ describe("compiled notes feature E2E", () => {
   );
 
   it(
-    "rejects calls with neither --content nor --list",
+    "rejects calls with neither positional text, --content, nor --list",
     async () => {
       const result = await runCompiled(["note"], tmpDir);
       expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("--content is required");
+      expect(result.stderr).toContain("Provide the note text");
     },
     SLOW_CLI_TIMEOUT_MS,
   );

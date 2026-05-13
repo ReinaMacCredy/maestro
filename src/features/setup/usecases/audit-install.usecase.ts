@@ -28,6 +28,7 @@ export async function auditInstall(args: AuditInstallArgs): Promise<AuditInstall
   const findings: AuditFinding[] = [];
   const tocBudget = args.tocBudget ?? DEFAULT_TOC_BUDGET;
 
+  await checkProjectInitialized(args.projectRoot, findings);
   await checkAgentsMdSize(args.projectRoot, tocBudget, findings);
   await checkOwnersYaml(args.projectRoot, findings);
   await checkOrphanRunDirs(args.projectRoot, findings);
@@ -58,6 +59,17 @@ export async function auditInstall(args: AuditInstallArgs): Promise<AuditInstall
     hostRuntimes: hostRuntimes.map((r) => r.id),
     skillBinaryParity,
   };
+}
+
+async function checkProjectInitialized(root: string, findings: AuditFinding[]): Promise<void> {
+  const path = join(root, ".maestro");
+  if (!(await dirExists(path))) {
+    findings.push({
+      code: "project-not-initialized",
+      severity: "warn",
+      message: ".maestro/ directory not found — run `maestro init` to bootstrap project state",
+    });
+  }
 }
 
 async function checkAgentsMdSize(

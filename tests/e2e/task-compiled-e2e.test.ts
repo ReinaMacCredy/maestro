@@ -165,7 +165,11 @@ describe("compiled task feature E2E", () => {
           status: "pending",
         }),
       );
-      expect(claim.stderr).toContain("using a per-user synthesized session");
+      // Round-3 hardening suppresses the synthesized-session hint when stderr is
+      // not a TTY (piped/scripted runs — the dominant agent path). The
+      // `local-<user>` assignee above already proves the fallback fired; we just
+      // confirm the run is quiet under piped stderr.
+      expect(claim.stderr.trim()).toBe("");
     },
     SLOW_CLI_TIMEOUT_MS,
   );

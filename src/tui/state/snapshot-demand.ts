@@ -21,7 +21,9 @@ export function buildMissionControlSnapshotDemand(
     case "preview-all":
       return { includeTaskBoard: true };
     case "preview-screen":
-      return { includeTaskBoard: input.screen === "tasks" };
+      // Home/dashboard projection branches on task count (task-only project
+      // headline), so the board must load for any screen, not just `tasks`.
+      return { includeTaskBoard: true };
     case "interactive":
       return {};
   }

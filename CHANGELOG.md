@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.80.11 - UAT round-5: MC task-awareness ACTUALLY fires + setup, introspect, gc, verdict_request hardening
+
+Round-5 UAT (greenfield + brownfield, real MCP server connections) found
+one HIGH regression and four MED/LOW friction items.
+
+### Fixed
+
+- **Mission Control task-aware headline now fires for `--preview` and
+  `--preview <screen>` (HIGH regression).** The v0.80.10 projection fix
+  branched on `taskBoard.totalCount`, but the home/dashboard preview
+  paths set `includeTaskBoard: false` — so the board never loaded and
+  the headline silently stayed at "No missions yet" even with tasks
+  present. `buildMissionControlSnapshotDemand` now requests the task
+  board for every preview screen (the home projection consumes it
+  regardless of which screen is being rendered).
+- **`maestro task introspect` accepts `--task <id>` (MED).** Mirrors
+  `task verify` and `task proof`, which were already on the flag form.
+  Agents extrapolating from those verbs no longer trip on
+  `error: unknown option '--task'`. Positional `<id-or-slug>` still
+  works; passing both errors out explicitly with a typed MaestroError.
+- **`maestro gc` (bare) exits 0 with help text (LOW).** Was exiting 1
+  while printing help, inconsistent with other group commands. Now
+  matches `--help` semantics.
+- **`maestro setup --check` warns when `.maestro/` is missing (MED).**
+  Previously emitted "Setup audit — OK" on a completely un-initialized
+  repo, which read as success to first-time greenfield agents. New
+  `project-not-initialized` finding directs the user to run
+  `maestro init` first.
+- **`maestro_verdict_request` returns `NO_COMMITS` on an empty repo
+  (MED).** The verifier's `git rev-parse HEAD^{tree}` call surfaced the
+  raw `fatal: ambiguous argument 'HEAD^{tree}'` git error to the MCP
+  caller — unactionable for agents. Now translates to a typed
+  `NO_COMMITS` failure with a hint to `git commit` first.
+
+### Build correctness
+
+- **Verified `dist/maestro` matches HEAD.** Round-5 surfaced that
+  `dist/maestro` was built 14s before the v0.80.10 commit landed, so
+  the test fleet was unknowingly exercising v0.80.9. The HIGH "R14
+  regression" above existed in v0.80.10 too, but went undetected
+  because the binary under test predated the projection.ts fix. Pre-
+  test step: `bun run build && ./dist/maestro --version` to confirm git
+  sha against HEAD.
+
 ## 0.80.10 - UAT round-4 brownfield: receipt invariant, mission-control task awareness, state/get aliases
 
 Round-4 brownfield UAT reported one HIGH-severity issue plus two

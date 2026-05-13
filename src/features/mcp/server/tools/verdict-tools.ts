@@ -80,6 +80,20 @@ export function registerVerdictTools(server: McpServer, deps: RegisterDeps): voi
         );
         return toCallToolResult(ok({ verdict }));
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // The verifier shells out to `git rev-parse HEAD^{tree}` for the
+        // anchor. On a freshly init'd repo with no commits, git emits an
+        // "ambiguous argument" or "unknown revision" error — that's
+        // unactionable to an agent. Translate it into a typed code with a
+        // clear next step.
+        if (/ambiguous argument 'HEAD|unknown revision 'HEAD|Needed a single revision/i.test(message)) {
+          return toCallToolResult(fail("NO_COMMITS", "Repository has no commits — cannot anchor a verdict", {
+            hints: [
+              "Run `git commit` (or stage + commit) so HEAD resolves to a tree",
+              "Then re-run `maestro_verdict_request` for this task",
+            ],
+          }));
+        }
         return toCallToolResult(fromMaestroError(err, "VERDICT_REQUEST_FAILED"));
       }
     },

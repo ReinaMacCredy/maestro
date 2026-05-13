@@ -8,12 +8,12 @@ describe("buildMissionControlSnapshotDemand", () => {
     expect(buildMissionControlSnapshotDemand({ mode: "preview-all" })).toEqual({ includeTaskBoard: true });
   });
 
-  it("loads task-board data only for the tasks preview screen", () => {
+  it("loads task-board data for every preview screen (home projection branches on task count)", () => {
     expect(buildMissionControlSnapshotDemand({ mode: "preview-screen", screen: "tasks" })).toEqual({
       includeTaskBoard: true,
     });
     expect(buildMissionControlSnapshotDemand({ mode: "preview-screen", screen: "dashboard" })).toEqual({
-      includeTaskBoard: false,
+      includeTaskBoard: true,
     });
   });
 
