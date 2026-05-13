@@ -510,7 +510,7 @@ interface TaskStatusJsonSummaryTrack {
   readonly identifier: string;
   readonly slug?: string;
   readonly task: TaskSummary;
-  readonly steps: readonly TaskSummary[];
+  readonly steps?: readonly TaskSummary[];
 }
 
 function toTaskStatusJson(
@@ -522,7 +522,6 @@ function toTaskStatusJson(
       readonly header: TaskStatusProjection["header"];
       readonly tracks: readonly TaskStatusJsonSummaryTrack[];
       readonly orphans: readonly TaskSummary[];
-      readonly tasksById: Record<string, TaskSummary>;
     } {
   if (includeFullTasks) {
     return {
@@ -530,29 +529,17 @@ function toTaskStatusJson(
       tasksById: Object.fromEntries(projection.tasksById),
     };
   }
-  const visibleIds = new Set<string>();
-  for (const track of projection.tracks) {
-    visibleIds.add(track.task.id);
-    for (const step of track.steps) visibleIds.add(step.id);
-    for (const id of track.task.blockedBy) visibleIds.add(id);
-    for (const step of track.steps) for (const id of step.blockedBy) visibleIds.add(id);
-  }
-  for (const orphan of projection.orphans) visibleIds.add(orphan.id);
-
+  // Doctrine: digest (no `tasksById`). The map duplicated data already in
+  // `tracks[].task`/`steps[]`. Recover the full lookup with `--full`.
   return {
     header: projection.header,
     tracks: projection.tracks.map((track) => ({
       identifier: track.identifier,
       ...(track.slug !== undefined ? { slug: track.slug } : {}),
       task: summarizeTask(track.task),
-      steps: track.steps.map(summarizeTask),
+      ...(track.steps.length > 0 ? { steps: track.steps.map(summarizeTask) } : {}),
     })),
     orphans: projection.orphans.map(summarizeTask),
-    tasksById: Object.fromEntries(
-      [...projection.tasksById.entries()]
-        .filter(([id]) => visibleIds.has(id))
-        .map(([id, task]) => [id, summarizeTask(task)]),
-    ),
   };
 }
 
