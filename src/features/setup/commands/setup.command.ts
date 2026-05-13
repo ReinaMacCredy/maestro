@@ -87,6 +87,13 @@ function formatSelfTest(r: SelfTestReport): readonly string[] {
 }
 
 function formatHookInstall(results: readonly RuntimeHookInstallResult[]): readonly string[] {
-  if (results.length === 0) return ["No host runtimes detected (.claude/.codex/.cursor)"];
+  if (results.length === 0) {
+    return [
+      "No host runtimes detected (.claude/.codex/.cursor)",
+      "  Hooks install into <runtime>/maestro-hooks.md inside the project.",
+      "  Start a Claude Code, Codex, or Cursor session in this repo, or create",
+      "  one of those directories first, then re-run 'maestro setup --install-hooks'.",
+    ];
+  }
   return results.map((r) => `  [${r.status}] ${r.runtime} -> ${r.file}`);
 }

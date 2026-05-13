@@ -1,4 +1,5 @@
 import { BUNDLED_SKILL_TEMPLATES } from "@/infra/domain/bundled-skill-templates.js";
+import { parseYaml } from "@/shared/lib/yaml.js";
 
 export interface SkillBinaryDriftFinding {
   readonly skill: string;
@@ -26,8 +27,10 @@ export function checkSkillBinaryParity(
     const md = findSkillMd(skill);
     if (!md) continue;
     skillsChecked += 1;
+    const skipVerbs = extractParitySkipVerbs(md.content);
     const verbs = extractVerbs(md.content);
     for (const verb of verbs) {
+      if (skipVerbs.has(verb)) continue;
       const head = firstSegment(verb);
       if (!head) continue;
       if (!args.knownVerbs.has(head)) {
@@ -36,6 +39,22 @@ export function checkSkillBinaryParity(
     }
   }
   return { skillsChecked, findings };
+}
+
+function extractParitySkipVerbs(content: string): ReadonlySet<string> {
+  if (!content.startsWith("---")) return new Set();
+  const close = content.indexOf("\n---", 3);
+  if (close === -1) return new Set();
+  const rawFrontmatter = content.slice(3, close).trim();
+  let frontmatter: Record<string, unknown>;
+  try {
+    frontmatter = parseYaml<Record<string, unknown>>(rawFrontmatter) ?? {};
+  } catch {
+    return new Set();
+  }
+  const raw = frontmatter["parity-skip-verbs"];
+  if (!Array.isArray(raw)) return new Set();
+  return new Set(raw.filter((entry): entry is string => typeof entry === "string"));
 }
 
 export function renderDriftError(finding: SkillBinaryDriftFinding, binaryVersion: string): string {

@@ -3,7 +3,8 @@ import { basename } from "node:path";
 import { Command, Option } from "commander";
 import { type Services } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
-import { readTextOrStdin } from "@/shared/lib/fs.js";
+import { fileExists, readTextOrStdin } from "@/shared/lib/fs.js";
+import { join as pathJoin } from "node:path";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { summarizeTask } from "@/shared/lib/projection.js";
 import { truncateText } from "@/shared/lib/truncate.js";
@@ -241,7 +242,18 @@ function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCom
       }
 
       output(isJson, task, formatTaskSummary);
+      await maybeWarnMissingProjectConfig(services.projectRoot, isJson);
     });
+}
+
+async function maybeWarnMissingProjectConfig(
+  projectRoot: string,
+  isJson: boolean,
+): Promise<void> {
+  if (isJson) return;
+  const configPath = pathJoin(projectRoot, ".maestro", "config.yaml");
+  if (await fileExists(configPath)) return;
+  warn("No .maestro/config.yaml found — run 'maestro init' to enable mission-control and policies");
 }
 
 function registerPlanCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
@@ -700,6 +712,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command, deps: TaskCom
     .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
     .option("--reason <text>", "Completion reason when --status completed")
     .option("--summary <text>", "Receipt summary captured on --status completed (defaults to --reason)")
+    .option("--receipt <text>", "Alias for --summary (the completion receipt)")
     .option("--surprise <text>", "Surprise/gotcha captured on --status completed")
     .option("--verified-by <name>", "Verifier captured on --status completed (repeatable)", appendVerifier, [] as string[])
     .option("--strict", "Block completion when the contract verdict is broken")
@@ -772,7 +785,9 @@ function registerUpdateCommand(taskCmd: Command, program: Command, deps: TaskCom
         dropSlug: opts.dropSlug === true ? true : undefined,
         addLabels: parseList(opts.addLabel),
         removeLabels: parseList(opts.removeLabel),
-        summary: typeof opts.summary === "string" ? opts.summary : undefined,
+        summary: typeof opts.summary === "string"
+          ? opts.summary
+          : typeof opts.receipt === "string" ? opts.receipt : undefined,
         surprise: typeof opts.surprise === "string" ? opts.surprise : undefined,
         verifiedBy: Array.isArray(opts.verifiedBy) && opts.verifiedBy.length > 0
           ? opts.verifiedBy as readonly string[]

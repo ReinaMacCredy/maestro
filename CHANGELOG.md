@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.80.1 - UAT-driven friction fixes: lean skills list, future-verb parity, install-hooks UX
+
+Real-scenario greenfield + brownfield UAT (sub-agent first-time users) flagged
+five concrete pain points on top of v0.80.0. All addressed in this release.
+
+### Changed
+
+- **`maestro skills list` is quiet by default.** Informational warnings
+  (shadowed-skill notices, name/directory mismatches) no longer print to
+  stderr unless `--verbose` is passed. Default text output is the clean skill
+  table only; only `error`-level diagnostics surface without `--verbose`.
+- **`maestro skills list --full` is now actually verbose.** Text output adds
+  the first-sentence description and source label per skill (previously it
+  was identical to default but paid ~293k tokens in JSON). JSON `--full`
+  retains the full `SKILL.md` body.
+- **`maestro setup --check`** no longer flags the `maestro qa`/`qa install`/
+  `qa check`/`qa modalities` verbs from the bundled `maestro-qa` skill as
+  binary drift. The skill declares them as `parity-skip-verbs` in its
+  frontmatter; `checkSkillBinaryParity` honors that list.
+- **`maestro setup --install-hooks`** now prints actionable guidance when no
+  host runtime is detected instead of a single-line no-op message.
+- **`maestro task update`** accepts `--receipt <text>` as an alias for
+  `--summary <text>`, matching the conceptual model used in `task show`.
+- **`maestro task create`** prints a one-line hint to run `maestro init`
+  when the project has no `.maestro/config.yaml`.
+
+### Internal
+
+- New frontmatter field `parity-skip-verbs` for bundled SKILL.md files.
+  Forward-looking documentation of future CLI verbs no longer trips drift
+  checks.
+
 ## 0.80.0 - harness pivot: trust substrate, token-budget doctrine, lean MCP
 
 Three PRs land in this release: #56 (CodeQL alerts), #57 (handoff MCP
