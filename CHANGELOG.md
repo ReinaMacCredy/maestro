@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.80.6 - UAT round-3 fixes (evidence_record schema, task verify exit, lean skills list, CLI/MCP parity)
+
+Round-3 UAT (greenfield + brownfield, real MCP server connection) found
+two HIGH-severity issues blocking first-time MCP agent loops, plus four
+moderate friction items. All addressed in this release.
+
+### Fixed
+
+- **`maestro_evidence_record` MCP schema is no longer empty (HIGH).**
+  `EvidenceRecordInput` used `z.object().refine().refine()`, which wraps
+  the schema in `ZodEffects`. The SDK could not introspect `.shape`, so
+  `tools/list` surfaced `{"properties": {}}` — agents had zero guidance
+  on what to pass. Split into `EvidenceRecordShape` (raw record, used
+  for tool registration) and `EvidenceRecordInput` (full schema with
+  refines, applied at runtime). Cross-field validation still rejects
+  bad inputs with `INVALID_ARG` carrying the offending `arg`.
+- **`task verify` exits 0 on the no-contract skip path (HIGH).** Was
+  exiting 2 (intended as "warn"), which aborted any agent shell running
+  under `set -e` or composing with `task verify && next-step`. The
+  advisory JSON / text message still calls out the skip; exit code now
+  matches the semantics (verifier didn't run, but that's not a failure).
+
+### Changed
+
+- **`skills list` JSON default drops `description` (MED, 57 % cut).**
+  130 skills × ~200-char descriptions = 25 KB of context-tax on every
+  startup-time `skills list`. Default now returns `{name, scope,
+  source}` only. `--full` recovers `description`, `path`, `root`,
+  `metadata`. Bodies remain exclusive to `skills inspect <name>`.
+  Probe diff: `skills list default` shrank from 30 889 B / 8 816 tok
+  to 13 200 B / 3 772 tok.
+- **`maestro_task_complete` accepts `reason` as an alias for `summary`.**
+  CLI uses `--reason`; the MCP schema only accepted `summary`. Agents
+  reading CLI docs and then calling the MCP tool tripped on the rename.
+- **Session-fallback hint suppressed when stderr is piped or
+  `MAESTRO_QUIET=1`.** The `[info] no agent session detected` message
+  was firing on every mutating command for piped/scripted runs (the
+  agent-loop dominant case). Now gated on `process.stderr.isTTY`.
+
+### Doc
+
+- `docs/token-budget.md` clarifies that `inspect token-budget` has no
+  `--full` flag — the probe always exercises both modes automatically.
+
 ## 0.80.5 - omit dead fields from MCP responses (research-grounded null/empty pruning)
 
 Token-budget pass two — apply the TOON-style "omit null and empty fields

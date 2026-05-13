@@ -166,9 +166,10 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       try {
         const services = deps.getServices();
         const { sessionId } = deps;
+        const summary = args.summary ?? args.reason;
         const result = await services.taskStore.update(
           args.id,
-          { status: "completed", summary: args.summary },
+          { status: "completed", summary },
           { sessionId },
         );
         return toCallToolResult(ok({ task: result.task, autoClaimed: result.autoClaimed }));

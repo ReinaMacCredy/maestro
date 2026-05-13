@@ -56,10 +56,12 @@ export function registerTaskVerifyCommand(
           );
         }
         // No contract at all is the tiny-lane case (intake → patch directly).
-        // Emit an advisory warning and exit 2 (warn) instead of error so the
-        // verifier doesn't block tiny-lane completion. Callers who *require*
-        // a contract should run plan check / verdict request, both of which
-        // correctly fail when no contract exists.
+        // Emit an advisory and exit 0 — verifier "skipped" is not a failure
+        // condition for the calling agent. Agents under `set -e` (and plain
+        // shell pipelines like `task verify && next-step`) were aborting on
+        // the previous exit(2). Callers who *require* a contract should run
+        // plan check / verdict request, both of which correctly fail when
+        // no contract exists.
         const advisory = {
           warning: "no-contract",
           taskId,
@@ -72,7 +74,7 @@ export function registerTaskVerifyCommand(
           console.log(`Trust Verifier: skipped — ${advisory.message}`);
           console.log(`  ${advisory.hint}`);
         }
-        process.exit(2);
+        process.exit(0);
       }
 
       // Prefer the contract's lock-commit so brownfield repos don't pull

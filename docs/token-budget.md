@@ -94,13 +94,15 @@ the `body`.
 ## Regression guard
 
 ```bash
-maestro inspect token-budget --json
+maestro inspect token-budget          # text table
+maestro inspect token-budget --json   # machine-readable
 ```
 
-Measures bytes and estimated tokens for each agent-facing list verb in
-both default and `--full` modes. Run before/after a list-shape change
-and after any projection helper edit; surprise regressions show up
-immediately.
+The probe always exercises each agent-facing list verb in both its
+default and `--full` modes — there is no `--full` flag on the probe
+itself, both rows appear automatically. Run before/after a list-shape
+change and after any projection helper edit; surprise regressions
+show up immediately.
 
 The estimator is a heuristic (Anthropic publishes ~4 chars/token; JSON
 tokenizes at ~3.5). Use it for comparing the same shape before and

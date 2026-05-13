@@ -45,13 +45,14 @@ export interface SkillRecord {
 /**
  * Lean projection of {@link SkillRecord} for `skills list` JSON output.
  * Drops `body` (~1 MB across the catalog), `path` (absolute and unactionable
- * — agents address skills by `name`), and truncates `description` to the
- * first sentence. `--full` recovers `path`/`root`/`metadata` but still drops
- * `body`; `skills inspect <name>` is the only verb that returns the body.
+ * — agents address skills by `name`), and `description` (130 skills × ~200
+ * chars = 25 KB of waste in the agent's context). Agents discover skills
+ * by name + scope; the description lives in `skills inspect <name>`.
+ * `--full` adds `description`/`path`/`root`/`metadata` but still drops
+ * `body`.
  */
 export interface SkillSummary {
   readonly name: string;
-  readonly description: string;
   readonly scope: SkillRecord["scope"];
   readonly source: string;
 }
@@ -64,7 +65,6 @@ const SKILL_DESCRIPTION_MAX = 200;
 function summarizeSkill(skill: SkillRecord): SkillSummary {
   return {
     name: skill.name,
-    description: truncateText(firstSentence(skill.description), SKILL_DESCRIPTION_MAX),
     scope: skill.scope,
     source: skill.source,
   };

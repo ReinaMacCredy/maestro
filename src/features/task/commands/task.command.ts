@@ -1398,7 +1398,15 @@ async function resolveOwnershipSessionId(
   // (across shells, across tool calls) see the same owner id. Agents that
   // need multi-user coordination should export CODEX_THREAD_ID / CLAUDECODE
   // or pass --session explicitly.
-  if (!warnedAboutFallbackSession) {
+  //
+  // Suppress the hint when stderr is not a TTY (piped/scripted runs — the
+  // dominant case for agent loops) or when MAESTRO_QUIET=1. Interactive
+  // human runs still see it once per process via warnedAboutFallbackSession.
+  if (
+    !warnedAboutFallbackSession
+    && process.stderr.isTTY
+    && process.env.MAESTRO_QUIET !== "1"
+  ) {
     warnedAboutFallbackSession = true;
     process.stderr.write(
       "[info] no agent session detected; using a per-user synthesized session\n"
