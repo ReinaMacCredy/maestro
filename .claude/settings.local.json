@@ -14,7 +14,10 @@
       "Bash(./dist/maestro task *)",
       "Bash(bun scripts/bump.ts feature)",
       "WebSearch",
-      "Bash(rtk git *)"
+      "Bash(rtk git *)",
+      "Bash(mkdir -p /tmp/maestro-token-audit)",
+      "Read(//private/tmp/maestro-token-audit/**)",
+      "Bash(rm -rf ./*)"
     ]
   },
   "outputStyle": "default"
