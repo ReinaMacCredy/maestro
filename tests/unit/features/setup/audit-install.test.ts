@@ -51,9 +51,12 @@ describe("auditInstall", () => {
     expect(errs).toEqual([]);
   });
 
-  it("warns when expected docs are missing", async () => {
+  it("does not flag fresh user projects for missing maestro-repo-internal docs", async () => {
+    // docs/harness-positioning.md and docs/schedule-recipes.md live in the
+    // maestro repo itself; a freshly init'd user project should not be warned
+    // for their absence.
     const root = await makeRepo({ agentsMdLines: 50 });
     const r = await auditInstall({ projectRoot: root, knownVerbs: new Set() });
-    expect(r.findings.some((f) => f.code === "doc-missing")).toBe(true);
+    expect(r.findings.some((f) => f.code === "doc-missing")).toBe(false);
   });
 });

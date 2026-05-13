@@ -29,7 +29,6 @@ export async function auditInstall(args: AuditInstallArgs): Promise<AuditInstall
   const tocBudget = args.tocBudget ?? DEFAULT_TOC_BUDGET;
 
   await checkAgentsMdSize(args.projectRoot, tocBudget, findings);
-  await checkDocsPresence(args.projectRoot, findings);
   await checkOwnersYaml(args.projectRoot, findings);
   await checkOrphanRunDirs(args.projectRoot, findings);
 
@@ -89,19 +88,6 @@ async function checkAgentsMdSize(
       severity: "warn",
       message: `AGENTS.md is ${report.lines} lines (warn at ${budget.warnLimit}, hard ${budget.hardLimit})`,
     });
-  }
-}
-
-async function checkDocsPresence(root: string, findings: AuditFinding[]): Promise<void> {
-  const required = ["docs/harness-positioning.md", "docs/schedule-recipes.md"];
-  for (const rel of required) {
-    if (!(await fileExists(join(root, rel)))) {
-      findings.push({
-        code: "doc-missing",
-        severity: "warn",
-        message: `Expected ${rel} missing`,
-      });
-    }
   }
 }
 

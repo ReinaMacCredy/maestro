@@ -28,7 +28,9 @@ const handoffId = z
   .describe("A maestro handoff id like 'bold-otter-1' or '2026-05-08-001'.");
 const handoffAgent = z
   .enum(["codex", "claude", "hermes"])
-  .describe("Acting agent identifier when picking up a handoff.");
+  .describe(
+    "Acting agent identifier when picking up a handoff. Claude Code agents pass `claude` (not `claude-code`); the Codex CLI passes `codex`.",
+  );
 
 const taskStatus = z
   .enum(["pending", "in_progress", "completed"])

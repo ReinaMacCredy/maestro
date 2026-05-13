@@ -512,10 +512,11 @@ function buildActivitySummary(
   _elapsedOffsetMs: number,
 ): UiLine[] {
   if (snapshot.mode === "home" && snapshot.home) {
+    const nextAction = snapshot.home.actions[0]?.command;
     return [
       boldLine(snapshot.home.headline),
       normalLine(snapshot.home.summary),
-      keyValueLine("next", snapshot.home.actions[0]?.command ?? "Run maestro doctor"),
+      ...(nextAction !== undefined ? [keyValueLine("next", nextAction)] : []),
       keyValueLine("scope", snapshot.home.locationLabel),
     ];
   }

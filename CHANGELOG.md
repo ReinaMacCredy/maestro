@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.80.9 - UAT round-4 fixes: MC doctor stale hint, note positional, audit noise, advisory polish
+
+Round-4 UAT (real MCP, greenfield) reported zero HIGH-severity issues and
+declared the agent loop ready. Six MED/LOW friction items addressed here:
+
+### Fixed
+
+- **MC Activity panel no longer emits `next: Run maestro doctor` on a clean
+  repo (F1).** The home-mode action list correctly omits the doctor action
+  when checks all pass; the Activity panel renderer was hard-coding the
+  string as a fallback. Now the `next:` line is skipped entirely when there
+  is no recommended action.
+- **`maestro note "text"` accepts a positional argument (F2).** The natural
+  first invocation no longer fails with `too many arguments`. Both
+  `maestro note "..."` and `maestro note --content "..."` work; passing both
+  errors out explicitly.
+- **`maestro_handoff_pickup.actorAgent` schema description names the
+  Claude-Code convention (F3).** Adds "Claude Code agents pass `claude`
+  (not `claude-code`)" so agents that read schema descriptions know which
+  enum value to use.
+- **`maestro session` no-args error mentions subcommands (F4).** First-time
+  agents who run `maestro session` outside an agent env now see a hint
+  pointing at `maestro session start <taskId>` / `exit <taskId>` and
+  `--help`.
+- **`maestro setup --check` no longer warns about
+  `docs/harness-positioning.md` / `docs/schedule-recipes.md` on fresh user
+  projects (F5).** Those docs are maestro-repo-internal; the audit check
+  leaked maestro-self-audit findings into user-facing output. Removed.
+- **`maestro task proof` surfaces an advisory when no contract or spec
+  exists (F6).** Empty proof output used to mean "no criteria found" with
+  no guidance on how to add criteria. JSON output gains a `warning:
+  "no-criteria-source"` field plus a `hint` pointing at
+  `task contract new <id> --from default`; text output prints both lines.
+
 ## 0.80.8 - UAT round-3 mop-up: contract-lock hint upgrade, task-ready hint signal cleanup
 
 Last two carry-overs from round-3 UAT, addressed in one shot:

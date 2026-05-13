@@ -16,22 +16,32 @@ export function registerNoteCommand(
   deps: NoteCommandDeps,
 ): void {
   program
-    .command("note")
+    .command("note [text...]")
     .description("Append or list project notes")
     .addHelpText("after", `
 Examples:
-  maestro note --content "Remember to rerun doctor after init"
+  maestro note "Remember to rerun doctor after init"
+  maestro note --content "Same as above, explicit flag"
   maestro note --list
   maestro note --list --json
 `)
     .option("--content <text>", "Note content to append")
     .option("--list", "List saved notes")
     .option("--json", "Output as JSON")
-    .action(async (opts): Promise<void> => {
+    .action(async (textParts: string[], opts): Promise<void> => {
         const services = deps.getServices();
         const isJson = opts.json ?? program.opts().json;
+        const positional = textParts.length > 0 ? textParts.join(" ") : undefined;
 
-      if (opts.list && opts.content) {
+      if (positional !== undefined && opts.content !== undefined) {
+        throw new MaestroError("Pass the note text positionally or via --content, not both", [
+          "maestro note \"text\"",
+          "maestro note --content \"text\"",
+        ]);
+      }
+      const content = positional ?? opts.content;
+
+      if (opts.list && content !== undefined) {
         throw new MaestroError("--content and --list cannot be used together", [
           "maestro note --content '...'",
           "maestro note --list",
@@ -44,15 +54,16 @@ Examples:
           return;
         }
 
-      if (!opts.content) {
-        throw new MaestroError("--content is required unless --list is used", [
+      if (content === undefined) {
+        throw new MaestroError("Provide the note text positionally or via --content, or pass --list", [
+          "maestro note \"text\"",
           "maestro note --content '...'",
           "maestro note --list",
         ]);
       }
 
         const note = await (deps.createNote ?? defaultCreateNote)(services.git, services.notesStore, {
-          content: opts.content,
+          content,
           dir: process.cwd(),
         });
 
