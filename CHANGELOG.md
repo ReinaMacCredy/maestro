@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.80.14 - UAT round-7: duplicate-flag silent-pick fix + task-complete shim + handoff help text
+
+Round-7 UAT (greenfield + brownfield, real MCP server, v0.80.13 binary)
+surfaced one real regression and two LOW friction items. Closes them so
+the agent loop reaches "all prod" status. Round-7 also surfaced two
+HIGH/MED findings (MCP cwd-scoping; `maestro_evidence_record` schema
+empty; `view` param missing on `maestro_task_list`) that triaged as UAT
+methodology false positives — the sub-agents inherited the parent
+session's pre-rebuild MCP runtime, so they were inspecting stale tool
+schemas. The current binary's MCP server has populated schemas and the
+`view` param on list verbs, verified by `tools/list` against the
+v0.80.13 build.
+
+### Fixed
+
+- **Duplicate-flag silent-pick on alias options.** v0.80.12 fixed
+  `positional + --flag` duplication on `task introspect --task`, but
+  Commander's default last-wins behavior still let `--task X --task X`
+  (or `X Y`) silently succeed. Same on `task create --title A --title B`
+  (v0.80.13 introduced the flag, inherited the same hole). Now the
+  parser rejects repeated use with a clean
+  `error: option '--task <id>' argument 'X' is invalid. pass it once,
+  not multiple times` and exits 1. Applied to `--task` on
+  `task introspect`, `task update`, and `--title` on `task create`. A
+  new `singletonOption` parser in `src/shared/lib/cli-options.ts`
+  carries the policy so future alias flags can opt in.
+
+- **`maestro task complete <id>` now points at the canonical path.**
+  Agents pattern-match the MCP tool name `maestro_task_complete` and
+  try the same verb on the CLI; previously Commander emitted an opaque
+  "unknown command". Added a hidden shim that throws the same
+  `taskCompletedViaUpdateStatus` redirect as `task close`, so agents
+  get the explicit "use `maestro task update <id> --status completed
+  --reason "..."`" hint instead of a dead end.
+
+- **`maestro handoff --help` now describes the bare-invocation
+  behavior.** The v0.80.13 change made `maestro handoff` (no args, no
+  launch flags) list existing packets, but the verb description still
+  read "Launch or pick up standalone task handoff packets" with no
+  mention of the listing path. Help text now mentions both branches
+  and the `list`/`pickup`/`show` subcommands.
+
 ## 0.80.13 - prod polish: handoff-bare default, task-create --title alias
 
 Closes the two remaining LOW friction items surfaced across Round 5/6

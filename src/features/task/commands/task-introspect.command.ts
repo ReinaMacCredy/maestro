@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
+import { singletonOption } from "@/shared/lib/cli-options.js";
 import { MaestroError } from "@/shared/errors.js";
 import { listOpenProjectHandoffIdsForTask } from "@/features/handoff";
 import { type Services } from "@/services.js";
@@ -35,7 +36,7 @@ export function registerTaskIntrospectCommand(
   taskCmd
     .command("introspect [id-or-slug]")
     .description("Show a task's full context: spec, verdict, budget, lints, blockers, recent activity")
-    .option("--task <id>", "Task id or slug (alias for the positional arg; matches `task verify` / `task proof`)")
+    .option("--task <id>", "Task id or slug (alias for the positional arg; matches `task verify` / `task proof`)", singletonOption)
     .option("--json", "Output as JSON")
     .action(async (positionalRef: string | undefined, opts): Promise<void> => {
       const services = deps.getServices();

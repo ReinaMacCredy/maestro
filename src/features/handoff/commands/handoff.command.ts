@@ -45,7 +45,7 @@ export function registerHandoffCommand(
 ): void {
   const handoffCmd = program
     .command("handoff")
-    .description("Launch or pick up standalone task handoff packets")
+    .description("Launch a handoff packet (pass <task> or --prompt-file). Bare `maestro handoff` (no args, no launch flags) lists existing packets; see subcommands `list`, `pickup`, `show`.")
     .argument("[task]", "Task description for a new handoff launch")
     .option("--agent <agent>", "Target agent (codex|claude|hermes)")
     .option("--task-id <id>", "Link the handoff to a specific task id")

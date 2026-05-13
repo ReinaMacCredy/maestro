@@ -9,6 +9,7 @@ import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { summarizeTask } from "@/shared/lib/projection.js";
 import { truncateText } from "@/shared/lib/truncate.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
+import { singletonOption } from "@/shared/lib/cli-options.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
@@ -171,7 +172,7 @@ function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCom
   taskCmd
     .command("create [title]")
     .description("Create a new task")
-    .option("--title <title>", "Task title (alias for the positional arg)")
+    .option("--title <title>", "Task title (alias for the positional arg)", singletonOption)
     .option("--description <text>", "Task description")
     .option("--type <type>", `Task type (${TASK_TYPES.join("|")})`)
     .option("--priority <n>", "Priority 0-4 (0=critical, 4=backlog)")
@@ -727,7 +728,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command, deps: TaskCom
   taskCmd
     .command("update [id-or-slug]")
     .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug; positional or --task)")
-    .option("--task <id>", "Task id or slug (alternative to the positional argument)")
+    .option("--task <id>", "Task id or slug (alternative to the positional argument)", singletonOption)
     .option("--title <title>", "New title")
     .option("--description <text>", "New description")
     .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
@@ -1387,6 +1388,16 @@ function registerCloseCommand(taskCmd: Command): void {
   taskCmd
     .command("close <id>", { hidden: true })
     .description("Legacy compatibility shim; completion moved to task update")
+    .action(() => {
+      throw taskCompletedViaUpdateStatus();
+    });
+  // Agents pattern-match the MCP tool name `maestro_task_complete` and try
+  // `maestro task complete <id>` on the CLI. Without this shim, Commander
+  // emits an opaque "unknown command" with no pointer to the canonical
+  // completion path. Surface the same redirect as `task close`.
+  taskCmd
+    .command("complete <id>", { hidden: true })
+    .description("Alias hint; completion goes through task update --status completed")
     .action(() => {
       throw taskCompletedViaUpdateStatus();
     });
