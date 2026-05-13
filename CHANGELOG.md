@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.80.16 - UAT round-8: drop `assignee` from lean task summary
+
+Round-8 brownfield UAT verdict was PROD-READY: YES with one MED finding:
+the lean projection of `Task` exposed `assignee` conditionally (only when
+non-undefined) on both CLI `task list --json` and MCP `maestro_task_list`
+default `view: "summary"`. That violates the token-budget doctrine in
+two ways — the field is detail-grade (the `status` field already signals
+open vs taken for claim decisions), and conditional presence makes the
+lean schema unstable for agents pattern-matching keys.
+
+### Fixed
+
+- **Lean task summary drops `assignee`.** `summarizeTask` no longer
+  emits the `assignee` field; agents that need the owner string recover
+  it with `--full` / `view: "full"` or `task get <id>` / `task introspect`.
+  Affects both CLI `task list --json` and MCP `maestro_task_list` lean
+  view. `--full` shape unchanged.
+
 ## 0.80.15 - prod polish: warn-once for missing config.yaml on task create
 
 Closes the last LOW Round-7 friction item so the agent loop is fully

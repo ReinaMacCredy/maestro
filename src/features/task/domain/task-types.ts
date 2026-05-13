@@ -92,7 +92,6 @@ export interface TaskSummary {
   readonly blockedByCount: number;
   readonly parentId?: string;
   readonly missionId?: string;
-  readonly assignee?: string;
 }
 
 // ============================
