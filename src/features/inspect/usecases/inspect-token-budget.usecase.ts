@@ -38,25 +38,19 @@ const PROBES: readonly VerbProbe[] = [
   { verb: "handoff list", args: ["handoff", "list", "--json"], fullArgs: ["handoff", "list", "--json", "--full", "--all"] },
 ];
 
-interface ProbeInvocation {
-  readonly verb: string;
-  readonly mode: "default" | "full";
-  readonly args: readonly string[];
-}
-
 const PROBE_CONCURRENCY = 4;
 
 export async function inspectTokenBudget(): Promise<TokenBudgetResult> {
   const bin = resolveCliBin();
-  const invocations: ProbeInvocation[] = PROBES.flatMap((probe) => {
-    const entries: ProbeInvocation[] = [
-      { verb: probe.verb, mode: "default", args: probe.args },
+  const invocations = PROBES.flatMap((probe) => {
+    const entries: Array<[string, "default" | "full", readonly string[]]> = [
+      [probe.verb, "default", probe.args],
     ];
-    if (probe.fullArgs) entries.push({ verb: probe.verb, mode: "full", args: probe.fullArgs });
+    if (probe.fullArgs) entries.push([probe.verb, "full", probe.fullArgs]);
     return entries;
   });
-  const rows = await mapWithConcurrency(invocations, PROBE_CONCURRENCY, (inv) =>
-    measure(bin, inv.verb, inv.mode, inv.args),
+  const rows = await mapWithConcurrency(invocations, PROBE_CONCURRENCY, ([verb, mode, args]) =>
+    measure(bin, verb, mode, args),
   );
   const totals = { defaultBytes: 0, fullBytes: 0, defaultTokens: 0, fullTokens: 0 };
   for (const row of rows) {

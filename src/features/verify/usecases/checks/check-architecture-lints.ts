@@ -125,41 +125,43 @@ function toPosix(p: string): string {
 }
 
 /**
- * Replace `// ...` line comments and `/* ... *\/` block comments with spaces,
- * preserving byte offsets and line counts so callers that map `match.index`
- * back to the original text keep working. String-literal contents are not
- * masked — heuristic lint rules tolerate occasional false positives there.
+ * Mask `//` line and `/* ... *\/` block comments with spaces. Byte offsets and
+ * `\n` positions stay aligned with the original, so `match.index` / `lineOf`
+ * mapping still works. String-literal contents are intentionally not masked.
  */
 function stripComments(text: string): string {
-  let out = "";
+  const out: string[] = new Array(text.length);
   let i = 0;
   while (i < text.length) {
     const c = text[i];
     const next = text[i + 1];
     if (c === "/" && next === "/") {
-      out += "  ";
+      out[i] = " ";
+      out[i + 1] = " ";
       i += 2;
       while (i < text.length && text[i] !== "\n") {
-        out += " ";
+        out[i] = " ";
         i++;
       }
     } else if (c === "/" && next === "*") {
-      out += "  ";
+      out[i] = " ";
+      out[i + 1] = " ";
       i += 2;
       while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) {
-        out += text[i] === "\n" ? "\n" : " ";
+        out[i] = text[i] === "\n" ? "\n" : " ";
         i++;
       }
       if (i < text.length) {
-        out += "  ";
+        out[i] = " ";
+        out[i + 1] = " ";
         i += 2;
       }
     } else {
-      out += c;
+      out[i] = c!;
       i++;
     }
   }
-  return out;
+  return out.join("");
 }
 
 function lineOf(text: string, index: number): { line: number; snippet: string } {
@@ -266,13 +268,9 @@ interface FunctionBodyRange {
   readonly bodyEnd: number;
 }
 
-/**
- * Find function-body ranges by name. Brace counting runs against a
- * comment-masked copy (same length as `text`) so `/* } *\/` inside a JSDoc
- * doesn't unbalance the depth tracker. String/template-literal contents are
- * still unmasked — out of scope for these scanned mission-control functions,
- * which don't embed `{`/`}` chars in string literals.
- */
+// Brace counting runs over the comment-masked copy so `/* } */` in a JSDoc
+// can't unbalance the depth tracker. Braces inside string/template literals
+// are not masked (out of scope for the scanned mission-control functions).
 function extractFunctionBodies(
   text: string,
   names: readonly string[],

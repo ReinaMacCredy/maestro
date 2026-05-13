@@ -3,22 +3,14 @@ import { fail, toCallToolResult, type CallToolResult } from "./errors.js";
 
 type RequestHandler = (request: unknown, extra: unknown) => Promise<unknown>;
 
-interface PrivateProtocol {
-  _requestHandlers: Map<string, RequestHandler>;
-}
-
-interface PrivateServerHolder {
-  server: PrivateProtocol;
-}
-
 /**
  * Replaces the SDK's `tools/call` handler with a wrapper that rewrites
  * the SDK's verbose InvalidParams error text into the doctrine shape:
  * `{ code: "INVALID_ARG", message, arg }`.
  *
  * Reaches through `server._requestHandlers` because the SDK doesn't expose a
- * public hook. Guarded so future SDK refactors degrade to no-op rather than
- * crash — callers still get raw SDK errors, just not the rewritten shape.
+ * public hook. Guarded so a future SDK refactor degrades to no-op rather than
+ * crashing startup — callers just see the raw SDK error shape.
  *
  * Call after all tools are registered so the SDK has installed its handler.
  */
@@ -32,19 +24,16 @@ export function installToolErrorInterceptor(server: McpServer): void {
       const result = await original(request, extra);
       return rewriteInvalidParamsError(result);
     });
-  } catch {
-    // SDK internals froze the map or rejected the set — leave the original
-    // handler in place rather than crash on startup.
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    // Frozen Map / hardened SDK — leave the original handler in place.
   }
 }
 
 function resolveRequestHandlers(server: McpServer): Map<string, RequestHandler> | undefined {
-  const holder = server as unknown as Partial<PrivateServerHolder>;
-  const inner = holder.server;
-  if (inner === undefined) return undefined;
-  const handlers = (inner as Partial<PrivateProtocol>)._requestHandlers;
-  if (!(handlers instanceof Map)) return undefined;
-  return handlers as Map<string, RequestHandler>;
+  const inner = (server as unknown as { server?: unknown }).server;
+  const handlers = (inner as { _requestHandlers?: unknown } | undefined)?._requestHandlers;
+  return handlers instanceof Map ? (handlers as Map<string, RequestHandler>) : undefined;
 }
 
 const INPUT_VALIDATION_PREFIX = "MCP error -32602: Input validation error:";

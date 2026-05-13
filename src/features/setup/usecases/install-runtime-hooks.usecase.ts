@@ -1,5 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { ensureDir } from "@/shared/lib/fs.js";
+import { writeFile } from "node:fs/promises";
+import { ensureDir, readText } from "@/shared/lib/fs.js";
 import { detectHostRuntimes, type DetectedHostRuntime } from "./detect-host-runtime.usecase.js";
 
 export interface RuntimeHookInstallResult {
@@ -32,7 +32,7 @@ async function installFor(
   runtime: DetectedHostRuntime,
   deps: InstallRuntimeHooksDeps,
 ): Promise<RuntimeHookInstallResult> {
-  const read = deps.read ?? readFileSafe;
+  const read = deps.read ?? readText;
   const write = deps.write ?? writeFileSafe;
 
   const existing = await read(runtime.hooksFile);
@@ -51,32 +51,19 @@ async function installFor(
 }
 
 function renderHookPayload(runtime: DetectedHostRuntime["id"]): string {
-  const startCmd = 'maestro session start "$TASK_ID"';
-  const exitCmd = 'maestro session exit "$TASK_ID"';
-  const lines = [
-    `# Maestro session hooks (${runtime})`,
-    "",
-    "This file is informational. To activate these hooks in the host runtime,",
-    "wire them into the runtime's native config (e.g. `hooks.SessionStart` /",
-    "`hooks.SessionEnd` in Claude Code's `settings.json`).",
-    "",
-    `- SessionStart -> \`${startCmd}\``,
-    `- SessionEnd   -> \`${exitCmd}\``,
-  ];
-  return lines.join("\n");
+  return `# Maestro session hooks (${runtime})
+
+This file is informational. To activate these hooks in the host runtime,
+wire them into the runtime's native config (e.g. \`hooks.SessionStart\` /
+\`hooks.SessionEnd\` in Claude Code's \`settings.json\`).
+
+- SessionStart -> \`maestro session start "$TASK_ID"\`
+- SessionEnd   -> \`maestro session exit "$TASK_ID"\``;
 }
 
 function mergeHookIntoExisting(existing: string, payload: string): string {
   const trimmed = existing.endsWith("\n") ? existing : `${existing}\n`;
   return `${trimmed}\n${SENTINEL}\n${payload}\n`;
-}
-
-async function readFileSafe(path: string): Promise<string | undefined> {
-  try {
-    return await readFile(path, "utf8");
-  } catch {
-    return undefined;
-  }
 }
 
 async function writeFileSafe(path: string, content: string): Promise<void> {

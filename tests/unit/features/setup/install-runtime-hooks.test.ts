@@ -3,9 +3,10 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { installRuntimeHooks } from "@/features/setup";
+import { fileExists } from "@/shared/lib/fs.js";
 
 describe("installRuntimeHooks", () => {
-  it("installs hooks into detected runtime dirs", async () => {
+  it("installs hooks into detected runtime dirs and leaves settings.json untouched", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "setup-hooks-"));
     await mkdir(join(tmp, ".claude"), { recursive: true });
     const results = await installRuntimeHooks(tmp);
@@ -16,16 +17,7 @@ describe("installRuntimeHooks", () => {
     expect(content).toContain("maestro-managed: session hooks");
     expect(content).toContain('maestro session start "$TASK_ID"');
     expect(content).toContain('maestro session exit "$TASK_ID"');
-  });
-
-  it("does not write to the host runtime's settings.json", async () => {
-    const tmp = await mkdtemp(join(tmpdir(), "setup-hooks-"));
-    await mkdir(join(tmp, ".claude"), { recursive: true });
-    await installRuntimeHooks(tmp);
-    const settingsExists = await readFile(join(tmp, ".claude/settings.json"), "utf8")
-      .then(() => true)
-      .catch(() => false);
-    expect(settingsExists).toBe(false);
+    expect(await fileExists(join(tmp, ".claude/settings.json"))).toBe(false);
   });
 
   it("is idempotent — re-running reports already-present", async () => {
