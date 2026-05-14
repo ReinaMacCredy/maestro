@@ -240,17 +240,27 @@ export function projectHomeSnapshot(input: HomeProjectionInput): MissionControlS
   const { status } = env;
   const backgroundMode = getMissionControlBackgroundMode(configLayers.effective);
 
+  // A task-only project should not present as "No missions yet" — that
+  // makes the dashboard look empty when there's actually a backlog. When
+  // any task exists, surface the task count instead.
+  const taskCount = taskBoard?.totalCount ?? 0;
+  const hasTasks = taskCount > 0;
+
   const headline = status.gitAvailable
-    ? "No missions yet"
+    ? hasTasks
+      ? `${taskCount} ${taskCount === 1 ? "task" : "tasks"} in this project`
+      : "No missions yet"
     : "No project detected";
 
   const summary = status.gitAvailable
-    ? "Initialize this repository, then create your first mission."
+    ? hasTasks
+      ? "Run `maestro task status` to see your queue, or create a mission for larger work."
+      : "Initialize this repository, then create your first mission."
     : status.initialized
       ? "Global setup is ready. Open a project repository to start tracking missions here."
       : "Open a git repository to track missions, checkpoints, and launches here.";
 
-  const actions = buildHomeActions(status, checks);
+  const actions = buildHomeActions(status, checks, hasTasks);
 
   const agentGrid = buildAgentGrid([]);
   const homeReplyInbox = replies ? buildReplyInbox([], replies) : undefined;
@@ -320,6 +330,7 @@ function findActiveFeature(taskPreviews: readonly TaskPreviewPane[]): MissionCon
 function buildHomeActions(
   status: StatusReport,
   checks: readonly DoctorCheck[],
+  hasTasks = false,
 ): readonly MissionControlHomeAction[] {
   const actions: MissionControlHomeAction[] = [];
   const projectConfig = checks.find((check: DoctorCheck) => check.name === "project-config");
@@ -349,11 +360,27 @@ function buildHomeActions(
     });
   }
 
-  actions.push({
-    label: "Run environment checks",
-    command: "maestro doctor",
-    detail: "Verify git and config health before starting work.",
-  });
+  // Task backlog beats mission-create as the natural first action when
+  // tasks already exist — a task-only project should land on its queue.
+  if (hasTasks) {
+    actions.push({
+      label: "See task queue",
+      command: "maestro task status",
+      detail: "Review the task backlog and pick the next ready item.",
+    });
+  }
+
+  // Only surface the doctor suggestion when something is actually wrong —
+  // showing it on a clean repo misleads users into thinking they need to
+  // run diagnostics on a healthy project.
+  const hasFailingCheck = checks.some((check) => check.status !== "ok");
+  if (hasFailingCheck) {
+    actions.push({
+      label: "Run environment checks",
+      command: "maestro doctor",
+      detail: "Verify git and config health before starting work.",
+    });
+  }
 
   return actions;
 }

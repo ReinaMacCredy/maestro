@@ -28,8 +28,8 @@ export async function auditInstall(args: AuditInstallArgs): Promise<AuditInstall
   const findings: AuditFinding[] = [];
   const tocBudget = args.tocBudget ?? DEFAULT_TOC_BUDGET;
 
+  await checkProjectInitialized(args.projectRoot, findings);
   await checkAgentsMdSize(args.projectRoot, tocBudget, findings);
-  await checkDocsPresence(args.projectRoot, findings);
   await checkOwnersYaml(args.projectRoot, findings);
   await checkOrphanRunDirs(args.projectRoot, findings);
 
@@ -61,6 +61,17 @@ export async function auditInstall(args: AuditInstallArgs): Promise<AuditInstall
   };
 }
 
+async function checkProjectInitialized(root: string, findings: AuditFinding[]): Promise<void> {
+  const path = join(root, ".maestro");
+  if (!(await dirExists(path))) {
+    findings.push({
+      code: "project-not-initialized",
+      severity: "warn",
+      message: ".maestro/ directory not found — run `maestro init` to bootstrap project state",
+    });
+  }
+}
+
 async function checkAgentsMdSize(
   root: string,
   budget: TocBudget,
@@ -89,19 +100,6 @@ async function checkAgentsMdSize(
       severity: "warn",
       message: `AGENTS.md is ${report.lines} lines (warn at ${budget.warnLimit}, hard ${budget.hardLimit})`,
     });
-  }
-}
-
-async function checkDocsPresence(root: string, findings: AuditFinding[]): Promise<void> {
-  const required = ["docs/harness-positioning.md", "docs/schedule-recipes.md"];
-  for (const rel of required) {
-    if (!(await fileExists(join(root, rel)))) {
-      findings.push({
-        code: "doc-missing",
-        severity: "warn",
-        message: `Expected ${rel} missing`,
-      });
-    }
   }
 }
 

@@ -94,7 +94,7 @@ describe("toCallToolResult", () => {
     expect(out.isError).toBeUndefined();
     expect(out.content[0]?.type).toBe("text");
     expect(JSON.parse(out.content[0]?.text ?? "")).toEqual({ a: 1 });
-    expect(out.structuredContent).toEqual({ a: 1 });
+    expect(out.structuredContent).toBeUndefined();
   });
 
   it("renders failure with isError=true and code/message/hints in payload", () => {

@@ -144,7 +144,36 @@ describe("registerNoteCommand", () => {
     await expect(
       program.parseAsync(["node", "maestro", "note"]),
     ).rejects.toMatchObject({
-      message: "--content is required unless --list is used",
+      message: "Provide the note text positionally or via --content, or pass --list",
+    });
+  });
+
+  it("accepts a positional argument as the note content", async () => {
+    const captured = captureConsole();
+    const deps = noteDeps({
+      createNote: async (_git, _store, opts) => ({
+        timestamp: "2026-04-15T09:00:00.000Z",
+        git_branch: "main",
+        content: opts.content,
+      }),
+    });
+
+    const program = new Command().name("maestro").option("--json", "Output as JSON");
+    registerNoteCommand(program, deps);
+
+    await program.parseAsync(["node", "maestro", "note", "hello", "from", "positional"]);
+
+    expect(captured.logs.join("\n")).toContain("hello from positional");
+  });
+
+  it("rejects both positional and --content together", async () => {
+    const program = new Command().name("maestro").option("--json", "Output as JSON");
+    registerNoteCommand(program, noteDeps());
+
+    await expect(
+      program.parseAsync(["node", "maestro", "note", "hi", "--content", "also"]),
+    ).rejects.toMatchObject({
+      message: "Pass the note text positionally or via --content, not both",
     });
   });
 });

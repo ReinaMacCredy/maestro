@@ -1,5 +1,430 @@
 # Changelog
 
+## 0.80.16 - UAT round-8: drop `assignee` from lean task summary
+
+Round-8 brownfield UAT verdict was PROD-READY: YES with one MED finding:
+the lean projection of `Task` exposed `assignee` conditionally (only when
+non-undefined) on both CLI `task list --json` and MCP `maestro_task_list`
+default `view: "summary"`. That violates the token-budget doctrine in
+two ways — the field is detail-grade (the `status` field already signals
+open vs taken for claim decisions), and conditional presence makes the
+lean schema unstable for agents pattern-matching keys.
+
+### Fixed
+
+- **Lean task summary drops `assignee`.** `summarizeTask` no longer
+  emits the `assignee` field; agents that need the owner string recover
+  it with `--full` / `view: "full"` or `task get <id>` / `task introspect`.
+  Affects both CLI `task list --json` and MCP `maestro_task_list` lean
+  view. `--full` shape unchanged.
+
+## 0.80.15 - prod polish: warn-once for missing config.yaml on task create
+
+Closes the last LOW Round-7 friction item so the agent loop is fully
+clean. Also re-validated and triaged the remaining Round-7 LOW finding:
+`mission-control --preview tasks` was reported as "renders home screen
+not tasks"; the task-board modal does in fact render as an overlay with
+all tasks visible. The `HOME` section indicator reflects the underlying
+screen, not the modal kind. No change needed — the brownfield UAT
+agent missed the overlay while skim-reading the header.
+
+### Fixed
+
+- **`task create` no longer reshouts the missing-config banner on every
+  call.** The "No .maestro/config.yaml found — run 'maestro init'"
+  warning previously fired on every human-text `task create` in an
+  un-init'd project, which the Round-7 UAT flagged as LOW noise for
+  scripts that issue many creates in a row. Now the warning fires only
+  on the first task in the project (i.e. `task create` finds zero
+  existing tasks before the create). Subsequent creates stay quiet,
+  since by then the agent has clearly seen the verb works and the
+  prompt to init no longer changes behavior. `--json` and `--silent`
+  paths remain unaffected.
+
+## 0.80.14 - UAT round-7: duplicate-flag silent-pick fix + task-complete shim + handoff help text
+
+Round-7 UAT (greenfield + brownfield, real MCP server, v0.80.13 binary)
+surfaced one real regression and two LOW friction items. Closes them so
+the agent loop reaches "all prod" status. Round-7 also surfaced two
+HIGH/MED findings (MCP cwd-scoping; `maestro_evidence_record` schema
+empty; `view` param missing on `maestro_task_list`) that triaged as UAT
+methodology false positives — the sub-agents inherited the parent
+session's pre-rebuild MCP runtime, so they were inspecting stale tool
+schemas. The current binary's MCP server has populated schemas and the
+`view` param on list verbs, verified by `tools/list` against the
+v0.80.13 build.
+
+### Fixed
+
+- **Duplicate-flag silent-pick on alias options.** v0.80.12 fixed
+  `positional + --flag` duplication on `task introspect --task`, but
+  Commander's default last-wins behavior still let `--task X --task X`
+  (or `X Y`) silently succeed. Same on `task create --title A --title B`
+  (v0.80.13 introduced the flag, inherited the same hole). Now the
+  parser rejects repeated use with a clean
+  `error: option '--task <id>' argument 'X' is invalid. pass it once,
+  not multiple times` and exits 1. Applied to `--task` on
+  `task introspect`, `task update`, and `--title` on `task create`. A
+  new `singletonOption` parser in `src/shared/lib/cli-options.ts`
+  carries the policy so future alias flags can opt in.
+
+- **`maestro task complete <id>` now points at the canonical path.**
+  Agents pattern-match the MCP tool name `maestro_task_complete` and
+  try the same verb on the CLI; previously Commander emitted an opaque
+  "unknown command". Added a hidden shim that throws the same
+  `taskCompletedViaUpdateStatus` redirect as `task close`, so agents
+  get the explicit "use `maestro task update <id> --status completed
+  --reason "..."`" hint instead of a dead end.
+
+- **`maestro handoff --help` now describes the bare-invocation
+  behavior.** The v0.80.13 change made `maestro handoff` (no args, no
+  launch flags) list existing packets, but the verb description still
+  read "Launch or pick up standalone task handoff packets" with no
+  mention of the listing path. Help text now mentions both branches
+  and the `list`/`pickup`/`show` subcommands.
+
+## 0.80.13 - prod polish: handoff-bare default, task-create --title alias
+
+Closes the two remaining LOW friction items surfaced across Round 5/6
+UAT so the agent loop is "production polish" clean. Both fixes are
+ergonomic — no semantic change to existing usage, just one new tolerant
+default and one alias.
+
+### Fixed
+
+- **`maestro handoff` (no args) now lists existing packets instead of
+  erroring.** Bare invocation with no positional, no `--prompt-file`,
+  and no launch flags (`--agent`, `--task-id`, `--model`, `--worktree`,
+  `--base`, `--wait`) is treated as a discovery query: agents
+  exploring the verb get the same output as `maestro handoff list`
+  rather than a "Task description required" error. Any explicit launch
+  signal still routes to the launch path, so a mis-typed task arg
+  can't silently become a list. `--json` returns the lean 20-item
+  summary used elsewhere.
+
+- **`maestro task create --title <title>` accepts the title via flag.**
+  Agents that pattern-match on `--title` (a common convention from
+  other task systems) no longer have to special-case `task create` as
+  positional-only. The positional form still works; passing both is
+  rejected with a "pass it just once" hint, matching the
+  `task introspect` / `task verify` / `task proof` `--task` vs
+  positional pattern.
+
+## 0.80.12 - UAT round-6 mop-up: task introspect same-id edge case
+
+Round-6 UAT (greenfield + brownfield, real MCP server, v0.80.11 binary)
+declared the agent loop "good enough" — both agents returned `YES`.
+This release closes the single MED edge case greenfield surfaced.
+
+### Fixed
+
+- **`task introspect --task X X` (same id in both slots) now errors
+  cleanly.** Previously the duplication guard only fired when the
+  positional and `--task` values differed, so `--task tsk-abc tsk-abc`
+  silently succeeded and hid the fact that the caller was uncertain
+  which form the verb took. Now both same-value and differing-value
+  cases reject with the same "pass it just once" hint.
+
+## 0.80.11 - UAT round-5: MC task-awareness ACTUALLY fires + setup, introspect, gc, verdict_request hardening
+
+Round-5 UAT (greenfield + brownfield, real MCP server connections) found
+one HIGH regression and four MED/LOW friction items.
+
+### Fixed
+
+- **Mission Control task-aware headline now fires for `--preview` and
+  `--preview <screen>` (HIGH regression).** The v0.80.10 projection fix
+  branched on `taskBoard.totalCount`, but the home/dashboard preview
+  paths set `includeTaskBoard: false` — so the board never loaded and
+  the headline silently stayed at "No missions yet" even with tasks
+  present. `buildMissionControlSnapshotDemand` now requests the task
+  board for every preview screen (the home projection consumes it
+  regardless of which screen is being rendered).
+- **`maestro task introspect` accepts `--task <id>` (MED).** Mirrors
+  `task verify` and `task proof`, which were already on the flag form.
+  Agents extrapolating from those verbs no longer trip on
+  `error: unknown option '--task'`. Positional `<id-or-slug>` still
+  works; passing both errors out explicitly with a typed MaestroError.
+- **`maestro gc` (bare) exits 0 with help text (LOW).** Was exiting 1
+  while printing help, inconsistent with other group commands. Now
+  matches `--help` semantics.
+- **`maestro setup --check` warns when `.maestro/` is missing (MED).**
+  Previously emitted "Setup audit — OK" on a completely un-initialized
+  repo, which read as success to first-time greenfield agents. New
+  `project-not-initialized` finding directs the user to run
+  `maestro init` first.
+- **`maestro_verdict_request` returns `NO_COMMITS` on an empty repo
+  (MED).** The verifier's `git rev-parse HEAD^{tree}` call surfaced the
+  raw `fatal: ambiguous argument 'HEAD^{tree}'` git error to the MCP
+  caller — unactionable for agents. Now translates to a typed
+  `NO_COMMITS` failure with a hint to `git commit` first.
+
+### Build correctness
+
+- **Verified `dist/maestro` matches HEAD.** Round-5 surfaced that
+  `dist/maestro` was built 14s before the v0.80.10 commit landed, so
+  the test fleet was unknowingly exercising v0.80.9. The HIGH "R14
+  regression" above existed in v0.80.10 too, but went undetected
+  because the binary under test predated the projection.ts fix. Pre-
+  test step: `bun run build && ./dist/maestro --version` to confirm git
+  sha against HEAD.
+
+## 0.80.10 - UAT round-4 brownfield: receipt invariant, mission-control task awareness, state/get aliases
+
+Round-4 brownfield UAT reported one HIGH-severity issue plus two
+medium-impact items affecting first-time agent ergonomics. All fixed.
+
+### Fixed
+
+- **`maestro_task_complete` now rejects calls without `summary` or
+  `reason` (HIGH).** The MCP handler accepted `{id}` with no receipt
+  text, silently producing context-free completions that violated the
+  `maestro-task` skill's hard rule #2 ("Every completion carries
+  `--reason`"). Now returns `INVALID_ARG { arg: "summary" }` with hints
+  pointing at the rule. Mirrors the CLI invariant. Tool description and
+  schema describe the constraint up front.
+- **Mission Control is no longer task-blind on a task-only project.**
+  When `missions=0` and the task store has at least one task, the home
+  headline reports `N tasks in this project` (not "No missions yet"),
+  the summary directs the user to `maestro task status`, and the action
+  list includes "See task queue" instead of presenting "Initialize this
+  project" / "Run maestro doctor" as the only paths forward.
+- **`maestro state` (bare) now defaults to a 24-hour summary.** Was
+  exiting 1 with subcommand help on stderr — confusing for first-timers
+  who expected a state summary. `state since <iso>` still works; bare
+  `state` now executes `state since now-24h` and exits 0.
+- **`maestro task get` is an alias for `task show`.** Agents reading the
+  MCP `maestro_task_get` tool name no longer trip on the CLI naming
+  mismatch.
+
+## 0.80.9 - UAT round-4 fixes: MC doctor stale hint, note positional, audit noise, advisory polish
+
+Round-4 UAT (real MCP, greenfield) reported zero HIGH-severity issues and
+declared the agent loop ready. Six MED/LOW friction items addressed here:
+
+### Fixed
+
+- **MC Activity panel no longer emits `next: Run maestro doctor` on a clean
+  repo (F1).** The home-mode action list correctly omits the doctor action
+  when checks all pass; the Activity panel renderer was hard-coding the
+  string as a fallback. Now the `next:` line is skipped entirely when there
+  is no recommended action.
+- **`maestro note "text"` accepts a positional argument (F2).** The natural
+  first invocation no longer fails with `too many arguments`. Both
+  `maestro note "..."` and `maestro note --content "..."` work; passing both
+  errors out explicitly.
+- **`maestro_handoff_pickup.actorAgent` schema description names the
+  Claude-Code convention (F3).** Adds "Claude Code agents pass `claude`
+  (not `claude-code`)" so agents that read schema descriptions know which
+  enum value to use.
+- **`maestro session` no-args error mentions subcommands (F4).** First-time
+  agents who run `maestro session` outside an agent env now see a hint
+  pointing at `maestro session start <taskId>` / `exit <taskId>` and
+  `--help`.
+- **`maestro setup --check` no longer warns about
+  `docs/harness-positioning.md` / `docs/schedule-recipes.md` on fresh user
+  projects (F5).** Those docs are maestro-repo-internal; the audit check
+  leaked maestro-self-audit findings into user-facing output. Removed.
+- **`maestro task proof` surfaces an advisory when no contract or spec
+  exists (F6).** Empty proof output used to mean "no criteria found" with
+  no guidance on how to add criteria. JSON output gains a `warning:
+  "no-criteria-source"` field plus a `hint` pointing at
+  `task contract new <id> --from default`; text output prints both lines.
+
+## 0.80.8 - UAT round-3 mop-up: contract-lock hint upgrade, task-ready hint signal cleanup
+
+Last two carry-overs from round-3 UAT, addressed in one shot:
+
+### Changed
+
+- **Contract-lock failure hints now name the template path and CLI shortcut.**
+  The MaestroError raised when `maestro task contract lock` fails on a
+  draft was telling agents what was missing without telling them where to
+  find the schema. The error now points at
+  `.maestro/tasks/contract-templates/default.md` and surfaces the
+  `--from default` shortcut, in addition to the `contract show` repro
+  command.
+- **`task ready` hints filter out generic task-verb noise.** The keyword
+  extractor's stop-list now drops `fix`, `add`, `remove`, `bump`,
+  `refactor`, `task`, `bug`, `feature`, and other meta-nouns that
+  appeared in nearly every task title and so dominated the candidate
+  index. Hints surfaced by `task ready` (and `findSimilarTasks`) now key
+  off specific domain nouns — `argon2`, `jwt`, `middleware`, etc. —
+  instead of producing matches purely on shared verbs.
+
+## 0.80.7 - UAT round-3 followups: MCP tool table coverage, doctor-suggestion gating
+
+Two more findings from round-3 UAT:
+
+### Changed
+
+- **`skills/bundled/maestro-task/SKILL.md`** documents all 18 MCP tools.
+  Was missing the verdict, policy, and handoff families (~7 tools).
+  Added a "When" column and explicit notes on the `id` vs `taskId`
+  parameter convention and the `summary`/`reason` alias on
+  `maestro_task_complete`.
+- **Mission Control** no longer suggests `maestro doctor` on a healthy
+  repo. The action is now gated on at least one failing doctor check —
+  showing it unconditionally misled first-time users into running
+  diagnostics on a clean project.
+
+## 0.80.6 - UAT round-3 fixes (evidence_record schema, task verify exit, lean skills list, CLI/MCP parity)
+
+Round-3 UAT (greenfield + brownfield, real MCP server connection) found
+two HIGH-severity issues blocking first-time MCP agent loops, plus four
+moderate friction items. All addressed in this release.
+
+### Fixed
+
+- **`maestro_evidence_record` MCP schema is no longer empty (HIGH).**
+  `EvidenceRecordInput` used `z.object().refine().refine()`, which wraps
+  the schema in `ZodEffects`. The SDK could not introspect `.shape`, so
+  `tools/list` surfaced `{"properties": {}}` — agents had zero guidance
+  on what to pass. Split into `EvidenceRecordShape` (raw record, used
+  for tool registration) and `EvidenceRecordInput` (full schema with
+  refines, applied at runtime). Cross-field validation still rejects
+  bad inputs with `INVALID_ARG` carrying the offending `arg`.
+- **`task verify` exits 0 on the no-contract skip path (HIGH).** Was
+  exiting 2 (intended as "warn"), which aborted any agent shell running
+  under `set -e` or composing with `task verify && next-step`. The
+  advisory JSON / text message still calls out the skip; exit code now
+  matches the semantics (verifier didn't run, but that's not a failure).
+
+### Changed
+
+- **`skills list` JSON default drops `description` (MED, 57 % cut).**
+  130 skills × ~200-char descriptions = 25 KB of context-tax on every
+  startup-time `skills list`. Default now returns `{name, scope,
+  source}` only. `--full` recovers `description`, `path`, `root`,
+  `metadata`. Bodies remain exclusive to `skills inspect <name>`.
+  Probe diff: `skills list default` shrank from 30 889 B / 8 816 tok
+  to 13 200 B / 3 772 tok.
+- **`maestro_task_complete` accepts `reason` as an alias for `summary`.**
+  CLI uses `--reason`; the MCP schema only accepted `summary`. Agents
+  reading CLI docs and then calling the MCP tool tripped on the rename.
+- **Session-fallback hint suppressed when stderr is piped or
+  `MAESTRO_QUIET=1`.** The `[info] no agent session detected` message
+  was firing on every mutating command for piped/scripted runs (the
+  agent-loop dominant case). Now gated on `process.stderr.isTTY`.
+
+### Doc
+
+- `docs/token-budget.md` clarifies that `inspect token-budget` has no
+  `--full` flag — the probe always exercises both modes automatically.
+
+## 0.80.5 - omit dead fields from MCP responses (research-grounded null/empty pruning)
+
+Token-budget pass two — apply the TOON-style "omit null and empty fields
+entirely" pattern that Anthropic context-engineering and MCP community
+guidance both call out as the highest-ROI cut on agent-facing responses.
+
+### Changed
+
+- **`maestro_policy_check`** omits `matchedRiskPolicyRow` entirely when no
+  policy row matched. Previously emitted `"matchedRiskPolicyRow": null`,
+  ~28 bytes of zero-information overhead on every successful call.
+- **`maestro_contract_amend`** omits `skippedAddPaths` when the array is
+  empty. Most amendments don't skip paths; emitting `"skippedAddPaths":[]`
+  was pure noise.
+
+Both are non-breaking: agents that already truthy-checked these fields
+(`if (response.matchedRiskPolicyRow)`) work unchanged.
+
+## 0.80.4 - skills list --full drops body (876 KB savings)
+
+Doctrine-aligned regression: `skills list --full` was emitting every
+SKILL.md body inline. The doctrine has always said "`skills list` exposes
+summary records; `skills inspect <name>` reads the `body`", so the
+verbose list path was silently violating it.
+
+### Fixed
+
+- **`skills list --full --json`** drops the `body` field. The new
+  `--full` projection still includes `description`, `path`, `root`,
+  `metadata`, `source`, `scope` — the bits the summary projection
+  drops — but bodies are exclusive to `skills inspect <name>`.
+- **`maestro inspect token-budget`** measures the difference:
+  `skills list --full` shrank from 988 KB / 281 K tokens to 83 KB /
+  24 K tokens — a 92 % cut on the worst-offending list verb.
+
+### Added
+
+- `SkillDetail` projection type (`Omit<SkillRecord, "body">`) and
+  `detailSkill()` helper alongside the existing `summarizeSkill()`.
+
+## 0.80.3 - token-budget doctrine: MCP success responses minified, no duplicate structuredContent
+
+Token optimization sweep grounded in the doctrine doc and Anthropic guidance
+on writing tools for agents.
+
+### Changed
+
+- **MCP success responses** drop the duplicate `structuredContent` field.
+  Per the existing doctrine ("text content in `content[0].text` is the
+  authoritative payload"), the typed copy was pure duplication. Removing it
+  cuts response size for every successful MCP tool call.
+- **MCP success responses** are minified (no `null, 2` pretty-print).
+  Indentation is pure whitespace overhead for agent consumers.
+
+### Removed
+
+- `src/features/mcp/server/schemas/outputs.ts` — dead `outputSchema` Zod
+  definitions that were never wired in.
+
+### Doc
+
+- `docs/token-budget.md` MCP section updated to reflect minified text and
+  no-`structuredContent` convention.
+
+## 0.80.2 - UAT round-2 follow-ups: token-budget probe binary, slug-aware claim/unclaim
+
+Round-2 UAT against v0.80.1 confirmed all five round-1 fixes held, then
+surfaced two new issues:
+
+### Fixed
+
+- **`maestro inspect token-budget`** now resolves its self-binary via
+  `process.execPath` first, then falls back to `process.argv[0]` and only
+  finally to `dist/maestro`. Previously the probe would silently fail (every
+  row marked `[err]`, 0 bytes) when run from the installed binary without
+  `MAESTRO_BIN` set, defeating the purpose of the regression guard.
+- **`maestro task claim`** and **`maestro task unclaim`** now accept slugs
+  in addition to task ids (parity with `task update`, `task show`). Previously
+  these verbs would reject any slug with "task not found," forcing users to
+  call `task list --json` to harvest the numeric id first.
+
+## 0.80.1 - UAT-driven friction fixes: lean skills list, future-verb parity, install-hooks UX
+
+Real-scenario greenfield + brownfield UAT (sub-agent first-time users) flagged
+five concrete pain points on top of v0.80.0. All addressed in this release.
+
+### Changed
+
+- **`maestro skills list` is quiet by default.** Informational warnings
+  (shadowed-skill notices, name/directory mismatches) no longer print to
+  stderr unless `--verbose` is passed. Default text output is the clean skill
+  table only; only `error`-level diagnostics surface without `--verbose`.
+- **`maestro skills list --full` is now actually verbose.** Text output adds
+  the first-sentence description and source label per skill (previously it
+  was identical to default but paid ~293k tokens in JSON). JSON `--full`
+  retains the full `SKILL.md` body.
+- **`maestro setup --check`** no longer flags the `maestro qa`/`qa install`/
+  `qa check`/`qa modalities` verbs from the bundled `maestro-qa` skill as
+  binary drift. The skill declares them as `parity-skip-verbs` in its
+  frontmatter; `checkSkillBinaryParity` honors that list.
+- **`maestro setup --install-hooks`** now prints actionable guidance when no
+  host runtime is detected instead of a single-line no-op message.
+- **`maestro task update`** accepts `--receipt <text>` as an alias for
+  `--summary <text>`, matching the conceptual model used in `task show`.
+- **`maestro task create`** prints a one-line hint to run `maestro init`
+  when the project has no `.maestro/config.yaml`.
+
+### Internal
+
+- New frontmatter field `parity-skip-verbs` for bundled SKILL.md files.
+  Forward-looking documentation of future CLI verbs no longer trips drift
+  checks.
+
 ## 0.80.0 - harness pivot: trust substrate, token-budget doctrine, lean MCP
 
 Three PRs land in this release: #56 (CodeQL alerts), #57 (handoff MCP

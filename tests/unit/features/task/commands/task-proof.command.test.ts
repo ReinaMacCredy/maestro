@@ -189,12 +189,14 @@ describe("task proof", () => {
       expect(exitCode).toBe(0);
     });
 
-    it("prints 'no criteria found' when task has no missionId and no contract", async () => {
+    it("surfaces an advisory + hint when task has no missionId and no contract", async () => {
       const task = makeTask({ missionId: undefined });
       const taskStore = mockTaskStore([task]);
       const deps = makeDeps({ taskStore });
       const { logs } = await runProof(["--task", TASK_ID], deps);
-      expect(logs.join("\n")).toContain("no criteria found");
+      const joined = logs.join("\n");
+      expect(joined).toContain("nothing to prove against");
+      expect(joined).toContain("maestro task contract new");
     });
   });
 

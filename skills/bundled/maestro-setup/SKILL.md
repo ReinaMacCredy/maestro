@@ -24,9 +24,8 @@ host-runtime hook install; the skill owns the content-generation flow.
 
 - `maestro setup --check` — read-only audit. Detects host runtimes (`.claude/`,
   `.codex/`, `.cursor/`), AGENTS.md size against the TOC budget (default 160
-  lines hard, 140 warn), required docs (`docs/harness-positioning.md`,
-  `docs/schedule-recipes.md`), `owners.yaml` role coverage, orphan run dirs,
-  and bundled-skill verb drift vs the local binary. Exit 0 clean, 1 with any
+  lines hard, 140 warn), `owners.yaml` role coverage, orphan run dirs, and
+  bundled-skill verb drift vs the local binary. Exit 0 clean, 1 with any
   `error`-severity findings.
 - `maestro setup --self-test` — sandboxed self-test in a tmpdir. Provisions
   a synthetic task layout, exercises the evidence store, and reports

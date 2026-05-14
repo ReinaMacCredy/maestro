@@ -21,7 +21,10 @@ export function registerGcCommand(
 ): void {
   const gcCmd = program
     .command("gc")
-    .description("On-demand garbage-collection verbs (doc-gardening, slop-cleanup, plan-regen)");
+    .description("On-demand garbage-collection verbs (doc-gardening, slop-cleanup, plan-regen)")
+    .action((): void => {
+      gcCmd.outputHelp();
+    });
 
   gcCmd
     .command("doc-gardening")

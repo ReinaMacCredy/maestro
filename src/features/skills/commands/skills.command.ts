@@ -45,26 +45,34 @@ export interface SkillRecord {
 /**
  * Lean projection of {@link SkillRecord} for `skills list` JSON output.
  * Drops `body` (~1 MB across the catalog), `path` (absolute and unactionable
- * — agents address skills by `name`), and truncates `description` to the
- * first sentence. `--full` recovers the pre-doctrine shape; `skills inspect
- * <name>` returns the full record.
+ * — agents address skills by `name`), and `description` (130 skills × ~200
+ * chars = 25 KB of waste in the agent's context). Agents discover skills
+ * by name + scope; the description lives in `skills inspect <name>`.
+ * `--full` adds `description`/`path`/`root`/`metadata` but still drops
+ * `body`.
  */
 export interface SkillSummary {
   readonly name: string;
-  readonly description: string;
   readonly scope: SkillRecord["scope"];
   readonly source: string;
 }
+
+/** `--full` projection: every public field except `body`. */
+export type SkillDetail = Omit<SkillRecord, "body">;
 
 const SKILL_DESCRIPTION_MAX = 200;
 
 function summarizeSkill(skill: SkillRecord): SkillSummary {
   return {
     name: skill.name,
-    description: truncateText(firstSentence(skill.description), SKILL_DESCRIPTION_MAX),
     scope: skill.scope,
     source: skill.source,
   };
+}
+
+function detailSkill(skill: SkillRecord): SkillDetail {
+  const { body: _body, ...rest } = skill;
+  return rest;
 }
 
 export interface SkillDiagnostic {
@@ -103,25 +111,33 @@ export function registerSkillsCommand(program: Command): void {
   skills
     .command("list")
     .option("--scope <scope>", "project|user|shared|all", "all")
-    .option("--full", "Include SKILL.md body in JSON output (verbose; default summary)")
+    .option("--full", "Include descriptions in text output and SKILL.md body in JSON")
+    .option("--verbose", "Show informational diagnostics (e.g. shadowed-skill notices)")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const scope = parseScope(opts.scope);
       const isFull = opts.full === true;
+      const isVerbose = opts.verbose === true;
       const result = await discoverSkills({ cwd: process.cwd(), homeDir: homedir(), scope });
       if (isJson) {
         const projected = {
-          skills: isFull ? result.skills : result.skills.map(summarizeSkill),
-          diagnostics: result.diagnostics,
+          skills: isFull ? result.skills.map(detailSkill) : result.skills.map(summarizeSkill),
+          diagnostics: isVerbose
+            ? result.diagnostics
+            : result.diagnostics.filter((d) => d.level === "error"),
         };
-        output(true, projected, formatSkillDiscoveryResult);
+        output(true, projected, (data) => formatSkillDiscoveryResult(data, isFull));
         return;
       }
       for (const diagnostic of result.diagnostics) {
-        if (diagnostic.level === "warning") warn(diagnostic.message);
+        if (diagnostic.level === "error") {
+          warn(diagnostic.message);
+          continue;
+        }
+        if (isVerbose) warn(diagnostic.message);
       }
-      output(isJson, result.skills, formatSkillList);
+      output(isJson, result.skills, (skills) => formatSkillList(skills, isFull));
     });
 
   skills
@@ -790,22 +806,39 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-function formatSkillList(skills: readonly SkillRecord[]): string[] {
+function formatSkillList(skills: readonly SkillRecord[], isFull: boolean): string[] {
   if (skills.length === 0) return ["No skills found"];
-  return [
-    `[ok] ${skills.length} skill(s)`,
-    ...skills.map((skill) => `  ${skill.name}  ${skill.scope}  ${skill.path}`),
-  ];
+  const header = `[ok] ${skills.length} skill(s)`;
+  if (!isFull) {
+    return [
+      header,
+      ...skills.map((skill) => `  ${skill.name}  ${skill.scope}  ${skill.path}`),
+    ];
+  }
+  const lines = [header];
+  for (const skill of skills) {
+    lines.push(`  ${skill.name}  [${skill.scope}]  ${skill.source}`);
+    const summary = truncateText(firstSentence(skill.description), SKILL_DESCRIPTION_MAX);
+    if (summary) lines.push(`    ${summary}`);
+    lines.push(`    path: ${skill.path}`);
+  }
+  return lines;
 }
 
-function formatSkillDiscoveryResult(result: {
-  readonly skills: readonly (SkillRecord | SkillSummary)[];
-  readonly diagnostics: readonly SkillDiagnostic[];
-}): string[] {
+function formatSkillDiscoveryResult(
+  result: {
+    readonly skills: readonly (SkillRecord | SkillSummary)[];
+    readonly diagnostics: readonly SkillDiagnostic[];
+  },
+  _isFull: boolean,
+): string[] {
   if (result.skills.length === 0) return ["No skills found"];
   return [
     `[ok] ${result.skills.length} skill(s)`,
-    ...result.skills.map((skill) => `  ${skill.name}  ${skill.scope}  ${skill.path}`),
+    ...result.skills.map((skill) => {
+      const path = "path" in skill ? skill.path : skill.source;
+      return `  ${skill.name}  ${skill.scope}  ${path}`;
+    }),
   ];
 }
 

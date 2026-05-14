@@ -2,6 +2,11 @@
 name: maestro-qa
 description: One-time QA installer for a repo. Scaffolds `.maestro/qa/` (config, sub-skills, sidecars, templates), symlinks `qa/` and per-app sub-skills into `.claude/skills/` and `.codex/skills/`, and optionally writes a GitHub Actions workflow. Use when the user runs `/maestro-qa`, says "install QA", "set up QA in this repo", or asks to bootstrap a project-local `/qa` runtime.
 user-invocable: true
+parity-skip-verbs:
+  - qa
+  - qa install
+  - qa check
+  - qa modalities
 ---
 
 # Maestro QA

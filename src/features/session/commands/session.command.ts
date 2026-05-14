@@ -74,6 +74,7 @@ async function runWhoami(
     throw new MaestroError("No session detected", [
       "Run inside Claude Code, Codex, or another supported agent",
       "The conductor reads CLAUDECODE / CODEX_THREAD_ID env vars only",
+      "Subcommands: `maestro session start <taskId>` / `exit <taskId>` (see `maestro session --help`)",
     ]);
   }
 

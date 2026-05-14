@@ -72,12 +72,14 @@ export function registerPolicyTools(server: McpServer, deps: RegisterDeps): void
             contractRiskClass,
             derivedRiskClass: derivedRiskResult.class,
             effectiveRiskClass,
-            matchedRiskPolicyRow: derivedRiskResult.matchedRow
+            ...(derivedRiskResult.matchedRow
               ? {
-                  signal: derivedRiskResult.matchedRow.signal,
-                  description: derivedRiskResult.matchedRow.description,
+                  matchedRiskPolicyRow: {
+                    signal: derivedRiskResult.matchedRow.signal,
+                    description: derivedRiskResult.matchedRow.description,
+                  },
                 }
-              : null,
+              : {}),
             autoMergeAllowed: autopilotPolicy.autoMergeAllowed[effectiveRiskClass] ?? false,
             requiredWitnessLevel: autopilotPolicy.requiredWitnessLevel[effectiveRiskClass],
             releaseRules: {

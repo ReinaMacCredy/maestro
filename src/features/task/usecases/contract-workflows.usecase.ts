@@ -354,8 +354,10 @@ async function lockContract(
   const contract = await resolveContractRef(contractStore, input.ref);
   if (!isContractLockable(contract)) {
     throw new MaestroError(`Contract ${contract.id} cannot be locked from status '${contract.status}'`, [
-      "Draft contracts need a non-empty intent, at least one expected file glob, and at least one done-when criterion",
-      `Show the draft: maestro task contract show ${contract.id}`,
+      "Required fields: `intent` (non-empty), `scope.filesExpected` (≥1 glob), `doneWhen` (≥1 criterion)",
+      "Template: `.maestro/tasks/contract-templates/default.md` shows the full schema",
+      "Or skip the YAML: `maestro task contract new <taskId> --from default` loads the template",
+      `Show the current draft: maestro task contract show ${contract.id}`,
     ]);
   }
 

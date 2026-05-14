@@ -28,7 +28,9 @@ const handoffId = z
   .describe("A maestro handoff id like 'bold-otter-1' or '2026-05-08-001'.");
 const handoffAgent = z
   .enum(["codex", "claude", "hermes"])
-  .describe("Acting agent identifier when picking up a handoff.");
+  .describe(
+    "Acting agent identifier when picking up a handoff. Claude Code agents pass `claude` (not `claude-code`); the Codex CLI passes `codex`.",
+  );
 
 const taskStatus = z
   .enum(["pending", "in_progress", "completed"])
@@ -145,7 +147,15 @@ export const TaskCompleteInput = z
     summary: z
       .string()
       .optional()
-      .describe("Optional one-line completion summary stored on the task receipt."),
+      .describe(
+        "One-line completion summary stored on the task receipt. Either `summary` or `reason` is required at runtime — calls with neither are rejected with INVALID_ARG to keep future sessions from inheriting a context-free completion.",
+      ),
+    // CLI uses `--reason`; accept it as an alias so agents that read CLI
+    // docs and then call the MCP tool don't trip on naming drift.
+    reason: z
+      .string()
+      .optional()
+      .describe("Alias for `summary` (matches the CLI's --reason flag). Provide this OR `summary`; calls with neither are rejected."),
   })
   .strict();
 
@@ -185,30 +195,37 @@ export const EvidenceListInput = z
   })
   .strict();
 
+// Raw shape exported so the MCP SDK can introspect properties for the
+// tools/list JSON Schema. Z.object().refine() returns ZodEffects, which
+// strips the `.shape` accessor — surfacing as `"properties": {}` to
+// agents calling tools/list. Refines apply in EvidenceRecordInput
+// (used for runtime parsing only).
+export const EvidenceRecordShape = {
+  taskId,
+  command: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Shell command that was executed. Pair with exitCode. Mutually exclusive with note.",
+    ),
+  exitCode: z
+    .number()
+    .int()
+    .optional()
+    .describe("Exit code of the command (0=success). Required when command is set."),
+  note: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Free-text note for manual evidence (e.g. 'Verified UI on staging'). Mutually exclusive with command.",
+    ),
+  witnessLevel: witnessLevel.optional(),
+} as const;
+
 export const EvidenceRecordInput = z
-  .object({
-    taskId,
-    command: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        "Shell command that was executed. Pair with exitCode. Mutually exclusive with note.",
-      ),
-    exitCode: z
-      .number()
-      .int()
-      .optional()
-      .describe("Exit code of the command (0=success). Required when command is set."),
-    note: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        "Free-text note for manual evidence (e.g. 'Verified UI on staging'). Mutually exclusive with command.",
-      ),
-    witnessLevel: witnessLevel.optional(),
-  })
+  .object(EvidenceRecordShape)
   .strict()
   .refine(
     (d) => (d.command !== undefined) !== (d.note !== undefined),

@@ -3,11 +3,13 @@ import { basename } from "node:path";
 import { Command, Option } from "commander";
 import { type Services } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
-import { readTextOrStdin } from "@/shared/lib/fs.js";
+import { fileExists, readTextOrStdin } from "@/shared/lib/fs.js";
+import { join as pathJoin } from "node:path";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { summarizeTask } from "@/shared/lib/projection.js";
 import { truncateText } from "@/shared/lib/truncate.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
+import { singletonOption } from "@/shared/lib/cli-options.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
@@ -168,8 +170,9 @@ Typical loop:
 
 function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
-    .command("create <title>")
+    .command("create [title]")
     .description("Create a new task")
+    .option("--title <title>", "Task title (alias for the positional arg)", singletonOption)
     .option("--description <text>", "Task description")
     .option("--type <type>", `Task type (${TASK_TYPES.join("|")})`)
     .option("--priority <n>", "Priority 0-4 (0=critical, 4=backlog)")
@@ -185,9 +188,28 @@ function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCom
     .addOption(new Option("--assignee <name>").hideHelp())
     .option("--silent", "Print only the id (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (title: string, opts): Promise<void> => {
+    .action(async (positionalTitle: string | undefined, opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
+
+      const flagTitle = typeof opts.title === "string" ? opts.title.trim() : undefined;
+      const rawTitle = positionalTitle ?? flagTitle;
+      if (rawTitle === undefined || rawTitle.length === 0) {
+        throw new MaestroError("Pass a task title", [
+          "Positional: `maestro task create \"<title>\"`",
+          "Or with the flag: `maestro task create --title \"<title>\"`",
+        ]);
+      }
+      if (positionalTitle !== undefined && flagTitle !== undefined) {
+        const detail = positionalTitle === flagTitle
+          ? `both as positional and --title ('${positionalTitle}')`
+          : `as positional ('${positionalTitle}') and --title ('${flagTitle}')`;
+        throw new MaestroError(
+          `Got title ${detail}`,
+          ["Pass it just once — either the positional or `--title`, not both"],
+        );
+      }
+      const title = rawTitle;
 
       if (opts.assignee !== undefined) {
         throw taskUpdateOwnershipViaClaim();
@@ -211,6 +233,10 @@ function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCom
       const parentId = opts.parent !== undefined
         ? (await resolveTaskRef(services.taskStore, opts.parent)).id
         : undefined;
+      // Snapshot before the create so the init-warning only fires when
+      // this is truly the agent's first task in the project.
+      const existingTasksBefore = await listTasks(services.taskStore, {});
+      const isFirstTask = existingTasksBefore.length === 0;
       const input = buildCreateInput(title, {
         description: opts.description,
         type: opts.type,
@@ -241,7 +267,25 @@ function registerCreateCommand(taskCmd: Command, program: Command, deps: TaskCom
       }
 
       output(isJson, task, formatTaskSummary);
+      await maybeWarnMissingProjectConfig(services.projectRoot, isJson, isFirstTask);
     });
+}
+
+async function maybeWarnMissingProjectConfig(
+  projectRoot: string,
+  isJson: boolean,
+  isFirstTask: boolean,
+): Promise<void> {
+  if (isJson) return;
+  // Once the agent has at least one prior task in this project, the
+  // create verb has clearly worked without an explicit init. Reshouting
+  // the same banner on every subsequent create is just noise — surface
+  // it only on the first task in a fresh `.maestro/` so the prompt lands
+  // when it would actually change behavior.
+  if (!isFirstTask) return;
+  const configPath = pathJoin(projectRoot, ".maestro", "config.yaml");
+  if (await fileExists(configPath)) return;
+  warn("No .maestro/config.yaml found — run 'maestro init' to enable mission-control and policies");
 }
 
 function registerPlanCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
@@ -395,7 +439,8 @@ function registerQuickCommand(taskCmd: Command, program: Command, deps: TaskComm
 function registerShowCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
     .command("show <id-or-slug>")
-    .description("Show task details (accepts a tsk-XXX id or a track slug)")
+    .alias("get")
+    .description("Show task details (accepts a tsk-XXX id or a track slug). Aliased as `get` to match the MCP `maestro_task_get` tool name.")
     .option("--json", "Output as JSON")
     .action(async (rawRef: string, opts): Promise<void> => {
       const services = deps.getServices();
@@ -694,12 +739,13 @@ function registerUpdateCommand(taskCmd: Command, program: Command, deps: TaskCom
   taskCmd
     .command("update [id-or-slug]")
     .description("Update task fields or move task status explicitly (accepts tsk-XXX or slug; positional or --task)")
-    .option("--task <id>", "Task id or slug (alternative to the positional argument)")
+    .option("--task <id>", "Task id or slug (alternative to the positional argument)", singletonOption)
     .option("--title <title>", "New title")
     .option("--description <text>", "New description")
     .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
     .option("--reason <text>", "Completion reason when --status completed")
     .option("--summary <text>", "Receipt summary captured on --status completed (defaults to --reason)")
+    .option("--receipt <text>", "Alias for --summary (the completion receipt)")
     .option("--surprise <text>", "Surprise/gotcha captured on --status completed")
     .option("--verified-by <name>", "Verifier captured on --status completed (repeatable)", appendVerifier, [] as string[])
     .option("--strict", "Block completion when the contract verdict is broken")
@@ -772,7 +818,9 @@ function registerUpdateCommand(taskCmd: Command, program: Command, deps: TaskCom
         dropSlug: opts.dropSlug === true ? true : undefined,
         addLabels: parseList(opts.addLabel),
         removeLabels: parseList(opts.removeLabel),
-        summary: typeof opts.summary === "string" ? opts.summary : undefined,
+        summary: typeof opts.summary === "string"
+          ? opts.summary
+          : typeof opts.receipt === "string" ? opts.receipt : undefined,
         surprise: typeof opts.surprise === "string" ? opts.surprise : undefined,
         verifiedBy: Array.isArray(opts.verifiedBy) && opts.verifiedBy.length > 0
           ? opts.verifiedBy as readonly string[]
@@ -926,8 +974,8 @@ function registerUpdateCommand(taskCmd: Command, program: Command, deps: TaskCom
 
 function registerClaimCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
-    .command("claim <id>")
-    .description("Claim exclusive ownership of a task")
+    .command("claim <id-or-slug>")
+    .description("Claim exclusive ownership of a task (accepts tsk-XXX or slug)")
     .option("--force", "Take over a task already claimed by another session")
     .option("--busy-check", "Reject the claim if this session already owns unresolved work")
     .option("--contract-required", "Always print the contract reminder note after claim")
@@ -936,13 +984,14 @@ function registerClaimCommand(taskCmd: Command, program: Command, deps: TaskComm
     .option("--stale-after <duration>", "Auto-release a dead owner's stale claim after this idle window (default 4h)")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts): Promise<void> => {
+    .action(async (rawRef: string, opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session, deps);
       if (opts.contractRequired === true && opts.contract === false) {
         throw new MaestroError("Choose either --contract-required or --no-contract, not both");
       }
+      const id = (await resolveTaskRef(services.taskStore, rawRef)).id;
       await maybeReleaseStaleOwnedTasks(deps, [sessionId]);
       await maybeReleaseStaleClaim(id, sessionId, opts.staleAfter, deps);
       const previous = await services.taskStore.get(id);
@@ -986,16 +1035,17 @@ function registerClaimCommand(taskCmd: Command, program: Command, deps: TaskComm
 
 function registerUnclaimCommand(taskCmd: Command, program: Command, deps: TaskCommandDeps): void {
   taskCmd
-    .command("unclaim <id>")
-    .description("Release task ownership")
+    .command("unclaim <id-or-slug>")
+    .description("Release task ownership (accepts tsk-XXX or slug)")
     .option("--force", "Release a task owned by another session")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts): Promise<void> => {
+    .action(async (rawRef: string, opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session, deps);
+      const id = (await resolveTaskRef(services.taskStore, rawRef)).id;
       const previous = await services.taskStore.get(id);
 
       const unclaimed = await unclaimTask(services.taskStore, id, {
@@ -1352,6 +1402,16 @@ function registerCloseCommand(taskCmd: Command): void {
     .action(() => {
       throw taskCompletedViaUpdateStatus();
     });
+  // Agents pattern-match the MCP tool name `maestro_task_complete` and try
+  // `maestro task complete <id>` on the CLI. Without this shim, Commander
+  // emits an opaque "unknown command" with no pointer to the canonical
+  // completion path. Surface the same redirect as `task close`.
+  taskCmd
+    .command("complete <id>", { hidden: true })
+    .description("Alias hint; completion goes through task update --status completed")
+    .action(() => {
+      throw taskCompletedViaUpdateStatus();
+    });
 }
 
 let warnedAboutFallbackSession = false;
@@ -1381,7 +1441,15 @@ async function resolveOwnershipSessionId(
   // (across shells, across tool calls) see the same owner id. Agents that
   // need multi-user coordination should export CODEX_THREAD_ID / CLAUDECODE
   // or pass --session explicitly.
-  if (!warnedAboutFallbackSession) {
+  //
+  // Suppress the hint when stderr is not a TTY (piped/scripted runs — the
+  // dominant case for agent loops) or when MAESTRO_QUIET=1. Interactive
+  // human runs still see it once per process via warnedAboutFallbackSession.
+  if (
+    !warnedAboutFallbackSession
+    && process.stderr.isTTY
+    && process.env.MAESTRO_QUIET !== "1"
+  ) {
     warnedAboutFallbackSession = true;
     process.stderr.write(
       "[info] no agent session detected; using a per-user synthesized session\n"

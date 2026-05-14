@@ -53,10 +53,31 @@ export function registerTaskProofCommand(
       // 4. Build proof map
       const proofMap = buildProofMap({ taskId, spec, contract, evidenceRows });
 
+      // 4b. Advisory: empty proof map with no contract or spec means there's
+      //     nothing to prove against. First-time agents read empty output as
+      //     "covered"; surface the cause so they know what to do.
+      const hasSource = spec !== undefined || contract !== undefined;
+      const advisory = (!hasSource && proofMap.entries.length === 0)
+        ? {
+            warning: "no-criteria-source" as const,
+            message: `task ${taskId} has neither a mission Spec nor a locked Contract; nothing to prove against`,
+            hint: "Lock a Contract: maestro task contract new "
+              + taskId
+              + " --from default && maestro task contract lock "
+              + taskId,
+          }
+        : undefined;
+
       // 5. Render
       if (isJson) {
-        process.stdout.write(JSON.stringify(proofMap) + "\n");
+        const payload = advisory ? { ...proofMap, ...advisory } : proofMap;
+        process.stdout.write(JSON.stringify(payload) + "\n");
       } else {
+        if (advisory) {
+          console.log(advisory.message);
+          console.log(`hint: ${advisory.hint}`);
+          return;
+        }
         printTextProofMap(proofMap);
       }
 

@@ -19,7 +19,26 @@ export function registerStateCommand(
 ): void {
   const stateCmd = program
     .command("state")
-    .description("Cross-store state queries");
+    .description("Cross-store state queries (defaults to the last 24 hours)")
+    .option("--task <id>", "Limit to a single task id")
+    .option("--json", "Output as JSON")
+    .action(async (opts): Promise<void> => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const services = deps.getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const result = await stateSince(
+        {
+          evidenceStore: services.evidenceStore,
+          verdictStore: services.verdictStore,
+          taskStore: services.taskStore,
+        },
+        {
+          since,
+          taskId: typeof opts.task === "string" ? opts.task : undefined,
+        },
+      );
+      output(isJson, result, formatStateSinceLines);
+    });
 
   stateCmd
     .command("since <iso>")

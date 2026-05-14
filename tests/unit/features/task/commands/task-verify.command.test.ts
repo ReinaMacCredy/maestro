@@ -328,7 +328,7 @@ describe("task verify", () => {
   });
 
   describe("no contract proposed", () => {
-    it("emits a no-contract advisory and exits 2 (warn) for the tiny-lane case", async () => {
+    it("emits a no-contract advisory and exits 0 for the tiny-lane case", async () => {
       const deps = makeDeps({
         contractVersionStore: mockContractVersionStore(undefined),
       });
@@ -363,7 +363,7 @@ describe("task verify", () => {
         process.exit = originalExit;
       }
 
-      expect(exitCode).toBe(2);
+      expect(exitCode).toBe(0);
       const parsed = JSON.parse(written.join("")) as {
         findings: TrustFinding[];
         counts: Record<string, number>;

@@ -9,6 +9,8 @@ export const PROJECTION_VIEWS = ["summary", "full"] as const;
 export type ProjectionView = (typeof PROJECTION_VIEWS)[number];
 
 export function summarizeTask(task: Task): TaskSummary {
+  // `status` already signals open vs taken; agents that need the owner string
+  // recover it with `--full` / `view: "full"` or `task get <id>`.
   return {
     ...(task.slug !== undefined ? { slug: task.slug } : {}),
     id: task.id,
@@ -19,7 +21,6 @@ export function summarizeTask(task: Task): TaskSummary {
     blockedByCount: task.blockedBy.length,
     ...(task.parentId !== undefined ? { parentId: task.parentId } : {}),
     ...(task.missionId !== undefined ? { missionId: task.missionId } : {}),
-    ...(task.assignee !== undefined ? { assignee: task.assignee } : {}),
   };
 }
 

@@ -153,7 +153,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "Complete a maestro task",
       description:
-        "Mark a task as completed. Optional summary is stored on the task receipt. Error codes: TASK_NOT_FOUND, ALREADY_COMPLETED, OWNERSHIP_CONFLICT.",
+        "Mark a task as completed. Requires `summary` or its alias `reason` to populate the task receipt. Error codes: INVALID_ARG (missing receipt), TASK_NOT_FOUND, ALREADY_COMPLETED, OWNERSHIP_CONFLICT.",
       inputSchema: TaskCompleteInput,
       annotations: {
         readOnlyHint: false,
@@ -166,9 +166,19 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       try {
         const services = deps.getServices();
         const { sessionId } = deps;
+        const summary = args.summary ?? args.reason;
+        if (summary === undefined || summary.trim().length === 0) {
+          return toCallToolResult(fail("INVALID_ARG", "Provide summary or reason for the completion receipt", {
+            arg: "summary",
+            hints: [
+              "Pass a one-line outcome via `summary` or its alias `reason`",
+              "Mirrors the CLI rule that `task update --status completed` requires `--reason`",
+            ],
+          }));
+        }
         const result = await services.taskStore.update(
           args.id,
-          { status: "completed", summary: args.summary },
+          { status: "completed", summary },
           { sessionId },
         );
         return toCallToolResult(ok({ task: result.task, autoClaimed: result.autoClaimed }));

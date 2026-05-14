@@ -103,13 +103,13 @@ describe("summarizeTask", () => {
       type: "task",
       priority: 2,
       blockedByCount: 1,
-      assignee: "claude",
     });
     expect("description" in summary).toBe(false);
     expect("labels" in summary).toBe(false);
     expect("createdAt" in summary).toBe(false);
     expect("updatedAt" in summary).toBe(false);
     expect("receipt" in summary).toBe(false);
+    expect("assignee" in summary).toBe(false);
   });
 
   it("omits optional fields when undefined", () => {
