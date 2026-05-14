@@ -200,8 +200,51 @@ Proposing `low` for any of the above is futile — Maestro will raise it and the
 
 ## Hand off cleanly
 
-- If `.maestro/` is present in the cwd or an ancestor (maestro project), hand off to `maestro-task`. Emit the phased plan as task-batch JSON matching `maestro task plan --schema`: each phase becomes a task with `name`, `title`, `description`, and `blockedBy` wiring the phase dependencies. `maestro-task` runs `maestro task plan --file -` and claims the first task via `--start <name>`.
-- If no maestro project is detected, switch to a generic implementation skill when the user wants execution.
-- When cross-session transfer is needed at any point during implementation, hand off to `maestro-handoff`. `maestro-handoff` writes a rich brief and launches a new session via `maestro handoff --prompt-file`.
-- Preserve the approved design unless new verified context forces the plan to reopen the design decision.
-- If the implementation skill is TDD-based, make the likely test entry points explicit in the plan.
+When `.maestro/` is present in the cwd or an ancestor (maestro project), automatically transition to execution:
+
+1. **Convert the plan to a task batch.** Map each phase to a task JSON object with `name`, `title`, `description`, `type`, `priority`, and `blockedBy` for sequencing. Top-level tasks require a `slug` (e.g., `implement/feature-x`); step tasks use `parent` instead.
+
+2. **Create tasks atomically.** Run `maestro task plan --file - --start <first-task-name>` with the task batch JSON on stdin. This creates all tasks and claims the first one in a single command.
+
+3. **Load the task skill.** After task creation succeeds, invoke the `maestro-task` skill by calling the `Skill` tool with `skill: "maestro-task"`. The task skill will take over and guide implementation.
+
+Example task batch structure:
+```json
+{
+  "batchId": "plan-<short-slug>",
+  "tasks": [
+    {
+      "name": "scaffold",
+      "title": "Scaffold feature X",
+      "description": "Create the feature directory, wire index.ts, add skeleton services.ts.",
+      "type": "feature",
+      "priority": 1,
+      "slug": "implement/feature-x"
+    },
+    {
+      "name": "impl",
+      "title": "Implement the core use-case",
+      "description": "Build the use-case behind the port; cover happy path first.",
+      "parent": "scaffold"
+    },
+    {
+      "name": "tests",
+      "title": "Add unit + integration tests",
+      "parent": "scaffold",
+      "blockedBy": ["impl"]
+    }
+  ]
+}
+```
+
+**Why this flow:**
+- Atomic task creation with referential integrity
+- No manual handoff step — the agent continues directly to implementation
+- The user sees task creation output, then implementation begins immediately
+- Idempotent retry via `batchId`
+
+**When no maestro project is detected:**
+- Switch to a generic implementation skill when the user wants execution
+- When cross-session transfer is needed, hand off to `maestro-handoff` which writes a rich brief and launches a new session via `maestro handoff --prompt-file`
+
+**Preserve the approved design** unless new verified context forces the plan to reopen the design decision. If the implementation skill is TDD-based, make the likely test entry points explicit in the plan.
