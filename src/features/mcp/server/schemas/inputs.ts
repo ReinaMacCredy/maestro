@@ -184,6 +184,57 @@ export const TaskUnblockInput = z
   })
   .strict();
 
+export const TaskPlanInput = z
+  .object({
+    batchId: z
+      .string()
+      .optional()
+      .describe("Optional idempotency key for replay protection. If provided and matches an existing receipt, returns the stored result."),
+    tasks: z
+      .array(
+        z.object({
+          name: z
+            .string()
+            .optional()
+            .describe("Batch-local symbolic name for parent/blockedBy references."),
+          title: z
+            .string()
+            .min(1)
+            .max(200)
+            .describe("Task title (required), 1..200 chars."),
+          description: z
+            .string()
+            .optional()
+            .describe("Optional task description; supports markdown."),
+          type: taskType.optional(),
+          priority: taskPriority.optional(),
+          parent: z
+            .string()
+            .optional()
+            .describe("tsk-* id, batch-local name, or slug (for step tasks)."),
+          slug: z
+            .string()
+            .optional()
+            .describe("'<verb>/<kebab>' for top-level tasks only. Auto-derived from title if omitted."),
+          labels: z.array(z.string()).optional(),
+          blockedBy: z
+            .array(z.string())
+            .optional()
+            .describe("Array of tsk-* ids or batch-local names."),
+        }).strict(),
+      )
+      .min(1)
+      .max(500)
+      .describe("1-500 tasks per batch."),
+    start: z
+      .string()
+      .optional()
+      .describe("Batch-local name of task to auto-claim and move to in_progress after batch creation."),
+  })
+  .strict();
+
+export type TaskPlanInput = z.infer<typeof TaskPlanInput>;
+
 export const EvidenceListInput = z
   .object({
     taskId,

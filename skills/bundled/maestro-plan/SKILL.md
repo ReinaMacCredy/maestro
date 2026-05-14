@@ -204,7 +204,9 @@ When `.maestro/` is present in the cwd or an ancestor (maestro project), automat
 
 1. **Convert the plan to a task batch.** Map each phase to a task JSON object with `name`, `title`, `description`, `type`, `priority`, and `blockedBy` for sequencing. Top-level tasks require a `slug` (e.g., `implement/feature-x`); step tasks use `parent` instead.
 
-2. **Create tasks atomically.** Run `maestro task plan --file - --start <first-task-name>` with the task batch JSON on stdin. This creates all tasks and claims the first one in a single command.
+2. **Create tasks atomically.**
+   - **If MCP is available**: Call `maestro_task_plan` with the batch JSON and `start` parameter set to the first task's name.
+   - **Otherwise**: Run `maestro task plan --file - --start <first-task-name>` with the task batch JSON on stdin.
 
 3. **Load the task skill.** After task creation succeeds, invoke the `maestro-task` skill by calling the `Skill` tool with `skill: "maestro-task"`. The task skill will take over and guide implementation.
 
@@ -237,11 +239,31 @@ Example task batch structure:
 }
 ```
 
+Example MCP call:
+```json
+{
+  "batchId": "plan-feature-x",
+  "tasks": [...],
+  "start": "scaffold"
+}
+```
+
+Example CLI fallback:
+```bash
+cat <<'JSON' | maestro task plan --file - --start scaffold
+{
+  "batchId": "plan-feature-x",
+  "tasks": [...]
+}
+JSON
+```
+
 **Why this flow:**
 - Atomic task creation with referential integrity
 - No manual handoff step — the agent continues directly to implementation
 - The user sees task creation output, then implementation begins immediately
 - Idempotent retry via `batchId`
+- MCP protocol preferred for structured JSON without shell execution
 
 **When no maestro project is detected:**
 - Switch to a generic implementation skill when the user wants execution

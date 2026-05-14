@@ -7,6 +7,9 @@ import {
   unblockTasks,
   type ListTasksFilters,
 } from "@/features/task/index.js";
+import { planTasks } from "@/features/task/usecases/plan-tasks.usecase.js";
+import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
+import type { BatchInput } from "@/features/task/domain/task-batch-types.js";
 import { summarizeTask } from "@/shared/lib/projection.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
@@ -17,6 +20,7 @@ import {
   TaskCreateInput,
   TaskGetInput,
   TaskListInput,
+  TaskPlanInput,
   TaskUnblockInput,
 } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";
@@ -242,6 +246,119 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         return toCallToolResult(ok({ task }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_UNBLOCK_FAILED"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "maestro_task_plan",
+    {
+      title: "Create Task Batch",
+      description: `Create multiple tasks atomically from a plan. Supports idempotent replay via batchId and optional auto-start.
+
+Input:
+- batchId (optional): Idempotency key. If provided and matches an existing receipt, returns the stored result.
+- tasks: Array of 1-500 task definitions. Each task has:
+  - name (optional): Batch-local symbolic name for parent/blockedBy references
+  - title (required): Task title
+  - description, type, priority, labels (optional)
+  - parent (optional): tsk-* id, batch-local name, or slug (for step tasks)
+  - slug (optional): '<verb>/<kebab>' for top-level tasks only (auto-derived from title if omitted)
+  - blockedBy (optional): Array of tsk-* ids or batch-local names
+- start (optional): Batch-local name of task to auto-claim and move to in_progress after batch creation
+
+Returns:
+- batchId (if provided)
+- created: Array of {name?, id, status, assignee?}
+- replayed: true if batchId matched existing receipt
+- startedTaskId: ID of the started task (if start was provided)
+
+Error codes: INVALID_ARG, BATCH_VALIDATION_FAILED, TASK_NOT_FOUND, OWNERSHIP_CONFLICT, STALE_RECEIPT`,
+      inputSchema: TaskPlanInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args): Promise<CallToolResult> => {
+      try {
+        const services = deps.getServices();
+        const { sessionId } = deps;
+
+        // Convert MCP input to BatchInput domain type
+        const batchInput: BatchInput = {
+          batchId: args.batchId,
+          tasks: args.tasks.map(t => ({
+            name: t.name,
+            title: t.title,
+            description: t.description,
+            type: t.type,
+            priority: t.priority,
+            parent: t.parent,
+            slug: t.slug,
+            labels: t.labels,
+            blockedBy: t.blockedBy,
+          })),
+        };
+
+        // Create the batch
+        const result = await planTasks(
+          services.taskStore,
+          batchInput,
+          {
+            sessionId,
+            gitAnchor: services.gitAnchor,
+            continuationStore: services.taskContinuationStore,
+            nowMdWriter: services.taskNowMdWriter,
+          },
+        );
+
+        // Handle --start equivalent
+        let startedTaskId: string | undefined;
+        if (args.start) {
+          const targetTask = result.created.find(t => t.name === args.start);
+          if (!targetTask) {
+            return toCallToolResult(
+              fail("TASK_NOT_FOUND", `No task with name '${args.start}' in batch`, {
+                hints: [`Available names: ${result.created.filter(t => t.name).map(t => t.name).join(", ")}`],
+                arg: "start",
+              }),
+            );
+          }
+
+          // Update to in_progress (auto-claims if not already claimed)
+          const { task: updated } = await updateTask(
+            services.taskStore,
+            targetTask.id,
+            { status: "in_progress" },
+            { sessionId },
+          );
+
+          startedTaskId = updated.id;
+
+          // Update the result to reflect the started task's new status
+          const idx = result.created.findIndex(t => t.id === targetTask.id);
+          if (idx !== -1) {
+            result.created[idx] = {
+              ...result.created[idx],
+              status: updated.status,
+              assignee: updated.assignee,
+            };
+          }
+        }
+
+        return toCallToolResult(
+          ok({
+            batchId: result.batchId,
+            created: result.created,
+            replayed: result.replayed,
+            ...(startedTaskId ? { startedTaskId } : {}),
+          }),
+        );
+      } catch (err) {
+        return toCallToolResult(fromMaestroError(err, "BATCH_CREATION_FAILED"));
       }
     },
   );
