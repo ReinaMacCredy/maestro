@@ -85,6 +85,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           planStore: services.planStore,
           observabilityStore: services.observabilityStore,
           worktreeStore: services.worktreeStore,
+          handoffEmitter: services.handoffEmitter,
         },
         { id, agentId: flags.agent, skipWorktree: flags.skipWorktree === true },
       );
@@ -125,6 +126,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
           observabilityStore: services.observabilityStore,
+          handoffEmitter: services.handoffEmitter,
         },
         { id, reason: flags.reason },
       );

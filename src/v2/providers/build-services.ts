@@ -37,6 +37,10 @@ import {
   GitWorktreeStore,
   type WorktreeStorePort,
 } from "../repo/git-worktree-store.adapter.js";
+import {
+  FsHandoffEmitter,
+  type HandoffEmitterPort,
+} from "../repo/fs-handoff-emitter.adapter.js";
 
 export interface V2Services {
   readonly specStore: SpecStorePort;
@@ -48,6 +52,7 @@ export interface V2Services {
   readonly processRunner: ProcessRunnerPort;
   readonly observabilityStore: ObservabilityPort;
   readonly worktreeStore: WorktreeStorePort;
+  readonly handoffEmitter: HandoffEmitterPort;
 }
 
 export interface BuildV2ServicesOptions {
@@ -69,5 +74,6 @@ export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
     observabilityStore: overrides?.observabilityStore ?? new JsonlObservabilityAdapter({ repoRoot }),
     worktreeStore:
       overrides?.worktreeStore ?? new GitWorktreeStore({ repoRoot, processRunner }),
+    handoffEmitter: overrides?.handoffEmitter ?? new FsHandoffEmitter({ repoRoot }),
   };
 }

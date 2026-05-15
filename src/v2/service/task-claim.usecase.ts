@@ -2,12 +2,14 @@ import { readFile } from "node:fs/promises";
 import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
 import type { ExecPlanStorePort } from "../repo/exec-plan-store.port.js";
 import { parseSpecFile } from "../repo/fs-spec-store.adapter.js";
+import type { HandoffEmitterPort } from "../repo/handoff-emitter.port.js";
 import type { ObservabilityPort } from "../repo/observability.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import type { WorktreeStorePort } from "../repo/worktree-store.port.js";
 import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
+import { emitHandoff } from "./emit-handoff.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
 import { tryAdvancePlan } from "./try-advance-plan.usecase.js";
 
@@ -17,6 +19,7 @@ export interface TaskClaimDeps {
   readonly planStore?: ExecPlanStorePort;
   readonly observabilityStore?: ObservabilityPort;
   readonly worktreeStore?: WorktreeStorePort;
+  readonly handoffEmitter?: HandoffEmitterPort;
   readonly clock?: () => Date;
   readonly idFactory?: () => string;
 }
@@ -96,6 +99,18 @@ export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Pro
       { plan_id: updated.plan_id, trigger_task_verb: "task:claim" },
     );
   }
+
+  await emitHandoff(
+    { emitter: deps.handoffEmitter, clock: deps.clock },
+    {
+      task_id: updated.id,
+      trigger_verb: "task:claim",
+      agent_id: input.agentId,
+      worktree_path: updated.worktree_path,
+      spec_path: updated.spec_path,
+    },
+  );
+
   return updated;
 }
 

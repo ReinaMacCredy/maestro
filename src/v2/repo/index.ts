@@ -18,3 +18,5 @@ export * from "./observability.port.js";
 export * from "./jsonl-observability.adapter.js";
 export * from "./worktree-store.port.js";
 export * from "./git-worktree-store.adapter.js";
+export * from "./handoff-emitter.port.js";
+export * from "./fs-handoff-emitter.adapter.js";
