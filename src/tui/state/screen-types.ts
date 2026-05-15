@@ -2,7 +2,7 @@
  * DTOs for the conductor TUI screens: agent grid, dispatch console,
  * event stream, task board, and mission timeline.
  */
-import type { TaskStatus, TaskPriority } from "@/features/task";
+import type { TaskStatus, TaskPriority } from "@/shared/domain/legacy-task";
 import type {
   MilestoneKind,
   MilestoneProfile,

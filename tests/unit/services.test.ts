@@ -9,7 +9,9 @@ describe("services composition root", () => {
     expect(source).toContain('./features/principle/services.js');
     expect(source).toContain('./features/reply/services.js');
     expect(source).toContain('./features/handoff/services.js');
-    expect(source).toContain('./features/task/services.js');
+    // v1 task feature services.ts moved to @/shared/domain/legacy-task (D-task Phase 5)
+    expect(source).toContain('@/shared/domain/legacy-task/index.js');
+    expect(source).not.toContain('./features/task/services.js');
 
     expect(source).not.toContain('./features/principle/index.js');
     expect(source).not.toContain('./features/reply/index.js');

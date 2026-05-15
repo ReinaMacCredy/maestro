@@ -5,9 +5,8 @@ import type { RuntimeMonitorPort } from "@/features/runtime/ports/monitor.port.j
 import type { RuntimeSignalResult } from "@/features/runtime/domain/types.js";
 import type { EvidenceStorePort, EvidenceRow, RecordEvidenceInput } from "@/features/evidence/index.js";
 import type { RuntimeSignalPayload } from "@/features/evidence/index.js";
-import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
+import type { LegacyTaskStorePort as TaskStorePort, LegacyTask as Task } from "@/shared/domain/legacy-task";
 import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec/index.js";
-import type { Task } from "@/features/task";
 import { mockEvidenceStore, mockTaskStore } from "../../../../helpers/mocks.js";
 
 const STUB_TASK: Task = {

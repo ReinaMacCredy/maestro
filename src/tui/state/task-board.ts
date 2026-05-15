@@ -1,4 +1,4 @@
-import { TASK_STATUSES, type TaskQueryPort, type TaskStatus } from "@/features/task";
+import { TASK_STATUSES, type TaskQueryPort, type TaskStatus } from "@/shared/domain/legacy-task";
 import type { EvidenceStorePort } from "@/features/evidence";
 import type { EvidenceSummary, TaskBoardItem, TaskBoardSnapshot } from "./screen-types.js";
 

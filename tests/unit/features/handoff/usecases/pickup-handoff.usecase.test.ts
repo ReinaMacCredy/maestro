@@ -3,9 +3,9 @@ import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsHandoffStoreAdapter, pickupHandoff } from "@/features/handoff";
-import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import {
+  FsContractStoreAdapter,
   FsTaskContinuationHistoryStoreAdapter,
   FsTaskContinuationStoreAdapter,
   JsonlTaskStoreAdapter,
@@ -15,7 +15,7 @@ import {
   syncTaskContinuation,
   type ContractWorkflows,
   updateTask,
-} from "@/features/task";
+} from "@/shared/domain/legacy-task";
 import { mockGitAnchor } from "../../../../helpers/mocks.js";
 
 describe("pickupHandoff", () => {

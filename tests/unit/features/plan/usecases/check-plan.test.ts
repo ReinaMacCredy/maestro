@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { checkPlan } from "@/features/plan/usecases/check-plan.js";
 import type { PlanInput } from "@/features/plan/domain/types.js";
-import type { Contract } from "@/features/task/index.js";
+import type { Contract } from "@/v2/types/contract.js";
 import type { Spec } from "@/shared/domain/legacy-spec/index.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
 
 function makeContract(filesExpected: string[] = []): Contract {
   return {

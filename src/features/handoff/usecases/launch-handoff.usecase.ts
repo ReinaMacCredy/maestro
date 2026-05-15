@@ -10,7 +10,7 @@ import type {
   HandoffStorePort,
 } from "@/features/handoff";
 import { DEFAULT_HANDOFF_MODELS } from "@/features/handoff";
-import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
+import type { TaskContinuationEvent, TaskContinuationSummary } from "@/shared/domain/legacy-task";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { GitWorktree } from "@/infra/domain/git-types.js";
 import { MaestroError } from "@/shared/errors.js";

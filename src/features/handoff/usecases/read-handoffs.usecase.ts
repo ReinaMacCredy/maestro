@@ -1,4 +1,4 @@
-import type { TaskQueryPort } from "@/features/task";
+import type { TaskQueryPort } from "@/shared/domain/legacy-task";
 import { MaestroError } from "@/shared/errors.js";
 import type { HandoffRecord, HandoffStorePort } from "../domain/handoff-types.js";
 import { isOpenHandoffRecord } from "../domain/handoff-state.js";

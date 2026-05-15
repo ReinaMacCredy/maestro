@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import type { EvidenceRow } from "@/features/evidence/domain/types.js";
 import type { HandoffRecord } from "@/features/handoff/domain/handoff-types.js";
 import type { Mission } from "@/shared/domain/legacy-mission";
-import type { Task } from "@/features/task/domain/task-types.js";
+import type { LegacyTask as Task } from "@/shared/domain/legacy-task";
 import {
   summarizeEvidence,
   summarizeHandoff,

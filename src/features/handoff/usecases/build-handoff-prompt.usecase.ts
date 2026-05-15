@@ -9,7 +9,7 @@ import type {
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { HandoffPromptContext, HandoffRelevantFile } from "@/features/handoff";
-import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
+import type { TaskContinuationEvent, TaskContinuationSummary } from "@/shared/domain/legacy-task";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { fileExists } from "@/shared/lib/fs.js";
 import { sanitizeInlineCodeContent, sanitizeInlinePromptContent } from "@/shared/lib/sanitize.js";

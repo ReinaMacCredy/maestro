@@ -14,8 +14,7 @@ import {
 } from "@/features/evidence";
 import { join } from "node:path";
 import { mockEvidenceStore } from "../../../../helpers/mocks.js";
-import type { Task } from "@/features/task";
-import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
+import type { LegacyTask as Task, LegacyTaskStorePort as TaskStorePort } from "@/shared/domain/legacy-task";
 import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec/index.js";
 
 const originalConsoleLog = console.log;

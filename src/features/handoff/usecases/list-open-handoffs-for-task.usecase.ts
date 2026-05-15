@@ -1,4 +1,4 @@
-import type { TaskQueryPort } from "@/features/task";
+import type { TaskQueryPort } from "@/shared/domain/legacy-task";
 import type { HandoffStorePort } from "../domain/handoff-types.js";
 import { listOpenProjectHandoffIdsForTask } from "./read-handoffs.usecase.js";
 

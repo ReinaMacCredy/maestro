@@ -2,18 +2,16 @@ import { describe, expect, it } from "bun:test";
 import { requestVerdict } from "@/features/verdict/usecases/request-verdict.usecase.js";
 import type { RequestVerdictDeps } from "@/features/verdict/usecases/request-verdict.usecase.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
-import type { Contract } from "@/features/task/index.js";
+import type { Contract } from "@/v2/types/contract.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/v2/types/trust.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
-import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
-import type { RunStateStorePort, RunStateDelta } from "@/features/task/ports/run-state-store.port.js";
-import type { RunState } from "@/features/task/domain/run-state.js";
+import type { ContractVersionStorePort, RunStateStorePort, RunStateDelta, GitAnchorPort } from "@/shared/domain/legacy-task";
+import type { RunState } from "@/shared/domain/legacy-task/domain/run-state.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
-import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
 

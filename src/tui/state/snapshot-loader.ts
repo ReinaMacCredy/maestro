@@ -13,7 +13,7 @@ import type { AgentReply, ReplyStorePort } from "@/features/reply";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { HandoffStorePort } from "@/features/handoff";
-import type { TaskQueryPort } from "@/features/task";
+import type { TaskQueryPort } from "@/shared/domain/legacy-task";
 import type { ContractVersionStorePort, ContractStoreQueryPort } from "@/v2/repo/contract-store.port.js";
 import type { RunStateStorePort } from "@/v2/repo/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence";

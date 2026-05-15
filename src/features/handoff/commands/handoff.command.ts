@@ -18,7 +18,7 @@ import {
   loadTaskContinuationSummary,
   type TaskContinuationEvent,
   type TaskContinuationSummary,
-} from "@/features/task";
+} from "@/shared/domain/legacy-task";
 import { MaestroError } from "@/shared/errors.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { summarizeHandoff } from "@/shared/lib/projection.js";

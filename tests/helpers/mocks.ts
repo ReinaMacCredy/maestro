@@ -20,11 +20,9 @@ import type {
   EvidenceRow,
   EvidenceStorePort,
 } from "@/features/evidence";
-import type { Contract, Task } from "@/features/task";
-import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
-import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
-import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
+import type { Contract } from "@/v2/types/contract.js";
+import type { LegacyTask as Task, ContractStorePort, GitAnchorPort, LegacyTaskStorePort as TaskStorePort } from "@/shared/domain/legacy-task";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
 import type {
   Mission,
   Feature,

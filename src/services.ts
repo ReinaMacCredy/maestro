@@ -3,7 +3,7 @@ import { buildLegacyMissionServices, type LegacyMissionServices } from "@/shared
 import { buildPrincipleServices, type PrincipleServices } from "./features/principle/services.js";
 import { buildReplyServices, type ReplyServices } from "./features/reply/services.js";
 import { buildHandoffServices, type HandoffServices } from "./features/handoff/services.js";
-import { buildTaskServices, type TaskServices } from "./features/task/services.js";
+import { buildTaskServices, type TaskServices } from "@/shared/domain/legacy-task/index.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
 import { buildEvidenceServices, type EvidenceServices } from "./features/evidence/services.js";
 import { FsSpecStoreAdapter } from "@/shared/domain/legacy-spec/index.js";

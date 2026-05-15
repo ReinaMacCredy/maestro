@@ -1,4 +1,4 @@
-import type { Contract } from "@/features/task/index.js";
+import type { Contract } from "@/v2/types/contract.js";
 import type { GitSignatureProbePort } from "./ports/git-signature.port.js";
 import type { TrustFinding, TrustVerifierResult } from "@/v2/types/trust.js";
 import { checkScope } from "./checks/check-scope.js";

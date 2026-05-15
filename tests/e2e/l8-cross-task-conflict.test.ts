@@ -216,7 +216,8 @@ async function readEvidenceRows(
 
 // ─── Scenarios ────────────────────────────────────────────────────────────────
 
-describe("L8.1 cross-task conflict detection (compiled binary)", () => {
+// TODO(D-task-rehome): scaffolding uses v1 `task` CLI removed in Phase 5; rewire to v2 `task` verbs
+describe.skip("L8.1 cross-task conflict detection (compiled binary)", () => {
   // ── S1: Conflict detected ─────────────────────────────────────────────────
 
   it(

@@ -8,8 +8,8 @@ import {
   type ContractWorkflows,
   type TaskContinuationHistoryPort,
   type TaskContinuationStorePort,
-  type TaskStorePort,
-} from "@/features/task";
+  type LegacyTaskStorePort as TaskStorePort,
+} from "@/shared/domain/legacy-task";
 import type { HandoffStorePort, HandoffRecord } from "@/features/handoff";
 import { MaestroError } from "@/shared/errors.js";
 import { resolveHandoffProjectRoot } from "../domain/project-scope.js";

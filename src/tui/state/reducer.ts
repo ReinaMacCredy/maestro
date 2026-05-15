@@ -9,7 +9,7 @@ import type {
 import type { ConfigScope } from "@/infra/ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
-import { TASK_STATUSES, type TaskStatus } from "@/features/task";
+import { TASK_STATUSES, type TaskStatus } from "@/shared/domain/legacy-task";
 import type { EventStreamEntry } from "./screen-types.js";
 import { getConfigRowsForTab, isGlobalOnlyConfigKey, resolveConfigScopeForKey } from "./config-inspector.js";
 

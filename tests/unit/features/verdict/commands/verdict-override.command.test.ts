@@ -8,7 +8,7 @@ import type { Owners } from "@/features/policy/index.js";
 import { mockContractStore, mockEvidenceStore } from "../../../../helpers/mocks.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { VerdictOverridePayload } from "@/features/evidence/index.js";
-import type { RiskClass } from "@/features/task/index.js";
+import type { RiskClass } from "@/v2/types/product-spec.js";
 // ─── Console capture ──────────────────────────────────────────────────────────
 
 const originalConsoleLog = console.log;

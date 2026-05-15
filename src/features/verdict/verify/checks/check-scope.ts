@@ -1,6 +1,6 @@
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { isMaestroSubstratePath } from "@/shared/lib/substrate-paths.js";
-import type { Contract } from "@/features/task/index.js";
+import type { Contract } from "@/v2/types/contract.js";
 import type { TrustFinding } from "@/v2/types/trust.js";
 
 /**

@@ -4,16 +4,13 @@ import { registerVerdictCommand } from "@/features/verdict/commands/verdict.comm
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
-import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
-import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
-import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
+import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort, RunStateStorePort } from "@/shared/domain/legacy-task";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { EvidenceRow, VerdictOverridePayload } from "@/features/evidence/index.js";
-import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { RiskServices } from "@/features/risk/services.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
-import type { Contract } from "@/features/task/index.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import type { Contract } from "@/v2/types/contract.js";
 import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import { mockContractStore } from "../../../../helpers/mocks.js";
 

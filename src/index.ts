@@ -27,10 +27,8 @@ import { registerReplyCommand } from "./features/reply/index.js";
 // runs. Every other verb (and `--version`/`--help`) skips it entirely.
 // See profile-imports.ts for the measurements.
 import { registerHandoffCommand } from "./features/handoff/index.js";
-import { registerTaskCommand } from "./features/task/index.js";
 import { registerBundleCommand } from "./features/bundle/index.js";
 import { registerEvidenceCommand } from "./features/evidence/index.js";
-import { registerContractL2Command } from "./features/task/commands/contract-l2.command.js";
 import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
 import { registerVerdictCommand } from "./features/verdict/index.js";
 import { registerPlanCheckCommand } from "./features/plan/index.js";
@@ -83,7 +81,6 @@ registerProvidersCommand(program);
 registerSkillsCommand(program);
 registerMcpCommand(program);
 registerHandoffCommand(program, deps);
-registerTaskCommand(program, deps);
 registerReplyCommand(program, deps);
 registerPrincipleCommand(program, deps);
 // v2 surface: attaches `principle promote <correctionId>` to the same parent.
@@ -99,7 +96,6 @@ registerSpecV2Commands(program, {
 registerTaskV2Commands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
-registerContractL2Command(program, deps);
 registerPolicyCommand(program, deps);
 registerVerdictCommand(program, deps);
 

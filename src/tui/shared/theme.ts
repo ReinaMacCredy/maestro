@@ -3,7 +3,7 @@
  * Uses 256-color indices for broad terminal compatibility.
  */
 import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult, MilestoneKind, MilestoneProfile } from "@/shared/domain/legacy-mission";
-import type { TaskStatus } from "@/features/task";
+import type { TaskStatus } from "@/shared/domain/legacy-task";
 import type { InferredAgentStatus } from "../state/screen-types.js";
 
 // ── Palette (256-color) ─────────────────────────────
