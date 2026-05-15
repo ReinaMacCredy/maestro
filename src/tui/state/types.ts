@@ -8,14 +8,7 @@ import type {
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import type { GitFileChange } from "@/infra/domain/git-types.js";
 import type { MissionControlBackgroundMode } from "@/tui/shared/ui-config.js";
-import type {
-  CompiledLearnings,
-  Correction,
-  MemoryStats,
-  RawLearningEntry,
-} from "@/features/memory";
 import type { ProjectEdge, ProjectNode } from "@/features/graph";
-import type { RatchetBaseline, RatchetSuite } from "@/features/memory-ratchet";
 import type {
   AgentGridRow,
   DispatchQueueItem,
@@ -170,12 +163,6 @@ export interface MissionControlGraphContext {
 }
 
 export interface MissionControlMemorySnapshot {
-  stats: MemoryStats;
-  corrections: readonly Correction[];
-  rawLearnings: readonly RawLearningEntry[];
-  compiledLearnings?: CompiledLearnings;
-  ratchetSuite: RatchetSuite;
-  ratchetBaseline?: RatchetBaseline;
   graphContext?: MissionControlGraphContext;
 }
 
@@ -216,9 +203,8 @@ export interface MissionControlSnapshot {
   canPause: boolean;
   canResume: boolean;
 
-  // Memory system
+  // Memory pane (project-graph context only after v2 cleanup)
   memory?: MissionControlMemorySnapshot | null;
-  memoryStats?: MemoryStats | null;
 
   // Conductor screens
   agentGrid?: readonly AgentGridRow[];

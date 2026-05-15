@@ -13,8 +13,6 @@ import type {
 } from "@/features/mission";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
-import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
-import type { RatchetStorePort } from "@/features/memory-ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort } from "@/features/handoff";
 import type { TaskQueryPort, RunStateStorePort, ContractVersionStorePort } from "@/features/task";
@@ -44,9 +42,6 @@ export interface SnapshotDeps {
   checkpointStore: CheckpointStorePort;
   config: ConfigPort;
   git: GitPort;
-  correctionStore?: CorrectionStorePort;
-  learningStore?: LearningStorePort;
-  ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
@@ -63,9 +58,6 @@ export interface SnapshotDeps {
 export interface HomeSnapshotDeps {
   config: ConfigPort;
   git: GitPort;
-  correctionStore?: CorrectionStorePort;
-  learningStore?: LearningStorePort;
-  ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
@@ -143,9 +135,6 @@ export async function loadSnapshotInput(
     deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.getState(deps.cwd),
     buildMissionControlMemorySnapshot({
-      correctionStore: deps.correctionStore,
-      learningStore: deps.learningStore,
-      ratchetStore: deps.ratchetStore,
       projectGraphStore: deps.projectGraphStore,
       cwd: deps.cwd,
     }),
@@ -199,9 +188,6 @@ export async function loadHomeSnapshotInput(
     deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
     buildMissionControlMemorySnapshot({
-      correctionStore: deps.correctionStore,
-      learningStore: deps.learningStore,
-      ratchetStore: deps.ratchetStore,
       projectGraphStore: deps.projectGraphStore,
       cwd: deps.cwd,
     }),

@@ -13,16 +13,6 @@ import type {
   Missions,
 } from "@/features/mission";
 import { buildMissions } from "@/features/mission";
-import type {
-  CorrectionStorePort,
-  LearningStorePort,
-  Correction,
-  CreateCorrectionInput,
-  CorrectionQuery,
-  RawLearningEntry,
-  CompiledLearnings,
-} from "@/features/memory";
-import type { RatchetStorePort, RatchetSuite, RatchetBaseline } from "@/features/memory-ratchet";
 import type { ProjectGraphStorePort, ProjectGraph } from "@/features/graph";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
 import { isOpenHandoffRecord } from "@/features/handoff";
@@ -706,100 +696,6 @@ export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchor
     collectUntrackedFiles: async () => [],
     resolveTreeSha: async () => "tree-sha-123",
     ...overrides,
-  };
-}
-
-export function mockCorrectionStore(
-  initial: Correction[] = [],
-): CorrectionStorePort {
-  const corrections = new Map<string, Correction>();
-  let counter = initial.length;
-
-  for (const c of initial) {
-    corrections.set(c.id, c);
-  }
-
-  return {
-    create: async (input: CreateCorrectionInput) => {
-      counter++;
-      const now = new Date().toISOString();
-      const id = `corr-${counter}`;
-      const correction: Correction = {
-        id,
-        rule: input.rule,
-        source: input.source,
-        trigger: input.trigger,
-        severity: input.severity,
-        createdAt: now,
-        updatedAt: now,
-      };
-      corrections.set(id, correction);
-      return correction;
-    },
-    get: async (id: string) => corrections.get(id),
-    list: async () => [...corrections.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    search: async (query: CorrectionQuery) => {
-      const all = [...corrections.values()];
-      return all.filter((c) => {
-        if (query.keywords?.length) {
-          const match = query.keywords.some((qk) =>
-            c.trigger.keywords.some((tk) => tk.toLowerCase().includes(qk.toLowerCase())),
-          );
-          if (!match) return false;
-        }
-        if (query.text) {
-          const text = query.text.toLowerCase();
-          if (!c.rule.toLowerCase().includes(text) && !c.source.toLowerCase().includes(text)) return false;
-        }
-        return true;
-      });
-    },
-    update: async (id: string, input: Partial<Correction>) => {
-      const existing = corrections.get(id);
-      if (!existing) return undefined;
-      const updated: Correction = { ...existing, ...input, id: existing.id, updatedAt: new Date().toISOString() };
-      corrections.set(id, updated);
-      return updated;
-    },
-    remove: async (id: string) => corrections.delete(id),
-  };
-}
-
-export function mockLearningStore(
-  initial: RawLearningEntry[] = [],
-): LearningStorePort {
-  const raw = [...initial];
-  let compiled: CompiledLearnings | undefined;
-
-  return {
-    appendRaw: async (entry: RawLearningEntry) => {
-      raw.push(entry);
-    },
-    listRaw: async () => [...raw],
-    rawCount: async () => raw.length,
-    readCompiled: async () => compiled,
-    writeCompiled: async (c: CompiledLearnings) => {
-      compiled = c;
-    },
-  };
-}
-
-export function mockRatchetStore(
-  initialSuite?: RatchetSuite,
-  initialBaseline?: RatchetBaseline,
-): RatchetStorePort {
-  let suite: RatchetSuite = initialSuite ?? { assertions: [] };
-  let baseline: RatchetBaseline | undefined = initialBaseline;
-
-  return {
-    getSuite: async () => suite,
-    writeSuite: async (s: RatchetSuite) => {
-      suite = s;
-    },
-    getBaseline: async () => baseline,
-    writeBaseline: async (b: RatchetBaseline) => {
-      baseline = b;
-    },
   };
 }
 

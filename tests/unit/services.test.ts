@@ -8,20 +8,22 @@ describe("services composition root", () => {
     expect(source).toContain('./features/session/services.js');
     expect(source).toContain('./features/notes/services.js');
     expect(source).toContain('./features/mission/services.js');
-    expect(source).toContain('./features/memory/services.js');
     expect(source).toContain('./features/handoff/services.js');
-    expect(source).toContain('./features/memory-ratchet/services.js');
     expect(source).toContain('./features/graph/services.js');
     expect(source).toContain('./features/task/services.js');
 
     expect(source).not.toContain('./features/session/index.js');
     expect(source).not.toContain('./features/notes/index.js');
     expect(source).not.toContain('./features/mission/index.js');
-    expect(source).not.toContain('./features/memory/index.js');
     expect(source).not.toContain('./features/handoff/index.js');
-    expect(source).not.toContain('./features/memory-ratchet/index.js');
     expect(source).not.toContain('./features/graph/index.js');
     expect(source).not.toContain('./features/task/index.js');
+
+    // v1 memory + memory-ratchet were retired in Phase 4 (ADR-0015 absorbs
+    // them into `principle` + provider gates).
+    expect(source).not.toContain('./features/memory/');
+    expect(source).not.toContain('./features/memory-ratchet/');
+    expect(source).not.toContain('./features/agent/');
   });
 
   it("createServices returns a fresh, fully-populated Services graph", () => {
@@ -34,13 +36,11 @@ describe("services composition root", () => {
       notesStore: expect.any(Object),
       missionStore: expect.any(Object),
       missions: expect.any(Object),
-      correctionStore: expect.any(Object),
       handoffStore: expect.any(Object),
       handoffLaunchers: {
         codex: expect.any(Object),
         claude: expect.any(Object),
       },
-      ratchetStore: expect.any(Object),
       projectGraphStore: expect.any(Object),
       taskStore: expect.any(Object),
       contractStore: expect.any(Object),

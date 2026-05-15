@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -152,26 +152,6 @@ describe("compiled CLI pipeline E2E", () => {
   it("runs a full Maestro workflow from plan file through completion", async () => {
     const missionId = await createMission(tmpDir);
 
-    const promptResult = await runCompiled(
-      ["feature", "prompt", "f1", "--mission", missionId, "--json"],
-      tmpDir,
-    );
-    expect(promptResult.exitCode).toBe(0);
-    const promptData = JSON.parse(promptResult.stdout);
-    expect(promptData.featureId).toBe("f1");
-    expect(promptData.agentType).toBe("test-skill");
-    expect(promptData.prompt).toContain("# Agent Assignment: Bootstrap agent prompt");
-    const promptPath = join(
-      tmpDir,
-      ".maestro",
-      "missions",
-      missionId,
-      "agents",
-      "f1",
-      "prompt.md",
-    );
-    expect(await readFile(promptPath, "utf8")).toContain("## Skill Instructions");
-
     const approveResult = await runCompiled(
       ["mission", "approve", missionId, "--json"],
       tmpDir,
@@ -288,13 +268,6 @@ describe("compiled CLI pipeline E2E", () => {
       ),
     );
     expect(featureStatusesAfterLoad.get("f3")).toBe("pending");
-
-    const f3PromptResult = await runCompiled(
-      ["feature", "prompt", "f3", "--mission", missionId, "--json"],
-      tmpDir,
-    );
-    expect(f3PromptResult.exitCode).toBe(0);
-    expect(JSON.parse(f3PromptResult.stdout).prompt).toContain("Validate release workflow");
 
     for (const status of ["assigned", "in-progress", "review", "done"] as const) {
       const result = await runCompiled(

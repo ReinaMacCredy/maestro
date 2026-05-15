@@ -12,10 +12,6 @@ import {
   type ListFeaturesResult,
   type UpdateFeatureResult,
 } from "../usecases/feature-lifecycle.usecase.js";
-import {
-  generateAgentPrompt,
-  type GenerateAgentPromptResult,
-} from "@/features/agent";
 import { MaestroError } from "@/shared/errors.js";
 
 interface FeatureCommandDeps {
@@ -24,8 +20,6 @@ interface FeatureCommandDeps {
     | "missionStore"
     | "featureStore"
     | "missions"
-    | "correctionStore"
-    | "learningStore"
     | "principleStore"
   >;
 }
@@ -120,38 +114,6 @@ export function registerFeatureCommand(
       output(isJson, result, formatFeatureUpdate);
     });
 
-    featureCmd
-      .command("prompt <featureId>")
-    .description("Generate an agent prompt for a feature")
-    .requiredOption("--mission <id>", "Mission ID (required)")
-    .option("--out <path>", "Write prompt to specified path (also writes to agents/{featureId}/prompt.md)")
-    .option("--json", "Output as JSON")
-    .action(async (featureId: string, opts): Promise<void> => {
-      const services = deps.getServices();
-      const isJson = resolveJsonFlag(opts, program);
-
-      if (!opts.mission) {
-        throw new MaestroError("--mission is required", [
-          "Usage: maestro feature prompt <featureId> --mission <id>",
-          "Optional: --out /path/to/prompt.md",
-        ]);
-      }
-
-      const result = await generateAgentPrompt(
-        services.missions,
-        process.cwd(),
-        opts.mission,
-        featureId,
-        opts.out,
-        {
-          correctionStore: services.correctionStore,
-          learningStore: services.learningStore,
-          principleStore: services.principleStore,
-        },
-      );
-
-      output(isJson, result, formatPromptResult);
-    });
 }
 
 /** Format feature list for text output */
@@ -197,25 +159,3 @@ function formatFeatureUpdate(result: UpdateFeatureResult): string[] {
   return lines;
 }
 
-/** Format prompt generation result for text output */
-function formatPromptResult(result: GenerateAgentPromptResult): string[] {
-  const lines: string[] = [
-    `[ok] Agent prompt generated for: ${result.featureId}`,
-    `  Agent type: ${result.agentType}`,
-  ];
-
-  if (result.writtenTo) {
-    for (const path of result.writtenTo) {
-      lines.push(`  Written to: ${path}`);
-    }
-  }
-
-  lines.push("");
-  lines.push("--- PROMPT BEGIN ---");
-  lines.push("");
-  lines.push(result.prompt);
-  lines.push("");
-  lines.push("--- PROMPT END ---");
-
-  return lines;
-}

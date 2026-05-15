@@ -36,19 +36,6 @@ import {
 // runs. Every other verb (and `--version`/`--help`) skips it entirely.
 // See profile-imports.ts for the measurements.
 import {
-  registerMemoryCorrectCommand,
-  registerMemoryRecallCommand,
-  registerMemorySearchCommand,
-  registerMemoryLearnCommand,
-  registerMemoryCompileCommand,
-  registerMemoryStatsCommand,
-  registerMemoryLintCommand,
-} from "./features/memory/index.js";
-import {
-  registerRatchetCheckCommand,
-  registerRatchetPromoteCommand,
-} from "./features/memory-ratchet/index.js";
-import {
   registerGraphLinkCommand,
   registerGraphContextCommand,
 } from "./features/graph/index.js";
@@ -121,15 +108,6 @@ registerFeatureCommand(program, deps);
 registerValidateCommand(program, deps);
 registerMilestoneCommand(program, deps);
 registerCheckpointCommand(program, deps);
-registerMemoryCorrectCommand(program, deps);
-registerMemoryRecallCommand(program, deps);
-registerMemorySearchCommand(program, deps);
-registerMemoryLearnCommand(program, deps);
-registerMemoryCompileCommand(program, deps);
-registerRatchetCheckCommand(program, deps);
-registerRatchetPromoteCommand(program, deps);
-registerMemoryStatsCommand(program, deps);
-registerMemoryLintCommand(program, deps);
 registerGraphLinkCommand(program, deps);
 registerGraphContextCommand(program, deps);
 registerHandoffCommand(program, deps);

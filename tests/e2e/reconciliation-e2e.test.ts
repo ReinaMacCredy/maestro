@@ -431,23 +431,6 @@ describe("reconciliation E2E: feature with new plan fields", () => {
     expect(f1.expectedBehavior).toBe("Returns 200 OK with JSON body containing user data");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("includes preconditions and expectedBehavior in agent prompt", async () => {
-    const missionId = await createMission(tmpDir, createRichFieldsPlan());
-
-    const promptResult = await run(
-      ["feature", "prompt", "f1", "--mission", missionId, "--json"],
-      tmpDir,
-    );
-    expect(promptResult.exitCode).toBe(0);
-    const data = JSON.parse(promptResult.stdout);
-
-    // The prompt should include feature details (preconditions/expectedBehavior
-    // are stored on the feature but the current prompt template includes feature description)
-    expect(data.prompt).toContain("Feature With Rich Fields");
-    expect(data.prompt).toContain("Verify DB connection");
-    expect(data.prompt).toContain("Check HTTP 200");
-  }, SLOW_CLI_TIMEOUT_MS);
-
   it("preserves proposal field on mission through lifecycle", async () => {
     const missionId = await createMission(tmpDir, createRichFieldsPlan());
 

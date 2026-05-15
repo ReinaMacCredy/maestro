@@ -400,36 +400,6 @@ describe("full mission lifecycle", () => {
     expect(f1Data.report).toBeDefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("handles feature prompt generation in lifecycle context", async () => {
-    const missionId = await createMission(tmpDir);
-    await run(["mission", "approve", missionId], tmpDir);
-
-    // Generate prompt for feature
-    const promptResult = await run(
-      ["feature", "prompt", "f1", "--mission", missionId, "--json"],
-      tmpDir,
-    );
-    expect(promptResult.exitCode).toBe(0);
-    const promptData = JSON.parse(promptResult.stdout);
-    expect(promptData.prompt).toContain("f1");
-    expect(promptData.prompt).toContain("Setup Feature");
-    expect(promptData.agentType).toBe("test-skill");
-    expect(promptData.writtenTo.length).toBeGreaterThan(0);
-
-    // Verify prompt file was written
-    const promptPath = join(
-      tmpDir,
-      ".maestro",
-      "missions",
-      missionId,
-      "agents",
-      "f1",
-      "prompt.md",
-    );
-    const promptContent = await readFile(promptPath, "utf-8");
-    expect(promptContent).toContain("Agent Assignment: Setup Feature");
-    expect(promptContent).toContain("Foundation"); // milestone title
-  }, SLOW_CLI_TIMEOUT_MS);
 });
 
 describe("lifecycle error handling", () => {
