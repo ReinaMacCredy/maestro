@@ -12,7 +12,7 @@
 import { join } from "node:path";
 import { readdir } from "node:fs/promises";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
-import { FEATURE_ID_PATTERN, MISSION_ID_PATTERN } from "@/features/mission";
+import { FEATURE_ID_PATTERN, MISSION_ID_PATTERN } from "@/shared/domain/legacy-mission";
 import { ensureDir, readText, removeIfExists, writeText } from "@/shared/lib/fs.js";
 import { parseYaml, stringifyYaml } from "@/shared/lib/yaml.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";

@@ -13,7 +13,7 @@ import type {
   Missions,
 } from "@/shared/domain/legacy-mission";
 import { MISSION_ID_PATTERN } from "@/shared/domain/legacy-mission";
-import type { ReplyStorePort } from "@/features/mission/index.js";
+import type { ReplyStorePort } from "@/features/reply";
 import {
   isHandoffInProject,
   type HandoffStorePort,

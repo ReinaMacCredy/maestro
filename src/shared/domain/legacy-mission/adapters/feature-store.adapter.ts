@@ -6,7 +6,7 @@
 import type { Feature, CreateFeatureInput, UpdateFeatureInput } from "../types.js";
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import { FEATURE_ID_PATTERN, validateFeature } from "../validators.js";
-import { migrateLegacyWorkerType } from "@/features/mission/feature/feature-migration.js";
+import { migrateLegacyWorkerType } from "../feature-migration.js";
 import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { readdir } from "node:fs/promises";

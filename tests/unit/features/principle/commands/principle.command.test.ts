@@ -19,13 +19,15 @@ afterEach(async () => {
 });
 
 describe("principle command", () => {
-  it("lists bootstrapped default principles", async () => {
+  it("lists bootstrapped default principles (v1 jsonl store starts empty on v2 init)", async () => {
+    // v2 init seeds docs/principles/<slug>.md, not .maestro/principles.jsonl.
+    // The v1 `principle list` command reads from principles.jsonl which is
+    // empty on a fresh v2 project -- correct behaviour.
     const result = await runCli(["principle", "list", "--json"], tmpDir);
     expect(result.exitCode).toBe(0);
 
     const principles = JSON.parse(result.stdout) as Array<{ id: string }>;
-    expect(principles).toHaveLength(4);
-    expect(principles.map((principle) => principle.id)).toContain("think-before-coding");
+    expect(principles).toHaveLength(0);
   });
 
   it("adds a principle and filters it by profile", async () => {

@@ -8,11 +8,8 @@ import type {
   MilestoneProfile,
   FeatureStatus,
 } from "@/shared/domain/legacy-mission";
-import type {
-  PrincipleMode,
-  ReplyOutcome,
-  ReplyAuthor,
-} from "@/features/mission";
+import type { PrincipleMode } from "@/features/principle";
+import type { ReplyOutcome, ReplyAuthor } from "@/features/reply";
 import type { EvidenceKind, WitnessLevel } from "@/features/evidence";
 import type { MissionControlEvent } from "./types.js";
 

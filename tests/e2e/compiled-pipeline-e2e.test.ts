@@ -149,7 +149,8 @@ afterEach(async () => {
 });
 
 describe("compiled CLI pipeline E2E", () => {
-  it("runs a full Maestro workflow from plan file through completion", async () => {
+  // v1 mission CLI removed in PR-C; skip until v2 pipeline wired in Phase 4.
+  it.skip("runs a full Maestro workflow from plan file through completion", async () => {
     const missionId = await createMission(tmpDir);
 
     const approveResult = await runCompiled(

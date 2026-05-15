@@ -2,9 +2,9 @@
  * Mission lifecycle usecases
  * Implements mission creation, approval, rejection, update, and listing
  */
-import type { MissionStorePort } from "@/shared/domain/legacy-mission";
-import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
-import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
+import type { MissionStorePort } from "./ports/mission-store.port.js";
+import type { FeatureStorePort } from "./ports/feature-store.port.js";
+import type { AssertionStorePort } from "./ports/assertion-store.port.js";
 import type {
   Mission,
   CreateMissionInput,
@@ -14,20 +14,19 @@ import type {
   MissionPlanFile,
   MilestoneInput,
   Feature,
-} from "@/shared/domain/legacy-mission";
-import { generateMissionId } from "@/shared/domain/legacy-mission";
+} from "./types.js";
+import { generateMissionId } from "./ids.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { MaestroConfig } from "@/infra/domain/config-types.js";
-import type { WorkflowTemplate } from "@/shared/domain/legacy-mission";
-import { BUILT_IN_WORKFLOWS } from "@/shared/domain/legacy-mission";
+import type { WorkflowTemplate } from "./workflow-types.js";
+import { BUILT_IN_WORKFLOWS } from "./workflows.js";
 import {
   validateCreateMissionInput,
   validateMissionPlanFile,
   validateWorkflowTemplate,
   assertNoDanglingReferences,
   assertNoCyclicDependencies,
-} from "@/shared/domain/legacy-mission";
-import { assertMissionTransition, canTransitionMission } from "@/shared/domain/legacy-mission";
+} from "./validators.js";
+import { assertMissionTransition, canTransitionMission } from "./state-machine.js";
 
 /** Result of creating a mission */
 export interface CreateMissionResult {
@@ -37,12 +36,11 @@ export interface CreateMissionResult {
 
 /**
  * Expand a workflow template into a milestone array.
- * Resolves the template from config (user-defined) or built-in templates.
- * Generates milestone IDs from phase labels (kebab-cased) with order from array position.
+ * Resolves the template from the provided templates record or built-in templates.
  */
 export function expandWorkflowTemplate(
   templateName: string,
-  config?: MaestroConfig,
+  config?: { readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>> },
 ): readonly MilestoneInput[] {
   const userTemplates = config?.workflowTemplates ?? {};
   const rawTemplate =

@@ -1,5 +1,7 @@
 import { buildInfraServices, type InfraServices } from "./infra/services.js";
-import { buildMissionServices, type MissionServices } from "./features/mission/services.js";
+import { buildLegacyMissionServices, type LegacyMissionServices } from "@/shared/domain/legacy-mission";
+import { buildPrincipleServices, type PrincipleServices } from "./features/principle/services.js";
+import { buildReplyServices, type ReplyServices } from "./features/reply/services.js";
 import { buildHandoffServices, type HandoffServices } from "./features/handoff/services.js";
 import { buildTaskServices, type TaskServices } from "./features/task/services.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
@@ -17,7 +19,9 @@ import { buildRuntimeServices, type RuntimeServices } from "./features/runtime/s
 
 export interface Services extends
   InfraServices,
-  MissionServices,
+  LegacyMissionServices,
+  PrincipleServices,
+  ReplyServices,
   HandoffServices,
   TaskServices,
   BundleServices,
@@ -41,7 +45,9 @@ export function createServices(
 ): Services {
   const base: Services = {
     ...buildInfraServices(projectDir),
-    ...buildMissionServices(projectDir),
+    ...buildLegacyMissionServices(projectDir),
+    ...buildPrincipleServices(projectDir),
+    ...buildReplyServices(projectDir),
     ...buildHandoffServices(),
     ...buildTaskServices(projectDir),
     ...buildBundleServices(),

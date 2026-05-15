@@ -8,11 +8,8 @@ import type {
   CheckpointStorePort,
   Missions,
 } from "@/shared/domain/legacy-mission";
-import type {
-  AgentReply,
-  PrincipleStorePort,
-  ReplyStorePort,
-} from "@/features/mission";
+import type { PrincipleStorePort } from "@/features/principle";
+import type { AgentReply, ReplyStorePort } from "@/features/reply";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { HandoffStorePort } from "@/features/handoff";

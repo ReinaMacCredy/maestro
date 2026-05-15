@@ -7,7 +7,7 @@
  * next poll cycle. The adapter's `write()` invalidates any prior
  * `.ingested` sidecar so overwrites re-run ingest automatically.
  */
-import type { AgentReport } from "@/features/mission";
+import type { AgentReport } from "@/shared/domain/legacy-mission";
 import type { ReplyStorePort } from "../ports/reply-store.port.js";
 import type { ReplyAuthor, ReplyOutcome, AgentReply } from "../domain/types.js";
 

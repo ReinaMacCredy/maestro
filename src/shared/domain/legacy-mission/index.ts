@@ -125,3 +125,43 @@ export type {
   MissionFullState,
   Missions,
 } from "./missions.js";
+
+export { buildLegacyMissionServices } from "./services.js";
+export type { LegacyMissionServices } from "./services.js";
+
+export {
+  updateFeature,
+  listFeatures,
+  parseAgentReport,
+  getValidFeatureNextStates,
+} from "./feature-lifecycle.usecase.js";
+export type {
+  ListFeaturesResult,
+  UpdateFeatureResult,
+} from "./feature-lifecycle.usecase.js";
+
+export {
+  createMission,
+  listMissions,
+  showMission,
+  approveMission,
+  rejectMission,
+  updateMission,
+  expandWorkflowTemplate,
+  getValidMissionNextStates,
+} from "./mission-lifecycle.usecase.js";
+export type { CreateMissionResult } from "./mission-lifecycle.usecase.js";
+
+export {
+  deriveMissionReport,
+  generateMissionReport,
+} from "./mission-report.usecase.js";
+export type {
+  MissionReport,
+  MilestoneReportProgress,
+} from "./mission-report.usecase.js";
+
+export {
+  migrateLegacyWorkerType,
+} from "./feature-migration.js";
+export type { LegacyWorkerTypeMigration } from "./feature-migration.js";

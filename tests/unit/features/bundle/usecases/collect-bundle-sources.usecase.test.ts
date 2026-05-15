@@ -18,7 +18,7 @@ import type {
 } from "@/shared/domain/legacy-mission";
 import { buildMissions } from "@/shared/domain/legacy-mission";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
-import type { ReplyStorePort, AgentReply } from "@/features/mission/index.js";
+import type { ReplyStorePort, AgentReply } from "@/features/reply";
 
 const MISSION_ID = "2026-04-13-001";
 

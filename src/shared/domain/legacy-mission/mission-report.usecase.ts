@@ -2,9 +2,9 @@
  * Mission reporting usecase
  * Provides enhanced mission status with milestone progress indicators and completion percentages
  */
-import type { MissionStorePort } from "@/shared/domain/legacy-mission";
-import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
-import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
+import type { MissionStorePort } from "./ports/mission-store.port.js";
+import type { FeatureStorePort } from "./ports/feature-store.port.js";
+import type { AssertionStorePort } from "./ports/assertion-store.port.js";
 import type {
   Mission,
   MissionStatus,
@@ -12,9 +12,9 @@ import type {
   MilestoneStatus,
   Feature,
   Assertion,
-} from "@/shared/domain/legacy-mission";
+} from "./types.js";
 import { MaestroError } from "@/shared/errors.js";
-import { isTerminalAssertionStatus } from "@/shared/domain/legacy-mission";
+import { isTerminalAssertionStatus } from "./state-machine.js";
 import {
   deriveEffectiveMissionStatus,
   deriveSequentialMilestoneStatuses,
@@ -83,9 +83,9 @@ function collectMilestoneData(
       hasStartedFeatures: features.some((feature) => feature.status !== "pending"),
       allFeaturesCompleted: featureCount > 0 && completedFeatures === featureCount,
     },
-      progress: {
-        milestoneId: milestone.id,
-        milestone,
+    progress: {
+      milestoneId: milestone.id,
+      milestone,
       order: milestone.order,
       featureCount,
       completedFeatures,
@@ -93,11 +93,11 @@ function collectMilestoneData(
       assertionCount,
       passedAssertions,
       waivedAssertions,
-        terminalAssertions,
-        assertionCompletionPct,
-        waivedAssertionIds,
-      },
-    };
+      terminalAssertions,
+      assertionCompletionPct,
+      waivedAssertionIds,
+    },
+  };
 }
 
 function groupByMilestone<T extends { readonly milestoneId: string }>(

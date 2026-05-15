@@ -1,5 +1,4 @@
 import type { AgentSlug } from "@/shared/domain/agent-slug.js";
-import type { WorkflowTemplate } from "@/shared/domain/legacy-mission";
 import type { UiConfig } from "@/tui/shared/ui-config.js";
 
 export interface MaestroConfig {
@@ -14,7 +13,6 @@ export interface MaestroConfig {
     readonly staleReclaimContractPolicy?: "inherit" | "block";
   };
   readonly defaultWorkflow?: string;
-  readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>>;
   readonly ui?: UiConfig;
 }
 

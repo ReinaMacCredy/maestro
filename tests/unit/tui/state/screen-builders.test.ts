@@ -12,11 +12,11 @@ import {
 import { buildModalOptions } from "@/tui/app/modal-builders.js";
 import { createInitialState, reduce } from "@/tui/state/reducer.js";
 import type { Feature, Milestone } from "@/shared/domain/legacy-mission";
-import type { Principle, PrincipleOutcomeRecord, PrincipleStorePort } from "@/features/mission";
+import type { Principle, PrincipleOutcomeRecord, PrincipleStorePort } from "@/features/principle";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
 import type { MissionControlEvent, MissionControlSnapshot } from "@/tui/state/types.js";
 import type { Task, TaskQueryPort } from "@/features/task";
-import type { AgentReply } from "@/features/mission";
+import type { AgentReply } from "@/features/reply";
 import type { EvidenceSummary } from "@/tui/state/screen-types.js";
 import { mockConfig, mockGit } from "../../../helpers/mocks.js";
 

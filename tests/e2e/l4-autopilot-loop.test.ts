@@ -514,9 +514,11 @@ describe("L4 autopilot loop (compiled binary)", () => {
     SLOW_CLI_TIMEOUT_MS,
   );
 
-  // ─── Autopilot Mission Control screen ────────────────────────────────────
+  // ─── Autopilot Mission Control screen (mission-create removed in PR-C) ─────
+  // The v1 `mission create` verb was removed in PR-C; this test case is a
+  // no-op until the v2 equivalent is wired in Phase 4.
 
-  it(
+  it.skip(
     "autopilot Mission Control screen renders non-empty output with a mission context",
     async () => {
       const dir = await setupRepo();

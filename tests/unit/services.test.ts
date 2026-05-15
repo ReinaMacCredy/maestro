@@ -5,11 +5,14 @@ describe("services composition root", () => {
   it("imports feature service builders directly instead of feature public surfaces", async () => {
     const source = await Bun.file(new URL("../../src/services.ts", import.meta.url)).text();
 
-    expect(source).toContain('./features/mission/services.js');
+    expect(source).not.toContain('./features/mission/');
+    expect(source).toContain('./features/principle/services.js');
+    expect(source).toContain('./features/reply/services.js');
     expect(source).toContain('./features/handoff/services.js');
     expect(source).toContain('./features/task/services.js');
 
-    expect(source).not.toContain('./features/mission/index.js');
+    expect(source).not.toContain('./features/principle/index.js');
+    expect(source).not.toContain('./features/reply/index.js');
     expect(source).not.toContain('./features/handoff/index.js');
     expect(source).not.toContain('./features/task/index.js');
 

@@ -2,7 +2,7 @@ import type {
   Mission,
   MissionStatus,
   MilestoneStatus,
-} from "@/shared/domain/legacy-mission";
+} from "./types.js";
 
 export interface MilestoneActivitySnapshot {
   readonly milestoneId: string;

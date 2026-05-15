@@ -19,8 +19,8 @@ import type {
   MissionStorePort,
   FeatureStorePort,
   AssertionStorePort,
-} from "@/features/mission";
-import { canTransitionFeature, updateFeature } from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
+import { canTransitionFeature, updateFeature } from "@/shared/domain/legacy-mission";
 import type { ReplyStorePort } from "../ports/reply-store.port.js";
 import type {
   ReplyIngestResult,

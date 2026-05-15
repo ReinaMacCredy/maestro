@@ -3,7 +3,7 @@ import { createRoot, flushSync } from "@opentui/react";
 import { useState } from "react";
 
 import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
-import { updateFeature } from "@/features/mission";
+import { updateFeature } from "@/shared/domain/legacy-mission";
 import { applyConfigEdit, previewConfigEdit } from "@/infra/usecases/config-edit.usecase.js";
 import {
   getCommandPaletteSelectionAction,

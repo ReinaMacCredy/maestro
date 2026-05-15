@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FsAssertionStoreAdapter } from "@/features/mission";
-import { FsCheckpointStoreAdapter } from "@/features/mission";
-import { FsFeatureStoreAdapter } from "@/features/mission";
-import { FsMissionStoreAdapter } from "@/features/mission";
-import { buildMissions } from "@/features/mission";
+import { FsAssertionStoreAdapter } from "@/shared/domain/legacy-mission";
+import { FsCheckpointStoreAdapter } from "@/shared/domain/legacy-mission";
+import { FsFeatureStoreAdapter } from "@/shared/domain/legacy-mission";
+import { FsMissionStoreAdapter } from "@/shared/domain/legacy-mission";
+import { buildMissions, createMission as createMissionRecord, updateFeature } from "@/shared/domain/legacy-mission";
   import {
     createMissionControlSnapshotLoader,
     loadMissionControlSnapshot,
@@ -101,14 +101,15 @@ afterEach(async () => {
 });
 
 async function createMission(): Promise<string> {
-    const planPath = join(tmpDir, "plan.json");
-    await writeFile(planPath, JSON.stringify(createSamplePlan()));
-    const { stdout } = await runCli(["mission", "create", "--file", planPath, "--json"], tmpDir);
-    const missionId = JSON.parse(stdout).mission.id as string;
-    await runCli(["mission", "approve", missionId, "--json"], tmpDir);
-    await runCli(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
-    return missionId;
-  }
+  const missionStore = new FsMissionStoreAdapter(tmpDir);
+  const featureStore = new FsFeatureStoreAdapter(tmpDir);
+  const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+  const plan = createSamplePlan() as Parameters<typeof createMissionRecord>[3];
+  const { mission } = await createMissionRecord(missionStore, featureStore, assertionStore, plan);
+  await missionStore.update(mission.id, { status: "approved" });
+  await updateFeature(missionStore, featureStore, tmpDir, mission.id, "f1", { status: "assigned" });
+  return mission.id;
+}
 
 describe("loadMissionControlSnapshot", () => {
   it("keeps inspection non-mutating", async () => {

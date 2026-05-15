@@ -17,7 +17,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { chmod, lstat, readdir, rm } from "node:fs/promises";
-import { DEFAULT_PRINCIPLES } from "@/features/principle";
+import { DEFAULT_PRINCIPLES } from "@/v2/service/default-principles.js";
 
 const RUNTIME_GITIGNORE_COMMENT = "# Maestro runtime state";
 const RUNTIME_GITIGNORE_LINES = [
@@ -125,13 +125,16 @@ export async function initMaestro(
       skipped.push(join(opts.dir, ".gitignore"));
     }
 
-    const principlesPath = join(maestroDir, "principles.jsonl");
-    if (await readText(principlesPath) === undefined) {
-      const lines = DEFAULT_PRINCIPLES.map((p) => JSON.stringify(p));
-      await writeText(principlesPath, lines.join("\n") + "\n");
-      created.push(principlesPath);
-    } else {
-      skipped.push(principlesPath);
+    const principlesDir = join(opts.dir, "docs", "principles");
+    await ensureDir(principlesDir);
+    for (const principle of DEFAULT_PRINCIPLES) {
+      const principleFile = join(principlesDir, `${principle.slug}.md`);
+      if (await readText(principleFile) === undefined) {
+        await writeText(principleFile, principle.content);
+        created.push(principleFile);
+      } else {
+        skipped.push(principleFile);
+      }
     }
 
     await syncProjectAgentBuiltInSkills(opts.dir, created);

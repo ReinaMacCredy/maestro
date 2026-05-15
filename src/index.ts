@@ -20,13 +20,6 @@ import {
   resolveInstallDir,
   resolveInstalledBinaryName,
 } from "@/infra/usecases/install-release-binary.usecase.js";
-import {
-  registerMissionCommand,
-  registerFeatureCommand,
-  registerValidateCommand,
-  registerMilestoneCommand,
-  registerCheckpointCommand,
-} from "./features/mission/index.js";
 import { registerPrincipleCommand } from "./features/principle/index.js";
 import { registerReplyCommand } from "./features/reply/index.js";
 // Mission Control lazy-loads — its import graph (OpenTUI + React) costs
@@ -91,11 +84,6 @@ registerUninstallCommand(program);
 registerProvidersCommand(program);
 registerSkillsCommand(program);
 registerMcpCommand(program);
-registerMissionCommand(program, deps);
-registerFeatureCommand(program, deps);
-registerValidateCommand(program, deps);
-registerMilestoneCommand(program, deps);
-registerCheckpointCommand(program, deps);
 registerHandoffCommand(program, deps);
 registerTaskCommand(program, deps);
 registerReplyCommand(program, deps);
