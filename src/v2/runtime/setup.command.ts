@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { migrateCorrections } from "../service/migrate-corrections.usecase.js";
+import { migrateV2, type MigrateV2StepResult } from "../service/migrate-v2.usecase.js";
 import { setupBootstrap } from "../service/setup-bootstrap.usecase.js";
 import { setupCheck, type SetupCheckEntry } from "../service/setup-check.usecase.js";
 
@@ -18,6 +19,19 @@ function formatEntry(entry: SetupCheckEntry): string {
     entry.status === "ok" ? "[ok]   " : entry.status === "warn" ? "[warn] " : "[miss] ";
   const detail = entry.detail ? ` — ${entry.detail}` : "";
   return `${marker}${entry.path}${detail}`;
+}
+
+function formatMigrateStep(step: MigrateV2StepResult): string {
+  const marker =
+    step.status === "ok"
+      ? "[ok]      "
+      : step.status === "skipped"
+        ? "[skip]    "
+        : step.status === "not-implemented"
+          ? "[pending] "
+          : "[err]     ";
+  const detail = step.detail ? ` — ${step.detail}` : "";
+  return `${marker}${step.id.padEnd(22)} ${step.label}${detail}`;
 }
 
 export function registerSetupV2Commands(
@@ -70,6 +84,38 @@ export function registerSetupV2Commands(
         }
       } catch (err) {
         console.error(`maestro setup bootstrap: ${(err as Error).message}`);
+        process.exitCode = 1;
+      }
+    });
+
+  setup
+    .command("migrate-v2")
+    .description("Migrate a v1 .maestro/ tree to the v2 layout (scaffold; steps 4-10 land in PR 33)")
+    .option("--dry-run", "report planned actions without writing")
+    .option("--force", "re-run even if .maestro/.migrated-v2.json is present")
+    .option("--json", "emit JSON instead of text")
+    .action(async function (
+      this: Command,
+      flags: { dryRun?: boolean; force?: boolean; json?: boolean },
+    ): Promise<void> {
+      try {
+        const repoRoot = opts.resolveRepoRoot();
+        const result = await migrateV2(
+          { repoRoot },
+          { dryRun: flags.dryRun === true, force: flags.force === true },
+        );
+        const wantJson = flags.json === true || this.optsWithGlobals().json === true;
+        if (wantJson) {
+          console.log(JSON.stringify(result, null, 2));
+        } else if (result.already_migrated) {
+          console.log("migrate-v2: repo already migrated (use --force to re-run)");
+        } else {
+          for (const step of result.steps) console.log(formatMigrateStep(step));
+          console.log(result.ok ? "migrate-v2: scaffold complete" : "migrate-v2: failed");
+        }
+        if (!result.ok) process.exitCode = 1;
+      } catch (err) {
+        console.error(`maestro setup migrate-v2: ${(err as Error).message}`);
         process.exitCode = 1;
       }
     });

@@ -1,0 +1,2 @@
+{"id":"tsk-1","slug":"v1-demo-task","title":"Demo v1 task","state":"draft","created_at":"2026-04-01T00:00:00Z","updated_at":"2026-04-01T00:00:00Z"}
+{"id":"tsk-2","slug":"v1-claimed-task","title":"Claimed v1 task","state":"claimed","assignee":"agent-a","created_at":"2026-04-02T00:00:00Z","updated_at":"2026-04-02T01:00:00Z"}
