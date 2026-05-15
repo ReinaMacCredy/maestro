@@ -5,6 +5,10 @@
  * temp project and exercises each tool through real JSON-RPC messages.
  * This is the load-bearing handler-level coverage: the unit tests in
  * tests/unit/features/mcp/ only hit the helper layer.
+ *
+ * v2 update (D-task-MCP): uses v2 verbs (task_from_spec, task_ship,
+ * task_block with reason). Seeds spec files and task JSONL for flows that
+ * need pre-existing state.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -108,6 +112,38 @@ let server: ChildProcessWithoutNullStreams | undefined;
 let client: McpStdioClient | undefined;
 let stderrBuf = "";
 
+/** Write a minimal v2 product-spec markdown file and return the absolute path. */
+async function writeSpec(dir: string, slug: string, title: string): Promise<string> {
+  const specDir = join(dir, ".maestro", "specs");
+  await mkdir(specDir, { recursive: true });
+  const path = join(specDir, `${slug}.md`);
+  const content = [
+    "---",
+    `slug: ${slug}`,
+    "mode: light",
+    "risk_class: low",
+    "work_type: maintenance",
+    "acceptance_criteria:",
+    `  - ${title} is complete`,
+    "---",
+    "",
+    `# ${title}`,
+    "",
+    "E2E test spec.",
+  ].join("\n");
+  await writeFile(path, content);
+  return path;
+}
+
+/** Seed a v2 task directly into the JSONL store (bypasses state machine). */
+async function seedV2Task(dir: string, task: Record<string, unknown>): Promise<void> {
+  const tasksDir = join(dir, ".maestro", "tasks");
+  await mkdir(tasksDir, { recursive: true });
+  const file = join(tasksDir, "tasks.v2.jsonl");
+  const line = JSON.stringify(task) + "\n";
+  await writeFile(file, line, { flag: "a" });
+}
+
 beforeAll(buildCompiledCli, BUILD_TIMEOUT_MS);
 
 beforeEach(async () => {
@@ -120,6 +156,10 @@ beforeEach(async () => {
   await runCommand(["git", "commit", "--allow-empty", "-m", "init"], tmpDir);
   const initRes = await runCompiled(["init"], tmpDir);
   expect(initRes.exitCode).toBe(0);
+
+  // Bootstrap v2 directory tree required by v2 task store and evidence store.
+  const bootstrapRes = await runCompiled(["setup", "bootstrap"], tmpDir);
+  expect(bootstrapRes.exitCode).toBe(0);
 
   server = spawn(DIST_CLI, ["mcp", "serve"], {
     cwd: tmpDir,
@@ -158,14 +198,16 @@ afterAll(() => {
 });
 
 describe("MCP stdio flow", () => {
-  it("creates, gets, and lists a task", async () => {
+  it("creates a task from spec, gets it, and lists it", async () => {
     const c = client!;
-    const created = await c.call("maestro_task_create", { title: "e2e task" });
+    const specPath = await writeSpec(tmpDir, "e2e-task", "E2E Task");
+
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
     const taskId = (created.body as { task: { id: string } }).task.id;
-    expect(taskId).toMatch(/^tsk-[0-9a-f]{6}$/);
+    expect(taskId).toMatch(/^tsk-[a-z0-9]+-[a-z0-9]+$/);
 
     const got = await c.call("maestro_task_get", { id: taskId });
-    expect((got.body as { task: { id: string; title: string } }).task.title).toBe("e2e task");
+    expect((got.body as { task: { id: string; title: string } }).task.title).toBe("E2E Task");
 
     const list = await c.call("maestro_task_list", {});
     const items = (list.body as { items: { id: string }[] }).items;
@@ -174,28 +216,69 @@ describe("MCP stdio flow", () => {
 
   it("returns a TASK_NOT_FOUND error for an unknown id", async () => {
     const c = client!;
-    const r = await c.call("maestro_task_get", { id: "tsk-deadbe" });
+    // v2 task ID format — not present in store.
+    const r = await c.call("maestro_task_get", { id: "tsk-aaaa00-bbbb00" });
     expect(r.payload.isError).toBe(true);
     expect((r.body as { code: string }).code).toBe("TASK_NOT_FOUND");
   });
 
-  it("claims a task and completes it", async () => {
+  it("creates a task from spec and claims it", async () => {
     const c = client!;
-    const created = await c.call("maestro_task_create", { title: "claim-me" });
+    const specPath = await writeSpec(tmpDir, "claim-me", "Claim Me");
+
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
     const claimed = await c.call("maestro_task_claim", { id: taskId });
-    const claimedTask = (claimed.body as { task: { assignee?: string; claimedAt?: string } }).task;
+    const claimedTask = (claimed.body as { task: { assignee?: string; claimed_at?: string; state: string } }).task;
+    expect(claimedTask.state).toBe("claimed");
     expect(typeof claimedTask.assignee).toBe("string");
-    expect(typeof claimedTask.claimedAt).toBe("string");
+  });
 
-    const completed = await c.call("maestro_task_complete", { id: taskId, summary: "done" });
-    expect((completed.body as { task: { status: string } }).task.status).toBe("completed");
+  it("blocks a claimed task with a reason", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "block-me", "Block Me");
+
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
+    const taskId = (created.body as { task: { id: string } }).task.id;
+
+    await c.call("maestro_task_claim", { id: taskId });
+
+    const blocked = await c.call("maestro_task_block", { id: taskId, reason: "waiting on infra" });
+    const blockedTask = (blocked.body as { task: { state: string; block_reason?: string } }).task;
+    expect(blockedTask.state).toBe("blocked");
+    expect(blockedTask.block_reason).toBe("waiting on infra");
+  });
+
+  it("ships a task seeded in ready state", async () => {
+    const c = client!;
+    // Seed a task directly in 'ready' state (state machine: ready -> shipped).
+    const now = new Date().toISOString();
+    const taskId = "tsk-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    await seedV2Task(tmpDir, {
+      id: taskId,
+      slug: "ship-me/ready-task",
+      title: "Ship Me",
+      state: "ready",
+      blocked_by: [],
+      created_at: now,
+      updated_at: now,
+    });
+
+    const shipped = await c.call("maestro_task_ship", {
+      id: taskId,
+      pr_url: "https://github.com/owner/repo/pull/42",
+    });
+    const shippedTask = (shipped.body as { task: { state: string; pr_url?: string } }).task;
+    expect(shippedTask.state).toBe("shipped");
+    expect(shippedTask.pr_url).toBe("https://github.com/owner/repo/pull/42");
   });
 
   it("records and lists evidence rows", async () => {
     const c = client!;
-    const created = await c.call("maestro_task_create", { title: "evidence-flow" });
+    const specPath = await writeSpec(tmpDir, "evidence-flow", "Evidence Flow");
+
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
     const cmdEv = await c.call("maestro_evidence_record", {
@@ -214,36 +297,24 @@ describe("MCP stdio flow", () => {
     expect(items.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("maintains bidirectional block edges and detects self-block", async () => {
+  it("task_block requires a reason (rejects missing reason)", async () => {
     const c = client!;
-    const a = (
-      (await c.call("maestro_task_create", { title: "a" })).body as { task: { id: string } }
-    ).task.id;
-    const b = (
-      (await c.call("maestro_task_create", { title: "b" })).body as { task: { id: string } }
-    ).task.id;
-
-    await c.call("maestro_task_block", { id: a, blockedTaskIds: [b] });
-    const aAfter = (
-      (await c.call("maestro_task_get", { id: a })).body as {
-        task: { blocks: string[] };
-      }
-    ).task.blocks;
-    const bAfter = (
-      (await c.call("maestro_task_get", { id: b })).body as {
-        task: { blockedBy: string[] };
-      }
-    ).task.blockedBy;
-    expect(aAfter).toContain(b);
-    expect(bAfter).toContain(a);
-
-    const selfBlock = await c.call("maestro_task_block", { id: a, blockedTaskIds: [a] });
-    expect(selfBlock.payload.isError).toBe(true);
+    const r = await c.rpc("tools/call", {
+      name: "maestro_task_block",
+      arguments: { id: "tsk-aaaa00-bbbb00" },
+    });
+    // Schema rejects missing reason at the zod layer.
+    const tooled = r.result as ToolPayload | undefined;
+    const rejected =
+      r.error !== undefined ||
+      (tooled !== undefined && tooled.isError === true);
+    expect(rejected).toBe(true);
   });
 
   it("shows, amends, and re-shows a contract", async () => {
     const c = client!;
-    const created = await c.call("maestro_task_create", { title: "contract-flow" });
+    const specPath = await writeSpec(tmpDir, "contract-flow", "Contract Flow");
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
     // Seed a v1 contract directly. We need the real on-disk shape that
@@ -306,7 +377,8 @@ describe("MCP stdio flow", () => {
 
   it("requests a verdict and shows it back", async () => {
     const c = client!;
-    const created = await c.call("maestro_task_create", { title: "verdict-flow" });
+    const specPath = await writeSpec(tmpDir, "verdict-flow", "Verdict Flow");
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
     const contractDir = join(tmpDir, ".maestro", "contracts", taskId);
@@ -349,7 +421,8 @@ describe("MCP stdio flow", () => {
 
   it("computes policy effective risk class for a task with a contract", async () => {
     const c = client!;
-    const created = await c.call("maestro_task_create", { title: "policy-flow" });
+    const specPath = await writeSpec(tmpDir, "policy-flow", "Policy Flow");
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
     const taskId = (created.body as { task: { id: string } }).task.id;
 
     const contractDir = join(tmpDir, ".maestro", "contracts", taskId);
@@ -392,11 +465,11 @@ describe("MCP stdio flow", () => {
     expect(body.contractRiskClass).toBe("low");
   });
 
-  it("rejects an empty title at the schema layer", async () => {
+  it("rejects an empty spec_path at the schema layer", async () => {
     const c = client!;
     const r = await c.rpc("tools/call", {
-      name: "maestro_task_create",
-      arguments: { title: "" },
+      name: "maestro_task_from_spec",
+      arguments: { spec_path: "" },
     });
     // The MCP SDK may surface a zod validation failure as a JSON-RPC
     // error or as a tool result with isError=true; accept either path.
@@ -409,7 +482,8 @@ describe("MCP stdio flow", () => {
 
   it("returns a stable error code when no contract exists for maestro_contract_show", async () => {
     const c = client!;
-    const created = await c.call("maestro_task_create", { title: "no-contract" });
+    const specPath = await writeSpec(tmpDir, "no-contract", "No Contract");
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
     const taskId = (created.body as { task: { id: string } }).task.id;
     const r = await c.call("maestro_contract_show", { taskId });
     expect(r.payload.isError).toBe(true);
@@ -480,7 +554,7 @@ describe("MCP stdio flow", () => {
 
     // open_for_task on a packet with no taskId returns an empty list.
     const noTaskOpen = await c.call("maestro_handoff_open_for_task", {
-      taskId: "tsk-deadbeef",
+      taskId: "tsk-aaaa00-deadbe",
     });
     expect((noTaskOpen.body as { handoffIds: string[] }).handoffIds).toEqual([]);
 
@@ -528,7 +602,7 @@ describe("MCP stdio flow", () => {
       promptPath: join(".maestro", "handoff", handoffId, "prompt.md"),
       outputPath: join(".maestro", "handoff", handoffId, "output.log"),
       command: ["claude"],
-      refs: { projectRoot: foreignProject, taskId: "tsk-foreign1" },
+      refs: { projectRoot: foreignProject, taskId: "tsk-aaaa00-foreign" },
     };
     await writeFile(join(handoffDir, "handoff.json"), JSON.stringify(record));
     await writeFile(join(handoffDir, "prompt.md"), "## task\n");
@@ -563,11 +637,10 @@ describe("MCP stdio flow", () => {
 
   it("rejects unknown fields at the schema boundary (strict mode)", async () => {
     const c = client!;
-    // maestro_task_create with a typo'd 'missionID' (correct field would be
-    // 'missionId', but maestro_task_create no longer accepts it at all).
+    // maestro_task_from_spec with an unknown extra field.
     const r = await c.rpc("tools/call", {
-      name: "maestro_task_create",
-      arguments: { title: "strict mode probe", missionID: "msn-abc123" },
+      name: "maestro_task_from_spec",
+      arguments: { spec_path: "docs/specs/foo.md", missionID: "msn-abc123" },
     });
     const tooled = r.result as ToolPayload | undefined;
     const rejected =
@@ -592,5 +665,36 @@ describe("MCP stdio flow", () => {
     expect(body.code).toBe("INVALID_ARG");
     expect(body.arg).toBe("taskId");
     expect(typeof body.message).toBe("string");
+  });
+
+  it("maestro_setup_check returns a report with ok status", async () => {
+    const c = client!;
+    const r = await c.call("maestro_setup_check", {});
+    if (r.payload.isError) {
+      throw new Error(`maestro_setup_check failed: ${JSON.stringify(r.body)}`);
+    }
+    const body = r.body as { ok: boolean; entries: { path: string; status: string }[] };
+    expect(typeof body.ok).toBe("boolean");
+    expect(Array.isArray(body.entries)).toBe(true);
+    // After bootstrap, all directories should be ok (not missing).
+    const missing = body.entries.filter((e) => e.status === "missing");
+    expect(missing).toEqual([]);
+  });
+
+  it("maestro_task_list filters by state", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "state-filter", "State Filter");
+    await c.call("maestro_task_from_spec", { spec_path: specPath });
+
+    // Filter by state=draft; the newly created task should appear.
+    const draftList = await c.call("maestro_task_list", { state: "draft" });
+    const drafts = (draftList.body as { items: { state: string }[] }).items;
+    expect(drafts.every((t) => t.state === "draft")).toBe(true);
+    expect(drafts.length).toBeGreaterThanOrEqual(1);
+
+    // Filter by state=shipped; should be empty in a fresh project.
+    const shippedList = await c.call("maestro_task_list", { state: "shipped" });
+    const shipped = (shippedList.body as { items: unknown[] }).items;
+    expect(shipped.length).toBe(0);
   });
 });

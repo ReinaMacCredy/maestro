@@ -8,7 +8,7 @@ import {
   type HandoffAgent,
   type HandoffRecord,
 } from "@/features/handoff/index.js";
-import { buildTaskOwnerId } from "@/features/task/index.js";
+import { buildTaskOwnerId } from "@/v2/service/index.js";
 import { summarizeHandoff } from "@/shared/lib/projection.js";
 import type { z } from "zod";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";

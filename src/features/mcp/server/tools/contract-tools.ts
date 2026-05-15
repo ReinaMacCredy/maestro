@@ -2,10 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import {
   amendContract,
-  type ContractAmendment,
   generateContractAmendmentId,
   getCurrentContract,
-} from "@/features/task/index.js";
+} from "@/v2/service/index.js";
+import type { ContractAmendment } from "@/v2/types/contract.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { ContractAmendInput, ContractShowInput } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";

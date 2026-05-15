@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { PROJECTION_VIEWS } from "@/shared/lib/projection.js";
+import { TASK_STATES } from "@/v2/types/task-state.js";
 
+// Accepts both v1 (tsk-aabbcc) and v2 (tsk-x-y) task ID formats.
+// v1 IDs are 6 lowercase hex chars; v2 IDs have two dash-separated alphanumeric
+// segments. The broader pattern here accepts both without special-casing.
 const taskId = z
   .string()
-  .regex(/^tsk-[a-z0-9]+$/, "Invalid task id")
-  .describe("A maestro task id like 'tsk-abc123'.");
+  .regex(/^tsk-[0-9a-f]{6}$|^tsk-[a-z0-9]+-[a-z0-9]+$/, "Invalid task id")
+  .describe("A maestro task id like 'tsk-abc123' (v1) or 'tsk-lp1abc-xy1234' (v2).");
 const planId = z
   .string()
   .regex(/^pln-[a-z0-9]+-[a-z0-9]+$/, "Invalid exec-plan id")
@@ -32,15 +36,12 @@ const handoffAgent = z
     "Acting agent identifier when picking up a handoff. Claude Code agents pass `claude` (not `claude-code`); the Codex CLI passes `codex`.",
   );
 
-const taskStatus = z
-  .enum(["pending", "in_progress", "completed"])
-  .describe("Filter by task status.");
-const taskType = z
-  .enum(["task", "bug", "feature", "epic", "chore"])
-  .describe("Filter by task type.");
-const taskPriority = z
-  .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
-  .describe("Filter by priority (0=critical, 4=backlog).");
+// v2 task state enum. Replaces v1 status (pending|in_progress|completed).
+const taskState = z
+  .enum(TASK_STATES)
+  .describe(
+    "Filter by v2 task state. Values: draft, claimed, doing, verifying, blocked, ready, shipped, abandoned.",
+  );
 const witnessLevel = z
   .enum([
     "witnessed-by-maestro",
@@ -92,23 +93,16 @@ const offset = z
   .optional()
   .describe("Zero-based page offset. Defaults to 0 when omitted.");
 
+// v2 task list: only plan_id and state filters are supported.
+// Removed v1-only filters: type, priority, label, parentId, assignee.
 export const TaskListInput = z
   .object({
     plan_id: planId.optional(),
-    status: taskStatus.optional(),
-    type: taskType.optional(),
-    priority: taskPriority.optional(),
-    label: z
-      .string()
-      .min(1)
+    state: taskState
       .optional()
-      .describe("Filter to tasks carrying this label (exact match)."),
-    parentId: taskId.optional(),
-    assignee: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("Filter by assignee/session id."),
+      .describe(
+        "Filter by v2 task state. v1 status (pending/in_progress/completed) is not supported; use state with v2 values.",
+      ),
     limit,
     offset,
     view,
@@ -121,119 +115,54 @@ export const TaskGetInput = z
   })
   .strict();
 
-export const TaskCreateInput = z
-  .object({
-    title: z
-      .string()
-      .min(1)
-      .max(200)
-      .describe("Task title, 1..200 chars. Slug is derived from this automatically."),
-    description: z
-      .string()
-      .optional()
-      .describe("Optional task description; supports markdown."),
-  })
-  .strict();
-
 export const TaskClaimInput = z
   .object({
     id: taskId,
+    agent_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Agent identifier recorded on the task and evidence row. Defaults to MCP session id when omitted."),
   })
   .strict();
 
-export const TaskCompleteInput = z
+// Task ship (renamed from task_complete). v2: pr_url replaces the receipt.
+// The verdict-PASS path is the authoritative completion receipt in v2.
+export const TaskShipInput = z
   .object({
     id: taskId,
-    summary: z
+    pr_url: z
       .string()
+      .url()
       .optional()
-      .describe(
-        "One-line completion summary stored on the task receipt. Either `summary` or `reason` is required at runtime — calls with neither are rejected with INVALID_ARG to keep future sessions from inheriting a context-free completion.",
-      ),
-    // CLI uses `--reason`; accept it as an alias so agents that read CLI
-    // docs and then call the MCP tool don't trip on naming drift.
-    reason: z
-      .string()
-      .optional()
-      .describe("Alias for `summary` (matches the CLI's --reason flag). Provide this OR `summary`; calls with neither are rejected."),
+      .describe("Optional PR URL recorded on the task when merging."),
   })
   .strict();
 
+// v2 task block: marks the task itself as blocked with a mandatory reason.
+// Removed v1 fields: blockedTaskIds[], force (bidirectional graph edges).
 export const TaskBlockInput = z
   .object({
     id: taskId,
-    blockedTaskIds: z
-      .array(taskId)
-      .min(1)
-      .describe("Task ids that this task should block. Edges are bidirectional."),
-    force: z
-      .boolean()
-      .optional()
-      .describe("Bypass cycle detection. Use only when you understand the consequences."),
-  })
-  .strict();
-
-export const TaskUnblockInput = z
-  .object({
-    id: taskId,
-    blockedTaskIds: z
-      .array(taskId)
-      .min(1)
-      .describe("Task ids whose blocker edge from this task should be removed."),
-    force: z.boolean().optional(),
-  })
-  .strict();
-
-export const TaskPlanInput = z
-  .object({
-    batchId: z
+    reason: z
       .string()
-      .optional()
-      .describe("Optional idempotency key for replay protection. If provided and matches an existing receipt, returns the stored result."),
-    tasks: z
-      .array(
-        z.object({
-          name: z
-            .string()
-            .optional()
-            .describe("Batch-local symbolic name for parent/blockedBy references."),
-          title: z
-            .string()
-            .min(1)
-            .max(200)
-            .describe("Task title (required), 1..200 chars."),
-          description: z
-            .string()
-            .optional()
-            .describe("Optional task description; supports markdown."),
-          type: taskType.optional(),
-          priority: taskPriority.optional(),
-          parent: z
-            .string()
-            .optional()
-            .describe("tsk-* id, batch-local name, or slug (for step tasks)."),
-          slug: z
-            .string()
-            .optional()
-            .describe("'<verb>/<kebab>' for top-level tasks only. Auto-derived from title if omitted."),
-          labels: z.array(z.string()).optional(),
-          blockedBy: z
-            .array(z.string())
-            .optional()
-            .describe("Array of tsk-* ids or batch-local names."),
-        }).strict(),
-      )
       .min(1)
-      .max(500)
-      .describe("1-500 tasks per batch."),
-    start: z
-      .string()
-      .optional()
-      .describe("Batch-local name of task to auto-claim and move to in_progress after batch creation."),
+      .describe("Human-readable explanation of what is blocking this task."),
   })
   .strict();
 
-export type TaskPlanInput = z.infer<typeof TaskPlanInput>;
+// task_from_spec creates a v2 task in draft state from a product-spec markdown file.
+// Takes a file path (absolute or relative to repo root), not a spec ID.
+export const TaskFromSpecInput = z
+  .object({
+    spec_path: z
+      .string()
+      .min(1)
+      .describe(
+        "Absolute or repo-root-relative path to the product-spec markdown file. Example: 'docs/specs/add-caching.md'.",
+      ),
+  })
+  .strict();
 
 export const EvidenceListInput = z
   .object({
@@ -417,6 +346,35 @@ export const HandoffPickupInput = z
       .describe(
         "Consume the packet without resuming its linked task. Required when picking up a packet from a different project than the one that created it.",
       ),
+  })
+  .strict();
+
+// --- New v2 hot-path inputs ---
+
+export const PrinciplePromoteInput = z
+  .object({
+    correction_id: z
+      .string()
+      .min(1)
+      .describe(
+        "Evidence row id (evd-*) for a lint-violation row to promote to a principle. Use maestro_evidence_list to find candidates.",
+      ),
+  })
+  .strict();
+
+// setupCheck takes no user inputs — it reads the project root from context.
+export const SetupCheckInput = z.object({}).strict();
+
+export const SetupMigrateV2Input = z
+  .object({
+    dry_run: z
+      .boolean()
+      .optional()
+      .describe("Report migration steps without applying changes. Defaults to false."),
+    force: z
+      .boolean()
+      .optional()
+      .describe("Re-run migration even if the .migrated-v2.json flag is present."),
   })
   .strict();
 

@@ -17,6 +17,7 @@ import { buildCiServices, type CiServices } from "./features/ci/services.js";
 import { buildMergeServices, type MergeServices } from "./features/merge/services.js";
 import { buildDeployServices, type DeployServices } from "./features/deploy/services.js";
 import { buildRuntimeServices, type RuntimeServices } from "./features/runtime/services.js";
+import { buildV2Services, type V2Services } from "./v2/providers/build-services.js";
 
 export interface Services extends
   InfraServices,
@@ -38,6 +39,8 @@ export interface Services extends
   RuntimeServices {
   readonly specStore: LegacySpecStorePort;
   readonly projectRoot: string;
+  /** v2 service bundle — MCP tools for v2 verbs consume these directly. */
+  readonly v2: V2Services;
 }
 
 export function createServices(
@@ -64,6 +67,7 @@ export function createServices(
     ...buildDeployServices(),
     ...buildRuntimeServices(),
     projectRoot: projectDir,
+    v2: buildV2Services({ repoRoot: projectDir }),
   };
   return overrides ? { ...base, ...overrides } : base;
 }

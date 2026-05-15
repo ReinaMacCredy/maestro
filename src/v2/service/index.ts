@@ -15,6 +15,15 @@ export * from "./plan-decompose.usecase.js";
 export * from "./try-advance-plan.usecase.js";
 export * from "./principle-scan.usecase.js";
 export * from "./principle-promote.usecase.js";
+export * from "./setup-check.usecase.js";
+export * from "./migrate-v2.usecase.js";
 export * from "./migrate-corrections.usecase.js";
 export * from "./check-cost-budget.js";
 export * from "./contract-helpers.js";
+// Contract helpers re-exported here so MCP tools can import from @/v2/service
+// without depending on @/shared/domain/legacy-task.
+export { amendContract } from "@/shared/domain/legacy-task/usecases/amend-contract.usecase.js";
+export type { AmendContractInput, AmendContractResult } from "@/shared/domain/legacy-task/usecases/amend-contract.usecase.js";
+export { getCurrentContract } from "@/shared/domain/legacy-task/usecases/get-current-contract.usecase.js";
+export { generateContractAmendmentId } from "@/shared/domain/legacy-task/domain/contract/contract-state.js";
+export { buildTaskOwnerId } from "@/shared/domain/legacy-task/usecases/task-continuation.usecase.js";

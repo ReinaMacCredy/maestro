@@ -9,6 +9,8 @@ import { registerContractTools } from "./tools/contract-tools.js";
 import { registerEvidenceTools } from "./tools/evidence-tools.js";
 import { registerHandoffTools } from "./tools/handoff-tools.js";
 import { registerPolicyTools } from "./tools/policy-tools.js";
+import { registerPrincipleTools } from "./tools/principle-tools.js";
+import { registerSetupTools } from "./tools/setup-tools.js";
 import { registerTaskTools } from "./tools/task-tools.js";
 import type { RegisterDeps } from "./tools/types.js";
 import { registerVerdictTools } from "./tools/verdict-tools.js";
@@ -47,6 +49,8 @@ export function buildMaestroMcpServer(options: McpServerOptions = {}): {
   registerContractTools(server, deps);
   registerPolicyTools(server, deps);
   registerHandoffTools(server, deps);
+  registerPrincipleTools(server, deps);
+  registerSetupTools(server, deps);
   installToolErrorInterceptor(server);
 
   return { server, services, projectRoot };
