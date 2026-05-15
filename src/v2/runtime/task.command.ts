@@ -71,7 +71,10 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       }
     });
 
-  const claimAction = async (id: string, flags: { agent?: string }): Promise<void> => {
+  const claimAction = async (
+    id: string,
+    flags: { agent?: string; skipWorktree?: boolean },
+  ): Promise<void> => {
     try {
       const repoRoot = opts.resolveRepoRoot();
       const services = buildV2Services({ repoRoot });
@@ -81,10 +84,14 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           evidenceStore: services.evidenceStore,
           planStore: services.planStore,
           observabilityStore: services.observabilityStore,
+          worktreeStore: services.worktreeStore,
         },
-        { id, agentId: flags.agent },
+        { id, agentId: flags.agent, skipWorktree: flags.skipWorktree === true },
       );
-      console.log(`${claimed.id} claimed${flags.agent ? ` by ${flags.agent}` : ""}`);
+      const worktreeNote = claimed.worktree_path ? ` (worktree ${claimed.worktree_path})` : "";
+      console.log(
+        `${claimed.id} claimed${flags.agent ? ` by ${flags.agent}` : ""}${worktreeNote}`,
+      );
     } catch (err) {
       reportError("task claim", err);
     }
@@ -92,14 +99,16 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
 
   task
     .command("claim <id>")
-    .description("Claim a task (draft -> claimed)")
+    .description("Claim a task (draft -> claimed); auto-creates a worktree for heavy-mode specs")
     .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
+    .option("--skip-worktree", "skip auto-worktree creation even for heavy-mode specs")
     .action(claimAction);
 
   program
     .command("claim <id>")
     .description("Hot-path alias for `task claim`")
     .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
+    .option("--skip-worktree", "skip auto-worktree creation even for heavy-mode specs")
     .action(claimAction);
 
   const blockAction = async (id: string, flags: { reason?: string }): Promise<void> => {

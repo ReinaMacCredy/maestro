@@ -16,6 +16,8 @@ export interface Task {
   readonly blocked_by: readonly string[];
   readonly block_reason?: string;
   readonly abandon_reason?: string;
+  // Set by task-claim when a heavy-mode spec triggers an auto-worktree.
+  readonly worktree_path?: string;
   readonly created_at: string;
   readonly updated_at: string;
 }

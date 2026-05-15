@@ -16,3 +16,5 @@ export * from "./process-runner.port.js";
 export * from "./bun-process-runner.adapter.js";
 export * from "./observability.port.js";
 export * from "./jsonl-observability.adapter.js";
+export * from "./worktree-store.port.js";
+export * from "./git-worktree-store.adapter.js";

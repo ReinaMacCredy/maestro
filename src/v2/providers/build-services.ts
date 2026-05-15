@@ -33,6 +33,10 @@ import {
   JsonlObservabilityAdapter,
   type ObservabilityPort,
 } from "../repo/jsonl-observability.adapter.js";
+import {
+  GitWorktreeStore,
+  type WorktreeStorePort,
+} from "../repo/git-worktree-store.adapter.js";
 
 export interface V2Services {
   readonly specStore: SpecStorePort;
@@ -43,6 +47,7 @@ export interface V2Services {
   readonly principlesStore: PrinciplesStorePort;
   readonly processRunner: ProcessRunnerPort;
   readonly observabilityStore: ObservabilityPort;
+  readonly worktreeStore: WorktreeStorePort;
 }
 
 export interface BuildV2ServicesOptions {
@@ -52,6 +57,7 @@ export interface BuildV2ServicesOptions {
 
 export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
   const { repoRoot, overrides } = options;
+  const processRunner = overrides?.processRunner ?? new BunProcessRunner();
   return {
     specStore: overrides?.specStore ?? new FsSpecStore({ repoRoot }),
     taskStore: overrides?.taskStore ?? new JsonlTaskStore({ repoRoot }),
@@ -59,7 +65,9 @@ export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
     evidenceStore: overrides?.evidenceStore ?? new JsonlEvidenceStore({ repoRoot }),
     architectureRules: overrides?.architectureRules ?? new YamlArchitectureRules({ repoRoot }),
     principlesStore: overrides?.principlesStore ?? new FsPrinciplesStore({ repoRoot }),
-    processRunner: overrides?.processRunner ?? new BunProcessRunner(),
+    processRunner,
     observabilityStore: overrides?.observabilityStore ?? new JsonlObservabilityAdapter({ repoRoot }),
+    worktreeStore:
+      overrides?.worktreeStore ?? new GitWorktreeStore({ repoRoot, processRunner }),
   };
 }
