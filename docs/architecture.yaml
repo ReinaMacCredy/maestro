@@ -20,6 +20,10 @@ layers:
   - ui
 
 cross_cutting:
+  # Cross-cutting layers are universally importable: any layer may import from
+  # them, and they may import from any layer. Only the internal forward_only
+  # chain between non-cross-cutting layers is enforced by the lint runner. See
+  # docs/adr/0017-cross-cutting-import-semantics.md for the rationale.
   - providers
 
 # Globs (relative to repo root) that scope lint application. Phase 1 ships v2

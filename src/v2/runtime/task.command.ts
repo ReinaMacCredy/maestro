@@ -4,6 +4,8 @@ import { taskFromSpec } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
 import { taskBlock } from "../service/task-block.usecase.js";
 import { taskAbandon } from "../service/task-abandon.usecase.js";
+import { taskVerify } from "../service/task-verify.usecase.js";
+import { taskShip } from "../service/task-ship.usecase.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError } from "../types/task-state.js";
 
@@ -40,7 +42,7 @@ function reportError(verb: string, err: unknown): void {
 
 export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Options): void {
   const task = findOrCreateTaskCommand(program);
-  detachV1Overrides(task, ["claim", "block", "verify"]);
+  detachV1Overrides(task, ["claim", "block", "verify", "ship"]);
 
   task
     .command("from-spec <path>")
@@ -160,4 +162,86 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .description("Hot-path alias for `task abandon`")
     .requiredOption("--reason <text>", "human-readable explanation of abandonment")
     .action(abandonAction);
+
+  const verifyAction = async (id: string, flags: { json?: boolean }): Promise<void> => {
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildV2Services({ repoRoot });
+      const result = await taskVerify(
+        {
+          repoRoot,
+          taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
+          architectureRules: services.architectureRules,
+        },
+        { id },
+      );
+      if (flags.json) {
+        console.log(
+          JSON.stringify(
+            {
+              id: result.task.id,
+              state: result.task.state,
+              verdict: result.verdict,
+              violations: result.violations,
+            },
+            null,
+            2,
+          ),
+        );
+      } else if (result.verdict === "PASS") {
+        console.log(`${result.task.id} verified -> ready (PASS)`);
+      } else {
+        console.log(`${result.task.id} verify FAIL (${result.violations.length} violation(s))`);
+        for (const v of result.violations) {
+          const loc = v.line ? `${v.file}:${v.line}` : v.file;
+          console.log(`  [${v.severity}] ${v.rule_id} ${loc}: ${v.message}`);
+        }
+      }
+      if (result.verdict === "FAIL") process.exitCode = 1;
+    } catch (err) {
+      reportError("task verify", err);
+    }
+  };
+
+  task
+    .command("verify <id>")
+    .description("Run lints; PASS auto-advances verifying -> ready, FAIL stays at verifying")
+    .option("--json", "emit JSON result with task, verdict, and violations")
+    .action(verifyAction);
+
+  program
+    .command("verify <id>")
+    .description("Hot-path alias for `task verify`")
+    .option("--json", "emit JSON result with task, verdict, and violations")
+    .action(verifyAction);
+
+  const shipAction = async (id: string, flags: { prUrl?: string }): Promise<void> => {
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildV2Services({ repoRoot });
+      const shipped = await taskShip(
+        {
+          taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
+        },
+        { id, pr_url: flags.prUrl },
+      );
+      console.log(`${shipped.id} shipped${flags.prUrl ? ` (${flags.prUrl})` : ""}`);
+    } catch (err) {
+      reportError("task ship", err);
+    }
+  };
+
+  task
+    .command("ship <id>")
+    .description("Mark a ready task shipped (ready -> shipped)")
+    .option("--pr-url <url>", "PR URL recorded on the task")
+    .action(shipAction);
+
+  program
+    .command("ship <id>")
+    .description("Hot-path alias for `task ship`")
+    .option("--pr-url <url>", "PR URL recorded on the task")
+    .action(shipAction);
 }
