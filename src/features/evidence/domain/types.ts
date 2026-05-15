@@ -18,7 +18,8 @@ export type EvidenceKind =
   | "session-exit"
   | "recovery"
   | "doc-gardening"
-  | "ralph-iteration";
+  | "ralph-iteration"
+  | "harness-delta";
 
 export type WitnessLevel =
   | "witnessed-by-maestro"
@@ -238,6 +239,19 @@ export interface RalphIterationPayload {
   readonly sources: readonly ("trust-verifier" | "ai-review" | "lint-arch" | "threat-model")[];
 }
 
+/**
+ * Payload for harness-delta evidence. Records that a task modified the
+ * development harness itself (policies, skills, hooks, .maestro/). Captured
+ * at task close when `IntakeResult.harnessImpact` is true.
+ */
+export type HarnessDeltaCategory = "validation" | "workflow" | "policy";
+
+export interface HarnessDeltaPayload {
+  readonly paths: readonly string[];
+  readonly category: HarnessDeltaCategory;
+  readonly impactScope: string;
+}
+
 interface EvidencePayloadByKind {
   readonly command: CommandPayload;
   readonly "manual-note": ManualNotePayload;
@@ -259,6 +273,7 @@ interface EvidencePayloadByKind {
   readonly recovery: RecoveryPayload;
   readonly "doc-gardening": DocGardeningPayload;
   readonly "ralph-iteration": RalphIterationPayload;
+  readonly "harness-delta": HarnessDeltaPayload;
 }
 
 export type EvidencePayload<K extends EvidenceKind> = EvidencePayloadByKind[K];

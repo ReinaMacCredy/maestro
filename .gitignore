@@ -53,6 +53,9 @@ feedback.jsonl
 /apps/
 .gitnexus
 
+# Bootstrap/reference assets (not needed in repo)
+.factory/
+
 # Maestro runtime state
 .maestro/sessions/
 .maestro/policies/.pending-loosenings.json

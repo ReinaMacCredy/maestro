@@ -44,11 +44,28 @@ export const TASK_PRIORITIES: readonly TaskPriority[] = [0, 1, 2, 3, 4] as const
 // Core entity
 // ============================
 
+/**
+ * Work-type classification recorded on a task receipt. Mirrors the WorkType
+ * union exported from `@/features/intake`; duplicated here to avoid a
+ * cross-feature dependency. Keep in sync with `src/features/intake/domain/types.ts`.
+ */
+export type TaskWorkType =
+  | "new-spec"
+  | "spec-slice"
+  | "change-request"
+  | "initiative"
+  | "maintenance"
+  | "harness-improvement";
+
 export interface TaskReceipt {
   readonly summary: string;
   readonly surprise?: string;
   readonly verifiedBy?: readonly string[];
   readonly capturedAt: string;
+  /** Work-type classification at task close. Optional for backward compat. */
+  readonly workType?: TaskWorkType;
+  /** Paths that modified the harness (.maestro/, policies/, skills/, hooks/). */
+  readonly harnessDeltas?: readonly string[];
 }
 
 export interface Task {
@@ -138,6 +155,8 @@ export interface BuildTaskReceiptInput {
   readonly surprise?: string;
   readonly verifiedBy?: readonly string[];
   readonly reasonFallback?: string;
+  readonly workType?: TaskWorkType;
+  readonly harnessDeltas?: readonly string[];
 }
 
 export interface TaskMutationInput {
@@ -220,11 +239,16 @@ export function buildTaskReceipt(
     return existingReceipt;
   }
 
+  const workType = input.workType ?? existingReceipt?.workType;
+  const harnessDeltas = input.harnessDeltas ?? existingReceipt?.harnessDeltas;
+
   return {
     summary: summary ?? "",
     ...(surprise ? { surprise } : {}),
     ...(verifiedBy.length > 0 ? { verifiedBy } : {}),
     capturedAt: input.capturedAt,
+    ...(workType !== undefined ? { workType } : {}),
+    ...(harnessDeltas !== undefined && harnessDeltas.length > 0 ? { harnessDeltas } : {}),
   };
 }
 

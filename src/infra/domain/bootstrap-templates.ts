@@ -361,6 +361,172 @@ required_witness_level:
 `,
   },
   {
+    path: ".maestro/docs/HARNESS.md",
+    content: `# Harness
+
+This document explains the **harness** — the development infrastructure layer that wraps the product code in this repository.
+
+## Product Delta vs Harness Delta
+
+Every change in this repo falls into one of two buckets, and many touch both.
+
+**Product Delta** — changes that deliver user-facing value:
+
+- New features, bug fixes, API endpoints
+- UI components, business logic
+- User-facing documentation
+
+**Harness Delta** — changes that improve the development process itself:
+
+- New validation rules, policy updates
+- Workflow improvements, skill enhancements
+- Process documentation, risk flags
+
+A single PR can carry both. The \`harness-delta\` evidence kind exists so the harness improvements are not invisible — they show up alongside product evidence in the same task.
+
+## Work Types
+
+Six classifications, mutually exclusive. See \`FEATURE_INTAKE.md\` for the decision tree.
+
+- \`new-spec\` — new feature with no existing implementation
+- \`spec-slice\` — part of an existing spec or feature area
+- \`change-request\` — modify, fix, or refine existing behavior
+- \`initiative\` — large cross-domain work, multiple tasks
+- \`maintenance\` — deps, configuration, tooling
+- \`harness-improvement\` — improve the development harness itself
+
+## How this fits the rest of the system
+
+- \`maestro intake\` returns the work type as part of its result. Run it before claiming a task.
+- The \`harness-delta\` evidence kind is recorded when a task closes and the work touched \`.maestro/\`, \`policies/\`, \`skills/\`, or \`hooks/\`.
+- See \`VALIDATION_LADDER.md\` for how harness changes get verified.
+`,
+  },
+  {
+    path: ".maestro/docs/FEATURE_INTAKE.md",
+    content: `# Feature Intake Guide
+
+Before claiming a task or creating a plan, run \`maestro intake --paths <paths> --json\` to classify the work.
+
+## Classification Decision Tree
+
+\`\`\`text
+Start with IntakeResult and intendedPaths.
+
+┌─ Any path under .maestro/ | policies/ | skills/ | hooks/?
+│    └─ yes → harness-improvement
+│
+├─ multi-domain flag OR paths span 3+ top-level dirs?
+│    └─ yes → initiative
+│
+├─ All paths are manifests / .github/** / root config?
+│    └─ yes → maintenance
+│
+├─ None of the paths exist yet?
+│    └─ yes → new-spec
+│
+├─ All paths share one src/features/<one>/ root?
+│    └─ yes → spec-slice
+│
+└─ else → change-request
+\`\`\`
+
+First-match wins. A path that lands in \`.maestro/\` is \`harness-improvement\` even if other paths in the same call look like a \`spec-slice\`.
+
+> **Note for brownfield codebases**: \`spec-slice\` requires the \`src/features/<name>/\` layout. Projects that organize code as \`src/<domain>/\` (without \`features/\`) will get \`change-request\` instead — that's the intended fallback. The two work types share most lane-driven next-steps, so adoption doesn't require restructuring.
+
+## Common Patterns
+
+| User Request | Work Type | Rationale |
+|---|---|---|
+| "Add new API endpoint" | spec-slice | Extending existing API surface |
+| "Fix bug in login" | change-request | Modifying existing behavior |
+| "Update dependencies" | maintenance | Chore-type work |
+| "New auth system" | initiative | Multi-domain, large scope |
+| "Add risk policy" | harness-improvement | Harness modification |
+
+## Acting on the result
+
+The intake response includes \`recommendedNextStep\` (lane-derived) and \`recommendedNextSteps\` (work-type + lane derived). Prefer the latter — it's more specific.
+
+\`IntakeResult.harnessImpact\` is \`true\` whenever any path falls under \`.maestro/\`, \`policies/\`, \`skills/\`, or \`hooks/\` — independent of the work type. When it's true, plan to record a \`harness-delta\` evidence row at task close.
+`,
+  },
+  {
+    path: ".maestro/docs/VALIDATION_LADDER.md",
+    content: `# Validation Ladder
+
+The harness-experimental project models verification as a 7-rung ladder. Maestro's canonical verification protocol (\`maestro-verify\`) covers all 7 rungs but groups them under 6 steps.
+
+## The 7-Rung Ladder
+
+1. **Format** — code formatting checks (prettier, etc.)
+2. **Lint** — static analysis (eslint, architecture lint, etc.)
+3. **Type** — type checking (\`tsc --noEmit\`, etc.)
+4. **Integration** — integration tests
+5. **E2E** — end-to-end tests, compiled-binary tests
+6. **Platform** — platform-specific tests, deploy readiness
+7. **Release** — final verdict, release checks
+
+## Mapping to \`maestro-verify\`
+
+- **Plan** → Pre-validation (read spec, contracts, prior evidence)
+- **Implement** → Code changes
+- **Verify** → Rungs 1–5 (format / lint / type / integration / e2e)
+- **ProofMap** → Evidence coverage check
+- **Verdict** → Rungs 6–7 (platform / release)
+- **Branch** → Action based on verdict (merge, rollback, retry)
+
+## Harness-Specific Validation
+
+For \`harness-improvement\` work types, additional checks apply:
+
+- Policy schema validation via \`maestro policy check\`
+- Skill self-tests via \`bun run check:bundled-skills\` and \`bun run check:skills\`
+- Contract amendment evidence when contracts change
+- One \`harness-delta\` evidence row per task that touched \`.maestro/\`, \`policies/\`, \`skills/\`, or \`hooks/\`
+`,
+  },
+  {
+    path: "AGENTS.md",
+    content: `# Project Conventions
+
+Repo-level conventions for agents working in this codebase. The harness pointer surface
+lives in \`.maestro/AGENTS.md\`; this file holds code conventions, build commands, and
+feature boundaries.
+
+## Build / test / verify
+
+Fill in the commands an agent should run before claiming a task done:
+
+\`\`\`bash
+# build:   <how to build>
+# test:    <how to run tests>
+# lint:    <if any>
+# format:  <if any>
+\`\`\`
+
+## Layout
+
+- \`src/\` — application source
+- \`tests/\` — automated tests
+- \`.maestro/\` — harness state (read \`.maestro/AGENTS.md\` first)
+
+## Conventions
+
+- Match existing code style; use established libraries before adding new ones.
+- Surgical edits only — touch what the task requires.
+- Bump the relevant version when behavior changes.
+
+## See also
+
+- \`.maestro/MAESTRO.md\` — read order, lane policy, daily commands
+- \`.maestro/docs/HARNESS.md\` — product-delta vs harness-delta model
+- \`.maestro/docs/FEATURE_INTAKE.md\` — work-type classification decision tree
+- \`.maestro/docs/VALIDATION_LADDER.md\` — 7-step verification protocol
+`,
+  },
+  {
     path: ".maestro/policies/release.yaml",
     content: `# Release gate policy for Maestro Trust Substrate.
 # Controls release-time enforcement rules.

@@ -16,14 +16,15 @@ Read `docs/harness-positioning.md` for the principle-to-primitive mapping.
 ## STRUCTURE
 ```text
 maestro/
-├── .factory/    # committed bootstrap/reference assets
-├── .maestro/    # repo-tracked project state, plans, tasks, and context
+├── .maestro/    # repo-tracked project state, plans, tasks, context, and doc templates
 ├── hooks/       # session/tool hook entrypoints
 ├── scripts/     # build, version, install, release, and TUI helpers
 ├── skills/      # shipped built-in and bundled skill sources
 ├── src/         # feature-first CLI + TUI source tree
 └── tests/       # unit, integration, and compiled-binary coverage
 ```
+
+**Note**: `.maestro/docs/` contains canonical doc templates (HARNESS.md, FEATURE_INTAKE.md, VALIDATION_LADDER.md) that `maestro setup` copies to user projects.
 
 ## WHERE TO LOOK
 | Task | Location |
@@ -114,7 +115,6 @@ Parent:
 - none (root)
 
 Children:
-- [.factory/AGENTS.md](.factory/AGENTS.md)
 - [.maestro/AGENTS.md](.maestro/AGENTS.md)
 - [hooks/AGENTS.md](hooks/AGENTS.md)
 - [scripts/AGENTS.md](scripts/AGENTS.md)

@@ -7,6 +7,7 @@ import {
   type TaskStatus,
   type TaskType,
   type TaskPriority,
+  type TaskWorkType,
   type CreateTaskInput,
   type UpdateTaskInput,
 } from "./task-types.js";
@@ -112,6 +113,19 @@ export function validateTask(value: unknown): Task | undefined {
   };
 }
 
+const TASK_WORK_TYPES: readonly TaskWorkType[] = [
+  "new-spec",
+  "spec-slice",
+  "change-request",
+  "initiative",
+  "maintenance",
+  "harness-improvement",
+];
+
+function isTaskWorkType(value: unknown): value is TaskWorkType {
+  return typeof value === "string" && (TASK_WORK_TYPES as readonly string[]).includes(value);
+}
+
 function normalizeStoredReceipt(value: unknown): TaskReceipt | null {
   if (typeof value !== "object" || value === null) return null;
   const r = value as Record<string, unknown>;
@@ -124,11 +138,24 @@ function normalizeStoredReceipt(value: unknown): TaskReceipt | null {
     if (!r.verifiedBy.every((item) => typeof item === "string")) return null;
     verifiedBy = r.verifiedBy as readonly string[];
   }
+  let workType: TaskWorkType | undefined;
+  if (r.workType !== undefined) {
+    if (!isTaskWorkType(r.workType)) return null;
+    workType = r.workType;
+  }
+  let harnessDeltas: readonly string[] | undefined;
+  if (r.harnessDeltas !== undefined) {
+    if (!Array.isArray(r.harnessDeltas)) return null;
+    if (!r.harnessDeltas.every((item) => typeof item === "string")) return null;
+    harnessDeltas = r.harnessDeltas as readonly string[];
+  }
   return {
     summary: r.summary,
     surprise: r.surprise as string | undefined,
     verifiedBy,
     capturedAt: r.capturedAt,
+    ...(workType !== undefined ? { workType } : {}),
+    ...(harnessDeltas !== undefined ? { harnessDeltas } : {}),
   };
 }
 
