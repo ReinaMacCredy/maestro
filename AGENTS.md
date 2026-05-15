@@ -13,6 +13,29 @@ repo-owned agent surfaces, and shared project state under `.maestro/`.
 
 Read `docs/harness-positioning.md` for the principle-to-primitive mapping.
 
+## Maestro v2 (in flight)
+
+Maestro v2 is a layered rewrite landing on `main` per ADR-0007 (big-bang)
+and ADR-0013 (greenfield branch inlined). Phase 1 — the v2 spine — is
+feature-complete and dogfooded; see `docs/phase-1-done.md` for the
+transition-evidence record.
+
+- **Plan:** `docs/v2-master-plan.md` is the source of truth. Layered
+  architecture rules live in `docs/architecture.yaml` (loaded by the
+  v2 `ArchitectureRules` port and enforced by the lint runner). ADRs
+  under `docs/adr/` capture each binding decision.
+- **Verbs live now:** `maestro spec new`, `maestro spec validate`,
+  `maestro task from-spec`, `maestro task claim` (+ hot-path `claim`),
+  `maestro task block` (+ `block`), `maestro task abandon` (+ `abandon`),
+  `maestro task verify` (+ `verify`), `maestro task ship` (+ `ship`),
+  and `bun run lint:arch` (v2 runner; `lint:arch:v1` keeps the v1
+  runner reachable until Phase 4 removal).
+- **State + storage:** v2 task state machine in `src/v2/types/task-state.ts`;
+  append-only evidence in `.maestro/evidence/<date>.jsonl`; v2 tasks in
+  `.maestro/tasks/tasks.v2.jsonl` (v1 `tasks.jsonl` is unchanged).
+- **Skill:** `skills/bundled/maestro-design` runs the grill protocol
+  from ADR-0016 to author product-specs before `task from-spec`.
+
 ## STRUCTURE
 ```text
 maestro/

@@ -1,0 +1,5 @@
+{"id":"evd-mp6x70oh-nk4d9q","kind":"transition","timestamp":"2026-05-15T12:55:20.369Z","task_id":"tsk-mp6x70og-zflvrp","from_state":null,"to_state":"draft","trigger_verb":"task:from-spec"}
+{"id":"evd-mp6x7474-xuos3h","kind":"transition","timestamp":"2026-05-15T12:55:24.928Z","task_id":"tsk-mp6x70og-zflvrp","from_state":"draft","to_state":"claimed","trigger_verb":"task:claim","agent_id":"claude-opus-4-7"}
+{"id":"evd-mp6x80mg-wd4wdo","kind":"transition","timestamp":"2026-05-15T12:56:06.952Z","task_id":"tsk-mp6x70og-zflvrp","from_state":"claimed","to_state":"verifying","trigger_verb":"task:verify"}
+{"id":"evd-mp6x80mz-qgwtv7","kind":"transition","timestamp":"2026-05-15T12:56:06.971Z","task_id":"tsk-mp6x70og-zflvrp","from_state":"verifying","to_state":"ready","trigger_verb":"task:verify","verdict":"PASS"}
+{"id":"evd-mp6x84xg-019wtu","kind":"transition","timestamp":"2026-05-15T12:56:12.532Z","task_id":"tsk-mp6x70og-zflvrp","from_state":"ready","to_state":"shipped","trigger_verb":"task:ship","verdict":"PASS"}
