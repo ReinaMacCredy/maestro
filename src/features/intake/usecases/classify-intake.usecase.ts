@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { deriveRiskClassFromDiff, requiresThreatModel } from "@/features/risk/index.js";
 import type { RiskPolicy } from "@/features/policy/index.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
+import { normalizeIntakePath } from "../domain/normalize-path.js";
 import type {
   IntakeFlag,
   IntakeInput,
@@ -56,9 +57,11 @@ export function classifyIntake(
   riskPolicy: RiskPolicy,
   sensitivePathsPolicy: readonly string[],
   pathExists: (path: string) => boolean = existsSync,
+  cwd: string = process.cwd(),
 ): IntakeResult {
   const auto = new Set<IntakeFlag>();
-  const paths = input.intendedPaths;
+  const paths = input.intendedPaths.map((p) => normalizeIntakePath(p, cwd));
+  const normalizedInput: IntakeInput = { ...input, intendedPaths: paths };
 
   if (paths.some((p) => matchesAnyGlob(sensitivePathsPolicy, p))) auto.add("audit-security");
   if (paths.some((p) => matchesAnyGlob(AUTH_GLOBS, p))) auto.add("auth");
@@ -91,7 +94,7 @@ export function classifyIntake(
           ? "create a high-risk task with Spec acceptance criteria and a `threat-model` Evidence row"
           : "create a high-risk task with Spec acceptance criteria";
 
-  const workType = classifyWorkType(input, { allFlags: all, pathExists });
+  const workType = classifyWorkType(normalizedInput, { allFlags: all, pathExists });
   const harnessImpact = detectHarnessImpact(paths);
   const recommendedNextSteps = generateNextSteps(workType, lane);
 

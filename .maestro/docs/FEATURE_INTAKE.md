@@ -27,6 +27,8 @@ Start with IntakeResult and intendedPaths.
 
 First-match wins. A path that lands in `.maestro/` is `harness-improvement` even if other paths in the same call look like a `spec-slice`.
 
+> **Note for brownfield codebases**: `spec-slice` requires the `src/features/<name>/` layout. Projects that organize code as `src/<domain>/` (without `features/`) will get `change-request` instead — that's the intended fallback. The two work types share most lane-driven next-steps, so adoption doesn't require restructuring.
+
 ## Common Patterns
 
 | User Request | Work Type | Rationale |
