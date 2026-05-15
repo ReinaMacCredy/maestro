@@ -13,11 +13,16 @@ import {
   JsonlTaskStore,
   type TaskStorePort,
 } from "../repo/jsonl-task-store.adapter.js";
+import {
+  YamlArchitectureRules,
+  type ArchitectureRulesPort,
+} from "../repo/yaml-architecture-rules.adapter.js";
 
 export interface V2Services {
   readonly specStore: SpecStorePort;
   readonly taskStore: TaskStorePort;
   readonly evidenceStore: EvidenceStorePort;
+  readonly architectureRules: ArchitectureRulesPort;
 }
 
 export interface BuildV2ServicesOptions {
@@ -31,5 +36,6 @@ export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
     specStore: overrides?.specStore ?? new FsSpecStore({ repoRoot }),
     taskStore: overrides?.taskStore ?? new JsonlTaskStore({ repoRoot }),
     evidenceStore: overrides?.evidenceStore ?? new JsonlEvidenceStore({ repoRoot }),
+    architectureRules: overrides?.architectureRules ?? new YamlArchitectureRules({ repoRoot }),
   };
 }

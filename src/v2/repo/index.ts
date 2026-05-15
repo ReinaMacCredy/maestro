@@ -5,3 +5,5 @@ export * from "./task-store.port.js";
 export * from "./jsonl-task-store.adapter.js";
 export * from "./spec-store.port.js";
 export * from "./fs-spec-store.adapter.js";
+export * from "./architecture-rules.port.js";
+export * from "./yaml-architecture-rules.adapter.js";

@@ -22,6 +22,13 @@ layers:
 cross_cutting:
   - providers
 
+# Globs (relative to repo root) that scope lint application. Phase 1 ships v2
+# only; v1 legitimately uses forbidden_patterns (setInterval, setTimeout) in
+# CLI spinners and fs-lock polling. Phase 4 broadens this to "src/**" after v1
+# is excised.
+lint_scope:
+  - "src/v2/**/*.ts"
+
 passive_harness:
   # Patterns that must not appear in production v2 src code (tests/scripts exempt).
   # Enforces the "no daemon, no scheduler, no LLM call inside maestro" invariant.
