@@ -1,0 +1,45 @@
+import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
+import type { TaskStorePort } from "../repo/task-store.port.js";
+import { TaskNotFoundError } from "../repo/task-store.port.js";
+import { assertTaskTransition } from "../types/task-state.js";
+import type { Task, TaskId } from "../types/task.js";
+import { emitTransitionEvidence } from "./emit-transition-evidence.js";
+
+export interface TaskClaimDeps {
+  readonly taskStore: TaskStorePort;
+  readonly evidenceStore: EvidenceStorePort;
+  readonly clock?: () => Date;
+  readonly idFactory?: () => string;
+}
+
+export interface TaskClaimInput {
+  readonly id: TaskId;
+  readonly agentId?: string;
+}
+
+export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Promise<Task> {
+  const existing = await deps.taskStore.get(input.id);
+  if (!existing) throw new TaskNotFoundError(input.id);
+  assertTaskTransition(existing.state, "claimed");
+  const claimed_at = (deps.clock ?? (() => new Date()))().toISOString();
+  const updated = await deps.taskStore.update(input.id, {
+    state: "claimed",
+    assignee: input.agentId,
+    claimed_at,
+  });
+  await emitTransitionEvidence(
+    {
+      store: deps.evidenceStore,
+      clock: deps.clock,
+      idFactory: deps.idFactory,
+    },
+    {
+      task_id: existing.id,
+      from_state: existing.state,
+      to_state: "claimed",
+      trigger_verb: "task:claim",
+      agent_id: input.agentId,
+    },
+  );
+  return updated;
+}

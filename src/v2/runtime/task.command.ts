@@ -1,0 +1,93 @@
+import type { Command } from "commander";
+import { buildV2Services } from "../providers/build-services.js";
+import { taskFromSpec } from "../service/task-from-spec.usecase.js";
+import { taskClaim } from "../service/task-claim.usecase.js";
+import { TaskNotFoundError } from "../repo/task-store.port.js";
+import { TaskTransitionError } from "../types/task-state.js";
+
+export interface TaskCommandV2Options {
+  readonly resolveRepoRoot: () => string;
+}
+
+function findOrCreateTaskCommand(program: Command): Command {
+  const existing = program.commands.find((c) => c.name() === "task");
+  if (existing) return existing;
+  return program.command("task").description("Task lifecycle (v2)");
+}
+
+// Remove v1 subcommands that v2 overrides. v1 task claim / block / verify have
+// different signatures and semantics; on the harness-os branch v2 owns these
+// verbs. v1 versions return in Phase 4 only if a migration test pins them.
+function detachV1Overrides(task: Command, overrides: readonly string[]): void {
+  for (const name of overrides) {
+    const idx = task.commands.findIndex((c) => c.name() === name);
+    if (idx !== -1) {
+      task.commands.splice(idx, 1);
+    }
+  }
+}
+
+function reportError(verb: string, err: unknown): void {
+  if (err instanceof TaskNotFoundError || err instanceof TaskTransitionError) {
+    console.error(`maestro ${verb}: ${(err as Error).message}`);
+    process.exitCode = 1;
+    return;
+  }
+  throw err;
+}
+
+export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Options): void {
+  const task = findOrCreateTaskCommand(program);
+  detachV1Overrides(task, ["claim", "block", "verify"]);
+
+  task
+    .command("from-spec <path>")
+    .description("Create a v2 task in draft from a product-spec markdown file")
+    .action(async (pathArg: string) => {
+      try {
+        const repoRoot = opts.resolveRepoRoot();
+        const services = buildV2Services({ repoRoot });
+        const created = await taskFromSpec(
+          {
+            repoRoot,
+            specStore: services.specStore,
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+          },
+          pathArg,
+        );
+        console.log(`${created.id} draft (${created.slug})`);
+      } catch (err) {
+        reportError("task from-spec", err);
+      }
+    });
+
+  const claimAction = async (id: string, flags: { agent?: string }) => {
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildV2Services({ repoRoot });
+      const claimed = await taskClaim(
+        {
+          taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
+        },
+        { id, agentId: flags.agent },
+      );
+      console.log(`${claimed.id} claimed${flags.agent ? ` by ${flags.agent}` : ""}`);
+    } catch (err) {
+      reportError("task claim", err);
+    }
+  };
+
+  task
+    .command("claim <id>")
+    .description("Claim a task (draft -> claimed)")
+    .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
+    .action(claimAction);
+
+  program
+    .command("claim <id>")
+    .description("Hot-path alias for `task claim`")
+    .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
+    .action(claimAction);
+}
