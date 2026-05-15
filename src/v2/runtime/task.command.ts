@@ -2,6 +2,8 @@ import type { Command } from "commander";
 import { buildV2Services } from "../providers/build-services.js";
 import { taskFromSpec } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
+import { taskBlock } from "../service/task-block.usecase.js";
+import { taskAbandon } from "../service/task-abandon.usecase.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError } from "../types/task-state.js";
 
@@ -90,4 +92,72 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .description("Hot-path alias for `task claim`")
     .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
     .action(claimAction);
+
+  const blockAction = async (id: string, flags: { reason?: string }) => {
+    if (!flags.reason) {
+      console.error("maestro task block: --reason is required");
+      process.exitCode = 1;
+      return;
+    }
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildV2Services({ repoRoot });
+      const blocked = await taskBlock(
+        {
+          taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
+        },
+        { id, reason: flags.reason },
+      );
+      console.log(`${blocked.id} blocked: ${flags.reason}`);
+    } catch (err) {
+      reportError("task block", err);
+    }
+  };
+
+  task
+    .command("block <id>")
+    .description("Block a task with a reason (claimed | doing | verifying -> blocked)")
+    .requiredOption("--reason <text>", "human-readable explanation of the blocker")
+    .action(blockAction);
+
+  program
+    .command("block <id>")
+    .description("Hot-path alias for `task block`")
+    .requiredOption("--reason <text>", "human-readable explanation of the blocker")
+    .action(blockAction);
+
+  const abandonAction = async (id: string, flags: { reason?: string }) => {
+    if (!flags.reason) {
+      console.error("maestro task abandon: --reason is required");
+      process.exitCode = 1;
+      return;
+    }
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildV2Services({ repoRoot });
+      const abandoned = await taskAbandon(
+        {
+          taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
+        },
+        { id, reason: flags.reason },
+      );
+      console.log(`${abandoned.id} abandoned: ${flags.reason}`);
+    } catch (err) {
+      reportError("task abandon", err);
+    }
+  };
+
+  task
+    .command("abandon <id>")
+    .description("Abandon a task with a reason (any non-terminal -> abandoned)")
+    .requiredOption("--reason <text>", "human-readable explanation of abandonment")
+    .action(abandonAction);
+
+  program
+    .command("abandon <id>")
+    .description("Hot-path alias for `task abandon`")
+    .requiredOption("--reason <text>", "human-readable explanation of abandonment")
+    .action(abandonAction);
 }
