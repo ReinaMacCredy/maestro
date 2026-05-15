@@ -6,3 +6,4 @@ export * from "./task-from-spec.usecase.js";
 export * from "./task-claim.usecase.js";
 export * from "./task-block.usecase.js";
 export * from "./task-abandon.usecase.js";
+export * from "./architecture-lint.usecase.js";
