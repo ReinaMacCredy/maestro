@@ -6,10 +6,12 @@ import type {
   FeatureStorePort,
   AssertionStorePort,
   CheckpointStorePort,
+  Missions,
+} from "@/shared/domain/legacy-mission";
+import type {
   AgentReply,
   PrincipleStorePort,
   ReplyStorePort,
-  Missions,
 } from "@/features/mission";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";

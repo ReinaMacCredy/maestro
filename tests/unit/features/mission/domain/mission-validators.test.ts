@@ -12,7 +12,7 @@ import {
   validateUpdateAssertionInput,
   assertNoDanglingReferences,
   assertNoCyclicDependencies,
-} from "@/features/mission/domain/mission-validators.js";
+} from "@/shared/domain/legacy-mission";
 import type {
   Mission,
   Milestone,
@@ -24,7 +24,7 @@ import type {
   CreateFeatureInput,
   CreateAssertionInput,
   UpdateAssertionInput,
-} from "@/features/mission/domain/mission-types.js";
+} from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
 
 // Test data builders

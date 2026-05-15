@@ -19,7 +19,7 @@ import { generateMissionReport, type MissionReport } from "../usecases/mission-r
 import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
-import type { Mission, UpdateMissionInput, MissionStatus } from "../domain/mission-types.js";
+import type { Mission, UpdateMissionInput, MissionStatus } from "@/shared/domain/legacy-mission";
 
 const DEFAULT_TEXT_MISSION_LIST_LIMIT = 10;
 

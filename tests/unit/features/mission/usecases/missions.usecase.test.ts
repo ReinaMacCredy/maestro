@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildMissions } from "@/features/mission/usecases/missions.usecase.js";
+import { buildMissions } from "@/shared/domain/legacy-mission";
 import type {
   Assertion,
   Checkpoint,
@@ -7,7 +7,7 @@ import type {
   FeatureStatus,
   Mission,
   MissionStatus,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
 import {
   mockAssertionStore,

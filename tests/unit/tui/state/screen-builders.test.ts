@@ -11,7 +11,8 @@ import {
 } from "@/tui/state/snapshot.js";
 import { buildModalOptions } from "@/tui/app/modal-builders.js";
 import { createInitialState, reduce } from "@/tui/state/reducer.js";
-import type { Feature, Milestone, Principle, PrincipleOutcomeRecord, PrincipleStorePort } from "@/features/mission";
+import type { Feature, Milestone } from "@/shared/domain/legacy-mission";
+import type { Principle, PrincipleOutcomeRecord, PrincipleStorePort } from "@/features/mission";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
 import type { MissionControlEvent, MissionControlSnapshot } from "@/tui/state/types.js";
 import type { Task, TaskQueryPort } from "@/features/task";

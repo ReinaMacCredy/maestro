@@ -13,7 +13,7 @@ import {
   getValidMilestoneTransitions,
   getValidFeatureTransitions,
   getValidAssertionTransitions,
-} from "@/features/mission/domain/mission-state.js";
+} from "@/shared/domain/legacy-mission";
 
 describe("mission state transitions", () => {
   describe("mission transitions", () => {

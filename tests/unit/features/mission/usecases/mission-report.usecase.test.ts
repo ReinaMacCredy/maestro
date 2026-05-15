@@ -4,10 +4,7 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { deriveMissionReport, generateMissionReport } from "@/features/mission/usecases/mission-report.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { Mission, Feature, Assertion, Milestone, CreateFeatureInput, UpdateFeatureInput, CreateAssertionInput, UpdateAssertionInput } from "@/features/mission/domain/mission-types.js";
-import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
-import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "@/features/mission/ports/assertion-store.port.js";
+import type { Mission, Feature, Assertion, Milestone, CreateFeatureInput, UpdateFeatureInput, CreateAssertionInput, UpdateAssertionInput, MissionStorePort, FeatureStorePort, AssertionStorePort } from "@/shared/domain/legacy-mission";
 
 // Mock stores
 class MockMissionStore implements MissionStorePort {

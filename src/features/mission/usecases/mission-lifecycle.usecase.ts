@@ -2,9 +2,9 @@
  * Mission lifecycle usecases
  * Implements mission creation, approval, rejection, update, and listing
  */
-import type { MissionStorePort } from "../ports/mission-store.port.js";
-import type { FeatureStorePort } from "../feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../ports/assertion-store.port.js";
+import type { MissionStorePort } from "@/shared/domain/legacy-mission";
+import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
+import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
 import type {
   Mission,
   CreateMissionInput,
@@ -14,20 +14,20 @@ import type {
   MissionPlanFile,
   MilestoneInput,
   Feature,
-} from "../domain/mission-types.js";
-import { generateMissionId } from "../domain/mission-id.js";
+} from "@/shared/domain/legacy-mission";
+import { generateMissionId } from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
-import type { WorkflowTemplate } from "../domain/workflow-types.js";
-import { BUILT_IN_WORKFLOWS } from "../domain/workflows.js";
+import type { WorkflowTemplate } from "@/shared/domain/legacy-mission";
+import { BUILT_IN_WORKFLOWS } from "@/shared/domain/legacy-mission";
 import {
   validateCreateMissionInput,
   validateMissionPlanFile,
   validateWorkflowTemplate,
   assertNoDanglingReferences,
   assertNoCyclicDependencies,
-} from "../domain/mission-validators.js";
-import { assertMissionTransition, canTransitionMission } from "../domain/mission-state.js";
+} from "@/shared/domain/legacy-mission";
+import { assertMissionTransition, canTransitionMission } from "@/shared/domain/legacy-mission";
 
 /** Result of creating a mission */
 export interface CreateMissionResult {

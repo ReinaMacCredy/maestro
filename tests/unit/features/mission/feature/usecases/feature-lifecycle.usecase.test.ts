@@ -7,10 +7,8 @@ import {
   updateFeature,
   parseAgentReport,
 } from "@/features/mission/feature/usecases/feature-lifecycle.usecase.js";
-import { FsMissionStoreAdapter } from "@/features/mission/adapters/mission-store.adapter.js";
-import { FsFeatureStoreAdapter } from "@/features/mission/feature/adapters/feature-store.adapter.js";
-import { FsAssertionStoreAdapter } from "@/features/mission/adapters/assertion-store.adapter.js";
-import type { MilestoneInput } from "@/features/mission/domain/mission-types.js";
+import { FsMissionStoreAdapter, FsFeatureStoreAdapter, FsAssertionStoreAdapter } from "@/shared/domain/legacy-mission";
+import type { MilestoneInput } from "@/shared/domain/legacy-mission";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp, writeFile } from "node:fs/promises";

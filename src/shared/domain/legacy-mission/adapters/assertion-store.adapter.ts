@@ -4,9 +4,9 @@
  * Storage layout: .maestro/missions/{missionId}/assertions.json
  */
 import { join } from "node:path";
-import type { Assertion, CreateAssertionInput, UpdateAssertionInput } from "../domain/mission-types.js";
+import type { Assertion, CreateAssertionInput, UpdateAssertionInput } from "../types.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
-import { validateAssertion } from "../domain/mission-validators.js";
+import { validateAssertion } from "../validators.js";
 import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 

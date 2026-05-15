@@ -12,7 +12,7 @@ import { VERSION } from "@/shared/version.js";
 import { execArgv } from "@/shared/lib/shell.js";
 import {
   MISSION_ID_PATTERN,
-} from "@/features/mission/index.js";
+} from "@/shared/domain/legacy-mission";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
 import type { ArchivePort } from "../ports/archive.port.js";
 import type {

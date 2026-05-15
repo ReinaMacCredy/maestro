@@ -4,14 +4,14 @@
  * evidence persistence, waive-with-reason handling, retry-to-pending from failed/blocked,
  * and helpful transition errors for invalid result changes.
  */
-import type { AssertionStorePort } from "../ports/assertion-store.port.js";
-import type { MissionStorePort } from "../ports/mission-store.port.js";
+import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
+import type { MissionStorePort } from "@/shared/domain/legacy-mission";
 import type {
   Assertion,
   UpdateAssertionInput,
-} from "../domain/mission-types.js";
+} from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
-import { assertAssertionTransition } from "../domain/mission-state.js";
+import { assertAssertionTransition } from "@/shared/domain/legacy-mission";
 
 /** Result of showing assertions */
 export interface ShowAssertionsResult {

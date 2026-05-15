@@ -1,4 +1,4 @@
-import type { MilestoneProfile } from "./mission-types.js";
+import type { MilestoneProfile } from "@/shared/domain/legacy-mission";
 
 export type PrincipleMode = "advisory" | "gate";
 export type GateCheckType = `array_min_length:${number}` | "object_non_empty" | "array_all_passed";

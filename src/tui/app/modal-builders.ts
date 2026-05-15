@@ -19,7 +19,7 @@ import {
   type ModalInfoItem,
   type ModalOptions,
 } from "../shared/modal-model.js";
-import { getValidFeatureTransitions } from "@/features/mission";
+import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
 import { TASK_STATUSES } from "@/features/task";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, TASK_STATUS_COLUMN_LABEL, AGENT_STATUS_LABEL } from "../shared/theme.js";
   import {

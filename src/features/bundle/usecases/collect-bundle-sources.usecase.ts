@@ -11,9 +11,9 @@ import type {
   Feature,
   Mission,
   Missions,
-  ReplyStorePort,
-} from "@/features/mission/index.js";
-import { MISSION_ID_PATTERN } from "@/features/mission/index.js";
+} from "@/shared/domain/legacy-mission";
+import { MISSION_ID_PATTERN } from "@/shared/domain/legacy-mission";
+import type { ReplyStorePort } from "@/features/mission/index.js";
 import {
   isHandoffInProject,
   type HandoffStorePort,

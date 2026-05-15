@@ -2,15 +2,15 @@
  * Feature lifecycle usecases
  * Implements feature listing, updating, and agent report persistence
  */
-import type { FeatureStorePort } from "../ports/feature-store.port.js";
-import type { MissionStorePort } from "../../ports/mission-store.port.js";
+import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
+import type { MissionStorePort } from "@/shared/domain/legacy-mission";
 import type {
   Feature,
   UpdateFeatureInput,
   AgentReport,
-} from "../../domain/mission-types.js";
+} from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
-import { assertFeatureTransition } from "../../domain/mission-state.js";
+import { assertFeatureTransition } from "@/shared/domain/legacy-mission";
 import { writeJson, readJson, ensureDir } from "@/shared/lib/fs.js";
 import { join } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
@@ -268,4 +268,4 @@ export function getValidFeatureNextStates(feature: Feature): readonly string[] {
 }
 
 // Re-export the transition function for direct use
-import { getValidFeatureTransitions } from "../../domain/mission-state.js";
+import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";

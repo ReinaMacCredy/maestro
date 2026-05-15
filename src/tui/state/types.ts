@@ -4,7 +4,7 @@ import type {
   FeatureStatus,
   MilestoneKind,
   MilestoneProfile,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import type { GitFileChange } from "@/infra/domain/git-types.js";
 import type { MissionControlBackgroundMode } from "@/tui/shared/ui-config.js";

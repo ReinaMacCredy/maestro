@@ -3,16 +3,16 @@
  * Implements checkpoint save, list, and load functionality
  * Captures timestamped snapshots of mission execution state
  */
-import type { CheckpointStorePort } from "../ports/checkpoint-store.port.js";
-import type { MissionStorePort } from "../ports/mission-store.port.js";
-import type { FeatureStorePort } from "../feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../ports/assertion-store.port.js";
+import type { CheckpointStorePort } from "@/shared/domain/legacy-mission";
+import type { MissionStorePort } from "@/shared/domain/legacy-mission";
+import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
+import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
 import type {
   Checkpoint,
   FeatureStatus,
   AssertionResult,
   Mission,
-} from "../domain/mission-types.js";
+} from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
 import {
   deriveSequentialMilestoneStatuses,

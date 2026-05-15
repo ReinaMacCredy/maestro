@@ -1,5 +1,5 @@
 import type { AgentSlug } from "@/shared/domain/agent-slug.js";
-import type { WorkflowTemplate } from "@/features/mission";
+import type { WorkflowTemplate } from "@/shared/domain/legacy-mission";
 import type { UiConfig } from "@/tui/shared/ui-config.js";
 
 export interface MaestroConfig {

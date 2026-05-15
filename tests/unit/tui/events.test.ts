@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { deriveEvents } from "@/tui/state/events.js";
-import type { Mission, Feature, Checkpoint, Assertion } from "@/features/mission";
+import type { Mission, Feature, Checkpoint, Assertion } from "@/shared/domain/legacy-mission";
 
 function makeMission(overrides: Partial<Mission> = {}): Mission {
   return {

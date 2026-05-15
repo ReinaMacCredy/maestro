@@ -12,7 +12,7 @@ import {
   type UpdateAssertionResult,
 } from "../usecases/validation-lifecycle.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { Assertion } from "../domain/mission-types.js";
+import type { Assertion } from "@/shared/domain/legacy-mission";
 
 interface ValidateCommandDeps {
   readonly getServices: () => Pick<Services, "missionStore" | "assertionStore">;

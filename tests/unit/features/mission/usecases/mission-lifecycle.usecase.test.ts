@@ -11,12 +11,9 @@ import {
   rejectMission,
   updateMission,
 } from "@/features/mission/usecases/mission-lifecycle.usecase.js";
-import { FsMissionStoreAdapter } from "@/features/mission/adapters/mission-store.adapter.js";
-import { FsFeatureStoreAdapter } from "@/features/mission/feature/adapters/feature-store.adapter.js";
-import { FsAssertionStoreAdapter } from "@/features/mission/adapters/assertion-store.adapter.js";
+import { FsMissionStoreAdapter, FsFeatureStoreAdapter, FsAssertionStoreAdapter } from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
-import type { MilestoneInput } from "@/features/mission/domain/mission-types.js";
-import type { WorkflowTemplate } from "@/features/mission";
+import type { MilestoneInput, WorkflowTemplate } from "@/shared/domain/legacy-mission";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";

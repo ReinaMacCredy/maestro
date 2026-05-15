@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { launchHandoff, type HandoffLaunchPort, type HandoffRecord, type HandoffStorePort } from "@/features/handoff";
-import type { Feature, Mission } from "@/features/mission";
+import type { Feature, Mission } from "@/shared/domain/legacy-mission";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import { mockMissions } from "../../../../helpers/mocks.js";
 

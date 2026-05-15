@@ -9,7 +9,7 @@ import type {
   MilestoneStatus,
   FeatureStatus,
   AssertionResult,
-} from "./mission-types.js";
+} from "./types.js";
 
 // ============================
 // Mission State Machine

@@ -3,7 +3,7 @@ import type {
   CreatePrincipleInput,
   PrincipleOutcomeRecord,
 } from "../domain/principle-types.js";
-import type { MilestoneProfile } from "../domain/mission-types.js";
+import type { MilestoneProfile } from "@/shared/domain/legacy-mission";
 
 export interface PrincipleStorePort {
   /** Return all principles in the store. */

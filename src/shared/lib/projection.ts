@@ -2,7 +2,7 @@
 
 import type { EvidenceRow, EvidenceSummary } from "@/features/evidence/domain/types.js";
 import type { HandoffRecord, HandoffSummary } from "@/features/handoff/domain/handoff-types.js";
-import type { Mission, MissionSummary } from "@/features/mission/domain/mission-types.js";
+import type { Mission, MissionSummary } from "@/shared/domain/legacy-mission";
 import type { Task, TaskSummary } from "@/features/task/domain/task-types.js";
 
 export const PROJECTION_VIEWS = ["summary", "full"] as const;

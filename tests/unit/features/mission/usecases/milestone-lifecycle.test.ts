@@ -4,10 +4,7 @@
 import { describe, expect, it } from "bun:test";
 import { listMilestones, getMilestoneStatus, sealMilestone } from "@/features/mission/usecases/milestone-lifecycle.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { Mission, Milestone, Feature, Assertion, MissionStatus, MilestoneStatus, FeatureStatus, AssertionResult } from "@/features/mission/domain/mission-types.js";
-import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
-import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "@/features/mission/ports/assertion-store.port.js";
+import type { Mission, Milestone, Feature, Assertion, MissionStatus, MilestoneStatus, FeatureStatus, AssertionResult, MissionStorePort, FeatureStorePort, AssertionStorePort } from "@/shared/domain/legacy-mission";
 
 // Test fixtures
 function createTestMission(status: MissionStatus = "draft", milestones: Milestone[] = []): Mission {

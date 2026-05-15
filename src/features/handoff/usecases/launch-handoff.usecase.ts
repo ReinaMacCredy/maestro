@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type {
   Missions,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
 import type {
   HandoffAgent,
   HandoffLaunchPort,

@@ -2,7 +2,7 @@
  * Mission store port
  * Defines the interface for mission persistence operations
  */
-import type { Mission, CreateMissionInput, UpdateMissionInput } from "../domain/mission-types.js";
+import type { Mission, CreateMissionInput, UpdateMissionInput } from "../types.js";
 
 export interface MissionStorePort {
   /** Get all mission IDs */

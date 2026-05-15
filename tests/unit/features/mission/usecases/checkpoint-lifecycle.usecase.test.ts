@@ -17,11 +17,11 @@ import type {
   FeatureStatus,
   AssertionResult,
   Checkpoint,
-} from "@/features/mission/domain/mission-types.js";
-import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
-import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "@/features/mission/ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "@/features/mission/ports/checkpoint-store.port.js";
+  MissionStorePort,
+  FeatureStorePort,
+  AssertionStorePort,
+  CheckpointStorePort,
+} from "@/shared/domain/legacy-mission";
 
 // Test fixtures
 function createTestMission(

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { buildHandoffPrompt } from "@/features/handoff";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import { mockMissions } from "../../../../helpers/mocks.js";
-import type { Mission, Feature, Assertion } from "@/features/mission";
+import type { Mission, Feature, Assertion } from "@/shared/domain/legacy-mission";
 
 let cwd: string;
 

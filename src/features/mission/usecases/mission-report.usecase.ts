@@ -2,9 +2,9 @@
  * Mission reporting usecase
  * Provides enhanced mission status with milestone progress indicators and completion percentages
  */
-import type { MissionStorePort } from "../ports/mission-store.port.js";
-import type { FeatureStorePort } from "../feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../ports/assertion-store.port.js";
+import type { MissionStorePort } from "@/shared/domain/legacy-mission";
+import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
+import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
 import type {
   Mission,
   MissionStatus,
@@ -12,9 +12,9 @@ import type {
   MilestoneStatus,
   Feature,
   Assertion,
-} from "../domain/mission-types.js";
+} from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
-import { isTerminalAssertionStatus } from "../domain/mission-state.js";
+import { isTerminalAssertionStatus } from "@/shared/domain/legacy-mission";
 import {
   deriveEffectiveMissionStatus,
   deriveSequentialMilestoneStatuses,

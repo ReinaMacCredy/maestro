@@ -8,7 +8,7 @@
  *
  * Phase 1 scope: export + inspect only. Import/replay is phase 2.
  */
-import type { MissionStatus } from "@/features/mission/index.js";
+import type { MissionStatus } from "@/shared/domain/legacy-mission";
 
 /** Redaction scopes -- content dropped from the bundle when requested. */
 export type BundleRedactScope = "memory" | "prompts" | "replies";

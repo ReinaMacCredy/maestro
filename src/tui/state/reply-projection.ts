@@ -3,7 +3,7 @@ import type {
   Feature,
   FeatureStorePort,
   MissionStorePort,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
 import type {
   Principle,
   PrincipleOutcomeRecord,

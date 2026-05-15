@@ -1,16 +1,16 @@
-import type { MissionStorePort } from "./ports/mission-store.port.js";
-import type { FeatureStorePort } from "./feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "./ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "./ports/checkpoint-store.port.js";
+import type { MissionStorePort } from "@/shared/domain/legacy-mission";
+import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
+import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
+import type { CheckpointStorePort } from "@/shared/domain/legacy-mission";
 import type { PrincipleStorePort } from "@/features/principle";
 import type { ReplyStorePort } from "@/features/reply";
-import { FsMissionStoreAdapter } from "./adapters/mission-store.adapter.js";
-import { FsFeatureStoreAdapter } from "./feature/adapters/feature-store.adapter.js";
-import { FsAssertionStoreAdapter } from "./adapters/assertion-store.adapter.js";
-import { FsCheckpointStoreAdapter } from "./adapters/checkpoint-store.adapter.js";
+import { FsMissionStoreAdapter } from "@/shared/domain/legacy-mission";
+import { FsFeatureStoreAdapter } from "@/shared/domain/legacy-mission";
+import { FsAssertionStoreAdapter } from "@/shared/domain/legacy-mission";
+import { FsCheckpointStoreAdapter } from "@/shared/domain/legacy-mission";
 import { buildPrincipleServices } from "@/features/principle";
 import { buildReplyServices } from "@/features/reply";
-import { buildMissions, type Missions } from "./usecases/missions.usecase.js";
+import { buildMissions, type Missions } from "@/shared/domain/legacy-mission";
 
 export interface MissionServices {
   readonly missionStore: MissionStorePort;

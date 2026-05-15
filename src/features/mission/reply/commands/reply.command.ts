@@ -14,8 +14,8 @@ import { MaestroError } from "@/shared/errors.js";
 import { writeAgentReply } from "../usecases/write-reply.usecase.js";
 import type { ReplyOutcome, AgentReply } from "../domain/reply-types.js";
 import { REPLY_OUTCOMES } from "../domain/reply-types.js";
-import type { AgentReport } from "../../domain/mission-types.js";
-import { AgentReportSchema } from "../../domain/mission-validators.js";
+import type { AgentReport } from "@/shared/domain/legacy-mission";
+import { AgentReportSchema } from "@/shared/domain/legacy-mission";
 
 interface ReplyCommandDeps {
   readonly getServices: () => Pick<Services, "replyStore">;

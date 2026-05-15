@@ -13,7 +13,7 @@ import type {
   CreatePrincipleInput,
   PrincipleOutcomeRecord,
 } from "../domain/principle-types.js";
-import type { MilestoneProfile } from "../domain/mission-types.js";
+import type { MilestoneProfile } from "@/shared/domain/legacy-mission";
 import type { PrincipleStorePort } from "../ports/principle-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readText, writeText, appendText } from "@/shared/lib/fs.js";

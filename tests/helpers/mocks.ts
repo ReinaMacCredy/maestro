@@ -9,8 +9,8 @@ import type {
   AssertionStorePort,
   CheckpointStorePort,
   Missions,
-} from "@/features/mission";
-import { buildMissions } from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
+import { buildMissions } from "@/shared/domain/legacy-mission";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
 import { isOpenHandoffRecord } from "@/features/handoff";
 import { isHandoffInProject } from "@/features/handoff/domain/project-scope.js";
@@ -36,7 +36,7 @@ import type {
   UpdateMissionInput,
   UpdateFeatureInput,
   UpdateAssertionInput,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
   return {

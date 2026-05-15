@@ -4,12 +4,12 @@ import type {
   Feature,
   Milestone,
   Mission,
-} from "../domain/mission-types.js";
-import { missionNotFound } from "../domain/errors.js";
-import type { MissionStorePort } from "../ports/mission-store.port.js";
-import type { FeatureStorePort } from "../feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "../ports/checkpoint-store.port.js";
+} from "./types.js";
+import { missionNotFound } from "./errors.js";
+import type { MissionStorePort } from "./ports/mission-store.port.js";
+import type { FeatureStorePort } from "./ports/feature-store.port.js";
+import type { AssertionStorePort } from "./ports/assertion-store.port.js";
+import type { CheckpointStorePort } from "./ports/checkpoint-store.port.js";
 
 export interface MissionFullState {
   readonly mission: Mission;

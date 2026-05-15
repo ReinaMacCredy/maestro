@@ -17,7 +17,7 @@ import type {
   CreateAssertionInput,
   UpdateAssertionInput,
   MissionPlanFile,
-} from "./mission-types.js";
+} from "./types.js";
 import type { WorkflowTemplate } from "./workflow-types.js";
 
 // ============================

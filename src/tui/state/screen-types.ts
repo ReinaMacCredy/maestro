@@ -7,6 +7,8 @@ import type {
   MilestoneKind,
   MilestoneProfile,
   FeatureStatus,
+} from "@/shared/domain/legacy-mission";
+import type {
   PrincipleMode,
   ReplyOutcome,
   ReplyAuthor,

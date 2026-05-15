@@ -2,9 +2,9 @@
  * Milestone lifecycle usecases
  * Implements milestone listing, status reporting, and seal functionality
  */
-import type { MissionStorePort } from "../ports/mission-store.port.js";
-import type { FeatureStorePort } from "../feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../ports/assertion-store.port.js";
+import type { MissionStorePort } from "@/shared/domain/legacy-mission";
+import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
+import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
 import type {
   Mission,
   Milestone,
@@ -13,12 +13,12 @@ import type {
   Assertion,
   FeatureStatus,
   AssertionResult,
-} from "../domain/mission-types.js";
+} from "@/shared/domain/legacy-mission";
 import { MaestroError } from "@/shared/errors.js";
 import {
   canTransitionMilestone,
   isTerminalAssertionStatus,
-} from "../domain/mission-state.js";
+} from "@/shared/domain/legacy-mission";
 import {
   deriveSequentialMilestoneStatuses,
   type MilestoneActivitySnapshot,

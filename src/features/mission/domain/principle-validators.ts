@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MilestoneProfileSchema } from "./mission-validators.js";
+import { MilestoneProfileSchema } from "@/shared/domain/legacy-mission";
 import type {
   Principle,
   CreatePrincipleInput,

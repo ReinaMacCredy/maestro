@@ -16,11 +16,11 @@ import type {
   Feature,
   FeatureStatus,
   UpdateFeatureInput,
-} from "../../domain/mission-types.js";
-import type { MissionStorePort } from "../../ports/mission-store.port.js";
-import type { FeatureStorePort } from "../../feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../../ports/assertion-store.port.js";
-import { canTransitionFeature } from "../../domain/mission-state.js";
+} from "@/shared/domain/legacy-mission";
+import type { MissionStorePort } from "@/shared/domain/legacy-mission";
+import type { FeatureStorePort } from "@/shared/domain/legacy-mission";
+import type { AssertionStorePort } from "@/shared/domain/legacy-mission";
+import { canTransitionFeature } from "@/shared/domain/legacy-mission";
 import { updateFeature } from "../../feature/usecases/feature-lifecycle.usecase.js";
 import type { ReplyStorePort } from "../ports/reply-store.port.js";
 import type {

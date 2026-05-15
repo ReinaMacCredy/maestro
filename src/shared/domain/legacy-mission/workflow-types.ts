@@ -1,4 +1,4 @@
-import type { MilestoneKind, MilestoneProfile } from "./mission-types.js";
+import type { MilestoneKind, MilestoneProfile } from "./types.js";
 
 /** A single phase in a workflow template */
 export interface WorkflowPhase {

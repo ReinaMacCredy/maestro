@@ -5,7 +5,7 @@ import type {
   Milestone,
   Mission,
   Missions,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { HandoffPromptContext, HandoffRelevantFile } from "@/features/handoff";

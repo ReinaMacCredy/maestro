@@ -7,7 +7,7 @@
  * kickback, or abandonment. Ingest then advances feature state and records
  * principle outcomes.
  */
-import type { AgentReport } from "../../domain/mission-types.js";
+import type { AgentReport } from "@/shared/domain/legacy-mission";
 
 /** How the caller claims the work resolved. Cross-checked against objective state on ingest. */
 export const REPLY_OUTCOMES = ["completed", "kicked-back", "abandoned"] as const;

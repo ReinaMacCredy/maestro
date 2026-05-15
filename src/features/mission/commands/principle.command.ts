@@ -7,7 +7,7 @@ import type {
   CreatePrincipleInput,
   PrincipleEffectiveness,
 } from "../domain/principle-types.js";
-import { MilestoneProfileSchema } from "../domain/mission-validators.js";
+import { MilestoneProfileSchema } from "@/shared/domain/legacy-mission";
 import { validateCreatePrincipleInput } from "../domain/principle-validators.js";
 import {
   buildPrincipleEffectiveness,

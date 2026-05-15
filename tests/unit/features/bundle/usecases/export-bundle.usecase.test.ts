@@ -18,8 +18,8 @@ import type {
   FeatureStorePort,
   Mission,
   MissionStorePort,
-} from "@/features/mission/index.js";
-import { buildMissions } from "@/features/mission/index.js";
+} from "@/shared/domain/legacy-mission";
+import { buildMissions } from "@/shared/domain/legacy-mission";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort, AgentReply } from "@/features/mission/index.js";
 

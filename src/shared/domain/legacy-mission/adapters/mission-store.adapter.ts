@@ -4,9 +4,9 @@
  * Storage layout: .maestro/missions/{id}/
  */
 import { basename, join } from "node:path";
-import type { Mission, CreateMissionInput, UpdateMissionInput } from "../domain/mission-types.js";
+import type { Mission, CreateMissionInput, UpdateMissionInput } from "../types.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
-import { MISSION_ID_PATTERN, validateMission } from "../domain/mission-validators.js";
+import { MISSION_ID_PATTERN, validateMission } from "../validators.js";
 import { MaestroError } from "@/shared/errors.js";
 import { ensureDir, readJson, writeJson, dirExists, listDirs } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";

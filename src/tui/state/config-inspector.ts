@@ -1,4 +1,4 @@
-import type { Feature } from "@/features/mission";
+import type { Feature } from "@/shared/domain/legacy-mission";
 import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
