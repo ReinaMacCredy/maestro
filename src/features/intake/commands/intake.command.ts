@@ -3,7 +3,10 @@ import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { type Services } from "@/services.js";
 import { classifyIntake } from "../usecases/classify-intake.usecase.js";
-import type { IntakeFlag, IntakeResult } from "../domain/types.js";
+import type { IntakeFlag, IntakeResult, WorkType } from "../domain/types.js";
+import { WORK_TYPES } from "../domain/types.js";
+
+const VALID_WORK_TYPES: ReadonlySet<WorkType> = new Set(WORK_TYPES);
 
 const VALID_FLAGS: ReadonlySet<IntakeFlag> = new Set([
   "auth",
@@ -56,6 +59,18 @@ export function registerIntakeCommand(
       },
       [] as IntakeFlag[],
     )
+    .option(
+      "--work-type <type>",
+      "Override work-type classification. One of: " + Array.from(VALID_WORK_TYPES).join(", "),
+      (val: string) => {
+        if (!VALID_WORK_TYPES.has(val as WorkType)) {
+          throw new MaestroError(`Unknown work type: ${val}`, [
+            `Valid work types: ${Array.from(VALID_WORK_TYPES).join(", ")}`,
+          ]);
+        }
+        return val as WorkType;
+      },
+    )
     .option("--json", "Output as JSON")
     .addHelpText(
       "after",
@@ -80,6 +95,7 @@ Exit code is always 0; agents react to the lane in the output.
       paths?: string[];
       flag: IntakeFlag[];
       json?: boolean;
+      workType?: WorkType;
     }): Promise<void> => {
       const isJson = resolveJsonFlag(opts, program);
       const paths: readonly string[] = opts.paths ?? [];
@@ -100,6 +116,7 @@ Exit code is always 0; agents react to the lane in the output.
         {
           intendedPaths: paths,
           declaredFlags: opts.flag,
+          declaredWorkType: opts.workType,
         },
         riskPolicy,
         sensitivePaths,
@@ -131,6 +148,15 @@ function printResult(r: IntakeResult): void {
   if (r.threatModelRequired) {
     console.log(`         threat-model:        required (Evidence row of kind=threat-model)`);
   }
+  if (r.workType !== undefined) {
+    console.log(`         work-type:           ${r.workType}`);
+  }
+  if (r.harnessImpact === true) {
+    console.log(`         harness-impact:      yes (record \`harness-delta\` evidence at close)`);
+  }
   console.log("");
   console.log(`Next step: ${r.recommendedNextStep}`);
+  if (r.recommendedNextSteps !== undefined && r.recommendedNextSteps !== r.recommendedNextStep) {
+    console.log(`Work-type next: ${r.recommendedNextSteps}`);
+  }
 }

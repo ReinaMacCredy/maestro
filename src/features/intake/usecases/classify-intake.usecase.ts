@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { deriveRiskClassFromDiff, requiresThreatModel } from "@/features/risk/index.js";
 import type { RiskPolicy } from "@/features/policy/index.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
@@ -7,6 +8,11 @@ import type {
   IntakeLane,
   IntakeResult,
 } from "../domain/types.js";
+import {
+  classifyWorkType,
+  detectHarnessImpact,
+  generateNextSteps,
+} from "../domain/classify-work-type.js";
 
 const HARD_GATES: ReadonlySet<IntakeFlag> = new Set([
   "auth",
@@ -49,6 +55,7 @@ export function classifyIntake(
   input: IntakeInput,
   riskPolicy: RiskPolicy,
   sensitivePathsPolicy: readonly string[],
+  pathExists: (path: string) => boolean = existsSync,
 ): IntakeResult {
   const auto = new Set<IntakeFlag>();
   const paths = input.intendedPaths;
@@ -84,6 +91,10 @@ export function classifyIntake(
           ? "create a high-risk task with Spec acceptance criteria and a `threat-model` Evidence row"
           : "create a high-risk task with Spec acceptance criteria";
 
+  const workType = classifyWorkType(input, { allFlags: all, pathExists });
+  const harnessImpact = detectHarnessImpact(paths);
+  const recommendedNextSteps = generateNextSteps(workType, lane);
+
   return {
     lane,
     derivedRiskClass: derived.class,
@@ -93,5 +104,8 @@ export function classifyIntake(
     hardGatesTriggered: hardGates,
     threatModelRequired,
     recommendedNextStep,
+    workType,
+    harnessImpact,
+    recommendedNextSteps,
   };
 }

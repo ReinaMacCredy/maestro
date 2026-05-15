@@ -19,10 +19,39 @@ export type IntakeFlag =
 
 export type IntakeLane = "tiny" | "normal" | "high-risk";
 
+/**
+ * Work-type classification, ported from the harness-experimental framework.
+ * Six mutually-exclusive categories shaped by intent rather than risk.
+ *
+ * Promoted from the `maestro-classify` skill in Phase 2 of the harness
+ * integration. The skill remains for telemetry and explicit invocation.
+ */
+export type WorkType =
+  | "new-spec"
+  | "spec-slice"
+  | "change-request"
+  | "initiative"
+  | "maintenance"
+  | "harness-improvement";
+
+export const WORK_TYPES: readonly WorkType[] = [
+  "new-spec",
+  "spec-slice",
+  "change-request",
+  "initiative",
+  "maintenance",
+  "harness-improvement",
+] as const;
+
 export interface IntakeInput {
   readonly intendedPaths: readonly string[];
   /** Flags the agent declares up front. Combined with auto-detected flags. */
   readonly declaredFlags?: readonly IntakeFlag[];
+  /**
+   * Manual override for the work-type classification. When provided, skips
+   * heuristic classification and uses this value directly.
+   */
+  readonly declaredWorkType?: WorkType;
 }
 
 export interface IntakeResult {
@@ -39,4 +68,19 @@ export interface IntakeResult {
    */
   readonly threatModelRequired: boolean;
   readonly recommendedNextStep: string;
+  /**
+   * Work-type classification. Optional for backward compatibility with older
+   * callers; populated whenever `classifyIntake` runs.
+   */
+  readonly workType?: WorkType;
+  /**
+   * True when any intended path falls under `.maestro/`, `policies/`,
+   * `skills/`, or `hooks/`. Independent of `workType`.
+   */
+  readonly harnessImpact?: boolean;
+  /**
+   * Human-readable next-step hint derived from (workType, lane). Distinct from
+   * `recommendedNextStep`, which is derived from lane alone.
+   */
+  readonly recommendedNextSteps?: string;
 }
