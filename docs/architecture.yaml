@@ -1,0 +1,32 @@
+# Maestro v2 ArchitectureRules port: source of truth (ADR-0005).
+#
+# Layers list is order-significant: each layer may import only from layers
+# listed earlier in the array. `providers` is the single cross-cutting boundary
+# allowed to import from any layer (composition root).
+#
+# Enforced by the v2 architecture-lint runner (PR 12) and surfaced through the
+# ArchitectureRulesPort (PR 11). The passive_harness section enforces the
+# no-runner-inversion invariant from §13 of the master plan.
+
+version: 1
+forward_only: true
+
+layers:
+  - types
+  - config
+  - repo
+  - service
+  - runtime
+  - ui
+
+cross_cutting:
+  - providers
+
+passive_harness:
+  # Patterns that must not appear in production v2 src code (tests/scripts exempt).
+  # Enforces the "no daemon, no scheduler, no LLM call inside maestro" invariant.
+  forbidden_patterns:
+    - setInterval
+    - setTimeout
+    - cron
+    - daemon
