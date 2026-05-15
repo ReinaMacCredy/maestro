@@ -70,6 +70,18 @@ describe("FsPrinciplesStore", () => {
     expect(await store.get("nope")).toBeUndefined();
   });
 
+  it("exists() returns true even when file is unparseable", async () => {
+    const principlesDir = join(dir, "docs/principles");
+    await mkdir(principlesDir, { recursive: true });
+    await writeFile(join(principlesDir, "stub.md"), "not a principle", "utf8");
+    expect(await store.exists("stub")).toBe(true);
+    expect(await store.exists("missing")).toBe(false);
+  });
+
+  it("exists() rejects invalid slug without touching disk", async () => {
+    expect(await store.exists("Bad_Slug!")).toBe(false);
+  });
+
   it("round-trips write/get", async () => {
     await store.write("rule-one", VALID);
     const p = await store.get("rule-one");

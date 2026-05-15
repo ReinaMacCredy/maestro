@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   isValidPrincipleSlug,
@@ -109,6 +109,16 @@ export class FsPrinciplesStore implements PrinciplesStorePort {
       throw err;
     }
     return parsePrincipleFile(raw, slug, path);
+  }
+
+  async exists(slug: string): Promise<boolean> {
+    if (!isValidPrincipleSlug(slug)) return false;
+    try {
+      await access(this.pathFor(slug));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async write(slug: string, content: string): Promise<void> {

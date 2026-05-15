@@ -83,6 +83,7 @@ import {
 import { registerSpecV2Commands } from "@/v2/runtime/spec.command.js";
 import { registerTaskV2Commands } from "@/v2/runtime/task.command.js";
 import { registerPlanV2Commands } from "@/v2/runtime/plan.command.js";
+import { registerPrincipleV2Commands } from "@/v2/runtime/principle.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -134,6 +135,10 @@ registerHandoffCommand(program, deps);
 registerTaskCommand(program, deps);
 registerReplyCommand(program, deps);
 registerPrincipleCommand(program, deps);
+// v2 surface: attaches `principle promote <correctionId>` to the same parent.
+registerPrincipleV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
 registerBundleCommand(program, deps);
 registerEvidenceCommand(program, deps);
 registerSpecCommand(program, deps);

@@ -3,6 +3,7 @@ import type { Principle } from "../types/principle.js";
 export interface PrinciplesStorePort {
   list(): Promise<readonly Principle[]>;
   get(slug: string): Promise<Principle | undefined>;
+  exists(slug: string): Promise<boolean>;
   write(slug: string, content: string): Promise<void>;
 }
 
