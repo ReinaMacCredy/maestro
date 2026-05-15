@@ -60,7 +60,7 @@ Branches to walk, in roughly this order:
 2. **Non-goals.** What is explicitly out of scope? Name the things a reader might assume are in scope.
 3. **Risk class.** `low`, `medium`, `high`, `critical`. Default by what the change touches (auth/secrets/payments/policies/migrations → critical or high; src under a single feature → medium; docs-only → low).
 4. **Mode.** `light` (single agent, in-tree) or `heavy` (worktree-per-task, ADR-0008). Default light unless the change spans multiple features or contracts.
-5. **Work-type.** Classification used by harness routing. Pull from the existing `maestro-classify` taxonomy if the user is unsure.
+5. **Work-type.** Classification used by harness routing. Walk the decision tree in `.maestro/docs/FEATURE_INTAKE.md` (six values: `new-spec`, `spec-slice`, `change-request`, `initiative`, `maintenance`, `harness-improvement`).
 6. **Dependencies / blocked_by.** What other specs or tasks must complete first?
 
 ### 4. Challenge against committed knowledge

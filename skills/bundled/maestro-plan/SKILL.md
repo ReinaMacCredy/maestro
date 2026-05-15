@@ -1,299 +1,182 @@
 ---
 name: maestro-plan
-description: Turn an approved brainstorm design into a concrete implementation plan by grounding on the real codebase or artifacts, consuming the accepted approach, constraints, assumptions, and unresolved decisions from the brainstorming phase, defining the done state, identifying risks and dependencies, sequencing phases and tasks, attaching validation to each step, and specifying the next executable move. In maestro projects, persists the plan to `.maestro/plans/<slug>.md` and emits task-batch JSON for `maestro-task`. Use when the user wants the phase after brainstorming, a phased approach, task breakdown, rollout sequence, implementation roadmap, or a concrete path from approved design to execution.
+description: Turn an approved heavy-mode product-spec into an executable v2 exec-plan with child tasks. Use after `maestro-design` has produced a `mode: heavy` spec, or when a single task has grown big enough that it should be decomposed into a multi-PR batch. Persists the plan to `.maestro/plans/plans.v2.jsonl` and the child tasks to `.maestro/tasks/tasks.v2.jsonl`.
 ---
 
 # Maestro Plan
 
-Use this skill to convert an approved brainstorm design into an actionable plan.
+Heavy-mode work runs as an exec-plan with child tasks. This skill is the bridge from a heavy spec to the first claimed task. Light-mode specs skip this skill — they go straight to `maestro-task`.
+
+---
+
+## When to use
+
+- The spec was authored via `maestro-design` with `mode: heavy`.
+- The work spans 3+ vertical slices, multiple feature dirs, or has dependency edges between phases.
+- A single in-flight task has revealed too many surfaces; promote it.
+
+Do not use for:
+
+- Light-mode specs (one PR / one task).
+- Read-only research or one-off corrections.
+
+---
 
 ## Enter plan mode
 
-- Call the `EnterPlanMode` tool as the first action of this skill, before reading context or drafting the plan.
-- Plan mode enforces read-only behavior so the plan is built from verified context without side effects.
-- Stay in plan mode for the entire drafting pass: exploration, synthesis, phasing, and validation design.
-- Do not edit files, run destructive commands, or start implementation while in plan mode. Use read-only tools (Read, Grep, Glob, Bash for inspection, etc.) only.
-- When the plan is complete and ready to present, call `ExitPlanMode` with the full plan content as the argument. This both exits plan mode and presents the plan to the user for approval.
-- If `EnterPlanMode` is unavailable (for example, already in plan mode or the tool is not exposed in this session), proceed with the skill anyway but keep the same read-only discipline and use `ExitPlanMode` at the end.
-- If the user rejects the plan at `ExitPlanMode`, re-enter plan mode and revise rather than starting implementation.
+Call `EnterPlanMode` as the first action of this skill, before reading context or drafting the plan.
 
-## Start from the brainstorm handoff
+Plan mode enforces read-only behavior so the plan is built from verified context without side effects. Stay in plan mode for the entire drafting pass: exploration, synthesis, phasing, validation design. Do not edit files or run destructive commands while in plan mode. Use Read, Grep, Glob, and Bash for inspection only.
 
-- Treat this skill as the next phase after `maestro-brainstorm`.
-- Read the brainstorm output first when it exists.
-- Carry forward:
-  - the approved approach or design
-  - the relevant context discovered during brainstorming
-  - constraints and assumptions
-  - open questions
-  - validation expectations
-  - the final state from brainstorming
-- If brainstorming ended in `needs-clarification` or `design-in-progress`, do not build a full plan yet.
-- If the design has not been approved, ask for approval or continue design work instead of planning.
-- If no brainstorm artifact exists, reconstruct the same handoff inputs from the user's request and available context.
+When the plan is complete and ready to present, call `ExitPlanMode` with the full plan content as the argument. If the user rejects the plan, re-enter plan mode and revise rather than starting implementation.
 
-## Ground on real context first
+---
 
-- Inspect the actual artifacts when the user references a repo, files, specs, tickets, docs, or prior decisions.
-- Read enough of the current system to plan against reality, not assumptions.
-- Base specific planning claims on verified context when it is available.
+## Ground on the spec and the real codebase
+
+- Read the heavy-mode spec at `.maestro/specs/<slug>.md`. Carry forward `acceptance_criteria`, `non_goals`, `work_type`, and any open questions.
+- Inspect the actual artifacts the spec touches. Read enough of the current system to plan against reality, not assumptions.
 - Mark assumptions clearly when information is missing.
 
-## Define the target
+If the spec is light-mode or has not been authored, stop and route the user to `maestro-design` first.
 
-- Restate the approved design in one sentence.
-- Define what done looks like.
-- Identify explicit constraints, acceptance criteria, and out-of-scope areas.
-- Distinguish firm requirements from preferences.
-- Convert unresolved decisions from brainstorming into either:
-  - decisions that must be made before implementation, or
-  - explicit assumptions the plan will proceed under
-
-Do not build a plan until the target is clear enough to avoid planning the wrong work.
-
-## Plan around the real shape of the work
-
-Identify:
-
-- the systems or surfaces that will likely change
-- the riskiest unknowns
-- the dependencies that gate later work
-- what can run in parallel and what must stay sequential
-- what needs migration, rollout, or compatibility handling
-- what verification is needed to prove the change works
-
-Avoid generic task lists detached from the actual system.
+---
 
 ## Build a phased plan
 
-- Organize the work into 2 to 7 phases when the task is non-trivial.
+- Organize the work into 2 to 7 phases for non-trivial scope.
 - Give each phase a clear outcome, not just an activity label.
 - Sequence phases by dependency order.
 - Make tasks outcome-named, concrete, and falsifiable.
-- Keep tasks small enough to execute without re-planning mid-task.
+- Keep each task small enough to ship as one PR (ADR-0006: 1:1 task↔PR).
 
-For each phase, include:
+For each phase, include: purpose, child tasks, dependencies, verification checkpoint.
 
-- purpose
-- tasks
-- dependencies
-- verification checkpoint
+---
 
 ## Attach validation to the plan
 
 - Define the smallest relevant check for each phase.
-- Call out tests, lint, type checks, builds, manual verification, or rollout checks as needed.
+- Call out tests, lint, type checks, builds, manual verification, or rollout checks.
 - Prefer the cheapest check that can falsify the phase.
-- If later implementation should be test-first, identify the test surfaces up front.
+- If implementation should be test-first, identify the test surfaces up front.
 
-For non-trivial tasks, include a plan file in the hand-off so the executing agent can run `maestro plan check --task <id> --plan-file <path>` before writing code. Use `maestro plan check` per the protocol in `maestro-verify`.
+The verification protocol is `maestro-verify` — every task ends with `maestro task verify`, every PR is gated by CI Maestro.
+
+---
 
 ## Surface risks and cut lines
 
-- Identify what could derail the plan.
-- Call out the highest-risk assumption or dependency.
+- Identify the highest-risk assumption or dependency.
 - Separate must-have work from optional polish.
 - State what can be deferred without undermining the goal.
 
-## Return an execution-ready answer
+---
 
-Return a compact response in this shape:
+## Materialize the plan and child tasks
 
-1. Approved design from brainstorming
-2. Current context
-3. Constraints, assumptions, and unresolved decisions
-4. Phased plan
-5. Dependency and ordering notes
-6. Validation strategy
-7. Risks and cut lines
-8. First execution step
-9. State: `needs-clarification` or `ready-for-implementation`
+When the user approves, run the v2 plan lifecycle:
 
-## Keep the plan useful
+### 1. Promote the spec to an exec-plan
 
-- Do not start implementing.
-- Do not produce a generic checklist with no ordering logic.
-- Do not hide dependencies or risks.
-- Do not over-plan beyond the actual complexity of the work.
-- Match the depth of the plan to the risk and scope of the task.
-
-## Propose a contract
-
-Your plan must include `proposed_contract` with `allowed_files`, `forbidden_paths`, `risk_class`, and `amendment_budget`. The human reviews the plan including the contract.
-
-Example:
-
-```yaml
-proposed_contract:
-  allowed_files:
-    - "src/features/auth/**"
-    - "tests/unit/features/auth/**"
-  forbidden_paths:
-    - ".github/workflows/**"
-    - "bun.lock"
-    - "package.json"
-  risk_class: medium
-  amendment_budget:
-    max_amendments: 3
-    max_paths_per_amendment: 5
-    forbidden_amendment_paths:
-      - ".github/workflows/**"
-      - "bun.lock"
-      - "package.json"
+```bash
+maestro plan from-spec .maestro/specs/<slug>.md
 ```
 
-`risk_class` is one of `low`, `medium`, `high`, `critical`. Be honest — `critical` for changes to auth, payments, secrets, or deploy infrastructure.
+Creates an `ExecPlan` in `specified`. Captures the returned `pln-...` id. Requires `mode: heavy` on the spec — light-mode specs are rejected with `PlanRequiresHeavyModeError`.
 
-`amendment_budget` caps how many times the agent may expand `allowed_files` after the plan is locked. The agent must call `maestro contract amend --task <id> --add-path <p> --reason <r>` for each genuine scope change; failures are recorded.
+### 2. Decompose into child tasks
 
-## Persist the plan
+Emit a JSON array of `{title, slug, spec_path?}` task objects (one per phase or vertical slice) and pipe it to:
 
-When `.maestro/plans/` exists in the cwd or an ancestor (the project uses maestro), write the final approved plan to `.maestro/plans/<slug>.md` before handing off. Approved plans are durable, searchable references future sessions can read.
+```bash
+maestro plan decompose <pln-id> --file -
+```
 
-- **Slug:** kebab-case derived from the plan subject. Short (2 to 4 words). Example: `auth-jwt-migration`, `skill-bundle`, `docs-update`.
-- **Collision handling:** if `.maestro/plans/<slug>.md` already exists, append a numeric suffix (`<slug>-2.md`, `<slug>-3.md`) rather than overwrite.
-- **Format:** follow the existing convention in that directory.
+The CLI writes each child task with `plan_id` set and transitions the plan `specified → planned`. The batch is validated atomically: no duplicate slugs within the batch, no collisions with existing tasks. A single validation error rejects the whole batch.
+
+Example batch:
+
+```json
+[
+  { "title": "Scaffold feature X",                  "slug": "scaffold-feature-x" },
+  { "title": "Implement core use-case",             "slug": "impl-feature-x-core" },
+  { "title": "Add unit + integration tests",        "slug": "test-feature-x" }
+]
+```
+
+### 3. Inspect the plan
+
+```bash
+maestro plan show <pln-id>
+maestro plan show <pln-id> --json
+```
+
+Prints the plan state, the spec path, and every child task with its current state.
+
+### 4. Start work
+
+The plan auto-advances `planned → in-progress` on the first `maestro claim <tsk-id>` (ADR-0011). It auto-advances to `completed` when every child reaches `shipped` or `abandoned`. There is no manual `plan start` or `plan complete` verb.
+
+After the first child claim, load `maestro-task` and execute from there.
+
+---
+
+## Persist a human-readable plan note (optional)
+
+The plan record in `.maestro/plans/plans.v2.jsonl` carries `title`, `slug`, `spec_path`, and `state` — it does not carry narrative. For non-trivial plans, persist a markdown sidecar so future sessions and reviewers have the rationale:
+
+`.maestro/plans/<slug>.md`:
 
 ```markdown
 # <Title>
 
 ## Objective
-<1-2 sentence restatement of the approved design>
+<1-2 sentence restatement of the heavy-mode spec's goal>
 
 ## Scope
 **In:** <what is included>
 **Out:** <what is explicitly excluded>
 
-## Research Findings
+## Research findings
 <context gathered during planning, grounded in verified files or artifacts>
 
-## Tasks
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
+## Phases
+- [ ] Phase 1 — <outcome> — tasks: <tsk-...>, <tsk-...>
+- [ ] Phase 2 — <outcome> — tasks: <tsk-...>
 
 ## Verification
-<commands, tests, or manual checks that prove the plan succeeded>
+<commands, tests, manual checks per phase>
 
-## Notes
-<risks, cut lines, assumptions, references>
+## Risks and cut lines
+<the highest-risk assumption; what can be deferred>
 ```
+
+Collision handling: if `.maestro/plans/<slug>.md` already exists, append a numeric suffix (`<slug>-2.md`).
 
 Skip this section entirely when no maestro project is detected.
 
-## Risk class is independently verified
+---
 
-When the user approves your plan, the proposed Contract becomes Contract v1. Maestro independently re-derives a `risk_class` from the diff and uses `max(your_proposed, derived)` as the effective class — per Rule 1, you can only **raise** the class, never lower it.
+## What this skill does not do
 
-Plan accordingly:
+- Does **not** propose a contract. v2 contracts are derived from the spec's path globs and the task's diff; the agent does not author them in the plan.
+- Does **not** lock a risk class. Maestro derives it from the diff; you cannot lower it from the plan.
+- Does **not** open PRs. Each child task ends with `maestro task ship`; the PR opens through normal git flow before `ship`.
+- Does **not** schedule iteration. Maestro stays passive (no cron, no daemon).
 
-- Diffs intersecting `auth/**`, `secrets/**`, `permissions/**`, `payments/**`, or any path matching the project's `policies/sensitive-paths.yaml` → `critical`.
-- Diffs modifying dependency manifests (`package.json`, `bun.lock`, `Cargo.toml`, `requirements.txt`, `pyproject.toml`, etc.) → `high`.
-- Diffs including database migration files (paths matching `policies/migration_paths`) → `high`.
-- Diffs modifying CI workflow files (`.github/workflows/**`, `.circleci/**`, `.gitlab-ci.yml`) → `high`.
-- Diffs modifying `.maestro/policies/**`, `.maestro/ratchets/**`, or `owners.yaml` → `high`.
-- Diffs modifying build configuration (`tsconfig*.json`, `bunfig.toml`, `vite.config.*`, etc.) → `medium`.
-- Any source code change under `src/`, `lib/`, `app/`, or similar not matched above → `medium`.
-- Docs-only, comment-only, or formatting-only → `low`.
+---
 
-Proposing `low` for any of the above is futile — Maestro will raise it and the verdict will route to a human.
+## Hand off to `maestro-task`
 
-## Hand off cleanly
+When tasks are created and the user approves, invoke the `Skill` tool with `skill: "maestro-task"`. Execution continues there. The handoff does not need a separate handoff envelope — `plan decompose` already emitted one, and the first `task claim` will emit `task:claim`.
 
-When `.maestro/` is present in the cwd or an ancestor (maestro project), automatically transition to execution.
+---
 
-### v2 heavy-mode path (preferred for new specs)
+## See also
 
-When the plan is for a **heavy-mode** product-spec (`.maestro/specs/<slug>.md` with `mode: heavy` in the YAML frontmatter — typically authored via `maestro-design`), use the v2 plan lifecycle:
-
-1. **Promote the spec to a plan.** Run `maestro plan from-spec .maestro/specs/<slug>.md` to create an `ExecPlan` in `specified`. Capture the returned `pln-...` id.
-
-2. **Decompose into child tasks.** Emit a JSON array of `{title, slug, spec_path?}` task objects (one per phase or vertical slice) and pipe it to `maestro plan decompose <pln-id> --file -`. The CLI writes each child task with `plan_id` set and transitions the plan `specified -> planned`.
-
-3. **Start work.** The plan auto-advances `planned -> in-progress` on the first `maestro claim <tsk-id>`; it auto-advances to `completed` when every child reaches `shipped` or `abandoned` (ADR-0011). No manual `plan start` or `plan complete` verb exists.
-
-4. **Load the task skill.** Invoke the `Skill` tool with `skill: "maestro-task"` so execution continues there.
-
-Example v2 batch (piped to `plan decompose --file -`):
-```json
-[
-  { "title": "Scaffold feature X", "slug": "scaffold-feature-x" },
-  { "title": "Implement core use-case", "slug": "impl-feature-x-core" },
-  { "title": "Add unit + integration tests", "slug": "test-feature-x" }
-]
-```
-
-The batch is validated atomically (no duplicate slugs within the batch, no collisions with existing tasks) before any task is written.
-
-### v1 legacy path (light-mode or non-spec plans)
-
-When the plan does not come from a heavy-mode product-spec, use the legacy v1 batch verb:
-
-1. **Convert the plan to a task batch.** Map each phase to a task JSON object with `name`, `title`, `description`, `type`, `priority`, and `blockedBy` for sequencing. Top-level tasks require a `slug` (e.g., `implement/feature-x`); step tasks use `parent` instead.
-
-2. **Create tasks atomically.**
-   - **If MCP is available**: Call `maestro_task_plan` with the batch JSON and `start` parameter set to the first task's name.
-   - **Otherwise**: Run `maestro task plan --file - --start <first-task-name>` with the task batch JSON on stdin.
-
-3. **Load the task skill.** After task creation succeeds, invoke the `maestro-task` skill by calling the `Skill` tool with `skill: "maestro-task"`. The task skill will take over and guide implementation.
-
-Example task batch structure:
-```json
-{
-  "batchId": "plan-<short-slug>",
-  "tasks": [
-    {
-      "name": "scaffold",
-      "title": "Scaffold feature X",
-      "description": "Create the feature directory, wire index.ts, add skeleton services.ts.",
-      "type": "feature",
-      "priority": 1,
-      "slug": "implement/feature-x"
-    },
-    {
-      "name": "impl",
-      "title": "Implement the core use-case",
-      "description": "Build the use-case behind the port; cover happy path first.",
-      "parent": "scaffold"
-    },
-    {
-      "name": "tests",
-      "title": "Add unit + integration tests",
-      "parent": "scaffold",
-      "blockedBy": ["impl"]
-    }
-  ]
-}
-```
-
-Example MCP call:
-```json
-{
-  "batchId": "plan-feature-x",
-  "tasks": [...],
-  "start": "scaffold"
-}
-```
-
-Example CLI fallback:
-```bash
-cat <<'JSON' | maestro task plan --file - --start scaffold
-{
-  "batchId": "plan-feature-x",
-  "tasks": [...]
-}
-JSON
-```
-
-**Why this flow:**
-- Atomic task creation with referential integrity
-- No manual handoff step — the agent continues directly to implementation
-- The user sees task creation output, then implementation begins immediately
-- Idempotent retry via `batchId`
-- MCP protocol preferred for structured JSON without shell execution
-
-**When no maestro project is detected:**
-- Switch to a generic implementation skill when the user wants execution
-- When cross-session transfer is needed, hand off to `maestro-handoff` which writes a rich brief and launches a new session via `maestro handoff --prompt-file`
-
-**Preserve the approved design** unless new verified context forces the plan to reopen the design decision. If the implementation skill is TDD-based, make the likely test entry points explicit in the plan.
+- `maestro-design` — grill-protocol spec authoring (run before this skill).
+- `maestro-task` — single-task execution loop (run after this skill for each child).
+- `maestro-verify` — canonical verification protocol.
+- `docs/cli-reference.md` — verb-by-verb reference.
+- `docs/adr/0003-task-lifecycle.md`, `docs/adr/0011-exec-plan-auto-complete.md` — the lifecycle decisions this skill rides on.
