@@ -45,7 +45,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
   task
     .command("from-spec <path>")
     .description("Create a v2 task in draft from a product-spec markdown file")
-    .action(async (pathArg: string) => {
+    .action(async (pathArg: string): Promise<void> => {
       try {
         const repoRoot = opts.resolveRepoRoot();
         const services = buildV2Services({ repoRoot });
@@ -64,7 +64,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       }
     });
 
-  const claimAction = async (id: string, flags: { agent?: string }) => {
+  const claimAction = async (id: string, flags: { agent?: string }): Promise<void> => {
     try {
       const repoRoot = opts.resolveRepoRoot();
       const services = buildV2Services({ repoRoot });
@@ -93,7 +93,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
     .action(claimAction);
 
-  const blockAction = async (id: string, flags: { reason?: string }) => {
+  const blockAction = async (id: string, flags: { reason?: string }): Promise<void> => {
     if (!flags.reason) {
       console.error("maestro task block: --reason is required");
       process.exitCode = 1;
@@ -127,7 +127,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .requiredOption("--reason <text>", "human-readable explanation of the blocker")
     .action(blockAction);
 
-  const abandonAction = async (id: string, flags: { reason?: string }) => {
+  const abandonAction = async (id: string, flags: { reason?: string }): Promise<void> => {
     if (!flags.reason) {
       console.error("maestro task abandon: --reason is required");
       process.exitCode = 1;

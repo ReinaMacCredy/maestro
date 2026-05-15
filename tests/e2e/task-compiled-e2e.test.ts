@@ -24,7 +24,9 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-describe("compiled task feature E2E", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim`/`block`/`verify` are detached
+// per ADR-0007 big-bang; v2 equivalents live in src/v2/runtime/task.command.ts.
+describe.skip("compiled task feature E2E", () => {
   it(
     "runs the full Claude-style task loop against ./dist/maestro",
     async () => {

@@ -31,7 +31,9 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-describe("agent session loop (plan -> next -> update)", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim` is detached per ADR-0007 big-bang;
+// v2 equivalents live in src/v2/runtime/task.command.ts.
+describe.skip("agent session loop (plan -> next -> update)", () => {
   it("exposes the plan input schema via --schema", async () => {
     const result = await runCompiled(["task", "plan", "--schema"], tmpDir);
     expect(result.exitCode).toBe(0);

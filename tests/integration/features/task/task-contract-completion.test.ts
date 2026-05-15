@@ -66,7 +66,9 @@ async function writeContractRuntimeNoise(): Promise<void> {
   await Bun.write(join(tmpDir, ".maestro", "config.yaml"), "contracts:\n  default: prompt\n");
 }
 
-describe("task contract completion", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim` is detached per ADR-0007 big-bang;
+// v2 equivalents live in src/v2/runtime/task.command.ts.
+describe.skip("task contract completion", () => {
   it("captures claim anchors and stores a fulfilled verdict on completion", async () => {
     await seedTrackedFile("README.md", "hello\n");
 

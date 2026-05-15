@@ -24,7 +24,9 @@ async function writeTemplate(name: string, body: string): Promise<string> {
   return path;
 }
 
-describe("task CLI daily loop", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim`/`block` are detached per ADR-0007 big-bang;
+// v2 equivalents live in src/v2/runtime/task.command.ts.
+describe.skip("task CLI daily loop", () => {
   it("completes the create -> claim -> start -> complete -> ready cycle", async () => {
     const captured = await runCli(["task", "q", "login endpoint", "--priority", "1"], tmpDir);
     const apiId = captured.stdout;

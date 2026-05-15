@@ -23,7 +23,9 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-describe("task mutating commands --silent", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim`/`block` are detached per ADR-0007 big-bang;
+// v2 equivalents live in src/v2/runtime/task.command.ts.
+describe.skip("task mutating commands --silent", () => {
   it(
     "prints '<id> <marker>' for update/claim/unclaim/block/unblock/reopen",
     async () => {

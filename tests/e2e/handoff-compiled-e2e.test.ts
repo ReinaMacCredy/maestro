@@ -304,7 +304,9 @@ async function attachLockedContract(
   return contract.id;
 }
 
-describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim` is detached per ADR-0007 big-bang;
+// v2 equivalents live in src/v2/runtime/task.command.ts.
+describe.skip("compiled handoff launcher E2E", () => {
   it(
     "launches codex by default, writes prompt artifacts, and returns launch metadata",
     async () => {

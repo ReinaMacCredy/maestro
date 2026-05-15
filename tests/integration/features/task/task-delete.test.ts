@@ -19,7 +19,9 @@ afterEach(async () => {
 });
 
 describe("task delete", () => {
-  it("requires the owner session or force before deleting a claimed task", async () => {
+  // TODO(v2/phase-4): re-enable or remove. v1 `task claim` is detached per ADR-0007 big-bang;
+  // v2 equivalents live in src/v2/runtime/task.command.ts.
+  it.skip("requires the owner session or force before deleting a claimed task", async () => {
     const created = await runCli(["task", "create", "claimed delete", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(created);
 

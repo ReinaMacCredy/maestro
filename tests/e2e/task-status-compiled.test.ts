@@ -24,7 +24,9 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-describe("compiled task status + plan slug conversion", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim` is detached per ADR-0007 big-bang;
+// v2 equivalents live in src/v2/runtime/task.command.ts.
+describe.skip("compiled task status + plan slug conversion", () => {
   it(
     "renders the screenshot fixture and exposes slugs in JSON / list / show",
     async () => {

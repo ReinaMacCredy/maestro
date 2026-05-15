@@ -35,7 +35,9 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-describe("L1 evidence flow E2E", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim` is detached per ADR-0007 big-bang;
+// v2 equivalents live in src/v2/runtime/task.command.ts.
+describe.skip("L1 evidence flow E2E", () => {
   it(
     "records, lists, shows, and preserves evidence through task completion",
     async () => {

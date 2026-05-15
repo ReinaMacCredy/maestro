@@ -30,7 +30,7 @@ export function registerSpecV2Commands(program: Command, opts: SpecCommandV2Opti
       async (
         slug: string,
         flags: { title?: string; mode?: string },
-      ) => {
+      ): Promise<void> => {
         try {
           const repoRoot = opts.resolveRepoRoot();
           const services = buildV2Services({ repoRoot });
@@ -59,7 +59,7 @@ export function registerSpecV2Commands(program: Command, opts: SpecCommandV2Opti
   spec
     .command("validate <path>")
     .description("Validate a product-spec markdown file against the frontmatter schema")
-    .action(async (pathArg: string) => {
+    .action(async (pathArg: string): Promise<void> => {
       try {
         const repoRoot = opts.resolveRepoRoot();
         const result = await specValidate({ repoRoot }, pathArg);
