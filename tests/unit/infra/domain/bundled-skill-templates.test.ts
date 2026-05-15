@@ -75,6 +75,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     const names = BUNDLED_SKILL_TEMPLATES.map((t) => t.name).sort();
     expect(names).toEqual([
       "maestro-brainstorm",
+      "maestro-classify",
       "maestro-handoff",
       "maestro-intake",
       "maestro-mission",
