@@ -1,2 +1,2 @@
 // v2/service: use cases. Allowed to import from types, config, repo.
-export {};
+export * from "./emit-transition-evidence.js";
