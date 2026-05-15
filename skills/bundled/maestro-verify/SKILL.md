@@ -59,6 +59,14 @@ If retries are accumulating before step 5, run
 `maestro task budget --task <id>` to check consumption
 (`reference/verdict.md` covers cost-budget interpretation).
 
+### Harness-delta evidence
+
+If `maestro intake` returned `harnessImpact: true` (the change touches
+`.maestro/`, `policies/`, `skills/`, or `hooks/`), record a `harness-delta`
+evidence row at task close in addition to the product-side verification.
+The 7-rung validation ladder and harness-specific checks are documented in
+`.maestro/docs/VALIDATION_LADDER.md`.
+
 ---
 
 ## After the Verdict (when PASS or HUMAN)

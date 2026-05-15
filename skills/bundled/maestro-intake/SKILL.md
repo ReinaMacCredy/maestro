@@ -75,11 +75,31 @@ Auto-detection is intentionally narrow: declared flags are the primary input. Wh
   "declaredFlags": ["existing-behavior", "weak-proof"],
   "hardGatesTriggered": [],
   "threatModelRequired": false,
-  "recommendedNextStep": "create a task via `maestro task plan` and run `maestro plan check`"
+  "recommendedNextStep": "create a task via `maestro task plan` and run `maestro plan check`",
+  "workType": "spec-slice",
+  "harnessImpact": false,
+  "recommendedNextSteps": "Create task, reference parent spec"
 }
 ```
 
 `threatModelRequired` is `true` only when the diff intersects sensitive security paths (the same predicate the post-diff Verdict pipeline uses to require a `threat-model` Evidence row). If it is `true` and you skip the threat-model row, the verdict will fail.
+
+## Work types
+
+`workType` is one of six classifications (see `.maestro/docs/FEATURE_INTAKE.md` for the full decision tree):
+
+| Work type | When |
+|---|---|
+| `new-spec` | None of the intended paths exist yet |
+| `spec-slice` | All paths share one `src/features/<name>/` root and exist |
+| `change-request` | Paths exist and span multiple existing areas (fallback) |
+| `initiative` | `multi-domain` flag OR paths span 3+ top-level dirs |
+| `maintenance` | All paths are manifests / `.github/**` / root config |
+| `harness-improvement` | Any path under `.maestro/`, `policies/`, `skills/`, `hooks/` |
+
+Override with `--work-type <type>` when the heuristic gets it wrong.
+
+`harnessImpact: true` means the change touches the harness itself — record a `harness-delta` evidence row at task close.
 
 ## Examples
 

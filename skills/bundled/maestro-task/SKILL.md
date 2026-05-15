@@ -181,6 +181,17 @@ Every task receipt should answer two questions:
 
 If the harness delta is non-trivial, capture it before the close so the next session inherits it. The product delta belongs in `--reason` / `--summary`; the harness delta usually goes through `maestro memory-correct`, a skill edit, or a follow-up task.
 
+When `maestro intake` reported `harnessImpact: true`, also record a `harness-delta` evidence row at close. The task receipt stores `workType` and `harnessDeltas` for future agents reading the history:
+
+```json
+{
+  "summary": "Add --json output to maestro intake",
+  "capturedAt": "2026-05-15T10:00:00Z",
+  "workType": "spec-slice",
+  "harnessDeltas": ["skills/bundled/maestro-intake/SKILL.md"]
+}
+```
+
 ## Before claiming the task complete
 
 Run this loop before marking any task done:

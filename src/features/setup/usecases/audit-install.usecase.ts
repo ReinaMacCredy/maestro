@@ -31,6 +31,7 @@ export async function auditInstall(args: AuditInstallArgs): Promise<AuditInstall
   await checkProjectInitialized(args.projectRoot, findings);
   await checkAgentsMdSize(args.projectRoot, tocBudget, findings);
   await checkOwnersYaml(args.projectRoot, findings);
+  await checkHarnessDocs(args.projectRoot, findings);
   await checkOrphanRunDirs(args.projectRoot, findings);
 
   const hostRuntimes = await detectHostRuntimes(args.projectRoot);
@@ -121,6 +122,33 @@ async function checkOwnersYaml(root: string, findings: AuditFinding[]): Promise<
         code: "owners-role-missing",
         severity: "info",
         message: `owners.yaml has no ${role} entries`,
+      });
+    }
+  }
+}
+
+const HARNESS_DOC_TEMPLATES: readonly string[] = [
+  "HARNESS.md",
+  "FEATURE_INTAKE.md",
+  "VALIDATION_LADDER.md",
+];
+
+async function checkHarnessDocs(root: string, findings: AuditFinding[]): Promise<void> {
+  const docsDir = join(root, ".maestro/docs");
+  if (!(await dirExists(docsDir))) {
+    findings.push({
+      code: "harness-docs-missing",
+      severity: "info",
+      message: ".maestro/docs/ not present; run `maestro setup` to seed harness doc templates",
+    });
+    return;
+  }
+  for (const name of HARNESS_DOC_TEMPLATES) {
+    if (!(await fileExists(join(docsDir, name)))) {
+      findings.push({
+        code: "harness-doc-missing",
+        severity: "info",
+        message: `.maestro/docs/${name} not present; re-run \`maestro setup\` to restore`,
       });
     }
   }

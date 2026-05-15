@@ -5,9 +5,11 @@ description: Classify work type and harness impact before implementation. Wraps 
 
 # Maestro Classify
 
-Plan-time work-type classifier. Wraps `maestro intake` and adds a 6-type classification (`work_type`) plus a `recommended_next_steps` string derived from the (work_type, lane) pair. Emits telemetry to `.maestro/telemetry/classify-events.ndjson` so Phase 2 can refine the heuristic against real usage.
+> **Phase 3 status:** The work-type classification logic now lives in `maestro intake`. Use `maestro intake --paths <paths> --json` directly; the result includes `workType`, `harnessImpact`, and `recommendedNextSteps`. This skill remains as a thin wrapper for telemetry collection and explicit overrides via `--work-type`.
 
-This is a **Phase 1 skill** — its job is to gather telemetry before the same logic is promoted into the `maestro intake` primitive. See `reference/work-types.md` for the taxonomy.
+Plan-time work-type classifier. Wraps `maestro intake` and adds a 6-type classification (`work_type`) plus a `recommended_next_steps` string derived from the (work_type, lane) pair. Emits telemetry to `.maestro/telemetry/classify-events.ndjson` so the heuristic can be refined against real usage.
+
+This skill remains useful when you want explicit telemetry-on-by-default behavior, or when you want to override the heuristic with `--work-type`. For most cases, run `maestro intake` directly. See `reference/work-types.md` for the taxonomy.
 
 ---
 
