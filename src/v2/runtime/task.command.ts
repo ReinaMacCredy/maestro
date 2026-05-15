@@ -61,6 +61,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
             specStore: services.specStore,
             taskStore: services.taskStore,
             evidenceStore: services.evidenceStore,
+            observabilityStore: services.observabilityStore,
           },
           pathArg,
         );
@@ -79,6 +80,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
           planStore: services.planStore,
+          observabilityStore: services.observabilityStore,
         },
         { id, agentId: flags.agent },
       );
@@ -113,6 +115,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         {
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
+          observabilityStore: services.observabilityStore,
         },
         { id, reason: flags.reason },
       );
@@ -148,6 +151,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
           planStore: services.planStore,
+          observabilityStore: services.observabilityStore,
         },
         { id, reason: flags.reason },
       );
@@ -195,6 +199,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
           architectureRules: services.architectureRules,
+          observabilityStore: services.observabilityStore,
         },
         { id, verdict: explicit, reason: flags.reason },
       );
@@ -261,6 +266,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
           planStore: services.planStore,
+          observabilityStore: services.observabilityStore,
         },
         { id, pr_url: flags.prUrl },
       );

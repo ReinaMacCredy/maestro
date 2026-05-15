@@ -1,6 +1,7 @@
 import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
 import type { ExecPlanStorePort } from "../repo/exec-plan-store.port.js";
 import { ExecPlanNotFoundError } from "../repo/exec-plan-store.port.js";
+import type { ObservabilityPort } from "../repo/observability.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { DuplicateSlugError } from "../repo/task-store.port.js";
 import type { ExecPlan, ExecPlanId } from "../types/exec-plan.js";
@@ -18,6 +19,7 @@ export interface PlanDecomposeDeps {
   readonly planStore: ExecPlanStorePort;
   readonly taskStore: TaskStorePort;
   readonly evidenceStore: EvidenceStorePort;
+  readonly observabilityStore?: ObservabilityPort;
   readonly clock?: () => Date;
   readonly idFactory?: () => string;
 }
@@ -138,6 +140,7 @@ export async function planDecompose(
     await emitTransitionEvidence(
       {
         store: deps.evidenceStore,
+        observabilityStore: deps.observabilityStore,
         clock: deps.clock,
         idFactory: deps.idFactory,
       },

@@ -4,6 +4,10 @@ import type {
   EvidenceRow,
   EvidenceStorePort,
 } from "@/v2/repo/evidence-store.port.js";
+import type {
+  ObservabilityEvent,
+  ObservabilityPort,
+} from "@/v2/repo/observability.port.js";
 import {
   TaskNotFoundError,
   type CreateTaskInput,
@@ -127,6 +131,32 @@ describe("taskShip", () => {
     await expect(taskShip({ taskStore, evidenceStore }, { id: "tsk-missing" })).rejects.toBeInstanceOf(
       TaskNotFoundError,
     );
+  });
+
+  it("emits an observability event to the task-scoped runs stream when observabilityStore is supplied", async () => {
+    const taskStore = makeTaskStore([seedTask("ready")]);
+    const { store: evidenceStore } = makeEvidence();
+    const events: ObservabilityEvent[] = [];
+    const observabilityStore: ObservabilityPort = {
+      async emit(event) {
+        events.push(event);
+      },
+    };
+    await taskShip(
+      { taskStore, evidenceStore, observabilityStore },
+      { id: "tsk-target" },
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      task_id: "tsk-target",
+      kind: "transition",
+      payload: {
+        from_state: "ready",
+        to_state: "shipped",
+        trigger_verb: "task:ship",
+        verdict: "PASS",
+      },
+    });
   });
 
   it("throws TaskTransitionError when the source state is not ready", async () => {

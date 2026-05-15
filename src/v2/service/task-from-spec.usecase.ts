@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
+import type { ObservabilityPort } from "../repo/observability.port.js";
 import type { SpecStorePort } from "../repo/spec-store.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { parseSpecFile } from "../repo/fs-spec-store.adapter.js";
@@ -12,6 +13,7 @@ export interface TaskFromSpecDeps {
   readonly specStore: SpecStorePort;
   readonly taskStore: TaskStorePort;
   readonly evidenceStore: EvidenceStorePort;
+  readonly observabilityStore?: ObservabilityPort;
   readonly clock?: () => Date;
   readonly idFactory?: () => string;
 }
@@ -33,6 +35,7 @@ export async function taskFromSpec(
   await emitTransitionEvidence(
     {
       store: deps.evidenceStore,
+      observabilityStore: deps.observabilityStore,
       clock: deps.clock,
       idFactory: deps.idFactory,
     },

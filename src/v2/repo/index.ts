@@ -14,3 +14,5 @@ export * from "./principles-store.port.js";
 export * from "./fs-principles-store.adapter.js";
 export * from "./process-runner.port.js";
 export * from "./bun-process-runner.adapter.js";
+export * from "./observability.port.js";
+export * from "./jsonl-observability.adapter.js";

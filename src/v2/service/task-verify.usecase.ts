@@ -2,6 +2,7 @@ import type {
   EvidenceStorePort,
   LintViolationEvidenceRow,
 } from "../repo/evidence-store.port.js";
+import type { ObservabilityPort } from "../repo/observability.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import type { ArchitectureRulesPort } from "../repo/architecture-rules.port.js";
@@ -18,6 +19,7 @@ export interface TaskVerifyDeps {
   readonly evidenceStore: EvidenceStorePort;
   readonly architectureRules: ArchitectureRulesPort;
   readonly repoRoot: string;
+  readonly observabilityStore?: ObservabilityPort;
   readonly clock?: () => Date;
   readonly idFactory?: () => string;
 }
@@ -78,6 +80,7 @@ export async function taskVerify(
     await emitTransitionEvidence(
       {
         store: deps.evidenceStore,
+        observabilityStore: deps.observabilityStore,
         clock: deps.clock,
         idFactory: deps.idFactory,
       },
@@ -94,6 +97,7 @@ export async function taskVerify(
     await emitTransitionEvidence(
       {
         store: deps.evidenceStore,
+        observabilityStore: deps.observabilityStore,
         clock: deps.clock,
         idFactory: deps.idFactory,
       },
@@ -117,6 +121,7 @@ export async function taskVerify(
     await emitTransitionEvidence(
       {
         store: deps.evidenceStore,
+        observabilityStore: deps.observabilityStore,
         clock: deps.clock,
         idFactory: deps.idFactory,
       },
@@ -142,6 +147,7 @@ export async function taskVerify(
     await emitTransitionEvidence(
       {
         store: deps.evidenceStore,
+        observabilityStore: deps.observabilityStore,
         clock: deps.clock,
         idFactory: deps.idFactory,
       },

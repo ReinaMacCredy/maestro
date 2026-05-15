@@ -29,6 +29,10 @@ import {
   BunProcessRunner,
   type ProcessRunnerPort,
 } from "../repo/bun-process-runner.adapter.js";
+import {
+  JsonlObservabilityAdapter,
+  type ObservabilityPort,
+} from "../repo/jsonl-observability.adapter.js";
 
 export interface V2Services {
   readonly specStore: SpecStorePort;
@@ -38,6 +42,7 @@ export interface V2Services {
   readonly architectureRules: ArchitectureRulesPort;
   readonly principlesStore: PrinciplesStorePort;
   readonly processRunner: ProcessRunnerPort;
+  readonly observabilityStore: ObservabilityPort;
 }
 
 export interface BuildV2ServicesOptions {
@@ -55,5 +60,6 @@ export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
     architectureRules: overrides?.architectureRules ?? new YamlArchitectureRules({ repoRoot }),
     principlesStore: overrides?.principlesStore ?? new FsPrinciplesStore({ repoRoot }),
     processRunner: overrides?.processRunner ?? new BunProcessRunner(),
+    observabilityStore: overrides?.observabilityStore ?? new JsonlObservabilityAdapter({ repoRoot }),
   };
 }

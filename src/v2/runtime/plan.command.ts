@@ -142,6 +142,7 @@ export function registerPlanV2Commands(program: Command, opts: PlanCommandV2Opti
             planStore: services.planStore,
             taskStore: services.taskStore,
             evidenceStore: services.evidenceStore,
+            observabilityStore: services.observabilityStore,
           },
           { plan_id: id, tasks },
         );
