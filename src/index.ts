@@ -82,6 +82,7 @@ import {
 } from "./features/setup/usecases/check-skill-binary-parity.usecase.js";
 import { registerSpecV2Commands } from "@/v2/runtime/spec.command.js";
 import { registerTaskV2Commands } from "@/v2/runtime/task.command.js";
+import { registerPlanV2Commands } from "@/v2/runtime/plan.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -153,6 +154,11 @@ const planCmd = program
   .command("plan")
   .description("Plan-time checks for agent tasks");
 registerPlanCheckCommand(planCmd, program, deps);
+// v2 plan lifecycle verbs (from-spec, show). Attaches to the same `plan`
+// parent; v1 `plan check` and v2 `plan from-spec` coexist until Phase 4.
+registerPlanV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
 
 const ciCmd = program
   .command("ci")

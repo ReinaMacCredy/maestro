@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import { Command } from "commander";
 import { buildV2Services } from "../providers/build-services.js";
 import { taskFromSpec } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
@@ -163,7 +163,11 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .requiredOption("--reason <text>", "human-readable explanation of abandonment")
     .action(abandonAction);
 
-  const verifyAction = async (id: string, flags: { json?: boolean }): Promise<void> => {
+  const verifyAction = async function (
+    this: Command,
+    id: string,
+    flags: { json?: boolean },
+  ): Promise<void> {
     try {
       const repoRoot = opts.resolveRepoRoot();
       const services = buildV2Services({ repoRoot });
@@ -176,7 +180,8 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         },
         { id },
       );
-      if (flags.json) {
+      const wantJson = flags.json === true || this.optsWithGlobals().json === true;
+      if (wantJson) {
         console.log(
           JSON.stringify(
             {

@@ -9,3 +9,5 @@ export * from "./task-abandon.usecase.js";
 export * from "./architecture-lint.usecase.js";
 export * from "./task-verify.usecase.js";
 export * from "./task-ship.usecase.js";
+export * from "./plan-from-spec.usecase.js";
+export * from "./plan-show.usecase.js";
