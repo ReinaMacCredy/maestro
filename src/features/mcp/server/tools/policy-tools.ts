@@ -3,10 +3,8 @@ import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
 import { maxRiskClass } from "@/features/risk/index.js";
-import {
-  readCurrentContractWithBackfill,
-  type RiskClass,
-} from "@/features/task/index.js";
+import { readCurrentContractWithBackfill } from "@/v2/service/contract-helpers.js";
+import type { RiskClass } from "@/v2/types/product-spec.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { PolicyCheckInput } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";

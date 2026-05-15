@@ -20,3 +20,6 @@ export * from "./worktree-store.port.js";
 export * from "./git-worktree-store.adapter.js";
 export * from "./handoff-emitter.port.js";
 export * from "./fs-handoff-emitter.adapter.js";
+export * from "./contract-store.port.js";
+export * from "./run-state-store.port.js";
+export * from "./git-anchor.port.js";

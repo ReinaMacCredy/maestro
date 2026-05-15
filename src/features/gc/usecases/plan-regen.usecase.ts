@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { TaskStorePort, Task } from "@/features/task";
 import type { VerdictStorePort, Verdict } from "@/features/verdict";
-import type { SpecStorePort } from "@/features/spec";
+import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import type { EvidenceStorePort, EvidenceRow } from "@/features/evidence";
 import { fileExists, readText } from "@/shared/lib/fs.js";
 

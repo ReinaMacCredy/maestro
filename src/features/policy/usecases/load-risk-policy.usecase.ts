@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { readText } from "@/shared/lib/fs.js";
 import { parsePolicyYaml } from "@/shared/lib/yaml.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { RiskClass } from "@/features/task/index.js";
+import type { RiskClass } from "@/v2/types/product-spec.js";
 import { RISK_CLASS_ORDER } from "@/features/risk/index.js";
 import type { RiskPolicy, RiskPolicyRow } from "../domain/policy-types.js";
 import { DEFAULT_RISK_POLICY } from "../domain/risk-policy-defaults.js";

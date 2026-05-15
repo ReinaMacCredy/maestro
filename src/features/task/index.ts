@@ -56,15 +56,16 @@ export type {
 export type {
   ContractStorePort,
   ContractStoreQueryPort,
-} from "./ports/contract-store.port.js";
-export type { GitAnchorPort } from "./ports/git-anchor.port.js";
+} from "@/v2/repo/contract-store.port.js";
+export type { GitAnchorPort } from "@/v2/repo/git-anchor.port.js";
 export { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
 export { FsCandidateStoreAdapter } from "./adapters/fs-candidate-store.adapter.js";
 export { FsTaskContinuationStoreAdapter } from "./adapters/fs-task-continuation-store.adapter.js";
 export { FsTaskContinuationHistoryStoreAdapter } from "./adapters/fs-task-continuation-history-store.adapter.js";
+// Contract types are now canonical in @/v2/types/contract; these re-exports
+// keep existing @/features/task imports compiling during transition.
 export type {
   Contract,
-  RiskClass,
   ContractAmendment,
   ContractStatus,
   ContractScope,
@@ -79,16 +80,18 @@ export type {
   ContractOwnershipTransfer,
   AmendmentSnapshot,
   ContractConfigSnapshot,
-} from "./domain/contract/contract-types.js";
+  RunState,
+} from "@/v2/types/contract.js";
+// RiskClass canonical home is @/v2/types/product-spec.
+export type { RiskClass } from "@/v2/types/product-spec.js";
 export { generateContractAmendmentId } from "./domain/contract/contract-state.js";
-export type { RunState } from "./domain/run-state.js";
-export type { RunStateStorePort, RunStateDelta } from "./ports/run-state-store.port.js";
+export type { RunStateStorePort, RunStateDelta } from "@/v2/repo/run-state-store.port.js";
 export { FsRunStateStoreAdapter } from "./adapters/fs-run-state-store.adapter.js";
 export {
   checkCostBudget,
   type CostBudgetCheck,
   type CostBudgetExhaustionReason,
-} from "./usecases/check-cost-budget.js";
+} from "@/v2/service/check-cost-budget.js";
 
 export { createTask } from "./usecases/create-task.usecase.js";
 export { showTask } from "./usecases/show-task.usecase.js";
@@ -162,7 +165,7 @@ export type {
   LockContractInput,
 } from "./usecases/contract-workflows.usecase.js";
 
-export type { ContractVersionStorePort } from "./ports/contract-version-store.port.js";
+export type { ContractVersionStorePort } from "@/v2/repo/contract-store.port.js";
 export { FsContractVersionStoreAdapter } from "./adapters/fs-contract-version-store.adapter.js";
 export { proposeContract } from "./usecases/propose-contract.usecase.js";
 export { approveContract } from "./usecases/approve-contract.usecase.js";
@@ -174,4 +177,4 @@ export {
   readCurrentContractWithBackfill,
   readContractHistoryWithBackfill,
   readDraftContract,
-} from "./usecases/read-current-contract-with-backfill.js";
+} from "@/v2/service/contract-helpers.js";

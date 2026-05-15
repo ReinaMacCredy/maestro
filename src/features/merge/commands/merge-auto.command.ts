@@ -3,7 +3,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
-import { readCurrentContractWithBackfill } from "@/features/task/index.js";
+import { readCurrentContractWithBackfill } from "@/v2/service/contract-helpers.js";
 import { type Services } from "@/services.js";
 import { autoMergeEligible } from "../usecases/auto-merge-eligible.usecase.js";
 

@@ -1,8 +1,8 @@
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { compareRiskClass } from "@/features/risk/index.js";
-import type { RiskClass } from "@/features/task/index.js";
-import type { Contract } from "@/features/task/index.js";
-import type { Spec } from "@/features/spec/index.js";
+import type { RiskClass } from "@/v2/types/product-spec.js";
+import type { Contract } from "@/v2/types/contract.js";
+import type { Spec } from "@/shared/domain/legacy-spec/index.js";
 import type { PlanCheckFinding, PlanCheckResult, PlanInput } from "../domain/types.js";
 
 export interface CheckPlanInput {

@@ -1,4 +1,5 @@
-import type { CostBudgetExhaustionReason, RiskClass } from "@/features/task/index.js";
+import type { RiskClass } from "@/v2/types/product-spec.js";
+import type { CostBudgetExhaustionReason } from "@/v2/service/check-cost-budget.js";
 import type { VerdictReason } from "@/features/verdict/index.js";
 
 /**

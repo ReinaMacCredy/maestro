@@ -26,7 +26,7 @@ import {
   type WitnessLevel,
 } from "../domain/types.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
-import { readCurrentContractWithBackfill } from "@/features/task/index.js";
+import { readCurrentContractWithBackfill } from "@/v2/service/contract-helpers.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {

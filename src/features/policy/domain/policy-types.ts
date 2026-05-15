@@ -1,4 +1,4 @@
-import type { RiskClass } from "@/features/task/index.js";
+import type { RiskClass } from "@/v2/types/product-spec.js";
 import type { WitnessLevel } from "@/features/evidence/index.js";
 
 export type PolicyKind = "risk" | "autopilot" | "release" | "sensitive-paths" | "owners";

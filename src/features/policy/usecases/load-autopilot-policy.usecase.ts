@@ -8,7 +8,7 @@ import {
   type WitnessLevel,
 } from "@/features/evidence/index.js";
 import { RISK_CLASS_ORDER } from "@/features/risk/index.js";
-import type { RiskClass } from "@/features/task/index.js";
+import type { RiskClass } from "@/v2/types/product-spec.js";
 import type { AutopilotPolicy } from "../domain/policy-types.js";
 
 const AUTOPILOT_POLICY_REL_PATH = ".maestro/policies/autopilot.yaml";

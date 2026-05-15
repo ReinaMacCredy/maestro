@@ -1,4 +1,4 @@
-import type { RuntimeSignal } from "@/features/spec";
+import type { RuntimeSignal } from "@/shared/domain/legacy-spec/index.js";
 import type { RuntimeSignalResult } from "../domain/types.js";
 import type { RuntimeMonitorPort } from "../ports/monitor.port.js";
 

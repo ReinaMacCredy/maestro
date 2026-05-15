@@ -1,4 +1,4 @@
-import type { RuntimeSignalOperator } from "@/features/spec";
+import type { RuntimeSignalOperator } from "@/shared/domain/legacy-spec/index.js";
 
 export interface RuntimeSignalResult {
   readonly value: number;

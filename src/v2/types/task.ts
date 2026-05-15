@@ -29,6 +29,21 @@ export function generateTaskId(): TaskId {
 
 export const TASK_ID_PATTERN = /^tsk-[a-z0-9]+-[a-z0-9]+$/;
 
+/** v1 task IDs had the shape `tsk-<6 hex chars>`, e.g. `tsk-aabbcc`. */
+export const LEGACY_TASK_ID_PATTERN = /^tsk-[0-9a-f]{6}$/;
+
 export function isTaskId(value: unknown): value is TaskId {
   return typeof value === "string" && TASK_ID_PATTERN.test(value);
 }
+
+/** Matches either a v1 (6 hex) or v2 (`tsk-x-y`) task ID. */
+export function isAnyTaskId(value: unknown): value is string {
+  return (
+    typeof value === "string"
+    && (TASK_ID_PATTERN.test(value) || LEGACY_TASK_ID_PATTERN.test(value))
+  );
+}
+
+/** Combined regex matching both v1 and v2 task ID shapes.
+ *  Use in places that require a RegExp (e.g., assertSafeSegment). */
+export const ANY_TASK_ID_PATTERN = /^tsk-([0-9a-f]{6}|[a-z0-9]+-[a-z0-9]+)$/;
