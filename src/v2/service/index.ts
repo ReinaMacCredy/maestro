@@ -11,3 +11,4 @@ export * from "./task-verify.usecase.js";
 export * from "./task-ship.usecase.js";
 export * from "./plan-from-spec.usecase.js";
 export * from "./plan-show.usecase.js";
+export * from "./plan-decompose.usecase.js";
