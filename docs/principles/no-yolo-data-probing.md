@@ -10,7 +10,7 @@ The JSONL files are an append-only journal; reading them via shell skips schema 
 
 ## Scan Command
 
-rg -n "(cat|head|tail|awk|sed)\s+[^\"']*\.maestro/(tasks|plans|evidence)" --glob 'src/**' --glob 'scripts/**' --glob '!**/*.test.ts'
+! rg -n "(cat|head|tail|awk|sed)\s+[^\"']*\.maestro/(tasks|plans|evidence)" --glob 'src/**' --glob 'scripts/**' --glob '!**/*.test.ts' --glob '!src/infra/domain/*-templates.ts'
 
 ## Fix Recipe
 

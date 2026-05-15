@@ -10,7 +10,7 @@ Duplicating shared primitives across features drifts implementations apart and q
 
 ## Scan Command
 
-rg -n "^export (function|const) (generateId|appendJsonl|toIsoDate|kebabize)\b" --glob 'src/features/**' --glob '!src/shared/**'
+! rg -n "^export (function|const) (generateId|appendJsonl|toIsoDate|kebabize)\b" --glob 'src/features/**' --glob '!src/shared/**'
 
 ## Fix Recipe
 

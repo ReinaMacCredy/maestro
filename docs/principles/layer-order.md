@@ -10,7 +10,7 @@ Layer-order is the spine of the v2 architecture (ADR-0017). Mechanical enforceme
 
 ## Scan Command
 
-bun run lint:arch -- --reporter json
+bun run lint:arch
 
 ## Fix Recipe
 

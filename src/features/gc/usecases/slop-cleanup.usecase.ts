@@ -3,16 +3,27 @@ import {
   type ArchitectureRuleId,
   type ArchitectureViolation,
 } from "@/features/verify";
+import {
+  principlesScan,
+  type PrincipleScanFinding,
+} from "@/v2/service/principle-scan.usecase.js";
+import { buildV2Services } from "@/v2/providers/build-services.js";
+import type { PrinciplesStorePort } from "@/v2/repo/principles-store.port.js";
+import type { ProcessRunnerPort } from "@/v2/repo/process-runner.port.js";
 
 export interface SlopCleanupArgs {
   readonly projectRoot: string;
   readonly minSeverity?: "info" | "warn" | "error";
+  readonly principlesStore?: PrinciplesStorePort;
+  readonly processRunner?: ProcessRunnerPort;
 }
 
 export interface SlopFileGroup {
   readonly file: string;
   readonly violations: readonly ArchitectureViolation[];
-  readonly ruleIds: readonly ArchitectureRuleId[];
+  // ruleIds is widened from ArchitectureRuleId so principle slugs can appear
+  // alongside arch-lint rule ids in the same group (PR 29 rewire).
+  readonly ruleIds: readonly (ArchitectureRuleId | string)[];
 }
 
 export interface SlopCleanupResult {
@@ -21,6 +32,7 @@ export interface SlopCleanupResult {
   readonly bySeverity: Readonly<Record<"error" | "warn" | "info", number>>;
   readonly byRule: Readonly<Record<string, number>>;
   readonly groups: readonly SlopFileGroup[];
+  readonly principleFindings: readonly PrincipleScanFinding[];
 }
 
 const SEVERITY_RANK: Record<"info" | "warn" | "error", number> = {
@@ -37,20 +49,36 @@ export async function scanSlopCleanup(
     await checkArchitectureRules({ repoRoot: args.projectRoot })
   ).filter((v) => SEVERITY_RANK[v.severity] >= minRank);
 
+  const services = args.principlesStore && args.processRunner
+    ? {
+        principlesStore: args.principlesStore,
+        processRunner: args.processRunner,
+      }
+    : (() => {
+        const v2 = buildV2Services({ repoRoot: args.projectRoot });
+        return {
+          principlesStore: v2.principlesStore,
+          processRunner: v2.processRunner,
+        };
+      })();
+
+  const principleReport = await principlesScan({
+    principlesStore: services.principlesStore,
+    processRunner: services.processRunner,
+    repoRoot: args.projectRoot,
+  });
+
   const fileMap = new Map<string, ArchitectureViolation[]>();
+  const ruleIdsByFile = new Map<string, Set<string>>();
   for (const v of violations) {
     if (!v.file) continue;
     const list = fileMap.get(v.file) ?? [];
     list.push(v);
     fileMap.set(v.file, list);
+    const ids = ruleIdsByFile.get(v.file) ?? new Set<string>();
+    ids.add(v.ruleId);
+    ruleIdsByFile.set(v.file, ids);
   }
-
-  const groups: SlopFileGroup[] = [];
-  for (const [file, list] of fileMap) {
-    const ruleIds = Array.from(new Set(list.map((v) => v.ruleId))).sort();
-    groups.push({ file, violations: list, ruleIds });
-  }
-  groups.sort((a, b) => b.violations.length - a.violations.length);
 
   const bySeverity = { error: 0, warn: 0, info: 0 };
   const byRule: Record<string, number> = {};
@@ -59,12 +87,32 @@ export async function scanSlopCleanup(
     byRule[v.ruleId] = (byRule[v.ruleId] ?? 0) + 1;
   }
 
+  for (const finding of principleReport.findings) {
+    byRule[finding.principle_slug] = (byRule[finding.principle_slug] ?? 0) + 1;
+    bySeverity.error++;
+    if (finding.file) {
+      const list = fileMap.get(finding.file) ?? [];
+      fileMap.set(finding.file, list);
+      const ids = ruleIdsByFile.get(finding.file) ?? new Set<string>();
+      ids.add(finding.principle_slug);
+      ruleIdsByFile.set(finding.file, ids);
+    }
+  }
+
+  const groups: SlopFileGroup[] = [];
+  for (const [file, list] of fileMap) {
+    const ruleIds = Array.from(ruleIdsByFile.get(file) ?? new Set<string>()).sort();
+    groups.push({ file, violations: list, ruleIds });
+  }
+  groups.sort((a, b) => b.violations.length - a.violations.length);
+
   return {
-    totalViolations: violations.length,
+    totalViolations: violations.length + principleReport.findings.length,
     filesAffected: groups.length,
     bySeverity,
     byRule,
     groups,
+    principleFindings: principleReport.findings,
   };
 }
 
@@ -76,6 +124,11 @@ export function formatSlopCleanupLines(r: SlopCleanupResult): string[] {
   lines.push(
     `  by severity: ${r.bySeverity.error} error, ${r.bySeverity.warn} warn, ${r.bySeverity.info} info`,
   );
+  if (r.principleFindings.length > 0) {
+    lines.push(
+      `  principle findings: ${r.principleFindings.length} (${r.principleFindings.filter((f) => f.kind === "scan-error").length} scan-error)`,
+    );
+  }
   if (Object.keys(r.byRule).length > 0) {
     lines.push("");
     lines.push("By rule:");

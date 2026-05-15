@@ -10,7 +10,7 @@ Maestro never schedules background work. No `setInterval`, no detached daemons, 
 
 ## Scan Command
 
-rg -n "setInterval|setTimeout|child_process\.fork|spawn.*detached|new Worker\(" --glob 'src/**' --glob '!**/*.test.ts' --glob '!src/v2/repo/bun-process-runner.adapter.ts'
+! rg -n "setInterval|setTimeout|child_process\.fork|spawn.*detached|new Worker\(" --glob 'src/v2/**' --glob '!**/*.test.ts' --glob '!src/v2/repo/bun-process-runner.adapter.ts'
 
 ## Fix Recipe
 

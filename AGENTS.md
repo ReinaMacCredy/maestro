@@ -16,10 +16,11 @@ Read `docs/harness-positioning.md` for the principle-to-primitive mapping.
 ## Maestro v2 (in flight)
 
 Maestro v2 is a layered rewrite landing on `main` per ADR-0007 (big-bang)
-and ADR-0013 (greenfield branch inlined). Phases 1 and 2 — the v2 spine
-and the heavy-mode plan lifecycle — are feature-complete and dogfooded;
-see `docs/phase-1-done.md` and `docs/phase-2-done.md` for the
-transition-evidence records.
+and ADR-0013 (greenfield branch inlined). Phases 1, 1.5, and 2 — the v2
+spine, the principles + correction-recording bridge, and the heavy-mode
+plan lifecycle — are feature-complete and dogfooded; see
+`docs/phase-1-done.md`, `docs/phase-1.5-done.md`, and
+`docs/phase-2-done.md` for the transition-evidence records.
 
 - **Plan:** `docs/v2-master-plan.md` is the source of truth. Layered
   architecture rules live in `docs/architecture.yaml` (loaded by the
@@ -45,6 +46,14 @@ transition-evidence records.
   `plan from-spec`. `maestro-plan` documents the v2 heavy-mode handoff
   (`plan from-spec` -> `plan decompose --file -`); `maestro-verify`
   documents the 4-exit-code routing from `task verify`.
+- **Principles bridge (Phase 1.5):** four default principles ship at
+  `docs/principles/*.md` (`prefer-shared-utils`, `no-yolo-data-probing`,
+  `passive-harness`, `layer-order`). `maestro principle promote <evd-id>`
+  materializes new principle scaffolds from `lint-violation` evidence
+  rows; `maestro setup migrate-corrections` moves v1
+  `.maestro/memory/corrections/*.json` into `docs/principles/legacy/`;
+  `gc slop-cleanup` folds principle findings into the same per-file
+  report it already emits for arch-lint violations.
 
 ## STRUCTURE
 ```text
