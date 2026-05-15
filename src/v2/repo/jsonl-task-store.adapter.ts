@@ -44,6 +44,7 @@ export class JsonlTaskStore implements TaskStorePort {
         title: input.title,
         state: input.state,
         spec_path: input.spec_path,
+        plan_id: input.plan_id,
         blocked_by: input.blocked_by ?? [],
         created_at: now,
         updated_at: now,
@@ -81,6 +82,11 @@ export class JsonlTaskStore implements TaskStorePort {
   async listByState(state: TaskState): Promise<readonly Task[]> {
     const tasks = await this.#read();
     return tasks.filter((t) => t.state === state);
+  }
+
+  async listByPlanId(plan_id: string): Promise<readonly Task[]> {
+    const tasks = await this.#read();
+    return tasks.filter((t) => t.plan_id === plan_id);
   }
 
   #mutate<T>(fn: (tasks: Task[]) => Promise<T>): Promise<T> {

@@ -83,6 +83,23 @@ describe("JsonlTaskStore", () => {
     expect(doing.map((t) => t.slug)).toEqual(["c"]);
   });
 
+  it("listByPlanId filters tasks by their plan_id linkage", async () => {
+    const store = makeStore(root);
+    await store.create({ slug: "x", title: "X", state: "draft", plan_id: "pln-1" });
+    await store.create({ slug: "y", title: "Y", state: "draft", plan_id: "pln-1" });
+    await store.create({ slug: "z", title: "Z", state: "draft", plan_id: "pln-2" });
+    await store.create({ slug: "no-plan", title: "Solo", state: "draft" });
+
+    const pln1 = await store.listByPlanId("pln-1");
+    expect(pln1.map((t) => t.slug).sort()).toEqual(["x", "y"]);
+
+    const pln2 = await store.listByPlanId("pln-2");
+    expect(pln2.map((t) => t.slug)).toEqual(["z"]);
+
+    const unknown = await store.listByPlanId("pln-missing");
+    expect(unknown).toEqual([]);
+  });
+
   it("serializes concurrent updates without losing writes", async () => {
     const store = makeStore(root);
     const created = await store.create({ slug: "x", title: "X", state: "draft" });

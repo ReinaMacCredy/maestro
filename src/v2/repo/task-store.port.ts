@@ -6,6 +6,7 @@ export interface CreateTaskInput {
   readonly title: string;
   readonly state: TaskState;
   readonly spec_path?: string;
+  readonly plan_id?: string;
   readonly blocked_by?: readonly string[];
 }
 
@@ -19,6 +20,7 @@ export interface TaskStorePort {
   update(id: TaskId, patch: TaskPatch): Promise<Task>;
   list(): Promise<readonly Task[]>;
   listByState(state: TaskState): Promise<readonly Task[]>;
+  listByPlanId(plan_id: string): Promise<readonly Task[]>;
 }
 
 export class TaskNotFoundError extends Error {

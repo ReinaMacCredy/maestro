@@ -70,6 +70,9 @@ function makeTaskStore(seed: readonly Task[] = []): TaskStorePort {
     async listByState(state: TaskState) {
       return [...tasks.values()].filter((t) => t.state === state);
     },
+    async listByPlanId(plan_id: string) {
+      return [...tasks.values()].filter((t) => t.plan_id === plan_id);
+    },
   };
 }
 
