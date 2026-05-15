@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { scoreSpec } from "@/features/spec/usecases/score-spec.usecase.js";
-import type { Spec } from "@/features/spec/domain/types.js";
+import { scoreSpec } from "@/shared/domain/legacy-spec/index.js";
+import type { Spec } from "@/shared/domain/legacy-spec/index.js";
 
 function makeSpec(overrides: Partial<Pick<Spec, "acceptance_criteria" | "non_goals">>): Spec {
   return {

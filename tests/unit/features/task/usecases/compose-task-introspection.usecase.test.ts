@@ -9,7 +9,7 @@ import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-sto
 import { FsContractVersionStoreAdapter } from "@/features/task/adapters/fs-contract-version-store.adapter.js";
 import { FsRunStateStoreAdapter } from "@/features/task/adapters/fs-run-state-store.adapter.js";
 import { FsEvidenceStoreAdapter, recordEvidence } from "@/features/evidence";
-import { FsSpecStoreAdapter } from "@/features/spec";
+import { FsSpecStoreAdapter } from "@/shared/domain/legacy-spec";
 import type { Verdict, VerdictStorePort } from "@/features/verdict";
 import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import {

@@ -14,7 +14,7 @@ import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/poli
 import type { RiskServices } from "@/features/risk/services.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
 import type { Contract } from "@/features/task/index.js";
-import type { SpecStorePort } from "@/features/spec/ports/storage.js";
+import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import { mockContractStore } from "../../../../helpers/mocks.js";
 
 // ─── Console capture ──────────────────────────────────────────────────────────

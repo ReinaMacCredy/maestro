@@ -11,7 +11,7 @@ import type { ContractVersionStorePort } from "@/features/task/ports/contract-ve
 import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
 import type { RunStateStorePort } from "@/features/task/ports/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
-import type { SpecStorePort } from "@/features/spec/ports/storage.js";
+import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { GithubApiPort } from "@/features/ci/ports/github-api.port.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";

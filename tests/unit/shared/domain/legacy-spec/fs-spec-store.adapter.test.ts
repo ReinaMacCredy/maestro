@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsSpecStoreAdapter, coerceSpec } from "@/features/spec/adapters/fs-spec-store.adapter.js";
-import type { Spec } from "@/features/spec/domain/types.js";
+import { FsSpecStoreAdapter, coerceSpec } from "@/shared/domain/legacy-spec/index.js";
+import type { Spec } from "@/shared/domain/legacy-spec/index.js";
 
 // ---------------------------------------------------------------------------
 // coerceSpec unit tests (in-memory, no filesystem)

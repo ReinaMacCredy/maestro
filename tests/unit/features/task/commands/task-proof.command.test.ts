@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { registerTaskProofCommand } from "@/features/task/commands/task-proof.command.js";
 import { mockEvidenceStore, mockTaskStore, mockContractStore } from "../../../../helpers/mocks.js";
 import type { EvidenceStorePort, EvidenceRow } from "@/features/evidence/index.js";
-import type { SpecStorePort, Spec } from "@/features/spec/index.js";
+import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec/index.js";
 import type { TaskStorePort, Task, Contract } from "@/features/task";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";

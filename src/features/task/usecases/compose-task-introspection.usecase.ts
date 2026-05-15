@@ -4,7 +4,7 @@ import type { RunStateStorePort } from "../ports/run-state-store.port.js";
 import type { TaskContinuationHistoryPort } from "../ports/task-continuation-history.port.js";
 import type { TaskContinuationStorePort } from "../ports/task-continuation-store.port.js";
 import type { TaskQueryPort } from "../ports/task-store.port.js";
-import type { Spec, SpecStorePort } from "@/features/spec";
+import type { Spec, LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec";
 import type { Verdict, VerdictStorePort } from "@/features/verdict";
 import type {
   EvidenceRow,

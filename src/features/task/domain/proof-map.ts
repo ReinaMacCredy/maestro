@@ -1,4 +1,4 @@
-import type { Spec } from "@/features/spec/index.js";
+import type { Spec } from "@/shared/domain/legacy-spec/index.js";
 import type { Contract } from "@/features/task/index.js";
 import type { EvidenceRow, EvidenceKind, WitnessLevel } from "@/features/evidence/index.js";
 

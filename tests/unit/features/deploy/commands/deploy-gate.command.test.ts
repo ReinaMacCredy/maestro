@@ -7,8 +7,7 @@ import type { EvidenceRow, DeployReadinessPayload } from "@/features/evidence/in
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
 import type { Task } from "@/features/task";
-import type { SpecStorePort } from "@/features/spec/index.js";
-import type { Spec } from "@/features/spec/index.js";
+import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec/index.js";
 import type { Owners } from "@/features/policy/index.js";
 
 // ── Minimal task stub ──────────────────────────────────────────────────────

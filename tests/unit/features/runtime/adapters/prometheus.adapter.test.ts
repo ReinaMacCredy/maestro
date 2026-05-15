@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { PrometheusRuntimeMonitor } from "@/features/runtime/adapters/prometheus.adapter.js";
-import type { RuntimeSignal } from "@/features/spec";
+import type { RuntimeSignal } from "@/shared/domain/legacy-spec";
 
 function makeSignal(overrides: Partial<RuntimeSignal> = {}): RuntimeSignal {
   return {

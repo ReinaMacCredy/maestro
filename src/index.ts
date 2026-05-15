@@ -30,7 +30,6 @@ import { registerHandoffCommand } from "./features/handoff/index.js";
 import { registerTaskCommand } from "./features/task/index.js";
 import { registerBundleCommand } from "./features/bundle/index.js";
 import { registerEvidenceCommand } from "./features/evidence/index.js";
-import { registerSpecCommand } from "./features/spec/index.js";
 import { registerContractL2Command } from "./features/task/commands/contract-l2.command.js";
 import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
 import { registerVerdictCommand } from "./features/verdict/index.js";
@@ -93,10 +92,7 @@ registerPrincipleV2Commands(program, {
 });
 registerBundleCommand(program, deps);
 registerEvidenceCommand(program, deps);
-registerSpecCommand(program, deps);
-// v2 surface: attaches `spec new` and `spec validate` subcommands to the
-// existing `spec` parent command. Coexists with v1 spec subcommands on the
-// harness-os branch; v1 spec verbs are removed in Phase 4.
+// v2 spec surface: spec new + spec validate
 registerSpecV2Commands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });

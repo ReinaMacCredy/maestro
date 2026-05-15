@@ -6,7 +6,8 @@ import { buildHandoffServices, type HandoffServices } from "./features/handoff/s
 import { buildTaskServices, type TaskServices } from "./features/task/services.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
 import { buildEvidenceServices, type EvidenceServices } from "./features/evidence/services.js";
-import { buildSpecServices, type SpecServices } from "./features/spec/services.js";
+import { FsSpecStoreAdapter } from "@/shared/domain/legacy-spec/index.js";
+import type { LegacySpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import { buildPolicyServices, type PolicyServices } from "./features/policy/services.js";
 import { buildVerifyServices, type VerifyServices } from "./features/verdict/services.js";
 import { buildRiskServices, type RiskServices } from "./features/risk/services.js";
@@ -26,7 +27,6 @@ export interface Services extends
   TaskServices,
   BundleServices,
   EvidenceServices,
-  SpecServices,
   PolicyServices,
   VerifyServices,
   RiskServices,
@@ -36,6 +36,7 @@ export interface Services extends
   MergeServices,
   DeployServices,
   RuntimeServices {
+  readonly specStore: LegacySpecStorePort;
   readonly projectRoot: string;
 }
 
@@ -52,7 +53,7 @@ export function createServices(
     ...buildTaskServices(projectDir),
     ...buildBundleServices(),
     ...buildEvidenceServices(projectDir),
-    ...buildSpecServices(projectDir),
+    specStore: new FsSpecStoreAdapter(projectDir),
     ...buildPolicyServices(projectDir),
     ...buildVerifyServices(projectDir),
     ...buildRiskServices(),

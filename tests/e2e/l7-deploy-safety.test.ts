@@ -1,8 +1,7 @@
 /**
  * L7.E2E — Compiled-binary L7 deploy-safety flow end-to-end.
  *
- * Covers 12 scenarios:
- *   S1  Spec v1 → v2 read migration — v1 file on disk; spec show returns v2 shape; file unchanged.
+ * Covers 11 scenarios:
  *   S2  Witnessed rollback (local) — deploy rollback exits 0; rollback-exercised Evidence at witnessed-by-maestro.
  *   S3  Witnessed rollback (CI) — same but GITHUB_ACTIONS=true; witness is witnessed-by-ci.
  *   S4  Deploy gate happy path — all 4 checks pass; gate=pass; exit 0.
@@ -128,27 +127,6 @@ async function writeSpec(
 ): Promise<void> {
   const specsDir = join(dir, ".maestro", "specs");
   await mkdir(specsDir, { recursive: true });
-  await writeFile(join(specsDir, `${missionId}.json`), JSON.stringify(spec, null, 2));
-}
-
-/**
- * Write a v1 Spec JSON (no runtime_signals, no rollout_plan) to the spec store path.
- * The schema_version field is 1 so migration is triggered at read time.
- */
-async function writeSpecV1(
-  dir: string,
-  missionId: string,
-): Promise<void> {
-  const specsDir = join(dir, ".maestro", "specs");
-  await mkdir(specsDir, { recursive: true });
-  const spec = {
-    schema_version: 1,
-    mission_id: missionId,
-    acceptance_criteria: [],
-    non_goals: [],
-    created_at: "2026-01-01T00:00:00.000Z",
-    updated_at: "2026-01-01T00:00:00.000Z",
-  };
   await writeFile(join(specsDir, `${missionId}.json`), JSON.stringify(spec, null, 2));
 }
 
@@ -421,41 +399,6 @@ function startPrometheusFixture(metricValue: string): {
 // ─── Scenarios ─────────────────────────────────────────────────────────────────
 
 describe("L7 deploy-safety flow (compiled binary)", () => {
-  // ── S1: Spec v1 → v2 read migration ─────────────────────────────────────────
-
-  it(
-    "S1 Spec v1 → v2 read: CLI outputs schema_version:2; file on disk stays at schema_version:1",
-    async () => {
-      const dir = await setupRepo();
-      tempDirs.push(dir);
-
-      const missionId = "2026-01-l7-s1";
-      await writeSpecV1(dir, missionId);
-
-      // Run spec show — should succeed (v1 migrated at read time)
-      const result = await runCompiled(
-        ["spec", "show", "--mission", missionId, "--json"],
-        dir,
-      );
-
-      expect(result.exitCode).toBe(0);
-      const spec = expectJson<Record<string, unknown>>(result);
-
-      // Output reflects v2 shape
-      expect(spec["schema_version"]).toBe(2);
-      expect(spec["mission_id"]).toBe(missionId);
-      expect(Array.isArray(spec["runtime_signals"])).toBe(true);
-      expect((spec["runtime_signals"] as unknown[]).length).toBe(0);
-
-      // File on disk is NOT rewritten — still has schema_version: 1
-      const specsDir = join(dir, ".maestro", "specs");
-      const diskContent = await readFile(join(specsDir, `${missionId}.json`), "utf8");
-      const diskSpec = JSON.parse(diskContent) as Record<string, unknown>;
-      expect(diskSpec["schema_version"]).toBe(1);
-    },
-    SLOW_CLI_TIMEOUT_MS,
-  );
-
   // ── S2: Witnessed rollback (local) ───────────────────────────────────────────
 
   it(

@@ -17,8 +17,8 @@ import { readdir } from "node:fs/promises";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
-import type { Spec, RuntimeSignal, RuntimeSignalThreshold, RolloutPlan, CanaryPlan } from "../domain/types.js";
-import type { SpecStorePort } from "../ports/storage.js";
+import type { Spec, RuntimeSignal, RuntimeSignalThreshold, RolloutPlan, CanaryPlan } from "./types.js";
+import type { LegacySpecStorePort } from "./spec-store.port.js";
 
 const SPECS_DIR = "specs";
 const CURRENT_SCHEMA_VERSION = 2;
@@ -29,7 +29,7 @@ const CURRENT_SCHEMA_VERSION = 2;
  */
 const MISSION_ID_PATTERN = /^[\w][\w.-]*$/;
 
-export class FsSpecStoreAdapter implements SpecStorePort {
+export class FsSpecStoreAdapter implements LegacySpecStorePort {
   constructor(private readonly baseDir: string) {}
 
   private dir(): string {

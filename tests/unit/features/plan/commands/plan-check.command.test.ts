@@ -6,7 +6,7 @@ import { Command } from "commander";
 import { registerPlanCheckCommand } from "@/features/plan/commands/plan-check.command.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { EvidenceRow, EvidenceStorePort } from "@/features/evidence/index.js";
-import type { SpecStorePort } from "@/features/spec/ports/storage.js";
+import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import type { Contract } from "@/features/task/index.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
 
