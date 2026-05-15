@@ -3,3 +3,4 @@ export * from "./task-state.js";
 export * from "./exec-plan-state.js";
 export * from "./product-spec.js";
 export * from "./spec-id.js";
+export * from "./task.js";
