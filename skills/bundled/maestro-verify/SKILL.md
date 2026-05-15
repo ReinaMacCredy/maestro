@@ -23,6 +23,13 @@ the pre-claim ritual.
 
 Run this loop before marking any task done. Steps are ordered; do not skip.
 
+> **v2 path (heavy-mode plans and architecture-linted tasks):** for tasks
+> created via `maestro task from-spec` or `maestro plan decompose`, use
+> `maestro task verify <id>` for the lint pass (PASS auto-advances
+> `verifying -> ready`) and `maestro task ship <id>` to close. The v1
+> Trust Verifier verbs below remain for richer ProofMap/AI-review flows;
+> v2 trims to the 4-exit-code routing in step 6.
+
 1. **Plan** — write a plan file and run
    `maestro plan check --task <id> --plan-file <path>`. Address
    `scope-widens`, `missing-proof`, and `risk-class-too-low` before writing
@@ -36,9 +43,18 @@ Run this loop before marking any task done. Steps are ordered; do not skip.
    maestro evidence record --task <id> --command "bun test" --exit 0
    ```
 
-3. **Verify** — `maestro task verify --task <id>`. Address every `error`
-   finding. The 8 deterministic checks and architecture-lint rules are
-   documented in `reference/trust-verifier.md`.
+3. **Verify** — `maestro task verify <id>` (v2) or
+   `maestro task verify --task <id>` (v1). Address every `error` finding.
+   The 8 deterministic checks and architecture-lint rules are documented
+   in `reference/trust-verifier.md`.
+
+   To record an explicit human verdict instead of running lints, pass
+   `--verdict {human,block} --reason <text>`:
+
+   - `--verdict human` keeps the task at `verifying` (awaiting review),
+     exit code `2`.
+   - `--verdict block` transitions the task to `blocked` with
+     `block_reason`, exit code `3`.
 
 4. **ProofMap** — `maestro task proof --task <id>`. Every criterion must be
    covered at the required witness level. Coverage rules:
@@ -48,12 +64,14 @@ Run this loop before marking any task done. Steps are ordered; do not skip.
    cost-budget, AI Reviewer protocol (Rule 1), and threat-model production:
    `reference/verdict.md`.
 
-6. **Branch on exit code:**
-   - `0` PASS — claim the task done
-     (`maestro task update <id> --status completed --reason "..."`)
-   - `1` FAIL — fix the cited findings, loop back to step 3
-   - `2` HUMAN — run `maestro handoff create` and stop
-   - `3` BLOCK — stop, surface the reason to the user
+6. **Branch on exit code (v1 verdict request OR v2 task verify):**
+   - `0` PASS — v2: auto-advanced to `ready`; run `maestro task ship <id>`
+     to close. v1: `maestro task update <id> --status completed --reason "..."`.
+   - `1` FAIL — fix the cited findings, loop back to step 3.
+   - `2` HUMAN — surface to the user. v2: the task stays at `verifying`
+     with the reason recorded; v1: `maestro handoff create` and stop.
+   - `3` BLOCK — stop. v2: the task is now `blocked` with `block_reason`;
+     v1: surface the reason to the user.
 
 If retries are accumulating before step 5, run
 `maestro task budget --task <id>` to check consumption

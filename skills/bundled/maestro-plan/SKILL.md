@@ -200,7 +200,34 @@ Proposing `low` for any of the above is futile — Maestro will raise it and the
 
 ## Hand off cleanly
 
-When `.maestro/` is present in the cwd or an ancestor (maestro project), automatically transition to execution:
+When `.maestro/` is present in the cwd or an ancestor (maestro project), automatically transition to execution.
+
+### v2 heavy-mode path (preferred for new specs)
+
+When the plan is for a **heavy-mode** product-spec (`.maestro/specs/<slug>.md` with `mode: heavy` in the YAML frontmatter — typically authored via `maestro-design`), use the v2 plan lifecycle:
+
+1. **Promote the spec to a plan.** Run `maestro plan from-spec .maestro/specs/<slug>.md` to create an `ExecPlan` in `specified`. Capture the returned `pln-...` id.
+
+2. **Decompose into child tasks.** Emit a JSON array of `{title, slug, spec_path?}` task objects (one per phase or vertical slice) and pipe it to `maestro plan decompose <pln-id> --file -`. The CLI writes each child task with `plan_id` set and transitions the plan `specified -> planned`.
+
+3. **Start work.** The plan auto-advances `planned -> in-progress` on the first `maestro claim <tsk-id>`; it auto-advances to `completed` when every child reaches `shipped` or `abandoned` (ADR-0011). No manual `plan start` or `plan complete` verb exists.
+
+4. **Load the task skill.** Invoke the `Skill` tool with `skill: "maestro-task"` so execution continues there.
+
+Example v2 batch (piped to `plan decompose --file -`):
+```json
+[
+  { "title": "Scaffold feature X", "slug": "scaffold-feature-x" },
+  { "title": "Implement core use-case", "slug": "impl-feature-x-core" },
+  { "title": "Add unit + integration tests", "slug": "test-feature-x" }
+]
+```
+
+The batch is validated atomically (no duplicate slugs within the batch, no collisions with existing tasks) before any task is written.
+
+### v1 legacy path (light-mode or non-spec plans)
+
+When the plan does not come from a heavy-mode product-spec, use the legacy v1 batch verb:
 
 1. **Convert the plan to a task batch.** Map each phase to a task JSON object with `name`, `title`, `description`, `type`, `priority`, and `blockedBy` for sequencing. Top-level tasks require a `slug` (e.g., `implement/feature-x`); step tasks use `parent` instead.
 

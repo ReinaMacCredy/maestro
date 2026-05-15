@@ -34,6 +34,7 @@ describe("Edge Case 5: skill-binary drift detection", () => {
       "setup", "qa",
       "qa lint", "qa typecheck", "qa test", "qa run",
       "intake", "doctor", "memory-correct",
+      "claim", "block", "abandon", "ship", "verify",
     ]) knownVerbs.add(v);
     const report = checkSkillBinaryParity({ knownVerbs });
     // No findings whose first segment is missing from knownVerbs

@@ -35,6 +35,7 @@ describe("checkSkillBinaryParity", () => {
       "bundle inspect", "mission show", "mission validate",
       "setup", "setup check", "setup languages",
       "memory-correct", "memory-recall", "memory-search", "memory-learn",
+      "claim", "block", "abandon", "ship",
     ]) {
       allVerbs.add(v);
     }

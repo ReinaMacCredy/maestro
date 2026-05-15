@@ -3,3 +3,22 @@
 {"id":"evd-mp6x80mg-wd4wdo","kind":"transition","timestamp":"2026-05-15T12:56:06.952Z","task_id":"tsk-mp6x70og-zflvrp","from_state":"claimed","to_state":"verifying","trigger_verb":"task:verify"}
 {"id":"evd-mp6x80mz-qgwtv7","kind":"transition","timestamp":"2026-05-15T12:56:06.971Z","task_id":"tsk-mp6x70og-zflvrp","from_state":"verifying","to_state":"ready","trigger_verb":"task:verify","verdict":"PASS"}
 {"id":"evd-mp6x84xg-019wtu","kind":"transition","timestamp":"2026-05-15T12:56:12.532Z","task_id":"tsk-mp6x70og-zflvrp","from_state":"ready","to_state":"shipped","trigger_verb":"task:ship","verdict":"PASS"}
+{"id":"evd-mp6zpjh2-id2ywk","kind":"transition","timestamp":"2026-05-15T14:05:43.766Z","plan_id":"pln-mp6zpjh2-5gijnm","from_state":null,"to_state":"specified","trigger_verb":"plan:from-spec"}
+{"id":"evd-mp6zpurn-6h00wy","kind":"transition","timestamp":"2026-05-15T14:05:58.403Z","task_id":"tsk-mp6zpurn-u5u8c1","from_state":null,"to_state":"draft","trigger_verb":"task:from-spec"}
+{"id":"evd-mp6zpuro-ufsuk7","kind":"transition","timestamp":"2026-05-15T14:05:58.404Z","task_id":"tsk-mp6zpuro-oupbmt","from_state":null,"to_state":"draft","trigger_verb":"task:from-spec"}
+{"id":"evd-mp6zpuro-1szxlg","kind":"transition","timestamp":"2026-05-15T14:05:58.404Z","task_id":"tsk-mp6zpuro-4nsjmj","from_state":null,"to_state":"draft","trigger_verb":"task:from-spec"}
+{"id":"evd-mp6zpurp-nijckz","kind":"transition","timestamp":"2026-05-15T14:05:58.405Z","plan_id":"pln-mp6zpjh2-5gijnm","from_state":"specified","to_state":"planned","trigger_verb":"plan:decompose"}
+{"id":"evd-mp6zq2nq-m5o7gu","kind":"transition","timestamp":"2026-05-15T14:06:08.630Z","task_id":"tsk-mp6zpurn-u5u8c1","from_state":"draft","to_state":"claimed","trigger_verb":"task:claim"}
+{"id":"evd-mp6zq2nr-4hfgym","kind":"transition","timestamp":"2026-05-15T14:06:08.631Z","plan_id":"pln-mp6zpjh2-5gijnm","from_state":"planned","to_state":"in-progress","trigger_verb":"plan:auto-start"}
+{"id":"evd-mp6zq833-seeqnj","kind":"transition","timestamp":"2026-05-15T14:06:15.663Z","task_id":"tsk-mp6zpurn-u5u8c1","from_state":"claimed","to_state":"verifying","trigger_verb":"task:verify"}
+{"id":"evd-mp6zq83g-6pz3s1","kind":"transition","timestamp":"2026-05-15T14:06:15.676Z","task_id":"tsk-mp6zpurn-u5u8c1","from_state":"verifying","to_state":"ready","trigger_verb":"task:verify","verdict":"PASS"}
+{"id":"evd-mp6zqcv0-2dj752","kind":"transition","timestamp":"2026-05-15T14:06:21.852Z","task_id":"tsk-mp6zpurn-u5u8c1","from_state":"ready","to_state":"shipped","trigger_verb":"task:ship","verdict":"PASS"}
+{"id":"evd-mp6zqhxg-9kklmu","kind":"transition","timestamp":"2026-05-15T14:06:28.420Z","task_id":"tsk-mp6zpuro-oupbmt","from_state":"draft","to_state":"claimed","trigger_verb":"task:claim"}
+{"id":"evd-mp6zqi17-kppc2g","kind":"transition","timestamp":"2026-05-15T14:06:28.555Z","task_id":"tsk-mp6zpuro-oupbmt","from_state":"claimed","to_state":"verifying","trigger_verb":"task:verify"}
+{"id":"evd-mp6zqi18-6yki6k","kind":"transition","timestamp":"2026-05-15T14:06:28.556Z","task_id":"tsk-mp6zpuro-oupbmt","from_state":"verifying","to_state":"verifying","trigger_verb":"task:verify","verdict":"HUMAN","reason":"needs UX review before lint pass"}
+{"id":"evd-mp6zqnhg-pme7s0","kind":"transition","timestamp":"2026-05-15T14:06:35.620Z","task_id":"tsk-mp6zpuro-4nsjmj","from_state":"draft","to_state":"claimed","trigger_verb":"task:claim"}
+{"id":"evd-mp6zqnl9-eyy1iy","kind":"transition","timestamp":"2026-05-15T14:06:35.757Z","task_id":"tsk-mp6zpuro-4nsjmj","from_state":"claimed","to_state":"verifying","trigger_verb":"task:verify"}
+{"id":"evd-mp6zqnla-xhzgsa","kind":"transition","timestamp":"2026-05-15T14:06:35.758Z","task_id":"tsk-mp6zpuro-4nsjmj","from_state":"verifying","to_state":"blocked","trigger_verb":"task:verify","verdict":"BLOCK","reason":"upstream API still unavailable"}
+{"id":"evd-mp6zqyra-rr6gs7","kind":"transition","timestamp":"2026-05-15T14:06:50.230Z","task_id":"tsk-mp6zpuro-oupbmt","from_state":"verifying","to_state":"abandoned","trigger_verb":"task:abandon","reason":"deferred to Phase 1.5 backlog"}
+{"id":"evd-mp6zqyuz-8e1ck5","kind":"transition","timestamp":"2026-05-15T14:06:50.363Z","task_id":"tsk-mp6zpuro-4nsjmj","from_state":"blocked","to_state":"abandoned","trigger_verb":"task:abandon","reason":"deferred to Phase 1.5 backlog"}
+{"id":"evd-mp6zqyv0-xgiqv0","kind":"transition","timestamp":"2026-05-15T14:06:50.364Z","plan_id":"pln-mp6zpjh2-5gijnm","from_state":"in-progress","to_state":"completed","trigger_verb":"plan:auto-complete"}

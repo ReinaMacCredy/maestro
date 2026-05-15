@@ -16,9 +16,10 @@ Read `docs/harness-positioning.md` for the principle-to-primitive mapping.
 ## Maestro v2 (in flight)
 
 Maestro v2 is a layered rewrite landing on `main` per ADR-0007 (big-bang)
-and ADR-0013 (greenfield branch inlined). Phase 1 — the v2 spine — is
-feature-complete and dogfooded; see `docs/phase-1-done.md` for the
-transition-evidence record.
+and ADR-0013 (greenfield branch inlined). Phases 1 and 2 — the v2 spine
+and the heavy-mode plan lifecycle — are feature-complete and dogfooded;
+see `docs/phase-1-done.md` and `docs/phase-2-done.md` for the
+transition-evidence records.
 
 - **Plan:** `docs/v2-master-plan.md` is the source of truth. Layered
   architecture rules live in `docs/architecture.yaml` (loaded by the
@@ -27,14 +28,23 @@ transition-evidence record.
 - **Verbs live now:** `maestro spec new`, `maestro spec validate`,
   `maestro task from-spec`, `maestro task claim` (+ hot-path `claim`),
   `maestro task block` (+ `block`), `maestro task abandon` (+ `abandon`),
-  `maestro task verify` (+ `verify`), `maestro task ship` (+ `ship`),
-  and `bun run lint:arch` (v2 runner; `lint:arch:v1` keeps the v1
-  runner reachable until Phase 4 removal).
+  `maestro task verify` (+ `verify`; `--verdict {human,block} --reason`
+  exits 2 or 3), `maestro task ship` (+ `ship`), `maestro plan from-spec`,
+  `maestro plan decompose <id> --file <path|->`, `maestro plan show`, and
+  `bun run lint:arch` (v2 runner; `lint:arch:v1` keeps the v1 runner
+  reachable until Phase 4 removal).
 - **State + storage:** v2 task state machine in `src/v2/types/task-state.ts`;
-  append-only evidence in `.maestro/evidence/<date>.jsonl`; v2 tasks in
-  `.maestro/tasks/tasks.v2.jsonl` (v1 `tasks.jsonl` is unchanged).
-- **Skill:** `skills/bundled/maestro-design` runs the grill protocol
-  from ADR-0016 to author product-specs before `task from-spec`.
+  v2 plan state machine in `src/v2/types/exec-plan-state.ts`; append-only
+  evidence in `.maestro/evidence/<date>.jsonl`; v2 tasks in
+  `.maestro/tasks/tasks.v2.jsonl`; v2 plans in `.maestro/plans/plans.v2.jsonl`
+  (v1 `tasks.jsonl` is unchanged). Plans auto-advance off task transitions
+  per ADR-0011 (`plan:auto-start` on first claim, `plan:auto-complete` when
+  every child is terminal).
+- **Skill:** `skills/bundled/maestro-design` runs the grill protocol from
+  ADR-0016 to author product-specs before `task from-spec` or
+  `plan from-spec`. `maestro-plan` documents the v2 heavy-mode handoff
+  (`plan from-spec` -> `plan decompose --file -`); `maestro-verify`
+  documents the 4-exit-code routing from `task verify`.
 
 ## STRUCTURE
 ```text
