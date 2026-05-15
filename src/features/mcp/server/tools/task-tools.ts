@@ -4,12 +4,12 @@ import {
   claimTask,
   createTask,
   listTasks,
+  planTasks,
   unblockTasks,
+  updateTask,
+  type BatchInput,
   type ListTasksFilters,
 } from "@/features/task/index.js";
-import { planTasks } from "@/features/task/usecases/plan-tasks.usecase.js";
-import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
-import type { BatchInput } from "@/features/task/domain/task-batch-types.js";
 import { summarizeTask } from "@/shared/lib/projection.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
