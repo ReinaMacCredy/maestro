@@ -5,3 +5,4 @@ export * from "./product-spec.js";
 export * from "./spec-id.js";
 export * from "./task.js";
 export * from "./exec-plan.js";
+export * from "./principle.js";

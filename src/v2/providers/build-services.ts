@@ -21,6 +21,14 @@ import {
   JsonlExecPlanStore,
   type ExecPlanStorePort,
 } from "../repo/jsonl-exec-plan-store.adapter.js";
+import {
+  FsPrinciplesStore,
+  type PrinciplesStorePort,
+} from "../repo/fs-principles-store.adapter.js";
+import {
+  BunProcessRunner,
+  type ProcessRunnerPort,
+} from "../repo/bun-process-runner.adapter.js";
 
 export interface V2Services {
   readonly specStore: SpecStorePort;
@@ -28,6 +36,8 @@ export interface V2Services {
   readonly planStore: ExecPlanStorePort;
   readonly evidenceStore: EvidenceStorePort;
   readonly architectureRules: ArchitectureRulesPort;
+  readonly principlesStore: PrinciplesStorePort;
+  readonly processRunner: ProcessRunnerPort;
 }
 
 export interface BuildV2ServicesOptions {
@@ -43,5 +53,7 @@ export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
     planStore: overrides?.planStore ?? new JsonlExecPlanStore({ repoRoot }),
     evidenceStore: overrides?.evidenceStore ?? new JsonlEvidenceStore({ repoRoot }),
     architectureRules: overrides?.architectureRules ?? new YamlArchitectureRules({ repoRoot }),
+    principlesStore: overrides?.principlesStore ?? new FsPrinciplesStore({ repoRoot }),
+    processRunner: overrides?.processRunner ?? new BunProcessRunner(),
   };
 }
