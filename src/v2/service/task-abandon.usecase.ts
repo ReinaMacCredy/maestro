@@ -1,13 +1,16 @@
 import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
+import type { ExecPlanStorePort } from "../repo/exec-plan-store.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
+import { tryAdvancePlan } from "./try-advance-plan.usecase.js";
 
 export interface TaskAbandonDeps {
   readonly taskStore: TaskStorePort;
   readonly evidenceStore: EvidenceStorePort;
+  readonly planStore?: ExecPlanStorePort;
   readonly clock?: () => Date;
   readonly idFactory?: () => string;
 }
@@ -39,5 +42,17 @@ export async function taskAbandon(deps: TaskAbandonDeps, input: TaskAbandonInput
       reason: input.reason,
     },
   );
+  if (deps.planStore) {
+    await tryAdvancePlan(
+      {
+        planStore: deps.planStore,
+        taskStore: deps.taskStore,
+        evidenceStore: deps.evidenceStore,
+        clock: deps.clock,
+        idFactory: deps.idFactory,
+      },
+      { plan_id: updated.plan_id, trigger_task_verb: "task:abandon" },
+    );
+  }
   return updated;
 }

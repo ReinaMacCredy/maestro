@@ -74,6 +74,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         {
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
+          planStore: services.planStore,
         },
         { id, agentId: flags.agent },
       );
@@ -142,6 +143,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         {
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
+          planStore: services.planStore,
         },
         { id, reason: flags.reason },
       );
@@ -229,6 +231,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         {
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
+          planStore: services.planStore,
         },
         { id, pr_url: flags.prUrl },
       );
