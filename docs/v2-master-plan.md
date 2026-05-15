@@ -259,7 +259,7 @@ Milestone, Feature, and Assertion sub-states (also in `mission-state.ts`) are no
 
 ### Migration tests
 
-Phase 1 must ship a fixture-based migration test suite at `tests/e2e/migrate-v2/` that:
+Phase 1 must ship a fixture-based migration test suite at `tests/fixtures/v1-maestro/` that:
 
 - runs `setup --migrate-v2` against a frozen v1 `.maestro/` snapshot;
 - asserts every row in both mapping tables above;
@@ -271,7 +271,7 @@ Phase 1 must ship a fixture-based migration test suite at `tests/e2e/migrate-v2/
 
 v2 work lives on a long-lived `harness-os` branch off main (ADR-0013). v1 stays on main and may receive bug fixes during the rebuild window. When v2 is feature-complete, the branch merges to main as the 2.0 release. The merge IS the big-bang flip.
 
-Estimated 3.5–4 months solo (extended after advisor flagged Phase 2 overload; added Phase 1.5 bridge for the correction-recording gap). Phases inside the branch (each phase ends at a working maestro-on-itself milestone):
+Estimated 6–7 months solo (revised after Phases 5/6/7 split off the original Phase 4 per ADR-0018, ADR-0019). Phases inside the branch (each phase ends at a working maestro-on-itself milestone):
 
 ### Phase 1: Spine + architecture lints (target: month 1)
 
@@ -317,30 +317,92 @@ Inserted between Phase 1 and Phase 2 to close the correction-recording gap that 
 
 **Done criteria:** a fresh consumer project bootstraps via `setup`, runs a spec → task → ship with observability evidence, and migrates a v1 fixture via `setup --migrate-v2`.
 
-### Phase 4: Polish + 2.0 release (target: month 4)
+### Phase 4: Docs polish + skill-surface cleanup (target: month 4)
 
-- Documentation pass: all five skill bundles finalized, harness-positioning.md rewritten against v2 truth.
-- CLI reference (`docs/cli-reference.md`) rewritten.
-- v1 verbs fully removed from the codebase (not just hidden).
-- Release `chore(release): v2.0.0`, merge `harness-os` → main.
+Light cleanup of the *agent-facing* surface (skills + docs). Heavy source-code cleanup is Phase 5 per ADR-0018.
+
+- Documentation pass: all five bundled SKILL.md files finalized.
+- CLI reference (`docs/cli-reference.md`) rewritten against v2 verbs only.
+- `docs/harness-positioning.md` rewritten around v2 primitives.
+- Docs root + setup templates v2 pass.
+- Absorbed skill files deleted; `skills/built-in/maestro:*` colon-namespaced tier deleted.
+
+**Done criteria:** PRs 36–40 landed (docs cli-reference rewrite, harness-positioning rewrite, docs+setup templates, SKILL.md finalize + delete absorbed skills, colon-tier deletion).
+
+### Phase 5: v1 source-code sunset (target: month 5)
+
+Per ADR-0018, v2-displaces rule: walk each `src/features/<x>/` and delete if v2 owns the verb; keep §11 non-goals.
+
+- Delete v1 feature dirs that v2 owns: `task`, `spec`, `verify`, `setup`, `mission`, `intake`.
+- Split `src/features/plan/`: delete exec-plan workflow code, keep plan-check + cost-budget.
+- Delete ADR-0015 absorbed/dropped dirs: `memory`, `memory-ratchet`, `agent`, `graph`, `session`, `ralph`, `notes`, `inspect`, `state`.
+- Resolve judgment-call dirs (`handoff`, `worktree`) at phase kickoff with an import-graph audit; port supporting machinery into `src/v2/` as needed.
+- Delete v1 CLI verb registrations from `src/index.ts`.
+- Delete v1 e2e tests for deleted features. Concrete list at kickoff includes `tests/e2e/memory-compiled-e2e.test.ts`, `notes-compiled-e2e.test.ts`, `session-compiled-e2e.test.ts`, `ratchet-compiled-e2e.test.ts`, `graph-compiled-e2e.test.ts`, `agent-loop-compiled-e2e.test.ts` (verify against the `src/features/` deletion list — anything covering a deleted feature goes with it).
+- Clean up cross-feature imports referencing deleted dirs.
+- **MCP server v2 pass** (revised §11 scope): rename `task_complete` → `task_ship`; delete `task_unblock`; replace `task_create` / `task_plan` with `task_from_spec`; add hot-path v2 MCP tools (`principle_promote`, `setup_check`, `setup_migrate_v2`); verify kept tools (`task_claim`, `task_block`, `task_get`, `task_list`, `evidence_*`, `verdict_*`, `policy_*`, `handoff_*`, `contract_*`) call v2 use cases. Grill-driven verbs (`spec new`, `plan from-spec`, `plan decompose`) stay CLI-only.
+- Extend `.github/workflows/install-smoke.yml` and `release.yml` to exercise v2 hot-path verbs end-to-end after install — both currently only call `maestro --version` + `mission-control --render-check`, which passes vacuously against either v1 or v2. Add a scripted `setup check`, `spec new` (non-interactive `--from-file` mode), `task from-spec`, `claim`, `verify`, `ship` smoke so a broken v2 binary fails the install-smoke job instead of escaping to a release.
+- README v2 sweep: after sunset, verify `README.md` and any other root-level docs reference v2 verbs only. This is a sweep, not a rewrite — Phase 4 PR 38 (`docs root + setup templates v2 pass`) owns the primary rewrite; this is the post-sunset verification that no v1 verb survived.
+- §9 migration mapping coverage audit: maestro's own `.maestro/` (and a survey of any other v1 project state we have access to) contains dirs that may not yet be in §9's mapping table (`wisdom/`, `doctrine/`, `tracks/`, `launches/`, `bootstrap/`, `drafts/`, `archive/`, `MAESTRO.md`, `principles.jsonl`, `feedback.jsonl`, `retrieval-index.json`). At Phase 5 kickoff, walk each one and decide: in-mapping (add a §9 row), skip-silently (preserve as-is, no v1 contract), or error-out (migration refuses to run). Goal: no v1 user hits an artifact with no §9 row and a confusing migration outcome.
+- AGENTS.md sweep: the `WHERE TO LOOK` table currently points at v1 paths Phase 5 deletes (`src/features/spec/`, `src/features/setup/`, `src/features/verify/`, `src/features/handoff/` if displaced, `.maestro/MAESTRO.md`, plus mission/intake/plan rows). Rewrite the table against surviving `src/v2/` + retained `src/features/` paths. Resolve the fate of `.maestro/MAESTRO.md` at the same time — delete, rename to `EXEC-PLANS.md`, or fold into the v2 plan store.
+- Verify `scripts/check-feature-boundaries-lib.ts` still describes truthfully which dirs are features after deletions; update the allow/deny lists at kickoff.
+- Verify `bun run check:bundled-skills` and the embed generator under `src/infra/domain/*.ts` still build after absorbed-skill deletions (Phase 4 owned the deletes; Phase 5 owns the source-tree cleanup).
+
+**Done criteria:** v2 e2e green (all `tests/e2e/v2-*.test.ts` pass); kept-feature e2e green; install-smoke workflow green against v2 verbs; no dead imports; README and root docs reference v2 verbs only; maestro completes one dogfooded spec → task → ship cycle on itself using only v2 verbs; **one Phase 5 external-project dogfood completed** (add v2 maestro to a small unrelated repo, run spec → task → ship — tests the install + happy path on a non-maestro codebase). Phase 7's RC-tag dogfood is a separate run against the release candidate.
+
+### Phase 6: Scenario testing (target: month 6)
+
+Behavioral gate before release per ADR-0019. Eight scenarios across project × familiarity × workflow, driven by a **swarm-fix-loop** during Phase 6 itself.
+
+**Loop shape (developer-driven, interactive Claude Code session):**
+
+1. Author the 8 scenarios + deterministic rubrics + fixtures.
+2. **Swarm** — dispatch all 8 (or all-failing subset) as sub-agents in parallel via the Claude Code `Agent` tool with `run_in_background: true`. Each sub-agent gets a scenario brief + a fresh sandbox copy of greenfield or brownfield fixture.
+3. **Wait** — sub-agents emit pass/fail + rubric trace + evidence-trail dump when they finish.
+4. **Triage** — for each failure: read the evidence trail, identify whether the bug is in maestro, in the scenario rubric, or in the sub-agent's harness instructions. Fix maestro (most common) or sharpen the rubric.
+5. **Re-dispatch** — send a new sub-agent for each previously-failed scenario; passing scenarios stay green. Loop to step 3.
+6. **Exit** — all 8 green in a single pass with no fix in between.
+
+The Agent tool works here precisely *because* Phase 6 runs in an interactive Claude Code session — not in CI. Phase 6 is a development phase, not a perpetual gate. Post-release ongoing monitoring can use whatever transport (CI cron, SDK, manual replay) — that's a v2.x concern, not a v2.0 blocker.
+
+**Concrete deliverables:**
+
+- **Scenarios.** 8 authored under `tests/scenarios/<name>/`. Each contains: `scenario.md` (user-mock script + familiarity tier + termination), `rubric.ts` (deterministic must-happen / must-not-happen against `.maestro/evidence/<date>.jsonl`), `fixture/` (or symlink to `tests/fixtures/v1-maestro/` for brownfield), and `agent-brief.md` (the system+initial-user prompt that gets handed to each spawned sub-agent).
+- **User-mock contract.** Each scenario carries an ordered script of N user messages (typically 2–6) plus a termination condition. User-mock is the *initial brief + scripted follow-ups* the spawned sub-agent simulates; determinism lives here so non-determinism is concentrated in the coding-agent's reasoning.
+- **Coding-agent surface = production skill bundle.** Each sub-agent loads maestro CLI + the 5 bundled `SKILL.md` files verbatim, no test-only system prompt. Otherwise the rubric measures the test harness, not maestro.
+- **Per-scenario project dir.** Before dispatching each sub-agent, the swarm script prepares a fresh project sandbox:
+  - **Greenfield:** `mktemp -d` → `cd` in → `git init` → `maestro setup` (the same flow a real new-project user runs). Sub-agent receives the dir path in its brief.
+  - **Brownfield:** `mktemp -d` → `cp -R tests/fixtures/v1-maestro/.maestro <tmpdir>/.maestro` + `git init`. The user-mock opening prompt differs by familiarity tier: **novice** opens with intent only ("help me with this project") — the coding-agent must discover from the v1 `.maestro/` artifacts that a migration is required and run `setup --migrate-v2` itself; **expert** opens with the explicit upgrade prompt. Novice tests discovery; expert tests execution. Both exercise the §9 migration spec under live agent conditions; only novice tests whether the harness signals its own upgrade need.
+  - Sub-agent operates *inside* its project dir (its `agent-brief.md` opens with "Your working directory is `<path>`. All `maestro` commands run from there"). maestro v2's `resolveMaestroProjectRoot(process.cwd())` (see `src/index.ts:95`) makes cwd the project root — no `--project-root` flag plumbing needed, no env-var hacks.
+  - Sandboxes survive the run; rubric runner reads `<tmpdir>/.maestro/evidence/*.jsonl` afterwards. Parallel scenarios never collide because each has its own `mktemp -d`.
+- **Rubric runner.** A `bun scripts/scenarios/check.ts <scenario-name> <project-dir>` that reads `<project-dir>/.maestro/evidence/<date>.jsonl` and prints PASS/FAIL with per-line evidence. Project dir is an explicit arg, not inferred — both sub-agent (final step) and dispatcher (triage) pass it.
+- **Loop dispatch harness.** `bun scripts/scenarios/swarm.ts` spawns the N sub-agents, **records the `scenario-name → tmpdir` map for the run** (writes it to `.maestro/scenarios/last-run.json`), invokes the rubric runner per scenario with the recorded tmpdir, and prints a pass/fail table + per-failure trace pointer. Each sub-agent's `agent-brief.md` includes an explicit termination contract: exit on `verify=PASS` *or* on 3 consecutive verify failures *or* on a 20-minute timeout — whichever fires first. The dispatcher enforces its own outer per-scenario timeout (e.g., 25 min) so a hung sub-agent can't wedge the swarm.
+
+**Done criteria:** 8 scenarios + rubrics + fixtures authored; swarm dispatcher works; **one full swarm pass completes with all 8 green and zero fixes in between** (i.e., the loop terminated). No nightly cron, no API-key-in-CI dance, no flake aging — those are post-2.0 work if and when scheduled scenario runs are added.
+
+### Phase 7: 2.0 release (target: month 6.5)
+
+- **First action — before any v2 merge:** tag `v0.LAST` on `main` at the last v1 commit (HEAD of `main` before the `harness-os` merge). The tag must point at v1 code, not v2; cutting it post-merge would silently point users at v2. This is sequencing-critical and must precede the RC cut.
+- Author `UPGRADING.md` at repo root: user-facing v1 → v2 upgrade guide (what breaks, what to run, where to read more). Separate from §9, which is the *internal* migration spec for maestro maintainers. A DRAFT exists; Phase 7 finalizes against the actual breaking-changes list.
+- Hand-curate the `v2.0.0` `CHANGELOG.md` header: the existing 136KB file is auto-generated per-commit. Phase 7 adds a top-level `## v2.0.0 — 2026-MM-DD` section summarizing the breaking changes (mirrors `UPGRADING.md`'s tables), so existing users see the v1→v2 cliff in changelog form too.
+- Cut `chore(release): v2.0.0-rc.1` from `harness-os` at least 7 days before the merge. During the soak, re-run the Phase 6 swarm against the RC tag — same dispatcher, same rubrics — and dogfood maestro on at least one real external project. Soak window catches issues real users hit that fixtures don't.
+- After RC soak passes: release `chore(release): v2.0.0`, merge `harness-os` → main.
 - Delete `harness-os` branch post-merge.
+- Stop v1 main bug-fix backports (`v0.LAST` tag stands as the final v1).
 
-**Done criteria:** 2.0 ships from main, v1 main bug-fix backports stop.
+**Done criteria:** `v0.LAST` tagged on the last v1 commit of `main` *before* the v2 merge; `UPGRADING.md` finalized; `CHANGELOG.md` carries a hand-curated `v2.0.0` header; `v2.0.0-rc.1` cut and soaked ≥7 days; one swarm pass against the RC tag completes all-green with zero fixes; one external-project dogfood completed; 2.0 ships from main; v1 backport branches closed.
 
-### Open items pending Phase 3 lock
+### Items locked in Phase 3
 
-- **Observability adapter scope** (Q12, deferred during grill): three candidates remain:
-  - (A) Full Vector + VictoriaLogs/Metrics/Traces stack with one-command bring-up.
-  - (B) Vendor-neutral wire-only (port + schema; no default backend; consumer provides).
-  - (C) Minimal log-only default (write JSON lines, no metric/trace adapter; defer M/T to v2.x).
-  Decision must be made before Phase 3 starts.
+- **Observability adapter scope** (Q12): locked at **Option (C) — minimal log-only default**. `JsonlObservabilityStore` writes per-task lines to `.maestro/runs/<task-id>/observability.jsonl`; every transition produces a row mirroring the evidence-store record. Metric/trace adapters deferred to v2.x. See `docs/phase-3-done.md`.
+- **v1 backport policy**: defined in Phase 7 — `v0.LAST` tag stands as the final v1; no further main backports after the tag is cut.
 
 ## 11. Non-goals for v2
 
 Kept as-is from v1 (no rework in v2.0 scope; revisit post-2.0):
 
 - **Mission Control TUI** (`src/tui/`, OpenTUI dashboard): keep current rendering, only rename mission → exec-plan in the snapshot read model.
-- **MCP server** (`mcp__maestro__*` tools): keep current tool surface; rename mission-shaped tools mechanically, no new tools.
+- **MCP server** (`mcp__maestro__*` tools): keep the existing tool *surface area*, but the tool-by-tool work is non-trivial and lands in Phase 5. Renames: `task_complete` → `task_ship`. Deletions: `task_unblock` (v2 routes unblock via verify PASS). Replacements: `task_create` / `task_plan` → `task_from_spec`. Additions for v2 hot-path: `principle_promote`, `setup_check`, `setup_migrate_v2`. Grill-driven verbs (`spec new`, `plan from-spec`, `plan decompose`) stay CLI-only — MCP cannot sustain the interactive grill protocol.
 - **Hooks** (`hooks/` session/tool hook entrypoints): keep as-is.
 - **CI integration** (`maestro ci verify`, PR check, auto-merge eligibility): keep authoritative; only the verb surface changes if the noun changes.
 - **GitNexus** (`gitnexus_impact`, `gitnexus_detect_changes`): keep as-is; reference from new principles pack.
@@ -390,6 +452,9 @@ The 13 locked decisions, in order:
 | 14 | 0014 | Verb naming: git-style noun-verb with hot-path aliases |
 | 15 | 0015 | v1 feature gap closure (memory/graph/session absorbed; ralph/notes/inspect/state dropped; classify→design; qa→setup; colon-tier migrated) |
 | 16 | 0016 | Grill protocol baked into design + plan skills (no new verbs, no sixth skill) |
+| 17 | 0017 | Cross-cutting layers (`providers`) are universally importable; layer-order exempt in both directions |
+| 18 | 0018 | v1 sunset scope = v2-displaces (delete every `src/features/` dir v2 owns; keep §11 non-goals) |
+| 19 | 0019 | Scenario test architecture: 8 scenarios, sub-agent swarm-fix-loop via Agent tool, deterministic rubric against evidence trail |
 
 Open decisions (lock during phase noted):
 
