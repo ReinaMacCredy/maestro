@@ -19,7 +19,7 @@ import {
 } from "@/v2/repo/task-store.port.js";
 import { TaskTransitionError, type TaskState } from "@/v2/types/task-state.js";
 import type { Task, TaskId } from "@/v2/types/task.js";
-import { taskVerify } from "@/v2/service/task-verify.usecase.js";
+import { taskVerify, TaskVerifyReasonRequiredError } from "@/v2/service/task-verify.usecase.js";
 
 const RULES: ArchitectureRules = {
   version: 1,
@@ -244,5 +244,114 @@ describe("taskVerify", () => {
         { id: "tsk-target" },
       ),
     ).rejects.toBeInstanceOf(TaskTransitionError);
+  });
+
+  it("HUMAN verdict keeps task at verifying and emits a verdict=HUMAN evidence row with reason", async () => {
+    const taskStore = makeTaskStore([seedTask("claimed")]);
+    const { store: evidenceStore, rows } = makeEvidence();
+
+    const result = await taskVerify(
+      { repoRoot, taskStore, evidenceStore, architectureRules: stubRules() },
+      { id: "tsk-target", verdict: "HUMAN", reason: "needs design review" },
+    );
+
+    expect(result.verdict).toBe("HUMAN");
+    expect(result.task.state).toBe("verifying");
+    expect(result.violations).toEqual([]);
+    const verdictRow = rows.find(
+      (r) => r.kind === "transition" && (r as { verdict?: string }).verdict === "HUMAN",
+    );
+    expect(verdictRow).toMatchObject({
+      kind: "transition",
+      from_state: "verifying",
+      to_state: "verifying",
+      trigger_verb: "task:verify",
+      verdict: "HUMAN",
+      reason: "needs design review",
+    });
+  });
+
+  it("BLOCK verdict transitions verifying -> blocked and records block_reason + verdict=BLOCK row", async () => {
+    const taskStore = makeTaskStore([seedTask("verifying")]);
+    const { store: evidenceStore, rows } = makeEvidence();
+
+    const result = await taskVerify(
+      { repoRoot, taskStore, evidenceStore, architectureRules: stubRules() },
+      { id: "tsk-target", verdict: "BLOCK", reason: "upstream API outage" },
+    );
+
+    expect(result.verdict).toBe("BLOCK");
+    expect(result.task.state).toBe("blocked");
+    expect(result.task.block_reason).toBe("upstream API outage");
+    const verdictRow = rows.find(
+      (r) => r.kind === "transition" && (r as { verdict?: string }).verdict === "BLOCK",
+    );
+    expect(verdictRow).toMatchObject({
+      kind: "transition",
+      from_state: "verifying",
+      to_state: "blocked",
+      trigger_verb: "task:verify",
+      verdict: "BLOCK",
+      reason: "upstream API outage",
+    });
+  });
+
+  it("HUMAN verdict from claimed state still emits the entry transition (claimed -> verifying)", async () => {
+    const taskStore = makeTaskStore([seedTask("claimed")]);
+    const { store: evidenceStore, rows } = makeEvidence();
+
+    await taskVerify(
+      { repoRoot, taskStore, evidenceStore, architectureRules: stubRules() },
+      { id: "tsk-target", verdict: "HUMAN", reason: "blocked on schema review" },
+    );
+
+    expect(rows.length).toBe(2);
+    expect(rows[0]).toMatchObject({
+      from_state: "claimed",
+      to_state: "verifying",
+      trigger_verb: "task:verify",
+    });
+    expect((rows[0] as { verdict?: string }).verdict).toBeUndefined();
+    expect(rows[1]).toMatchObject({ verdict: "HUMAN" });
+  });
+
+  it("throws TaskVerifyReasonRequiredError when --verdict is set without a reason", async () => {
+    const taskStore = makeTaskStore([seedTask("claimed")]);
+    const { store: evidenceStore } = makeEvidence();
+
+    await expect(
+      taskVerify(
+        { repoRoot, taskStore, evidenceStore, architectureRules: stubRules() },
+        { id: "tsk-target", verdict: "HUMAN" },
+      ),
+    ).rejects.toBeInstanceOf(TaskVerifyReasonRequiredError);
+
+    await expect(
+      taskVerify(
+        { repoRoot, taskStore, evidenceStore, architectureRules: stubRules() },
+        { id: "tsk-target", verdict: "BLOCK", reason: "  " },
+      ),
+    ).rejects.toBeInstanceOf(TaskVerifyReasonRequiredError);
+  });
+
+  it("HUMAN verdict does not run lints (skips architecture rules)", async () => {
+    // setInterval would normally trigger a violation under stubRules; HUMAN
+    // verdict should skip lints entirely.
+    await writeFile(
+      join(repoRoot, "src/v2/service/bad.ts"),
+      `export function tick() { setInterval(() => null, 1000); }\n`,
+    );
+    const taskStore = makeTaskStore([seedTask("verifying")]);
+    const { store: evidenceStore, rows } = makeEvidence();
+
+    const result = await taskVerify(
+      { repoRoot, taskStore, evidenceStore, architectureRules: stubRules() },
+      { id: "tsk-target", verdict: "HUMAN", reason: "spec is ambiguous" },
+    );
+
+    expect(result.verdict).toBe("HUMAN");
+    expect(result.violations).toEqual([]);
+    const lints = rows.filter((r) => r.kind === "lint-violation");
+    expect(lints.length).toBe(0);
   });
 });

@@ -24,12 +24,26 @@ export interface TaskVerifyDeps {
 
 export interface TaskVerifyInput {
   readonly id: TaskId;
+  // When set, skip running lints and record the explicit human verdict instead.
+  // HUMAN keeps the task at verifying (awaiting human review); BLOCK transitions
+  // verifying -> blocked. Both require a reason.
+  readonly verdict?: "HUMAN" | "BLOCK";
+  readonly reason?: string;
 }
 
 export interface TaskVerifyResult {
   readonly task: Task;
-  readonly verdict: "PASS" | "FAIL";
+  readonly verdict: "PASS" | "FAIL" | "HUMAN" | "BLOCK";
   readonly violations: readonly LintViolation[];
+}
+
+export class TaskVerifyReasonRequiredError extends Error {
+  readonly verdict: "HUMAN" | "BLOCK";
+  constructor(verdict: "HUMAN" | "BLOCK") {
+    super(`task verify --verdict ${verdict.toLowerCase()} requires --reason`);
+    this.name = "TaskVerifyReasonRequiredError";
+    this.verdict = verdict;
+  }
 }
 
 function defaultIdFactory(): string {
@@ -42,6 +56,12 @@ export async function taskVerify(
 ): Promise<TaskVerifyResult> {
   const existing = await deps.taskStore.get(input.id);
   if (!existing) throw new TaskNotFoundError(input.id);
+
+  if (input.verdict !== undefined) {
+    if (input.reason === undefined || input.reason.trim().length === 0) {
+      throw new TaskVerifyReasonRequiredError(input.verdict);
+    }
+  }
 
   // Enter verifying. Accepts claimed | doing | verifying (re-run allowed).
   // Self-transition (verifying -> verifying) is not in TASK_TRANSITIONS, so
@@ -68,6 +88,48 @@ export async function taskVerify(
         trigger_verb: "task:verify",
       },
     );
+  }
+
+  if (input.verdict === "HUMAN") {
+    await emitTransitionEvidence(
+      {
+        store: deps.evidenceStore,
+        clock: deps.clock,
+        idFactory: deps.idFactory,
+      },
+      {
+        task_id: existing.id,
+        from_state: "verifying",
+        to_state: "verifying",
+        trigger_verb: "task:verify",
+        verdict: "HUMAN",
+        reason: input.reason,
+      },
+    );
+    return { task: entered, verdict: "HUMAN", violations: [] };
+  }
+
+  if (input.verdict === "BLOCK") {
+    const blocked = await deps.taskStore.update(input.id, {
+      state: "blocked",
+      block_reason: input.reason,
+    });
+    await emitTransitionEvidence(
+      {
+        store: deps.evidenceStore,
+        clock: deps.clock,
+        idFactory: deps.idFactory,
+      },
+      {
+        task_id: existing.id,
+        from_state: "verifying",
+        to_state: "blocked",
+        trigger_verb: "task:verify",
+        verdict: "BLOCK",
+        reason: input.reason,
+      },
+    );
+    return { task: blocked, verdict: "BLOCK", violations: [] };
   }
 
   const report = await runArchitectureLints({

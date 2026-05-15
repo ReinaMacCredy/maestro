@@ -4,7 +4,7 @@ import { taskFromSpec } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
 import { taskBlock } from "../service/task-block.usecase.js";
 import { taskAbandon } from "../service/task-abandon.usecase.js";
-import { taskVerify } from "../service/task-verify.usecase.js";
+import { taskVerify, TaskVerifyReasonRequiredError } from "../service/task-verify.usecase.js";
 import { taskShip } from "../service/task-ship.usecase.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError } from "../types/task-state.js";
@@ -32,7 +32,11 @@ function detachV1Overrides(task: Command, overrides: readonly string[]): void {
 }
 
 function reportError(verb: string, err: unknown): void {
-  if (err instanceof TaskNotFoundError || err instanceof TaskTransitionError) {
+  if (
+    err instanceof TaskNotFoundError ||
+    err instanceof TaskTransitionError ||
+    err instanceof TaskVerifyReasonRequiredError
+  ) {
     console.error(`maestro ${verb}: ${(err as Error).message}`);
     process.exitCode = 1;
     return;
@@ -168,11 +172,23 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
   const verifyAction = async function (
     this: Command,
     id: string,
-    flags: { json?: boolean },
+    flags: { json?: boolean; verdict?: string; reason?: string },
   ): Promise<void> {
     try {
       const repoRoot = opts.resolveRepoRoot();
       const services = buildV2Services({ repoRoot });
+      let explicit: "HUMAN" | "BLOCK" | undefined;
+      if (flags.verdict !== undefined) {
+        const v = flags.verdict.toLowerCase();
+        if (v !== "human" && v !== "block") {
+          console.error(
+            `maestro task verify: --verdict must be 'human' or 'block' (got '${flags.verdict}')`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        explicit = v === "human" ? "HUMAN" : "BLOCK";
+      }
       const result = await taskVerify(
         {
           repoRoot,
@@ -180,7 +196,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           evidenceStore: services.evidenceStore,
           architectureRules: services.architectureRules,
         },
-        { id },
+        { id, verdict: explicit, reason: flags.reason },
       );
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
@@ -198,6 +214,10 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         );
       } else if (result.verdict === "PASS") {
         console.log(`${result.task.id} verified -> ready (PASS)`);
+      } else if (result.verdict === "HUMAN") {
+        console.log(`${result.task.id} verify HUMAN: ${flags.reason}`);
+      } else if (result.verdict === "BLOCK") {
+        console.log(`${result.task.id} verify BLOCK -> blocked: ${flags.reason}`);
       } else {
         console.log(`${result.task.id} verify FAIL (${result.violations.length} violation(s))`);
         for (const v of result.violations) {
@@ -206,6 +226,8 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         }
       }
       if (result.verdict === "FAIL") process.exitCode = 1;
+      else if (result.verdict === "HUMAN") process.exitCode = 2;
+      else if (result.verdict === "BLOCK") process.exitCode = 3;
     } catch (err) {
       reportError("task verify", err);
     }
@@ -213,14 +235,21 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
 
   task
     .command("verify <id>")
-    .description("Run lints; PASS auto-advances verifying -> ready, FAIL stays at verifying")
+    .description(
+      "Run lints; PASS auto-advances verifying -> ready, FAIL stays at verifying. " +
+        "Use --verdict {human,block} --reason to record an explicit human verdict instead.",
+    )
     .option("--json", "emit JSON result with task, verdict, and violations")
+    .option("--verdict <verdict>", "explicit verdict: 'human' (stay) or 'block' (-> blocked)")
+    .option("--reason <text>", "required when --verdict is set")
     .action(verifyAction);
 
   program
     .command("verify <id>")
     .description("Hot-path alias for `task verify`")
     .option("--json", "emit JSON result with task, verdict, and violations")
+    .option("--verdict <verdict>", "explicit verdict: 'human' (stay) or 'block' (-> blocked)")
+    .option("--reason <text>", "required when --verdict is set")
     .action(verifyAction);
 
   const shipAction = async (id: string, flags: { prUrl?: string }): Promise<void> => {
