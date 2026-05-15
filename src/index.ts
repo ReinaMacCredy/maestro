@@ -45,11 +45,10 @@ import { registerMcpCommand } from "./features/mcp/index.js";
 import { registerRecoverCommand } from "./features/recover/index.js";
 import { registerGcCommand } from "./features/gc/index.js";
 import { registerWorktreeCommand } from "./features/worktree/index.js";
-import { registerSetupCommand } from "./features/setup/index.js";
 import {
   checkSkillBinaryParity,
   renderDriftError,
-} from "./features/setup/usecases/check-skill-binary-parity.usecase.js";
+} from "@/v2/service/skill-binary-parity.js";
 import { registerSpecV2Commands } from "@/v2/runtime/spec.command.js";
 import { registerTaskV2Commands } from "@/v2/runtime/task.command.js";
 import { registerPlanV2Commands } from "@/v2/runtime/plan.command.js";
@@ -127,8 +126,6 @@ registerReviewCommand(program, deps);
 registerRecoverCommand(program, deps);
 registerGcCommand(program, deps);
 registerWorktreeCommand(program, deps);
-registerSetupCommand(program, deps);
-// v2 surface: attaches `setup migrate-corrections` to the same parent.
 registerSetupV2Commands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
