@@ -80,6 +80,7 @@ import {
   checkSkillBinaryParity,
   renderDriftError,
 } from "./features/setup/usecases/check-skill-binary-parity.usecase.js";
+import { registerSpecV2Commands } from "@/v2/runtime/spec.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -134,6 +135,12 @@ registerPrincipleCommand(program, deps);
 registerBundleCommand(program, deps);
 registerEvidenceCommand(program, deps);
 registerSpecCommand(program, deps);
+// v2 surface: attaches `spec new` and `spec validate` subcommands to the
+// existing `spec` parent command. Coexists with v1 spec subcommands on the
+// harness-os branch; v1 spec verbs are removed in Phase 4.
+registerSpecV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
 registerContractL2Command(program, deps);
 registerPolicyCommand(program, deps);
 registerVerdictCommand(program, deps);
