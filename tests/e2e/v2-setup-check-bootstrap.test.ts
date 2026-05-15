@@ -49,15 +49,8 @@ describe("maestro setup check (v2)", () => {
     expect(parsed.entries.some((e) => e.path === ".maestro/tasks" && e.status === "missing")).toBe(true);
   });
 
-  it("reports ok after bootstrap + a seeded principle file", async () => {
+  it("reports ok after bootstrap (warn-only entries don't gate ok)", async () => {
     await runCompiled(["setup", "bootstrap"], tmpDir);
-    await writeFile(
-      join(tmpDir, "docs/principles/example.md"),
-      "# example\n## Rule\n\nx\n## Rationale\n\nx\n## Scan Command\n\n! rg x\n## Fix Recipe\n\nx\n",
-      "utf8",
-    );
-    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
-    await writeFile(join(tmpDir, ".maestro/config.yaml"), "version: 1\n", "utf8");
     const result = await runCompiled(["setup", "check"], tmpDir);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("setup check: OK");

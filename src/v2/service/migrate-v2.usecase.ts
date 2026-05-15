@@ -5,6 +5,15 @@ import {
   writeMigrationFlag,
   type MigrationFlag,
 } from "./migrate-v2-flag.js";
+import {
+  runMigrateCorrections,
+  runMigrateEvidence,
+  runMigratePlans,
+  runMigratePolicies,
+  runMigrateTasks,
+  runSeedPrinciples,
+  runVerify,
+} from "./migrate-v2-steps.js";
 import { setupBootstrap } from "./setup-bootstrap.usecase.js";
 
 export type MigrateV2StepStatus = "ok" | "skipped" | "error" | "not-implemented";
@@ -129,15 +138,29 @@ export async function migrateV2(
     });
   }
 
-  // Steps 4-9: stubs filled in by PR 33 (migrate-corrections..seed-principles).
-  for (let i = 3; i <= 8; i++) {
-    const step = MIGRATE_V2_STEP_TABLE[i]!;
-    steps.push({
-      id: step.id,
-      label: step.label,
-      status: "not-implemented",
-      detail: "filled in by PR 33",
-    });
+  // Steps 4-9: real implementations. In dry-run we skip them but still
+  // emit a row so the assertion table stays stable.
+  const stepRunners = [
+    runMigrateCorrections,
+    runMigrateTasks,
+    runMigratePlans,
+    runMigrateEvidence,
+    runMigratePolicies,
+    runSeedPrinciples,
+  ] as const;
+  for (let i = 0; i < stepRunners.length; i++) {
+    const tableEntry = MIGRATE_V2_STEP_TABLE[i + 3]!;
+    if (dryRun) {
+      steps.push({
+        id: tableEntry.id,
+        label: tableEntry.label,
+        status: "skipped",
+        detail: "dry-run mode",
+      });
+    } else {
+      const result = await stepRunners[i]!({ repoRoot: deps.repoRoot, clock });
+      steps.push(result);
+    }
   }
 
   // Step 10: write-flag. Run early in the scaffold so re-runs are idempotent
@@ -166,13 +189,17 @@ export async function migrateV2(
     });
   }
 
-  // Step 11: verify. Stubbed in PR 32; PR 33 will run setupCheck and assert OK.
-  steps.push({
-    id: "verify",
-    label: "Re-run setup check and confirm OK",
-    status: "not-implemented",
-    detail: "filled in by PR 33",
-  });
+  // Step 11: verify by re-running setupCheck.
+  if (dryRun) {
+    steps.push({
+      id: "verify",
+      label: "Re-run setup check and confirm OK",
+      status: "skipped",
+      detail: "dry-run mode",
+    });
+  } else {
+    steps.push(await runVerify({ repoRoot: deps.repoRoot, clock }));
+  }
 
   return {
     ok: steps.every((s) => s.status !== "error"),

@@ -74,7 +74,9 @@ export async function setupCheck(deps: SetupCheckDeps): Promise<SetupCheckReport
     detail: configExists ? undefined : "config.yaml not present (optional)",
   });
 
-  const ok = entries.every((e) => e.status === "ok");
+  // ok semantics: nothing is `missing`. `warn` entries (empty principles pack,
+  // absent config.yaml) are informational and do not gate the report.
+  const ok = entries.every((e) => e.status !== "missing");
   return { ok, entries };
 }
 

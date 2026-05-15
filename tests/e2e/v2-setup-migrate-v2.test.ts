@@ -25,7 +25,7 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-describe("maestro setup migrate-v2 (scaffold)", () => {
+describe("maestro setup migrate-v2", () => {
   it("prints one row per step and exits 0", async () => {
     const result = await runCompiled(["setup", "migrate-v2"], tmpDir);
     expect(result.exitCode).toBe(0);
@@ -44,7 +44,7 @@ describe("maestro setup migrate-v2 (scaffold)", () => {
     ]) {
       expect(result.stdout).toContain(id);
     }
-    expect(result.stdout).toContain("migrate-v2: scaffold complete");
+    expect(result.stdout).toContain("migrate-v2: complete");
   });
 
   it("creates a backup directory and the migration flag", async () => {
@@ -77,7 +77,7 @@ describe("maestro setup migrate-v2 (scaffold)", () => {
       tmpDir,
     );
     expect(forced.exitCode).toBe(0);
-    expect(forced.stdout).toContain("migrate-v2: scaffold complete");
+    expect(forced.stdout).toContain("migrate-v2: complete");
   });
 
   it("--json emits the full step table", async () => {
@@ -93,5 +93,72 @@ describe("maestro setup migrate-v2 (scaffold)", () => {
     };
     expect(parsed.dry_run).toBe(true);
     expect(parsed.steps.length).toBe(11);
+  });
+
+  // Full end-to-end assertion table: a single run against the v1 fixture must
+  // produce every artifact the v2 verbs depend on. Add a row here whenever a
+  // step starts writing new files; the table protects future PRs from silently
+  // breaking the migration contract.
+  it("produces every expected artifact after one successful run", async () => {
+    const result = await runCompiled(["setup", "migrate-v2", "--json"], tmpDir);
+    expect(result.exitCode).toBe(0);
+
+    // tasks.v2.jsonl has 3 rows mirroring the v1 fixture
+    const tasks = await readFile(
+      join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"),
+      "utf8",
+    );
+    const taskRows = tasks
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { id: string; state: string });
+    expect(taskRows.length).toBe(3);
+    expect(taskRows.map((r) => r.id).sort()).toEqual([
+      "tsk-v1-claimed",
+      "tsk-v1-draft",
+      "tsk-v1-shipped",
+    ]);
+
+    // plans.v2.jsonl has 1 row from .maestro/missions/mis-001/
+    const plans = await readFile(
+      join(tmpDir, ".maestro/plans/plans.v2.jsonl"),
+      "utf8",
+    );
+    const planRows = plans
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { id: string });
+    expect(planRows.length).toBe(1);
+    expect(planRows[0]!.id).toBe("mis-001");
+
+    // docs/principles/legacy/<id>.md exists for each v1 correction
+    const legacy = await readFile(
+      join(tmpDir, "docs/principles/legacy/legacy-rule-1.md"),
+      "utf8",
+    );
+    expect(legacy).toContain("Never paraphrase");
+
+    // Default principles pack seeded
+    const principlesDir = await readdir(join(tmpDir, "docs/principles"));
+    expect(principlesDir).toContain("layer-order.md");
+    expect(principlesDir).toContain("passive-harness.md");
+    expect(principlesDir).toContain("prefer-shared-utils.md");
+    expect(principlesDir).toContain("no-yolo-data-probing.md");
+
+    // Verify step ran and ok=true
+    const parsed = JSON.parse(result.stdout) as {
+      ok: boolean;
+      steps: { id: string; status: string }[];
+    };
+    expect(parsed.ok).toBe(true);
+    const verify = parsed.steps.find((s) => s.id === "verify");
+    expect(verify?.status).toBe("ok");
+  });
+
+  it("setup check exits 0 after migrate-v2", async () => {
+    await runCompiled(["setup", "migrate-v2"], tmpDir);
+    const check = await runCompiled(["setup", "check"], tmpDir);
+    expect(check.exitCode).toBe(0);
+    expect(check.stdout).toContain("setup check: OK");
   });
 });

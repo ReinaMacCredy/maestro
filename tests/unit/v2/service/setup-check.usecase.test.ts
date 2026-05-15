@@ -40,7 +40,7 @@ describe("setupCheck", () => {
     expect(report.entries.find((e) => e.kind === "pack")?.status).toBe("ok");
   });
 
-  it("warns when principles directory is present but empty", async () => {
+  it("warns (but stays ok) when principles directory is present but empty", async () => {
     for (const rel of [
       ".maestro/tasks",
       ".maestro/plans",
@@ -53,7 +53,7 @@ describe("setupCheck", () => {
     const report = await setupCheck({ repoRoot: root });
     const pack = report.entries.find((e) => e.kind === "pack");
     expect(pack?.status).toBe("warn");
-    expect(report.ok).toBe(false);
+    expect(report.ok).toBe(true);
   });
 
   it("warns (not missing) when only .maestro/config.yaml is absent", async () => {

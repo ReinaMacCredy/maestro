@@ -90,7 +90,7 @@ export function registerSetupV2Commands(
 
   setup
     .command("migrate-v2")
-    .description("Migrate a v1 .maestro/ tree to the v2 layout (scaffold; steps 4-10 land in PR 33)")
+    .description("Migrate a v1 .maestro/ tree to the v2 layout (backup, translate tasks/plans/evidence, seed principles, verify)")
     .option("--dry-run", "report planned actions without writing")
     .option("--force", "re-run even if .maestro/.migrated-v2.json is present")
     .option("--json", "emit JSON instead of text")
@@ -111,7 +111,7 @@ export function registerSetupV2Commands(
           console.log("migrate-v2: repo already migrated (use --force to re-run)");
         } else {
           for (const step of result.steps) console.log(formatMigrateStep(step));
-          console.log(result.ok ? "migrate-v2: scaffold complete" : "migrate-v2: failed");
+          console.log(result.ok ? "migrate-v2: complete" : "migrate-v2: failed");
         }
         if (!result.ok) process.exitCode = 1;
       } catch (err) {

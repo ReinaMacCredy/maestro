@@ -44,7 +44,7 @@ describe("migrateV2 (scaffold)", () => {
       join(root, backup!, "tasks/tasks.jsonl"),
       "utf8",
     );
-    expect(taskFile).toContain("v1-demo-task");
+    expect(taskFile).toContain("tsk-v1-draft");
   });
 
   it("creates missing v2 directories during bootstrap-dirs step", async () => {
@@ -93,13 +93,74 @@ describe("migrateV2 (scaffold)", () => {
     expect(flag).toBeUndefined();
   });
 
-  it("emits not-implemented status for steps 4-9 and 11 in PR 32", async () => {
+  it("runs every step end-to-end against the v1 fixture", async () => {
     const result = await migrateV2({ repoRoot: root });
-    const pending = result.steps.filter((s) => s.status === "not-implemented");
-    expect(pending.length).toBe(7);
-    for (const step of pending) {
-      expect(step.detail).toContain("PR 33");
-    }
+    const stepById = new Map(result.steps.map((s) => [s.id, s]));
+    expect(stepById.get("migrate-corrections")?.status).toBe("ok");
+    expect(stepById.get("migrate-corrections")?.detail).toContain("migrated 1");
+    expect(stepById.get("migrate-tasks")?.status).toBe("ok");
+    expect(stepById.get("migrate-tasks")?.detail).toContain("migrated 3");
+    expect(stepById.get("migrate-plans")?.status).toBe("ok");
+    expect(stepById.get("migrate-plans")?.detail).toContain("migrated 1");
+    expect(stepById.get("migrate-evidence")?.status).toBe("ok");
+    expect(stepById.get("migrate-policies")?.status).toBe("ok");
+    expect(stepById.get("seed-principles")?.status).toBe("ok");
+    expect(stepById.get("verify")?.status).toBe("ok");
+    expect(result.ok).toBe(true);
+  });
+
+  it("writes tasks.v2.jsonl rows that mirror the v1 source", async () => {
+    await migrateV2({ repoRoot: root });
+    const raw = await readFile(
+      join(root, ".maestro/tasks/tasks.v2.jsonl"),
+      "utf8",
+    );
+    const rows = raw
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { id: string; slug: string; state: string });
+    expect(rows.length).toBe(3);
+    expect(rows.find((r) => r.id === "tsk-v1-draft")?.state).toBe("draft");
+    expect(rows.find((r) => r.id === "tsk-v1-claimed")?.state).toBe("doing");
+    expect(rows.find((r) => r.id === "tsk-v1-shipped")?.state).toBe("shipped");
+  });
+
+  it("writes plans.v2.jsonl from .maestro/missions/<id>/mission.json", async () => {
+    await migrateV2({ repoRoot: root });
+    const raw = await readFile(
+      join(root, ".maestro/plans/plans.v2.jsonl"),
+      "utf8",
+    );
+    const plans = raw
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { id: string; slug: string; state: string; title: string });
+    expect(plans.length).toBe(1);
+    expect(plans[0]!.id).toBe("mis-001");
+    expect(plans[0]!.title).toBe("Demo v1 mission");
+  });
+
+  it("seeds default principles when docs/principles is empty", async () => {
+    await migrateV2({ repoRoot: root });
+    const entries = await readdir(join(root, "docs/principles"));
+    const mdFiles = entries.filter((e) => e.endsWith(".md"));
+    expect(mdFiles).toContain("layer-order.md");
+    expect(mdFiles).toContain("passive-harness.md");
+    expect(mdFiles).toContain("prefer-shared-utils.md");
+    expect(mdFiles).toContain("no-yolo-data-probing.md");
+  });
+
+  it("skips seed-principles when docs/principles already has markdown", async () => {
+    await mkdir(join(root, "docs/principles"), { recursive: true });
+    await writeFile(
+      join(root, "docs/principles/custom.md"),
+      "# custom\n## Rule\n\nx\n## Rationale\n\nx\n## Scan Command\n\n! rg x\n## Fix Recipe\n\nx\n",
+      "utf8",
+    );
+    const result = await migrateV2({ repoRoot: root });
+    const seed = result.steps.find((s) => s.id === "seed-principles");
+    expect(seed?.status).toBe("skipped");
+    expect(seed?.detail).toContain("already present");
   });
 
   it("succeeds even when .maestro/ does not exist (greenfield repo)", async () => {
