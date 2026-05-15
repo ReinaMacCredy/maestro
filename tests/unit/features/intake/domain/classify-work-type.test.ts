@@ -63,6 +63,50 @@ describe("classifyWorkType", () => {
     expect(w).toBe("initiative");
   });
 
+  it("returns initiative when paths span 3+ feature areas under src/features/", () => {
+    const w = classifyWorkType(
+      {
+        intendedPaths: [
+          "src/features/intake/domain/types.ts",
+          "src/features/task/domain/task-types.ts",
+          "src/features/evidence/domain/types.ts",
+        ],
+      },
+      {
+        allFlags: [],
+        pathExists: existing(
+          new Set([
+            "src/features/intake/domain/types.ts",
+            "src/features/task/domain/task-types.ts",
+            "src/features/evidence/domain/types.ts",
+          ]),
+        ),
+      },
+    );
+    expect(w).toBe("initiative");
+  });
+
+  it("does NOT return initiative for exactly 2 feature areas", () => {
+    const w = classifyWorkType(
+      {
+        intendedPaths: [
+          "src/features/intake/domain/types.ts",
+          "src/features/task/domain/task-types.ts",
+        ],
+      },
+      {
+        allFlags: [],
+        pathExists: existing(
+          new Set([
+            "src/features/intake/domain/types.ts",
+            "src/features/task/domain/task-types.ts",
+          ]),
+        ),
+      },
+    );
+    expect(w).toBe("change-request");
+  });
+
   it("returns maintenance for package.json + lockfile only", () => {
     const w = classifyWorkType(
       { intendedPaths: ["package.json", "bun.lock"] },

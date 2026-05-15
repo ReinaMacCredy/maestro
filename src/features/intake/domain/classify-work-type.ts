@@ -37,11 +37,15 @@ const MAINTENANCE_PATH_GLOBS = [
  *
  * Decision order — first match wins:
  *   1. harness-improvement -- any path under .maestro/, policies/, skills/, hooks/
- *   2. initiative          -- multi-domain flag, OR paths span 3+ top-level dirs
+ *   2. initiative          -- multi-domain flag, OR paths span 3+ feature areas
  *   3. maintenance         -- all paths are manifests / .github / root config
  *   4. new-spec            -- no path exists on disk
  *   5. spec-slice          -- all paths share one `src/features/<one>/` root
  *   6. change-request      -- fallback
+ *
+ * A "feature area" is a `src/features/<name>/` root when the path falls
+ * under one; otherwise it is the path's top-level directory. This matches
+ * how a feature-first repo segments domains.
  *
  * Pure function; `pathExists` is injected so tests can stub the filesystem.
  */
@@ -62,8 +66,8 @@ export function classifyWorkType(
   }
 
   const hasMultiDomain = context.allFlags.includes("multi-domain");
-  const topLevelDirs = new Set(paths.map(topLevelDirOf));
-  if (hasMultiDomain || topLevelDirs.size >= 3) {
+  const domains = new Set(paths.map(domainOf));
+  if (hasMultiDomain || domains.size >= 3) {
     return "initiative";
   }
 
@@ -140,4 +144,8 @@ function topLevelDirOf(path: string): string {
 function featureRootOf(path: string): string | undefined {
   const match = path.match(/^(src\/features\/[^/]+)\//);
   return match ? match[1] : undefined;
+}
+
+function domainOf(path: string): string {
+  return featureRootOf(path) ?? topLevelDirOf(path);
 }
