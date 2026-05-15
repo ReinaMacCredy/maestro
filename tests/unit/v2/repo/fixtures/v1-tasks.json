@@ -1,0 +1,99 @@
+[
+  {
+    "id": "v1-task-0001",
+    "slug": "implement/feature-x",
+    "title": "Implement feature X",
+    "status": "pending",
+    "blockedBy": [],
+    "createdAt": "2026-01-01T08:00:00.000Z",
+    "updatedAt": "2026-01-01T08:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0002",
+    "slug": "implement/feature-x-impl",
+    "title": "Wire core use-case",
+    "status": "pending",
+    "assignee": "agent-a",
+    "claimedAt": "2026-01-02T09:00:00.000Z",
+    "blockedBy": [],
+    "createdAt": "2026-01-02T08:00:00.000Z",
+    "updatedAt": "2026-01-02T09:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0003",
+    "slug": "implement/feature-x-tests",
+    "title": "Add tests",
+    "status": "in_progress",
+    "assignee": "agent-b",
+    "claimedAt": "2026-01-03T10:00:00.000Z",
+    "blockedBy": ["v1-task-0002"],
+    "createdAt": "2026-01-03T09:00:00.000Z",
+    "updatedAt": "2026-01-03T10:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0004",
+    "slug": "fix/race-condition",
+    "title": "Fix mission-control race",
+    "status": "completed",
+    "closeReason": "merged in PR 41",
+    "blockedBy": [],
+    "createdAt": "2026-01-04T08:00:00.000Z",
+    "updatedAt": "2026-01-04T18:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0005",
+    "title": "Investigate stale handoff bug",
+    "status": "completed",
+    "closeReason": "abandoned: no longer reproducible after 0.80.0",
+    "blockedBy": [],
+    "createdAt": "2026-01-05T08:00:00.000Z",
+    "updatedAt": "2026-01-05T18:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0006",
+    "slug": "investigate/legacy-blocked",
+    "title": "Waiting on owner decision",
+    "status": "blocked",
+    "closeReason": "needs product input",
+    "blockedBy": [],
+    "createdAt": "2026-01-06T08:00:00.000Z",
+    "updatedAt": "2026-01-06T08:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0007",
+    "slug": "investigate/legacy-deferred",
+    "title": "Deferred until next quarter",
+    "status": "deferred",
+    "closeReason": "deferred to Q2 planning",
+    "blockedBy": [],
+    "createdAt": "2026-01-07T08:00:00.000Z",
+    "updatedAt": "2026-01-07T08:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0008",
+    "slug": "investigate/legacy-open",
+    "title": "Open legacy task",
+    "status": "open",
+    "blockedBy": [],
+    "createdAt": "2026-01-08T08:00:00.000Z",
+    "updatedAt": "2026-01-08T08:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0009",
+    "slug": "investigate/legacy-closed",
+    "title": "Closed legacy task",
+    "status": "closed",
+    "closeReason": "shipped",
+    "blockedBy": [],
+    "createdAt": "2026-01-09T08:00:00.000Z",
+    "updatedAt": "2026-01-09T18:00:00.000Z"
+  },
+  {
+    "id": "v1-task-0010",
+    "title": "Unknown status sentinel",
+    "status": "weird-future-status",
+    "blockedBy": [],
+    "createdAt": "2026-01-10T08:00:00.000Z",
+    "updatedAt": "2026-01-10T08:00:00.000Z"
+  }
+]
