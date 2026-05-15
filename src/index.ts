@@ -84,6 +84,7 @@ import { registerSpecV2Commands } from "@/v2/runtime/spec.command.js";
 import { registerTaskV2Commands } from "@/v2/runtime/task.command.js";
 import { registerPlanV2Commands } from "@/v2/runtime/plan.command.js";
 import { registerPrincipleV2Commands } from "@/v2/runtime/principle.command.js";
+import { registerSetupV2Commands } from "@/v2/runtime/setup.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -179,6 +180,10 @@ registerStateCommand(program, deps);
 registerWorktreeCommand(program, deps);
 registerInspectCommand(program, deps);
 registerSetupCommand(program, deps);
+// v2 surface: attaches `setup migrate-corrections` to the same parent.
+registerSetupV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
 
 const mergeCmd = program
   .command("merge")

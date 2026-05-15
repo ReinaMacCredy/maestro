@@ -15,3 +15,4 @@ export * from "./plan-decompose.usecase.js";
 export * from "./try-advance-plan.usecase.js";
 export * from "./principle-scan.usecase.js";
 export * from "./principle-promote.usecase.js";
+export * from "./migrate-corrections.usecase.js";
