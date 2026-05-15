@@ -51,10 +51,7 @@ import { registerSkillsCommand } from "./features/skills/index.js";
 import { registerMcpCommand } from "./features/mcp/index.js";
 import { registerRecoverCommand } from "./features/recover/index.js";
 import { registerGcCommand } from "./features/gc/index.js";
-import { registerRalphCommand } from "./features/ralph/index.js";
-import { registerStateCommand } from "./features/state/index.js";
 import { registerWorktreeCommand } from "./features/worktree/index.js";
-import { registerInspectCommand } from "./features/inspect/index.js";
 import { registerSetupCommand } from "./features/setup/index.js";
 import {
   checkSkillBinaryParity,
@@ -141,10 +138,7 @@ registerCiVerifyCommand(ciCmd, program, deps);
 registerReviewCommand(program, deps);
 registerRecoverCommand(program, deps);
 registerGcCommand(program, deps);
-registerRalphCommand(program, deps);
-registerStateCommand(program, deps);
 registerWorktreeCommand(program, deps);
-registerInspectCommand(program, deps);
 registerSetupCommand(program, deps);
 // v2 surface: attaches `setup migrate-corrections` to the same parent.
 registerSetupV2Commands(program, {
