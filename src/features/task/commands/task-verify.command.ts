@@ -4,7 +4,7 @@ import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { recordEvidence } from "@/features/evidence/index.js";
-import type { TrustFinding } from "@/features/verify/domain/types.js";
+import type { TrustFinding } from "@/v2/types/trust.js";
 import type { Contract } from "@/features/task/domain/contract/contract-types.js";
 import {
   readCurrentContractWithBackfill,
@@ -14,7 +14,7 @@ import { type Services } from "@/services.js";
 import {
   isArchitectureRuleId,
   type ArchitectureRuleId,
-} from "@/features/verify";
+} from "@/shared/lib/arch-rules.js";
 import type { LintViolationPayload } from "@/features/evidence";
 
 interface TaskVerifyDeps {

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { TrustFinding } from "../../domain/types.js";
+import type { TrustFinding } from "@/v2/types/trust.js";
 
 const LOCKFILE_PAIRS: Array<readonly [manifest: string, lockfile: string]> = [
   ["package.json", "bun.lock"],

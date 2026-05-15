@@ -1,5 +1,5 @@
-import type { GitSignatureProbePort } from "../../ports/git-signature.port.js";
-import type { TrustFinding } from "../../domain/types.js";
+import type { GitSignatureProbePort } from "../ports/git-signature.port.js";
+import type { TrustFinding } from "@/v2/types/trust.js";
 
 // Matches a commit line: "commit <sha>"
 const COMMIT_LINE_RE = /^commit ([0-9a-f]{7,40})/;

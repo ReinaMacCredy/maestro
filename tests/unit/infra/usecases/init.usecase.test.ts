@@ -3,7 +3,7 @@ import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:f
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { initMaestro } from "@/infra/usecases/init.usecase.js";
-import { resolveSkillDirectoryName } from "@/features/verify/lib/skill-path.js";
+import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
 import { mockConfig } from "../../../helpers/mocks.js";
 import { DEFAULT_PRINCIPLES } from "@/v2/service/default-principles.js";
 

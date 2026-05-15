@@ -7,7 +7,7 @@ import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
-import type { TrustFinding, TrustVerifierResult } from "@/features/verify/domain/types.js";
+import type { TrustFinding, TrustVerifierResult } from "@/v2/types/trust.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

@@ -13,7 +13,7 @@ import { dirExists, ensureDir, listFilesRecursive, readText, writeText } from "@
 import {
   isManagedSkillDirectoryName,
   resolveSkillDirectoryName,
-} from "@/features/verify/index.js";
+} from "@/shared/lib/skill-path.js";
 import { homedir } from "node:os";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { chmod, lstat, readdir, rm } from "node:fs/promises";

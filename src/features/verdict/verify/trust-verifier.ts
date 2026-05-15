@@ -1,6 +1,6 @@
 import type { Contract } from "@/features/task/index.js";
-import type { GitSignatureProbePort } from "../ports/git-signature.port.js";
-import type { TrustFinding, TrustVerifierResult } from "../domain/types.js";
+import type { GitSignatureProbePort } from "./ports/git-signature.port.js";
+import type { TrustFinding, TrustVerifierResult } from "@/v2/types/trust.js";
 import { checkScope } from "./checks/check-scope.js";
 import { checkLockfileParity } from "./checks/check-lockfile-parity.js";
 import { checkGeneratedFileParity } from "./checks/check-generated-file-parity.js";
@@ -8,7 +8,7 @@ import { checkSensitivePaths } from "./checks/check-sensitive-paths.js";
 import { checkCommitMetadata } from "./checks/check-commit-metadata.js";
 import { checkSecretsInDiff } from "./checks/check-secrets-in-diff.js";
 import { checkNonEmptyDiff } from "./checks/check-non-empty-diff.js";
-import { checkArchitectureLints } from "./checks/check-architecture-lints.js";
+import { checkArchitectureLints } from "@/shared/lib/arch-rules.js";
 
 export interface TrustVerifierInput {
   readonly contract: Contract;

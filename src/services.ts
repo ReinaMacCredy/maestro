@@ -8,7 +8,7 @@ import { buildBundleServices, type BundleServices } from "./features/bundle/serv
 import { buildEvidenceServices, type EvidenceServices } from "./features/evidence/services.js";
 import { buildSpecServices, type SpecServices } from "./features/spec/services.js";
 import { buildPolicyServices, type PolicyServices } from "./features/policy/services.js";
-import { buildVerifyServices, type VerifyServices } from "./features/verify/services.js";
+import { buildVerifyServices, type VerifyServices } from "./features/verdict/services.js";
 import { buildRiskServices, type RiskServices } from "./features/risk/services.js";
 import { buildVerdictServices, type VerdictServices } from "./features/verdict/services.js";
 import { buildPlanServices, type PlanServices } from "./features/plan/services.js";

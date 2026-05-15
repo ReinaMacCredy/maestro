@@ -2,7 +2,7 @@ import {
   checkArchitectureRules,
   type ArchitectureRuleId,
   type ArchitectureViolation,
-} from "@/features/verify";
+} from "@/shared/lib/arch-rules.js";
 import {
   principlesScan,
   type PrincipleScanFinding,

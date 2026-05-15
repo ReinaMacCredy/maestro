@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { type Services } from "@/services.js";
-import { buildProofMap, type ProofMap } from "@/features/verify/index.js";
+import { buildProofMap, type ProofMap } from "../domain/proof-map.js";
 import { readCurrentContractWithBackfill } from "../usecases/read-current-contract-with-backfill.js";
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import type { SpecStorePort } from "@/features/spec/index.js";

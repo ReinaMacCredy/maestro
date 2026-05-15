@@ -11,7 +11,7 @@ import type { ComputeRiskInput } from "@/features/risk/usecases/compute-risk.js"
 import type { Contract } from "@/features/task/index.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
-import type { TrustFinding } from "@/features/verify/index.js";
+import type { TrustFinding } from "@/v2/types/trust.js";
 
 function makeContract(overrides: Partial<Contract> = {}): Contract {
   return {

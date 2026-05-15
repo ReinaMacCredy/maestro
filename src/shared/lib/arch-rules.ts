@@ -1,6 +1,6 @@
 import { Glob } from "bun";
 import { join } from "node:path";
-import type { TrustFinding } from "../../domain/types.js";
+import type { TrustFinding } from "@/v2/types/trust.js";
 
 export type ArchitectureRuleId =
   | "no-runner-inversion"

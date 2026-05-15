@@ -9,7 +9,7 @@ import type { GitAnchorPort } from "@/v2/repo/git-anchor.port.js";
 import type { PolicyServices } from "@/features/policy/services.js";
 import type { RiskServices } from "@/features/risk/services.js";
 import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
-import type { VerifyServices } from "@/features/verify/services.js";
+import type { VerifyServices } from "../verify/services.js";
 import type { Verdict, VerdictSubject } from "../domain/types.js";
 import type { VerdictStorePort } from "../ports/storage.js";
 

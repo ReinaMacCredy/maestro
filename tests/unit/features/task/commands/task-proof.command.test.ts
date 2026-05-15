@@ -7,7 +7,7 @@ import type { SpecStorePort, Spec } from "@/features/spec/index.js";
 import type { TaskStorePort, Task, Contract } from "@/features/task";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
-import type { ProofMap } from "@/features/verify/index.js";
+import type { ProofMap } from "@/features/task/domain/proof-map.js";
 
 function mockContractVersionStore(contract: Contract | undefined): ContractVersionStorePort {
   return {

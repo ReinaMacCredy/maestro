@@ -4,7 +4,7 @@ import type { ComputeRiskInput } from "@/features/risk/usecases/compute-risk.js"
 import type { Contract, RiskClass } from "@/features/task/index.js";
 import type { EvidenceRow, ThreatModelPayload } from "@/features/evidence/index.js";
 import type { AIReviewPayload } from "@/features/evidence/index.js";
-import type { TrustFinding } from "@/features/verify/index.js";
+import type { TrustFinding } from "@/v2/types/trust.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
 

@@ -4,7 +4,7 @@ import type { RequestVerdictDeps } from "@/features/verdict/usecases/request-ver
 import type { Verdict } from "@/features/verdict/domain/types.js";
 import type { Contract } from "@/features/task/index.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
-import type { TrustFinding } from "@/features/verify/index.js";
+import type { TrustFinding } from "@/v2/types/trust.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
 import type { RunStateStorePort, RunStateDelta } from "@/features/task/ports/run-state-store.port.js";

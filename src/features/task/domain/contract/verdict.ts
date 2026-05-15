@@ -1,5 +1,5 @@
 import { matchGlob, matchesAnyGlob } from "@/shared/lib/glob-match.js";
-import { isMaestroSubstratePath } from "@/features/verify/index.js";
+import { isMaestroSubstratePath } from "@/shared/lib/substrate-paths.js";
 import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
 import type { TaskReceipt } from "../task-types.js";
 import type { GitTouchedFilesResult } from "../../ports/git-anchor.port.js";
