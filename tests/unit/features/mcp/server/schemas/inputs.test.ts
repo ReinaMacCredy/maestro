@@ -31,14 +31,18 @@ describe("input schemas — id format", () => {
     expect(TaskGetInput.safeParse({ id: "task-abc123" }).success).toBe(false);
   });
 
-  it("accepts valid mission ids in TaskListInput", () => {
-    expect(TaskListInput.safeParse({ missionId: "msn-abc123" }).success).toBe(true);
+  it("accepts valid exec-plan ids in TaskListInput", () => {
+    expect(TaskListInput.safeParse({ plan_id: "pln-1a2b3c4d5e6f-a1b2c3" }).success).toBe(true);
+  });
+
+  it("rejects v1 mission id format on TaskListInput plan_id", () => {
+    expect(TaskListInput.safeParse({ plan_id: "msn-abc123" }).success).toBe(false);
   });
 });
 
 describe("strict mode (unknown fields)", () => {
-  it("TaskCreateInput rejects unknown fields like missionId", () => {
-    const r = TaskCreateInput.safeParse({ title: "ok", missionId: "msn-abc123" });
+  it("TaskCreateInput rejects unknown fields (plan_id not declared on TaskCreateInput)", () => {
+    const r = TaskCreateInput.safeParse({ title: "ok", plan_id: "pln-1a2b3c4d5e6f-a1b2c3" });
     expect(r.success).toBe(false);
   });
 

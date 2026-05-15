@@ -31,7 +31,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "List maestro tasks",
       description:
-        "List tasks. Filters: missionId, status, type, priority, label, parentId, assignee. Paginated (default limit 20, max 100). view='summary' (default) returns slug+id+title+status+type+priority+blockedByCount; view='full' returns the full Task. Sorted by createdAt asc. Read-only.",
+        "List tasks. Filters: plan_id, status, type, priority, label, parentId, assignee. Paginated (default limit 20, max 100). view='summary' (default) returns slug+id+title+status+type+priority+blockedByCount; view='full' returns the full Task. Sorted by createdAt asc. Read-only.",
       inputSchema: TaskListInput,
       annotations: {
         readOnlyHint: true,
@@ -52,8 +52,10 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           ...(args.assignee !== undefined ? { assignee: args.assignee } : {}),
         };
         const tasks = await listTasks(services.taskStore, filters);
-        const filtered = args.missionId
-          ? tasks.filter((t) => t.missionId === args.missionId)
+        // Wire param is `plan_id` (v2 vocab); v1 Task domain still carries
+        // `missionId`. Phase 5 aligns both when MCP rewires onto v2 use cases.
+        const filtered = args.plan_id
+          ? tasks.filter((t) => t.missionId === args.plan_id)
           : tasks;
         const page = paginate(filtered, args.limit, args.offset);
         const projected = args.view === "full"

@@ -12,7 +12,7 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 
 | Tool | Behavior |
 |------|----------|
-| `maestro_task_list` | Paginated list. Filters: `missionId`, `status`, `type`, `priority`, `label`, `parentId`, `assignee`, plus `limit`/`offset`. |
+| `maestro_task_list` | Paginated list. Filters: `plan_id`, `status`, `type`, `priority`, `label`, `parentId`, `assignee`, plus `limit`/`offset`. |
 | `maestro_task_get` | Fetch one task by id. Returns `code: TASK_NOT_FOUND` if missing. |
 | `maestro_task_create` | Create a top-level task. Slug derived from title. |
 | `maestro_task_claim` | Claim a task for the current MCP session. Session id is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, `CODEX_THREAD_ID`, falling back to `<user>@<host>`. |
@@ -81,7 +81,7 @@ The MCP layer prefers explicit codes attached at the throw site (via `MaestroErr
 
 ## Strict input validation
 
-Every tool's input schema is `strict`: unknown fields cause the call to fail rather than being silently dropped. A typo such as `missionID` (correct: `missionId`) on a tool that does not declare that field will return a tool error instead of succeeding with the typo'd field ignored. Match the field names documented above exactly.
+Every tool's input schema is `strict`: unknown fields cause the call to fail rather than being silently dropped. A typo such as `planID` (correct: `plan_id`) on a tool that does not declare that field will return a tool error instead of succeeding with the typo'd field ignored. Match the field names documented above exactly.
 
 ## Output schemas
 

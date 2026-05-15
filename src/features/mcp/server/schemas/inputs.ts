@@ -5,11 +5,11 @@ const taskId = z
   .string()
   .regex(/^tsk-[a-z0-9]+$/, "Invalid task id")
   .describe("A maestro task id like 'tsk-abc123'.");
-const missionId = z
+const planId = z
   .string()
-  .regex(/^[a-z0-9][a-z0-9-]*$/, "Invalid mission id")
+  .regex(/^pln-[a-z0-9]+-[a-z0-9]+$/, "Invalid exec-plan id")
   .describe(
-    "A maestro mission id. Maestro generates dated ids like '2026-05-07-001'; legacy and seeded ids may use prefixes like 'msn-billing'.",
+    "A maestro exec-plan id like 'pln-1a2b3c4d5e6f-a1b2c3'.",
   );
 const verdictId = z
   .string()
@@ -94,7 +94,7 @@ const offset = z
 
 export const TaskListInput = z
   .object({
-    missionId: missionId.optional(),
+    plan_id: planId.optional(),
     status: taskStatus.optional(),
     type: taskType.optional(),
     priority: taskPriority.optional(),
@@ -420,4 +420,4 @@ export const HandoffPickupInput = z
   })
   .strict();
 
-export { taskId, missionId, verdictId, evidenceId, handoffId };
+export { taskId, planId, verdictId, evidenceId, handoffId };
