@@ -76,6 +76,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(names).toEqual([
       "maestro-brainstorm",
       "maestro-classify",
+      "maestro-design",
       "maestro-handoff",
       "maestro-intake",
       "maestro-mission",
