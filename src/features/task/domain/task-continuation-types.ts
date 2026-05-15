@@ -1,4 +1,4 @@
-import type { AgentSlug } from "@/features/session";
+import type { AgentSlug } from "@/shared/domain/agent-slug.js";
 import { TASK_STATUSES, type TaskStatus } from "./task-types.js";
 
 export interface TaskContinuationAgent {

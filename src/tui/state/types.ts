@@ -8,7 +8,6 @@ import type {
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import type { GitFileChange } from "@/infra/domain/git-types.js";
 import type { MissionControlBackgroundMode } from "@/tui/shared/ui-config.js";
-import type { ProjectEdge, ProjectNode } from "@/features/graph";
 import type {
   AgentGridRow,
   DispatchQueueItem,
@@ -149,21 +148,10 @@ export interface MissionOverviewPane {
   dependencyMap: readonly DependencyMapRow[];
 }
 
-export interface MissionControlProjectRelationship {
-  project: ProjectNode;
-  direction: "outgoing" | "incoming";
-  edge: ProjectEdge;
-}
-
-export interface MissionControlGraphContext {
-  currentProject?: ProjectNode;
-  relationships: readonly MissionControlProjectRelationship[];
-  totalProjects: number;
-  totalEdges: number;
-}
-
 export interface MissionControlMemorySnapshot {
-  graphContext?: MissionControlGraphContext;
+  // v1 memory + graph were retired in Phase 4. This snapshot is kept as a
+  // typed null bag so existing consumers don't break.
+  readonly _retired?: true;
 }
 
 export interface MissionControlSnapshot {

@@ -30,7 +30,7 @@ import { readCurrentContractWithBackfill } from "@/features/task/index.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore" | "contractStore" | "contractVersionStore">;
+  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractStore" | "contractVersionStore">;
   readonly recordEvidence?: typeof defaultRecordEvidence;
 }
 
@@ -75,7 +75,7 @@ Examples:
     .option("--confidence <n>", "Confidence score 0-1 for --kind ai-review (default 0.5)", parseFloat)
     .option("--threat-model-file <path>", "Path to a JSON or YAML threat-model file (with --kind threat-model)")
     .option("--witness <level>", "Override witness level (default: agent-claimed-locally)")
-    .option("--session <id>", "Override session id (default: detected session)")
+    .option("--session <id>", "Attach a session id to the evidence row")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
@@ -105,7 +105,7 @@ interface RecordOpts {
 }
 
 async function buildRecordInput(
-  services: Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore" | "contractVersionStore" | "contractStore">,
+  services: Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractVersionStore" | "contractStore">,
   opts: RecordOpts,
 ): Promise<RecordEvidenceInput> {
   const taskId = opts.task;
@@ -153,8 +153,7 @@ async function buildRecordInput(
   }
 
   const kind = parseKind(opts.kind);
-  const sessionId = opts.session
-    ?? (await services.sessionDetect.detect(process.cwd()))?.sessionId;
+  const sessionId = opts.session;
 
   if (kind === "command") {
     if (typeof opts.command !== "string" || opts.command.length === 0

@@ -1430,21 +1430,17 @@ async function resolveOwnershipSessionId(
     return trimmed;
   }
 
-  const services = deps.getServices();
-  const session = await services.sessionDetect.detect(process.cwd());
-  if (session) {
-    return buildTaskOwnerId(session.agent, session.sessionId);
+  const envAgent = (process.env.MAESTRO_AGENT ?? "").trim();
+  const envSessionId = (process.env.MAESTRO_SESSION_ID ?? "").trim();
+  if (envAgent.length > 0 && envSessionId.length > 0) {
+    return buildTaskOwnerId(envAgent, envSessionId);
   }
 
-  // No detected agent session. Synthesize a per-user stable fallback so the
+  // No explicit session. Synthesize a per-user stable fallback so the
   // command does not block AND so subsequent invocations from the same user
   // (across shells, across tool calls) see the same owner id. Agents that
-  // need multi-user coordination should export CODEX_THREAD_ID / CLAUDECODE
+  // need multi-user coordination should export MAESTRO_AGENT/MAESTRO_SESSION_ID
   // or pass --session explicitly.
-  //
-  // Suppress the hint when stderr is not a TTY (piped/scripted runs — the
-  // dominant case for agent loops) or when MAESTRO_QUIET=1. Interactive
-  // human runs still see it once per process via warnedAboutFallbackSession.
   if (
     !warnedAboutFallbackSession
     && process.stderr.isTTY
@@ -1453,7 +1449,7 @@ async function resolveOwnershipSessionId(
     warnedAboutFallbackSession = true;
     process.stderr.write(
       "[info] no agent session detected; using a per-user synthesized session\n"
-      + "       (export CODEX_THREAD_ID / CLAUDECODE or pass --session <id> for coordination)\n",
+      + "       (export MAESTRO_AGENT/MAESTRO_SESSION_ID or pass --session <id> for coordination)\n",
     );
   }
   return buildTaskOwnerId("local", fallbackSessionUserId());
@@ -1987,33 +1983,14 @@ async function maybeReleaseStaleOwnedTasks(
   }
 }
 
-const STALE_OWNER_LOOKUP_CONCURRENCY = 8;
-
 async function collectStaleOwners(
-  services: Services,
-  assignees: readonly string[],
+  _services: Services,
+  _assignees: readonly string[],
 ): Promise<readonly string[]> {
-  const staleOwners = new Set<string>();
-
-  for (let index = 0; index < assignees.length; index += STALE_OWNER_LOOKUP_CONCURRENCY) {
-    const chunk = assignees.slice(index, index + STALE_OWNER_LOOKUP_CONCURRENCY);
-    const statuses = await Promise.all(chunk.map(async (assignee): Promise<string | undefined> => {
-      const parsed = parseTaskOwnerId(assignee);
-      if (!parsed) {
-        return undefined;
-      }
-      const session = await services.sessionDetect.lookup(parsed.agent, parsed.sessionId);
-      return session ? undefined : assignee;
-    }));
-
-    for (const assignee of statuses) {
-      if (assignee) {
-        staleOwners.add(assignee);
-      }
-    }
-  }
-
-  return [...staleOwners];
+  // Background-sweep stale-owner detection is retired with the session
+  // feature. Per-claim stale-claim release in `maybeReleaseStaleClaim`
+  // still handles the common "agent crashed, claim is now idle" case.
+  return [];
 }
 
 async function syncRecoveredStaleOwnerTasks(
@@ -2378,10 +2355,6 @@ async function maybeReleaseStaleClaim(
 
   const parsed = parseTaskOwnerId(task.assignee);
   if (!parsed) {
-    return;
-  }
-  const session = await services.sessionDetect.lookup(parsed.agent, parsed.sessionId);
-  if (session) {
     return;
   }
 

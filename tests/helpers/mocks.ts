@@ -3,8 +3,6 @@ import { join } from "node:path";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { ConfigLayers } from "@/infra/ports/config.port.js";
-import type { SessionDetectPort } from "@/features/session";
-import type { NotesStorePort } from "@/features/notes";
 import type {
   MissionStorePort,
   FeatureStorePort,
@@ -13,14 +11,11 @@ import type {
   Missions,
 } from "@/features/mission";
 import { buildMissions } from "@/features/mission";
-import type { ProjectGraphStorePort, ProjectGraph } from "@/features/graph";
 import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
 import { isOpenHandoffRecord } from "@/features/handoff";
 import { isHandoffInProject } from "@/features/handoff/domain/project-scope.js";
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
-import type { AgentSession } from "@/features/session";
-import type { NoteEntry } from "@/features/notes";
 import type {
   EvidenceRow,
   EvidenceStorePort,
@@ -67,10 +62,10 @@ export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
 export function mockConfig(overrides: Partial<ConfigPort> = {}): ConfigPort {
   const store = new Map<string, MaestroConfig>();
   return {
-    load: async () => ({ sessionDetection: { enabled: true, agents: ["claude-code"] } }),
+    load: async () => ({}),
     loadLayers: async (): Promise<ConfigLayers> => ({
-      defaults: { sessionDetection: { enabled: true, agents: ["claude-code"] } },
-      effective: store.get("project") ?? store.get("global") ?? { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+      defaults: {},
+      effective: store.get("project") ?? store.get("global") ?? {},
       project: store.get("project"),
       global: store.get("global"),
       errors: [],
@@ -84,17 +79,6 @@ export function mockConfig(overrides: Partial<ConfigPort> = {}): ConfigPort {
     },
     exists: async (scope) => store.has(scope),
     ...overrides,
-  };
-}
-
-export function mockNotesStore(initial: NoteEntry[] = []): NotesStorePort {
-  const notes = [...initial];
-
-  return {
-    append: async (note) => {
-      notes.push(note);
-    },
-    list: async () => notes,
   };
 }
 
@@ -116,23 +100,6 @@ export function mockEvidenceStore(initial: EvidenceRow[] = []): EvidenceStorePor
         out.push(row);
       }
       return out.sort((a, b) => a.created_at.localeCompare(b.created_at));
-    },
-  };
-}
-
-export function mockSessionDetect(
-  session?: AgentSession,
-): SessionDetectPort {
-  const defaultSession: AgentSession = {
-    agent: "claude-code",
-    sessionId: "test-session-123",
-    sourcePath: join(tmpdir(), "sessions", "test"),
-  };
-  return {
-    detect: async () => session ?? defaultSession,
-    lookup: async (_agent, sessionId) => {
-      const active = session ?? defaultSession;
-      return active.sessionId === sessionId ? active : undefined;
     },
   };
 }
@@ -696,19 +663,6 @@ export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchor
     collectUntrackedFiles: async () => [],
     resolveTreeSha: async () => "tree-sha-123",
     ...overrides,
-  };
-}
-
-export function mockProjectGraphStore(
-  initial?: ProjectGraph,
-): ProjectGraphStorePort {
-  let graph: ProjectGraph = initial ?? { nodes: [], edges: [] };
-
-  return {
-    load: async () => graph,
-    save: async (g: ProjectGraph) => {
-      graph = g;
-    },
   };
 }
 

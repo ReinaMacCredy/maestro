@@ -1,4 +1,4 @@
-import type { AgentSlug } from "@/features/session";
+import type { AgentSlug } from "@/shared/domain/agent-slug.js";
 import type { WorkflowTemplate } from "@/features/mission";
 import type { UiConfig } from "@/tui/shared/ui-config.js";
 
@@ -13,11 +13,6 @@ export interface MaestroConfig {
     readonly defaultMaxFilesTouched?: number;
     readonly staleReclaimContractPolicy?: "inherit" | "block";
   };
-  readonly sessionDetection?: {
-    readonly enabled: boolean;
-    readonly agents: readonly AgentSlug[];
-    readonly staleMinutes?: number;
-  };
   readonly defaultWorkflow?: string;
   readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>>;
   readonly ui?: UiConfig;
@@ -30,10 +25,6 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     overlapPolicy: "fail",
     rebaseFallback: "best-effort",
     staleReclaimContractPolicy: "inherit",
-  },
-  sessionDetection: {
-    enabled: true,
-    agents: ["claude-code"],
   },
   defaultWorkflow: "plan-implement",
   // No `ui` block: ui.missionControl.backgroundMode is global-only

@@ -19,7 +19,7 @@ const VALID_REDACT_SCOPES: readonly BundleRedactScope[] = [
 interface BundleCommandDeps {
   readonly getServices: () => Pick<
     Services,
-    "missions" | "replyStore" | "handoffStore" | "archive" | "sessionDetect"
+    "missions" | "replyStore" | "handoffStore" | "archive"
   >;
 }
 
@@ -68,7 +68,6 @@ Examples:
           replyStore: services.replyStore,
           handoffStore: services.handoffStore,
           archive: services.archive,
-          sessionDetect: services.sessionDetect,
         },
         {
           missionId,

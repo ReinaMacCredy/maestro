@@ -1,9 +1,6 @@
 import { buildInfraServices, type InfraServices } from "./infra/services.js";
-import { buildSessionServices, type SessionServices } from "./features/session/services.js";
-import { buildNotesServices, type NotesServices } from "./features/notes/services.js";
 import { buildMissionServices, type MissionServices } from "./features/mission/services.js";
 import { buildHandoffServices, type HandoffServices } from "./features/handoff/services.js";
-import { buildGraphServices, type GraphServices } from "./features/graph/services.js";
 import { buildTaskServices, type TaskServices } from "./features/task/services.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
 import { buildEvidenceServices, type EvidenceServices } from "./features/evidence/services.js";
@@ -20,11 +17,8 @@ import { buildRuntimeServices, type RuntimeServices } from "./features/runtime/s
 
 export interface Services extends
   InfraServices,
-  SessionServices,
-  NotesServices,
   MissionServices,
   HandoffServices,
-  GraphServices,
   TaskServices,
   BundleServices,
   EvidenceServices,
@@ -47,11 +41,8 @@ export function createServices(
 ): Services {
   const base: Services = {
     ...buildInfraServices(projectDir),
-    ...buildSessionServices(),
-    ...buildNotesServices(projectDir),
     ...buildMissionServices(projectDir),
     ...buildHandoffServices(),
-    ...buildGraphServices(),
     ...buildTaskServices(projectDir),
     ...buildBundleServices(),
     ...buildEvidenceServices(projectDir),

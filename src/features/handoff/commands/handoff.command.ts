@@ -35,7 +35,6 @@ interface HandoffCommandDeps {
     | "contracts"
     | "taskContinuationStore"
     | "taskContinuationHistory"
-    | "sessionDetect"
   >;
 }
 
@@ -381,13 +380,10 @@ async function resolvePickupActor(
   const explicitAgent = typeof rawAgent === "string" ? rawAgent.trim() : undefined;
   const explicitSession = typeof rawSession === "string" ? rawSession.trim() : undefined;
 
-  const services = deps.getServices();
-  const detected = await services.sessionDetect.detect(process.cwd());
-
   if (mode.requireSession) {
     if ((explicitAgent && !explicitSession) || (!explicitAgent && explicitSession)) {
       throw new MaestroError("Pass both --agent and --session together when overriding pickup identity", [
-        "Or run pickup from a detected Codex or Claude session",
+        "Or set MAESTRO_AGENT/MAESTRO_SESSION_ID in your environment",
       ]);
     }
 
@@ -400,29 +396,22 @@ async function resolvePickupActor(
       };
     }
 
-    if (detected) {
-      const agent = normalizeDetectedAgent(detected.agent);
-      return {
-        agent,
-        sessionId: detected.sessionId,
-        ownerId: buildTaskOwnerId(detected.agent, detected.sessionId),
-      };
+    const envSession = readEnvSession();
+    if (envSession) {
+      return envSession;
     }
 
     const fallbackSessionId = fallbackPickupSessionId();
     return {
       agent: mode.fallbackAgent,
       sessionId: fallbackSessionId,
-      // Match the same per-user undetected-shell ownership model as `task`
-      // and `task contract`, so pickup does not transfer a task to an owner id
-      // that subsequent commands from the same shell cannot mutate.
       ownerId: buildTaskOwnerId("local", fallbackSessionId),
     };
   }
 
   if (!explicitAgent && explicitSession) {
     throw new MaestroError("Pass both --agent and --session together when overriding pickup identity", [
-      "Or run pickup from a detected Codex or Claude session",
+      "Or set MAESTRO_AGENT/MAESTRO_SESSION_ID in your environment",
     ]);
   }
 
@@ -439,16 +428,27 @@ async function resolvePickupActor(
     return { agent: parseAgent(explicitAgent) };
   }
 
-  // Agent: prefer detected session's agent, fall back to the packet's own
-  // agent field. This lets `maestro handoff pickup --id <id>` just work from
-  // any shell when the packet already knows who it was meant for.
-  const agent = detected ? normalizeDetectedAgent(detected.agent) : mode.fallbackAgent;
-  const sessionId = detected?.sessionId;
-  return {
-    agent,
-    ...(sessionId ? { sessionId } : {}),
-    ...(sessionId ? { ownerId: buildTaskOwnerId(detected?.agent ?? agent, sessionId) } : {}),
-  };
+  const envSession = readEnvSession();
+  if (envSession) {
+    return envSession;
+  }
+  return { agent: mode.fallbackAgent };
+}
+
+function readEnvSession(): { agent: HandoffAgent; sessionId: string; ownerId: string } | undefined {
+  const envAgent = (process.env.MAESTRO_AGENT ?? "").trim();
+  const envSessionId = (process.env.MAESTRO_SESSION_ID ?? "").trim();
+  if (envAgent.length === 0 || envSessionId.length === 0) return undefined;
+  try {
+    const agent = parseAgent(envAgent);
+    return {
+      agent,
+      sessionId: envSessionId,
+      ownerId: buildTaskOwnerId(agent, envSessionId),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function fallbackPickupSessionId(): string {
@@ -474,15 +474,6 @@ function fallbackPickupSessionId(): string {
     // fall through
   }
   return "default";
-}
-
-function normalizeDetectedAgent(value: string): HandoffAgent {
-  if (value === "codex") return "codex";
-  if (value === "claude-code" || value === "claude") return "claude";
-  if (value === "hermes") return "hermes";
-  throw new MaestroError(`Detected session agent '${value}' cannot pick up a supported handoff`, [
-    "Use --agent codex|claude|hermes with --session <id> to override explicitly",
-  ]);
 }
 
 function formatHandoffRecord(record: {

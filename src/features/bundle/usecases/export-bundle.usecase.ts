@@ -11,10 +11,6 @@ import { MaestroError } from "@/shared/errors.js";
 import { VERSION } from "@/shared/version.js";
 import { execArgv } from "@/shared/lib/shell.js";
 import {
-  detectSession,
-  type SessionDetectPort,
-} from "@/features/session/index.js";
-import {
   MISSION_ID_PATTERN,
 } from "@/features/mission/index.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
@@ -39,7 +35,6 @@ export interface ExportBundleInput {
 
 export interface ExportBundleDeps extends CollectBundleSourcesDeps {
   readonly archive: ArchivePort;
-  readonly sessionDetect?: SessionDetectPort;
 }
 
 export async function exportBundle(
@@ -78,21 +73,10 @@ export async function exportBundle(
     }
   }
 
-  let createdBy: string | undefined;
-  if (deps.sessionDetect) {
-    try {
-      const detected = await detectSession(deps.sessionDetect, { cwd: projectDir });
-      createdBy = detected?.session.agent;
-    } catch {
-      // Session detection is best-effort provenance; never block export.
-    }
-  }
-
   const manifest: BundleManifest = {
     schemaVersion: 1,
     bundleId: randomUUID(),
     createdAt: new Date().toISOString(),
-    ...(createdBy !== undefined && { createdBy }),
     maestroVersion: VERSION,
     mission: {
       id: sources.mission.id,

@@ -1,4 +1,4 @@
-import type { AgentSlug } from "@/features/session";
+import type { AgentSlug } from "@/shared/domain/agent-slug.js";
 import { taskNotFound } from "../domain/task-errors.js";
 import type { Task } from "../domain/task-types.js";
 import type {

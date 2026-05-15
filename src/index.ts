@@ -20,8 +20,6 @@ import {
   resolveInstallDir,
   resolveInstalledBinaryName,
 } from "@/infra/usecases/install-release-binary.usecase.js";
-import { registerNoteCommand } from "./features/notes/index.js";
-import { registerSessionCommand } from "./features/session/index.js";
 import {
   registerMissionCommand,
   registerFeatureCommand,
@@ -35,10 +33,6 @@ import {
 // ~250ms on cold start, but is only needed when the `mission-control` verb
 // runs. Every other verb (and `--version`/`--help`) skips it entirely.
 // See profile-imports.ts for the measurements.
-import {
-  registerGraphLinkCommand,
-  registerGraphContextCommand,
-} from "./features/graph/index.js";
 import { registerHandoffCommand } from "./features/handoff/index.js";
 import { registerTaskCommand } from "./features/task/index.js";
 import { registerBundleCommand } from "./features/bundle/index.js";
@@ -54,7 +48,6 @@ import { registerMergeAutoCommand } from "./features/merge/index.js";
 import { registerDeployCommand } from "./features/deploy/index.js";
 import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
 import { registerSkillsCommand } from "./features/skills/index.js";
-import { registerIntakeCommand } from "./features/intake/index.js";
 import { registerMcpCommand } from "./features/mcp/index.js";
 import { registerRecoverCommand } from "./features/recover/index.js";
 import { registerGcCommand } from "./features/gc/index.js";
@@ -95,8 +88,6 @@ export const program = new Command()
 registerInitCommand(program, deps);
 registerStatusCommand(program, deps);
 registerDoctorCommand(program, deps);
-registerNoteCommand(program, deps);
-registerSessionCommand(program, deps);
 registerInstallCommand(program, deps);
 registerUpdateCommand(program);
 registerUninstallCommand(program);
@@ -108,8 +99,6 @@ registerFeatureCommand(program, deps);
 registerValidateCommand(program, deps);
 registerMilestoneCommand(program, deps);
 registerCheckpointCommand(program, deps);
-registerGraphLinkCommand(program, deps);
-registerGraphContextCommand(program, deps);
 registerHandoffCommand(program, deps);
 registerTaskCommand(program, deps);
 registerReplyCommand(program, deps);
@@ -150,7 +139,6 @@ const ciCmd = program
 registerCiVerifyCommand(ciCmd, program, deps);
 
 registerReviewCommand(program, deps);
-registerIntakeCommand(program, deps);
 registerRecoverCommand(program, deps);
 registerGcCommand(program, deps);
 registerRalphCommand(program, deps);

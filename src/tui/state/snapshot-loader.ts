@@ -13,7 +13,6 @@ import type {
 } from "@/features/mission";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
-import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort } from "@/features/handoff";
 import type { TaskQueryPort, RunStateStorePort, ContractVersionStorePort } from "@/features/task";
 import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
@@ -42,7 +41,6 @@ export interface SnapshotDeps {
   checkpointStore: CheckpointStorePort;
   config: ConfigPort;
   git: GitPort;
-  projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
   evidenceStore?: EvidenceStorePort;
@@ -58,7 +56,6 @@ export interface SnapshotDeps {
 export interface HomeSnapshotDeps {
   config: ConfigPort;
   git: GitPort;
-  projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
   evidenceStore?: EvidenceStorePort;
@@ -134,10 +131,7 @@ export async function loadSnapshotInput(
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.getState(deps.cwd),
-    buildMissionControlMemorySnapshot({
-      projectGraphStore: deps.projectGraphStore,
-      cwd: deps.cwd,
-    }),
+    buildMissionControlMemorySnapshot({ cwd: deps.cwd }),
     taskBoardPromise,
     autopilotPromise,
   ]);
@@ -187,10 +181,7 @@ export async function loadHomeSnapshotInput(
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
-    buildMissionControlMemorySnapshot({
-      projectGraphStore: deps.projectGraphStore,
-      cwd: deps.cwd,
-    }),
+    buildMissionControlMemorySnapshot({ cwd: deps.cwd }),
     taskBoardPromise,
     repliesPromise,
     principleEffectivenessPromise,

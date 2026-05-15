@@ -1170,10 +1170,10 @@ async function resolveOptionalContractActorSessionId(
     return trimmed;
   }
 
-  const services = deps.getServices();
-  const session = await services.sessionDetect.detect(process.cwd());
-  if (session) {
-    return buildTaskOwnerId(session.agent, session.sessionId);
+  const envAgent = (process.env.MAESTRO_AGENT ?? "").trim();
+  const envSessionId = (process.env.MAESTRO_SESSION_ID ?? "").trim();
+  if (envAgent.length > 0 && envSessionId.length > 0) {
+    return buildTaskOwnerId(envAgent, envSessionId);
   }
   // Synthesize the same per-user fallback as the task command so task ownership
   // established in one shell can be matched by contract-mutating commands in

@@ -16,7 +16,6 @@ import { join } from "node:path";
 import { mockEvidenceStore } from "../../../../helpers/mocks.js";
 import type { Task } from "@/features/task";
 import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
-import type { AgentSession, SessionDetectPort } from "@/features/session";
 import type { SpecStorePort } from "@/features/spec/ports/storage.js";
 import type { Spec } from "@/features/spec/domain/types.js";
 
@@ -65,13 +64,6 @@ function fakeTaskStore(tasks: readonly Task[]): Pick<TaskStorePort, "get"> {
   };
 }
 
-function fakeSessionDetect(session?: AgentSession): Pick<SessionDetectPort, "detect" | "lookup"> {
-  return {
-    detect: async () => session,
-    lookup: async () => undefined,
-  };
-}
-
 function mockSpecStore(initial: Spec[] = []): SpecStorePort {
   const store = new Map(initial.map((s) => [s.mission_id, s]));
   return {
@@ -83,21 +75,12 @@ function mockSpecStore(initial: Spec[] = []): SpecStorePort {
 
 interface DepsOverrides {
   readonly tasks?: readonly Task[];
-  readonly session?: AgentSession;
-  readonly noSession?: boolean;
   readonly evidenceStore?: EvidenceStorePort;
   readonly specStore?: SpecStorePort;
   readonly recordEvidence?: typeof realRecordEvidence;
 }
 
 function evidenceDeps(overrides: DepsOverrides = {}) {
-  const session = overrides.noSession
-    ? undefined
-    : overrides.session ?? {
-        agent: "claude-code",
-        sessionId: "sess-test",
-        sourcePath: "/tmp/sess-test",
-      };
   const tasks = overrides.tasks ?? [makeTask("tsk-aaaaaa")];
   const evidenceStore = overrides.evidenceStore ?? mockEvidenceStore();
   const specStore = overrides.specStore ?? mockSpecStore();
@@ -106,7 +89,6 @@ function evidenceDeps(overrides: DepsOverrides = {}) {
       getServices: () => ({
         evidenceStore,
         taskStore: fakeTaskStore(tasks) as TaskStorePort,
-        sessionDetect: fakeSessionDetect(session) as SessionDetectPort,
         specStore,
         contractVersionStore: { write: async () => {}, readCurrent: async () => undefined, readVersion: async () => undefined, history: async () => [] },
         contractStore: { 
@@ -130,7 +112,7 @@ function makeProgram(): Command {
 }
 
 describe("registerEvidenceCommand", () => {
-  it("records command-kind evidence with detected session and witness level agent-claimed-locally", async () => {
+  it("records command-kind evidence with witness level agent-claimed-locally", async () => {
     captureConsole();
     let received: RecordEvidenceInput | undefined;
     const { deps, evidenceStore } = evidenceDeps({
@@ -158,7 +140,7 @@ describe("registerEvidenceCommand", () => {
     expect(received).toBeDefined();
     expect(received!.task_id).toBe("tsk-aaaaaa");
     expect(received!.kind).toBe("command");
-    expect(received!.session_id).toBe("sess-test");
+    expect(received!.session_id).toBeUndefined();
     expect(received!.witness_level).toBe("agent-claimed-locally");
     expect(received!.payload).toEqual({ command: "bun test", exit: 0 });
 
@@ -236,15 +218,10 @@ describe("registerEvidenceCommand", () => {
     });
   });
 
-  it("--session overrides the detected session", async () => {
+  it("--session attaches a session id to the evidence row", async () => {
     captureConsole();
     let received: RecordEvidenceInput | undefined;
     const { deps } = evidenceDeps({
-      session: {
-        agent: "claude-code",
-        sessionId: "sess-detected",
-        sourcePath: "/tmp/sess-detected",
-      },
       recordEvidence: async (store, input) => {
         received = input;
         return realRecordEvidence(store, input);
@@ -271,11 +248,10 @@ describe("registerEvidenceCommand", () => {
     expect(received!.session_id).toBe("sess-override");
   });
 
-  it("omits session_id when no session is detected and none provided", async () => {
+  it("omits session_id when --session is not provided", async () => {
     captureConsole();
     let received: RecordEvidenceInput | undefined;
     const { deps } = evidenceDeps({
-      noSession: true,
       recordEvidence: async (store, input) => {
         received = input;
         return realRecordEvidence(store, input);
