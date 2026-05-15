@@ -27,8 +27,8 @@ maestro mission-control --preview --size 120x40 --format plain
 maestro mission-control --render-check --size 120x40
 bun tui:dev --screen all --size 120x40
 bun test
-maestro bundle export <missionId> --out ./review.mission.tar.gz
-maestro setup --check
+maestro bundle export <id> --out ./review.bundle.tar.gz
+maestro setup check
 ```
 
 Conventional Commits: `feat(scope):`, `fix(scope):`, `refactor(scope):`. Bump

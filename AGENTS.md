@@ -13,47 +13,49 @@ repo-owned agent surfaces, and shared project state under `.maestro/`.
 
 Read `docs/harness-positioning.md` for the principle-to-primitive mapping.
 
-## Maestro v2 (in flight)
+## Maestro v2 (Phases 1–3 landed)
 
-Maestro v2 is a layered rewrite landing on `main` per ADR-0007 (big-bang)
-and ADR-0013 (greenfield branch inlined). Phases 1, 1.5, and 2 — the v2
-spine, the principles + correction-recording bridge, and the heavy-mode
-plan lifecycle — are feature-complete and dogfooded; see
-`docs/phase-1-done.md`, `docs/phase-1.5-done.md`, and
-`docs/phase-2-done.md` for the transition-evidence records.
+Maestro v2 is the harness-OS layer. Phases 1, 1.5, 2, and 3 — the v2
+spine, the principles + correction-recording bridge, the heavy-mode
+plan lifecycle, and the observability + setup + worktree + handoff layer
+— are feature-complete and dogfooded; see `docs/phase-1-done.md`,
+`docs/phase-1.5-done.md`, `docs/phase-2-done.md`, and
+`docs/phase-3-done.md` for the transition-evidence records. Phase 4
+(polish + 2.0 release) is the current track.
 
 - **Plan:** `docs/v2-master-plan.md` is the source of truth. Layered
   architecture rules live in `docs/architecture.yaml` (loaded by the
   v2 `ArchitectureRules` port and enforced by the lint runner). ADRs
-  under `docs/adr/` capture each binding decision.
-- **Verbs live now:** `maestro spec new`, `maestro spec validate`,
-  `maestro task from-spec`, `maestro task claim` (+ hot-path `claim`),
-  `maestro task block` (+ `block`), `maestro task abandon` (+ `abandon`),
-  `maestro task verify` (+ `verify`; `--verdict {human,block} --reason`
-  exits 2 or 3), `maestro task ship` (+ `ship`), `maestro plan from-spec`,
-  `maestro plan decompose <id> --file <path|->`, `maestro plan show`, and
-  `bun run lint:arch` (v2 runner; `lint:arch:v1` keeps the v1 runner
-  reachable until Phase 4 removal).
-- **State + storage:** v2 task state machine in `src/v2/types/task-state.ts`;
-  v2 plan state machine in `src/v2/types/exec-plan-state.ts`; append-only
-  evidence in `.maestro/evidence/<date>.jsonl`; v2 tasks in
-  `.maestro/tasks/tasks.v2.jsonl`; v2 plans in `.maestro/plans/plans.v2.jsonl`
-  (v1 `tasks.jsonl` is unchanged). Plans auto-advance off task transitions
+  under `docs/adr/` capture each binding decision (0001–0017).
+- **Verb surface:** see `docs/cli-reference.md`. Lifecycle verbs:
+  `spec new | validate`, `task from-spec | claim | verify | block |
+  abandon | ship` (+ hot-path aliases `claim | verify | block | abandon
+  | ship`), `plan from-spec | decompose | show`, `principle promote`,
+  `setup check | bootstrap | migrate-v2 | migrate-corrections`. Kept
+  from v1 unchanged: `evidence`, `contract`, `verdict`, `policy`, `ci`,
+  `merge auto`, `review ack`, `deploy`, `runtime`, `gc`, `recover`,
+  `bundle`, `mission-control`, `mcp`, `skills`, `worktree`.
+- **State + storage:** task state machine in `src/v2/types/task-state.ts`;
+  plan state machine in `src/v2/types/exec-plan-state.ts`; append-only
+  evidence at `.maestro/evidence/<date>.jsonl`; v2 tasks at
+  `.maestro/tasks/tasks.v2.jsonl`; v2 plans at `.maestro/plans/plans.v2.jsonl`;
+  per-task observability at `.maestro/runs/<task-id>/observability.jsonl`;
+  worktree records at `.maestro/worktrees/<task-id>.json`; handoff envelopes
+  at `.maestro/handoffs/<id>.json`. Plans auto-advance off task transitions
   per ADR-0011 (`plan:auto-start` on first claim, `plan:auto-complete` when
-  every child is terminal).
-- **Skill:** `skills/bundled/maestro-design` runs the grill protocol from
-  ADR-0016 to author product-specs before `task from-spec` or
-  `plan from-spec`. `maestro-plan` documents the v2 heavy-mode handoff
-  (`plan from-spec` -> `plan decompose --file -`); `maestro-verify`
-  documents the 4-exit-code routing from `task verify`.
-- **Principles bridge (Phase 1.5):** four default principles ship at
+  every child is terminal). Heavy-mode specs auto-create a worktree at
+  `task claim` per ADR-0008.
+- **Skills:** five bundled skills — `maestro-design` (grill-protocol
+  spec authoring), `maestro-plan` (heavy-mode decompose), `maestro-task`
+  (lifecycle), `maestro-verify` (4-exit-code routing), `maestro-setup`
+  (audit + bootstrap + migrate).
+- **Principles (Phase 1.5):** four default principles ship at
   `docs/principles/*.md` (`prefer-shared-utils`, `no-yolo-data-probing`,
   `passive-harness`, `layer-order`). `maestro principle promote <evd-id>`
-  materializes new principle scaffolds from `lint-violation` evidence
-  rows; `maestro setup migrate-corrections` moves v1
-  `.maestro/memory/corrections/*.json` into `docs/principles/legacy/`;
-  `gc slop-cleanup` folds principle findings into the same per-file
-  report it already emits for arch-lint violations.
+  materializes new principles from `lint-violation` evidence rows.
+  `maestro setup migrate-corrections` moves v1
+  `.maestro/memory/corrections/*.json` into `docs/principles/legacy/`.
+  `gc slop-cleanup` folds principle findings into the per-file report.
 
 ## STRUCTURE
 ```text
@@ -73,26 +75,27 @@ maestro/
 |------|----------|
 | CLI entry / command registration | `src/index.ts` |
 | Dependency wiring | `src/services.ts` (composition root) |
+| v2 task / plan / spec lifecycle | `src/v2/runtime/{task,plan,spec,setup,principle}.command.ts` |
+| v2 layered architecture | `src/v2/{types,config,repo,service,runtime,providers}/` |
+| v2 architecture lints | `src/v2/service/architecture-lint.service.ts` |
+| v2 ports + adapters | `src/v2/repo/` (task store, plan store, spec store, evidence store, observability, worktree, handoff, principles) |
+| v2 use cases | `src/v2/service/` (task-claim, task-verify, plan-decompose, emit-handoff, migrate-v2, setup-check, principle-promote, ...) |
 | Feature boundaries | `src/features/`, `scripts/check-feature-boundaries-lib.ts` |
-| Mission Control flow | `src/infra/commands/mission-control.command.ts`, `src/tui/state/snapshot.ts` |
-| Handoff launch and pickup | `src/features/handoff/`, `src/features/task/` |
+| Mission Control TUI | `src/infra/commands/mission-control.command.ts`, `src/tui/state/snapshot.ts` |
 | Evidence logbook | `src/features/evidence/`; see `docs/witness-levels.md` |
-| Shipped agent skills | `skills/built-in/`, `skills/bundled/` (sync via `bun run sync:bundled-skills`) |
+| Shipped agent skills | `skills/bundled/` (sync via `bun run sync:bundled-skills`) |
 | Release and install | `scripts/build.ts`, `scripts/ci.ts`, `scripts/install-local.ts` |
-| Task vs mission systems | `.maestro/tasks/tasks.jsonl`, `.maestro/MAESTRO.md` |
 | Compiled-binary verification | `tests/e2e/`, `tests/helpers/run-compiled-cli.ts` |
-| Mission Spec | `src/features/spec/`; `.maestro/missions/<id>/spec.json` |
 | Policy and owners loader | `src/features/policy/`; see `docs/owners-yaml-format.md` |
 | Trust Verifier | `src/features/verify/` |
 | Risk Engine | `src/features/risk/`; see `docs/risk-class-derivation.md` |
 | Verdict types and store | `src/features/verdict/` |
-| Plan-check + cost-budget | `src/features/plan/`, `src/features/task/usecases/check-cost-budget.ts` |
 | AI Reviewer + Threat-Model | `src/features/risk/usecases/compute-risk.ts`; `docs/threat-model-format.md` |
 | Auto-merge | `src/features/merge/`; `docs/auto-merge-eligibility.md` |
 | Review acknowledgement | `src/features/review/` |
 | Deploy gate + rollback | `src/features/deploy/`; `docs/deploy-gate.md` |
 | Runtime monitor | `src/features/runtime/`; `docs/runtime-monitoring.md` |
-| Setup / init hardening | `src/features/setup/`; `skills/bundled/maestro-setup/SKILL.md` |
+| MCP server | `src/features/mcp/server/` |
 | Edge-case regression corpus | `tests/e2e/trust-benchmark/`, `tests/e2e/edge-cases/` |
 
 ## CODE STYLE
@@ -121,10 +124,11 @@ maestro/
 
 ## ANTI-PATTERNS
 - Deep imports into another feature's `commands/`, `usecases/`, `domain/`, `ports/`, or `adapters/`.
+- Deep imports across v2 layers that violate forward-only-layers (ADR-0017).
 - Hidden writes or recovery logic inside Mission Control snapshot/preview paths.
 - Hand-editing generated embed files under `src/infra/domain/`.
 - Treating `bun run ci` as generic smoke; it performs release-prep.
-- Treating `task` and `mission` as interchangeable.
+- Treating `task` and `exec-plan` as interchangeable.
 - Assuming installed `maestro` is the fresh build without checking `command -v maestro`.
 
 ## COMMANDS
@@ -133,18 +137,19 @@ bun run build
 bun run check:boundaries
 bun run check:skills
 bun run check:bundled-skills
+bun run check:layers
 bun run test
 ./dist/maestro mission-control --render-check --size 120x40
 bun run release:local
-./dist/maestro setup --check
+./dist/maestro setup check
 ```
 
 ## CLI VERBS
 The full verb reference lives in [`docs/cli-reference.md`](docs/cli-reference.md).
-Verbs at a glance: `evidence`, `contract`, `task verify`, `task introspect`,
-`session`, `recover`, `ralph`, `gc`, `state`, `mission-control`, `spec`,
-`verdict`, `policy`, `plan`, `task budget`, `ci`, `merge auto`, `review ack`,
-`deploy`, `runtime`, `inspect`, `worktree`, `setup`.
+Verbs at a glance: `spec`, `task`, `plan`, `principle`, `setup`, `evidence`,
+`contract`, `verdict`, `policy`, `ci`, `merge auto`, `review ack`, `deploy`,
+`runtime`, `gc`, `recover`, `bundle`, `mission-control`, `mcp`, `skills`,
+`worktree`. Hot-path aliases: `claim`, `verify`, `block`, `abandon`, `ship`.
 
 ## GitNexus
 GitNexus code-intelligence usage rules live in
