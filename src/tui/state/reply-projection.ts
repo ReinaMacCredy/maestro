@@ -3,18 +3,22 @@ import type {
   Feature,
   FeatureStorePort,
   MissionStorePort,
+} from "@/features/mission";
+import type {
   Principle,
   PrincipleOutcomeRecord,
   PrincipleStorePort,
-} from "@/features/mission";
+} from "@/features/principle";
 import {
   buildPrincipleEffectiveness,
   PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+} from "@/features/principle";
+import {
   ingestReply,
   type AgentReply,
   type ReplyOutcome,
   type ReplyStorePort,
-} from "@/features/mission";
+} from "@/features/reply";
 import { isHandoffInProject, type HandoffRecord, type HandoffStorePort } from "@/features/handoff";
 import type {
   PrincipleEffectivenessRow,

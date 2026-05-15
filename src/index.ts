@@ -26,9 +26,9 @@ import {
   registerValidateCommand,
   registerMilestoneCommand,
   registerCheckpointCommand,
-  registerPrincipleCommand,
-  registerReplyCommand,
 } from "./features/mission/index.js";
+import { registerPrincipleCommand } from "./features/principle/index.js";
+import { registerReplyCommand } from "./features/reply/index.js";
 // Mission Control lazy-loads — its import graph (OpenTUI + React) costs
 // ~250ms on cold start, but is only needed when the `mission-control` verb
 // runs. Every other verb (and `--version`/`--help`) skips it entirely.

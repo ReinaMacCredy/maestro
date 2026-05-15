@@ -74,26 +74,26 @@ export type {
   PrincipleOutcome,
   PrincipleOutcomeRecord,
   PrincipleEffectiveness,
-} from "./domain/principle-types.js";
+} from "@/features/principle";
 export {
   buildPrincipleEffectiveness,
   hasSufficientSample,
   PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
-} from "./usecases/principle-effectiveness.usecase.js";
-export { DEFAULT_PRINCIPLES } from "./domain/default-principles.js";
-export { validatePrinciple, validateCreatePrincipleInput } from "./domain/principle-validators.js";
+} from "@/features/principle";
+export { DEFAULT_PRINCIPLES } from "@/features/principle";
+export { validatePrinciple, validateCreatePrincipleInput } from "@/features/principle";
 
 export type { MissionStorePort } from "./ports/mission-store.port.js";
 export type { FeatureStorePort } from "./feature/ports/feature-store.port.js";
 export type { AssertionStorePort } from "./ports/assertion-store.port.js";
 export type { CheckpointStorePort } from "./ports/checkpoint-store.port.js";
-export type { PrincipleStorePort } from "./ports/principle-store.port.js";
+export type { PrincipleStorePort } from "@/features/principle";
 
 export { FsMissionStoreAdapter } from "./adapters/mission-store.adapter.js";
 export { FsFeatureStoreAdapter } from "./feature/adapters/feature-store.adapter.js";
 export { FsAssertionStoreAdapter } from "./adapters/assertion-store.adapter.js";
 export { FsCheckpointStoreAdapter } from "./adapters/checkpoint-store.adapter.js";
-export { JsonlPrincipleStoreAdapter } from "./adapters/principle-store.adapter.js";
+export { JsonlPrincipleStoreAdapter } from "@/features/principle";
 
 export { deriveMissionReport, generateMissionReport } from "./usecases/mission-report.usecase.js";
 export type { MissionReport, MilestoneReportProgress } from "./usecases/mission-report.usecase.js";
@@ -133,7 +133,7 @@ export type { ShowAssertionsResult, UpdateAssertionResult } from "./usecases/val
 export { registerMissionCommand } from "./commands/mission.command.js";
 export { registerMilestoneCommand } from "./commands/milestone.command.js";
 export { registerCheckpointCommand } from "./commands/checkpoint.command.js";
-export { registerPrincipleCommand } from "./commands/principle.command.js";
+export { registerPrincipleCommand } from "@/features/principle";
 export { registerFeatureCommand } from "./feature/commands/feature.command.js";
 export { registerValidateCommand } from "./commands/validate.command.js";
 
@@ -145,22 +145,22 @@ export type {
   ReplyOutcome,
   ReplyAuthor,
   ReplyIngestResult,
-} from "./reply/domain/reply-types.js";
-export { REPLY_OUTCOMES } from "./reply/domain/reply-types.js";
-export { validateAgentReply } from "./reply/domain/reply-validators.js";
+} from "@/features/reply";
+export { REPLY_OUTCOMES } from "@/features/reply";
+export { validateAgentReply } from "@/features/reply";
 
-export type { ReplyStorePort } from "./reply/ports/reply-store.port.js";
-export { FsReplyStoreAdapter } from "./reply/adapters/fs-reply-store.adapter.js";
+export type { ReplyStorePort } from "@/features/reply";
+export { FsReplyStoreAdapter } from "@/features/reply";
 
 export {
   writeAgentReply,
   type WriteReplyInput,
-} from "./reply/usecases/write-reply.usecase.js";
+} from "@/features/reply";
 
 export {
   ingestReply,
   type IngestReplyDeps,
   type PrincipleOutcomeRecorder,
-} from "./reply/usecases/ingest-reply.usecase.js";
+} from "@/features/reply";
 
-export { registerReplyCommand } from "./reply/commands/reply.command.js";
+export { registerReplyCommand } from "@/features/reply";
