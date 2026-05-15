@@ -54,6 +54,11 @@ jobs:
           command -v maestro
           maestro --version
           maestro mission-control --render-check --size 120x40
+      - name: v2 hot-path smoke
+        env:
+          HOME: ${{ runner.temp }}/maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}/maestro-bin
+        run: bun scripts/v2-smoke.ts
 
   local-install-windows:
     name: Local Install Windows
@@ -85,6 +90,11 @@ jobs:
           Get-Command maestro.exe
           maestro.exe --version
           maestro.exe mission-control --render-check --size 120x40
+      - name: v2 hot-path smoke
+        env:
+          HOME: ${{ runner.temp }}\maestro-home
+          MAESTRO_INSTALL_DIR: ${{ runner.temp }}\maestro-bin
+        run: bun scripts/v2-smoke.ts
 
   install-script-linux:
     name: Release Installer Linux
