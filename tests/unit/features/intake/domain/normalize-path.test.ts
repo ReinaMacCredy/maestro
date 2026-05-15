@@ -33,4 +33,19 @@ describe("normalizeIntakePath", () => {
   it("handles `.` (cwd itself) by not over-stripping", () => {
     expect(normalizeIntakePath(".", "/repo")).toBe(".");
   });
+
+  it("collapses double slashes after dot prefix", () => {
+    expect(normalizeIntakePath(".//.maestro/policies/risk.yaml", "/repo")).toBe(
+      ".maestro/policies/risk.yaml",
+    );
+  });
+
+  it("collapses repeated dot-slash segments", () => {
+    expect(normalizeIntakePath("././skills/foo", "/repo")).toBe("skills/foo");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(normalizeIntakePath("", "/repo")).toBe("");
+    expect(normalizeIntakePath("   ", "/repo")).toBe("");
+  });
 });
