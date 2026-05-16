@@ -9,7 +9,10 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { isKnownScenario, SCENARIO_NAMES } from "./_scenarios.js";
-import type { RubricResult } from "../../tests/scenarios/greenfield-novice-light/rubric.js";
+import {
+  printRubricResult,
+  type RubricResult,
+} from "../../tests/scenarios/_helpers/rubric-helpers.js";
 
 const repoRoot = join(import.meta.dir, "../..");
 
@@ -47,17 +50,5 @@ const rubricPath = join(repoRoot, "tests/scenarios", scenarioName, "rubric.ts");
 const mod = await import(rubricPath) as { runRubric(dir: string): Promise<RubricResult> };
 const result = await mod.runRubric(projectDir);
 
-for (const c of result.checks) {
-  const marker = c.pass ? "[PASS]" : "[FAIL]";
-  console.log(`${marker} ${c.id}: ${c.description}`);
-  if (!c.pass && c.note) console.log(`       note: ${c.note}`);
-  if (c.evidence) console.log(`       evidence: ${c.evidence}`);
-}
-
-console.log(
-  result.pass
-    ? `\nSCENARIO ${scenarioName}: PASS`
-    : `\nSCENARIO ${scenarioName}: FAIL`,
-);
-
+printRubricResult(scenarioName, result);
 process.exit(result.pass ? 0 : 1);

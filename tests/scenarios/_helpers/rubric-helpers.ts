@@ -19,6 +19,55 @@ export interface CheckResult {
   readonly note?: string;
 }
 
+export interface RubricResult {
+  readonly scenario: string;
+  readonly projectDir: string;
+  readonly pass: boolean;
+  readonly checks: readonly CheckResult[];
+}
+
+// ---------------------------------------------------------------------------
+// Reusable row predicates
+// ---------------------------------------------------------------------------
+
+export function isTaskTransitionTo(row: EvidenceRow, state: string): boolean {
+  return (
+    row.kind === "transition" &&
+    "task_id" in row &&
+    typeof row.task_id === "string" &&
+    row.task_id.length > 0 &&
+    row.to_state === state
+  );
+}
+
+export function isPlanTransitionTo(row: EvidenceRow, state: string): boolean {
+  return (
+    row.kind === "transition" &&
+    "plan_id" in row &&
+    typeof row.plan_id === "string" &&
+    row.plan_id.length > 0 &&
+    !("task_id" in row && typeof row.task_id === "string" && row.task_id.length > 0) &&
+    row.to_state === state
+  );
+}
+
+export function isChildDraftRow(row: EvidenceRow): boolean {
+  return (
+    row.kind === "transition" &&
+    "task_id" in row &&
+    typeof row.task_id === "string" &&
+    row.task_id.length > 0 &&
+    "plan_id" in row &&
+    typeof row.plan_id === "string" &&
+    row.plan_id.length > 0 &&
+    row.to_state === "draft"
+  );
+}
+
+export function isLintViolation(row: EvidenceRow): boolean {
+  return row.kind === "lint-violation";
+}
+
 // ---------------------------------------------------------------------------
 // Evidence loading
 // ---------------------------------------------------------------------------
@@ -148,4 +197,32 @@ export async function readSubAgentExit(projectDir: string): Promise<unknown | nu
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Standalone runner shared by every scenario's rubric.ts
+// ---------------------------------------------------------------------------
+
+export function printRubricResult(scenarioName: string, result: RubricResult): void {
+  for (const c of result.checks) {
+    const marker = c.pass ? "[PASS]" : "[FAIL]";
+    console.log(`${marker} ${c.id}: ${c.description}`);
+    if (!c.pass && c.note) console.log(`       note: ${c.note}`);
+    if (c.evidence) console.log(`       evidence: ${c.evidence}`);
+  }
+  console.log(result.pass ? `\nSCENARIO ${scenarioName}: PASS` : `\nSCENARIO ${scenarioName}: FAIL`);
+}
+
+export async function runRubricMain(
+  scenarioName: string,
+  runRubric: (projectDir: string) => Promise<RubricResult>,
+): Promise<never> {
+  const projectDir = process.argv[2];
+  if (!projectDir) {
+    console.error(`Usage: bun tests/scenarios/${scenarioName}/rubric.ts <project-dir>`);
+    process.exit(1);
+  }
+  const result = await runRubric(projectDir);
+  printRubricResult(scenarioName, result);
+  process.exit(result.pass ? 0 : 1);
 }

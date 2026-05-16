@@ -11,7 +11,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { RubricResult } from "../../tests/scenarios/greenfield-novice-light/rubric.js";
+import type { RubricResult } from "../../tests/scenarios/_helpers/rubric-helpers.js";
 
 const repoRoot = join(import.meta.dir, "../..");
 const lastRunPath = join(repoRoot, ".maestro/scenarios/last-run.json");
@@ -52,14 +52,14 @@ interface ScenarioOutcome {
   result: RubricResult;
 }
 
-const outcomes: ScenarioOutcome[] = [];
-
-for (const rec of lastRun.scenarios) {
-  const rubricPath = join(repoRoot, "tests/scenarios", rec.name, "rubric.ts");
-  const mod = await import(rubricPath) as { runRubric(dir: string): Promise<RubricResult> };
-  const result = await mod.runRubric(rec.project_dir);
-  outcomes.push({ name: rec.name, result });
-}
+const outcomes: ScenarioOutcome[] = await Promise.all(
+  lastRun.scenarios.map(async (rec) => {
+    const rubricPath = join(repoRoot, "tests/scenarios", rec.name, "rubric.ts");
+    const mod = await import(rubricPath) as { runRubric(dir: string): Promise<RubricResult> };
+    const result = await mod.runRubric(rec.project_dir);
+    return { name: rec.name, result };
+  }),
+);
 
 // ---- summary table ----------------------------------------------------------
 
@@ -72,24 +72,15 @@ console.log(header);
 console.log("-".repeat(header.length + 10));
 
 let totalPass = 0;
-const failures: { name: string; failedChecks: string[] } [] = [];
 
 for (const { name, result } of outcomes) {
   const passCount = result.checks.filter((c) => c.pass).length;
   const total = result.checks.length;
   const status = result.pass ? "PASS" : "FAIL";
-  if (result.pass) {
-    totalPass++;
-  } else {
-    failures.push({
-      name,
-      failedChecks: result.checks.filter((c) => !c.pass).map((c) => c.id),
-    });
-  }
-  const failNote =
-    !result.pass && failures[failures.length - 1]
-      ? `    [${failures[failures.length - 1].failedChecks.join(", ")} FAIL]`
-      : "";
+  if (result.pass) totalPass++;
+  const failNote = result.pass
+    ? ""
+    : `    [${result.checks.filter((c) => !c.pass).map((c) => c.id).join(", ")} FAIL]`;
   console.log(
     `${name.padEnd(COL_SCENARIO)}${status.padEnd(COL_STATUS)}${passCount}/${total}${failNote}`,
   );

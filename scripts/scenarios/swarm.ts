@@ -62,12 +62,6 @@ const scenarios = parseArgs();
 
 // ---- helpers ----------------------------------------------------------------
 
-function randomHex(bytes = 4): string {
-  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 async function makeTempDir(): Promise<string> {
   const result = await $`mktemp -d -t maestro-scenario-XXXXXX`.text();
   return result.trim();
@@ -121,38 +115,35 @@ interface ScenarioRecord {
 }
 
 const preparedAt = new Date().toISOString();
-const runId = `${Date.now()}-${randomHex()}`;
+const runId = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
-const records: ScenarioRecord[] = [];
+console.log(`Preparing ${scenarios.length} scenario sandbox(es) in parallel...\n`);
 
-console.log(`Preparing ${scenarios.length} scenario sandbox(es)...\n`);
+const records: ScenarioRecord[] = await Promise.all(
+  scenarios.map(async (name) => {
+    const type = projectTypeOf(name);
+    const tmpdir = await makeTempDir();
 
-for (const name of scenarios) {
-  const type = projectTypeOf(name);
-  const tmpdir = await makeTempDir();
-  process.stdout.write(`  [${type}] ${name} -> ${tmpdir} ... `);
+    if (type === "greenfield") {
+      await prepareGreenfield(tmpdir);
+    } else {
+      await prepareBrownfield(tmpdir);
+    }
 
-  if (type === "greenfield") {
-    await prepareGreenfield(tmpdir);
-  } else {
-    await prepareBrownfield(tmpdir);
-  }
+    await mkdir(join(tmpdir, ".maestro/scenarios"), { recursive: true });
+    const briefPath = await fillBrief(name, tmpdir);
 
-  // Ensure .maestro/scenarios/ exists so sub-agent exit sentinel write succeeds.
-  await mkdir(join(tmpdir, ".maestro/scenarios"), { recursive: true });
+    console.log(`  [${type}] ${name} -> ${tmpdir} ... done`);
 
-  const briefPath = await fillBrief(name, tmpdir);
-
-  records.push({
-    name,
-    project_dir: tmpdir,
-    project_type: type,
-    prepared_at: new Date().toISOString(),
-    brief_path: briefPath,
-  });
-
-  console.log("done");
-}
+    return {
+      name,
+      project_dir: tmpdir,
+      project_type: type,
+      prepared_at: new Date().toISOString(),
+      brief_path: briefPath,
+    };
+  }),
+);
 
 // Write last-run.json into the maestro checkout's .maestro/scenarios/.
 const lastRunDir = join(repoRoot, ".maestro/scenarios");
