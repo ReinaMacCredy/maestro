@@ -1,0 +1,181 @@
+import { matchGlob, matchesAnyGlob } from "@/shared/lib/glob-match.js";
+import { isMaestroSubstratePath } from "@/shared/lib/substrate-paths.js";
+import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
+import type { TaskReceipt } from "../task-types.js";
+import type { GitTouchedFilesResult } from "../../ports/git-anchor.port.js";
+import type {
+  Contract,
+  ContractVerdict,
+  DoneWhenCriterion,
+} from "./contract-types.js";
+
+export interface ComputedContractVerdict {
+  readonly verdict: ContractVerdict;
+  readonly criteria: readonly DoneWhenCriterion[];
+}
+
+export function computeContractVerdict(
+  contract: Contract,
+  gitResult: GitTouchedFilesResult,
+  receipt: TaskReceipt | undefined,
+  actorId: string,
+  at: string,
+  opts?: {
+    readonly overlapDetected?: ContractVerdict["overlapDetected"];
+  },
+): ComputedContractVerdict {
+  const criteria = applyReceiptHints(contract.doneWhen, receipt, actorId, at);
+  const actualFilesTouched = gitResult.actualFilesTouched.map((path) => normalizeSlashes(path));
+  const storedActualFilesTouched = gitResult.actualFilesTouchedTruncated
+    ? actualFilesTouched.slice(0, gitResult.actualFilesTouchedTruncated.stored)
+    : actualFilesTouched;
+  // .maestro/** is substrate metadata written by the CLI itself; it is not
+  // part of the user's contract scope and must not influence fulfilled/broken.
+  const auditableFiles = actualFilesTouched.filter((path) => !isMaestroSubstratePath(path));
+  const forbiddenTouched = auditableFiles.filter((path) => matchesAnyGlob(contract.scope.filesForbidden, path));
+  const expectedFilesMatched = auditableFiles.filter((path) =>
+    !matchesAnyGlob(contract.scope.filesForbidden, path) && matchesAnyGlob(contract.scope.filesExpected, path),
+  );
+  const outOfScopeFiles = auditableFiles.filter((path) =>
+    !matchesAnyGlob(contract.scope.filesForbidden, path) && !matchesAnyGlob(contract.scope.filesExpected, path),
+  );
+  const filesExpectedUnused = contract.scope.filesExpected.filter((pattern) =>
+    !actualFilesTouched.some((path) => matchGlob(pattern, path)),
+  );
+
+  const cap = contract.scope.maxFilesTouched ?? contract.configSnapshot.defaultMaxFilesTouched;
+  const capExceeded = cap !== undefined && auditableFiles.length > cap
+    ? { cap, actual: auditableFiles.length }
+    : undefined;
+
+  const metCriteria = criteria.filter((criterion) => criterion.met === true);
+  const unmetCriteria = criteria.filter((criterion) => criterion.met !== true);
+  const anchorFailed = gitResult.gitAvailable && gitResult.anchorFallback === "lost";
+  const overlapBlocks = opts?.overlapDetected?.policy === "fail";
+  const amendmentScopeNote = buildAmendmentScopeNote(contract, outOfScopeFiles);
+  const notes = [gitResult.notes, amendmentScopeNote]
+    .filter((note): note is string => typeof note === "string" && note.trim().length > 0)
+    .join(" ");
+
+  return {
+    criteria,
+    verdict: {
+      fulfilled: !anchorFailed
+        && forbiddenTouched.length === 0
+        && outOfScopeFiles.length === 0
+        && unmetCriteria.length === 0
+        && capExceeded === undefined
+        && !overlapBlocks,
+      computedAt: at,
+      actualFilesTouched: storedActualFilesTouched,
+      ...(gitResult.actualFilesTouchedTruncated ? { actualFilesTouchedTruncated: gitResult.actualFilesTouchedTruncated } : {}),
+      expectedFilesMatched,
+      outOfScopeFiles,
+      forbiddenTouched,
+      filesExpectedUnused,
+      ...(capExceeded ? { capExceeded } : {}),
+      unmetCriteria,
+      metCriteria,
+      ...(opts?.overlapDetected ? { overlapDetected: opts.overlapDetected } : {}),
+      ...(gitResult.anchorFallback ? { anchorFallback: gitResult.anchorFallback } : {}),
+      ...(receipt
+        ? {
+            receiptLinked: {
+              summary: receipt.summary,
+              surprise: receipt.surprise,
+              verifiedBy: receipt.verifiedBy,
+            },
+          }
+        : {}),
+      ...(notes ? { notes } : {}),
+    },
+  };
+}
+
+function buildAmendmentScopeNote(contract: Contract, outOfScopeFiles: readonly string[]): string | undefined {
+  if (outOfScopeFiles.length === 0 || contract.amendments.length === 0) {
+    return undefined;
+  }
+
+  const previouslyInScope = Array.from(new Set(outOfScopeFiles.filter((path) =>
+    contract.amendments.some((amendment) =>
+      matchesScope(amendment.before.scope, path) || matchesScope(amendment.after.scope, path),
+    ),
+  ))).sort();
+  if (previouslyInScope.length === 0) {
+    return undefined;
+  }
+
+  return `Previously in scope under amendments: ${previouslyInScope.join(", ")}.`;
+}
+
+function applyReceiptHints(
+  criteria: readonly DoneWhenCriterion[],
+  receipt: TaskReceipt | undefined,
+  actorId: string,
+  at: string,
+): readonly DoneWhenCriterion[] {
+  const verifiedBy = receipt?.verifiedBy
+    ?.map((value) => ({
+      raw: value,
+      normalized: normalizeReceiptText(value),
+    }))
+    .filter((value) => value.normalized.length > 0) ?? [];
+  if (verifiedBy.length === 0) {
+    return criteria;
+  }
+
+  return criteria.map((criterion) => {
+    if (criterion.met === true || criterion.kind !== "receipt-hint") {
+      return criterion;
+    }
+
+    const matchedVerifier = verifiedBy.find((value) => looselyMatches(criterion.text, value.normalized));
+    if (!matchedVerifier) {
+      return criterion;
+    }
+
+    return {
+      ...criterion,
+      met: true,
+      metAt: at,
+      metBy: actorId,
+      metEvidence: `receipt.verifiedBy:${matchedVerifier.raw}`,
+    };
+  });
+}
+
+function looselyMatches(left: string, right: string): boolean {
+  const normalizedLeft = normalizeReceiptText(left);
+  const normalizedRight = normalizeReceiptText(right);
+  if (normalizedLeft.length === 0 || normalizedRight.length === 0) {
+    return false;
+  }
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+  if (normalizedLeft.length < 3) {
+    return false;
+  }
+  return normalizedRight.includes(normalizedLeft);
+}
+
+function normalizeReceiptText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function matchesScope(
+  scope: Contract["scope"] | undefined,
+  path: string,
+): boolean {
+  if (!scope) {
+    return false;
+  }
+  if (matchesAnyGlob(scope.filesForbidden, path)) {
+    return false;
+  }
+  return matchesAnyGlob(scope.filesExpected, path);
+}

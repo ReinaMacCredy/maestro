@@ -41,6 +41,8 @@ feedback.jsonl
 .maestro/missions/
 .maestro/tasks/local-history/
 .maestro/tasks/batches/
+# Derived dashboard refreshed on every task mutation; not authoritative state.
+.maestro/tasks/NOW.md
 
 # Claude plans
 .claude/plans/
@@ -65,3 +67,5 @@ feedback.jsonl
 .maestro/runs/
 # L2 versioned contract mirror — derived from .maestro/tasks/contracts/ (canonical L1 store)
 .maestro/contracts/
+# Phase 6 swarm run state — per-run tmpdir map, not durable
+.maestro/scenarios/

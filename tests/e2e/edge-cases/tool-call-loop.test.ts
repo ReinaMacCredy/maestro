@@ -8,10 +8,10 @@ import { describe, it, expect } from "bun:test";
 import {
   composeTaskIntrospection,
   formatTaskIntrospectionMarkdown,
-} from "@/features/task/usecases/compose-task-introspection.usecase.js";
-import type { TaskIntrospectionDeps } from "@/features/task/usecases/compose-task-introspection.usecase.js";
+} from "@/shared/domain/legacy-task/usecases/compose-task-introspection.usecase.js";
+import type { TaskIntrospectionDeps } from "@/shared/domain/legacy-task/usecases/compose-task-introspection.usecase.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
-import type { Task } from "@/features/task/index.js";
+import type { LegacyTask as Task } from "@/shared/domain/legacy-task";
 
 function makeTask(): Task {
   return {

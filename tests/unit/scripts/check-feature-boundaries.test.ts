@@ -105,13 +105,13 @@ describe("findCrossFeatureImportViolation", () => {
     expect(
       findCompositionRootImportViolation(
         "src/services.ts",
-        "./features/mission/reply/services.js",
+        "./features/reply/usecases/write-reply.usecase.js",
       ),
     ).toMatchObject({
       file: "src/services.ts",
       ownFeature: "composition-root",
-      importSpec: "./features/mission/reply/services.js",
-      otherFeature: "mission",
+      importSpec: "./features/reply/usecases/write-reply.usecase.js",
+      otherFeature: "reply",
     });
 
     expect(
@@ -163,7 +163,7 @@ describe("findCrossFeatureImportViolation", () => {
       join(srcDir, "services.ts"),
       [
         'import { buildMissionServices } from "./features/mission/services.js";',
-        'import { buildReplyServices } from "./features/mission/reply/services.js";',
+        'import { writeAgentReply } from "./features/reply/usecases/write-reply.usecase.js";',
       ].join("\n"),
     );
 
@@ -173,8 +173,8 @@ describe("findCrossFeatureImportViolation", () => {
       {
         file: "src/services.ts",
         ownFeature: "composition-root",
-        importSpec: "./features/mission/reply/services.js",
-        otherFeature: "mission",
+        importSpec: "./features/reply/usecases/write-reply.usecase.js",
+        otherFeature: "reply",
       },
     ]);
   });

@@ -1,8 +1,10 @@
-import type { Contract, RiskClass, CostBudgetExhaustionReason } from "@/features/task/index.js";
+import type { Contract } from "@/types/contract.js";
+import type { RiskClass } from "@/types/product-spec.js";
+import type { CostBudgetExhaustionReason } from "@/service/check-cost-budget.js";
 import type { AIReviewPayload, EvidenceRow } from "@/features/evidence/index.js";
 import { compareWitnessLevel } from "@/features/evidence/index.js";
-import type { Spec } from "@/features/spec/index.js";
-import type { TrustFinding } from "@/features/verify/index.js";
+import type { Spec } from "@/shared/domain/legacy-spec/index.js";
+import type { TrustFinding } from "@/types/trust.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { Verdict, VerdictReason } from "@/features/verdict/index.js";
 import { generateVerdictId } from "@/features/verdict/index.js";

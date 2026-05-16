@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { writeFile, mkdtemp, rm } from "node:fs/promises";
 import { Command } from "commander";
 import { registerPlanCheckCommand } from "@/features/plan/commands/plan-check.command.js";
-import type { ContractVersionStorePort } from "@/features/task/ports/contract-version-store.port.js";
+import type { ContractVersionStorePort } from "@/shared/domain/legacy-task";
 import type { EvidenceRow, EvidenceStorePort } from "@/features/evidence/index.js";
-import type { SpecStorePort } from "@/features/spec/ports/storage.js";
-import type { Contract } from "@/features/task/index.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
+import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
+import type { Contract } from "@/types/contract.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
 
 // ─── Console capture ──────────────────────────────────────────────────────────
 

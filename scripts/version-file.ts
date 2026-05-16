@@ -6,8 +6,10 @@ interface PackageJson {
 }
 
 interface ReleaseVersionParts {
+  readonly major: number;
   readonly feature: number;
   readonly patch: number;
+  readonly preRelease?: string;
 }
 
 interface VersionFileData {
@@ -17,19 +19,21 @@ interface VersionFileData {
   readonly releasedAt: string;
 }
 
-const RELEASE_VERSION_PATTERN = /^0\.(\d+)\.(\d+)$/;
+const RELEASE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:-(rc\.\d+))?$/;
 
 export function parseReleaseVersion(version: string): ReleaseVersionParts {
   const match = RELEASE_VERSION_PATTERN.exec(version);
   if (!match) {
     throw new Error(
-      `Invalid Maestro release version '${version}'. Expected 0.x.y with a zero major version.`,
+      `Invalid Maestro release version '${version}'. Expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-rc.N.`,
     );
   }
 
   return {
-    feature: Number(match[1]),
-    patch: Number(match[2]),
+    major: Number(match[1]),
+    feature: Number(match[2]),
+    patch: Number(match[3]),
+    ...(match[4] !== undefined ? { preRelease: match[4] } : {}),
   };
 }
 

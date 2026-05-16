@@ -11,17 +11,12 @@ import type {
   Feature,
   Mission,
   Missions,
-  ReplyStorePort,
-} from "@/features/mission/index.js";
-import { MISSION_ID_PATTERN } from "@/features/mission/index.js";
-import {
-  isHandoffInProject,
-  type HandoffStorePort,
-} from "@/features/handoff/index.js";
+} from "@/shared/domain/legacy-mission";
+import { MISSION_ID_PATTERN } from "@/shared/domain/legacy-mission";
+import type { ReplyStorePort } from "@/features/reply";
 import { readText, dirExists } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
-import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import type {
   BundleFile,
   BundleMemoryStats,
@@ -39,7 +34,6 @@ export interface CollectBundleSourcesInput {
 export interface CollectBundleSourcesDeps {
   readonly missions: Missions;
   readonly replyStore: ReplyStorePort;
-  readonly handoffStore: HandoffStorePort;
 }
 
 export interface BundleSources {
@@ -67,7 +61,6 @@ export async function collectBundleSources(
   const redact = new Set<BundleRedactScope>(options.redact);
   const root = BUNDLE_ROOT(missionId);
   const files: BundleFile[] = [];
-  const projectRoot = resolveMaestroProjectRoot(projectDir);
 
   const { mission, features, assertions, checkpoints } = await deps.missions.loadFullState(missionId);
 
@@ -136,19 +129,6 @@ export async function collectBundleSources(
     }
   }
 
-  // handoff packets that reference this mission id
-  const allHandoffs = await deps.handoffStore.list();
-  const missionHandoffs = allHandoffs.filter(
-    (handoff) => handoff.refs.missionId === missionId && isHandoffInProject(handoff, projectRoot),
-  );
-  const missionHandoffIds = new Set(missionHandoffs.map((handoff) => handoff.id));
-  for (const handoff of missionHandoffs) {
-    files.push({
-      path: `${root}/handoffs/${handoff.id}.json`,
-      content: stringifyJson(handoff),
-    });
-  }
-
   // principles snapshot -- global files filtered where possible
   const principlesPath = join(projectDir, MAESTRO_DIR, "principles.jsonl");
   const principlesRaw = await readText(principlesPath);
@@ -161,15 +141,12 @@ export async function collectBundleSources(
 
   const outcomesPath = join(projectDir, MAESTRO_DIR, "principles", "outcomes.jsonl");
   const outcomesRaw = await readText(outcomesPath);
-  const filteredOutcomes = filterOutcomesForHandoffs(
-    outcomesRaw ?? "",
-    missionHandoffIds,
-  );
+  const outcomesContent = outcomesRaw ?? "";
   files.push({
     path: `${root}/principles/outcomes.jsonl`,
-    content: filteredOutcomes,
+    content: outcomesContent,
   });
-  const outcomesSnapshot = countJsonlLines(filteredOutcomes);
+  const outcomesSnapshot = countJsonlLines(outcomesContent);
 
   // memory snapshot (corrections + learnings)
   let memorySnapshot: BundleMemoryStats | null = null;
@@ -184,7 +161,7 @@ export async function collectBundleSources(
     assertions: assertions.length,
     agents: agentFeatureIds.length,
     replies: replyCount,
-    handoffs: missionHandoffs.length,
+    handoffs: 0,
     checkpoints: checkpoints.length,
     principlesSnapshot,
     outcomesSnapshot,
@@ -282,23 +259,3 @@ function countLearnings(compiledText: string): number {
   }
 }
 
-function filterOutcomesForHandoffs(
-  raw: string,
-  handoffIds: ReadonlySet<string>,
-): string {
-  if (!raw) return "";
-  const kept: string[] = [];
-  for (const line of raw.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const parsed = JSON.parse(trimmed) as { handoffId?: string };
-      if (parsed.handoffId && handoffIds.has(parsed.handoffId)) {
-        kept.push(trimmed);
-      }
-    } catch {
-      // skip malformed lines
-    }
-  }
-  return kept.length > 0 ? kept.join("\n") + "\n" : "";
-}

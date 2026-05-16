@@ -1,176 +1,94 @@
 ---
 name: maestro-handoff
-description: Hand off current work to another session via `maestro handoff`. Covers transfer to a different agent (codex to claude or vice versa) AND transfer to another session of the same agent (claude to claude, codex to codex). Use when the user says "handoff", "hand off to codex/claude/new session", "drop a packet", "pickup handoff", "list open handoffs", or wants to pass work across any session boundary through maestro's native launcher.
-user-invocable: true
+description: Read handoff envelopes left by previous agents at the start of a session or when picking up a task in a maestro-initialized project. Use whenever you suspect a prior session left context behind — task was claimed by another agent, a block was raised, or a new shell is taking over an unfinished workflow.
 ---
 
 # Maestro Handoff
 
-You are handing off the current task to another session via maestro's native launcher. Your job is to write a rich handoff brief and launch the receiving session via `maestro handoff --prompt-file`.
+Handoff is **passive** in maestro. Lifecycle verbs drop a small JSON envelope on disk; the next agent reads it.
 
-**User's arguments:** $ARGUMENTS
+## When to read this skill
 
----
+- Starting a session in a `.maestro/` project and you want to know what the last agent left behind.
+- Picking up a task another agent claimed or blocked.
+- Debugging why a follow-up agent did not pick up context.
 
-## Prerequisites
+## The model
 
-1. `maestro` must be on PATH. If missing, tell the user to install maestro and stop.
-2. For mission/task linkage, the current working tree (or an ancestor) must contain `.maestro/`. Handoffs work outside maestro projects too, but `refs` will be empty.
-3. Before requesting a handoff for task work, run the verification protocol in `maestro-verify`. The receiving session inherits the task's contract and Evidence; hand off after `maestro task verify` is clean and `maestro verdict request` has been run so the receiver can see the current Verdict.
+Emitting agent does nothing extra — the lifecycle verb writes the envelope.
+Receiving agent reads `.maestro/handoffs/<hnd-...>.json` directly. The file on disk is the whole contract.
 
-## What a maestro handoff is
+## Which verbs emit envelopes
 
-A portable transfer artifact persisted on disk:
-
-- `prompt.md`: the brief sent to the receiving session
-- `handoff.json`: metadata (agent, model, status, refs, timing)
-- `output.log`: stdout/stderr from the launched session
-
-**Every packet lands in one global store: `~/.maestro/handoff/<id>/`.** There is no per-project store. `--task-id` links the packet to a task for continuation and ownership transfer on pickup, but it does not change where the packet is written. `promptPath` and `outputPath` in the JSON output are relative; resolve them against `~/` (the global store root). `maestro handoff list` scans the single global store, so handoffs created in one working directory are visible from any other.
-
-Packets are detached by default. The launcher returns immediately with a handoff id. The launched receiver prompt now tells the new session to run `maestro handoff pickup --id <id> --json` before any other work so ownership and packet state stay aligned. Prompt-only packets can be picked up from any working directory. Task-linked packets must be picked up from their source project unless the operator explicitly passes `--standalone` to discard task linkage.
-
-## Parsing arguments
-
-Parse `$ARGUMENTS` to determine:
-1. Target agent and model
-2. Worktree (isolated git copy)?
-3. Task link?
-4. Task description (becomes the packet title plus the core of the brief)
-
-### Agent and model
-
-| User says | `--agent` | Default model |
+| Verb | Emits | Envelope `trigger_verb` |
 |---|---|---|
-| (nothing), "codex" | `codex` | `gpt-5.4` |
-| "claude", "opus" | `claude` | `opus` |
-| "sonnet" | `claude` | `sonnet` |
-| "haiku" | `claude` | `haiku` |
-| "new session", "fresh session", "another claude/codex" | match current agent | current default |
+| `maestro task claim` | yes | `task:claim` |
+| `maestro task block` | yes | `task:block` |
+| `maestro task ship` | no (roadmap) | — |
+| `maestro task verify` | no (roadmap) | — |
+| `maestro task abandon` | no (roadmap) | — |
 
-If the user names a specific model ("codex gpt-5.4-fast", "claude sonnet 4.7"), pass `--model <exact>`.
+`HandoffTrigger` in the port reserves all five values; only claim and block are wired. Treat the other three as not-yet-handoff-emitting until that changes.
 
-### Worktree
+## Envelope schema
 
-"in a worktree", "worktree", "isolated": add `--worktree <slug> --base $(git branch --show-current)`. Derive a short slug from the task description.
+Path: `.maestro/handoffs/<hnd-<base36>-<rand>>.json`
 
-### Task link
-
-Mention of `tsk-abc123`, "for task X", "link to task Y": add `--task-id <id>`. Task-linked packets carry the task's continuation summary and transfer claim ownership on pickup when they are picked up from the source project.
-
-If no `--task-id` is passed and the project has exactly one active continuation, maestro links to it automatically. With zero or multiple active continuations, the packet is standalone.
-
-## Writing the brief
-
-The receiving session starts with zero context. Write a self-contained brief to `/tmp/maestro-handoff-<timestamp>.md`:
-
-```
-## Task
-[Imperative description of what to do]
-
-## Context
-[Why this exists, background the receiver needs]
-
-## Relevant Files
-- `path/to/file.ts`: what it does and why it matters
-- `path/to/other.ts`: what it does and why it matters
-
-## Current State
-[What is done, what works, what does not]
-
-## What Was Tried
-- Approach 1: why it failed or was abandoned
-- Approach 2: partial success, with the remaining gap
-
-## Decisions
-- Decision 1 plus rationale
-- Decision 2 plus rationale
-
-## Acceptance Criteria
-- [ ] Criterion 1
-- [ ] Criterion 2
-
-## Constraints
-- Do not do X
-- Must preserve Y
+```json
+{
+  "id": "hnd-...",
+  "task_id": "tsk-...",
+  "trigger_verb": "task:claim" | "task:block",
+  "created_at": "<ISO-8601>",
+  "agent_id":     "<optional>",
+  "worktree_path":"<optional>",
+  "spec_path":    "<optional>",
+  "reason":       "<optional, present on task:block>"
+}
 ```
 
-Preserve the user's task qualifiers:
-- "investigate without editing" becomes an explicit "DO NOT edit any files".
-- "refactor" does not become "rewrite".
-- "fix" means implement the fix.
+Filename is the envelope id; the task id lives inside the file.
 
-A longer brief template lives in `./reference/brief-template.md`.
+## How to find envelopes for a task
 
-## Launching
+Scan recent envelopes and read each:
 
-Default:
 ```bash
-maestro handoff \
-  --agent codex \
-  --prompt-file /tmp/maestro-handoff-<ts>.md \
-  --name "<short title>" \
-  --json
+ls -1t .maestro/handoffs/*.json | head -10 | xargs -I{} jq '{id, task_id, trigger_verb, created_at, reason}' {}
 ```
 
-With worktree:
-```bash
-base=$(git branch --show-current)
-maestro handoff \
-  --agent codex \
-  --worktree <slug> --base "$base" \
-  --prompt-file /tmp/maestro-handoff-<ts>.md \
-  --name "<short title>" \
-  --json
-```
+Then filter by `task_id`. The `*.json` glob matches envelope files only — pickup sidecars live at `<id>.picked_up.json`.
 
-With task link:
-```bash
-maestro handoff \
-  --agent claude \
-  --task-id tsk-abc123 \
-  --prompt-file /tmp/maestro-handoff-<ts>.md \
-  --name "<short title>" \
-  --json
-```
+## Pickup protocol
 
-## After launch
+1. Read the envelope. Confirm `task_id` matches what you intend to pick up.
+2. Check `trigger_verb`:
+   - `task:claim` — a prior agent had it; verify they are gone before re-claiming.
+   - `task:block` — task is blocked. Read `reason`; resolve before re-claim.
+3. Re-claim: `maestro task claim <task_id> --agent <your-agent-id>`.
+4. Continue the verification loop per `maestro-verify`.
 
-Parse the JSON response. Report to the user:
+## MCP tools (when available)
 
-```
-Handed off to <agent> (<model>). Handoff id: <id>
-Follow: maestro handoff show <id>
-Pickup later: maestro handoff pickup --id <id>
-```
+The MCP surface mirrors direct file reads. Use these instead of `ls`/`jq` when an MCP client is wired:
 
-Do not wait unless the user explicitly asked. The receiver runs detached, but the launched session is expected to consume its own packet immediately on startup.
+| MCP tool                  | Purpose                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------ |
+| `maestro_handoff_list`    | List open envelopes. Filters: `task_id`, `trigger_verb`, `include_picked_up` (default `false`).  |
+| `maestro_handoff_show`    | Fetch one envelope by `hnd-*` id. Returns the envelope and pickup metadata when present.         |
+| `maestro_handoff_emit`    | Write an envelope. Only needed when emitting outside the lifecycle verbs that already emit.      |
+| `maestro_handoff_pickup`  | Mark an envelope picked up via a `<id>.picked_up.json` sidecar. Second pickup returns `HANDOFF_ALREADY_PICKED_UP`. |
 
-## Pickup flow
+`maestro_handoff_pickup` is a bookkeeping mark; it does **not** claim the task — call `maestro_task_claim` after pickup.
 
-When the user says "pickup handoff", "take over handoff":
+## Hand off cleanly
 
-1. `maestro handoff list --open --json` to enumerate open packets (this list is global; packets from other projects may appear).
-2. Single open packet: `maestro handoff pickup --json`.
-3. User specified an id: `maestro handoff pickup --id <id> --json`.
-4. Multiple packets and no id: the CLI errors with a clean list of open packets. Surface the list to the user and ask which.
+The next phase after this skill is `maestro-task` (after `task claim` re-establishes ownership) or `maestro-verify` (if the prior agent left mid-verification and the verdict loop should resume).
 
-If the session environment provides a detected agent (Claude Code / Codex) the CLI uses it; otherwise it defaults to the packet's own `agent` field. Pass `--agent codex|claude` and `--session <id>` together to override identity explicitly.
+Pass a re-claimed task whose envelope context — `agent_id`, `worktree_path`, `spec_path`, `reason` — has been internalized. Not just an envelope you glanced at.
+Do not invoke spec authoring or planning from this skill; this skill is read-only handoff plumbing.
 
-Pickup auto-claims a linked task only when the current working directory matches the packet's source project. From another project, Maestro errors with the source path and a concrete `cd ... && maestro handoff pickup --id <id> --json` command. Use `maestro handoff pickup --id <id> --standalone --json` only when you intentionally want the prompt without resuming the linked task. Prompt-only packets (no `refs.taskId`) create no task and can be picked up anywhere.
+## See also
 
-Pickup semantics including stale-claim transfer and contract inheritance live in `./reference/pickup.md`.
-
-## MCP equivalents
-
-When invoked from an MCP-connected agent, the read and pickup verbs are also exposed as tools on the maestro MCP server. Launching new packets is intentionally CLI-only.
-
-- `maestro_handoff_list` — read-only, project-scoped, paginated. Optional filters: `openOnly` (boolean, mirrors `--open`), `displayState` (`open|consumed|completed|failed`, mutually exclusive with `openOnly`), `taskId` (filter to packets linked to a specific task), `agent` (`codex|claude|hermes`).
-- `maestro_handoff_show` — read-only, project-scoped. Takes `{ id }`. Returns code `HANDOFF_NOT_FOUND` when the packet does not exist or belongs to another project.
-- `maestro_handoff_open_for_task` — read-only, project-scoped. Takes `{ taskId }`. Returns ids of open packets linked to that task, newest first. Use this when resuming work on a known task to find a waiting packet without scanning the full list.
-- `maestro_handoff_pickup` — takes `{ id, actorAgent, actorSessionId?, ownerId?, standalone? }`. `actorSessionId` defaults to the MCP session id (`MAESTRO_SESSION_ID`/`CLAUDECODE_SESSION_ID`/`CODEX_THREAD_ID`, else `username@host`); `ownerId` defaults to `buildTaskOwnerId(actorAgent, actorSessionId)`. Error codes: `HANDOFF_NOT_FOUND`, `ALREADY_CONSUMED`, `CROSS_PROJECT_PICKUP`, `HANDOFF_TASK_COMPLETED`, `HANDOFF_TASK_BLOCKED`, `OWNERSHIP_CONFLICT`.
-
-## Reference
-
-- `./reference/brief-template.md`: longer brief example with a realistic scenario
-- `./reference/pickup.md`: pickup semantics, stale-claim transfer, contract inheritance
+- `maestro-task` — full task lifecycle.
+- `maestro-verify` — canonical verification protocol after re-claim.

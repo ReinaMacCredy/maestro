@@ -8,7 +8,7 @@ import { compareWitnessLevel } from "@/features/evidence/index.js";
 import type { DeployReadinessPayload, WitnessLevel, EvidenceStorePort } from "@/features/evidence/index.js";
 import { loadOwnersFromBase as defaultLoadOwnersFromBase } from "@/features/policy/index.js";
 import type { Owners } from "@/features/policy/index.js";
-import type { Spec } from "@/features/spec/index.js";
+import type { Spec } from "@/shared/domain/legacy-spec/index.js";
 import type { RecordEvidenceInput } from "@/features/evidence/index.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
 import { checkDeployReadiness } from "../usecases/check-deploy-readiness.usecase.js";

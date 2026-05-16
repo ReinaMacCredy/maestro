@@ -103,46 +103,6 @@ describe("compiled provider and skill commands", () => {
     expect(existsSync(join(homeDir, ".hermes", "skills", "maestro", "maestro-task", "SKILL.md"))).toBe(false);
   });
 
-  it("launches a Hermes handoff with Maestro session env", async () => {
-    const binDir = join(tmpDir, "bin");
-    const argsPath = join(tmpDir, "hermes-args.txt");
-    const envPath = join(tmpDir, "hermes-env.txt");
-    await mkdir(binDir, { recursive: true });
-    await writeFile(
-      join(binDir, "hermes"),
-      [
-        "#!/bin/sh",
-        "printf '%s\\n' \"$@\" > \"$FAKE_HERMES_ARGS\"",
-        "printf '%s\\n%s\\n' \"$MAESTRO_AGENT\" \"$MAESTRO_SESSION_ID\" > \"$FAKE_HERMES_ENV\"",
-        "exit 0",
-      ].join("\n"),
-    );
-    await chmod(join(binDir, "hermes"), 0o755);
-
-    const handoff = await runCompiled(
-      ["handoff", "Compiled Hermes smoke", "--agent", "hermes", "--wait", "--json"],
-      repoDir,
-      {
-        env: {
-          ...env,
-          PATH: `${binDir}:${process.env.PATH ?? ""}`,
-          FAKE_HERMES_ARGS: argsPath,
-          FAKE_HERMES_ENV: envPath,
-        },
-      },
-    );
-
-    expect(handoff.exitCode).toBe(0);
-    const record = expectJson<{ agent: string; status: string; id: string; model: string }>(handoff);
-    expect(record).toMatchObject({ agent: "hermes", status: "completed", model: "default" });
-    const args = (await readFile(argsPath, "utf8")).trim().split("\n");
-    expect(args).toContain("chat");
-    expect(args).toContain("--quiet");
-    expect(args).toContain("--yolo");
-    expect(args).toContain("terminal,skills");
-    expect(args).not.toContain("--model");
-    expect((await readFile(envPath, "utf8")).trim().split("\n")).toEqual(["hermes", record.id]);
-  });
 });
 
 async function writeSkill(dir: string, name: string, description: string): Promise<void> {

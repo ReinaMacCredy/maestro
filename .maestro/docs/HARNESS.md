@@ -56,7 +56,7 @@ Improving the development harness itself: policies, skills, validation, hooks.
 
 ## How this fits the rest of the system
 
-- `maestro intake` returns the work type as part of its result. Use it before claiming a task.
-- `maestro-classify` skill is the Phase 1 telemetry wrapper; the same logic now lives in the intake primitive.
+- Work-type is declared on the product-spec frontmatter (`work_type: <one of six>`); `maestro spec validate` enforces the value.
+- The `maestro-design` skill walks the work-type decision tree during spec authoring (grill protocol, ADR-0016).
 - The `harness-delta` evidence kind is recorded when a task closes and the work touched `.maestro/`, `policies/`, `skills/`, or `hooks/`.
 - See `VALIDATION_LADDER.md` for how harness changes get verified.

@@ -3,43 +3,23 @@ import { join } from "node:path";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { ConfigLayers } from "@/infra/ports/config.port.js";
-import type { SessionDetectPort } from "@/features/session";
-import type { NotesStorePort } from "@/features/notes";
 import type {
   MissionStorePort,
   FeatureStorePort,
   AssertionStorePort,
   CheckpointStorePort,
   Missions,
-} from "@/features/mission";
-import { buildMissions } from "@/features/mission";
-import type {
-  CorrectionStorePort,
-  LearningStorePort,
-  Correction,
-  CreateCorrectionInput,
-  CorrectionQuery,
-  RawLearningEntry,
-  CompiledLearnings,
-} from "@/features/memory";
-import type { RatchetStorePort, RatchetSuite, RatchetBaseline } from "@/features/memory-ratchet";
-import type { ProjectGraphStorePort, ProjectGraph } from "@/features/graph";
-import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
-import { isOpenHandoffRecord } from "@/features/handoff";
-import { isHandoffInProject } from "@/features/handoff/domain/project-scope.js";
+} from "@/shared/domain/legacy-mission";
+import { buildMissions } from "@/shared/domain/legacy-mission";
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
-import type { AgentSession } from "@/features/session";
-import type { NoteEntry } from "@/features/notes";
 import type {
   EvidenceRow,
   EvidenceStorePort,
 } from "@/features/evidence";
-import type { Contract, Task } from "@/features/task";
-import type { ContractStorePort } from "@/features/task/ports/contract-store.port.js";
-import type { GitAnchorPort } from "@/features/task/ports/git-anchor.port.js";
-import type { TaskStorePort } from "@/features/task/ports/task-store.port.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/features/task/domain/contract/contract-types.js";
+import type { Contract } from "@/types/contract.js";
+import type { LegacyTask as Task, ContractStorePort, GitAnchorPort, LegacyTaskStorePort as TaskStorePort } from "@/shared/domain/legacy-task";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
 import type {
   Mission,
   Feature,
@@ -51,7 +31,7 @@ import type {
   UpdateMissionInput,
   UpdateFeatureInput,
   UpdateAssertionInput,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
   return {
@@ -77,10 +57,10 @@ export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
 export function mockConfig(overrides: Partial<ConfigPort> = {}): ConfigPort {
   const store = new Map<string, MaestroConfig>();
   return {
-    load: async () => ({ sessionDetection: { enabled: true, agents: ["claude-code"] } }),
+    load: async () => ({}),
     loadLayers: async (): Promise<ConfigLayers> => ({
-      defaults: { sessionDetection: { enabled: true, agents: ["claude-code"] } },
-      effective: store.get("project") ?? store.get("global") ?? { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+      defaults: {},
+      effective: store.get("project") ?? store.get("global") ?? {},
       project: store.get("project"),
       global: store.get("global"),
       errors: [],
@@ -94,17 +74,6 @@ export function mockConfig(overrides: Partial<ConfigPort> = {}): ConfigPort {
     },
     exists: async (scope) => store.has(scope),
     ...overrides,
-  };
-}
-
-export function mockNotesStore(initial: NoteEntry[] = []): NotesStorePort {
-  const notes = [...initial];
-
-  return {
-    append: async (note) => {
-      notes.push(note);
-    },
-    list: async () => notes,
   };
 }
 
@@ -126,23 +95,6 @@ export function mockEvidenceStore(initial: EvidenceRow[] = []): EvidenceStorePor
         out.push(row);
       }
       return out.sort((a, b) => a.created_at.localeCompare(b.created_at));
-    },
-  };
-}
-
-export function mockSessionDetect(
-  session?: AgentSession,
-): SessionDetectPort {
-  const defaultSession: AgentSession = {
-    agent: "claude-code",
-    sessionId: "test-session-123",
-    sourcePath: join(tmpdir(), "sessions", "test"),
-  };
-  return {
-    detect: async () => session ?? defaultSession,
-    lookup: async (_agent, sessionId) => {
-      const active = session ?? defaultSession;
-      return active.sessionId === sessionId ? active : undefined;
     },
   };
 }
@@ -709,157 +661,3 @@ export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchor
   };
 }
 
-export function mockCorrectionStore(
-  initial: Correction[] = [],
-): CorrectionStorePort {
-  const corrections = new Map<string, Correction>();
-  let counter = initial.length;
-
-  for (const c of initial) {
-    corrections.set(c.id, c);
-  }
-
-  return {
-    create: async (input: CreateCorrectionInput) => {
-      counter++;
-      const now = new Date().toISOString();
-      const id = `corr-${counter}`;
-      const correction: Correction = {
-        id,
-        rule: input.rule,
-        source: input.source,
-        trigger: input.trigger,
-        severity: input.severity,
-        createdAt: now,
-        updatedAt: now,
-      };
-      corrections.set(id, correction);
-      return correction;
-    },
-    get: async (id: string) => corrections.get(id),
-    list: async () => [...corrections.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    search: async (query: CorrectionQuery) => {
-      const all = [...corrections.values()];
-      return all.filter((c) => {
-        if (query.keywords?.length) {
-          const match = query.keywords.some((qk) =>
-            c.trigger.keywords.some((tk) => tk.toLowerCase().includes(qk.toLowerCase())),
-          );
-          if (!match) return false;
-        }
-        if (query.text) {
-          const text = query.text.toLowerCase();
-          if (!c.rule.toLowerCase().includes(text) && !c.source.toLowerCase().includes(text)) return false;
-        }
-        return true;
-      });
-    },
-    update: async (id: string, input: Partial<Correction>) => {
-      const existing = corrections.get(id);
-      if (!existing) return undefined;
-      const updated: Correction = { ...existing, ...input, id: existing.id, updatedAt: new Date().toISOString() };
-      corrections.set(id, updated);
-      return updated;
-    },
-    remove: async (id: string) => corrections.delete(id),
-  };
-}
-
-export function mockLearningStore(
-  initial: RawLearningEntry[] = [],
-): LearningStorePort {
-  const raw = [...initial];
-  let compiled: CompiledLearnings | undefined;
-
-  return {
-    appendRaw: async (entry: RawLearningEntry) => {
-      raw.push(entry);
-    },
-    listRaw: async () => [...raw],
-    rawCount: async () => raw.length,
-    readCompiled: async () => compiled,
-    writeCompiled: async (c: CompiledLearnings) => {
-      compiled = c;
-    },
-  };
-}
-
-export function mockRatchetStore(
-  initialSuite?: RatchetSuite,
-  initialBaseline?: RatchetBaseline,
-): RatchetStorePort {
-  let suite: RatchetSuite = initialSuite ?? { assertions: [] };
-  let baseline: RatchetBaseline | undefined = initialBaseline;
-
-  return {
-    getSuite: async () => suite,
-    writeSuite: async (s: RatchetSuite) => {
-      suite = s;
-    },
-    getBaseline: async () => baseline,
-    writeBaseline: async (b: RatchetBaseline) => {
-      baseline = b;
-    },
-  };
-}
-
-export function mockProjectGraphStore(
-  initial?: ProjectGraph,
-): ProjectGraphStorePort {
-  let graph: ProjectGraph = initial ?? { nodes: [], edges: [] };
-
-  return {
-    load: async () => graph,
-    save: async (g: ProjectGraph) => {
-      graph = g;
-    },
-  };
-}
-
-export function makeHandoffRecord(
-  partial: Partial<HandoffRecord> & { id: string; createdAt: string },
-): HandoffRecord {
-  return {
-    id: partial.id,
-    createdAt: partial.createdAt,
-    task: partial.task ?? "work",
-    name: partial.name ?? partial.id,
-    agent: partial.agent ?? "codex",
-    model: partial.model ?? "gpt-5.4",
-    status: partial.status ?? "launched",
-    wait: partial.wait ?? false,
-    sourceDir: partial.sourceDir ?? "/src",
-    targetDir: partial.targetDir ?? "/target",
-    promptPath: partial.promptPath ?? "prompt.md",
-    outputPath: partial.outputPath ?? "output.log",
-    command: partial.command ?? [],
-    refs: partial.refs ?? {},
-    ...(partial.consumedAt !== undefined ? { consumedAt: partial.consumedAt } : {}),
-    ...(partial.pickedUpByAgent !== undefined ? { pickedUpByAgent: partial.pickedUpByAgent } : {}),
-    ...(partial.pickedUpBySessionId !== undefined ? { pickedUpBySessionId: partial.pickedUpBySessionId } : {}),
-    ...(partial.pickedUpAt !== undefined ? { pickedUpAt: partial.pickedUpAt } : {}),
-    ...(partial.worktree !== undefined ? { worktree: partial.worktree } : {}),
-  };
-}
-
-export function mockHandoffStore(records: readonly HandoffRecord[] = []): HandoffStorePort {
-  const recordMap = new Map(records.map((record) => [record.id, record] as const));
-  return {
-    async create() { throw new Error("not used in mockHandoffStore"); },
-    async update(r) {
-      recordMap.set(r.id, r);
-      return r;
-    },
-    async consume() { throw new Error("not used in mockHandoffStore"); },
-    async get(id) { return recordMap.get(id); },
-    async list() { return [...recordMap.values()]; },
-    async listOpenForTask(input) {
-      return [...recordMap.values()].filter((record) => (
-        record.refs.taskId === input.taskId
-        && isOpenHandoffRecord(record)
-        && isHandoffInProject(record, input.projectRoot)
-      ));
-    },
-    resolveArtifactPath(p: string) { return p; },
-  };
-}

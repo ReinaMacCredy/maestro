@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { checkDeployReadiness } from "@/features/deploy/usecases/check-deploy-readiness.usecase.js";
 import type { DeployReadinessInput } from "@/features/deploy/usecases/check-deploy-readiness.usecase.js";
-import type { Spec } from "@/features/spec/index.js";
+import type { Spec } from "@/shared/domain/legacy-spec/index.js";
 import type { Owners } from "@/features/policy/index.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
 

@@ -6,19 +6,15 @@ import type {
   FeatureStorePort,
   AssertionStorePort,
   CheckpointStorePort,
-  AgentReply,
-  PrincipleStorePort,
-  ReplyStorePort,
   Missions,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
+import type { PrincipleStorePort } from "@/features/principle";
+import type { AgentReply, ReplyStorePort } from "@/features/reply";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
-import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
-import type { RatchetStorePort } from "@/features/memory-ratchet";
-import type { ProjectGraphStorePort } from "@/features/graph";
-import type { HandoffStorePort } from "@/features/handoff";
-import type { TaskQueryPort, RunStateStorePort, ContractVersionStorePort } from "@/features/task";
-import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
+import type { TaskQueryPort } from "@/shared/domain/legacy-task";
+import type { ContractVersionStorePort, ContractStoreQueryPort } from "@/repo/contract-store.port.js";
+import type { RunStateStorePort } from "@/repo/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence";
 import type { VerdictStorePort } from "@/features/verdict";
 import { buildAutopilotSnapshot } from "./autopilot-screen.js";
@@ -44,11 +40,6 @@ export interface SnapshotDeps {
   checkpointStore: CheckpointStorePort;
   config: ConfigPort;
   git: GitPort;
-  correctionStore?: CorrectionStorePort;
-  learningStore?: LearningStorePort;
-  ratchetStore?: RatchetStorePort;
-  projectGraphStore?: ProjectGraphStorePort;
-  handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
@@ -63,11 +54,6 @@ export interface SnapshotDeps {
 export interface HomeSnapshotDeps {
   config: ConfigPort;
   git: GitPort;
-  correctionStore?: CorrectionStorePort;
-  learningStore?: LearningStorePort;
-  ratchetStore?: RatchetStorePort;
-  projectGraphStore?: ProjectGraphStorePort;
-  handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
@@ -120,7 +106,6 @@ export async function loadSnapshotInput(
         assertionStore: deps.assertionStore,
         replyStore: deps.replyStore,
         principleStore: deps.principleStore,
-        handoffStore: deps.handoffStore,
         cwd: deps.cwd,
       }, missionId, currentProjectRoot)
     : {
@@ -142,13 +127,7 @@ export async function loadSnapshotInput(
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.getState(deps.cwd),
-    buildMissionControlMemorySnapshot({
-      correctionStore: deps.correctionStore,
-      learningStore: deps.learningStore,
-      ratchetStore: deps.ratchetStore,
-      projectGraphStore: deps.projectGraphStore,
-      cwd: deps.cwd,
-    }),
+    buildMissionControlMemorySnapshot({ cwd: deps.cwd }),
     taskBoardPromise,
     autopilotPromise,
   ]);
@@ -198,13 +177,7 @@ export async function loadHomeSnapshotInput(
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
-    buildMissionControlMemorySnapshot({
-      correctionStore: deps.correctionStore,
-      learningStore: deps.learningStore,
-      ratchetStore: deps.ratchetStore,
-      projectGraphStore: deps.projectGraphStore,
-      cwd: deps.cwd,
-    }),
+    buildMissionControlMemorySnapshot({ cwd: deps.cwd }),
     taskBoardPromise,
     repliesPromise,
     principleEffectivenessPromise,

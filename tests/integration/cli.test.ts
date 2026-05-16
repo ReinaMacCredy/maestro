@@ -192,7 +192,6 @@ describe("CLI integration", () => {
     const { stdout, exitCode } = await run(["--help"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("init");
-    expect(stdout).toContain("note");
     expect(stdout).toContain("status");
     expect(stdout).toContain("doctor");
   });
@@ -214,22 +213,4 @@ describe("CLI integration", () => {
     expect(status).toHaveProperty("gitAvailable");
   }, SLOW_CLI_TIMEOUT_MS);
 
-    it("note writes a note and note --list returns it", async () => {
-      await initGitRepo(tmpDir);
-
-      const create = await run(
-        ["note", "--content", "Remember the branch state", "--json"],
-        tmpDir,
-      );
-    expect(create.exitCode).toBe(0);
-    const createdNote = JSON.parse(create.stdout);
-    expect(createdNote.content).toBe("Remember the branch state");
-    expect(createdNote.git_branch).toBe("main");
-
-    const list = await run(["note", "--list", "--json"], tmpDir);
-    expect(list.exitCode).toBe(0);
-    const notes = JSON.parse(list.stdout);
-    expect(notes).toHaveLength(1);
-    expect(notes[0]!.content).toBe("Remember the branch state");
-  });
 });

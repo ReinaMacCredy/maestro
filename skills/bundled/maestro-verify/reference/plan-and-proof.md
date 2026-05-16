@@ -41,25 +41,23 @@ the plan is internally consistent.
 ## ProofMap
 
 Every acceptance criterion in the linked Spec needs at least one Evidence row
-covering it before the Verdict can pass.
+covering it at the required witness level before the Verdict can pass. In v2
+the ProofMap computation runs inside `maestro verdict request` rather than as
+a standalone verb. The verdict's `reasons[]` array surfaces gaps through the
+`proof-map-incomplete` diagnostic code; the failing criterion ids are listed
+alongside.
 
-```bash
-maestro task proof --task <id>
-maestro task proof --task <id> --json
-```
-
-The verb prints which criteria are covered, by how many rows, and at what
-witness levels. A criterion with zero rows is `uncovered`. A criterion with
-rows all below the autopilot threshold is `under-witnessed`.
-
-Example output:
+Example excerpt from a FAIL verdict caused by coverage gaps:
 
 ```
-ProofMap for task tsk-aaa123:
-  [covered]         ac-1  "API returns 200 for valid input"  (2 rows, witnessed-by-maestro)
-  [under-witnessed] ac-2  "No secrets in response"  (1 row, agent-claimed-locally)
-  [uncovered]       ac-3  "Error path returns 422"
+Decision:   FAIL
+Reasons:
+  [coverage] proof-map-incomplete: ac-2 under-witnessed (1 row, agent-claimed-locally)
+  [coverage] proof-map-incomplete: ac-3 uncovered (0 rows)
 ```
 
-Run `maestro task proof` after every significant Evidence record and before
-requesting a Verdict. Gaps here will cause a `FAIL` or `HUMAN` verdict.
+Address gaps by recording additional Evidence rows tied to the specific
+criterion (`maestro evidence record --task <id> --kind command --criterion
+<ac-id>`), then re-run `maestro verdict request`. The `requireProofMapComplete`
+policy in `policies/autopilot.yaml` controls whether ProofMap gaps gate the
+verdict at PASS-class autopilot thresholds.

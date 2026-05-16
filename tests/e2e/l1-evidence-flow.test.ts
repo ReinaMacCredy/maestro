@@ -35,7 +35,9 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-describe("L1 evidence flow E2E", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task claim` is detached per ADR-0007 big-bang;
+// v2 equivalents live in src/runtime/task.command.ts.
+describe.skip("L1 evidence flow E2E", () => {
   it(
     "records, lists, shows, and preserves evidence through task completion",
     async () => {
@@ -140,9 +142,11 @@ describe("L1 evidence flow E2E", () => {
         tmpDir,
       );
       expect(listResult.exitCode).toBe(0);
-      const rows = expectJson<
-        Array<{ id: string; kind: string; witness_level: string; created_at: string }>
-      >(listResult);
+      const listPayload = expectJson<{
+        items: Array<{ id: string; kind: string; witness_level: string; created_at: string }>;
+        v2_items?: ReadonlyArray<unknown>;
+      }>(listResult);
+      const rows = listPayload.items;
       expect(rows.length).toBe(3);
       // Chronological order: row1 first, row3 last.
       expect(rows[0]!.id).toBe(row1.id);
@@ -189,8 +193,11 @@ describe("L1 evidence flow E2E", () => {
         tmpDir,
       );
       expect(listAfter.exitCode).toBe(0);
-      const rowsAfter = expectJson<Array<{ id: string }>>(listAfter);
-      expect(rowsAfter.length).toBe(3);
+      const listAfterPayload = expectJson<{
+        items: Array<{ id: string }>;
+        v2_items?: ReadonlyArray<unknown>;
+      }>(listAfter);
+      expect(listAfterPayload.items.length).toBe(3);
 
       // 8. Assert Mission Control snapshot exposes evidenceCount: 3 for this task.
       const mcResult = await runCompiled(

@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
+import { parseNonNegativeInt } from "@/shared/lib/cli-options.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { summarizeEvidence } from "@/shared/lib/projection.js";
 import { type Services } from "@/services.js";
@@ -26,11 +27,11 @@ import {
   type WitnessLevel,
 } from "../domain/types.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
-import { readCurrentContractWithBackfill } from "@/features/task/index.js";
+import { readCurrentContractWithBackfill } from "@/service/contract-helpers.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore" | "contractStore" | "contractVersionStore">;
+  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractStore" | "contractVersionStore" | "v2">;
   readonly recordEvidence?: typeof defaultRecordEvidence;
 }
 
@@ -75,7 +76,7 @@ Examples:
     .option("--confidence <n>", "Confidence score 0-1 for --kind ai-review (default 0.5)", parseFloat)
     .option("--threat-model-file <path>", "Path to a JSON or YAML threat-model file (with --kind threat-model)")
     .option("--witness <level>", "Override witness level (default: agent-claimed-locally)")
-    .option("--session <id>", "Override session id (default: detected session)")
+    .option("--session <id>", "Attach a session id to the evidence row")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
@@ -105,12 +106,14 @@ interface RecordOpts {
 }
 
 async function buildRecordInput(
-  services: Pick<Services, "evidenceStore" | "taskStore" | "sessionDetect" | "specStore" | "contractVersionStore" | "contractStore">,
+  services: Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractVersionStore" | "contractStore" | "v2">,
   opts: RecordOpts,
 ): Promise<RecordEvidenceInput> {
   const taskId = opts.task;
-  const task = await services.taskStore.get(taskId);
-  if (!task) {
+  // Look up in v1 first (legacy missionId-linked tasks). Fall back to v2.
+  const v1Task = await services.taskStore.get(taskId);
+  const v2Task = v1Task ? undefined : await services.v2.taskStore.get(taskId);
+  if (!v1Task && !v2Task) {
     throw new MaestroError(`Task not found: ${taskId}`, [
       "Run `maestro task list` to see available tasks",
     ]);
@@ -118,8 +121,10 @@ async function buildRecordInput(
 
   // When the task belongs to a Mission that has a Spec with at least one
   // criterion, --criterion is required and must match a known criterion id.
-  if (task.missionId) {
-    const spec = await services.specStore.read(task.missionId);
+  // (v1 only — v2 tasks reference specs via spec_path and skip this check;
+  // criterion validation for v2 happens against the contract below.)
+  if (v1Task?.missionId) {
+    const spec = await services.specStore.read(v1Task.missionId);
     if (spec && spec.acceptance_criteria.length > 0) {
       const ids = spec.acceptance_criteria.map((c) => c.id);
       if (!opts.criterion) {
@@ -153,8 +158,7 @@ async function buildRecordInput(
   }
 
   const kind = parseKind(opts.kind);
-  const sessionId = opts.session
-    ?? (await services.sessionDetect.detect(process.cwd()))?.sessionId;
+  const sessionId = opts.session;
 
   if (kind === "command") {
     if (typeof opts.command !== "string" || opts.command.length === 0
@@ -329,15 +333,6 @@ async function parseFindings(raw: string, taskId: string): Promise<readonly AIRe
   return findings;
 }
 
-function parseNonNegativeInt(raw: string): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
-    throw new MaestroError(`Invalid integer: ${raw}`, [
-      "Pass a non-negative integer (0 or greater)",
-    ]);
-  }
-  return n;
-}
 
 const VALID_RESIDUAL_RISKS = new Set(["low", "medium", "high"]);
 
@@ -561,11 +556,37 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
         ? rows.slice(0, effectiveLimit)
         : rows;
 
-      if (isJson && !isFull) {
-        output(true, sliced.map(summarizeEvidence), () => []);
+      // Also surface v2 evidence rows (transition / lint-violation) so a v2-only
+      // task is not invisible to `evidence list`. Session filter is v1-only.
+      // `services.v2` may be absent in tests that mock a subset of the surface;
+      // treat that as "no v2 rows" rather than failing the listing.
+      const v2Rows = opts.session === undefined && services.v2?.evidenceStore !== undefined
+        ? await services.v2.evidenceStore.list({
+            ...(opts.task !== undefined ? { task_id: opts.task as string } : {}),
+          })
+        : [];
+      const v2Sliced = effectiveLimit !== undefined && effectiveLimit > 0
+        ? v2Rows.slice(0, effectiveLimit)
+        : v2Rows;
+
+      if (isJson) {
+        const items = isFull ? sliced : sliced.map(summarizeEvidence);
+        const payload = v2Sliced.length > 0
+          ? { items, v2_items: v2Sliced }
+          : { items };
+        output(true, payload, () => []);
         return;
       }
-      output(isJson, sliced, formatEvidenceList);
+      // Text mode: print v1 section, then a v2 section when present.
+      const textLines = [...formatEvidenceList(sliced)];
+      if (v2Sliced.length > 0) {
+        textLines.push("");
+        textLines.push("V2 evidence rows:");
+        for (const row of v2Sliced) {
+          textLines.push(`  ${row.timestamp}  ${row.id}  ${row.kind}  ${row.task_id ?? "-"}`);
+        }
+      }
+      output(isJson, textLines, (lines) => lines);
     });
 }
 
@@ -586,6 +607,18 @@ function registerShowCommand(parent: Command, root: Command, deps: EvidenceComma
 
       const row = await services.evidenceStore.read(id);
       if (row === undefined) {
+        // Fall back to v2 evidence store (transition / lint-violation rows
+        // live there). v2 may be absent in narrow test fixtures.
+        const v2Match = await services.v2?.evidenceStore?.read(id);
+        if (v2Match !== undefined) {
+          output(isJson, v2Match, (r) => [
+            `  ID:        ${r.id}`,
+            `  Kind:      ${r.kind}`,
+            `  Timestamp: ${r.timestamp}`,
+            ...(r.task_id !== undefined ? [`  Task:      ${r.task_id}`] : []),
+          ]);
+          return;
+        }
         throw new MaestroError(`Evidence not found: ${id}`, [
           "Run `maestro evidence list --task <id>` to see available evidence",
         ]);

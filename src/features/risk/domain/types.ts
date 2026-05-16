@@ -1,4 +1,4 @@
-import type { RiskClass } from "@/features/task/index.js";
+import type { RiskClass } from "@/types/product-spec.js";
 
 export interface DerivedRiskInput {
   readonly changedPaths: readonly string[];

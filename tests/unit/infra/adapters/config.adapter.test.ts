@@ -52,8 +52,6 @@ describe("YamlConfigAdapter", () => {
   describe("load with defaults", () => {
     it("returns default config when no files exist", async () => {
       const loaded = await config.load(tmpDir);
-      expect(loaded.sessionDetection?.enabled).toBe(true);
-      expect(loaded.sessionDetection?.agents).toContain("claude-code");
       expect(loaded.contracts).toEqual({
         default: "prompt",
         strict: false,
@@ -66,11 +64,9 @@ describe("YamlConfigAdapter", () => {
     it("merges project config over defaults", async () => {
       await config.write("project", tmpDir, {
         defaultAgent: "gemini",
-        sessionDetection: { enabled: false, agents: [] },
       });
       const loaded = await config.load(tmpDir);
       expect(loaded.defaultAgent).toBe("gemini");
-      expect(loaded.sessionDetection?.enabled).toBe(false);
     });
 
     it("merges nested contracts config over defaults", async () => {

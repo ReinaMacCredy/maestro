@@ -103,7 +103,9 @@ async function commitFile(dir: string, relPath: string, content = "// test\n"): 
   );
 }
 
-describe("EC 9 — sensitive path access (forbidden_paths + sensitive-paths.yaml)", () => {
+// TODO(v2/phase-4): re-enable or remove. v1 `task verify` is detached per ADR-0007 big-bang;
+// v2 equivalents live in src/runtime/task.command.ts.
+describe.skip("EC 9 — sensitive path access (forbidden_paths + sensitive-paths.yaml)", () => {
   it(
     "positive: diff touching sensitive-paths glob emits sensitive-paths warn finding",
     async () => {

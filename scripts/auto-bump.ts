@@ -52,18 +52,19 @@ if (messages.length === 0) {
   process.exit(0);
 }
 
-// --- Determine bump level (0.x.y scheme) ---
+// --- Determine bump level (MAJOR.MINOR.PATCH scheme) ---
 // x bumps on feat or BREAKING CHANGE (feature slot)
 // y bumps on everything else (patch slot)
+// Major bumps are intentional and not driven by auto-bump.
 
 const { bump, featureCount: featCount, patchCount } = summarizeCommitBumps(messages);
 
-// --- Compute next version (0.x.y) ---
+// --- Compute next version ---
 
-const { feature: x, patch: y } = parseReleaseVersion(currentVersion);
+const { major: m, feature: x, patch: y } = parseReleaseVersion(currentVersion);
 const nextVersion = bump === "feature"
-  ? `0.${x + 1}.0`
-  : `0.${x}.${y + 1}`;
+  ? `${m}.${x + 1}.0`
+  : `${m}.${x}.${y + 1}`;
 
 console.log(`[-->] ${currentVersion} -> ${nextVersion} (${bump})`);
 console.log(`     ${messages.length} commits: ${featCount} feature, ${patchCount} patch`);

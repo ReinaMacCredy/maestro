@@ -11,11 +11,11 @@ import {
 } from "@/tui/state/snapshot.js";
 import { buildModalOptions } from "@/tui/app/modal-builders.js";
 import { createInitialState, reduce } from "@/tui/state/reducer.js";
-import type { Feature, Milestone, Principle, PrincipleOutcomeRecord, PrincipleStorePort } from "@/features/mission";
-import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
+import type { Feature, Milestone } from "@/shared/domain/legacy-mission";
+import type { Principle, PrincipleOutcomeRecord, PrincipleStorePort } from "@/features/principle";
 import type { MissionControlEvent, MissionControlSnapshot } from "@/tui/state/types.js";
-import type { Task, TaskQueryPort } from "@/features/task";
-import type { AgentReply } from "@/features/mission";
+import type { LegacyTask as Task, TaskQueryPort } from "@/shared/domain/legacy-task";
+import type { AgentReply } from "@/features/reply";
 import type { EvidenceSummary } from "@/tui/state/screen-types.js";
 import { mockConfig, mockGit } from "../../../helpers/mocks.js";
 
@@ -42,26 +42,6 @@ function makeMilestone(overrides: Partial<Milestone> & { id: string }): Mileston
     description: "",
     order: 0,
     featureIds: [],
-    ...overrides,
-  };
-}
-
-function makeHandoff(id: string, overrides: Partial<HandoffRecord> = {}): HandoffRecord {
-  return {
-    id,
-    createdAt: "2026-01-01T00:00:00Z",
-    task: `Task ${id}`,
-    name: `Handoff ${id}`,
-    agent: "codex",
-    model: "gpt-5.4",
-    status: "launched",
-    wait: false,
-    sourceDir: "/tmp/source",
-    targetDir: "/tmp/target",
-    promptPath: `.maestro/handoff/${id}/prompt.md`,
-    outputPath: `.maestro/handoff/${id}/output.log`,
-    command: ["codex", "exec"],
-    refs: {},
     ...overrides,
   };
 }
@@ -383,7 +363,7 @@ function makeOutcome(
 
 describe("buildPrincipleEffectivenessRows", () => {
   it("returns empty when no principles exist", () => {
-    const rows = buildPrincipleEffectivenessRows([], [], []);
+    const rows = buildPrincipleEffectivenessRows([], []);
     expect(rows).toEqual([]);
   });
 
@@ -403,7 +383,7 @@ describe("buildPrincipleEffectivenessRows", () => {
       makeOutcome("p-new", "h4", "helpful", "2026-04-13T03:00:00Z"),
     ];
 
-    const rows = buildPrincipleEffectivenessRows(principles, outcomes, []);
+    const rows = buildPrincipleEffectivenessRows(principles, outcomes);
     // p-bad: 33%, p-good: 100%, p-new: undecided+low -> sorts last
     expect(rows[0]!.id).toBe("p-bad");
     expect(rows[0]!.effectivenessPct).toBe(33);
@@ -414,54 +394,33 @@ describe("buildPrincipleEffectivenessRows", () => {
     expect(rows[2]!.lowSample).toBe(true);
   });
 
-  it("collects recent kickback examples from handoffs when available", () => {
+  it("emits unhelpful kickback examples (most recent first)", () => {
     const principles = [makePrinciple("p-1")];
     const outcomes = [
       makeOutcome("p-1", "h-1", "unhelpful", "2026-04-13T00:00:00Z"),
       makeOutcome("p-1", "h-2", "unhelpful", "2026-04-13T01:00:00Z"),
       makeOutcome("p-1", "h-3", "helpful", "2026-04-13T02:00:00Z"),
     ];
-    const handoffs = [
-      makeHandoff("h-1", { name: "Broken migration" }),
-      makeHandoff("h-2", { name: "Failing tests" }),
-    ];
 
-    const rows = buildPrincipleEffectivenessRows(principles, outcomes, handoffs);
+    const rows = buildPrincipleEffectivenessRows(principles, outcomes);
     const row = rows[0]!;
     expect(row.recentKickbackExamples.length).toBe(2);
-    expect(row.recentKickbackExamples[0]).toContain("Failing tests"); // newest first
-    expect(row.recentKickbackExamples[1]).toContain("Broken migration");
+    expect(row.recentKickbackExamples[0]).toContain("h-2"); // newest first
+    expect(row.recentKickbackExamples[1]).toContain("h-1");
   });
 });
 
 describe("buildHomeSnapshot principle effectiveness", () => {
-  it("scopes global handoff-backed outcomes to the current project", async () => {
+  it("rolls up principle outcomes without handoff scoping", async () => {
     const currentProjectRoot = "/tmp/maestro-project-a";
-    const foreignProjectRoot = "/tmp/maestro-project-b";
     const principles = [makePrinciple("p-1", "Preserve ownership")];
     const outcomes = [
       makeOutcome("p-1", "h-local", "unhelpful", "2026-04-13T01:00:00Z"),
-      makeOutcome("p-1", "h-foreign", "unhelpful", "2026-04-13T02:00:00Z"),
-    ];
-    const handoffs = [
-      makeHandoff("h-local", {
-        name: "Local kickback",
-        refs: { projectRoot: currentProjectRoot },
-        sourceDir: currentProjectRoot,
-      }),
-      makeHandoff("h-foreign", {
-        name: "Foreign kickback",
-        refs: { projectRoot: foreignProjectRoot },
-        sourceDir: foreignProjectRoot,
-      }),
     ];
     const principleStore = {
       list: async () => principles,
       listOutcomes: async () => outcomes,
     } as unknown as PrincipleStorePort;
-    const handoffStore = {
-      list: async () => handoffs,
-    } as unknown as HandoffStorePort;
 
     const snapshot = await buildHomeSnapshot(
       {
@@ -469,7 +428,6 @@ describe("buildHomeSnapshot principle effectiveness", () => {
         git: mockGit(),
         cwd: currentProjectRoot,
         principleStore,
-        handoffStore,
       },
       { includeReplies: true },
     );
@@ -479,7 +437,6 @@ describe("buildHomeSnapshot principle effectiveness", () => {
       id: "p-1",
       unhelpful: 1,
       total: 1,
-      recentKickbackExamples: ["h-local: Local kickback"],
     });
   });
 });

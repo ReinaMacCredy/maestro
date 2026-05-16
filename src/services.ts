@@ -1,17 +1,14 @@
 import { buildInfraServices, type InfraServices } from "./infra/services.js";
-import { buildSessionServices, type SessionServices } from "./features/session/services.js";
-import { buildNotesServices, type NotesServices } from "./features/notes/services.js";
-import { buildMissionServices, type MissionServices } from "./features/mission/services.js";
-import { buildMemoryServices, type MemoryServices } from "./features/memory/services.js";
-import { buildHandoffServices, type HandoffServices } from "./features/handoff/services.js";
-import { buildRatchetServices, type RatchetServices } from "./features/memory-ratchet/services.js";
-import { buildGraphServices, type GraphServices } from "./features/graph/services.js";
-import { buildTaskServices, type TaskServices } from "./features/task/services.js";
+import { buildLegacyMissionServices, type LegacyMissionServices } from "@/shared/domain/legacy-mission";
+import { buildPrincipleServices, type PrincipleServices } from "./features/principle/services.js";
+import { buildReplyServices, type ReplyServices } from "./features/reply/services.js";
+import { buildTaskServices, type TaskServices } from "@/shared/domain/legacy-task/index.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
 import { buildEvidenceServices, type EvidenceServices } from "./features/evidence/services.js";
-import { buildSpecServices, type SpecServices } from "./features/spec/services.js";
+import { FsSpecStoreAdapter } from "@/shared/domain/legacy-spec/index.js";
+import type { LegacySpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import { buildPolicyServices, type PolicyServices } from "./features/policy/services.js";
-import { buildVerifyServices, type VerifyServices } from "./features/verify/services.js";
+import { buildVerifyServices, type VerifyServices } from "./features/verdict/services.js";
 import { buildRiskServices, type RiskServices } from "./features/risk/services.js";
 import { buildVerdictServices, type VerdictServices } from "./features/verdict/services.js";
 import { buildPlanServices, type PlanServices } from "./features/plan/services.js";
@@ -19,20 +16,16 @@ import { buildCiServices, type CiServices } from "./features/ci/services.js";
 import { buildMergeServices, type MergeServices } from "./features/merge/services.js";
 import { buildDeployServices, type DeployServices } from "./features/deploy/services.js";
 import { buildRuntimeServices, type RuntimeServices } from "./features/runtime/services.js";
+import { buildV2Services, type V2Services } from "./providers/build-services.js";
 
 export interface Services extends
   InfraServices,
-  SessionServices,
-  NotesServices,
-  MissionServices,
-  MemoryServices,
-  HandoffServices,
-  RatchetServices,
-  GraphServices,
+  LegacyMissionServices,
+  PrincipleServices,
+  ReplyServices,
   TaskServices,
   BundleServices,
   EvidenceServices,
-  SpecServices,
   PolicyServices,
   VerifyServices,
   RiskServices,
@@ -42,7 +35,10 @@ export interface Services extends
   MergeServices,
   DeployServices,
   RuntimeServices {
+  readonly specStore: LegacySpecStorePort;
   readonly projectRoot: string;
+  /** v2 service bundle — MCP tools for v2 verbs consume these directly. */
+  readonly v2: V2Services;
 }
 
 export function createServices(
@@ -51,17 +47,13 @@ export function createServices(
 ): Services {
   const base: Services = {
     ...buildInfraServices(projectDir),
-    ...buildSessionServices(),
-    ...buildNotesServices(projectDir),
-    ...buildMissionServices(projectDir),
-    ...buildMemoryServices(projectDir),
-    ...buildHandoffServices(),
-    ...buildRatchetServices(projectDir),
-    ...buildGraphServices(),
+    ...buildLegacyMissionServices(projectDir),
+    ...buildPrincipleServices(projectDir),
+    ...buildReplyServices(projectDir),
     ...buildTaskServices(projectDir),
     ...buildBundleServices(),
     ...buildEvidenceServices(projectDir),
-    ...buildSpecServices(projectDir),
+    specStore: new FsSpecStoreAdapter(projectDir),
     ...buildPolicyServices(projectDir),
     ...buildVerifyServices(projectDir),
     ...buildRiskServices(),
@@ -72,6 +64,7 @@ export function createServices(
     ...buildDeployServices(),
     ...buildRuntimeServices(),
     projectRoot: projectDir,
+    v2: buildV2Services({ repoRoot: projectDir }),
   };
   return overrides ? { ...base, ...overrides } : base;
 }

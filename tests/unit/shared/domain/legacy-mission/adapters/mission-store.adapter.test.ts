@@ -1,0 +1,312 @@
+import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { FsMissionStoreAdapter } from "@/shared/domain/legacy-mission";
+import type { CreateMissionInput, Mission } from "@/shared/domain/legacy-mission";
+
+let tmpDir: string;
+let store: FsMissionStoreAdapter;
+
+const makeCreateInput = (overrides: Partial<CreateMissionInput> = {}): CreateMissionInput => ({
+    title: "Test Mission",
+    description: "A test mission",
+    milestones: [
+      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
+    ],
+    ...overrides,
+  });
+
+beforeEach(async () => {
+  tmpDir = await mkdtemp(join(tmpdir(), "maestro-mission-store-"));
+  store = new FsMissionStoreAdapter(tmpDir);
+});
+
+afterEach(async () => {
+  await rm(tmpDir, { recursive: true, force: true });
+});
+
+describe("FsMissionStoreAdapter", () => {
+    describe("stage and finalize", () => {
+      it("stages a mission and returns ID", async () => {
+        const input = makeCreateInput();
+        const id = await store.stage(input, "2026-03-28-001", []);
+        expect(id).toBe("2026-03-28-001");
+    });
+
+    it("finalizes a staged mission into the active directory", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const mission = await store.get(id);
+      expect(mission).toBeDefined();
+      expect(mission!.status).toBe("draft");
+      expect(mission!.title).toBe("Test Mission");
+    });
+
+      it("creates subdirectories on finalize", async () => {
+        const input = makeCreateInput();
+        const id = await store.stage(input, "2026-03-28-001", []);
+        await store.finalize(id);
+
+      // Check that feature, agents, and checkpoints dirs exist
+      const featuresDir = join(tmpDir, ".maestro", "missions", id, "features");
+      const agentsDir = join(tmpDir, ".maestro", "missions", id, "agents");
+      const checkpointsDir = join(tmpDir, ".maestro", "missions", id, "checkpoints");
+
+      const { stat } = await import("node:fs/promises");
+        expect((await stat(featuresDir)).isDirectory()).toBe(true);
+        expect((await stat(agentsDir)).isDirectory()).toBe(true);
+        expect((await stat(checkpointsDir)).isDirectory()).toBe(true);
+      });
+
+      it("keeps staged missions intact when listIds runs before finalize", async () => {
+        const input = makeCreateInput();
+        const id = await store.stage(input, "2026-03-28-001", []);
+
+        expect(await store.listIds()).toEqual([]);
+
+        await store.finalize(id);
+
+        const mission = await store.get(id);
+        expect(mission).toBeDefined();
+        expect(mission!.id).toBe(id);
+      });
+    });
+
+  describe("get", () => {
+    it("returns undefined for non-existent mission", async () => {
+      const result = await store.get("2026-03-28-999");
+      expect(result).toBeUndefined();
+    });
+
+    it("returns mission after staging and finalizing", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const mission = await store.get(id);
+      expect(mission).toBeDefined();
+      expect(mission!.id).toBe(id);
+      expect(mission!.milestones).toHaveLength(1);
+    });
+
+    it("rejects mission IDs that try to escape the mission root", async () => {
+      await expect(store.get("../../outside")).rejects.toThrow(/Invalid mission ID/);
+    });
+  });
+
+  describe("exists", () => {
+    it("returns false for non-existent mission", async () => {
+      const result = await store.exists("2026-03-28-999");
+      expect(result).toBe(false);
+    });
+
+    it("returns true for existing mission", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const result = await store.exists(id);
+      expect(result).toBe(true);
+    });
+
+    it("rejects unsafe mission IDs before checking the filesystem", async () => {
+      await expect(store.exists("../outside")).rejects.toThrow(/Invalid mission ID/);
+    });
+  });
+
+  describe("listIds", () => {
+    it("returns empty array when no missions exist", async () => {
+      const result = await store.listIds();
+      expect(result).toEqual([]);
+    });
+
+    it("returns all mission IDs sorted newest first", async () => {
+      await store.stage(makeCreateInput(), "2026-03-28-001", []);
+      await store.stage(makeCreateInput(), "2026-03-28-002", []);
+      await store.finalize("2026-03-28-001");
+      await store.finalize("2026-03-28-002");
+
+      const ids = await store.listIds();
+      expect(ids).toEqual(["2026-03-28-002", "2026-03-28-001"]);
+    });
+  });
+
+  describe("list", () => {
+    it("returns empty array when no missions exist", async () => {
+      const result = await store.list();
+      expect(result).toEqual([]);
+    });
+
+    it("returns all missions sorted by createdAt descending", async () => {
+      const input1 = makeCreateInput();
+      const id1 = await store.stage(input1, "2026-03-28-001", []);
+      await store.finalize(id1);
+
+      // Small delay to ensure different timestamps
+      await new Promise((r) => setTimeout(r, 10));
+
+      const input2 = makeCreateInput({ title: "Second Mission" });
+      const id2 = await store.stage(input2, "2026-03-28-002", []);
+      await store.finalize(id2);
+
+      const missions = await store.list();
+      expect(missions).toHaveLength(2);
+      expect(missions[0]!.id).toBe(id2);
+      expect(missions[1]!.id).toBe(id1);
+    });
+  });
+
+  describe("update", () => {
+    it("returns undefined for non-existent mission", async () => {
+      const result = await store.update("2026-03-28-999", { status: "approved" });
+      expect(result).toBeUndefined();
+    });
+
+    it("updates mission status and records timestamp", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const updated = await store.update(id, { status: "approved" });
+      expect(updated!.status).toBe("approved");
+      expect(updated!.approvedAt).toBeTruthy();
+      expect(updated!.updatedAt).toBeTruthy();
+    });
+
+    it("updates mission title without changing status", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const updated = await store.update(id, { title: "Updated Title" });
+      expect(updated!.title).toBe("Updated Title");
+      expect(updated!.status).toBe("draft");
+    });
+
+    it("updates mission description", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const updated = await store.update(id, { description: "Updated description" });
+      expect(updated!.description).toBe("Updated description");
+    });
+
+    it("records rejectedAt when transitioning to rejected", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const updated = await store.update(id, { status: "rejected" });
+      expect(updated!.status).toBe("rejected");
+      expect(updated!.rejectedAt).toBeTruthy();
+    });
+
+    it("records completedAt when transitioning to completed", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+      await store.update(id, { status: "approved" });
+      await store.update(id, { status: "executing" });
+      await store.update(id, { status: "validating" });
+
+      const updated = await store.update(id, { status: "completed" });
+      expect(updated!.status).toBe("completed");
+      expect(updated!.completedAt).toBeTruthy();
+    });
+
+    it("rejects unsafe mission IDs before updating", async () => {
+      await expect(store.update("../outside", { status: "approved" })).rejects.toThrow(/Invalid mission ID/);
+    });
+  });
+
+  describe("path safety", () => {
+    it("rejects unsafe mission IDs before staging", async () => {
+      await expect(store.stage(makeCreateInput(), "../outside", [])).rejects.toThrow(/Invalid mission ID/);
+    });
+  });
+
+  // ============================
+  // Phase 7: Proposal field roundtrip test
+  // ============================
+
+  describe("proposal field roundtrip", () => {
+    it("roundtrips mission with proposal through stage and finalize", async () => {
+      const input = makeCreateInput({ proposal: "# Full proposal\n\nDetailed plan here." });
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const mission = await store.get(id);
+      expect(mission).toBeDefined();
+      expect(mission!.proposal).toBe("# Full proposal\n\nDetailed plan here.");
+    });
+
+    it("preserves proposal through update", async () => {
+      const input = makeCreateInput({ proposal: "# Proposal v1" });
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      // Update status -- proposal should survive
+      const updated = await store.update(id, { status: "approved" });
+      expect(updated!.proposal).toBe("# Proposal v1");
+    });
+
+    it("mission without proposal has undefined proposal field", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const mission = await store.get(id);
+      expect(mission).toBeDefined();
+      expect(mission!.proposal).toBeUndefined();
+    });
+  });
+
+  describe("cleanOrphanedStaging", () => {
+    it("removes orphaned .staging-* directories", async () => {
+      const { mkdir, readdir } = await import("node:fs/promises");
+      const missionsRoot = join(tmpDir, ".maestro", "missions");
+      await mkdir(missionsRoot, { recursive: true });
+      await mkdir(join(missionsRoot, ".staging-orphan-001"));
+      await mkdir(join(missionsRoot, ".staging-orphan-002"));
+
+      const cleaned = await store.cleanOrphanedStaging();
+      expect(cleaned).toBe(2);
+
+      const entries = await readdir(missionsRoot);
+      expect(entries.filter((e) => e.startsWith(".staging-"))).toHaveLength(0);
+    });
+
+    it("returns 0 with no staging dirs", async () => {
+      const { mkdir } = await import("node:fs/promises");
+      await mkdir(join(tmpDir, ".maestro", "missions"), { recursive: true });
+
+      const cleaned = await store.cleanOrphanedStaging();
+      expect(cleaned).toBe(0);
+    });
+
+    it("does not remove real mission dirs", async () => {
+      const { mkdir, readdir } = await import("node:fs/promises");
+      const missionsRoot = join(tmpDir, ".maestro", "missions");
+      await mkdir(missionsRoot, { recursive: true });
+      await mkdir(join(missionsRoot, "2026-01-01-001"));
+      await mkdir(join(missionsRoot, ".staging-orphan"));
+
+      const cleaned = await store.cleanOrphanedStaging();
+      expect(cleaned).toBe(1);
+
+      const entries = await readdir(missionsRoot);
+      expect(entries).toContain("2026-01-01-001");
+      expect(entries.filter((e) => e.startsWith(".staging-"))).toHaveLength(0);
+    });
+
+    it("handles missing missions root gracefully", async () => {
+      // tmpDir exists but .maestro/missions/ does not
+      const cleaned = await store.cleanOrphanedStaging();
+      expect(cleaned).toBe(0);
+    });
+  });
+});

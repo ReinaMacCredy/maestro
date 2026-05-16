@@ -39,7 +39,7 @@ export function registerStatusCommand(
 
         if (s.legacyHandoffCount > 0) {
           lines.push(
-            `[--] Found ${s.legacyHandoffCount} legacy handoff artifact(s) under .maestro/handoffs/`,
+            `[--] Found ${s.legacyHandoffCount} legacy launch artifact(s) under .maestro/launches/`,
           );
         }
 

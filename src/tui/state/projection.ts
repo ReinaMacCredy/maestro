@@ -9,11 +9,13 @@ import {
   type Milestone,
   type Assertion,
   type Checkpoint,
-  type AgentReply,
+  getValidFeatureTransitions,
+} from "@/shared/domain/legacy-mission";
+import type { AgentReply } from "@/features/reply";
+import {
   deriveMissionReport,
   type MissionReport,
-  getValidFeatureTransitions,
-} from "@/features/mission";
+} from "@/shared/domain/legacy-mission";
 import { getMissionControlBackgroundMode } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck, StatusReport } from "@/infra/domain/status-types.js";
 import { deriveEvents } from "./events.js";

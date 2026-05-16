@@ -1,8 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import type { EvidenceRow } from "@/features/evidence/index.js";
 import type { AutopilotPolicy } from "@/features/policy/index.js";
-import type { Spec } from "@/features/spec/index.js";
-import type { Contract } from "@/features/task/index.js";
+import type { Spec } from "@/shared/domain/legacy-spec/index.js";
+import type { Contract } from "@/types/contract.js";
 import type { Verdict } from "@/features/verdict/index.js";
 import {
   autoMergeEligible,

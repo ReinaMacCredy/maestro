@@ -1,588 +1,229 @@
 ---
 name: maestro-task
-description: Use at the start of any multi-step work in any project that uses maestro, and throughout task execution. Decompose plans into `maestro task` entries before starting (including converting /maestro-plan or /planner output into a task batch), claim one task at a time, keep continuation state fresh, and close with a receipt. Agent auto-invokes without user action whenever a `.maestro/` directory is present in the current working tree or an ancestor.
+description: Use at the start of any multi-step work in a maestro-initialized project, and throughout task execution. Claim one task at a time, iterate through the verify → block / ship loop. `claim` and `block` automatically emit a handoff envelope to `.maestro/handoffs/<hnd-...>.json`; see `maestro-handoff` for the read side. Auto-invokes whenever a `.maestro/` directory is present in the current working tree or an ancestor.
 ---
 
 # Maestro Task
 
-You are working in a maestro-initialized project. Decompose multi-step work into maestro tasks before starting. Keep continuation state fresh while working. Close with a receipt.
+You are working in a maestro v2 project. Author a product-spec, materialize one task per PR, claim it, iterate until `task verify` returns PASS, then ship.
+
+This skill covers the **single-task path** (light-mode specs, one PR). For multi-PR work, see `maestro-plan` — heavy-mode specs decompose into a batch of child tasks via `plan from-spec` → `plan decompose`.
 
 ---
 
 ## When to activate
 
 Auto-activate when:
+
 1. The user asks for a multi-step implementation.
-2. You just received output from `/maestro-plan`, `/planner`, or a markdown checklist. **Convert it to a task batch before executing.**
-3. The user names a task id (`tsk-abc123`) or says "resume this task" / "work on X".
-4. Starting a fresh session in a maestro project (`.maestro/` exists in cwd or ancestor).
+2. The user names a task id (`tsk-...`) or says "resume this task".
+3. Starting a fresh session in a maestro v2 project (`.maestro/specs/` exists).
 
 Do not activate for one-liner edits or read-only questions.
 
+---
+
 ## Hard rules
 
-1. **One task `in_progress` per session** unless the user explicitly passes `--force`.
-2. **Every completion carries `--reason`.** The receipt is shared context for future sessions.
-3. **Update continuation state on meaningful change only.** Current state shifted, next action changed, a decision was made, blockers appeared. Not on every trivial edit.
-4. **Blockers block transitions.** A task cannot move to `in_progress` or `completed` with unresolved blockers.
-5. **Handoff is for cross-session transfer only.** Same-session resume uses continuation state, not handoffs.
-6. **Mandatory slug at plan conversion.** Every top-level "track" carries a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`). Pass `slug` explicitly on top-level entries or omit it and let the title derive one. Step entries (those with `parent`) must NOT carry a slug. The whole batch is rejected on slug shape errors, on-disk collisions, or `slug` + `parent` together.
+1. **One task at a time** unless the user explicitly directs otherwise.
+2. **Every spec is authored through `maestro-design`** — do not write spec markdown by hand without grilling.
+3. **`claim` and `block` emit a handoff envelope** to `.maestro/handoffs/<hnd-...>.json`. This is automatic; do not invent parallel handoff files. `ship`, `verify`, and `abandon` do not emit yet.
+4. **Blockers carry a `--reason`.** Same for abandon and `verify --verdict {human,block}`.
+5. **Heavy-mode specs do not flow through this skill.** They go to `maestro-plan`.
 
-## Converting a plan into a task batch
+---
 
-When you have a plan (from `/maestro-plan`, `/planner`, or a markdown checklist):
+## The single-task loop
 
-1. Read the plan. Identify phases or steps as candidate tasks.
-2. Map each step to a task JSON object. Use `description` for detail, `type` for kind (`task|bug|feature|epic|chore`), `priority` (0-4, 0 highest) for ordering hints, `blockedBy` for sequencing.
-3. Submit atomically via `maestro task plan --file -`:
+```
+spec new (light)  →  task from-spec  →  claim  →  [doing → verify ↔ blocked]  →  ready  →  ship
+```
+
+### 1. Author the spec
 
 ```bash
-cat <<'JSON' | maestro task plan --file - --start scaffold
-{
-  "batchId": "plan-<short-slug>",
-  "tasks": [
-    {
-      "name": "scaffold",
-      "title": "Scaffold feature X",
-      "description": "Create the feature directory, wire index.ts, add skeleton services.ts.",
-      "type": "feature",
-      "priority": 1,
-      "slug": "implement/feature-x"
-    },
-    {
-      "name": "impl",
-      "title": "Implement the core use-case",
-      "description": "Build the use-case behind the port; cover happy path first.",
-      "parent": "scaffold"
-    },
-    {
-      "name": "tests",
-      "title": "Add unit + integration tests",
-      "parent": "scaffold",
-      "blockedBy": ["impl"]
-    },
-    {
-      "name": "ship",
-      "title": "Open PR",
-      "type": "chore",
-      "parent": "scaffold",
-      "blockedBy": ["tests"]
-    }
-  ]
-}
-JSON
+maestro spec new <slug>                      # mode defaults to light
+maestro spec new <slug> --mode heavy         # promote when multi-PR
+maestro spec new <slug> --title "Human-readable title"
 ```
 
-`slug` is REQUIRED on every top-level entry. Either pass it explicitly (preferred when the kebab matters) or omit it and let `task plan` derive one from the title (`Title text` → `<verb>/title-text`). Step entries (`parent` set) must NOT carry a slug — they address by `tsk-<id>`.
+The grill protocol in `maestro-design` walks the spec through `acceptance_criteria` + `non_goals` + `work_type` before this verb runs. If you found yourself at this skill without a spec, jump to `maestro-design` first.
 
-`--start <name>` claims the named task and flips it to `in_progress` in the same command. `batchId` makes retries idempotent (receipt persists under `.maestro/tasks/batches/`). Any validation error rejects the whole batch.
-
-Report to the user: tasks created, which one is `in_progress`, the task id of each.
-
-**Why plan-first:** atomic create, referential integrity (`blockedBy` / `parent` resolved in one pass), idempotent retry, no reactive one-at-a-time drift.
-
-Full schema: `maestro task plan --schema`. Longer examples: `./reference/plan-conversion.md`.
-
-## Single-task shortcut
-
-For a one-task job (no plan):
-```bash
-maestro task create "Title" --description "..." --type feature --priority 1 --status in_progress
-```
-
-## Claim and start
-
-Existing task:
-```bash
-maestro task next --json           # claim the next ready task
-maestro task claim <id>            # claim a specific task
-maestro task update <id> --status in_progress
-```
-
-## Optional: lock a contract for non-trivial work
-
-Pipe the YAML on stdin (the CLI auto-detects piped input) or pass `--from <path|name|->`:
+### 2. Materialize the task
 
 ```bash
-cat <<'YAML' | maestro task contract new <id>
-intent: >
-  One to three sentences on what this task changes and why.
-scope:
-  filesExpected:
-    - src/**
-  filesForbidden: []
-doneWhen:
-  - text: tests pass
-    kind: receipt-hint
-  - text: manual
-    kind: receipt-hint
-YAML
-
-maestro task contract lock <id>
+maestro task from-spec .maestro/specs/<slug>.md
 ```
 
-Each `doneWhen` bullet has a `kind`. Use `receipt-hint` when the bullet should auto-mark from your completion `--verified-by` tags (`--verified-by "tests pass" --verified-by manual` would tick both above). Use `kind: manual` only when an operator must tick the box explicitly via `maestro task contract criteria mark <id> <criterionId> --met` — `manual` criteria left unmarked at completion will close the contract as `broken`.
+Creates a task in `draft`. Print the returned `tsk-...` id back to the user.
 
-Contract amend/reopen/criteria verbs and verdict semantics live in `./reference/contracts.md`.
-
-Load a project-local template: `maestro task contract new <id> --from default` (reads `.maestro/tasks/contract-templates/default.md`).
-
-## Stay in scope; amend on genuine discovery
-
-Your task has a Contract that locks the files you may touch. Do not modify files outside `allowed_files`. Do not touch any path in `forbidden_paths`.
-
-If you discover during implementation that a path you did not anticipate must change (a generated file regenerates differently, an unmocked dependency is reachable, a test helper needs a tweak), call:
+### 3. Claim it
 
 ```bash
-maestro contract amend --task <id> --add-path <new-path> --reason "<why>"
+maestro claim <id> --agent <agent-id>
+# heavy-mode specs auto-create a worktree under <parent>/<repo>-<task_id>
+maestro claim <id> --skip-worktree           # opt out of auto-worktree
 ```
 
-This writes a new contract version and an Evidence row of kind `contract-amendment`. If the amendment is rejected (budget exhausted, or the path is in `forbidden_amendment_paths`), an Evidence row of kind `contract-amendment-blocked` is written instead. Do not retry the same amendment — surface it in your handoff or stop and ask.
+The hot-path alias `claim` is identical to `task claim`. `--agent` is recorded on the task and the transition evidence.
 
-## While working, keep resume state fresh
-
-Only on meaningful change:
-```bash
-maestro task update <id> --current-state "..." --next-action "..."
-maestro task update <id> --add-decision "keep API stable"
-maestro task update <id> --remove-decision "old constraint"
-```
-
-Long-running work, heartbeat so the claim does not age out:
-```bash
-maestro task heartbeat <id>
-```
-
-Blockers:
-```bash
-maestro task block <blockerId> <blockedId...>
-maestro task unblock <blockerId> <blockedId...>
-```
-
-## Complete with a receipt
+### 4. Iterate
 
 ```bash
-maestro task update <id> --status completed \
-  --reason "<one-line outcome>" \
-  [--summary "<receipt summary>"] \
-  [--surprise "<gotcha>"] \
-  [--verified-by <name>] \
-  [--strict]
+maestro verify <id>
+maestro verify <id> --json                   # full JSON envelope
+maestro verify <id> --verdict human --reason "needs UX call"     # stays at verifying, exit 2
+maestro verify <id> --verdict block  --reason "infra missing"    # → blocked, exit 3
 ```
 
-`--reason` is persisted verbatim. Short, factual, no secrets. `--strict` blocks completion on a broken contract verdict.
+Exit codes (see `maestro-verify` for the full protocol):
 
-### Two outputs per close
+- `0` PASS — the task auto-advances `verifying → ready`. Move to step 5.
+- `1` FAIL — fix the cited violations, edit, then `verify` again. The task stays at `verifying`.
+- `2` HUMAN — explicit human verdict, task stays at `verifying`. Hand off and stop.
+- `3` BLOCK — task → `blocked`. Surface the reason; do not retry without guidance.
 
-Every task receipt should answer two questions:
+### 5. Block / abandon when you can't proceed
 
-1. **Product delta** — what changed in user-facing or product behavior?
-2. **Harness delta** — what should we change so the next agent has it easier? (memory ratchet, skill update, `maestro doctor` finding, friction note in `.maestro/MAESTRO.md`). Answer "none" if truly nothing.
-
-If the harness delta is non-trivial, capture it before the close so the next session inherits it. The product delta belongs in `--reason` / `--summary`; the harness delta usually goes through `maestro memory-correct`, a skill edit, or a follow-up task.
-
-When `maestro intake` reported `harnessImpact: true`, also record a `harness-delta` evidence row at close. The task receipt stores `workType` and `harnessDeltas` for future agents reading the history:
-
-```json
-{
-  "summary": "Add --json output to maestro intake",
-  "capturedAt": "2026-05-15T10:00:00Z",
-  "workType": "spec-slice",
-  "harnessDeltas": ["skills/bundled/maestro-intake/SKILL.md"]
-}
+```bash
+maestro block    <id> --reason "missing-credentials"
+maestro abandon  <id> --reason "out-of-scope after grill"
 ```
 
-## Before claiming the task complete
+Both transitions emit an evidence row and an observability row. `block` also emits a handoff envelope; `abandon` does not.
 
-Run this loop before marking any task done:
+### 6. Ship
 
-0. **Mark any `kind: manual` criteria met first.** Run
-   `maestro contract show --task <id>` and inspect each `[ ]` checkbox
-   on a `(manual)` criterion. If you have evidence the criterion is
-   satisfied, tick it now:
+```bash
+maestro ship <id>
+maestro ship <id> --pr-url https://github.com/owner/repo/pull/123
+```
 
-   ```bash
-   maestro task contract criteria mark <contractId> <criterionId> --met
-   ```
+`ship` is the manual `ready → shipped` flip.
 
-   `receipt-hint` criteria auto-tick from your `--verified-by` tags
-   on `task update --status completed`; `manual` criteria do not.
-   Unticked `manual` criteria silently close the contract `broken`
-   on completion — the recovery is `task contract reopen` + `criteria
-   mark` + re-complete, so it is cheaper to mark them up front.
+---
 
-1. `maestro task verify --task <id>` — Trust Verifier (scope, lockfile,
-   generated, sensitive-paths, commit-metadata, secrets). Address every
-   error finding before proceeding.
+## What `task claim` does for you
 
-   Exit codes: `0` clean, `1` errors present (must fix), `2` warnings or
-   info-only findings (review and continue if expected). A `2` is not a
-   failure — it is a heads-up; read the findings and proceed to step 2
-   if nothing actionable is flagged.
+- Records the claim transition in `.maestro/evidence/<date>.jsonl`.
+- Mirrors the transition into `.maestro/runs/<task-id>/observability.jsonl`.
+- For `mode: heavy` specs (and only those), creates a worktree at `<parent>/<repo>-<task_id>` on a branch `feat/<slug>` off `main`. Persists the record at `.maestro/worktrees/<task-id>.json` on the primary repo. The path is printed in the `(worktree …)` suffix.
+- Emits a `task:claim` handoff envelope at `.maestro/handoffs/<id>.json` carrying `agent_id`, `worktree_path`, and `spec_path`.
 
-2. `maestro task proof --task <id>` — confirm criterion coverage. Every
-   Spec acceptance criterion must have at least one Evidence row.
+Worktree failures (git not initialized, branch already exists, etc.) are logged to stderr but never block the claim — the task still reaches `claimed`.
 
-3. `maestro verdict request --task <id>` — produces a Verdict.
-
-4. Branch on the verdict's exit code:
-   - **0 PASS** — claim the task done.
-   - **1 FAIL** — fix the cited findings, then loop back to step 1.
-   - **2 HUMAN** — run `maestro handoff create` and stop. A human must
-     approve before the task can complete. **By default**,
-     `policies/autopilot.yaml` opts *every* risk class out of auto-merge
-     (`autoMergeAllowed.<class>: false` for `low`, `medium`, `high`,
-     `critical`), so even an otherwise-clean run lands as HUMAN until
-     the team explicitly enables auto-merge for that class. To enable
-     auto-merge for a risk class your team approves, set
-     `autoMergeAllowed.<class>: true` in
-     `.maestro/policies/autopilot.yaml`. See
-     `docs/auto-merge-eligibility.md`.
-   - **3 BLOCK** — stop. The task is blocked (typically cost-budget
-     exhaustion). Surface the BLOCK reason to the user; do not retry
-     without their guidance.
-
-If retries are accumulating, run `maestro task budget --task <id>` to
-see the current cost-budget consumption. Once retries reach the
-contract's `maxRetries`, the next `verdict request` will return BLOCK.
-
-See the `maestro-verify` skill for the canonical verification protocol
-(witness levels, ProofMap, plan-check, AI Reviewer protocol,
-threat-model production).
+---
 
 ## Evidence
 
-After each verification command (test, build, typecheck, lint), record
-the result so future sessions can see what was actually run:
+Every transition writes an evidence row. For verification commands that do not run through `task verify`, record explicitly:
 
 ```bash
-maestro evidence record --task <id> --kind command \
-  --command "bun test" --exit 0
+maestro evidence record --task <id> --command "bun test" --exit 0
+maestro evidence record --task <id> --kind manual-note --note "Verified UI on staging 1280x800"
 ```
 
-For manual checks that maestro can't witness, use `--kind manual-note`:
+For AI review / threat-model rows, see `maestro-verify`.
 
-```bash
-maestro evidence record --task <id> --kind manual-note \
-  --note "Verified UI on staging at 1280x800"
-```
-
-Recorded evidence appears in `maestro task show` and the Mission Control task detail pane.
+---
 
 ## Discovery
 
 ```bash
-maestro status --json
-maestro task ready --json --compact --limit 5
-maestro task show <id-or-slug>
-maestro task introspect <id-or-slug>     # full context: spec, verdict, budget, lints, blockers
-maestro task mine
-maestro task stuck --older-than 4h
-maestro task similar <id>
+maestro task list                            # all tasks
+maestro task list --state claimed
+maestro task list --plan-id pln-...          # children of a plan
+maestro task get <id>
 ```
 
-`task show` and `task update` accept either `tsk-<id>` or a track slug like `implement/foo`. `task list --tracks` prints just the track headers (slugs + slugless legacy ids), one per line.
+---
 
-### When to use `task introspect`
+## Dev-time observability
 
-Call `maestro task introspect <id>` when you need a single read-only digest
-of the full task surface — task + spec acceptance criteria + non-goals +
-latest verdict + cost-budget status + open lint violations + active
-blockers + last 5 evidence rows + recent commits since the last
-`session-start` anchor. Use it:
-
-- After context loss (compaction or fresh shell) to re-orient on a task
-  without re-reading the conversation.
-- Before committing to work on a task to confirm what "done" requires.
-- As a sanity check before requesting the final verdict.
-
-Output is structured markdown by default; `--json` returns the same view as a
-parseable object.
-
-**Watch for these introspection fields after compaction or long runs**
-(documented in `docs/edge-cases.md`):
-
-- `anchor.stale=true` — the last `session-start` head SHA is no longer
-  reachable. Re-anchor via `maestro session start <id>` before trusting
-  "recent commits".
-- `loopWarning` — the same `(kind, payloadHash)` row repeated three or more
-  times without a verdict-request boundary. Change approach or run
-  `maestro ralph review --task <id> --stuck-threshold 1` to confirm
-  convergence.
-
-### Dev-time observability with `task observe`
-
-Use `maestro task observe` for ad-hoc, per-worktree observability *while
-you work*: query a metric or tail a log without leaving the loop. It is
-distinct from `maestro runtime check`, which gates deploys.
+`maestro task observe` is the ad-hoc inspection verb for the agent's own worktree: one-shot metric query or last-N log lines. It does **not** gate any verdict — that is `runtime check`'s job (see `maestro-verify`).
 
 ```bash
-maestro task observe metrics 'rate(http_requests_total[1m])' --task <id>
-maestro task observe metrics 'up' --task <id> --provider-base-url http://prom:9090
-maestro task observe logs --task <id> --log-file /tmp/dev.log --lines 20 --filter ERROR
+maestro task observe metrics 'up' --prometheus-url http://localhost:9090
+maestro task observe metrics 'rate(errors[5m])' --json
+maestro task observe logs --log-file ./app.log --lines 50 --filter error
 ```
 
-- Provider URL precedence: `--provider-base-url` > `MAESTRO_PROMETHEUS_URL`
-  > `http://localhost:9090`.
-- Log path precedence: `--log-file` > `MAESTRO_DEV_LOG_FILE` > error.
-- `--record` writes a `manual-note` evidence row tagged
-  `[dev-observation]` at `agent-claimed-locally`. The row is advisory; it
-  does not gate the verdict.
+Flags:
 
-When to call:
+- `--prometheus-url <url>` overrides `MAESTRO_PROMETHEUS_URL`.
+- `--log-file <path>` overrides `MAESTRO_DEV_LOG_FILE`.
+- `--lines N` (logs only, default 100).
+- `--filter <substring>` (logs only, plain substring match).
+- `--json` emits a JSON envelope instead of plain text.
+- `--record --task <id>` writes a `manual-note` evidence row tagged `[dev-observation:metrics]` / `[dev-observation:logs]` so the observation appears in `evidence list`.
 
-- Before editing, to baseline error rate or a custom counter.
-- After edits, to confirm the new path is live before requesting the verdict.
-- When `task introspect` surfaces `loopWarning`, to see *why* the same
-  command keeps failing.
+Exit codes: `0` success, `1` config error (missing URL/path, `--record` without `--task`), `2` backend unreachable / empty vector / fs read error. The verb is one-shot — there is no `--follow`.
 
-See `docs/dev-observability.md`.
+---
 
-## Session lifecycle
-
-Two verbs anchor non-trivial work to a specific task:
-
-- `maestro session start <taskId>` — runs the baseline architecture-lint
-  pass, optionally invokes `maestro:setup`/`maestro:verify` package-json
-  scripts (when defined), writes an orient digest at
-  `.maestro/runs/<taskId>/orient.md`, and records a `session-start`
-  evidence row whose `headSha` payload anchors "recent commits" for future
-  introspection.
-- `maestro session exit <taskId>` — re-runs the baseline arch-lint pass,
-  reads the latest verdict, checks the working tree, writes
-  `.maestro/runs/<taskId>/progress.md`, and records a `session-exit`
-  evidence row. Exit code: `0` clean, `1` baseline regressed, `2`
-  arch-lint error-severity violations present.
-
-When to call:
-
-- At the start of any non-trivial task: `maestro session start <id>`.
-- At the end before requesting the final verdict: `maestro session exit <id>`.
-- After compaction or any context loss to re-orient: `maestro task introspect <id>`.
-
-`session start` blocks if the baseline arch-lint pass has error-severity
-violations. Recover by reverting the unhealthy commit or
-`git reset --hard <last-green-tag>` before retrying. The explicit
-`maestro recover` verb arrives in Phase 2.
-
-## Status view
+## Recovery and worktrees
 
 ```bash
-maestro task status                       # all open tracks
-maestro task status --all                 # include completed (with `v` glyph)
-maestro task status --no-compact          # unsectioned grouped detail view
-maestro task status --track implement/foo # restrict to one track
-maestro task status --json                # structured projection
+maestro recover --task <id>                  # reset working tree to last PASS verdict's tree
+maestro recover --task <id> --dry-run
+maestro worktree create <slug>               # explicit worktree (use when task claim's auto-create did not run)
 ```
 
-Status glyphs: `o` active (in_progress), `!` blocked, `·` pending, `v`
-completed (only with `--all`).
+`recover` finds the latest PASS verdict for the task, runs `git reset --hard` to its `tree_sha`, removes `.maestro/runs/<id>/`, and records a `recovery` evidence row at `witnessed-by-maestro`. Refuses dirty trees unless `--force`.
 
-Default render shape: a hybrid operator board. The header reports open, active,
-ready, blocked, and blocked-track counts. Simple one-task tracks render as
-compact rows under `ACTIVE`, `READY`, or `BLOCKED`. Multi-step tracks expand
-only when dependency structure matters: blocked steps or ready steps that unlock
-downstream work. If a ready task unlocks blocked downstream work, a one-line
-`next:` hint appears under the header.
+---
 
-Default examples:
+## When verify keeps failing
 
-```text
-tasks: 12 open | 3 active | 7 ready | 2 blocked | 1 blocked track
+If `task verify` repeats the same violations after two iterations, the loop is stuck. Choose one:
 
-ACTIVE
-  o implement/template-prompt-fixes  Remove contradictory close-issue instruction from implement-prompt.md
+- Read the failing rule's `Fix Recipe` in `docs/principles/<rule>.md`.
+- Run `maestro gc slop-cleanup` to see the violation grouped with the rest of the codebase.
+- Decompose into a plan: promote the spec to `mode: heavy` and use `maestro-plan` to break the work into smaller verifiable PRs.
+- Block the task with a precise reason and hand off.
 
-DEPENDENCY TRACKS
-
-implement/init-template-e2e-tests
-  ! Add AgentInvoker seam, test support module, and blank template e2e test
-      blocked by implement/template-prompt-fixes
-  · Add e2e test for simple-loop init template
-
-READY
-  · implement/template-prompt-fixes  Replace hardcoded 'main' in review-prompt.md with {{SOURCE_BRANCH}}
-```
-
-`--no-compact` renders the unsectioned grouped detail view: solo tracks (no step
-children) render on a single line (`  o slug  title  in-progress`) with no
-blank line between consecutive solo tracks. Tracks with step children render
-multi-line (slug header, indented bullet list, status text under blocked /
-in-progress steps) so step structure stays readable.
-
-Blocked rows render `blocked by <slug-or-id>` inline, while blocked steps inside
-dependency tracks render the blocker on the next line. If a blocker has
-completed it's marked `(done)` as a hint that the wait is over.
-
-## Slug backfill (legacy slugless top-level tasks)
-
-Existing top-level tasks without a slug render with their bare `tsk-<id>` as
-the header. Bulk-backfill the whole queue (derives a slug from each title +
-type, applies after preview):
-
-```bash
-maestro task backfill-slugs                       # dry-run / planning
-maestro task backfill-slugs --apply               # write the slugs
-maestro task backfill-slugs --apply --limit 10
-maestro task backfill-slugs --rederive --apply    # refresh existing auto-derived slugs
-```
-
-Derivation drops stop-words, hex shas, and digit-only tokens, caps at four
-significant words, and only cuts at word boundaries (no `...beads-ru` mid-word
-truncation).
-
-Backfill is display-only metadata: it bypasses the completion + ownership
-locks so it works on completed and currently-claimed tasks. By default it
-refuses to overwrite an existing slug; `--rederive` opts in to overwriting.
-
-To set or rename one slug at a time:
-
-```bash
-maestro task update tsk-<id> --slug implement/<kebab>
-```
-
-Slug uniqueness is enforced across all top-level tasks. Slugs are not
-preserved when a track is demoted to a step (`task update <id> --parent
-<other>`); the CLI requires `--drop-slug` to acknowledge that.
-
-## Recovery
-
-Stale or dead session:
-```bash
-maestro task claim <id> --stale-after 4h
-maestro task release-owned <deadSessionId>
-maestro task unclaim <id>
-```
-
-Local artifact pruning:
-```bash
-maestro task prune --dry-run
-maestro task prune [--keep N] [--candidates-only|--continuations-only] [--all]
-```
-
-Reset working tree to a known-green state (Phase 2):
-```bash
-maestro recover --task <id>                  # reset to last PASS verdict's tree
-maestro recover --task <id> --to <commit>    # reset to an explicit ref
-maestro recover --task <id> --dry-run        # show plan without applying
-maestro recover --task <id> --force          # bypass dirty-tree check (destructive)
-```
-
-`recover` finds the latest PASS verdict for the task, resolves its `tree_sha`
-to a commit, runs `git reset --hard`, drops `.maestro/runs/<id>/`, and records
-a `recovery` Evidence row at `witnessed-by-maestro`. Refuses to run when the
-working tree is dirty unless `--force`.
-
-Convergence loop (Phase 2):
-```bash
-maestro ralph review --task <id>                         # run convergence oracle
-maestro ralph review --task <id> --stuck-threshold 3     # custom stuck threshold
-```
-
-`ralph review` aggregates findings from arch lints, the Trust Verifier, AI
-review, and threat-model evidence. Records a `ralph-iteration` Evidence row
-with a stable `findingsHash`. Exits 0 when converged (no error-severity
-findings), 1 when not converged, 2 when *stuck* — i.e. the same hash has
-shown up `--stuck-threshold` (default 3) iterations in a row, signalling the
-loop is not making progress.
-
-Deeper recovery patterns live in `./reference/recovery.md`. The full command surface lives in `./reference/commands.md`.
-
-## Garbage collection
-
-On-demand GC verbs scan the repo for problems and either report them or open
-fixup PRs. Phase 2 ships `gc doc-gardening`:
-
-```bash
-maestro gc doc-gardening                  # report stale path/link references
-maestro gc doc-gardening --task <id>      # also record findings as evidence
-maestro gc doc-gardening --json
-```
-
-Scans `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/**/*.md`, `.maestro/**/*.md`,
-and `skills/**/*.md` for path references that don't resolve. Records a
-`doc-gardening` Evidence row when `--task` is supplied.
-
-Phase 4 adds two more GC verbs:
-
-```bash
-maestro gc slop-cleanup [--min-severity info|warn|error] [--json]
-maestro gc plan-regen --task <id> [--json]
-```
-
-`gc slop-cleanup` runs the architecture-lint corpus across `src/**` and
-groups violations by file. The output lists by-rule and by-severity counts
-plus the top 10 offending files. Read-only — no PR opened, no mutation.
-
-`gc plan-regen --task <id>` reports plan-vs-state drift: no plan file
-found, missing acceptance-criteria coverage in the plan, evidence rows
-recorded after the last PASS verdict, recorded `lint-violation` rows, and
-active blockers.
-
-## Sprint contract (Phase 4)
-
-```bash
-maestro contract sprint --task <id>                     # snapshot
-maestro contract sprint --task <id> --propose "..."     # record proposal as evidence
-```
-
-The sprint snapshot includes criteria progress, amendment-budget remaining,
-and the 5 most recent amendments. `--propose` records a `manual-note`
-evidence row tagged as a sprint-contract proposal. It does NOT mutate the
-contract — humans/agents review and apply via `maestro contract amend` if
-approved.
-
-## Inspect a run (Phase 5)
-
-After a session ends or after compaction, use `inspect` to pull a post-mortem
-view without re-running anything:
-
-```bash
-maestro inspect run <task-id>            # last 10 evidence rows + verdict history + run-dir artifacts
-maestro inspect run <task-id> --tail 20  # widen the tail
-```
-
-Reads `.maestro/runs/<id>/{orient,progress,plan}.md` plus `state.json`,
-recent evidence rows, and the verdict history. Read-only.
-
-## Worktree create (Phase 5)
-
-For larger features, create an isolated worktree so the main checkout stays
-clean:
-
-```bash
-maestro worktree create harness-pivot                  # base=main, prefix=feat
-maestro worktree create fix-x --base develop --prefix fix
-```
-
-Wraps `git worktree add -b <prefix>/<slug>` and provisions an empty
-`.maestro/runs/` directory inside the new tree.
+---
 
 ## MCP tools (when available)
 
-If your runtime exposes maestro MCP tools, prefer them over the CLI verbs above — they return structured JSON without text parsing. The MCP server is a thin wrapper around the same use cases the CLI calls, so semantics are identical and the CLI examples in this skill remain the source of truth for behavior.
+The MCP tool surface mirrors the CLI:
 
-| MCP tool | CLI equivalent | When |
-|----------|----------------|------|
-| `maestro_task_list`, `maestro_task_get` | `maestro task list`, `maestro task show` | discovery |
-| `maestro_task_create` | `maestro task create` (or `maestro task q` for quick capture) | new work |
-| `maestro_task_claim`, `maestro_task_complete` | `maestro task claim`, `maestro task update --status completed` | lifecycle |
-| `maestro_task_block`, `maestro_task_unblock` | `maestro task block`, `maestro task unblock` | dependency edges |
-| `maestro_evidence_record`, `maestro_evidence_list` | `maestro evidence record`, `maestro evidence list` | proof rows |
-| `maestro_contract_show`, `maestro_contract_amend` | `maestro contract show`, `maestro contract amend` | scope mgmt |
-| `maestro_verdict_show`, `maestro_verdict_request` | `maestro verdict show`, `maestro verdict request` | gate decision |
-| `maestro_policy_check` | (CLI: rolled into `verdict request`) | risk + autopilot |
-| `maestro_handoff_list`, `maestro_handoff_show` | `maestro handoff list`, `maestro handoff show` | inbox |
-| `maestro_handoff_open_for_task` | (use `handoff_list --taskId`) | resume hint |
-| `maestro_handoff_pickup` | `maestro handoff pickup` | take ownership |
+| MCP tool                            | CLI equivalent                       |
+| ----------------------------------- | ------------------------------------ |
+| `maestro_task_list`, `maestro_task_get` | `maestro task list`, `maestro task get` |
+| `maestro_task_create`               | `maestro task from-spec`             |
+| `maestro_task_claim`                | `maestro task claim`                 |
+| `maestro_task_block`, `maestro_task_unblock` | `maestro task block`, `maestro task abandon` (no native unblock; re-claim from blocked) |
+| `maestro_task_complete`             | `maestro task ship`                  |
+| `maestro_evidence_record`, `maestro_evidence_list` | `maestro evidence record`, `maestro evidence list` |
+| `maestro_contract_show`, `maestro_contract_amend` | `maestro contract show`, `maestro contract amend` |
+| `maestro_verdict_show`, `maestro_verdict_request` | `maestro verdict show`, `maestro verdict request` |
+| `maestro_handoff_list`, `maestro_handoff_show` | `.maestro/handoffs/*.json` (read directly; see `maestro-handoff`) |
+| `maestro_handoff_emit`, `maestro_handoff_pickup` | emit envelope outside lifecycle / mark picked up (see `maestro-handoff`) |
 
-If MCP is not available (no `maestro_*` tool prefix in your tool list), fall back to the CLI verbs documented above.
+`maestro_task_list` accepts `plan_id` to filter to a plan's children. The MCP schema is strict — unknown fields fail rather than getting silently dropped.
 
-MCP input schemas are strict: unknown fields fail rather than getting silently dropped. Match the documented field names exactly; if a tool errors on what looks like a valid call, check spelling first (e.g., `missionId` not `missionID`). The `task_get` tool takes `id`; cross-domain tools (`evidence_list`, `verdict_show`, `contract_show`) take `taskId`. `task_complete` accepts either `summary` or `reason` (alias for the CLI's `--reason`).
+If MCP is unavailable, fall back to the CLI verbs above.
 
-## Reference
+---
 
-- `./reference/plan-conversion.md`: longer examples mapping markdown plans to task batches
-- `./reference/commands.md`: full CLI surface for `maestro task *`
-- `./reference/contracts.md`: contract criteria, amend/reopen, verdicts, strict mode
-- `./reference/recovery.md`: stuck / stale / release-owned flows
+## Hand off cleanly
+
+The next phase after this skill depends on where the single-task loop exits:
+
+- `ship` → loop is done. Surface the PR URL; no downstream skill.
+- `block` → the next agent enters via `maestro-handoff` and reads the `task:block` envelope. Surface `block_reason` and stop.
+- `verify --verdict human` → surface the reason to the user; do not retry. The user (or a follow-up agent via `maestro-handoff`) decides next.
+- Pre-ship verification is in-loop, not a downstream skill — `maestro-verify` is the protocol you run *inside* this skill at step 4, not a handoff target.
+
+Pass a claimed task with a clean evidence trail — not an in-flight scratchpad. Do not invoke spec authoring or planning from this skill.
+
+---
+
+## See also
+
+- `maestro-design` — grill-protocol spec authoring (run before `task from-spec`).
+- `maestro-plan` — heavy-mode multi-PR work (skip `task from-spec`; use `plan from-spec` + `plan decompose`).
+- `maestro-verify` — canonical verification protocol (PASS / FAIL / HUMAN / BLOCK routing).
+- `maestro-setup` — `setup check`, `setup bootstrap`, `setup migrate-v2`.
+- `docs/cli-reference.md` — verb-by-verb reference.

@@ -1,4 +1,4 @@
-import type { RuntimeSignal, RuntimeSignalOperator } from "@/features/spec";
+import type { RuntimeSignal, RuntimeSignalOperator } from "@/shared/domain/legacy-spec/index.js";
 import type { RuntimeSignalResult } from "../domain/types.js";
 import type { RuntimeMonitorPort } from "../ports/monitor.port.js";
 import { assertNever } from "@/shared/lib/assert-never.js";

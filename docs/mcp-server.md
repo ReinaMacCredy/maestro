@@ -6,19 +6,20 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 
 ## Tools
 
-14 tools across 5 surfaces. Each is a 1:1 wrapper around an existing maestro use case; semantics match the CLI verbs documented in the bundled skills.
+20 tools across 8 surfaces. Each is a 1:1 wrapper around a maestro use case; semantics match the CLI verbs documented in the bundled skills.
 
 ### Task
 
 | Tool | Behavior |
 |------|----------|
-| `maestro_task_list` | Paginated list. Filters: `missionId`, `status`, `type`, `priority`, `label`, `parentId`, `assignee`, plus `limit`/`offset`. |
+| `maestro_task_list` | Paginated list. Filters: `plan_id`, `status`, `type`, `priority`, `label`, `parentId`, `assignee`, plus `limit`/`offset`. |
 | `maestro_task_get` | Fetch one task by id. Returns `code: TASK_NOT_FOUND` if missing. |
-| `maestro_task_create` | Create a top-level task. Slug derived from title. |
-| `maestro_task_claim` | Claim a task for the current MCP session. Session id is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, `CODEX_THREAD_ID`, falling back to `<user>@<host>`. |
-| `maestro_task_complete` | Mark completed. Optional `summary` stored on the receipt. |
-| `maestro_task_block` | Add bidirectional blocker edges. Detects cycles. |
-| `maestro_task_unblock` | Remove blocker edges. |
+| `maestro_task_from_spec` | Create a `draft` task from a product-spec markdown path. |
+| `maestro_task_claim` | Flip `draft → claimed`. Session id is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, `CODEX_THREAD_ID`, falling back to `<user>@<host>`. |
+| `maestro_task_block` | State-transition verb: moves the task to `blocked` with a required reason. |
+| `maestro_task_ship` | Manual `ready → shipped`; optional `pr_url`. |
+
+`task verify` is intentionally CLI-only — the interactive grill protocol and exit-code routing cannot be faithfully proxied over MCP.
 
 ### Evidence
 
@@ -47,6 +48,30 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 |------|----------|
 | `maestro_policy_check` | Compute effective risk class, autopilot rules, and sensitive-path matches against the task's current diff. |
 
+### Handoff
+
+| Tool | Behavior |
+|------|----------|
+| `maestro_handoff_list` | List handoff envelopes under `.maestro/handoffs/`. Filters: `task_id`, `trigger_verb`, `picked_up` (bool), plus `limit`/`offset`. |
+| `maestro_handoff_show` | Fetch one envelope by id; includes the pickup sidecar if present. `HANDOFF_NOT_FOUND` if missing, `HANDOFF_MALFORMED` if the JSON is corrupt. |
+| `maestro_handoff_emit` | Write a new envelope for a task. Bookkeeping only — does not change task state. |
+| `maestro_handoff_pickup` | Exclusive-create a pickup sidecar at `.maestro/handoffs/<id>.picked_up.json` so concurrent agents do not duplicate. Does not claim the task. Codes: `HANDOFF_NOT_FOUND`, `HANDOFF_ALREADY_PICKED_UP`, `HANDOFF_PICKUP_FAILED`, `HANDOFF_MALFORMED`. |
+
+### Principle
+
+| Tool | Behavior |
+|------|----------|
+| `maestro_principle_promote` | Materialize `docs/principles/<slug>.md` from a `lint-violation` evidence row. |
+
+### Setup
+
+| Tool | Behavior |
+|------|----------|
+| `maestro_setup_check` | Read-only audit of the v2 directory tree, principles pack, and `.maestro/config.yaml`. |
+| `maestro_setup_migrate_v2` | Run the 11-step v1→v2 migration. `dry_run` previews without side effects; `force` re-runs past the `.migrated-v2.json` flag. |
+
+Grill-driven verbs (`spec new`, `plan from-spec`, `plan decompose`) are CLI-only — the interactive grill protocol cannot be sustained over MCP.
+
 ## Result shape
 
 Successful calls return a `tools/call` result whose first content block is JSON text and whose `structuredContent` contains the same payload as a JS object.
@@ -58,20 +83,20 @@ Successful calls return a `tools/call` result whose first content block is JSON 
 }
 ```
 
-Failures set `isError: true` and the payload is `{ code, message, hints }`. Codes are stable and safe to branch on. The full set surfaced today:
+Failures set `isError: true` and the payload is `{ code, message, hints }`. Codes are stable and safe to branch on. The set surfaced today:
 
 | Code | Source |
 |------|--------|
 | `TASK_NOT_FOUND` | task lookup miss; thrown explicitly by the task-error factory |
+| `TASK_CLAIM_FAILED` / `TASK_BLOCK_FAILED` / `TASK_SHIP_FAILED` / `TASK_CREATE_FAILED` | wrapping fallback when the underlying use case throws |
 | `CONTRACT_NOT_FOUND` | contract show/amend on a task with no contract |
 | `CONTRACT_VERSION_NOT_FOUND` | `version` argument doesn't match any stored version |
 | `VERDICT_NOT_FOUND` | verdict show on a task with no computed verdict |
-| `ALREADY_COMPLETED` | mutating a task that has already been completed |
-| `OWNERSHIP_CONFLICT` | claim/mutate of a task owned by a different session |
-| `CYCLE_DETECTED` | task block would create a cycle in the blocker graph |
-| `SELF_BLOCK` | task tries to block itself |
+| `ALREADY_COMPLETED` | mutating a task that has already been shipped |
 | `NO_SCOPE_CHANGES` | contract amend whose add/remove paths produce no diff |
 | `VALIDATION_ERROR` | other validation failures (e.g. empty addPaths and removePaths) |
+| `HANDOFF_NOT_FOUND` / `HANDOFF_ALREADY_PICKED_UP` / `HANDOFF_PICKUP_FAILED` / `HANDOFF_MALFORMED` | handoff lookup, pickup, or sidecar parse failures |
+| `SETUP_CHECK_FAILED` / `SETUP_MIGRATE_FAILED` | wrapping fallback for setup verbs |
 
 The MCP layer prefers explicit codes attached at the throw site (via `MaestroError.code`) and falls back to message-pattern matching only for legacy throw sites. Adding a new error code in the domain is opt-in and doesn't risk silently shadowing an existing one.
 
@@ -81,7 +106,7 @@ The MCP layer prefers explicit codes attached at the throw site (via `MaestroErr
 
 ## Strict input validation
 
-Every tool's input schema is `strict`: unknown fields cause the call to fail rather than being silently dropped. A typo such as `missionID` (correct: `missionId`) on a tool that does not declare that field will return a tool error instead of succeeding with the typo'd field ignored. Match the field names documented above exactly.
+Every tool's input schema is `strict`: unknown fields cause the call to fail rather than being silently dropped. A typo such as `planID` (correct: `plan_id`) on a tool that does not declare that field will return a tool error instead of succeeding with the typo'd field ignored. Match the field names documented above exactly.
 
 ## Output schemas
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { buildTaskBoard } from "@/tui/state/task-board.js";
 import { mockEvidenceStore, mockTaskStore } from "../../../helpers/mocks.js";
-import type { Task } from "@/features/task";
+import type { LegacyTask as Task } from "@/shared/domain/legacy-task";
 import type { EvidenceRow } from "@/features/evidence";
 
 function makeTask(id: string): Task {

@@ -22,24 +22,23 @@ host-runtime hook install; the skill owns the content-generation flow.
 
 ## Setup CLI Surface
 
-- `maestro setup --check` — read-only audit. Detects host runtimes (`.claude/`,
-  `.codex/`, `.cursor/`), AGENTS.md size against the TOC budget (default 160
-  lines hard, 140 warn), `owners.yaml` role coverage, orphan run dirs, and
-  bundled-skill verb drift vs the local binary. Exit 0 clean, 1 with any
-  `error`-severity findings.
-- `maestro setup --self-test` — sandboxed self-test in a tmpdir. Provisions
-  a synthetic task layout, exercises the evidence store, and reports
-  step-by-step pass/fail. Never writes to the project's `.maestro/`.
-- `maestro setup --install-hooks` — installs `SessionStart` / `SessionEnd`
-  hook stubs into detected host-runtime settings files. Idempotent: re-running
-  reports `already-present`.
-- TOC size-budget enforcement: bootstrap writes refuse to emit an
-  `.maestro/AGENTS.md` over the hard limit (defaults to 160 lines, configurable
-  via `.maestro/config.json` `tocSizeBudget`). Warns at the soft limit.
-- Skill-binary drift detection: bundled skill SKILL.md verbs are scanned and
-  compared against the running binary's command tree. Drift surfaces as
-  `Skill expects "<verb>"; binary v<n> does not have it. Run "maestro update"
-  or downgrade the skill bundle.`
+- `maestro setup check` — read-only audit of the v2 directory layout
+  (`.maestro/{specs,plans,tasks,runs,evidence}`), the principles pack
+  (`docs/principles/`), and `.maestro/config.yaml`. Exit 1 only when an
+  entry is `missing`; `warn` (empty principles pack, absent
+  `config.yaml`) is informational. `--json` emits the full report.
+- `maestro setup bootstrap` — idempotent. Creates the five v2
+  directories with `.gitkeep` placeholders when empty. Skips dirs that
+  already exist.
+- `maestro setup migrate-v2` — 11-step v1 → v2 migration. Preflight,
+  backup to `.maestro.backup-<ts>/`, bootstrap-dirs, migrate-corrections,
+  migrate-tasks, migrate-plans, migrate-evidence, migrate-policies,
+  seed-principles, write-flag, verify. `--dry-run` plans without writing;
+  `--force` re-runs past `.maestro/.migrated-v2.json`.
+- `maestro setup migrate-corrections` — moves v1
+  `.maestro/memory/corrections/*.json` into `docs/principles/legacy/<id>.md`.
+  Exposed standalone for partial re-runs. `--overwrite` rewrites existing
+  legacy files.
 
 ## Managed Markers
 
@@ -221,6 +220,13 @@ Report:
 Do not claim setup is complete unless root `AGENTS.md`, context docs,
 language guides, and `.maestro/setup-report.md` have all been checked.
 
+### 8. Hand off cleanly
+
+The next phase after this skill is `maestro-design` (to author a new spec) or `maestro-task` (to resume work against an existing spec under `.maestro/specs/`).
+
+Pass a bootstrapped repo with `.maestro/setup-report.md` written and `maestro setup check` returning a clean audit — not a half-installed harness.
+Do not invoke design, planning, or implementation from this skill.
+
 ## Context Doc Intent
 
 - `architecture.md`: current repo shape, owned modules, boundaries, known
@@ -229,17 +235,18 @@ language guides, and `.maestro/setup-report.md` have all been checked.
 - `quality-gates.md`: build/test/lint/typecheck commands and review bar.
 - `security.md`: trust boundaries, sensitive files, approval gates.
 - `workflow.md`: human/agent delivery loop, review expectations, completion bar.
-- `planning.md`: thin policy bridge to `maestro-brainstorm`, `maestro-plan`,
-  `.maestro/plans/`, `maestro-task`, and handoff.
+- `planning.md`: thin policy bridge to `maestro-design`, `maestro-plan`,
+  `.maestro/plans/`, and `maestro-task`.
 - `index.md`: map of all context docs and copied style guides.
 
-## Future CLI Contract
+## CLI ↔ skill mapping
 
-The later CLI should mirror this skill exactly:
+The CLI mirrors this skill. When the skill says "set up the project",
+the binary's contract is:
 
-- `maestro setup --dry-run --json`
-- `maestro setup --json`
-- `maestro setup check --json`
-- `maestro setup languages --json`
+- `maestro setup check [--json]` — drift audit.
+- `maestro setup bootstrap [--json]` — directory scaffold.
+- `maestro setup migrate-v2 [--dry-run] [--force] [--json]` — v1 → v2 import.
+- `maestro setup migrate-corrections [--overwrite] [--json]` — corrections subset.
 
 Do not design extra CLI behavior while running this skill.

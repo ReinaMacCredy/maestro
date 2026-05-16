@@ -7,7 +7,7 @@ import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { type Services } from "@/services.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import { deriveRiskClassFromDiff } from "@/features/risk/index.js";
-import { readCurrentContractWithBackfill, readDraftContract } from "@/features/task/index.js";
+import { readCurrentContractWithBackfill, readDraftContract } from "@/service/contract-helpers.js";
 import { checkPlan } from "../usecases/check-plan.js";
 import { validatePlanInput } from "../domain/plan-validators.js";
 import type { PlanCheckFinding, PlanCheckResult } from "../domain/types.js";

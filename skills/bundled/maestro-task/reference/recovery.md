@@ -88,4 +88,4 @@ maestro task show <id>
 
 ## Handoff transfer
 
-To deliberately transfer work to another agent, do not manually unclaim. Use `maestro-handoff` instead. It creates a packet and the receiver picks it up, transferring task ownership cleanly.
+To deliberately transfer work to another agent, do not manually unclaim. Run `maestro task block <id> --reason "<context>"`; that emits a handoff envelope at `.maestro/handoffs/<hnd-...>.json`. The receiving agent reads the envelope (see `maestro-handoff`) and re-claims the task.

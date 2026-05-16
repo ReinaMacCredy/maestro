@@ -20,7 +20,7 @@ import { mapWithConcurrency } from "@/shared/lib/concurrency.js";
 // keeps wall-clock close to unbounded Promise.all on warm cache.
 const PER_TASK_READ_CONCURRENCY = 32;
 const PER_LIST_TASK_CONCURRENCY = 8;
-import { TASK_ID_PATTERN } from "@/features/task";
+import { ANY_TASK_ID_PATTERN as TASK_ID_PATTERN } from "@/types/task.js";
 import type { EvidenceRow } from "../domain/types.js";
 import { EVIDENCE_ID_PATTERN } from "../domain/evidence-id.js";
 import type {

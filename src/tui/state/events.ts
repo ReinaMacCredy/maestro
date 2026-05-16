@@ -1,4 +1,22 @@
-import type { Mission, Feature, Checkpoint, Assertion, MilestoneReportProgress } from "@/features/mission";
+import type { Mission, Feature, Checkpoint, Assertion } from "@/shared/domain/legacy-mission";
+import type { Milestone, MilestoneStatus } from "@/shared/domain/legacy-mission";
+
+/** Inlined from mission-report.usecase.ts (sole out-of-mission consumer). */
+interface MilestoneReportProgress {
+  milestoneId: string;
+  milestone: Milestone;
+  status: MilestoneStatus;
+  order: number;
+  featureCount: number;
+  completedFeatures: number;
+  featureCompletionPct: number;
+  assertionCount: number;
+  passedAssertions: number;
+  waivedAssertions: number;
+  terminalAssertions: number;
+  assertionCompletionPct: number;
+  waivedAssertionIds: string[];
+}
 import type { MissionControlEvent } from "./types.js";
 
 interface DeriveEventsInput {

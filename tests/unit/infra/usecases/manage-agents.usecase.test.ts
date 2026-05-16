@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { createHash } from "node:crypto";
-import { chmod, lstat, mkdtemp, readlink, rm, mkdir, symlink, writeFile, readFile, stat } from "node:fs/promises";
+import { lstat, mkdtemp, readlink, rm, mkdir, symlink, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -326,31 +326,6 @@ describe("manage-agents use case logic", () => {
 
       await injectAgentBlocks(tmpDir, "all", fakeHome);
       expect(await readFile(userEditedPath, "utf8")).toBe(userContent);
-    });
-
-    it("restores execute bits for shipped bundled scripts on reinstall", async () => {
-      if (process.platform === "win32") return;
-
-      await mkdir(join(fakeHome, ".claude"), { recursive: true });
-      await mkdir(join(fakeHome, ".codex"), { recursive: true });
-
-      await injectAgentBlocks(tmpDir, "all", fakeHome);
-
-      const scriptPath = join(
-        fakeHome,
-        ".claude",
-        "skills",
-        "maestro-brainstorm",
-        "scripts",
-        "start-server.sh",
-      );
-      await chmod(scriptPath, 0o644);
-      expect((await stat(scriptPath)).mode & 0o111).toBe(0);
-
-      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
-
-      expect(second.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
-      expect((await stat(scriptPath)).mode & 0o111).not.toBe(0);
     });
 
     it("removes stale manifest-owned files from still-shipped skill dirs", async () => {

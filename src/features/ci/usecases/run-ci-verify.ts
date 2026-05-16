@@ -13,7 +13,7 @@ import { detectCrossTaskConflict } from "./detect-cross-task-conflict.js";
 import { requestVerdict } from "@/features/verdict/index.js";
 import type { RequestVerdictDeps } from "@/features/verdict/index.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
-import { checkArchitectureRules } from "@/features/verify";
+import { checkArchitectureRules } from "@/shared/lib/arch-rules.js";
 import type { LintViolationPayload } from "@/features/evidence/domain/types.js";
 import { loadOwnersFromBase } from "@/features/policy/index.js";
 import type { GithubApiPort } from "../ports/github-api.port.js";

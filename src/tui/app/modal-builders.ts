@@ -2,7 +2,6 @@
  * Modal option builders and command palette glue.
  * Extracted from index.ts -- builds ModalOptions from AppState.
  */
-import { homedir } from "node:os";
 import type { AppState, Action } from "../state/reducer.js";
 import type {
   MissionControlConfigInspector,
@@ -20,10 +19,9 @@ import {
   type ModalInfoItem,
   type ModalOptions,
 } from "../shared/modal-model.js";
-import { getValidFeatureTransitions } from "@/features/mission";
-import { TASK_STATUSES } from "@/features/task";
+import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
+import { TASK_STATUSES } from "@/shared/domain/legacy-task";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, TASK_STATUS_COLUMN_LABEL, AGENT_STATUS_LABEL } from "../shared/theme.js";
-import { GRAPH_DIR } from "@/shared/domain/defaults.js";
   import {
     getConfigRowsForTab,
     getConfigTabDisplayLabel,
@@ -243,79 +241,24 @@ function buildMemoryModal(
   state: MemoryModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  const memory = state.snapshot.memory;
-  const eyebrow = `${buildMemoryTabs(state)}\n${buildMemoryHelpText()}`;
-
-  if (state.modal.tab === "overview") {
-    return {
-      mode: "info",
-      title: "Memory",
-      eyebrow,
-      items: buildMemoryOverviewItems(memory),
-      footer: buildTabbedOverlayFooter(returnTarget),
-      returnTarget,
-      renderSpec: buildOverlayRenderSpec("memory"),
-    };
-  }
-
-  if (state.modal.tab === "corrections") {
-    const corrections = memory?.corrections ?? [];
-    const selectedCorrection = corrections[state.modal.selectedItemIndex];
-    return {
-      mode: "split",
-      title: "Memory",
-      eyebrow,
-      items: corrections.length > 0
-        ? corrections.map((correction) => ({
-            label: `${correction.severity === "hard" ? "[!]" : "[ ]"} ${correction.rule}`,
-            detail: correction.trigger.keywords.join(", ") || "no keywords",
-          }))
-        : [{ label: "No saved corrections", selectable: false, tone: "muted" }],
-      selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, corrections.length - 1)),
-      detailItems: buildCorrectionDetailItems(selectedCorrection),
-      footer: buildTabbedOverlayFooter(returnTarget),
-      returnTarget,
-      renderSpec: buildOverlayRenderSpec("memory"),
-    };
-  }
-
-  if (state.modal.tab === "learnings") {
-    return {
-      mode: "info",
-      title: "Memory",
-      eyebrow,
-      items: buildLearningActivityItems(memory, state.snapshot.configInspector ?? null),
-      footer: buildTabbedOverlayFooter(returnTarget),
-      returnTarget,
-      renderSpec: buildOverlayRenderSpec("memory"),
-    };
-  }
-
-  if (state.modal.tab === "config") {
-    return {
-      mode: "info",
-      title: "Memory System",
-      eyebrow,
-      items: buildMemoryConfigItems(state.snapshot.configInspector ?? null),
-      footer: buildTabbedOverlayFooter(returnTarget),
-      returnTarget,
-      renderSpec: buildOverlayRenderSpec("config"),
-    };
-  }
-
-  const assertions = memory?.ratchetSuite.assertions ?? [];
+  // The v1 memory subsystem (corrections / learnings / ratchet) was retired
+  // in v2 and absorbed into the `principle` lifecycle. The Memory tab now
+  // surfaces only the project-graph context for backwards compatibility.
+  const graphContext = state.snapshot.memory?.graphContext;
   return {
-    mode: "split",
+    mode: "info",
     title: "Memory",
-    eyebrow,
-    items: assertions.length > 0
-      ? assertions.map((assertion) => ({
-          label: assertion.rule,
-          detail: assertion.check,
-        }))
-      : [{ label: "No ratchet assertions", selectable: false, tone: "muted" }],
-    selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, assertions.length - 1)),
-    detailItems: buildRatchetDetailItems(memory, assertions[state.modal.selectedItemIndex]),
+    eyebrow: "Retired in v2 · see `maestro principle` for the new surface.",
+    items: [
+      {
+        text: "The v1 memory subsystem (corrections, learnings, ratchet) was retired.",
+        tone: "muted" as const,
+      },
+      { text: "Promoted principles live under `maestro principle list`." },
+      { text: "" },
+      { text: "Project Graph", section: "Graph", tone: "accent" as const },
+      ...buildGraphImpactItems(graphContext),
+    ],
     footer: buildTabbedOverlayFooter(returnTarget),
     returnTarget,
     renderSpec: buildOverlayRenderSpec("memory"),
@@ -710,15 +653,6 @@ function buildProgressBar(pct: number, width: number): string {
   return "[" + "#".repeat(filled) + "-".repeat(width - filled) + "]";
 }
 
-function buildMemoryTabs(state: MemoryModalState): string {
-  const tabs = ["overview", "corrections", "learnings", "ratchet", "config"] as const;
-  return tabs.map((tab) => tab === state.modal.tab ? `[${tab}]` : tab).join(" ");
-}
-
-function buildMemoryHelpText(): string {
-  return "Tab or [ ] switch tabs. Up and Down move through saved items.";
-}
-
 function buildTabbedOverlayFooter(returnTarget: "command-palette" | undefined): string {
   return returnTarget === "command-palette"
     ? "Tab cycle tabs · Left back · Esc close"
@@ -729,174 +663,6 @@ function buildListOverlayFooter(returnTarget: "command-palette" | undefined): st
   return returnTarget === "command-palette"
     ? "Use arrows · Left back · Esc close"
     : "Use arrows · Esc close";
-}
-
-function buildMemoryOverviewItems(memory: MissionControlSnapshot["memory"]): readonly ModalInfoItem[] {
-  if (!memory) {
-    return [{ text: "No memory system data available", tone: "muted" as const }];
-  }
-
-  const correctionPreview = memory.corrections.slice(0, 4);
-  const compiledAt = formatDateTimeCompact(memory.stats.learnings.compiledAt);
-  const rawSinceCompile = memory.compiledLearnings
-    ? Math.max(0, memory.rawLearnings.length - memory.compiledLearnings.rawCount)
-    : memory.rawLearnings.length;
-  const ratchetStatus = memory.stats.ratchet.lastResult?.toUpperCase() ?? "No run";
-
-  return [
-    {
-      text: `Corrections: ${memory.stats.corrections.total}        Learnings: ${memory.stats.learnings.rawCount} raw / ${compiledAt ? `compiled ${compiledAt}` : "not compiled"}        Ratchet: ${memory.stats.ratchet.assertions}`,
-      section: "Summary",
-      tone: "accent" as const,
-    },
-    { text: "" },
-    { text: "Corrections", section: "Corrections", tone: "accent" as const },
-    ...(correctionPreview.length > 0
-      ? correctionPreview.map((correction) => ({
-          text: `${correction.severity === "hard" ? "[!]" : "[ ]"} ${correction.rule}    triggers: ${formatTriggerPreview(correction.trigger.keywords, correction.trigger.fileGlobs)}    severity: ${correction.severity.toUpperCase()}`,
-        }))
-      : [{ text: "No saved corrections", tone: "muted" as const }]),
-    { text: `${memory.stats.corrections.total} total  [View All -->]` },
-    { text: "" },
-    { text: "Learnings (compiled)", section: "Learnings", tone: "accent" as const },
-    { text: compiledAt ? `Last compiled: ${compiledAt}  (${rawSinceCompile} raw entries since)` : "Last compiled: not yet" },
-    ...(memory.compiledLearnings
-      ? splitIntoBullets(memory.compiledLearnings.summary)
-      : [{ text: "- No compiled learning summary yet", tone: "muted" as const }]),
-    { text: "[Full -->]" },
-    ...(memory.stats.learnings.staleDays !== undefined
-      ? [{ text: `Staleness: ${memory.stats.learnings.staleDays} day(s)` }]
-      : []),
-    { text: "" },
-    { text: "Ratchet", section: "Ratchet", tone: "accent" as const },
-    { text: `Suite: ${memory.stats.ratchet.assertions} assertions   Last run: ${ratchetStatus}` },
-    { text: memory.ratchetBaseline ? `Baseline score: ${formatBaselineScore(memory.ratchetBaseline.passCount, memory.ratchetSuite.assertions.length)}` : "Baseline score: n/a" },
-    ...memory.ratchetSuite.assertions.slice(0, 4).map((assertion) => ({
-      text: `[ok] ${assertion.id}    promoted ${formatDateOnly(assertion.createdAt)}`,
-    })),
-    { text: "" },
-      { text: "Project Graph", section: "Graph", tone: "accent" as const },
-      { text: `${memory.stats.graph.projects} projects · ${memory.stats.graph.links} links` },
-      ...buildGraphImpactItems(memory.graphContext),
-    ];
-  }
-
-function buildCorrectionDetailItems(correction: NonNullable<MissionControlSnapshot["memory"]>["corrections"][number] | undefined) {
-  if (!correction) {
-    return [{ text: "Choose a correction to inspect it.", tone: "muted" as const }];
-  }
-
-  return [
-    { text: correction.rule, section: "Rule", tone: "accent" as const, style: "block" as const },
-    { text: correction.source, section: "Source" },
-    { text: correction.trigger.keywords.join(", ") || "none", section: "Keywords" },
-    { text: correction.trigger.fileGlobs.join(", ") || "none", section: "Globs" },
-    { text: correction.severity.toUpperCase(), section: "Severity" },
-    { text: correction.promotedToRatchet ? `Promoted ${correction.promotedToRatchet}` : "Not promoted", section: "Ratchet" },
-    { text: correction.createdAt, section: "Created" },
-    { text: correction.updatedAt, section: "Updated" },
-  ];
-}
-
-function buildRatchetDetailItems(
-  memory: MissionControlSnapshot["memory"],
-  assertion: NonNullable<MissionControlSnapshot["memory"]>["ratchetSuite"]["assertions"][number] | undefined,
-): readonly ModalInfoItem[] {
-  if (!memory) {
-    return [{ text: "No ratchet data available.", tone: "muted" as const }];
-  }
-
-  return [
-    ...(assertion
-      ? [
-          { text: assertion.rule, section: "Assertion", tone: "accent" as const, style: "block" as const },
-          { text: assertion.check, section: "Check" },
-          { text: assertion.correctionId, section: "Correction" },
-          { text: assertion.createdAt, section: "Created" },
-          { text: "" },
-        ]
-      : [{ text: "Choose a ratchet assertion.", tone: "muted" as const }]),
-    { text: "Baseline", section: "Baseline" },
-      ...(memory.ratchetBaseline
-        ? [
-            { text: `Pass count: ${memory.ratchetBaseline.passCount}` },
-            { text: `Last run: ${memory.ratchetBaseline.lastRunAt}` },
-          ]
-        : [{ text: "No baseline recorded", tone: "muted" as const }]),
-    ];
-  }
-
-function buildLearningActivityItems(
-  memory: MissionControlSnapshot["memory"],
-  inspector: MissionControlConfigInspector | null | undefined,
-): readonly ModalInfoItem[] {
-  if (!memory) {
-    return [{ text: "No learning data available.", tone: "muted" as const }];
-  }
-
-  const activity = buildLearningActivitySeries(memory);
-  const compiledAt = formatDateTimeCompact(memory.compiledLearnings?.compiledAt ?? memory.stats.learnings.compiledAt);
-  const rawSinceCompile = memory.compiledLearnings
-    ? Math.max(0, memory.rawLearnings.length - memory.compiledLearnings.rawCount)
-    : memory.rawLearnings.length;
-  const compileThreshold = getMemoryCompileThreshold(inspector) ?? 5;
-  const remainingToCompile = Math.max(0, compileThreshold - rawSinceCompile);
-
-  return [
-    { text: "Learning Activity", section: "Activity", tone: "accent" as const },
-    ...activity,
-    { text: "" },
-    { text: `Corrections captured:  ${memory.stats.corrections.total} total,  ${countRecentEntries(memory.corrections.map((entry) => entry.createdAt))} this week` },
-    { text: `Learnings logged:      ${memory.stats.learnings.rawCount} total, ${countRecentEntries(memory.rawLearnings.map((entry) => entry.sessionDate))} this week` },
-    { text: `Ratchet promotions:   ${memory.stats.ratchet.assertions} total,  ${countRecentEntries(memory.ratchetSuite.assertions.map((entry) => entry.createdAt))} this week` },
-    { text: "" },
-    { text: `Compile status: ${compiledAt ? `compiled ${compiledAt}` : "not compiled"}${compiledAt ? `   Next: ~${remainingToCompile} more entr${remainingToCompile === 1 ? "y" : "ies"}` : ""}` },
-    ...(memory.compiledLearnings
-      ? splitIntoBullets(memory.compiledLearnings.summary)
-      : [{ text: "- No compiled learning summary yet", tone: "muted" as const }]),
-  ];
-}
-
-function buildMemoryConfigItems(
-  inspector: MissionControlConfigInspector | null | undefined,
-): readonly ModalInfoItem[] {
-  const rows = getConfigRowsForTab(inspector ?? null, "memory");
-  if (rows.length === 0) {
-    return [{ text: "No memory config is available for this workspace.", tone: "muted" as const }];
-  }
-
-  const items = [
-    { text: formatConfigLine("Memory System", findConfigValue(rows, "memory.enabled") ?? "unset"), section: "Memory System", tone: "accent" as const },
-    { text: "" },
-    { text: "Corrections", section: "Corrections", tone: "accent" as const },
-    ...buildConfigRowBlock(rows, [
-      "memory.corrections.enabled",
-      "memory.corrections.matching",
-      "memory.corrections.auto_capture",
-      "memory.corrections.severity_default",
-    ]),
-    { text: "" },
-    { text: "Learnings", section: "Learnings", tone: "accent" as const },
-    ...buildConfigRowBlock(rows, [
-      "memory.learnings.enabled",
-      "memory.learnings.compile_threshold",
-      "memory.learnings.max_age_days",
-    ]),
-    { text: "" },
-    { text: "Ratchet", section: "Ratchet", tone: "accent" as const },
-    ...buildConfigRowBlock(rows, [
-      "memory.ratchet.enabled",
-      "memory.ratchet.enforcement",
-    ]),
-    { text: "" },
-    { text: "Project Graph", section: "Project Graph", tone: "accent" as const },
-    ...buildConfigRowBlock(rows, ["memory.graph.enabled"]),
-    { text: formatConfigLine("Global Path", shortenHomePath(GRAPH_DIR)) },
-    { text: "" },
-    { text: "Read-only summary. Open Config to edit memory settings.", tone: "muted" as const },
-  ];
-
-  return items;
 }
 
 function buildConfigRowBlock(
@@ -920,52 +686,6 @@ function findConfigValue(rows: readonly MissionControlConfigRow[], keyPath: stri
   return rows.find((row) => row.keyPath === keyPath)?.displayValueText;
 }
 
-function getMemoryCompileThreshold(
-  inspector: MissionControlConfigInspector | null | undefined,
-): number | undefined {
-  const rows = getConfigRowsForTab(inspector ?? null, "memory");
-  const threshold = rows.find((row) => row.keyPath === "memory.learnings.compile_threshold");
-  const rawValue = threshold?.effectiveValueText ?? threshold?.valueText;
-  if (!rawValue) return undefined;
-  const parsed = Number.parseInt(rawValue, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function formatTriggerPreview(keywords: readonly string[], globs: readonly string[]): string {
-  const parts = [...keywords, ...globs];
-  if (parts.length === 0) return "none";
-  return parts.slice(0, 2).join(", ");
-}
-
-function formatDateTimeCompact(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  return value.slice(0, 16).replace("T", " ");
-}
-
-function formatDateOnly(value: string): string {
-  return value.slice(0, 10);
-}
-
-function formatBaselineScore(passCount: number, totalCount: number): string {
-  if (totalCount === 0) return "0.00";
-  return (passCount / totalCount).toFixed(2);
-}
-
-function splitIntoBullets(summary: string) {
-  return summary
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => ({
-      text: line.startsWith("-") ? line : `- ${line}`,
-    }));
-}
-
-function shortenHomePath(path: string): string {
-  if (process.platform === "win32") return path;
-  const home = homedir();
-  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
-}
 
 interface GraphListEntry {
   readonly label: string;
@@ -1049,78 +769,6 @@ function buildGraphImpactItems(
     .map((relationship) => ({
       text: `[!] Changing ${relationship.edge.detail} will impact: ${relationship.project.name}`,
     }));
-}
-
-function buildLearningActivitySeries(
-  memory: NonNullable<MissionControlSnapshot["memory"]>,
-) {
-  const dayKeys = buildRecentDayKeys(memory);
-  const labelLine = dayKeys.map((dayKey) => formatShortDay(dayKey).padEnd(9, " ")).join("");
-  const correctionCounts = countEntriesByDay(memory.corrections.map((entry) => entry.createdAt), dayKeys);
-  const learningCounts = countEntriesByDay(memory.rawLearnings.map((entry) => entry.sessionDate), dayKeys);
-  const ratchetCounts = countEntriesByDay(memory.ratchetSuite.assertions.map((entry) => entry.createdAt), dayKeys);
-
-  return [
-    { text: labelLine },
-    { text: `corrections: ${renderActivityBars(correctionCounts, "-")}` },
-    { text: `learnings:   ${renderActivityBars(learningCounts, "#")}` },
-    { text: `ratchet:     ${renderActivityBars(ratchetCounts, "*")}` },
-  ];
-}
-
-function buildRecentDayKeys(memory: NonNullable<MissionControlSnapshot["memory"]>): readonly string[] {
-  const timestamps = [
-    ...memory.corrections.map((entry) => entry.createdAt),
-    ...memory.rawLearnings.map((entry) => entry.sessionDate),
-    ...memory.ratchetSuite.assertions.map((entry) => entry.createdAt),
-    memory.compiledLearnings?.compiledAt ?? "",
-  ].filter((value) => value.length > 0);
-  const latestDate = timestamps.length > 0 ? new Date([...timestamps].sort().at(-1)!) : new Date();
-
-  return Array.from({ length: 5 }, (_, index) => {
-    const day = new Date(latestDate);
-    day.setUTCDate(latestDate.getUTCDate() - (4 - index));
-    return day.toISOString().slice(0, 10);
-  });
-}
-
-function countEntriesByDay(timestamps: readonly string[], dayKeys: readonly string[]): readonly number[] {
-  return dayKeys.map((dayKey) => timestamps.filter((timestamp) => timestamp.startsWith(dayKey)).length);
-}
-
-function countRecentEntries(timestamps: readonly string[]): number {
-  const latest = timestamps.length > 0 ? new Date([...timestamps].sort().at(-1)!) : new Date();
-  const cutoff = new Date(latest);
-  cutoff.setUTCDate(latest.getUTCDate() - 6);
-  return timestamps.filter((timestamp) => new Date(timestamp) >= cutoff).length;
-}
-
-function formatShortDay(dayKey: string): string {
-  const parts = dayKey.split("-").map((part) => Number(part));
-  if (parts.length !== 3) {
-    return dayKey;
-  }
-  const year = parts[0];
-  const month = parts[1];
-  const day = parts[2];
-  if (
-    year === undefined
-    || month === undefined
-    || day === undefined
-    || !Number.isFinite(year)
-    || !Number.isFinite(month)
-    || !Number.isFinite(day)
-  ) {
-    return dayKey;
-  }
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-}
-
-function renderActivityBars(counts: readonly number[], marker: string): string {
-  return counts
-    .map((count) => marker.repeat(Math.max(1, count)).padEnd(6, " "))
-    .join(" ");
 }
 
 function getFeatureActionFooter(modal: Extract<AppState["modal"], { kind: "feature-action" }>): string {

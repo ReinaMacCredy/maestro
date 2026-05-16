@@ -1,15 +1,17 @@
 # maestro
 
-Maestro is a local-first, long-running agent harness for multi-agent software engineering. It gives you one CLI and one on-disk state model for missions, features, assertions, handoff launches, checkpoints, memory, and project context so separate agent sessions can collaborate without a server, database, or background daemon.
+Maestro is a local-first agent harness for the spec-to-ship loop. It gives agents one CLI and one on-disk state model for specs, tasks, evidence, contracts, handoffs, and principles so separate sessions can collaborate without a server, database, or background daemon.
 
-In day-to-day use it acts as a conductor: a human operator drives multiple terminals while Maestro keeps the shared state disciplined and inspectable. See `docs/harness-positioning.md` for the principle-to-primitive mapping.
+In day-to-day use it acts as a conductor: a human operator drives multiple terminals while Maestro keeps the shared state disciplined and inspectable. The vocabulary is `spec -> task -> verify -> ship`. One task equals one PR (ADR-0006). Multi-PR work decomposes into an exec-plan via `maestro plan`. See `docs/harness-positioning.md` for the principle-to-primitive mapping.
 
 ## Why Maestro
 
 - Shared state lives on disk in `.maestro/`, not in chat history.
-- Missions break work into milestones, features, and validation assertions.
-- Native handoff launches build a self-contained markdown brief and start a fresh Codex, Claude, or Hermes run from the current repo state.
-- Memory commands turn corrections and learnings into reusable guidance.
+- Specs define acceptance criteria, risk class, and non-goals before code is written.
+- Tasks carry durable, per-session continuation records so the next agent resumes exactly where the last left off.
+- Handoff envelopes are emitted passively at each lifecycle transition; the next agent reads the file on disk.
+- Evidence turns agent claims into auditable, witnessed rows tied to tasks and contracts.
+- The trust substrate (contracts, verifier, verdict, CI) gates completion on witnessed evidence, not convention.
 - Mission Control gives you a read-only TUI and JSON snapshots of current state.
 - The runtime stays local-first: filesystem, git, config, and terminal tools.
 
@@ -24,49 +26,29 @@ Maestro is the shared state layer in the middle. The operator and fresh agent ru
 - It is not a hosted orchestration service or remote agent platform.
 - It is not tied to a single model vendor or harness.
 - It does not require a database, queue, or network API to work.
+- It does not schedule or background anything. "Automatic" means computed from the result of the verb the agent just called.
 
 The human operator is the bridge between terminals. Maestro is the shared state layer underneath that workflow.
-
-## Two Working Loops
-
-Maestro has two related but separate operating modes:
-
-| Use missions when you need... | Use tasks when you need... |
-|---|---|
-| A planned multi-step effort with milestones, assertions, checkpoints, and handoff launches. | A lightweight blocker graph for the daily queue. |
-| A durable brief for a fresh agent run. | Fast `ready`, `claim`, `update`, and blocker management. |
-| Reviewable artifacts under `.maestro/missions/<mission-id>/`. | Repo-tracked task state under `.maestro/tasks/tasks.jsonl`. |
-
-If you only remember one distinction: `mission` is for planned execution; `task` is for the day-to-day queue.
 
 ## Core Concepts
 
 | Concept | Purpose |
 |---|---|
-| Mission | The top-level unit of work with a lifecycle such as `draft`, `approved`, or `executing`. |
-| Milestone | A phase within a mission. Milestones can act as work phases or validation gates. |
-| Feature | A concrete piece of work assigned to an agent type, with verification steps and optional dependencies. |
-| Assertion | A validation target tied to a feature. Assertions are updated to `passed`, `failed`, `blocked`, or `waived`. |
-| Handoff | A persisted launch record plus markdown brief for starting a fresh Codex, Claude, or Hermes session from current mission or repo context. |
-| Task | A Claude-style blocker-graph work item for the daily loop; lives at `.maestro/tasks/tasks.jsonl` independent of missions. |
-| Reply | An agent's structured outcome record for a feature, optionally gated by behavioral principles. |
-| Principle | A behavioral rule injected into agent prompts and scored against replies. Stored at `.maestro/principles.jsonl`. |
-| Memory | Corrections, learnings, and compiled guidance that feed back into future agent prompts. |
-| Checkpoint | A timestamped mission snapshot you can save and later restore. |
-| Bundle | A portable `.mission.tar.gz` archive of a mission plus its artifacts for review or transfer. |
-| Mission Control | A read-only dashboard for previewing mission state interactively or as JSON. |
-
-## Mission Control Preview
-
-Mission Control gives you a read-only terminal dashboard over the current Maestro state.
-
-![Mission Control preview](assets/images/Misson_Control_Preview.png)
+| Spec | A product-spec markdown file with YAML frontmatter: acceptance criteria, non-goals, risk class, mode, and work type. The input to the task lifecycle. |
+| Task | The atomic unit of work. One task equals one PR. Carries a state machine, continuation record, optional contract, and linked evidence. |
+| Exec-plan | A container for multiple child tasks decomposed from a heavy-mode spec. Auto-completes when all children reach a terminal state. |
+| Evidence | An auditable row tied to a task: command run, exit code, optional log path, and a witness level. |
+| Contract | A machine-checked scope agreement attached to a task: files expected, files forbidden, and explicit done-when criteria. |
+| Handoff | A passive JSON envelope emitted at lifecycle transitions. The next agent reads `.maestro/handoffs/<id>.json` to learn what happened and why. |
+| Principle | A behavioral rule stored at `.maestro/principles.jsonl` and injected into agent prompts. |
+| Verdict | The deterministic gating decision after verification: `PASS`, `FAIL`, `HUMAN`, or `BLOCK`. |
+| Mission Control | A read-only terminal dashboard and JSON snapshot surface for inspecting current state. |
 
 ## How Work Flows
 
 ![How Maestro work flows](assets/diagrams/readme-how-work-flows.svg)
 
-The loop is deliberately simple: define work, optionally inspect the feature brief, launch a fresh handoff, update progress, validate the outcome, and checkpoint before sealing the milestone.
+The loop is deliberately simple: author a spec, create a task, claim it, implement and verify in a loop, then ship. Each transition emits evidence and a handoff envelope so any subsequent agent can resume without a briefing.
 
 ## Installation
 
@@ -131,203 +113,183 @@ This syncs bundled Maestro skills into Codex, Claude Code, Hermes, and the share
 maestro init
 ```
 
-This creates the local `.maestro/` workspace for the current repository, seeds default policy files, and writes `.maestro/MAESTRO.md` — a read-order compass that points fresh agents at the right files (this compass → root `AGENTS.md` → `.maestro/tasks/NOW.md` → `maestro status --json` → policies → specs).
+Creates the local `.maestro/` workspace for the current repository and writes `.maestro/MAESTRO.md` — a read-order compass that points fresh agents at the right files.
 
-### 2. Create a mission plan file
-
-`mission create` expects a JSON plan file. A minimal example:
-
-```json
-{
-  "title": "Add authentication",
-  "description": "Ship the first authentication slice",
-  "milestones": [
-    {
-      "id": "plan",
-      "title": "Planning",
-      "description": "Define the implementation approach",
-      "order": 0,
-      "kind": "work",
-      "profile": "planning"
-    },
-    {
-      "id": "implement",
-      "title": "Implementation",
-      "description": "Build and verify the feature",
-      "order": 1,
-      "kind": "work",
-      "profile": "implementation"
-    }
-  ],
-  "features": [
-    {
-      "id": "auth-plan",
-      "milestoneId": "plan",
-      "title": "Plan the auth flow",
-      "description": "Define the login shape, risks, and acceptance criteria",
-      "agentType": "codex-cli",
-      "verificationSteps": [
-        "Review the proposed flow with the team"
-      ]
-    },
-    {
-      "id": "auth-impl",
-      "milestoneId": "implement",
-      "title": "Implement the auth flow",
-      "description": "Build the first working authentication slice",
-      "agentType": "codex-cli",
-      "dependsOn": [
-        "auth-plan"
-      ],
-      "verificationSteps": [
-        "Run build",
-        "Run targeted tests",
-        "Verify the login flow manually"
-      ],
-      "fulfills": [
-        "auth-login-works"
-      ]
-    }
-  ]
-}
-```
-
-### 3. Create and approve the mission
+### 2. Bootstrap the directory layout
 
 ```bash
-maestro mission create --file plan.json
-maestro mission list
-maestro mission approve <mission-id>
+maestro setup bootstrap
 ```
 
-### 4. Inspect the current feature brief (optional)
+Creates the canonical subdirectories under `.maestro/` with `.gitkeep` placeholders. Idempotent: safe to re-run.
+
+### 3. Check setup
 
 ```bash
-maestro feature list --mission <mission-id>
-maestro feature prompt <feature-id> --mission <mission-id> --out agent-prompt.md
+maestro setup check
 ```
 
-This writes the prompt to `agent-prompt.md` and also stores it under `.maestro/missions/<mission-id>/agents/<feature-id>/prompt.md`. `maestro handoff` does not require this step, but it is useful when you want to inspect the current feature context before launching a fresh agent run.
+Audits the directory layout, principles pack, and config file. Exits 1 only when an entry is `missing`; `warn` is informational. Add `--json` for machine output.
 
-### 5. Launch a handoff
-
-Launch a fresh Codex run for the next implementation slice:
+### 4. Author a spec
 
 ```bash
-maestro handoff \
-  "Implement auth-impl for mission <mission-id> and run the listed verification steps before stopping" \
-  --agent codex
+maestro spec new my-feature --title "My first feature"
 ```
 
-Launches are detached by default. Maestro persists the handoff under `~/.maestro/handoff/<id>/` (a single global store) and returns the launch record with the prompt path, log path, target directory, linked task id, and agent details.
+Scaffolds `.maestro/specs/my-feature.md` with YAML frontmatter. Open the file and fill in `acceptance`, `non_goals`, `risk_class`, `mode`, and `work_type`. For a guided interview, run the `maestro-design` skill before this step.
 
-Useful variants:
+The frontmatter shape:
+
+```yaml
+---
+slug: my-feature
+title: My first feature
+status: draft
+acceptance:
+  - "The new endpoint returns 200 for valid input"
+non_goals:
+  - "Migrating existing data"
+risk_class: medium
+mode: light
+work_type: feature
+blocked_by: []
+---
+```
+
+Run `maestro spec validate .maestro/specs/my-feature.md` to check frontmatter before proceeding.
+
+### 5. Create the task
 
 ```bash
-maestro handoff "Review auth-impl before merge" --agent claude --worktree auth-review
-maestro handoff "Finish auth-impl and wait for the result" --agent codex --wait --json
-maestro handoff "Run a Hermes pass over auth-impl" --agent hermes --wait --json
-maestro handoff pickup --id <handoff-id> --json
+maestro task from-spec .maestro/specs/my-feature.md
 ```
 
-### 6. Track progress, validate, and seal
+Creates a task in `draft` state and prints the task ID (`tsk-...`).
+
+### 6. Claim the task
 
 ```bash
-maestro feature update auth-impl --mission <mission-id> --status in-progress
-maestro feature update auth-impl --mission <mission-id> --status review
-maestro validate show --mission <mission-id>
-maestro validate update auth-login-works --mission <mission-id> --result passed --evidence "bun test"
-maestro checkpoint save --mission <mission-id>
-maestro milestone seal implement --mission <mission-id>
+maestro task claim <tsk-id>
+# or the hot-path alias:
+claim <tsk-id>
 ```
+
+Transitions the task to `claimed`, records a transition evidence row, and emits a handoff envelope at `.maestro/handoffs/<id>.json`. For heavy-mode specs, a worktree is auto-created at this step. To skip worktree creation:
+
+```bash
+maestro task claim <tsk-id> --skip-worktree
+```
+
+### 7. Do the work, then verify
+
+Implement the change. When ready:
+
+```bash
+maestro task verify <tsk-id>
+# or:
+verify <tsk-id>
+```
+
+Exit codes:
+
+| Code | Meaning | Next action |
+|---|---|---|
+| `0` | PASS | Task auto-advances to `ready`. Run `ship`. |
+| `1` | FAIL | Fix the cited violations. Run `verify` again. |
+| `2` | HUMAN | Task stays at `verifying`. Hand off and stop. |
+| `3` | BLOCK | Task transitions to `blocked`. Surface the reason. |
+
+### 8. Ship
+
+```bash
+maestro task ship <tsk-id>
+# or:
+ship <tsk-id>
+```
+
+Transitions `ready -> shipped`. Optionally attach a PR URL:
+
+```bash
+maestro task ship <tsk-id> --pr-url https://github.com/owner/repo/pull/123
+```
+
+## The Six Skills
+
+Maestro ships a bundle of six agent-facing skills. Agents load them at session start. Each skill is a markdown document in `skills/bundled/`.
+
+### maestro-design
+
+Interview-driven product-spec authoring. Runs the grill protocol: a one-question-at-a-time interview that walks acceptance criteria, non-goals, risk class, mode, and work type, challenging user language against `CONTEXT.md` and committed ADRs. Output is a committed `.maestro/specs/<slug>.md` ready for `maestro task from-spec`. Use this skill before authoring any spec.
+
+### maestro-handoff
+
+Session handoff awareness for the passive handoff model. Describes the envelope schema, which lifecycle verbs emit envelopes (`task:claim`, `task:block`), and the read-only pickup protocol an incoming agent follows to resume a task left by a prior agent. Also documents the four handoff MCP tools for runtimes that prefer structured tool calls over direct file reads. Read this skill at session start in any `.maestro/` project to learn what the last agent left behind.
+
+### maestro-plan
+
+Heavy-mode workflow. Takes an approved `mode: heavy` product-spec and turns it into an exec-plan with child tasks via `maestro plan from-spec` followed by `maestro plan decompose`. The decompose step runs the grill protocol against the spec, `CONTEXT.md`, and the architecture lint set before emitting the task batch. The exec-plan auto-completes when every child task reaches `shipped` or `abandoned` (ADR-0011). Use this skill when the work spans three or more vertical slices or multiple feature directories.
+
+### maestro-task
+
+Single-task execution loop for light-mode specs. Guides the agent from `task from-spec` through `claim`, the `doing <-> verifying` iteration, blocking when stuck, and finally `ship`. Auto-activates when a `.maestro/` directory is detected in the working tree. Every state transition emits a handoff envelope and an evidence row. Use this skill for any single-PR implementation task.
+
+### maestro-verify
+
+The canonical verification protocol. Documents exit-code routing (PASS / FAIL / HUMAN / BLOCK), the architecture-lint corpus, the Trust Verifier checks, and the ProofMap acceptance-criteria coverage gate. Cross-referenced by `maestro-task` and `maestro-plan`. Read this skill before declaring any task complete; it is the shared pre-ship ritual every agent follows.
+
+### maestro-setup
+
+Repository onboarding. The skill generates context docs under `.maestro/context/`, a hierarchical `AGENTS.md`, language style guides, and a setup report. The CLI mirrors the skill: `setup check` audits drift, `setup bootstrap` scaffolds directories, `setup migrate-v2` performs the 11-step upgrade from a pre-rebuild `.maestro/`, and `setup migrate-corrections` moves legacy corrections into `docs/principles/legacy/`. Use this skill when initializing a new project or upgrading an older `.maestro/` directory.
 
 ## Handoffs
 
-`maestro handoff "<task>"` builds a self-contained markdown brief from the current repo state plus the linked task continuation, then launches a fresh Codex, Claude, or Hermes run. Every launch is persisted under `~/.maestro/handoff/<id>/` (a single global store) so the operator can inspect exactly what was sent and what the child process printed. Handoffs created in one working directory are visible from any other. Prompt-only packets can be picked up from any working directory, but task-linked packets must be picked up from their source project unless you explicitly pass `maestro handoff pickup --standalone`.
+Handoffs in Maestro are passive. Lifecycle verbs drop a small JSON envelope on disk at each meaningful transition; the next agent reads the file to understand what was happening and why. There is no launch daemon, no remote queue, and no active broker.
 
-### What a launch contains
+### Which verbs emit envelopes
 
-A launch record always includes:
+| Verb | Emits | Envelope `trigger_verb` |
+|---|---|---|
+| `maestro task claim` | yes | `task:claim` |
+| `maestro task block` | yes | `task:block` |
+| `maestro task ship` | roadmap | — |
+| `maestro task verify` | roadmap | — |
+| `maestro task abandon` | roadmap | — |
 
-- `id`, `agent`, and `model`
-- `status`: `launching`, `launched`, `completed`, or `failed`
-- `targetDir`: the directory handed to the external agent
-- `promptPath`, `outputPath`, and the exact launched `command`
-- task and takeover metadata such as `refs.taskId`, `createdByAgent`, `pickedUpByAgent`, and `consumedAt`
-- optional `worktree` metadata when `--worktree` is used
-- optional `pid` and `exitCode`, depending on detached vs `--wait` mode
+`task:claim` and `task:block` are the only wired emitters. The remaining triggers are reserved in the port and will emit when wired.
 
-The prompt itself is stored separately as markdown. Maestro always renders the same sections:
+### Envelope schema
 
-- `Task`
-- `Context`
-- `Relevant Files`
-- `Current State`
-- `What Was Tried`
-- `Decisions`
-- `Acceptance Criteria`
-- `Constraints`
+Envelopes land at `.maestro/handoffs/<hnd-<base36>-<rand>>.json`:
 
-### How prompt context is chosen
-
-- If exactly one actionable feature exists in the active mission, Maestro anchors the brief to that mission, milestone, feature, assertions, agent prompt or report artifacts, and the current git state.
-- Otherwise it falls back to repository context: current branch, recent commits, and changed files.
-- If the handoff is linked to an active task continuation, Maestro injects the saved `currentState`, `nextAction`, active decisions, and recent local timeline into the prompt before launch.
-- When `--worktree` is used, Maestro creates the sibling worktree first and appends that worktree path and branch information to the `Constraints` section.
-
-### Launch status flow
-
-![Launch status flow](assets/diagrams/readme-launch-status.svg)
-
-- Default mode returns as soon as the child process is started and records status `launched`.
-- `--wait` blocks until the agent exits and records `completed` or `failed`.
-- `--json` prints the persisted launch record for automation or debugging.
-- `handoff pickup` atomically consumes a packet on first pickup. Prompt-only packets can be consumed anywhere; task-linked packets resume their linked task only when pickup happens from the source project, unless `--standalone` is passed.
-
-### Typical commands
-
-Default Codex launch:
-
-```bash
-maestro handoff \
-  "Implement auth-impl for mission <mission-id> and verify the touched surface area" \
-  --agent codex
+```json
+{
+  "id": "hnd-...",
+  "task_id": "tsk-...",
+  "trigger_verb": "task:claim",
+  "created_at": "<ISO-8601>",
+  "agent_id": "<optional>",
+  "worktree_path": "<optional>",
+  "spec_path": "<optional>",
+  "reason": "<optional, present on task:block>"
+}
 ```
 
-Claude launch in a sibling worktree:
+### Pickup protocol
 
-```bash
-maestro handoff \
-  "Review auth-impl for regressions and missing tests" \
-  --agent claude \
-  --worktree auth-review
-```
+1. Scan recent envelopes: `ls -1t .maestro/handoffs/*.json | head -10`
+2. Read the envelope that matches the task you intend to pick up.
+3. Check `trigger_verb`:
+   - `task:claim` — a prior agent had it; verify they are gone before re-claiming.
+   - `task:block` — read `reason`; resolve the blocker before re-claiming.
+4. Re-claim: `maestro task claim <task_id> --agent <your-agent-id>`
+5. Continue the verification loop per `maestro-verify`.
 
-Foreground automation-friendly launch:
-
-```bash
-maestro handoff \
-  "Finish auth-impl and return only after the tests pass" \
-  --agent codex \
-  --wait \
-  --json
-```
-
-Hermes launch:
-
-```bash
-maestro handoff \
-  "Run a focused Hermes implementation pass" \
-  --agent hermes \
-  --wait \
-  --json
-```
-
-Use `--model` to override the agent default (`gpt-5.4` for Codex, `opus` for Claude; Hermes only receives `--model` when explicitly provided), `--name` to label the launch, and `--base` when you need a specific base branch for a worktree handoff. Use `maestro handoff pickup` to consume a packet, and pass `--standalone` when you intentionally want only the prompt without resuming a linked task.
+Pickup sidecars live at `<id>.picked_up.json`. The `*.json` glob matches envelope files only; pickup sidecars are excluded by `maestro_handoff_list` by default.
 
 ## Task System
 
-Tasks are Maestro's lightweight, mutable issue graph for the daily queue. A task answers "what do I do next?"; a mission answers "what are we building?" Tasks live in `.maestro/tasks/tasks.jsonl`, are repo-tracked, and review like regular diffs.
+Tasks are Maestro's lightweight, mutable issue graph for the daily queue. A task answers "what do I do next?" Tasks live in `.maestro/tasks/tasks.jsonl`, are repo-tracked, and review like regular diffs.
 
 ### Lifecycle
 
@@ -373,80 +335,6 @@ Rules enforced by the domain layer:
 | `maestro task similar <id>` | Tasks that look alike by title, completion reason, receipt text, and linked contract text. |
 | `maestro task list` | Full filter set: `--status`, `--priority`, `--type`, `--label`, `--parent`, `--assignee`, `--limit`. Add `--tracks` for headline-only output. |
 
-### Status view
-
-`maestro task status` renders a hybrid operator board. Simple one-task tracks render as compact rows under `ACTIVE`, `READY`, or `BLOCKED`. Multi-step tracks expand only when dependency structure matters: blocked steps or ready steps that unlock downstream work. If a ready task unlocks blocked downstream work, a one-line `next:` hint appears under the header.
-
-```text
-$ maestro task status
-tasks: 42 open | 13 active | 5 ready | 16 blocked | 5 blocked tracks
-next: epic/desktop-path-native-ghostty / Phase 0: verify env and stock paseo desktop dev flow (9 unblocks)
-
-ACTIVE
-  o chore/update-global-agents-md        Update global AGENTS.md guidance
-  o chore/check-maestro-task-dependency  Check maestro task dependency support against beads-rust
-  o chore/map-full-parallel-agent        Map full parallel-agent safety picture in maestro
-  o fix/fix-all-reviewed-regressions     Fix all reviewed regressions
-  + 9 more
-
-DEPENDENCY TRACKS
-
-epic/desktop-path-native-ghostty
-  · Phase 0: verify env and stock paseo desktop dev flow
-      ready, 9 unblocks
-  ! Phase 1: build pinned GhosttyKit xcframework
-      blocked by Phase 0: verify env and stock paseo desktop dev flow
-  ! Phase 2: scaffold ghostty-bridge N-API addon
-      blocked by Phase 1: build pinned GhosttyKit xcframework
-  + 7 more
-
-epic/test-batch-non-code
-  · Test batch: inspect ready queue
-      ready, 2 unblocks
-  · Test batch: inventory pending handoffs
-      ready, 2 unblocks
-  ! Test batch: draft cleanup notes
-      blocked by Test batch: inspect ready queue, Test batch: inventory pending handoffs
-  ! Test batch: close out temporary test set
-      blocked by Test batch: draft cleanup notes
-
-READY
-  · implement/review-last-four-commits      Review last four commits from 44d5f670 to e55384bf
-  · implement/implement-continuation-layer  Implement continuation layer
-
-BLOCKED
-  ! implement/investigate-regression            blocked by implement/scope-diff-history-feat
-  ! implement/inspect-changed-files-efficiency  blocked by implement/load-review-instructions-diff
-  ! implement/report-concise-findings-2         blocked by implement/inspect-changed-files-efficiency
-```
-
-Flags:
-
-| Flag | Effect |
-|---|---|
-| `--all` | Include completed tasks (rendered with the `v` glyph). |
-| `--track <slug-or-id>` | Restrict output to one track. |
-| `--json` | Emit a structured projection (`{ header, tracks[], orphans[], tasksById }`) for tooling. `header` includes `open`, `active`, `ready`, `pending`, `blocked`, and `blockedTracks`. |
-
-**Render shape.** The default view keeps solo/non-dependent work compact and expands only dependency tracks. `ACTIVE` shows at most four rows before `+ N more`; `READY`, `BLOCKED`, and dependency tracks are capped separately. Blocked rows render `blocked by <slug-or-id>` inline, while blocked steps inside dependency tracks render the blocker on the next line. Completed blockers are marked `(done)`.
-
-Color is auto-detected: `NO_COLOR=1` or a non-TTY pipe disables ANSI codes. Tracks (top-level tasks) carry a slug like `implement/<kebab>` (verbs: `implement | fix | chore | spike | epic`) which doubles as a human-friendly id — `task show implement/foo` and `task update implement/foo --status ...` work the same way `tsk-XXX` does.
-
-#### Backfilling legacy tasks
-
-Tasks created before slugs landed have no slug and render with their bare `tsk-<id>` as the header. To bulk-derive slugs from titles:
-
-```bash
-maestro task backfill-slugs                  # dry-run; prints what would change
-maestro task backfill-slugs --apply          # write the slugs
-maestro task backfill-slugs --apply --limit 20
-maestro task backfill-slugs --rederive --apply  # refresh auto-derived slugs after the algorithm changes
-```
-
-Derivation drops English stop-words ("and", "of", "in", ...), drops pure-hex tokens (commit shas) and digit-only tokens, caps at 4 significant words, and never truncates mid-word — so the result is short and scannable.
-
-Backfill is display-only and bypasses the completion + ownership locks (slugs don't affect runtime state), so it works on completed and currently-claimed tasks. By default it refuses to overwrite an existing slug; `--rederive` opts in to overwriting (use it when the derivation algorithm has changed).
-
 ### Ownership and claim
 
 Claiming is exclusive and session-scoped. Session IDs come from the `sessionDetection` config (Claude Code out of the box) or `--session <id>` when scripting.
@@ -455,13 +343,11 @@ Claiming is exclusive and session-scoped. Session IDs come from the `sessionDete
 maestro task claim <id>
 maestro task claim <id> --busy-check        # refuse if this session already owns open work
 maestro task claim <id> --force             # steal from another session
-maestro task claim <id> --stale-after 4h    # auto-release a dead owner's stale claim
+maestro task claim <id> --stale-after 4h   # auto-release a dead owner's stale claim
 maestro task unclaim <id>                   # in_progress demotes to pending
 maestro task release-owned <sessionId>      # release everything a session held
 maestro task heartbeat <id>                 # bump lastActivityAt without other edits
 ```
-
-`task update <id> --status in_progress` auto-claims an unassigned task for the current session, provided the session has no other open work (or `--force` is passed). This preserves the invariant that a session owns at most one in-flight task at a time.
 
 ### Batch planning
 
@@ -487,12 +373,12 @@ maestro task plan --file plan.json --dry-run           # validate without writin
 
 ### Resumable continuation
 
-Every task has a durable, on-disk continuation record that tells the next agent where work stands. It is the source of truth for resume across sessions, across agents, and across context compaction. Standalone handoff packets are the transfer artifact; the continuation is the state.
+Every task has a durable, on-disk continuation record that tells the next agent where work stands. It is the source of truth for resume across sessions, across agents, and across context compaction. Handoff envelopes are the transfer signal; the continuation is the state.
 
 Two files back each task:
 
-- `.maestro/tasks/continuations/active/<taskId>.json` -- live summary. Moves to `completed/<taskId>.json` at `task update --status completed` and returns to `active/` on `task reopen`.
-- `.maestro/tasks/local-history/<taskId>.jsonl` -- append-only event log (per-machine).
+- `.maestro/tasks/continuations/active/<taskId>.json` — live summary. Moves to `completed/<taskId>.json` at `task update --status completed` and returns to `active/` on `task reopen`.
+- `.maestro/tasks/local-history/<taskId>.jsonl` — append-only event log (per-machine).
 
 Summary fields: `currentState`, `nextAction`, `keyDecisions`, `activeAgent`, `lastActiveAt`. Event kinds: `snapshot`, `decision`, `next_action_set`, `blocker_set`, `handoff_created`, `handoff_picked_up`, `agent_takeover`, `task_completed`, `task_reopened`.
 
@@ -500,7 +386,7 @@ Summary fields: `currentState`, `nextAction`, `keyDecisions`, `activeAgent`, `la
 
 1. **Same session, chat intent.** Maestro installs Claude Code hooks that hydrate the active continuation into the agent's context with no CLI call:
    - `SessionStart` injects a short pointer when an active task exists: id, title, status, last-active timestamp, and a nudge to say `continue` or `resume`.
-   - `UserPromptSubmit` watches for these exact phrases (case- and punctuation-insensitive) and expands them into the full resume payload (current state, next action, active decisions, recent timeline) before the model sees the prompt:
+   - `UserPromptSubmit` watches for these exact phrases (case- and punctuation-insensitive) and expands them into the full resume payload before the model sees the prompt:
      - `continue`
      - `continue work`
      - `resume`
@@ -512,7 +398,7 @@ Summary fields: `currentState`, `nextAction`, `keyDecisions`, `activeAgent`, `la
 
    These are plain chat intents, not Maestro CLI commands.
 
-2. **Different agent, handoff pickup.** `maestro handoff pickup [--id <handoffId>]` consumes one open packet atomically. Prompt-only packets can be picked up from any working directory. Task-linked packets are project-anchored: from the source project, pickup force-claims the linked task for the current session, moves it to `in_progress`, transfers any contract ownership, rewrites the continuation summary with a `Resumed from handoff ...` prefix, and records `agent_takeover` + `handoff_picked_up` events. From another project, Maestro errors with the source path and a concrete `cd ... && maestro handoff pickup ...` command. Pass `--standalone` to intentionally consume the packet without resuming the linked task.
+2. **Different agent, handoff pickup.** Read the envelope at `.maestro/handoffs/`, confirm `task_id` and `trigger_verb`, then re-claim the task. See the [Handoffs](#handoffs) section for the full pickup protocol.
 
 3. **Manual inspection.** `maestro task show <id>` prints the raw task and continuation state for offline review.
 
@@ -549,28 +435,7 @@ maestro task contract criteria add <ref> "New criterion text"
 maestro task contract criteria remove <ref> <criterionId>
 ```
 
-A contract records:
-
-- `intent` -- one-sentence goal.
-- `scope` -- `filesExpected`, `filesForbidden`, optional `maxFilesTouched` cap.
-- `doneWhen[]` -- explicit criteria, each `manual` or `receipt-hint`, each markable with evidence.
-- `claimedAtCommit` -- git HEAD captured at lock; the verdict diffs against it.
-- `configSnapshot` -- strictness, overlap policy, anchor-rebase fallback, and stale-reclaim policy in effect at lock time.
-- `ownershipHistory` -- transfers from `claim --force` reclaims and `handoff pickup`.
-
-Completion gating: `task update --status completed` against a task with a locked contract closes the contract, renders a verdict, and fails completion when the verdict is broken and either `contracts.strict=true` is set or `--strict` is passed. Use `--no-contract` to complete without a contract when `contracts.default=required`.
-
-Relevant config (`.maestro/config.yaml`):
-
-```yaml
-contracts:
-  default: prompt              # required | prompt | optional
-  strict: false                # block completion on broken verdict
-  overlapPolicy: fail          # fail | annotate (active contract scope overlap)
-  rebaseFallback: best-effort  # best-effort | fail (when claimedAtCommit is missing)
-  defaultMaxFilesTouched: ~    # integer cap or unset
-  staleReclaimContractPolicy: inherit  # inherit | block (when taking over a stale claim)
-```
+Completion gating: `task update --status completed` against a task with a locked contract closes the contract, renders a verdict, and fails completion when the verdict is broken and either `contracts.strict=true` is set or `--strict` is passed.
 
 ### Task storage
 
@@ -585,14 +450,7 @@ contracts:
 └── local-history/              # per-machine audit log (ignored)
 ```
 
-`tasks.jsonl`, `contracts/`, and `principles.jsonl` are intentionally repo-tracked so the queue and its policies review like any other code change. Local histories and candidate piles stay per-machine. Bound their growth with:
-
-```bash
-maestro task prune                       # keep the most recent 500 entries per kind
-maestro task prune --keep 100 --candidates-only
-maestro task prune --continuations-only --dry-run
-maestro task prune --all                 # purge both piles
-```
+`tasks.jsonl`, `contracts/`, and `principles.jsonl` are intentionally repo-tracked so the queue and its policies review like any other code change.
 
 ## Evidence
 
@@ -645,7 +503,7 @@ This is the foundation. A contract pins down what a task is allowed to touch; th
    maestro task verify --task <id>
    ```
 
-   The verifier runs 6 checks in parallel: scope adherence, lockfile parity, generated-file parity, sensitive-path policy, commit metadata, and secrets-in-diff. Findings are printed with severity (`info`, `warn`, `error`). Exit codes: `0` when no `error` findings, `1` when at least one `error` finding, `2` when the task has no locked contract (warn — use `maestro task contract new` to create one).
+   The verifier runs 6 checks in parallel: scope adherence, lockfile parity, generated-file parity, sensitive-path policy, commit metadata, and secrets-in-diff. Findings are printed with severity (`info`, `warn`, `error`). Exit codes: `0` when no `error` findings, `1` when at least one `error` finding, `2` when the task has no locked contract.
 
 ### CLI surface
 
@@ -662,16 +520,16 @@ maestro task verify --task <id>
 maestro task verify --task <id> --base <git-ref>
 maestro task verify --task <id> --json
 
-# Mission Spec (acceptance criteria and non-goals)
-maestro spec show --mission <id>
-maestro spec edit --mission <id>
+# Spec (acceptance criteria and non-goals)
+maestro spec new <slug> [--title <text>] [--mode light|heavy]
+maestro spec validate <path>
 ```
 
 ### Policy files
 
 `maestro init` bootstraps two policy files committed under `.maestro/policies/`:
 
-- `sensitive-paths.yaml` — glob list; paths matching these globs trigger `checkSensitivePaths` findings. See `docs/sensitive-paths-defaults.md` for the 8 default globs and guidance on extending or relaxing them.
+- `sensitive-paths.yaml` — glob list; paths matching these globs trigger `checkSensitivePaths` findings.
 - `owners.yaml` — three role lists (`policy_approver`, `ratchet_approver`, `sensitive_waiver`). See `docs/owners-yaml-format.md` for the schema reference.
 
 ## Verdicts and Risk Class
@@ -691,7 +549,7 @@ Every Evidence row carries a `witness_level` that captures how trustworthy the c
 
 1. `witnessed-by-maestro` — Maestro itself ran the command and captured the result.
 2. `witnessed-by-ci` — A trusted CI gate ran the command and posted the result back.
-3. `agent-claimed-locally` — The agent self-reported a local run; Maestro did not observe it. Default for schema v1 evidence rows.
+3. `agent-claimed-locally` — The agent self-reported a local run; Maestro did not observe it.
 4. `agent-claimed-and-not-reproducible` — A manual note; cannot be reproduced. Weakest level.
 
 The Risk Engine demotes `PASS` to `HUMAN` if any evidence row's witness level is below the threshold required by the effective autopilot policy for the derived risk class.
@@ -704,7 +562,7 @@ The Risk Engine derives a risk class from deterministic diff signals and takes t
 
 ### ProofMap
 
-`maestro task proof --task <id>` produces a per-criterion coverage map: for each acceptance criterion in the linked Spec, it shows which Evidence rows satisfy it and at what witness level.
+ProofMap coverage is computed inside `maestro verdict request`. For every acceptance criterion in the linked Spec, the verdict checks which Evidence rows satisfy it at the required witness level; gaps surface as `proof-map-incomplete` diagnostics in the verdict's `reasons[]` array, with the failing criterion ids listed alongside.
 
 ### Asymmetric policy editing
 
@@ -719,9 +577,7 @@ maestro verdict request --task <id> --json
 maestro verdict show --task <id>
 maestro verdict show --task <id> --version <id>
 
-# ProofMap
-maestro task proof --task <id>
-maestro task proof --task <id> --json
+# ProofMap diagnostics surface inside `verdict request` (no separate verb)
 
 # Policy inspection
 maestro policy check --task <id>
@@ -746,82 +602,81 @@ The pre-claim loop closes the inner agent loop: the agent runs plan, implement, 
 
 Before claiming any non-trivial task done, the agent runs this ordered loop:
 
-1. **Intake** — run `maestro intake --paths <paths>` to classify the work as `tiny`, `normal`, or `high-risk` before writing code. The output drives the next step (patch directly, batch-create tasks, or build a Spec + threat-model).
-2. **Plan** — write a plan file and run `maestro plan check` to catch problems before code is written.
-3. **Implement** — write code and record evidence after each verification command.
-4. **Verify** — run `maestro task verify` and address every `error` finding.
-5. **ProofMap** — run `maestro task proof` and confirm every acceptance criterion is covered.
-6. **Verdict** — run `maestro verdict request` and branch on the exit code.
+1. **Plan** — write a plan file and run `maestro plan check` to catch problems before code is written.
+2. **Implement** — write code and record evidence after each verification command.
+3. **Verify (arch-lint)** — run `maestro task verify` and address every `error` finding.
+4. **Verdict** — run `maestro verdict request` and branch on the exit code. The verdict runs Trust Verifier + ProofMap + autopilot policy; ProofMap gaps surface as `proof-map-incomplete` reasons.
 
-The canonical source for this ritual is the `maestro-verify` bundled skill — read it when in doubt about the verification protocol.
-
-### Intake
-
-`maestro intake` is a deterministic plan-time risk classifier. It returns a lane and a recommended next step before code is written, using the same risk-class derivation rules as the Verdict layer.
-
-| Lane | Trigger | Next step |
-|---|---|---|
-| `tiny` | 0–1 risk flags, no hard gate | Patch directly, run validation, close with reason. |
-| `normal` | 2–3 risk flags, no hard gate | Create a task via `maestro task plan` and follow the standard pre-claim loop. |
-| `high-risk` | Any hard gate, or 4+ flags | Build a Spec with acceptance criteria, plus a `threat-model` Evidence row when the diff intersects sensitive paths. |
-
-Hard gates (any one promotes to `high-risk`): `auth`, `authz`, `data-model`, `audit-security`, `external-systems`. The classifier auto-detects flags from the intended file paths against the effective risk policy and sensitive-path globs; declared flags are merged on top.
-
-```bash
-maestro intake --paths src/auth/session.ts --flag auth
-maestro intake --paths src/foo.ts,src/bar.ts --json
-```
-
-Exit code is always 0; agents react to `lane`, `derivedRiskClass`, `threatModelRequired`, and `recommendedNextStep` in the output.
+The canonical source for this ritual is the `maestro-verify` bundled skill.
 
 ### Plan-check
 
-`maestro plan check` evaluates a plan file against the locked contract and spec before any code is written. It catches three classes of problems:
-
-- **`scope-widens`** — the plan intends to touch files outside `contract.scope.filesExpected`. Resolve by narrowing the intended files or amending the contract before coding.
-- **`missing-proof`** — an acceptance criterion from the Spec has no entry in the plan's `proofSet`. Every criterion needs a planned proof strategy.
-- **`risk-class-too-low`** — the plan's declared `riskClass` is lower than what the intended file set triggers. Raise it to match.
-
-The verb always exits 0. Findings in the output must be resolved before implementation begins. A clean plan-check does not guarantee a passing verdict; it means the plan is internally consistent.
+`maestro plan check` evaluates a plan file against the locked contract and spec before any code is written. It catches three classes of problems: `scope-widens`, `missing-proof`, and `risk-class-too-low`.
 
 ```bash
 maestro plan check --task <id> --plan-file ./plan.yaml
 maestro plan check --task <id> --plan-file ./plan.yaml --json
 ```
 
+### Dev-time observability
+
+`maestro task observe` is ad-hoc per-worktree observability for the agent during implementation. It does **not** gate any verdict — use `runtime check` for verdict-bearing signal recording.
+
+Two subcommands:
+
+```bash
+# One-shot PromQL query against the dev metrics backend
+maestro task observe metrics <promql>
+maestro task observe metrics <promql> --prometheus-url <url>   # override MAESTRO_PROMETHEUS_URL
+maestro task observe metrics <promql> --json                   # emit JSON envelope
+maestro task observe metrics <promql> --record --task <id>     # write a manual-note evidence row
+
+# Tail the dev log file
+maestro task observe logs
+maestro task observe logs --log-file <path>                    # override MAESTRO_DEV_LOG_FILE
+maestro task observe logs --lines <n>                          # default: 100
+maestro task observe logs --filter <string>                    # substring filter
+maestro task observe logs --json
+maestro task observe logs --record --task <id>
+```
+
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Config error (no URL / no log path configured) |
+| `2` | Backend error (query failed or file unreadable) |
+
+When `--record --task <id>` is passed, the result is written as a `manual-note` evidence row tagged `[dev-observation:metrics]` or `[dev-observation:logs]`. This is informational evidence; it does not satisfy any ProofMap criterion on its own.
+
 ### AI Reviewer Evidence
 
-Agents can record reviewer findings as structured evidence via `maestro evidence record --kind ai-review`. Three reviewer kinds are available: `bug` (correctness, edge cases, regressions), `security` (auth, input validation, secrets, injection), and `architecture` (boundary violations, coupling, abstraction misuse).
+Agents can record reviewer findings as structured evidence via `maestro evidence record --kind ai-review`. Three reviewer kinds are available: `bug`, `security`, and `architecture`.
 
-Any `error`-severity finding raises the effective risk class by one notch. A `security`-reviewer `error` always lifts to `critical`. A clean review (zero `error` findings) never lowers the deterministic baseline derived from diff signals.
+Any `error`-severity finding raises the effective risk class by one notch. A `security`-reviewer `error` always lifts to `critical`. A clean review never lowers the deterministic baseline derived from diff signals.
 
 See `docs/ai-reviewer-protocol.md` for the finding schema, confidence semantics, and recording guidance.
 
 ### Threat-model evidence
 
-When the diff intersects security-relevant sensitive paths, the Verdict is `HUMAN` with reason `threat-model-required` unless a `threat-model` Evidence row is present. Produce the threat-model document and record it before requesting a verdict:
+When the diff intersects security-relevant sensitive paths, the Verdict is `HUMAN` with reason `threat-model-required` unless a `threat-model` Evidence row is present:
 
 ```bash
 maestro evidence record --task <id> --kind threat-model \
   --threat-model-file ./threat-model.json
 ```
 
-See `docs/threat-model-format.md` for the schema (assets, threatCategories, mitigations, residualRisk) and examples.
+See `docs/threat-model-format.md` for the schema.
 
 ### Cost budgets
 
-Contracts can declare cost limits: `maxRetries`, `maxWallClockSeconds`, and `maxTokens`. When any limit is exceeded, run-state at `.maestro/runs/<task-id>/state.json` (gitignored) is marked exhausted and the next `verdict request` returns `BLOCK` (exit 3) with reason `cost-budget-exhausted`. Check consumption at any time:
+Contracts can declare cost limits: `maxRetries`, `maxWallClockSeconds`, and `maxTokens`. When any limit is exceeded, the next `verdict request` returns `BLOCK` (exit 3) with reason `cost-budget-exhausted`.
 
 ```bash
 maestro task budget --task <id>
 maestro task budget --task <id> --json
 ```
-
-`retryCount` increments automatically on each `FAIL` or `HUMAN` verdict.
-
-### Mission Control autopilot view
-
-In mission mode, Mission Control gains an `autopilot` screen that projects the current verify/verdict state across all active tasks in the mission. Use `maestro mission-control --preview autopilot --size 120x40 --format plain` to inspect it non-interactively.
 
 ### CLI surface
 
@@ -829,6 +684,10 @@ In mission mode, Mission Control gains an `autopilot` screen that projects the c
 # Plan-check
 maestro plan check --task <id> --plan-file <path>
 maestro plan check --task <id> --plan-file <path> --json
+
+# Dev-time observability (does not gate verdicts)
+maestro task observe metrics <promql> [--prometheus-url <url>] [--json] [--record --task <id>]
+maestro task observe logs [--log-file <path>] [--lines <n>] [--filter <s>] [--json] [--record --task <id>]
 
 # Cost-budget inspection (read-only, always exits 0)
 maestro task budget --task <id>
@@ -856,11 +715,11 @@ Local Maestro is advisory; CI Maestro is authoritative. The PR check status post
 
 Verdicts are bound to (pr, tree_sha), so squashes survive but force-pushes to a different tree invalidate them.
 
-See `docs/ci-integration.md` for the full reference (workflow template, env contract, witness ingestion, troubleshooting).
+See `docs/ci-integration.md` for the full reference.
 
 ## Auto-Merge
 
-When all 8 eligibility predicates pass, `maestro merge auto` triggers `gh pr merge --auto` without further human intervention. Auto-merge applies to roughly 5–15% of merged PRs in practice — only those where the diff is small-scope, fully CI-witnessed, and the autopilot policy explicitly opts in for the relevant risk class.
+When all 8 eligibility predicates pass, `maestro merge auto` triggers `gh pr merge --auto` without further human intervention.
 
 ### Opt-in
 
@@ -904,15 +763,11 @@ maestro review ack --task <id> --verdict <id> --criterion "<text>" [--criterion 
 
 Exit codes for `merge auto`: 0 = eligible and triggered, 1 = ineligible (reasons printed).
 
-See `docs/auto-merge-eligibility.md` for the full predicate reference and "Why isn't my PR auto-merging?" troubleshooting. See `docs/override-flow.md` for override authorization, audit trail, and no-silent-pass guarantees.
+See `docs/auto-merge-eligibility.md` for the full predicate reference.
 
 ## Deploy Safety
 
 Deploy Safety is opt-in. Producing `deploy-readiness` and `runtime-signal` Evidence does not by itself flip Verdict semantics; teams wire the new Evidence into `policies/risk.yaml` if they want it to gate.
-
-### Spec schema: `runtime_signals` and `rollout_plan`
-
-The spec adds two optional fields: `runtime_signals` (array of `RuntimeSignal` — name, provider, query, threshold) and `rollout_plan` (feature flag name, canary stages, rollback command). Older specs forward-migrate at read time with empty arrays and no rollout plan.
 
 ### `maestro deploy gate`
 
@@ -925,21 +780,15 @@ Runs four checks and records a `deploy-readiness` Evidence row. Exits 0 when all
 | `rollback` | A successful `rollback-exercised` Evidence row at `witnessed-by-ci` or stronger exists |
 | `owner` | `owners.yaml.deploy_approver` has at least one entry |
 
-`deploy gate` does NOT mutate the Verdict. Teams add a `deploy-readiness` signal to `policies/risk.yaml` if they want it to block a PR.
-
 ### `maestro deploy rollback`
 
-Runs the provided shell command, records a `rollback-exercised` Evidence row, and exits 1 if the command fails. The witness level is `witnessed-by-ci` in CI and `witnessed-by-maestro` locally — both satisfy the rollback check in `deploy gate`.
+Runs the provided shell command, records a `rollback-exercised` Evidence row, and exits 1 if the command fails.
 
 ### `maestro runtime check`
 
 Queries each signal declared in `Spec.runtime_signals` via the configured provider (Prometheus). Records one `runtime-signal` Evidence row per signal. Exit code is always 0; `pass=false` rows are advisory unless wired into risk policy.
 
 Provider base URL precedence: `--provider-base-url` flag → `MAESTRO_PROMETHEUS_URL` env → `http://localhost:9090`.
-
-### `owners.yaml` — `deploy_approver` role
-
-`owners.yaml` has a fourth role: `deploy_approver`. The list is checked by `deploy gate` (owner check). See `docs/owners-yaml-format.md` for the full schema. CI Maestro's PR-author check also verifies that the committer is not self-approving their own deploy.
 
 ### CLI shapes
 
@@ -949,17 +798,13 @@ maestro deploy rollback --task <id> --command <cmd> [--json]
 maestro runtime check --task <id> [--provider-base-url <url>] [--json]
 ```
 
-See `docs/deploy-gate.md` for the full check enumeration, `Spec.rollout_plan` reference, and troubleshooting. See `docs/runtime-monitoring.md` for the `RuntimeMonitorPort` reference and Prometheus adapter guide.
+See `docs/deploy-gate.md` and `docs/runtime-monitoring.md` for the full references.
 
 ## Cross-Task Conflict and Trust Benchmarks
-
-Two features extend the trust substrate horizontally — one across PRs, one across edge cases.
 
 ### Cross-task conflict detection
 
 `maestro ci verify` checks whether other open PRs touch any of the same file paths as the current PR. When overlap is detected, it records a `kind=cross-task-conflict` Evidence row at `witnessed-by-ci` and passes it to the Risk Engine. The Risk Engine raises the effective risk class one tier per signal (capped at `critical`; multiple conflict rows still produce only a one-tier raise total).
-
-Detection is file-path-level: a path counts as overlapping when it appears in both this PR's changed-file list and at least one other open PR's changed-file list. The check is non-fatal on API errors — a failed `gh api` call logs a warning and skips the record without failing the verify step.
 
 See `docs/cross-task-conflict.md` for the port/adapter/use-case flow, payload schema, and troubleshooting.
 
@@ -973,33 +818,39 @@ bun test tests/e2e/trust-benchmark/
 
 See `docs/trust-benchmark.md` for the full scenario table, fixture pattern, and how to add new scenarios.
 
-### Roadmap
-
-The following capabilities are not in this release and will ship when teams ask maestro to learn from incidents: autopsy generator, `maestro ratchet` review/approve/sunset CLI, N≥2 broad-promotion guard for ratchet rules, and sunset/decay machinery.
-
 ## MCP Server
 
-Maestro ships a Model Context Protocol (MCP) server that exposes its core verbs to MCP-aware agent runtimes. Agents call `maestro_task_create`, `maestro_evidence_record`, `maestro_verdict_request`, and so on as structured tools instead of shelling out to the CLI and parsing text. The server is the same maestro binary, run with `maestro mcp serve` over stdio.
+Maestro ships a Model Context Protocol (MCP) server that exposes its core verbs to MCP-aware agent runtimes. Agents call `maestro_task_claim`, `maestro_evidence_record`, `maestro_verdict_request`, and so on as structured tools instead of shelling out to the CLI and parsing text. The server is the same maestro binary, run with `maestro mcp serve` over stdio.
 
 ### Tool surface
 
-14 tools across 5 surfaces, each a 1:1 wrapper around an existing maestro use case:
+20 tools across 8 surfaces, each a 1:1 wrapper around an existing maestro use case:
 
 | Surface | Tools |
 |---|---|
-| Task | `maestro_task_list`, `maestro_task_get`, `maestro_task_create`, `maestro_task_claim`, `maestro_task_complete`, `maestro_task_block`, `maestro_task_unblock` |
+| Task | `maestro_task_list`, `maestro_task_get`, `maestro_task_from_spec`, `maestro_task_claim`, `maestro_task_ship`, `maestro_task_block` |
 | Evidence | `maestro_evidence_record`, `maestro_evidence_list` |
 | Contract | `maestro_contract_show`, `maestro_contract_amend` |
 | Verdict | `maestro_verdict_show`, `maestro_verdict_request` |
 | Policy | `maestro_policy_check` |
+| Principle | `maestro_principle_promote` |
+| Setup | `maestro_setup_check`, `maestro_setup_migrate_v2` |
+| Handoff | `maestro_handoff_list`, `maestro_handoff_show`, `maestro_handoff_emit`, `maestro_handoff_pickup` |
 
-`maestro_task_list` and `maestro_evidence_list` are paginated (`limit`/`offset` in, `pagination: { total, limit, offset, hasMore }` out). Every tool declares both a strict `inputSchema` (unknown fields error rather than being silently dropped) and an `outputSchema` mirroring the success-path `structuredContent`. Failures set `isError: true` with a stable `{ code, message, hints }` payload — clients branch on `code` (`TASK_NOT_FOUND`, `ALREADY_COMPLETED`, `OWNERSHIP_CONFLICT`, `CYCLE_DETECTED`, `CONTRACT_NOT_FOUND`, …).
+`maestro_task_list`, `maestro_evidence_list`, and `maestro_handoff_list` are paginated (`limit`/`offset` in, `pagination: { total, limit, offset, hasMore }` out). Every tool declares both a strict `inputSchema` (unknown fields error rather than being silently dropped) and an `outputSchema` mirroring the success-path `structuredContent`. Failures set `isError: true` with a stable `{ code, message, hints }` payload.
+
+**Handoff tools:**
+
+| Tool | Purpose |
+|---|---|
+| `maestro_handoff_list` | List open envelopes. Filters: `task_id`, `trigger_verb`, `include_picked_up` (default `false`). Returns `id`, `task_id`, `trigger_verb`, `created_at`, `picked_up`. |
+| `maestro_handoff_show` | Fetch one envelope by `hnd-*` id. Returns the envelope and pickup metadata when present. |
+| `maestro_handoff_emit` | Write an envelope. Use only when emitting outside the lifecycle verbs that already emit. |
+| `maestro_handoff_pickup` | Mark an envelope picked up via a `<id>.picked_up.json` sidecar. Second pickup returns `HANDOFF_ALREADY_PICKED_UP`. Does not claim the task — call `maestro_task_claim` after pickup. |
 
 ### Auto-configure on install
 
-`maestro install` and `bun run release:local` register the MCP entry with each supported runtime by shelling out to the runtime's own CLI (`claude mcp add -s user`, `codex mcp add`). Detection is CLI-on-`PATH`: a runtime whose CLI is not on `PATH` is silently skipped, so the install does not litter configs onto machines that don't have the runtime.
-
-The entry lands in the canonical file each runtime actually reads:
+`maestro install` and `bun run release:local` register the MCP entry with each supported runtime. The entry lands in the canonical file each runtime reads:
 
 | Runtime | Config file |
 |---|---|
@@ -1015,54 +866,46 @@ maestro mcp check                                  # verify installed binary + r
 maestro mcp check --json
 ```
 
-`mcp serve` reads JSON-RPC over stdin and writes responses to stdout; logs and errors go to stderr to keep the protocol channel clean. `mcp check` reports `[ok]`, `[stale]`, or `not configured` per runtime and exits `1` when the binary is missing.
-
-### Project scoping
-
-The server walks up from its working directory looking for `.maestro/`. To override, set `MAESTRO_PROJECT_ROOT` in the entry's `env` block (or pass `--project-root` when running standalone). The session id reported on writes is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, or `CODEX_THREAD_ID`, falling back to `<user>@<host>`.
-
 See [`docs/mcp-server.md`](docs/mcp-server.md) for the full tool and error-code reference, and [`docs/mcp-setup.md`](docs/mcp-setup.md) for the manual configuration path and troubleshooting.
 
 ## Common Commands
 
 | Command | Use it when you want to... |
 |---|---|
-| `maestro init` | Create local project state. |
+| `maestro init` | Create local project state and install the `.maestro/MAESTRO.md` compass. |
 | `maestro install` | Initialize global config and inject supported agent instruction blocks. |
 | `maestro update` | Upgrade the local binary to the latest release and refresh agent instruction blocks. |
-| `maestro doctor` | Check whether the local environment is configured correctly. Includes harness-drift checks for empty mission feature directories and oversized root docs. |
+| `maestro doctor` | Check whether the local environment is configured correctly. |
 | `maestro providers list` / `maestro providers doctor` | Inspect runtime and skill-target provider configuration. |
 | `maestro skills list` / `maestro skills install <source>` | Discover, inspect, install, remove, and sync AgentSkills-compatible skills. |
 | `maestro status` | Inspect the current Maestro state quickly. |
-| `maestro mission create --file plan.json` | Create a mission from a plan file. |
-| `maestro feature prompt <feature-id> --mission <mission-id>` | Generate the next agent prompt. |
-| `maestro feature update <feature-id> --mission <mission-id> --status <status>` | Advance a feature through `pending`, `assigned`, `in-progress`, `review`, `done`, or `blocked`. |
-| `maestro reply write <feature-id>` | Record an agent reply (outcome + optional report) for a feature. |
-| `maestro handoff "<task>" --agent <agent>` | Build a markdown brief from current repo or mission context and launch a fresh agent run. |
-| `maestro handoff pickup [--id <handoff-id>] [--standalone]` | Consume one open handoff packet. Prompt-only packets work anywhere; task-linked packets resume only from their source project unless `--standalone` is passed. |
-| `maestro handoff "<task>" --worktree [slug] --wait --json` | Launch in a sibling worktree, wait for completion, and return structured metadata. |
-| `maestro mission-control --preview` | Render a read-only dashboard preview in the terminal. |
-| `maestro mission-control --json` | Get a machine-readable snapshot of mission state. |
-| `maestro mission-control --render-check --size 120x40` | Validate TUI render integrity non-interactively. |
-| `maestro intake --paths <list>` | Classify intended work as `tiny`, `normal`, or `high-risk` before writing code. |
+| `maestro setup bootstrap` | Scaffold the canonical `.maestro/` directory layout. |
+| `maestro setup check` | Audit the directory layout, principles pack, and config file for drift. |
+| `maestro setup migrate-v2` | Upgrade a pre-rebuild `.maestro/` to the current layout. |
+| `maestro spec new <slug>` | Author a product-spec with the grill protocol (`maestro-design` skill). |
+| `maestro spec validate <path>` | Check frontmatter and schema before creating a task. |
+| `maestro task from-spec <path>` | Create a task in `draft` state from a validated spec. |
+| `maestro task claim <id>` | Claim a task for the current session. Emits a handoff envelope. |
+| `maestro task verify <id>` | Run the Trust Verifier and route on exit code (PASS/FAIL/HUMAN/BLOCK). |
+| `maestro task ship <id>` | Transition `ready -> shipped`. Optionally attach a PR URL. |
+| `maestro task block <id> --reason "..."` | Raise a blocker and emit a handoff envelope so the next agent knows why. |
+| `maestro task observe metrics <promql>` | Ad-hoc PromQL query against the dev metrics backend (does not gate verdict). |
+| `maestro task observe logs` | Tail the dev log file (does not gate verdict). |
+| `maestro task update <id> --current-state "..." --next-action "..."` | Refresh the resumable continuation summary for the next agent. |
+| `maestro task status` | Hybrid board: active, ready, blocked, and dependency tracks. |
 | `maestro task ready` | List actionable pending tasks with no unresolved blockers. |
-| `maestro task claim <id>` | Take ownership of a task for the current session. |
-| `maestro task update <id> --status in_progress` / `--status completed --reason "..."` | Start or finish a task. |
-| `maestro task update <id> --current-state "..." --next-action "..." --add-decision "..."` | Refresh the resumable continuation summary for the next agent. |
-| `maestro task reopen <id>` | Move a completed task back to the pending queue and restore its continuation summary. |
-| `maestro task block <id> <blockedTaskIds...>` | Record that one task blocks others. |
 | `maestro evidence record --task <id> --command "bun test" --exit 0` | Log a command run as evidence for a task. |
-| `maestro evidence record --task <id> --kind manual-note --note "..."` | Log a free-form manual note as evidence. |
 | `maestro evidence list --task <id>` | List all evidence rows for a task. |
-| `maestro evidence show <evidence-id>` | Show one evidence row by id. |
+| `maestro verdict request --task <id>` | Request a verdict (exit 0=PASS 1=FAIL 2=HUMAN 3=BLOCK). |
+| `maestro verdict show --task <id>` | Show the latest verdict for a task. |
+| `maestro plan from-spec <path>` | Create an exec-plan from a heavy-mode spec. |
+| `maestro plan decompose <id> --file <path>` | Decompose an exec-plan into child tasks from a batch file. |
 | `maestro mcp serve` | Start the MCP server on stdio. Agents launch this; you do not start it manually. |
 | `maestro mcp check` | Verify the installed maestro binary and the canonical agent runtime config files. |
-| `maestro principle list` / `principle add` | Inspect or register a behavioral principle. |
-| `maestro bundle export <mission-id> --out ./review.mission.tar.gz` | Package a mission + artifacts as a portable archive. |
-| `maestro bundle inspect <path>` | Print a mission bundle's manifest without extracting. |
-| `maestro memory-correct <rule>` | Capture a correction that should influence future runs. |
-| `maestro memory-compile` | Turn raw learnings into reusable guidance. |
-| `maestro ratchet-check` | Run the regression ratchet suite. |
+| `maestro principle list` / `principle promote <evd-id>` | Inspect or promote a correction to a behavioral principle. |
+| `maestro bundle export <id> --out ./review.bundle.tar.gz` | Package a plan or task + artifacts as a portable archive. |
+| `maestro mission-control --preview` | Render a read-only dashboard preview in the terminal. |
+| `maestro mission-control --json` | Get a machine-readable snapshot of current state. |
 
 Run `maestro <command> --help` for full flags and examples.
 
@@ -1079,19 +922,14 @@ Available preview screens include:
 
 - `dashboard`
 - `features`
-- `dependencies` (mission-only)
 - `config`
 - `memory`
 - `graph`
 - `agents`
-- `dispatch` (mission-only)
 - `events`
 - `tasks`
-- `timeline` (mission-only)
 - `principles`
 - `help`
-
-Aliases: `feat`, `deps`, `cfg`, `mem`, `agent`, `event`, `task`, `principle`. Mission-only screens are skipped automatically when running in home mode.
 
 For non-interactive environments, prefer `--preview`, `--preview all`, or `--json`.
 
@@ -1099,73 +937,90 @@ For non-interactive environments, prefer `--preview`, `--preview all`, or `--jso
 
 ![Maestro architecture layers](assets/diagrams/readme-architecture-layers.svg)
 
-The codebase follows a hexagonal shape: commands stay thin, `src/services.ts` wires dependencies, use cases depend on domain rules and ports, and adapters implement those ports against the local filesystem and environment.
+The implementation follows a forward-only layered architecture enforced by `docs/architecture.yaml` and checked at every `maestro task verify`:
+
+| Layer | Path | Role |
+|---|---|---|
+| `types` | `src/types/` | Domain types: task state machine, exec-plan state machine, product-spec shape, evidence kinds |
+| `config` | `src/config/` | Per-project and per-repo configuration loading |
+| `repo` | `src/repo/` | Ports and adapters: task store, plan store, spec store, evidence store, worktree store, handoff store |
+| `service` | `src/service/` | Use cases: task-claim, task-verify, plan-decompose, migrate-v2, setup-check, principle-promote, emit-handoff |
+| `runtime` | `src/runtime/` | CLI command registration: spec, task, plan, principle, setup verbs |
+| `providers` | `src/providers/` | Cross-cutting service wiring (importable from any layer) |
+
+Layer-order imports are enforced mechanically. A service may not import from runtime; a repo adapter may not import from service. The `providers` layer is exempt in both directions.
+
+For the full WHERE TO LOOK table, see `AGENTS.md`.
 
 ## Storage Model
 
 Maestro stores project-local state in `.maestro/` and user-level defaults in `~/.maestro/`.
 
-| Surface | Lives where | Holds |
-|---|---|---|
-| Project workflow state | `.maestro/` | Missions, tasks, notes, and local memory artifacts |
-| User-level defaults | `~/.maestro/` | Global config, graph metadata, and the global handoff store |
-| Read-only projections | Mission Control | Terminal previews and JSON snapshots over the same state |
-
 ```text
 .maestro/
 ├── config.yaml
-├── memory/
-│   ├── corrections/
-│   ├── learnings/
-│   └── ratchet/
-├── missions/
-│   └── <mission-id>/
-│       ├── mission.json
-│       ├── assertions.json
-│       ├── checkpoints/
-│       ├── features/
-│       └── agents/
+├── specs/              product-spec markdown files (<slug>.md, YAML frontmatter)
 ├── tasks/
-│   ├── tasks.jsonl
-│   ├── contracts/
+│   ├── tasks.jsonl     append-only task ledger (repo-tracked)
+│   ├── contracts/      per-task locked contracts and verdicts (repo-tracked)
 │   ├── contract-templates/
-│   ├── continuations/
-│   ├── batches/
-│   ├── candidates/
-│   └── local-history/
-├── principles.jsonl
-└── notes.json
+│   ├── continuations/  per-task resume summaries + event logs
+│   ├── batches/        batch plan manifests
+│   ├── candidates/     captured work candidates
+│   └── local-history/  per-machine audit log (gitignored)
+├── plans/
+│   ├── plans.jsonl     exec-plan ledger (repo-tracked)
+│   └── <slug>.md       optional human-readable plan sidecar
+├── evidence/
+│   └── <date>.jsonl    transition + ad-hoc evidence rows (per-machine)
+├── runs/
+│   └── <task-id>/
+│       └── observability.jsonl   per-task observability mirror (per-machine)
+├── handoffs/           handoff envelopes (<hnd-...>.json) and pickup sidecars
+├── worktrees/
+│   └── <task-id>.json  worktree binding records
+├── context/            operator-authored context docs
+├── policies/           risk, autopilot, release, sensitive-paths, owners
+├── backups/            migration backup tarballs (pre-v2-<ts>.tar.gz)
+├── .migrated-v2.json   migration idempotency stamp
+└── principles.jsonl    behavioral principles (repo-tracked)
 
 ~/.maestro/
 ├── config.yaml
-├── graph/
-│   └── projects.json
-└── handoff/
-    └── <id>/
-        ├── handoff.json
-        ├── prompt.md
-        └── output.log
+└── graph/
+    └── projects.json
 ```
 
-The design is intentionally transparent: state is inspectable, diffable, and easy to back up. `.maestro/tasks/**` and `.maestro/principles.jsonl` are intentionally repo-tracked so the daily queue and behavioral rules are reviewed like any other code change; `.maestro/missions/**` stays ignored as local orchestration artifacts. Handoff packets live in the global `~/.maestro/handoff/` store (outside the repo) so they are visible across every working directory. Legacy `.maestro/handoffs/**`, `.maestro/launches/**`, and `~/.maestro/launches/**` folders can remain on disk from earlier versions, but Maestro no longer reads them; `status` or `doctor` will warn when they are present.
+`tasks.jsonl`, `contracts/`, and `principles.jsonl` are intentionally repo-tracked so the queue and its policies review like any other code change. Local histories, evidence, and observability files stay per-machine.
 
 ## Codebase Layout
 
 Maestro is organized as a feature-first hexagonal codebase:
 
-- `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `memory-ratchet`, `handoff` (markdown prompt building plus Codex, Claude, or Hermes launch orchestration), `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders and behavioral principles), `agent` (library-only; composes agent prompts and manages harness config injection), `task` (Claude-style blocker graph for the daily loop), `reply` (agent reply ingest with principle gating), and `bundle` (portable mission archive).
-- `src/infra/` -- plumbing that isn't a feature: init, doctor, status, install, update, uninstall, and mission-control commands, config and git ports/adapters, and infra-owned domain types.
-- `src/shared/` -- generic utilities with no domain knowledge: filesystem, YAML, shell, path safety, and output formatting under `lib/`; cross-cutting primitives like IDs and UI config under `domain/`; plus top-level `errors.ts`, `version.ts`, and `version-format.ts`.
-- `src/tui/` -- read-only rendering and input for Mission Control; consumes features through their public surfaces. See `src/tui/README.md` for the contributor-oriented TUI architecture walkthrough.
-- `src/services.ts` -- composition root that wires every feature's adapters into a single service object.
-- `src/index.ts` -- Commander CLI entry point.
+- `src/features/<name>/` — each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `bundle`, `ci`, `deploy`, `evidence`, `gc`, `mcp`, `merge`, `plan`, `policy`, `principle`, `recover`, `reply`, `review`, `risk`, `runtime`, `skills`, `verdict`, `worktree`.
+- `src/runtime/` — v2 CLI command registration: `spec`, `task`, `plan`, `principle`, `setup` command trees.
+- `src/infra/` — plumbing that isn't a feature: init, doctor, status, install, update, uninstall, providers, and mission-control commands; config and git ports/adapters; infra-owned domain types.
+- `src/shared/` — generic utilities with no domain knowledge: filesystem, YAML, shell, path safety, and output formatting under `lib/`; cross-cutting primitives like IDs and UI config under `domain/`.
+- `src/tui/` — read-only rendering and input for Mission Control.
+- `src/repo/` — ports and adapters: task store, plan store, spec store, evidence store, worktree store, handoff emitter.
+- `src/service/` — use cases: task-claim, task-verify, plan-decompose, emit-handoff, migrate-v2, setup-check, principle-promote.
+- `src/types/` — domain types for the task and exec-plan state machines.
+- `src/services.ts` — composition root that wires every feature's adapters into a single service object.
+- `src/index.ts` — Commander CLI entry point.
 
-Cross-feature imports must go through `@/features/<name>`, which resolves to the feature's `index.ts`. Deep imports across feature boundaries are forbidden and enforced by `bun run check:boundaries` in CI. Two features have explicit, scoped exceptions:
-
-- `agent` may import from `mission`, `memory`, and `handoff` through their public surfaces, because agent composes prompts from mission context, memory hints, and the native handoff launcher APIs.
-- `bundle` may import from `mission`, `reply`, `handoff`, and `session` through their public surfaces, because bundle is a read-only aggregator that snapshots every mission artifact, including handoff launches, into a portable archive.
+Cross-feature imports must go through `@/features/<name>`, which resolves to the feature's `index.ts`. Deep imports across feature boundaries are forbidden and enforced by `bun run check:boundaries` in CI.
 
 The runtime is intentionally narrow: filesystem-backed stores, git integration, config handling, and a terminal UI. There is no database adapter or network service in the main workflow.
+
+## Migrating from a pre-rebuild `.maestro/`
+
+The current harness has no backward-compatibility shims for the pre-rebuild `.maestro/` directory layout. To upgrade:
+
+```bash
+maestro setup migrate-v2
+```
+
+This writes a backup tarball to `.maestro/backups/pre-v2-<timestamp>.tar.gz`, rewrites `.maestro/` to the current shape, and stamps `.migrated-v2.json` for idempotency. Pin to the `v0.LAST` tag on `main` if you are not ready to upgrade. Full verb-rename tables and the file-layout mapping are in `UPGRADING.md`.
 
 ## Development
 
@@ -1177,15 +1032,17 @@ bun run tui:dev
 bun run release:local
 ```
 
-Useful verification commands for CLI and TUI work:
+Useful verification commands:
 
 ```bash
 ./dist/maestro --version
 maestro --version
 maestro --help
-maestro mission-control --preview --size 120x40 --format plain
 maestro mission-control --render-check --size 120x40
+maestro mission-control --preview --size 120x40 --format plain
 ```
+
+After code changes: `bun run build && ./dist/maestro --version && bun test`.
 
 ## Provider and Skill Targets
 
@@ -1198,20 +1055,7 @@ Maestro treats agent integrations as providers. Runtime providers can launch han
 | Hermes | yes | yes | `~/.hermes/skills/maestro` |
 | AgentSkills | no | yes | `~/.agents/skills` |
 
-`maestro install`, `maestro update --agents-only`, and `maestro uninstall --agents-only` keep the bundled Maestro skills synced across every available skill target. The skills feature also discovers and manages external AgentSkills-compatible skills.
-
-### Skill discovery precedence
-
-Skill discovery is deterministic and stops at the first match. The order:
-
-1. project `.maestro/skills`
-2. project `.agents/skills`
-3. repo bundled skills
-4. `~/.maestro/external-skills`
-5. `~/.agents/skills`
-6. provider roots (`~/.claude/skills`, `~/.codex/skills`, `~/.hermes/skills/maestro`)
-
-Collisions emit warnings. The first skill in precedence order wins.
+`maestro install`, `maestro update --agents-only`, and `maestro uninstall --agents-only` keep the bundled Maestro skills synced across every available skill target.
 
 ### Provider and skill commands
 
@@ -1226,9 +1070,7 @@ maestro skills remove <name> [--scope user|project|shared]
 maestro skills sync [--targets ...]
 ```
 
-Supported install sources: local skill directory, local directory containing one or more skill directories, Git URL, GitHub shorthand (`owner/repo` or `owner/repo/path`), and HTTP `zip`/`tar`/`tgz`/`tar.gz` archive URLs. Bundled scripts inside a skill source are never executed during install.
-
-See [Provider Registry and Skills](docs/providers.md) for the full reference, including the Hermes config mutation and security model.
+See [Provider Registry and Skills](docs/providers.md) for the full reference.
 
 ## Documentation
 
@@ -1236,6 +1078,10 @@ In-depth references live under [`docs/`](docs/):
 
 | Topic | File |
 |---|---|
+| Principle-to-primitive mapping | [`harness-positioning.md`](docs/harness-positioning.md) |
+| Full verb-by-verb CLI reference | [`cli-reference.md`](docs/cli-reference.md) |
+| Architecture rules | [`architecture.yaml`](docs/architecture.yaml) |
+| ADR register | [`docs/adr/`](docs/adr/) |
 | Provider registry, skills, Hermes setup | [`providers.md`](docs/providers.md) |
 | CI integration (`maestro ci verify`, GitHub Checks) | [`ci-integration.md`](docs/ci-integration.md) |
 | Auto-merge eligibility (8 predicates) | [`auto-merge-eligibility.md`](docs/auto-merge-eligibility.md) |
@@ -1248,15 +1094,25 @@ In-depth references live under [`docs/`](docs/):
 | Cross-task conflict detection | [`cross-task-conflict.md`](docs/cross-task-conflict.md) |
 | Deploy gate (4 checks + `Spec.rollout_plan`) | [`deploy-gate.md`](docs/deploy-gate.md) |
 | Runtime monitoring (Prometheus adapter) | [`runtime-monitoring.md`](docs/runtime-monitoring.md) |
+| Dev observability (`task observe`, `DevObservabilityPort`) | [`dev-observability.md`](docs/dev-observability.md) |
 | Trust benchmark corpus (regression seed) | [`trust-benchmark.md`](docs/trust-benchmark.md) |
 | MCP server tools and result shapes | [`mcp-server.md`](docs/mcp-server.md) |
 | MCP setup for Claude Code and Codex | [`mcp-setup.md`](docs/mcp-setup.md) |
+| Upgrade guide from pre-rebuild `.maestro/` | [`UPGRADING.md`](UPGRADING.md) |
 
-The agent-facing protocol is documented inside the bundled skills under [`skills/bundled/`](skills/bundled/). `maestro-verify` is the canonical verification protocol; `maestro-intake`, `maestro-task`, `maestro-plan`, `maestro-mission`, `maestro-handoff`, `maestro-brainstorm`, `maestro-qa`, and `maestro-setup` cross-reference it. `maestro install` syncs all of them into `~/.claude/skills/` and `~/.codex/skills/`.
+The agent-facing protocol is documented inside the bundled skills under [`skills/bundled/`](skills/bundled/). `maestro-verify` is the canonical verification protocol; `maestro-task`, `maestro-plan`, `maestro-design`, `maestro-handoff`, and `maestro-setup` cross-reference it. `maestro install` syncs all six into `~/.claude/skills/` and `~/.codex/skills/`.
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev loop, repository layout, conventions, required pre-PR checks, and the port → adapter → use-case → command → test pattern. For security-sensitive reports, see [SECURITY.md](SECURITY.md).
+
+Conventions at a glance:
+
+- Bun-first, ESM, strict TypeScript. `bun run build` produces `dist/maestro`.
+- Conventional commits: `feat(scope):`, `fix(scope):`, `refactor(scope):`. Bump the CLI version for every behavior change.
+- Every skill change must update `skills/bundled/maestro-*/SKILL.md` in the same commit.
+- Hand-editing generated embed files under `src/infra/domain/` is an anti-pattern; run `bun run sync:bundled-skills`.
+- `bun run release:local` is the only way to test the installed binary.
 
 ## License
 

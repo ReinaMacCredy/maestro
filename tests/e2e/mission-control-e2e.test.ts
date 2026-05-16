@@ -124,7 +124,8 @@ describe("mission-control E2E", () => {
     ]);
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("renders all mission preview screens and keeps feature state unchanged", async () => {
+  // v1 `mission create` / `feature update` removed in PR-C; skip until v2 mission-control wired in Phase 4.
+  it.skip("renders all mission preview screens and keeps feature state unchanged", async () => {
     const missionId = await createMission(tmpDir);
 
     const approve = await runCli(["mission", "approve", missionId, "--json"], tmpDir);

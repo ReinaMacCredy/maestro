@@ -1,11 +1,8 @@
 import type { VerdictDecision, VerdictStorePort } from "@/features/verdict";
-import type {
-  ContractVersionStorePort,
-  RunStateStorePort,
-  TaskQueryPort,
-} from "@/features/task";
-import type { ContractStoreQueryPort } from "@/features/task/ports/contract-store.port.js";
-import { readCurrentContractWithBackfill } from "@/features/task/usecases/read-current-contract-with-backfill.js";
+import type { TaskQueryPort } from "@/shared/domain/legacy-task";
+import type { ContractVersionStorePort, ContractStoreQueryPort } from "@/repo/contract-store.port.js";
+import type { RunStateStorePort } from "@/repo/run-state-store.port.js";
+import { readCurrentContractWithBackfill } from "@/service/contract-helpers.js";
 
 export interface AutopilotTaskRow {
   readonly taskId: string;

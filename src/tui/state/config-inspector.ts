@@ -1,4 +1,4 @@
-import type { Feature } from "@/features/mission";
+import type { Feature } from "@/shared/domain/legacy-mission";
 import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
@@ -430,7 +430,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function sectionForKey(keyPath: string): string {
   if (keyPath.startsWith("ui.")) return "Interface";
-  if (keyPath.startsWith("sessionDetection.")) return "Session detection";
   return "General";
 }
 
@@ -491,14 +490,6 @@ function getEditMeta(
       editKind: "enum",
       options: ["warn", "block"],
       description: "Choose whether ratchet failures warn or block progress.",
-    };
-  }
-
-  if (keyPath === "sessionDetection.staleMinutes") {
-    return {
-      editKind: "number-preset",
-      options: ["5", "10", "15", "30", "60"],
-      description: "Preset stale-session windows in minutes.",
     };
   }
 

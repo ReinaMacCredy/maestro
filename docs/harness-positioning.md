@@ -1,164 +1,115 @@
 # Harness positioning
 
-Maestro is a **long-running agent harness**: the environment around an agent
-that makes long-horizon software-engineering work survivable. It is local-first,
-verb-driven, and stays passive — host runtimes (Claude Code, Codex, Cursor,
-CI) call maestro verbs; maestro never schedules, daemonizes, or runs an LLM
-itself.
+Maestro v2 is **the harness OS for agent-generated codebases**. Humans steer. Agents execute. Maestro is the substrate — local-first, verb-driven, passive. Host runtimes (Claude Code, Codex, Cursor, CI) call maestro verbs; maestro never schedules, daemonizes, or runs an LLM itself.
 
-This doc maps the five principles in OpenAI's
-["Harness Engineering"](https://openai.com/index/harness-engineering/) note
-to the maestro primitives that already implement them, so contributors and
-agents can find the right surface without re-deriving the design.
-
-For the verb surface, see `docs/cli-reference.md`. For passive scheduling
-patterns, see `docs/schedule-recipes.md`. For the architecture rules that
-keep maestro passive, see `docs/architecture-lints.md` (the
-`no-runner-inversion` rule is the structural guarantee).
+This document maps the v2 primitives to the source locations that implement them. For the full verb surface, see `docs/cli-reference.md`. For the locked architectural decisions, see `docs/adr/`.
 
 ---
 
-## 1. Context as a scarce resource
+## The two primitive families
 
-Long-horizon agent work fails when context windows fill with low-signal
-tool output, stale plans, or redundant evidence. Maestro treats every
-write to durable state as evidence with a witness level, and every read
-that re-enters the agent's context (orient digests, task introspect,
-plan-check) as a curated projection — not a dump.
+Maestro v2 has four **knowledge primitives** (directories the agent reads at session start) and four **execution primitives** (the agent's verb-shaped surface). Everything else is either composed from these or is non-goal for v2.0.
 
-**Pointers:**
+### Knowledge primitives
 
-- `src/features/task/usecases/introspect.ts` — read-only post-context-loss
-  digest (spec criteria, latest verdict, cost-budget, open lints, last 5
-  evidence rows, recent commits since `session-start` anchor).
-- `src/features/session/usecases/run-session-start.ts` — writes
-  `.maestro/runs/<task>/orient.md` and anchors `session-start` evidence so
-  "recent commits" is bounded.
-- `src/features/plan/usecases/check-plan.ts` — three deterministic
-  pre-coding checks (`scope-widens`, `missing-proof`, `risk-class-too-low`)
-  reduce context wasted on doomed plans.
-- `docs/witness-levels.md` — the 4-level evidence ladder. Lower-witness
-  rows can be filtered out at recall time.
+| Primitive       | Source of truth                                  | What lives here                                                                |
+| --------------- | ------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `product-specs` | `.maestro/specs/<slug>.md`                       | Feature specifications with acceptance criteria + non-goals + work-type.       |
+| `architecture`  | `docs/architecture.yaml` + `src/service/architecture-lint.usecase.ts` | Mechanically-enforced layering and dependency rules. |
+| `quality-score` | `.maestro/quality-score.json` (`gc grade`)       | Per-domain grade tracking gaps over time.                                      |
+| `principles`    | `docs/principles/*.md`                           | Named golden rules with `Rule | Rationale | Scan Command | Fix Recipe`.        |
 
-Phase G (deferred) would add explicit tool-result distillation; for now,
-context discipline lives in the verbs above and in the agent's own
-prompting.
+The agent reads these; maestro writes them only on explicit verbs (`spec new`, `principle promote`, `plan from-spec`, etc.).
+
+### Execution primitives
+
+| Primitive  | One-line role                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `worktree` | Isolated execution environment per task. Per-worktree `.maestro/runs/`, scoped telemetry and logs.            |
+| `loop`     | Default execution mode after a task is claimed. Try → verify → evidence → iterate until PASS or stuck.        |
+| `task`     | A unit of PR-shaped work with a lifecycle. Strictly 1:1 task↔PR (ADR-0006).                                   |
+| `handoff`  | Artifact emitted at every state transition, carrying context for the next agent session.                      |
 
 ---
 
-## 2. Per-worktree observability
+## Primitive → source map
 
-Harnesses give agents a way to see what their code is doing without
-booting an entire production stack. Maestro separates **dev-time
-observability** (cheap, local, advisory) from **deploy-gating runtime
-checks** (witnessed, policy-driven, gating).
+### `product-specs`
 
-**Pointers:**
+- `src/repo/spec-store.port.ts` — port + types (mode, work_type, acceptance criteria, non-goals).
+- `src/repo/fs-spec-store.adapter.ts` — filesystem reader with frontmatter parsing.
+- `src/service/spec-new.usecase.ts`, `spec-validate.usecase.ts` — author + lint.
+- `src/runtime/spec.command.ts` — `maestro spec new`, `maestro spec validate`.
+- Authored interactively via the `maestro-design` SKILL.md grill protocol.
 
-- `src/features/runtime/ports/runtime-monitor.port.ts` — deploy-gate
-  signal queries (Prometheus adapter today). Records `runtime-signal`
-  evidence.
-- `src/features/runtime/commands/runtime-check.command.ts` — `maestro
-  runtime check`, advisory at L7, can be wired into `policies/risk.yaml`.
-- `src/features/runtime/ports/dev-observability.port.ts` — dev-time
-  metrics + log tail for the agent's own iteration loop. Documented in
-  `docs/dev-observability.md`.
-- `docs/runtime-monitoring.md` — adapter contract and provider precedence.
+### `exec-plans`
 
-Dev-time observability is not a deploy gate. It exists so an agent can
-answer "what does this look like right now" without producing
-deploy-witness evidence.
+- `src/types/exec-plan.ts`, `exec-plan-state.ts` — state machine `intake → specified → planned → in-progress → completed | cancelled` (ADR-0011).
+- `src/repo/exec-plan-store.port.ts`, `jsonl-exec-plan-store.adapter.ts` — append-only log at `.maestro/plans/plans.jsonl`.
+- `src/service/plan-from-spec.usecase.ts`, `plan-show.usecase.ts`, `plan-decompose.usecase.ts`, `try-advance-plan.usecase.ts` — verbs + auto-advance helper.
+- `src/runtime/plan.command.ts` — `maestro plan from-spec | decompose | show`.
 
----
+### `principles`
 
-## 3. Isolated worktrees
+- `src/types/principle.ts`, `principles-store.port.ts` — schema for the 4-section principle markdown.
+- `src/repo/fs-principles-store.adapter.ts` — filesystem reader for `docs/principles/*.md`.
+- `src/service/principle-scan.usecase.ts` — runs each rule's `Scan Command` ripgrep and reports violations.
+- `src/service/principle-promote.usecase.ts` — materialize a principle from a lint-violation evidence row.
+- `src/service/default-principles.ts` — 4 default principle bodies embedded as TypeScript constants for `setup migrate-v2` seeding.
+- `src/runtime/principle.command.ts` — `maestro principle promote`.
 
-Long tasks must not collide on shared mutable state. Maestro keeps every
-task's run-state in its own directory and provisions worktrees with
-isolated maestro state so parallel agents do not corrupt each other.
+### `architecture`
 
-**Pointers:**
+- `src/service/architecture-lint.usecase.ts` — file-scan rules (`forward-only-layers`, `no-cross-feature-deep-imports`, `no-runner-inversion`, others).
+- Wired into `task verify` as one of the architecture checks.
 
-- `src/features/worktree/commands/worktree-create.command.ts` — `maestro
-  worktree create <slug>` wraps `git worktree add` and provisions a
-  per-worktree `.maestro/runs/` so each agent's evidence, plan, orient,
-  and progress files stay local to its branch.
-- `src/features/task/adapters/fs-run-state-store.adapter.ts` — run state
-  is persisted under `.maestro/runs/<task-id>/state.json` (gitignored)
-  so two worktrees on the same repo share nothing.
-- `src/features/recover/commands/recover.command.ts` — `maestro recover`
-  resets the working tree to the last `PASS` verdict's tree and drops
-  `.maestro/runs/<id>/`, restoring a known-good per-worktree state.
+### `task` (lifecycle)
 
----
+- `src/types/task.ts`, `task-state.ts` — state machine `draft → claimed → doing ↔ verifying ↔ blocked → ready → shipped | abandoned` (ADR-0003).
+- `src/repo/task-store.port.ts`, `jsonl-task-store.adapter.ts` — append-only log at `.maestro/tasks/tasks.jsonl`.
+- `src/service/task-{from-spec,claim,block,abandon,ship,verify}.usecase.ts` — the six lifecycle verbs.
+- `src/service/emit-transition-evidence.ts` — shared transition-evidence emitter (single emit point, mirrored into observability + handoff).
+- `src/runtime/task.command.ts` — `maestro task *` + hot-path aliases `claim | verify | block | abandon | ship`.
 
-## 4. Continuous quality grading
+### `worktree`
 
-Agents need a verdict surface that is deterministic, evidenced, and
-re-derivable. Maestro grades work via Verdicts (`PASS`/`FAIL`/`HUMAN`/
-`BLOCK`) bound to (PR, tree_sha) so squashes survive and force-pushes to
-a different tree invalidate the grade.
+- `src/repo/worktree-store.port.ts` — port + record shape (`task_id`, `slug`, `path`, `branch`, `base_branch`, `created_at`).
+- `src/repo/git-worktree-store.adapter.ts` — runs `git worktree add -b <branch> <path> <base>` via `ProcessRunnerPort`. State persists at `.maestro/worktrees/<task-id>.json` on the primary repo (PD-3 / ADR-0008).
+- `task claim` auto-creates a worktree when the spec is `mode: heavy`; `--skip-worktree` opts out. Failures are logged but never block the claim.
 
-**Pointers:**
+### `handoff`
 
-- `src/features/verdict/usecases/request-verdict.ts` — the decision tree
-  that maps spec acceptance criteria + evidence + risk class + policy to
-  a verdict.
-- `src/features/verify/usecases/run-trust-verifier.ts` — eight checks
-  (scope, lockfile, generated, sensitive-paths, commit-metadata, secrets,
-  proof-map, architecture-lints) feeding the verdict.
-- `src/features/verify/usecases/proof-map.ts` — joins
-  `Spec.acceptance_criteria` with evidence rows so coverage is provable,
-  not asserted.
-- `src/features/ralph/commands/ralph.command.ts` — `maestro ralph
-  review` is the convergence oracle: hashes findings and detects
-  stuck-iteration via `--stuck-threshold`.
-- `docs/risk-class-derivation.md` and `docs/policy-format.md` —
-  deterministic risk-class derivation and policy mapping.
+- `src/repo/handoff-emitter.port.ts` — write-only port; the trigger vocabulary is `task:claim | task:block | task:abandon | task:ship | task:verify`.
+- `src/repo/fs-handoff-emitter.adapter.ts` — writes one JSON envelope per emission to `.maestro/handoffs/<id>.json`, plus an exclusive-create pickup sidecar at `.maestro/handoffs/<id>.picked_up.json`.
+- `src/service/emit-handoff.ts` — stamps id + timestamp + trigger verb; omits optional fields when undefined; no-op when the emitter is not wired.
+- `task claim` and `task block` call `emitHandoff` after the state transition lands. The other three triggers (`abandon`, `ship`, `verify`) are reserved in the port vocabulary; envelope emission for those is roadmap.
 
----
+### Observability (per-task)
 
-## 5. Building blocks (design / code / review / test)
+- `src/repo/observability.port.ts` — write-only port: `emit({task_id, kind, timestamp, payload})`.
+- `src/repo/jsonl-observability.adapter.ts` — writes `.maestro/runs/<task-id>/observability.jsonl`.
+- `emit-transition-evidence.ts` mirrors every transition into the observability log in addition to the evidence log; the two logs are eventually-consistent without coupling. Option C from the master plan (minimal log-only default) is the locked Phase 3 scope.
 
-OpenAI's harness post frames agent work as four blocks: design, code,
-review, test. Maestro exposes each as named verbs, not implicit modes.
+### Setup + migration
 
-**Pointers:**
+- `src/service/setup-check.usecase.ts` — audits the five v2 directories, principles pack, and config.
+- `src/service/setup-bootstrap.usecase.ts` — idempotent dir creation with `.gitkeep`.
+- `src/service/migrate-v2.usecase.ts` + `migrate-v2-steps.ts` — 11-step v1→v2 migration.
+- `src/runtime/setup.command.ts` — `maestro setup check | bootstrap | migrate-v2 | migrate-corrections`.
 
-- **Design** — `src/features/spec/commands/spec.command.ts` and
-  `src/features/plan/commands/plan-check.command.ts`. Specs hold
-  `acceptance_criteria` + `non_goals`; plan-check guards them before
-  coding.
-- **Code** — `src/features/task/commands/contract.command.ts`. Contracts
-  declare allowed paths + sensitive-path consent + amendment budget.
-- **Review** — `src/features/verdict/`, `src/features/risk/`,
-  `src/features/verify/`. Trust Verifier + Risk Engine + ProofMap +
-  verdict request.
-- **Test** — `src/features/evidence/` (record runs as evidence rows) +
-  `src/features/ci/commands/ci-verify.command.ts` (authoritative CI
-  gate). Local maestro is advisory; CI maestro is authoritative.
+### Loop primitive
 
-Per-block verbs make each phase a separable, evidenced step instead of an
-opaque agent monologue.
+The loop primitive is not a verb. It is the agent's behavior between `task claim` and a terminal `verify PASS`: try → `task verify` → read evidence → iterate. Convergence is detected by stable findings hashes recorded in the evidence log; the agent decides when to stop.
 
 ---
 
 ## External triggers
 
-Maestro never schedules itself. Anything that needs to run on a clock
-lives outside the binary and calls maestro verbs as a subprocess. The
-three canonical shapes are:
+Maestro never schedules itself. Anything that needs to run on a clock lives outside the binary and calls maestro verbs as a subprocess. The three canonical shapes:
 
-1. **GitHub Actions cron** — nightly `maestro gc doc-gardening --json`,
-   weekly `maestro gc slop-cleanup`, etc.
-2. **Host-runtime session hooks** — `.claude/settings.json`,
-   `.codex/settings.json`, `.cursor/settings.json` `SessionStart` /
-   `SessionEnd` hooks calling `maestro session start/exit "$TASK_ID"`.
-3. **Agent skill prompts** — a local skill instructs `maestro task
-   verify --task <id>` after a substantive edit batch. Timing is
-   contextual; the skill decides, not a scheduler.
-
-Full recipes: `docs/schedule-recipes.md`.
+1. **GitHub Actions cron** — nightly `maestro gc doc-gardening --json`, weekly `maestro gc slop-cleanup`, etc.
+2. **Host-runtime session hooks** — `.claude/settings.json`, `.codex/settings.json`, `.cursor/settings.json` `SessionStart` / `SessionEnd` hooks call maestro verbs at the start and end of an interactive session.
+3. **Agent skill prompts** — a local skill instructs `maestro task verify <id>` after a substantive edit batch. Timing is contextual; the skill decides, not a scheduler.
 
 ---
 
@@ -166,27 +117,28 @@ Full recipes: `docs/schedule-recipes.md`.
 
 Maestro deliberately is **not**:
 
-- **A scheduler.** No cron, no daemon, no background process inside
-  maestro. Scheduling lives outside maestro (external cron, host-runtime
-  hooks, agent skills).
+- **A scheduler.** No cron, no daemon, no background process inside maestro. Scheduling lives outside maestro.
 - **A daemon.** The binary runs only when invoked and exits.
-- **An LLM client.** Maestro never makes model API calls; agents do, and
-  call maestro verbs in between.
-- **A background process.** No watcher, no file-system poller, no
-  long-lived state machine.
+- **An LLM client.** Maestro never makes model API calls; agents do, and call maestro verbs in between.
+- **A background process.** No watcher, no filesystem poller, no long-lived state machine.
 
-The structural guarantee is `no-runner-inversion` in
-`docs/architecture-lints.md`: maestro code may not invoke schedulers or
-spin up persistent loops. The lint enforces it at `error` severity.
+The structural guarantee is the `no-runner-inversion` rule in `src/service/architecture-lint.usecase.ts`: maestro code may not invoke schedulers or spin up persistent loops. The lint enforces it at `error` severity.
+
+---
+
+## Vocabulary disappearances on v2 (no aliases)
+
+`mission` → `exec-plan` · `spec` (old) → `product-spec` · `intake` / `brainstorm` → folded into `design-docs` reading + `product-spec` authoring · `session` / `notes` → folded into `handoff` (session-detect absorbed into `worktree` metadata).
+
+Three v1 feature dirs disappear because their job is now done by knowledge primitives the agent reads at session start: `memory` + `memory-ratchet` + `agent` (corrections live in `docs/principles/`, agent prompt collapses into `AGENTS.md`); `graph` (project-to-project edges) folded into `~/.maestro/graph/projects.json`; `session` → notes folded into handoff, detect folded into worktree.
 
 ---
 
 ## Where to read next
 
 - Verb surface: `docs/cli-reference.md`
+- Decision register: `docs/adr/`
 - Witness ladder: `docs/witness-levels.md`
 - Risk derivation: `docs/risk-class-derivation.md`
 - Policy format: `docs/policy-format.md`
 - CI integration: `docs/ci-integration.md`
-- Architecture lints: `docs/architecture-lints.md`
-- Schedule recipes: `docs/schedule-recipes.md`

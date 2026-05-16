@@ -91,14 +91,6 @@ skills:
 
 When Maestro rewrites an existing Hermes config, it creates a timestamped backup first.
 
-Hermes handoffs use:
-
-```bash
-hermes chat --quiet --yolo --toolsets terminal,skills --source maestro -q <prompt>
-```
-
-`--model <model>` is passed only when the operator explicitly supplies `maestro handoff --model <model>`. Hermes child processes receive `MAESTRO_AGENT=hermes` and `MAESTRO_SESSION_ID=<handoff-id>` so `maestro handoff pickup` and session-scoped state can identify the launched session.
-
 ## Security Model
 
 Skill install copies files and writes manifests. It does not execute scripts from the skill source during install. Git and HTTP sources are fetched and unpacked as data, validated for `SKILL.md`, and then copied into Maestro-managed storage.

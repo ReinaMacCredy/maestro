@@ -1,7 +1,7 @@
 /**
  * Bump the version in package.json and src/shared/version.ts.
- * Scheme: 0.x.y where x = feature, y = patch.
- * Usage: bun scripts/bump.ts [feature|patch]
+ * Scheme: MAJOR.MINOR.PATCH.
+ * Usage: bun scripts/bump.ts [major|feature|patch]
  * Default: patch
  */
 import { join } from "node:path";
@@ -11,19 +11,21 @@ const root = join(import.meta.dir, "..");
 const pkgPath = join(root, "package.json");
 const versionPath = join(root, "src", "shared", "version.ts");
 
-const part = (process.argv[2] ?? "patch") as "feature" | "patch";
-if (!["feature", "patch"].includes(part)) {
-  console.error(`[!] Invalid part: ${part}. Use feature or patch.`);
+const part = (process.argv[2] ?? "patch") as "major" | "feature" | "patch";
+if (!["major", "feature", "patch"].includes(part)) {
+  console.error(`[!] Invalid part: ${part}. Use major, feature, or patch.`);
   process.exit(1);
 }
 
 const pkg = await Bun.file(pkgPath).json();
 const currentVersion: string = pkg.version;
-const { feature: x, patch: y } = parseReleaseVersion(currentVersion);
+const { major: m, feature: x, patch: y } = parseReleaseVersion(currentVersion);
 
-const next = part === "feature"
-  ? `0.${x + 1}.0`
-  : `0.${x}.${y + 1}`;
+const next = part === "major"
+  ? `${m + 1}.0.0`
+  : part === "feature"
+    ? `${m}.${x + 1}.0`
+    : `${m}.${x}.${y + 1}`;
 
 await writeVersionArtifacts({
   cwd: root,

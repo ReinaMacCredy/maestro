@@ -1,0 +1,12 @@
+{
+  "id": "legacy-rule-1",
+  "rule": "Never paraphrase user authorization before destructive action.",
+  "source": "user-correction-2026-04-08",
+  "trigger": {
+    "keywords": ["force-push", "reset --hard"],
+    "fileGlobs": ["src/**", "scripts/**"]
+  },
+  "severity": "hard",
+  "createdAt": "2026-04-08T12:00:00Z",
+  "updatedAt": "2026-04-08T12:00:00Z"
+}

@@ -1,5 +1,76 @@
 # Changelog
 
+## 0.100.0 — 2026-05-16
+
+> The Maestro harness-OS rebuild. Breaking by content even though the version
+> number stays in the `0.x` line — maestro has never declared SemVer stability
+> and keeps the major at `0` deliberately. Pin to the `v0.LAST` tag on `main`
+> (carries the last pre-rebuild commit) if you are not ready to upgrade.
+> Upgrade guide: [UPGRADING.md](./UPGRADING.md).
+
+### Identity
+
+Maestro v2 is the harness OS that LLM coding agents (Claude Code, Codex, Cursor)
+operate against. Humans steer. Agents execute. Maestro is the substrate.
+
+The agent-facing surface collapses to a five-skill bundle and a small set of
+verb-shaped primitives (spec → task → verify → ship). Every primitive sits
+inside a state machine with auto-transitions and evidence on every step.
+
+### Breaking changes
+
+#### Verbs removed (no replacement)
+
+`ralph`, `ralph-review`, `note`, `notes` (standalone), `inspect`, `state`,
+all `memory-*` verbs, `memory-ratchet`, `generateAgentPrompt`,
+`graph` verbs, `session detect`.
+
+#### Verbs renamed or replaced
+
+| v1 | v2 |
+|---|---|
+| `mission *` | `plan *` |
+| `intake`, `brainstorm` | `spec new` |
+| `task complete` | `task ship` |
+| `task unblock` | Removed — resolves via `verify` PASS |
+
+#### MCP tool changes
+
+| v1 tool | v2 tool |
+|---|---|
+| `task_complete` | `task_ship` |
+| `task_unblock` | Removed (unblock via `task_block` reverse path or verify PASS) |
+| `task_create`, `task_plan` | `task_from_spec` |
+
+New: `principle_promote`, `setup_check`, `setup_migrate_v2`.
+
+#### File layout changes
+
+| v1 | v2 |
+|---|---|
+| `.maestro/missions/<id>/` | `.maestro/plans/<id>/` |
+| `.maestro/memory/corrections/*.json` | `docs/principles/legacy/*.md` |
+| `.maestro/graph.json` | `docs/references/project-graph.yaml` |
+| `.maestro/session/` | `.maestro/runs/<id>/agent.json` |
+| `tasks.jsonl` | `tasks.jsonl` |
+| `.maestro/MAESTRO.md` | Deleted |
+
+#### Skill bundle
+
+10-skill v1 bundle → 5-skill v2 bundle: `maestro-setup`, `maestro-design`,
+`maestro-plan`, `maestro-task`, `maestro-verify`.
+
+### Migration
+
+```bash
+maestro setup migrate-v2
+```
+
+Idempotent. Backs up `.maestro/` to `.maestro/backups/pre-v2-<timestamp>.tar.gz`
+before any writes. Subsequent runs short-circuit on the `.migrated-v2.json` flag.
+
+---
+
 ## 0.80.16 - UAT round-8: drop `assignee` from lean task summary
 
 Round-8 brownfield UAT verdict was PROD-READY: YES with one MED finding:

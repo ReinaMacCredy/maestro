@@ -1,6 +1,4 @@
-import type { AgentSlug } from "@/features/session";
-import type { MemoryConfig } from "@/features/memory";
-import type { WorkflowTemplate } from "@/features/mission";
+import type { AgentSlug } from "@/shared/domain/agent-slug.js";
 import type { UiConfig } from "@/tui/shared/ui-config.js";
 
 export interface MaestroConfig {
@@ -14,15 +12,8 @@ export interface MaestroConfig {
     readonly defaultMaxFilesTouched?: number;
     readonly staleReclaimContractPolicy?: "inherit" | "block";
   };
-  readonly sessionDetection?: {
-    readonly enabled: boolean;
-    readonly agents: readonly AgentSlug[];
-    readonly staleMinutes?: number;
-  };
   readonly defaultWorkflow?: string;
-  readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>>;
   readonly ui?: UiConfig;
-  readonly memory?: MemoryConfig;
 }
 
 export const DEFAULT_CONFIG: MaestroConfig = {
@@ -33,21 +24,10 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     rebaseFallback: "best-effort",
     staleReclaimContractPolicy: "inherit",
   },
-  sessionDetection: {
-    enabled: true,
-    agents: ["claude-code"],
-  },
   defaultWorkflow: "plan-implement",
   // No `ui` block: ui.missionControl.backgroundMode is global-only
   // (see GLOBAL_ONLY_CONFIG_KEYS in shared/domain/ui-config.ts). Writing
   // it as a project default would make `maestro doctor` flag every fresh
   // init's config.yaml as containing keys it will ignore. Runtime falls
   // back to "solid" via getMissionControlBackgroundMode.
-  memory: {
-    enabled: true,
-    corrections: { enabled: true, matching: "keyword", auto_capture: "prompt", severity_default: "soft" },
-    learnings: { enabled: true, compile_threshold: 5, max_age_days: 7 },
-    ratchet: { enabled: false, enforcement: "warn" },
-    graph: { enabled: true },
-  } satisfies MemoryConfig,
 };

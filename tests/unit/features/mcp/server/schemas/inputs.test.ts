@@ -4,25 +4,31 @@ import {
   ContractShowInput,
   EvidenceListInput,
   EvidenceRecordInput,
+  HandoffEmitInput,
   HandoffListInput,
-  HandoffOpenForTaskInput,
   HandoffPickupInput,
   HandoffShowInput,
   PolicyCheckInput,
   TaskBlockInput,
   TaskClaimInput,
-  TaskCompleteInput,
-  TaskCreateInput,
+  TaskFromSpecInput,
   TaskGetInput,
   TaskListInput,
-  TaskUnblockInput,
+  TaskShipInput,
+  PrinciplePromoteInput,
+  SetupCheckInput,
+  SetupMigrateV2Input,
   VerdictRequestInput,
   VerdictShowInput,
 } from "@/features/mcp/server/schemas/inputs.js";
 
 describe("input schemas — id format", () => {
-  it("accepts valid task ids in TaskGetInput", () => {
+  it("accepts v1 task ids in TaskGetInput", () => {
     expect(TaskGetInput.safeParse({ id: "tsk-abc123" }).success).toBe(true);
+  });
+
+  it("accepts v2 task ids in TaskGetInput", () => {
+    expect(TaskGetInput.safeParse({ id: "tsk-lp1abc-xy1234" }).success).toBe(true);
   });
 
   it("rejects malformed task ids", () => {
@@ -31,19 +37,18 @@ describe("input schemas — id format", () => {
     expect(TaskGetInput.safeParse({ id: "task-abc123" }).success).toBe(false);
   });
 
-  it("accepts valid mission ids in TaskListInput", () => {
-    expect(TaskListInput.safeParse({ missionId: "msn-abc123" }).success).toBe(true);
+  it("accepts valid exec-plan ids in TaskListInput", () => {
+    expect(TaskListInput.safeParse({ plan_id: "pln-1a2b3c4d5e6f-a1b2c3" }).success).toBe(true);
+  });
+
+  it("rejects v1 mission id format on TaskListInput plan_id", () => {
+    expect(TaskListInput.safeParse({ plan_id: "msn-abc123" }).success).toBe(false);
   });
 });
 
 describe("strict mode (unknown fields)", () => {
-  it("TaskCreateInput rejects unknown fields like missionId", () => {
-    const r = TaskCreateInput.safeParse({ title: "ok", missionId: "msn-abc123" });
-    expect(r.success).toBe(false);
-  });
-
-  it("TaskCreateInput rejects unknown riskClass field", () => {
-    const r = TaskCreateInput.safeParse({ title: "ok", riskClass: "low" });
+  it("TaskFromSpecInput rejects unknown fields", () => {
+    const r = TaskFromSpecInput.safeParse({ spec_path: "docs/specs/foo.md", plan_id: "pln-1a2b3c4d5e6f-a1b2c3" });
     expect(r.success).toBe(false);
   });
 
@@ -67,36 +72,30 @@ describe("TaskListInput", () => {
     expect(TaskListInput.safeParse({}).success).toBe(true);
   });
 
-  it("validates the status enum", () => {
-    expect(TaskListInput.safeParse({ status: "pending" }).success).toBe(true);
-    expect(TaskListInput.safeParse({ status: "in_progress" }).success).toBe(true);
-    expect(TaskListInput.safeParse({ status: "completed" }).success).toBe(true);
-    expect(TaskListInput.safeParse({ status: "fubar" }).success).toBe(false);
+  it("validates v2 state enum", () => {
+    expect(TaskListInput.safeParse({ state: "draft" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ state: "claimed" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ state: "doing" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ state: "verifying" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ state: "blocked" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ state: "ready" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ state: "shipped" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ state: "abandoned" }).success).toBe(true);
+    expect(TaskListInput.safeParse({ state: "fubar" }).success).toBe(false);
   });
 
-  it("validates the type enum", () => {
-    expect(TaskListInput.safeParse({ type: "bug" }).success).toBe(true);
-    expect(TaskListInput.safeParse({ type: "feature" }).success).toBe(true);
-    expect(TaskListInput.safeParse({ type: "spike" }).success).toBe(false);
+  it("rejects v1-only status values", () => {
+    expect(TaskListInput.safeParse({ state: "pending" }).success).toBe(false);
+    expect(TaskListInput.safeParse({ state: "in_progress" }).success).toBe(false);
+    expect(TaskListInput.safeParse({ state: "completed" }).success).toBe(false);
   });
 
-  it("validates the priority literal range", () => {
-    for (const p of [0, 1, 2, 3, 4]) {
-      expect(TaskListInput.safeParse({ priority: p }).success).toBe(true);
-    }
-    expect(TaskListInput.safeParse({ priority: 5 }).success).toBe(false);
-    expect(TaskListInput.safeParse({ priority: -1 }).success).toBe(false);
-  });
-
-  it("accepts label / parentId / assignee filters", () => {
-    expect(TaskListInput.safeParse({ label: "release-prep" }).success).toBe(true);
-    expect(TaskListInput.safeParse({ parentId: "tsk-aa0001" }).success).toBe(true);
-    expect(TaskListInput.safeParse({ assignee: "session:ada" }).success).toBe(true);
-  });
-
-  it("rejects empty-string label or assignee", () => {
-    expect(TaskListInput.safeParse({ label: "" }).success).toBe(false);
-    expect(TaskListInput.safeParse({ assignee: "" }).success).toBe(false);
+  it("rejects removed v1 filters (type, priority, label, parentId, assignee)", () => {
+    expect(TaskListInput.safeParse({ type: "bug" }).success).toBe(false);
+    expect(TaskListInput.safeParse({ priority: 1 }).success).toBe(false);
+    expect(TaskListInput.safeParse({ label: "release" }).success).toBe(false);
+    expect(TaskListInput.safeParse({ parentId: "tsk-abc123" }).success).toBe(false);
+    expect(TaskListInput.safeParse({ assignee: "someone" }).success).toBe(false);
   });
 
   it("clamps limit to 1..100", () => {
@@ -111,64 +110,70 @@ describe("TaskListInput", () => {
   });
 });
 
-describe("TaskCreateInput", () => {
+describe("TaskFromSpecInput", () => {
   it("accepts a minimal payload", () => {
-    expect(TaskCreateInput.safeParse({ title: "do a thing" }).success).toBe(true);
+    expect(TaskFromSpecInput.safeParse({ spec_path: "docs/specs/foo.md" }).success).toBe(true);
   });
 
-  it("rejects an empty title", () => {
-    expect(TaskCreateInput.safeParse({ title: "" }).success).toBe(false);
+  it("rejects empty spec_path", () => {
+    expect(TaskFromSpecInput.safeParse({ spec_path: "" }).success).toBe(false);
   });
 
-  it("rejects a title longer than 200 chars", () => {
-    expect(TaskCreateInput.safeParse({ title: "x".repeat(201) }).success).toBe(false);
-    expect(TaskCreateInput.safeParse({ title: "x".repeat(200) }).success).toBe(true);
+  it("rejects missing spec_path", () => {
+    expect(TaskFromSpecInput.safeParse({}).success).toBe(false);
   });
 });
 
-describe("TaskClaimInput / TaskCompleteInput", () => {
-  it("require an id", () => {
+describe("TaskClaimInput", () => {
+  it("requires an id", () => {
     expect(TaskClaimInput.safeParse({}).success).toBe(false);
-    expect(TaskCompleteInput.safeParse({}).success).toBe(false);
   });
 
-  it("TaskCompleteInput accepts an optional summary", () => {
-    expect(
-      TaskCompleteInput.safeParse({ id: "tsk-abc123", summary: "done" }).success,
-    ).toBe(true);
+  it("accepts id with optional agent_id", () => {
+    expect(TaskClaimInput.safeParse({ id: "tsk-abc123" }).success).toBe(true);
+    expect(TaskClaimInput.safeParse({ id: "tsk-abc123", agent_id: "claude-code" }).success).toBe(true);
   });
 });
 
-describe("TaskBlockInput / TaskUnblockInput", () => {
-  it("require at least one blockedTaskId", () => {
+describe("TaskShipInput", () => {
+  it("requires an id", () => {
+    expect(TaskShipInput.safeParse({}).success).toBe(false);
+  });
+
+  it("accepts id with optional pr_url", () => {
+    expect(TaskShipInput.safeParse({ id: "tsk-abc123" }).success).toBe(true);
     expect(
-      TaskBlockInput.safeParse({ id: "tsk-abc123", blockedTaskIds: [] }).success,
-    ).toBe(false);
-    expect(
-      TaskBlockInput.safeParse({
-        id: "tsk-abc123",
-        blockedTaskIds: ["tsk-def456"],
-      }).success,
+      TaskShipInput.safeParse({ id: "tsk-abc123", pr_url: "https://github.com/owner/repo/pull/1" }).success,
     ).toBe(true);
   });
 
-  it("validate every id in blockedTaskIds", () => {
-    expect(
-      TaskUnblockInput.safeParse({
-        id: "tsk-abc123",
-        blockedTaskIds: ["tsk-def456", "bogus"],
-      }).success,
-    ).toBe(false);
+  it("rejects non-URL pr_url", () => {
+    expect(TaskShipInput.safeParse({ id: "tsk-abc123", pr_url: "not-a-url" }).success).toBe(false);
+  });
+});
+
+describe("TaskBlockInput (v2 — reason, not blockedTaskIds)", () => {
+  it("requires id and reason", () => {
+    expect(TaskBlockInput.safeParse({ id: "tsk-abc123" }).success).toBe(false);
+    expect(TaskBlockInput.safeParse({ reason: "waiting on infra" }).success).toBe(false);
+    expect(TaskBlockInput.safeParse({ id: "tsk-abc123", reason: "waiting on infra" }).success).toBe(true);
   });
 
-  it("accept optional force flag", () => {
+  it("rejects removed v1 fields (blockedTaskIds, force)", () => {
     expect(
       TaskBlockInput.safeParse({
         id: "tsk-abc123",
+        reason: "x",
         blockedTaskIds: ["tsk-def456"],
+      }).success,
+    ).toBe(false);
+    expect(
+      TaskBlockInput.safeParse({
+        id: "tsk-abc123",
+        reason: "x",
         force: true,
       }).success,
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 
@@ -316,81 +321,139 @@ describe("PolicyCheckInput", () => {
   });
 });
 
-describe("HandoffListInput", () => {
-  it("accepts an empty payload", () => {
-    expect(HandoffListInput.safeParse({}).success).toBe(true);
+describe("PrinciplePromoteInput", () => {
+  it("requires correction_id", () => {
+    expect(PrinciplePromoteInput.safeParse({}).success).toBe(false);
+    expect(PrinciplePromoteInput.safeParse({ correction_id: "evd-1714747200123-a1b2c3" }).success).toBe(true);
   });
 
-  it("validates handoff agent enum", () => {
-    expect(HandoffListInput.safeParse({ agent: "codex" }).success).toBe(true);
-    expect(HandoffListInput.safeParse({ agent: "claude" }).success).toBe(true);
-    expect(HandoffListInput.safeParse({ agent: "hermes" }).success).toBe(true);
-    expect(HandoffListInput.safeParse({ agent: "gpt" }).success).toBe(false);
-  });
-
-  it("validates displayState enum", () => {
-    for (const s of ["open", "consumed", "completed", "failed"]) {
-      expect(HandoffListInput.safeParse({ displayState: s }).success).toBe(true);
-    }
-    expect(HandoffListInput.safeParse({ displayState: "draft" }).success).toBe(false);
-  });
-
-  it("filters by linked task id", () => {
-    expect(HandoffListInput.safeParse({ taskId: "tsk-abc123" }).success).toBe(true);
-    expect(HandoffListInput.safeParse({ taskId: "bogus" }).success).toBe(false);
-  });
-
-  it("schema accepts openOnly + displayState together (handler enforces mutual-exclusion)", () => {
-    // The schema stays a plain ZodObject so the SDK can serialize properties
-    // for `tools/list`. Mutual-exclusion is enforced by the handler with code
-    // INVALID_FILTER_COMBINATION (covered in handoff-tools tests).
-    expect(
-      HandoffListInput.safeParse({ openOnly: true, displayState: "consumed" }).success,
-    ).toBe(true);
-  });
-
-  it("rejects unknown fields (strict)", () => {
-    expect(HandoffListInput.safeParse({ statuss: "open" }).success).toBe(false);
+  it("rejects empty correction_id", () => {
+    expect(PrinciplePromoteInput.safeParse({ correction_id: "" }).success).toBe(false);
   });
 });
 
-describe("HandoffShowInput / HandoffOpenForTaskInput", () => {
-  it("HandoffShowInput accepts handoff id formats", () => {
-    expect(HandoffShowInput.safeParse({ id: "bold-otter-1" }).success).toBe(true);
-    expect(HandoffShowInput.safeParse({ id: "2026-05-08-001" }).success).toBe(true);
-    expect(HandoffShowInput.safeParse({ id: "Bold-Otter-1" }).success).toBe(false);
+describe("HandoffListInput", () => {
+  it("accepts an empty payload (lists all open envelopes)", () => {
+    expect(HandoffListInput.safeParse({}).success).toBe(true);
   });
 
-  it("HandoffOpenForTaskInput requires a valid task id", () => {
-    expect(HandoffOpenForTaskInput.safeParse({}).success).toBe(false);
-    expect(HandoffOpenForTaskInput.safeParse({ taskId: "tsk-abc123" }).success).toBe(true);
-    expect(HandoffOpenForTaskInput.safeParse({ taskId: "task-abc123" }).success).toBe(false);
+  it("accepts task_id, trigger_verb, include_picked_up filters together", () => {
+    expect(
+      HandoffListInput.safeParse({
+        task_id: "tsk-abc123",
+        trigger_verb: "task:block",
+        include_picked_up: true,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unknown trigger_verb", () => {
+    expect(
+      HandoffListInput.safeParse({ trigger_verb: "task:archive" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects unknown fields", () => {
+    expect(HandoffListInput.safeParse({ unknown: true }).success).toBe(false);
+  });
+});
+
+describe("HandoffShowInput", () => {
+  it("accepts a valid hnd-* id", () => {
+    expect(HandoffShowInput.safeParse({ id: "hnd-lp1abc-xy1234" }).success).toBe(true);
+  });
+
+  it("rejects a malformed handoff id", () => {
+    expect(HandoffShowInput.safeParse({ id: "handoff-1" }).success).toBe(false);
+    expect(HandoffShowInput.safeParse({ id: "hnd-ABC-XYZ" }).success).toBe(false);
+  });
+});
+
+describe("HandoffEmitInput", () => {
+  it("requires task_id and trigger_verb", () => {
+    expect(HandoffEmitInput.safeParse({}).success).toBe(false);
+  });
+
+  it("accepts a minimal task:claim emit", () => {
+    expect(
+      HandoffEmitInput.safeParse({
+        task_id: "tsk-abc123",
+        trigger_verb: "task:claim",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires reason when trigger_verb is task:block", () => {
+    const r = HandoffEmitInput.safeParse({
+      task_id: "tsk-abc123",
+      trigger_verb: "task:block",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.path).toEqual(["reason"]);
+    }
+  });
+
+  it("accepts task:block with reason", () => {
+    expect(
+      HandoffEmitInput.safeParse({
+        task_id: "tsk-abc123",
+        trigger_verb: "task:block",
+        reason: "missing creds",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects empty agent_id, worktree_path, spec_path, reason", () => {
+    expect(
+      HandoffEmitInput.safeParse({
+        task_id: "tsk-abc123",
+        trigger_verb: "task:claim",
+        agent_id: "",
+      }).success,
+    ).toBe(false);
   });
 });
 
 describe("HandoffPickupInput", () => {
-  it("requires id and actorAgent", () => {
-    expect(HandoffPickupInput.safeParse({}).success).toBe(false);
-    expect(
-      HandoffPickupInput.safeParse({ id: "bold-otter-1", actorAgent: "codex" }).success,
-    ).toBe(true);
+  it("accepts a bare id", () => {
+    expect(HandoffPickupInput.safeParse({ id: "hnd-lp1abc-xy1234" }).success).toBe(true);
   });
 
-  it("rejects unknown actorAgent values", () => {
-    expect(
-      HandoffPickupInput.safeParse({ id: "bold-otter-1", actorAgent: "gpt" }).success,
-    ).toBe(false);
-  });
-
-  it("accepts optional standalone, ownerId, actorSessionId", () => {
+  it("accepts picked_up_by and note", () => {
     expect(
       HandoffPickupInput.safeParse({
-        id: "bold-otter-1",
-        actorAgent: "claude",
-        actorSessionId: "session:1",
-        ownerId: "claude:session:1",
-        standalone: true,
+        id: "hnd-lp1abc-xy1234",
+        picked_up_by: "agent-2",
+        note: "taking over",
       }).success,
     ).toBe(true);
   });
+
+  it("rejects empty picked_up_by", () => {
+    expect(
+      HandoffPickupInput.safeParse({
+        id: "hnd-lp1abc-xy1234",
+        picked_up_by: "",
+      }).success,
+    ).toBe(false);
+  });
 });
+
+describe("SetupCheckInput / SetupMigrateV2Input", () => {
+  it("SetupCheckInput accepts empty payload", () => {
+    expect(SetupCheckInput.safeParse({}).success).toBe(true);
+  });
+
+  it("SetupMigrateV2Input accepts optional flags", () => {
+    expect(SetupMigrateV2Input.safeParse({}).success).toBe(true);
+    expect(SetupMigrateV2Input.safeParse({ dry_run: true }).success).toBe(true);
+    expect(SetupMigrateV2Input.safeParse({ force: true }).success).toBe(true);
+    expect(SetupMigrateV2Input.safeParse({ dry_run: true, force: true }).success).toBe(true);
+  });
+
+  it("SetupMigrateV2Input rejects unknown fields", () => {
+    expect(SetupMigrateV2Input.safeParse({ unknown: true }).success).toBe(false);
+  });
+});
+

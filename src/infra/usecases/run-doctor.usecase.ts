@@ -4,7 +4,7 @@ import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
 import { listIgnoredProjectConfigKeys } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
-import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "@/features/handoff";
+import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "./count-legacy-handoff-files.usecase.js";
 
 /**
  * Phase 1 strip: CASS and agent-transport checks were removed. The
@@ -69,8 +69,8 @@ export async function runDoctor(
     doctorChecks.push({
       name: "legacy-handoffs",
       status: "warn",
-      message: `Found ${legacyHandoffCount} legacy handoff artifact(s) under .maestro/handoffs/ or .maestro/launches/`,
-      fix: "Review or remove the old files manually. Maestro now writes handoff artifacts to ~/.maestro/handoff/",
+      message: `Found ${legacyHandoffCount} legacy launch artifact(s) under .maestro/launches/`,
+      fix: "Review or remove the old files manually. Maestro now writes handoff artifacts to .maestro/handoffs/.",
     });
   }
 

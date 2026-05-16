@@ -12,7 +12,7 @@ interface RuntimeMonitorPort {
 }
 ```
 
-`RuntimeSignal` comes from `src/features/spec/domain/types.ts`. `RuntimeSignalResult` is defined in `src/features/runtime/domain/types.ts`:
+`RuntimeSignal` comes from `src/shared/domain/legacy-spec/types.ts`. `RuntimeSignalResult` is defined in `src/features/runtime/domain/types.ts`:
 
 ```typescript
 interface RuntimeSignalResult {
@@ -56,7 +56,7 @@ The adapter sends the signal's `query` field as a PromQL instant query and reads
 
 `runtime_signals` is an array of `RuntimeSignal` objects in the Spec. Each signal specifies the provider, query, threshold, and severity.
 
-Schema (from `src/features/spec/domain/types.ts`):
+Schema (from `src/shared/domain/legacy-spec/types.ts`):
 
 ```typescript
 interface RuntimeSignal {

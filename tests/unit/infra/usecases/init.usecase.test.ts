@@ -3,9 +3,9 @@ import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:f
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { initMaestro } from "@/infra/usecases/init.usecase.js";
-import { resolveSkillDirectoryName } from "@/features/verify/lib/skill-path.js";
+import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
 import { mockConfig } from "../../../helpers/mocks.js";
-import { DEFAULT_PRINCIPLES } from "@/features/mission";
+import { DEFAULT_PRINCIPLES } from "@/service/default-principles.js";
 
 let tmpDir: string;
 
@@ -171,38 +171,37 @@ describe("initMaestro", () => {
     );
   });
 
-  it("creates principles.jsonl with default principles on fresh init", async () => {
+  it("creates docs/principles/<slug>.md with default principles on fresh init", async () => {
     const config = mockConfig();
     const result = await initMaestro(config, { global: false, dir: tmpDir });
 
-    const principlesPath = join(tmpDir, ".maestro", "principles.jsonl");
-    expect(result.created).toContain(principlesPath);
-
-    const raw = await readFile(principlesPath, "utf8");
-    const lines = raw.trim().split("\n");
-    expect(lines).toHaveLength(DEFAULT_PRINCIPLES.length);
-
-    const parsed = lines.map((line) => JSON.parse(line));
-    expect(parsed[0].id).toBe("think-before-coding");
-    expect(parsed[3].id).toBe("goal-driven-execution");
+    const principlesDir = join(tmpDir, "docs", "principles");
+    for (const principle of DEFAULT_PRINCIPLES) {
+      const principleFile = join(principlesDir, `${principle.slug}.md`);
+      expect(result.created).toContain(principleFile);
+      const content = await readFile(principleFile, "utf8");
+      expect(content).toBe(principle.content);
+    }
   });
 
-  it("does not overwrite existing principles.jsonl on re-init", async () => {
+  it("does not overwrite existing docs/principles/<slug>.md on re-init", async () => {
     const config = mockConfig();
-    const principlesPath = join(tmpDir, ".maestro", "principles.jsonl");
-    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
-    await writeFile(principlesPath, '{"id":"custom"}\n');
+    const principlesDir = join(tmpDir, "docs", "principles");
+    await mkdir(principlesDir, { recursive: true });
+    const firstPrinciple = DEFAULT_PRINCIPLES[0]!;
+    const principleFile = join(principlesDir, `${firstPrinciple.slug}.md`);
+    await writeFile(principleFile, "# custom content\n");
 
     const result = await initMaestro(config, { global: false, dir: tmpDir });
 
-    expect(result.skipped).toContain(principlesPath);
-    expect(result.created).not.toContain(principlesPath);
+    expect(result.skipped).toContain(principleFile);
+    expect(result.created).not.toContain(principleFile);
 
-    const raw = await readFile(principlesPath, "utf8");
-    expect(raw).toBe('{"id":"custom"}\n');
+    const content = await readFile(principleFile, "utf8");
+    expect(content).toBe("# custom content\n");
   });
 
-  it("syncs built-in maestro skills into project-local claude and codex folders", async () => {
+  it("no longer syncs colon-tier built-in skills (BUILT_IN_SKILL_TEMPLATES is empty in v2)", async () => {
     const config = mockConfig();
     const agentBaseDir = resolveSkillDirectoryName("maestro:agent-base");
 
@@ -211,24 +210,8 @@ describe("initMaestro", () => {
     const claudeSkillPath = join(tmpDir, ".claude", "skills", agentBaseDir, "SKILL.md");
     const codexSkillPath = join(tmpDir, ".codex", "skills", agentBaseDir, "SKILL.md");
 
-    expect(result.created).toContain(claudeSkillPath);
-    expect(result.created).toContain(codexSkillPath);
-    expect(await readFile(claudeSkillPath, "utf8")).toContain("# Agent Base Procedures");
-    expect(await readFile(codexSkillPath, "utf8")).toContain("# Agent Base Procedures");
-  });
-
-  it("overwrites existing synced maestro skills with the shipped version", async () => {
-    const config = mockConfig();
-    const agentBaseDir = resolveSkillDirectoryName("maestro:agent-base");
-    const claudeSkillPath = join(tmpDir, ".claude", "skills", agentBaseDir, "SKILL.md");
-
-    await mkdir(join(tmpDir, ".claude", "skills", agentBaseDir), { recursive: true });
-    await writeFile(claudeSkillPath, "# old agent base\n");
-
-    const result = await initMaestro(config, { global: false, dir: tmpDir });
-
-    expect(result.created).toContain(claudeSkillPath);
-    expect(await readFile(claudeSkillPath, "utf8")).toContain("# Agent Base Procedures");
+    expect(result.created).not.toContain(claudeSkillPath);
+    expect(result.created).not.toContain(codexSkillPath);
   });
 
   it("removes stale synced maestro skills without touching non-maestro skills", async () => {

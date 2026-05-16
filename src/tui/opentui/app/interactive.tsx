@@ -2,8 +2,8 @@ import { createCliRenderer, MouseButton, type MouseEvent } from "@opentui/core";
 import { createRoot, flushSync } from "@opentui/react";
 import { useState } from "react";
 
-import { getValidFeatureTransitions, updateFeature } from "@/features/mission";
-import { generateAgentPrompt } from "@/features/agent";
+import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
+import { updateFeature } from "@/shared/domain/legacy-mission";
 import { applyConfigEdit, previewConfigEdit } from "@/infra/usecases/config-edit.usecase.js";
 import {
   getCommandPaletteSelectionAction,
@@ -443,19 +443,8 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
     markDirty();
 
     try {
-      const result = await generateAgentPrompt(
-        opts.snapshotDeps.missions,
-        process.cwd(),
-        state.snapshot.missionId,
-        selected.featureId,
-        undefined,
-        {
-          correctionStore: opts.snapshotDeps.correctionStore,
-          learningStore: opts.snapshotDeps.learningStore,
-        },
-      );
-
-      // Mark the feature as assigned
+      // Mark the feature as assigned. Prompt generation was retired with the
+      // v1 `features/agent` module; dispatch now just transitions the feature.
       await updateFeature(
         opts.snapshotDeps.missionStore,
         opts.snapshotDeps.featureStore,
@@ -477,13 +466,13 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
 
       state = reduce(state, {
         type: "dispatch-generate-success",
-        promptPath: result.writtenTo?.[0],
+        promptPath: undefined,
       });
       markDirty();
     } catch (error) {
       state = reduce(state, {
         type: "dispatch-generate-error",
-        message: error instanceof Error ? error.message : "Failed to generate prompt",
+        message: error instanceof Error ? error.message : "Failed to assign feature",
       });
       markDirty();
     }

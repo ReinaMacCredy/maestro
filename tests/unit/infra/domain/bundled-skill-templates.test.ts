@@ -74,13 +74,9 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
   it("ships the expected bundled skills", () => {
     const names = BUNDLED_SKILL_TEMPLATES.map((t) => t.name).sort();
     expect(names).toEqual([
-      "maestro-brainstorm",
-      "maestro-classify",
+      "maestro-design",
       "maestro-handoff",
-      "maestro-intake",
-      "maestro-mission",
       "maestro-plan",
-      "maestro-qa",
       "maestro-setup",
       "maestro-task",
       "maestro-verify",
@@ -105,20 +101,35 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
   });
 
   it("chain references are consistent", () => {
-    const brainstorm = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-brainstorm");
+    const design = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-design");
     const plan = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-plan");
+    const task = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-task");
+    const verify = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-verify");
 
-    const brainstormSkill = brainstorm!.files.find((f) => f.path === "SKILL.md")!;
-    expect(brainstormSkill.content).not.toContain("preplan-brainstorm");
-    expect(brainstormSkill.content).not.toContain("execution-plan");
-    expect(brainstormSkill.content).toContain("maestro-plan");
+    const designSkill = design!.files.find((f) => f.path === "SKILL.md")!;
+    expect(designSkill.content).not.toContain("maestro-brainstorm");
+    expect(designSkill.content).not.toContain("maestro-classify");
+    expect(designSkill.content).toContain("maestro task from-spec");
 
     const planSkill = plan!.files.find((f) => f.path === "SKILL.md")!;
-    expect(planSkill.content).not.toContain("preplan-brainstorm");
-    expect(planSkill.content).toContain("maestro-brainstorm");
+    expect(planSkill.content).not.toContain("maestro-brainstorm");
+    expect(planSkill.content).not.toContain("maestro-handoff");
+    expect(planSkill.content).toContain("maestro-design");
     expect(planSkill.content).toContain("maestro-task");
-    expect(planSkill.content).toContain("maestro-handoff");
-    expect(planSkill.content).toContain("## Persist the plan");
+    expect(planSkill.content).toContain("maestro plan from-spec");
+    expect(planSkill.content).toContain("maestro plan decompose");
+
+    const taskSkill = task!.files.find((f) => f.path === "SKILL.md")!;
+    expect(taskSkill.content).not.toContain("maestro session start");
+    expect(taskSkill.content).not.toContain("ralph review");
+    expect(taskSkill.content).toContain("maestro-design");
+    expect(taskSkill.content).toContain("maestro-plan");
+    expect(taskSkill.content).toContain("maestro-verify");
+
+    const verifySkill = verify!.files.find((f) => f.path === "SKILL.md")!;
+    expect(verifySkill.content).not.toContain("maestro-handoff");
+    expect(verifySkill.content).toContain("maestro task verify");
+    expect(verifySkill.content).toContain("maestro task ship");
   });
 
   it("ships maestro-setup with managed-marker, report, and setup-CLI contracts", () => {
@@ -144,10 +155,10 @@ Before non-trivial work:
   instruction file and report the conflict.
 <!-- maestro-setup:end -->`);
     expect(skill.content).toContain(".maestro/setup-report.md");
-    expect(skill.content).toContain("maestro setup --check");
-    expect(skill.content).toContain("maestro setup --self-test");
-    expect(skill.content).toContain("maestro setup --install-hooks");
-    expect(skill.content).toContain("Skill-binary drift detection");
+    expect(skill.content).toContain("maestro setup check");
+    expect(skill.content).toContain("maestro setup bootstrap");
+    expect(skill.content).toContain("maestro setup migrate-v2");
+    expect(skill.content).toContain("maestro setup migrate-corrections");
 
     const planningTemplate = setup!.files.find((file) => file.path === "reference/context-templates/planning.md");
     expect(planningTemplate?.content).toContain("Approved implementation plans live under `.maestro/plans/`");
@@ -232,9 +243,13 @@ Before non-trivial work:
     expect(parsed!.permissions?.checks).toBe("write");
   });
 
-  it("marks bundled shell helpers as executable", () => {
-    const brainstorm = BUNDLED_SKILL_TEMPLATES.find((template) => template.name === "maestro-brainstorm");
-    expect(brainstorm?.files.find((file) => file.path === "scripts/start-server.sh")?.executable).toBe(true);
-    expect(brainstorm?.files.find((file) => file.path === "scripts/stop-server.sh")?.executable).toBe(true);
+  it("preserves executable bit on any shipped shell helper", () => {
+    for (const template of BUNDLED_SKILL_TEMPLATES) {
+      for (const file of template.files) {
+        if (file.path.endsWith(".sh")) {
+          expect(file.executable, `${template.name}/${file.path} should be executable`).toBe(true);
+        }
+      }
+    }
   });
 });

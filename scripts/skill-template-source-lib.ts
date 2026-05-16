@@ -38,7 +38,14 @@ export function isIgnoredSkillSourceArtifact(path: string): boolean {
 export async function collectSkillTemplates(
   options: CollectSkillTemplatesOptions,
 ): Promise<readonly SkillTemplate[]> {
-  const skillDirs = (await readdir(options.sourceDir, { withFileTypes: true }))
+  let entries;
+  try {
+    entries = await readdir(options.sourceDir, { withFileTypes: true });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw err;
+  }
+  const skillDirs = entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right, "en"));

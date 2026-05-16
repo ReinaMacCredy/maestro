@@ -50,7 +50,7 @@ export function registerGcCommand(
 
   gcCmd
     .command("slop-cleanup")
-    .description("Aggregate architecture-lint violations into a per-file slop report")
+    .description("Aggregate architecture-lint and principle-scan violations into a per-file slop report")
     .option("--min-severity <level>", "info | warn | error (default: info)", "info")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {

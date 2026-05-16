@@ -144,7 +144,8 @@ describe("runDoctor", () => {
     expect(checks.some((c) => c.name === "oversized-root-doc-TINY-md")).toBe(false);
   });
 
-  it("warns when legacy handoff or launch artifacts are still present in the project dir", async () => {
+  it("warns when legacy launch artifacts are still present in the project dir; current handoffs do not trigger the warning", async () => {
+    // Current handoffs are canonical and must not trigger the legacy warning.
     await mkdir(join(cwd, ".maestro", "handoffs"), { recursive: true });
     await writeFile(join(cwd, ".maestro", "handoffs", "2026-04-20-001.json"), "{}\n");
     await mkdir(join(cwd, ".maestro", "launches"), { recursive: true });
@@ -163,7 +164,7 @@ describe("runDoctor", () => {
 
     expect(checks.find((check) => check.name === "legacy-handoffs")).toMatchObject({
       status: "warn",
-      message: "Found 2 legacy handoff artifact(s) under .maestro/handoffs/ or .maestro/launches/",
+      message: "Found 1 legacy launch artifact(s) under .maestro/launches/",
     });
   });
 });

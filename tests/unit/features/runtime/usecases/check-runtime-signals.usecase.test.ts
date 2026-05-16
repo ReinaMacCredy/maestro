@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { checkRuntimeSignals } from "@/features/runtime/usecases/check-runtime-signals.usecase.js";
 import type { RuntimeMonitorPort } from "@/features/runtime/ports/monitor.port.js";
-import type { RuntimeSignal } from "@/features/spec";
+import type { RuntimeSignal } from "@/shared/domain/legacy-spec";
 import type { RuntimeSignalResult } from "@/features/runtime/domain/types.js";
 
 function makeSignal(overrides: Partial<RuntimeSignal> = {}): RuntimeSignal {

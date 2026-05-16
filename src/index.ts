@@ -20,44 +20,14 @@ import {
   resolveInstallDir,
   resolveInstalledBinaryName,
 } from "@/infra/usecases/install-release-binary.usecase.js";
-import { registerNoteCommand } from "./features/notes/index.js";
-import { registerSessionCommand } from "./features/session/index.js";
-import {
-  registerMissionCommand,
-  registerFeatureCommand,
-  registerValidateCommand,
-  registerMilestoneCommand,
-  registerCheckpointCommand,
-  registerPrincipleCommand,
-  registerReplyCommand,
-} from "./features/mission/index.js";
+import { registerPrincipleCommand } from "./features/principle/index.js";
+import { registerReplyCommand } from "./features/reply/index.js";
 // Mission Control lazy-loads — its import graph (OpenTUI + React) costs
 // ~250ms on cold start, but is only needed when the `mission-control` verb
 // runs. Every other verb (and `--version`/`--help`) skips it entirely.
 // See profile-imports.ts for the measurements.
-import {
-  registerMemoryCorrectCommand,
-  registerMemoryRecallCommand,
-  registerMemorySearchCommand,
-  registerMemoryLearnCommand,
-  registerMemoryCompileCommand,
-  registerMemoryStatsCommand,
-  registerMemoryLintCommand,
-} from "./features/memory/index.js";
-import {
-  registerRatchetCheckCommand,
-  registerRatchetPromoteCommand,
-} from "./features/memory-ratchet/index.js";
-import {
-  registerGraphLinkCommand,
-  registerGraphContextCommand,
-} from "./features/graph/index.js";
-import { registerHandoffCommand } from "./features/handoff/index.js";
-import { registerTaskCommand } from "./features/task/index.js";
 import { registerBundleCommand } from "./features/bundle/index.js";
 import { registerEvidenceCommand } from "./features/evidence/index.js";
-import { registerSpecCommand } from "./features/spec/index.js";
-import { registerContractL2Command } from "./features/task/commands/contract-l2.command.js";
 import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
 import { registerVerdictCommand } from "./features/verdict/index.js";
 import { registerPlanCheckCommand } from "./features/plan/index.js";
@@ -67,19 +37,20 @@ import { registerMergeAutoCommand } from "./features/merge/index.js";
 import { registerDeployCommand } from "./features/deploy/index.js";
 import { registerRuntimeCheckCommand } from "./features/runtime/index.js";
 import { registerSkillsCommand } from "./features/skills/index.js";
-import { registerIntakeCommand } from "./features/intake/index.js";
 import { registerMcpCommand } from "./features/mcp/index.js";
 import { registerRecoverCommand } from "./features/recover/index.js";
 import { registerGcCommand } from "./features/gc/index.js";
-import { registerRalphCommand } from "./features/ralph/index.js";
-import { registerStateCommand } from "./features/state/index.js";
 import { registerWorktreeCommand } from "./features/worktree/index.js";
-import { registerInspectCommand } from "./features/inspect/index.js";
-import { registerSetupCommand } from "./features/setup/index.js";
 import {
   checkSkillBinaryParity,
   renderDriftError,
-} from "./features/setup/usecases/check-skill-binary-parity.usecase.js";
+} from "@/service/skill-binary-parity.js";
+import { registerSpecV2Commands } from "@/runtime/spec.command.js";
+import { registerTaskV2Commands } from "@/runtime/task.command.js";
+import { registerPlanV2Commands } from "@/runtime/plan.command.js";
+import { registerPrincipleV2Commands } from "@/runtime/principle.command.js";
+import { registerSetupV2Commands } from "@/runtime/setup.command.js";
+import { registerContractCommands } from "@/runtime/contract.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -95,7 +66,7 @@ const deps = { getServices };
 
 export const program = new Command()
   .name("maestro")
-  .description("Conductor CLI -- shared mission, feature, and memory state for cross-agent workflows")
+  .description("The harness OS for agent-generated codebases. Humans steer, agents execute, maestro is the substrate.")
   .version(formatVersionOutputForArgv())
   .option("--json", "Output as JSON")
   .exitOverride();
@@ -103,38 +74,28 @@ export const program = new Command()
 registerInitCommand(program, deps);
 registerStatusCommand(program, deps);
 registerDoctorCommand(program, deps);
-registerNoteCommand(program, deps);
-registerSessionCommand(program, deps);
 registerInstallCommand(program, deps);
 registerUpdateCommand(program);
 registerUninstallCommand(program);
 registerProvidersCommand(program);
 registerSkillsCommand(program);
 registerMcpCommand(program);
-registerMissionCommand(program, deps);
-registerFeatureCommand(program, deps);
-registerValidateCommand(program, deps);
-registerMilestoneCommand(program, deps);
-registerCheckpointCommand(program, deps);
-registerMemoryCorrectCommand(program, deps);
-registerMemoryRecallCommand(program, deps);
-registerMemorySearchCommand(program, deps);
-registerMemoryLearnCommand(program, deps);
-registerMemoryCompileCommand(program, deps);
-registerRatchetCheckCommand(program, deps);
-registerRatchetPromoteCommand(program, deps);
-registerMemoryStatsCommand(program, deps);
-registerMemoryLintCommand(program, deps);
-registerGraphLinkCommand(program, deps);
-registerGraphContextCommand(program, deps);
-registerHandoffCommand(program, deps);
-registerTaskCommand(program, deps);
 registerReplyCommand(program, deps);
 registerPrincipleCommand(program, deps);
+// v2 surface: attaches `principle promote <correctionId>` to the same parent.
+registerPrincipleV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
 registerBundleCommand(program, deps);
 registerEvidenceCommand(program, deps);
-registerSpecCommand(program, deps);
-registerContractL2Command(program, deps);
+// v2 spec surface: spec new + spec validate
+registerSpecV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
+registerTaskV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
+registerContractCommands(program, deps);
 registerPolicyCommand(program, deps);
 registerVerdictCommand(program, deps);
 
@@ -142,6 +103,11 @@ const planCmd = program
   .command("plan")
   .description("Plan-time checks for agent tasks");
 registerPlanCheckCommand(planCmd, program, deps);
+// v2 plan lifecycle verbs (from-spec, show). Attaches to the same `plan`
+// parent; v1 `plan check` and v2 `plan from-spec` coexist until Phase 4.
+registerPlanV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
 
 const ciCmd = program
   .command("ci")
@@ -149,14 +115,12 @@ const ciCmd = program
 registerCiVerifyCommand(ciCmd, program, deps);
 
 registerReviewCommand(program, deps);
-registerIntakeCommand(program, deps);
 registerRecoverCommand(program, deps);
 registerGcCommand(program, deps);
-registerRalphCommand(program, deps);
-registerStateCommand(program, deps);
 registerWorktreeCommand(program, deps);
-registerInspectCommand(program, deps);
-registerSetupCommand(program, deps);
+registerSetupV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
 
 const mergeCmd = program
   .command("merge")
