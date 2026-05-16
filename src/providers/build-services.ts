@@ -37,10 +37,8 @@ import {
   GitWorktreeStore,
   type WorktreeStorePort,
 } from "../repo/git-worktree-store.adapter.js";
-import {
-  FsHandoffEmitter,
-  type HandoffEmitterPort,
-} from "../repo/fs-handoff-emitter.adapter.js";
+import { FsHandoffEmitter } from "../repo/fs-handoff-emitter.adapter.js";
+import type { HandoffEmitterPort } from "../repo/handoff-emitter.port.js";
 
 export interface V2Services {
   readonly specStore: SpecStorePort;

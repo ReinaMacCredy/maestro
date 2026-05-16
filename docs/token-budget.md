@@ -40,7 +40,6 @@ agent's own work. This document codifies how we keep our footprint small.
 | `task stuck --json` | Summary | `--full` |
 | `mission list --json` | Summary, default `--limit 20` | `--full --all` |
 | `evidence list --json` | Summary, default `--limit 20` | `--full --all` |
-| `handoff list --json` | Summary, default `--limit 20` | `--full --all` |
 | `skills list --json` | Summary (no `body`) | `--full` |
 
 Human-readable CLI output is already concise and unchanged.

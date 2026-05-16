@@ -1,12 +1,15 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { MaestroError } from "@/shared/errors.js";
 import { dirExists, fileExists } from "@/shared/lib/fs.js";
 import type {
   HandoffEmitterPort,
   HandoffEnvelope,
+  HandoffPickup,
 } from "./handoff-emitter.port.js";
 
 const DEFAULT_DIR = ".maestro/handoffs";
+const PICKUP_SUFFIX = ".picked_up.json";
 
 export interface FsHandoffEmitterOptions {
   readonly repoRoot: string;
@@ -32,7 +35,9 @@ export class FsHandoffEmitter implements HandoffEmitterPort {
   async list(): Promise<readonly HandoffEnvelope[]> {
     if (!(await dirExists(this.#dir))) return [];
     const entries = await readdir(this.#dir);
-    const files = entries.filter((e) => e.endsWith(".json"));
+    const files = entries.filter(
+      (e) => e.endsWith(".json") && !e.endsWith(PICKUP_SUFFIX),
+    );
     const records: HandoffEnvelope[] = [];
     for (const f of files) {
       const raw = await readFile(join(this.#dir, f), "utf8");
@@ -48,7 +53,49 @@ export class FsHandoffEmitter implements HandoffEmitterPort {
     return JSON.parse(raw) as HandoffEnvelope;
   }
 
+  async markPickedUp(envelopeId: string, pickup: HandoffPickup): Promise<void> {
+    await mkdir(this.#dir, { recursive: true });
+    const path = this.#pickupPath(envelopeId);
+    try {
+      await writeFile(path, `${JSON.stringify(pickup, null, 2)}\n`, {
+        encoding: "utf8",
+        flag: "wx",
+      });
+    } catch (err) {
+      if (isEexist(err)) {
+        throw new MaestroError(
+          `Handoff ${envelopeId} already picked up`,
+          [
+            "Read the existing pickup via maestro_handoff_show",
+            "Choose a different envelope to pick up",
+          ],
+          "HANDOFF_ALREADY_PICKED_UP",
+        );
+      }
+      throw err;
+    }
+  }
+
+  async getPickup(envelopeId: string): Promise<HandoffPickup | undefined> {
+    const path = this.#pickupPath(envelopeId);
+    if (!(await fileExists(path))) return undefined;
+    const raw = await readFile(path, "utf8");
+    return JSON.parse(raw) as HandoffPickup;
+  }
+
   #filePath(id: string): string {
     return join(this.#dir, `${id}.json`);
   }
+
+  #pickupPath(id: string): string {
+    return join(this.#dir, `${id}${PICKUP_SUFFIX}`);
+  }
+}
+
+function isEexist(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: string }).code === "EEXIST"
+  );
 }

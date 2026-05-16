@@ -101,14 +101,15 @@ message:
 > `costBudget.maxRetries` (reason=max-retries). Run `maestro task budget
 > --task <id>` to inspect the limits, amend the contract's costBudget via
 > `maestro contract amend` to raise the cap, or escalate to a human via
-> `maestro handoff create`.
+> `maestro task block <id> --reason "<cost-budget context>"`.
 
 The `findingChecks` field carries the machine code for programmatic
 consumers.
 
 **Recovery verbs.** `maestro task budget --task <id>` for inspection;
-`maestro contract amend ...` to raise the cap; `maestro handoff create`
-to escalate.
+`maestro contract amend ...` to raise the cap; `maestro task block <id>
+--reason "<context>"` to escalate (drops a handoff envelope for the
+human or follow-up agent).
 
 ---
 

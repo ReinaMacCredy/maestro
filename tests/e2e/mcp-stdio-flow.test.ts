@@ -536,6 +536,113 @@ describe("MCP stdio flow", () => {
     expect(missing).toEqual([]);
   });
 
+  it("emits a handoff envelope and lists it", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "handoff-emit", "Handoff Emit");
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
+    const taskId = (created.body as { task: { id: string } }).task.id;
+
+    const emitted = await c.call("maestro_handoff_emit", {
+      task_id: taskId,
+      trigger_verb: "task:abandon",
+      reason: "scope changed",
+    });
+    const envelope = (emitted.body as { envelope: { id: string; task_id: string; trigger_verb: string } }).envelope;
+    expect(envelope.id).toMatch(/^hnd-[a-z0-9]+-[a-z0-9]+$/);
+    expect(envelope.task_id).toBe(taskId);
+    expect(envelope.trigger_verb).toBe("task:abandon");
+
+    const list = await c.call("maestro_handoff_list", { task_id: taskId });
+    const items = (list.body as { items: { id: string; picked_up: boolean }[] }).items;
+    expect(items.some((i) => i.id === envelope.id)).toBe(true);
+    expect(items.find((i) => i.id === envelope.id)?.picked_up).toBe(false);
+  });
+
+  it("rejects task:block emit without a reason at the schema layer", async () => {
+    const c = client!;
+    const r = await c.rpc("tools/call", {
+      name: "maestro_handoff_emit",
+      arguments: { task_id: "tsk-abc123", trigger_verb: "task:block" },
+    });
+    const tooled = r.result as ToolPayload | undefined;
+    const body = JSON.parse(tooled?.content[0]?.text ?? "{}") as { code?: string; arg?: string };
+    expect(tooled?.isError).toBe(true);
+    expect(body.code).toBe("INVALID_ARG");
+    expect(body.arg).toBe("reason");
+  });
+
+  it("shows a handoff envelope by id", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "handoff-show", "Handoff Show");
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
+    const taskId = (created.body as { task: { id: string } }).task.id;
+
+    const emitted = await c.call("maestro_handoff_emit", {
+      task_id: taskId,
+      trigger_verb: "task:verify",
+    });
+    const id = (emitted.body as { envelope: { id: string } }).envelope.id;
+
+    const shown = await c.call("maestro_handoff_show", { id });
+    const body = shown.body as { envelope: { id: string }; picked_up?: unknown };
+    expect(body.envelope.id).toBe(id);
+    expect(body.picked_up).toBeUndefined();
+  });
+
+  it("returns HANDOFF_NOT_FOUND for an unknown envelope id", async () => {
+    const c = client!;
+    const r = await c.call("maestro_handoff_show", { id: "hnd-zzzzz-zzzzzz" });
+    expect(r.payload.isError).toBe(true);
+    expect((r.body as { code: string }).code).toBe("HANDOFF_NOT_FOUND");
+  });
+
+  it("marks a handoff as picked up; second pickup returns ALREADY_PICKED_UP", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "handoff-pickup", "Handoff Pickup");
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
+    const taskId = (created.body as { task: { id: string } }).task.id;
+
+    const emitted = await c.call("maestro_handoff_emit", {
+      task_id: taskId,
+      trigger_verb: "task:claim",
+    });
+    const id = (emitted.body as { envelope: { id: string } }).envelope.id;
+
+    const first = await c.call("maestro_handoff_pickup", {
+      id,
+      picked_up_by: "agent-pickup",
+      note: "taking over",
+    });
+    const firstBody = first.body as {
+      envelope: { id: string };
+      pickup: { id: string; envelope_id: string; picked_up_by: string };
+    };
+    expect(firstBody.envelope.id).toBe(id);
+    expect(firstBody.pickup.envelope_id).toBe(id);
+    expect(firstBody.pickup.picked_up_by).toBe("agent-pickup");
+
+    const second = await c.call("maestro_handoff_pickup", {
+      id,
+      picked_up_by: "agent-pickup-2",
+    });
+    expect(second.payload.isError).toBe(true);
+    expect((second.body as { code: string }).code).toBe("HANDOFF_ALREADY_PICKED_UP");
+
+    // After pickup, default list excludes it; include_picked_up surfaces it.
+    const openList = await c.call("maestro_handoff_list", { task_id: taskId });
+    const openItems = (openList.body as { items: { id: string }[] }).items;
+    expect(openItems.some((i) => i.id === id)).toBe(false);
+
+    const allList = await c.call("maestro_handoff_list", {
+      task_id: taskId,
+      include_picked_up: true,
+    });
+    const allItems = (allList.body as { items: { id: string; picked_up: boolean }[] }).items;
+    const row = allItems.find((i) => i.id === id);
+    expect(row).toBeDefined();
+    expect(row?.picked_up).toBe(true);
+  });
+
   it("maestro_task_list filters by state", async () => {
     const c = client!;
     const specPath = await writeSpec(tmpDir, "state-filter", "State Filter");

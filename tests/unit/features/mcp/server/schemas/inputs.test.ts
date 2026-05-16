@@ -4,6 +4,10 @@ import {
   ContractShowInput,
   EvidenceListInput,
   EvidenceRecordInput,
+  HandoffEmitInput,
+  HandoffListInput,
+  HandoffPickupInput,
+  HandoffShowInput,
   PolicyCheckInput,
   TaskBlockInput,
   TaskClaimInput,
@@ -325,6 +329,114 @@ describe("PrinciplePromoteInput", () => {
 
   it("rejects empty correction_id", () => {
     expect(PrinciplePromoteInput.safeParse({ correction_id: "" }).success).toBe(false);
+  });
+});
+
+describe("HandoffListInput", () => {
+  it("accepts an empty payload (lists all open envelopes)", () => {
+    expect(HandoffListInput.safeParse({}).success).toBe(true);
+  });
+
+  it("accepts task_id, trigger_verb, include_picked_up filters together", () => {
+    expect(
+      HandoffListInput.safeParse({
+        task_id: "tsk-abc123",
+        trigger_verb: "task:block",
+        include_picked_up: true,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unknown trigger_verb", () => {
+    expect(
+      HandoffListInput.safeParse({ trigger_verb: "task:archive" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects unknown fields", () => {
+    expect(HandoffListInput.safeParse({ unknown: true }).success).toBe(false);
+  });
+});
+
+describe("HandoffShowInput", () => {
+  it("accepts a valid hnd-* id", () => {
+    expect(HandoffShowInput.safeParse({ id: "hnd-lp1abc-xy1234" }).success).toBe(true);
+  });
+
+  it("rejects a malformed handoff id", () => {
+    expect(HandoffShowInput.safeParse({ id: "handoff-1" }).success).toBe(false);
+    expect(HandoffShowInput.safeParse({ id: "hnd-ABC-XYZ" }).success).toBe(false);
+  });
+});
+
+describe("HandoffEmitInput", () => {
+  it("requires task_id and trigger_verb", () => {
+    expect(HandoffEmitInput.safeParse({}).success).toBe(false);
+  });
+
+  it("accepts a minimal task:claim emit", () => {
+    expect(
+      HandoffEmitInput.safeParse({
+        task_id: "tsk-abc123",
+        trigger_verb: "task:claim",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires reason when trigger_verb is task:block", () => {
+    const r = HandoffEmitInput.safeParse({
+      task_id: "tsk-abc123",
+      trigger_verb: "task:block",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.path).toEqual(["reason"]);
+    }
+  });
+
+  it("accepts task:block with reason", () => {
+    expect(
+      HandoffEmitInput.safeParse({
+        task_id: "tsk-abc123",
+        trigger_verb: "task:block",
+        reason: "missing creds",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects empty agent_id, worktree_path, spec_path, reason", () => {
+    expect(
+      HandoffEmitInput.safeParse({
+        task_id: "tsk-abc123",
+        trigger_verb: "task:claim",
+        agent_id: "",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("HandoffPickupInput", () => {
+  it("accepts a bare id", () => {
+    expect(HandoffPickupInput.safeParse({ id: "hnd-lp1abc-xy1234" }).success).toBe(true);
+  });
+
+  it("accepts picked_up_by and note", () => {
+    expect(
+      HandoffPickupInput.safeParse({
+        id: "hnd-lp1abc-xy1234",
+        picked_up_by: "agent-2",
+        note: "taking over",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects empty picked_up_by", () => {
+    expect(
+      HandoffPickupInput.safeParse({
+        id: "hnd-lp1abc-xy1234",
+        picked_up_by: "",
+      }).success,
+    ).toBe(false);
   });
 });
 

@@ -3,6 +3,7 @@ import type { EvidenceStorePort } from "@/repo/evidence-store.port.js";
 import type {
   HandoffEmitterPort,
   HandoffEnvelope,
+  HandoffPickup,
 } from "@/repo/handoff-emitter.port.js";
 import {
   TaskNotFoundError,
@@ -78,6 +79,7 @@ function makeHandoffEmitter(): {
   emitted: HandoffEnvelope[];
 } {
   const emitted: HandoffEnvelope[] = [];
+  const pickups = new Map<string, HandoffPickup>();
   return {
     emitted,
     emitter: {
@@ -89,6 +91,15 @@ function makeHandoffEmitter(): {
       },
       async get(id) {
         return emitted.find((e) => e.id === id);
+      },
+      async markPickedUp(envelopeId, pickup) {
+        if (pickups.has(envelopeId)) {
+          throw new Error("EEXIST");
+        }
+        pickups.set(envelopeId, pickup);
+      },
+      async getPickup(envelopeId) {
+        return pickups.get(envelopeId);
       },
     },
   };

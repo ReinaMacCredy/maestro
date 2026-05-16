@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HANDOFF_TRIGGERS } from "@/repo/handoff-emitter.port.js";
 import { PROJECTION_VIEWS } from "@/shared/lib/projection.js";
 import { TASK_STATES } from "@/types/task-state.js";
 
@@ -23,6 +24,15 @@ const evidenceId = z
   .string()
   .regex(/^evd-\d{13}-[0-9a-f]{6}$/, "Invalid evidence id")
   .describe("A maestro evidence id like 'evd-1714747200123-a1b2c3'.");
+const handoffId = z
+  .string()
+  .regex(/^hnd-[a-z0-9]+-[a-z0-9]+$/, "Invalid handoff id")
+  .describe("A maestro handoff envelope id like 'hnd-lp1abc-xy1234'.");
+const handoffTrigger = z
+  .enum(HANDOFF_TRIGGERS)
+  .describe(
+    "Lifecycle verb that prompted the handoff: task:claim, task:block, task:abandon, task:ship, task:verify.",
+  );
 // v2 task state enum. Replaces v1 status (pending|in_progress|completed).
 const taskState = z
   .enum(TASK_STATES)
@@ -295,4 +305,82 @@ export const SetupMigrateV2Input = z
   })
   .strict();
 
-export { taskId, planId, verdictId, evidenceId };
+export const HandoffListInput = z
+  .object({
+    task_id: taskId.optional(),
+    trigger_verb: handoffTrigger.optional(),
+    include_picked_up: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, surfaces envelopes that already have a pickup sidecar. Defaults to false (open work only).",
+      ),
+    limit,
+    offset,
+    view,
+  })
+  .strict();
+
+export const HandoffShowInput = z
+  .object({
+    id: handoffId,
+  })
+  .strict();
+
+export const HandoffEmitShape = {
+  task_id: taskId,
+  trigger_verb: handoffTrigger,
+  agent_id: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Agent identifier recorded on the envelope. Defaults to MCP session id when omitted.",
+    ),
+  worktree_path: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Absolute or repo-root-relative worktree path the receiver should enter."),
+  spec_path: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Spec markdown the receiver should load first."),
+  reason: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Required when trigger_verb is 'task:block'. Free-text reason recorded on the envelope.",
+    ),
+} as const;
+
+export const HandoffEmitInput = z
+  .object(HandoffEmitShape)
+  .strict()
+  .refine(
+    (d) => d.trigger_verb !== "task:block" || d.reason !== undefined,
+    {
+      message: "reason is required when trigger_verb is 'task:block'",
+      path: ["reason"],
+    },
+  );
+
+export const HandoffPickupInput = z
+  .object({
+    id: handoffId,
+    picked_up_by: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Identifier of the agent picking up the handoff. Defaults to MCP session id."),
+    note: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Optional free-text note recorded on the pickup sidecar."),
+  })
+  .strict();
+
+export { taskId, planId, verdictId, evidenceId, handoffId };

@@ -2,11 +2,13 @@ import { describe, expect, it } from "bun:test";
 import type {
   HandoffEmitterPort,
   HandoffEnvelope,
+  HandoffPickup,
 } from "@/repo/handoff-emitter.port.js";
 import { emitHandoff } from "@/service/emit-handoff.js";
 
 function makeEmitter(): { emitter: HandoffEmitterPort; emitted: HandoffEnvelope[] } {
   const emitted: HandoffEnvelope[] = [];
+  const pickups = new Map<string, HandoffPickup>();
   return {
     emitted,
     emitter: {
@@ -18,6 +20,15 @@ function makeEmitter(): { emitter: HandoffEmitterPort; emitted: HandoffEnvelope[
       },
       async get(id) {
         return emitted.find((e) => e.id === id);
+      },
+      async markPickedUp(envelopeId, pickup) {
+        if (pickups.has(envelopeId)) {
+          throw new Error("EEXIST");
+        }
+        pickups.set(envelopeId, pickup);
+      },
+      async getPickup(envelopeId) {
+        return pickups.get(envelopeId);
       },
     },
   };

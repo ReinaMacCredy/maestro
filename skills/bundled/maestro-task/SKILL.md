@@ -1,6 +1,6 @@
 ---
 name: maestro-task
-description: Use at the start of any multi-step work in a maestro-initialized project, and throughout task execution. Claim one task at a time, iterate through the verify → block / ship loop, and emit a handoff at every transition. Auto-invokes whenever a `.maestro/` directory is present in the current working tree or an ancestor.
+description: Use at the start of any multi-step work in a maestro-initialized project, and throughout task execution. Claim one task at a time, iterate through the verify → block / ship loop. `claim` and `block` automatically emit a handoff envelope to `.maestro/handoffs/<hnd-...>.json`; see `maestro-handoff` for the read side. Auto-invokes whenever a `.maestro/` directory is present in the current working tree or an ancestor.
 ---
 
 # Maestro Task
@@ -27,7 +27,7 @@ Do not activate for one-liner edits or read-only questions.
 
 1. **One task at a time** unless the user explicitly directs otherwise.
 2. **Every spec is authored through `maestro-design`** — do not write spec markdown by hand without grilling.
-3. **Every state transition emits a handoff** to `.maestro/handoffs/<id>.json`. This is automatic; do not invent parallel handoff files.
+3. **`claim` and `block` emit a handoff envelope** to `.maestro/handoffs/<hnd-...>.json`. This is automatic; do not invent parallel handoff files. `ship`, `verify`, and `abandon` do not emit yet.
 4. **Blockers carry a `--reason`.** Same for abandon and `verify --verdict {human,block}`.
 5. **Heavy-mode specs do not flow through this skill.** They go to `maestro-plan`.
 
@@ -90,7 +90,7 @@ maestro block    <id> --reason "missing-credentials"
 maestro abandon  <id> --reason "out-of-scope after grill"
 ```
 
-Both transitions emit an evidence row, an observability row, and a handoff envelope.
+Both transitions emit an evidence row and an observability row. `block` also emits a handoff envelope; `abandon` does not.
 
 ### 6. Ship
 
@@ -175,7 +175,8 @@ The MCP tool surface mirrors the CLI:
 | `maestro_evidence_record`, `maestro_evidence_list` | `maestro evidence record`, `maestro evidence list` |
 | `maestro_contract_show`, `maestro_contract_amend` | `maestro contract show`, `maestro contract amend` |
 | `maestro_verdict_show`, `maestro_verdict_request` | `maestro verdict show`, `maestro verdict request` |
-| `maestro_handoff_list`, `maestro_handoff_show`, `maestro_handoff_pickup`, `maestro_handoff_open_for_task` | `.maestro/handoffs/*.json` (read directly) |
+| `maestro_handoff_list`, `maestro_handoff_show` | `.maestro/handoffs/*.json` (read directly; see `maestro-handoff`) |
+| `maestro_handoff_emit`, `maestro_handoff_pickup` | emit envelope outside lifecycle / mark picked up (see `maestro-handoff`) |
 
 `maestro_task_list` accepts `plan_id` to filter to a plan's children. The MCP schema is strict — unknown fields fail rather than getting silently dropped.
 
