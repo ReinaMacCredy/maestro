@@ -19,7 +19,7 @@ Maestro v2 has eight **knowledge primitives** (directories the agent reads at se
 | `product-specs` | `.maestro/specs/<slug>.md`                       | Feature specifications with acceptance criteria + non-goals + work-type.       |
 | `references`    | `docs/references/`                               | LLM-targeted condensations of upstream library docs.                           |
 | `generated`     | `docs/generated/`                                | Auto-generated reference docs (wire contracts, schema dumps).                  |
-| `architecture`  | `docs/architecture.yaml` + `src/v2/service/architecture-lint.service.ts` | Mechanically-enforced layering and dependency rules. |
+| `architecture`  | `docs/architecture.yaml` + `src/service/architecture-lint.service.ts` | Mechanically-enforced layering and dependency rules. |
 | `quality-score` | `.maestro/quality-score.json` (`gc grade`)       | Per-domain grade tracking gaps over time.                                      |
 | `principles`    | `docs/principles/*.md`                           | Named golden rules with `Rule | Rationale | Scan Command | Fix Recipe`.        |
 
@@ -40,66 +40,66 @@ The agent reads these; maestro writes them only on explicit verbs (`spec new`, `
 
 ### `product-specs`
 
-- `src/v2/repo/spec-store.port.ts` — port + types (mode, work_type, acceptance criteria, non-goals).
-- `src/v2/repo/fs-spec-store.adapter.ts` — filesystem reader with frontmatter parsing.
-- `src/v2/service/spec-new.usecase.ts`, `spec-validate.usecase.ts` — author + lint.
-- `src/v2/runtime/spec.command.ts` — `maestro spec new`, `maestro spec validate`.
+- `src/repo/spec-store.port.ts` — port + types (mode, work_type, acceptance criteria, non-goals).
+- `src/repo/fs-spec-store.adapter.ts` — filesystem reader with frontmatter parsing.
+- `src/service/spec-new.usecase.ts`, `spec-validate.usecase.ts` — author + lint.
+- `src/runtime/spec.command.ts` — `maestro spec new`, `maestro spec validate`.
 - Authored interactively via the `maestro-design` SKILL.md grill protocol (ADR-0016).
 
 ### `exec-plans`
 
-- `src/v2/types/exec-plan.ts`, `exec-plan-state.ts` — state machine `intake → specified → planned → in-progress → completed | cancelled` (ADR-0011).
-- `src/v2/repo/exec-plan-store.port.ts`, `jsonl-exec-plan-store.adapter.ts` — append-only log at `.maestro/plans/plans.v2.jsonl`.
-- `src/v2/service/plan-from-spec.usecase.ts`, `plan-show.usecase.ts`, `plan-decompose.usecase.ts`, `try-advance-plan.usecase.ts` — verbs + auto-advance helper.
-- `src/v2/runtime/plan.command.ts` — `maestro plan from-spec | decompose | show`.
+- `src/types/exec-plan.ts`, `exec-plan-state.ts` — state machine `intake → specified → planned → in-progress → completed | cancelled` (ADR-0011).
+- `src/repo/exec-plan-store.port.ts`, `jsonl-exec-plan-store.adapter.ts` — append-only log at `.maestro/plans/plans.jsonl`.
+- `src/service/plan-from-spec.usecase.ts`, `plan-show.usecase.ts`, `plan-decompose.usecase.ts`, `try-advance-plan.usecase.ts` — verbs + auto-advance helper.
+- `src/runtime/plan.command.ts` — `maestro plan from-spec | decompose | show`.
 
 ### `principles`
 
-- `src/v2/types/principle.ts`, `principles-schema.port.ts` — schema for the 4-section principle markdown.
-- `src/v2/repo/fs-principles.adapter.ts` — filesystem reader for `docs/principles/*.md`.
-- `src/v2/service/principles-scan.usecase.ts` — runs each rule's `Scan Command` ripgrep and reports violations.
-- `src/v2/service/principle-promote.usecase.ts` — materialize a principle from a lint-violation evidence row.
-- `src/v2/service/default-principles.ts` — 4 default principle bodies embedded as TypeScript constants for `setup migrate-v2` seeding.
-- `src/v2/runtime/principle.command.ts` — `maestro principle promote`.
+- `src/types/principle.ts`, `principles-schema.port.ts` — schema for the 4-section principle markdown.
+- `src/repo/fs-principles.adapter.ts` — filesystem reader for `docs/principles/*.md`.
+- `src/service/principles-scan.usecase.ts` — runs each rule's `Scan Command` ripgrep and reports violations.
+- `src/service/principle-promote.usecase.ts` — materialize a principle from a lint-violation evidence row.
+- `src/service/default-principles.ts` — 4 default principle bodies embedded as TypeScript constants for `setup migrate-v2` seeding.
+- `src/runtime/principle.command.ts` — `maestro principle promote`.
 
 ### `architecture`
 
-- `src/v2/service/architecture-lint.service.ts` — file-scan rules (`forward-only-layers`, `no-cross-feature-deep-imports`, `no-runner-inversion`, others).
+- `src/service/architecture-lint.service.ts` — file-scan rules (`forward-only-layers`, `no-cross-feature-deep-imports`, `no-runner-inversion`, others).
 - Wired into `task verify` as one of the architecture checks.
 
 ### `task` (lifecycle)
 
-- `src/v2/types/task.ts`, `task-state.ts` — state machine `draft → claimed → doing ↔ verifying ↔ blocked → ready → shipped | abandoned` (ADR-0003).
-- `src/v2/repo/task-store.port.ts`, `jsonl-task-store.adapter.ts` — append-only log at `.maestro/tasks/tasks.v2.jsonl`.
-- `src/v2/service/task-{from-spec,claim,block,abandon,ship,verify}.usecase.ts` — the six lifecycle verbs.
-- `src/v2/service/emit-transition-evidence.ts` — shared transition-evidence emitter (single emit point, mirrored into observability + handoff).
-- `src/v2/runtime/task.command.ts` — `maestro task *` + hot-path aliases `claim | verify | block | abandon | ship`.
+- `src/types/task.ts`, `task-state.ts` — state machine `draft → claimed → doing ↔ verifying ↔ blocked → ready → shipped | abandoned` (ADR-0003).
+- `src/repo/task-store.port.ts`, `jsonl-task-store.adapter.ts` — append-only log at `.maestro/tasks/tasks.jsonl`.
+- `src/service/task-{from-spec,claim,block,abandon,ship,verify}.usecase.ts` — the six lifecycle verbs.
+- `src/service/emit-transition-evidence.ts` — shared transition-evidence emitter (single emit point, mirrored into observability + handoff).
+- `src/runtime/task.command.ts` — `maestro task *` + hot-path aliases `claim | verify | block | abandon | ship`.
 
 ### `worktree`
 
-- `src/v2/repo/worktree-store.port.ts` — port + record shape (`task_id`, `slug`, `path`, `branch`, `base_branch`, `created_at`).
-- `src/v2/repo/git-worktree-store.adapter.ts` — runs `git worktree add -b <branch> <path> <base>` via `ProcessRunnerPort`. State persists at `.maestro/worktrees/<task-id>.json` on the primary repo (PD-3 / ADR-0008).
+- `src/repo/worktree-store.port.ts` — port + record shape (`task_id`, `slug`, `path`, `branch`, `base_branch`, `created_at`).
+- `src/repo/git-worktree-store.adapter.ts` — runs `git worktree add -b <branch> <path> <base>` via `ProcessRunnerPort`. State persists at `.maestro/worktrees/<task-id>.json` on the primary repo (PD-3 / ADR-0008).
 - `task claim` auto-creates a worktree when the spec is `mode: heavy`; `--skip-worktree` opts out. Failures are logged but never block the claim.
 
 ### `handoff`
 
-- `src/v2/repo/handoff-emitter.port.ts` — write-only port; triggers are the lifecycle verbs (`task:claim | task:block | task:abandon | task:ship | task:verify`).
-- `src/v2/repo/fs-handoff-emitter.adapter.ts` — writes one JSON envelope per emission to `.maestro/handoffs/<id>.json`.
-- `src/v2/service/emit-handoff.ts` — stamps id + timestamp + trigger verb; omits optional fields when undefined; no-op when the emitter is not wired.
+- `src/repo/handoff-emitter.port.ts` — write-only port; triggers are the lifecycle verbs (`task:claim | task:block | task:abandon | task:ship | task:verify`).
+- `src/repo/fs-handoff-emitter.adapter.ts` — writes one JSON envelope per emission to `.maestro/handoffs/<id>.json`.
+- `src/service/emit-handoff.ts` — stamps id + timestamp + trigger verb; omits optional fields when undefined; no-op when the emitter is not wired.
 - Every lifecycle verb calls `emitHandoff` after the state transition lands, so the next agent session can replay context from a single envelope file.
 
 ### Observability (per-task)
 
-- `src/v2/repo/observability.port.ts` — write-only port: `emit({task_id, kind, timestamp, payload})`.
-- `src/v2/repo/jsonl-observability.adapter.ts` — writes `.maestro/runs/<task-id>/observability.jsonl`.
+- `src/repo/observability.port.ts` — write-only port: `emit({task_id, kind, timestamp, payload})`.
+- `src/repo/jsonl-observability.adapter.ts` — writes `.maestro/runs/<task-id>/observability.jsonl`.
 - `emit-transition-evidence.ts` mirrors every transition into the observability log in addition to the evidence log; the two logs are eventually-consistent without coupling. Option C from the master plan (minimal log-only default) is the locked Phase 3 scope.
 
 ### Setup + migration
 
-- `src/v2/service/setup-check.usecase.ts` — audits the five v2 directories, principles pack, and config.
-- `src/v2/service/setup-bootstrap.usecase.ts` — idempotent dir creation with `.gitkeep`.
-- `src/v2/service/migrate-v2.usecase.ts` + `migrate-v2-steps.ts` — 11-step v1→v2 migration.
-- `src/v2/runtime/setup.command.ts` — `maestro setup check | bootstrap | migrate-v2 | migrate-corrections`.
+- `src/service/setup-check.usecase.ts` — audits the five v2 directories, principles pack, and config.
+- `src/service/setup-bootstrap.usecase.ts` — idempotent dir creation with `.gitkeep`.
+- `src/service/migrate-v2.usecase.ts` + `migrate-v2-steps.ts` — 11-step v1→v2 migration.
+- `src/runtime/setup.command.ts` — `maestro setup check | bootstrap | migrate-v2 | migrate-corrections`.
 
 ### Loop primitive
 
@@ -126,7 +126,7 @@ Maestro deliberately is **not**:
 - **An LLM client.** Maestro never makes model API calls; agents do, and call maestro verbs in between.
 - **A background process.** No watcher, no filesystem poller, no long-lived state machine.
 
-The structural guarantee is the `no-runner-inversion` rule in `src/v2/service/architecture-lint.service.ts`: maestro code may not invoke schedulers or spin up persistent loops. The lint enforces it at `error` severity.
+The structural guarantee is the `no-runner-inversion` rule in `src/service/architecture-lint.service.ts`: maestro code may not invoke schedulers or spin up persistent loops. The lint enforces it at `error` severity.
 
 ---
 
@@ -141,8 +141,7 @@ Three v1 feature dirs disappear because their job is now done by knowledge primi
 ## Where to read next
 
 - Verb surface: `docs/cli-reference.md`
-- Master plan: `docs/v2-master-plan.md`
-- Decision register: `docs/adr/0001..0017`
+- Decision register: `docs/adr/`
 - Witness ladder: `docs/witness-levels.md`
 - Risk derivation: `docs/risk-class-derivation.md`
 - Policy format: `docs/policy-format.md`

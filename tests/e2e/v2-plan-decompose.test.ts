@@ -76,14 +76,14 @@ describe("maestro plan decompose (v2)", () => {
     expect(result.stdout).toMatch(/tsk-\S+ draft second/);
     expect(result.stdout).toMatch(/tsk-\S+ draft third/);
 
-    const planText = await readFile(join(tmpDir, ".maestro/plans/plans.v2.jsonl"), "utf8");
+    const planText = await readFile(join(tmpDir, ".maestro/plans/plans.jsonl"), "utf8");
     const planLines = planText.trim().split("\n");
     expect(planLines.length).toBe(1);
     const plan = JSON.parse(planLines[0]!) as { state: string; id: string };
     expect(plan.id).toBe(planId);
     expect(plan.state).toBe("planned");
 
-    const taskText = await readFile(join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+    const taskText = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
     const taskLines = taskText.trim().split("\n");
     expect(taskLines.length).toBe(3);
     const tasks = taskLines.map((l) => JSON.parse(l) as { plan_id?: string; slug: string });

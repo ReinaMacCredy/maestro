@@ -1,4 +1,4 @@
-import type { TrustFinding } from "@/v2/types/trust.js";
+import type { TrustFinding } from "@/types/trust.js";
 
 // Known credential patterns — each match is severity "error".
 const KNOWN_SECRET_PATTERNS: Array<{ name: string; re: RegExp }> = [

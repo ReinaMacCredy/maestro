@@ -1,7 +1,7 @@
 import { GitSignatureAdapter } from "./adapters/git-signature.adapter.js";
 import { runTrustVerifier } from "./trust-verifier.js";
 import type { TrustVerifierInput, TrustVerifierDeps } from "./trust-verifier.js";
-import type { TrustVerifierResult } from "@/v2/types/trust.js";
+import type { TrustVerifierResult } from "@/types/trust.js";
 
 export interface VerifyServices {
   readonly runTrustVerifier: (

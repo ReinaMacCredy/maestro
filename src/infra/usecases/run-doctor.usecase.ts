@@ -4,7 +4,7 @@ import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
 import { listIgnoredProjectConfigKeys } from "@/tui/shared/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
-import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "@/features/handoff";
+import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "./count-legacy-handoff-files.usecase.js";
 
 /**
  * Phase 1 strip: CASS and agent-transport checks were removed. The

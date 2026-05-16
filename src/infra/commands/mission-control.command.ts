@@ -134,7 +134,6 @@ export function registerMissionControlCommand(
           checkpointStore: services.checkpointStore,
           config: services.config,
           git: services.git,
-          handoffStore: services.handoffStore,
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
           replyStore: services.replyStore,

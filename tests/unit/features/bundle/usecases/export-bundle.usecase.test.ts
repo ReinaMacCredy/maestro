@@ -20,7 +20,6 @@ import type {
   MissionStorePort,
 } from "@/shared/domain/legacy-mission";
 import { buildMissions } from "@/shared/domain/legacy-mission";
-import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort, AgentReply } from "@/features/reply";
 
 const MISSION_ID = "2026-04-15-001";
@@ -103,23 +102,13 @@ const replyStore: ReplyStorePort = {
   async markIngested() { /* noop */ },
 };
 
-const handoffStore: HandoffStorePort = {
-  async create(): Promise<HandoffRecord> { throw new Error("nope"); },
-  async update(record) { return record; },
-  async consume(): Promise<HandoffRecord> { throw new Error("nope"); },
-  async get() { return undefined; },
-  async list() { return []; },
-  async listOpenForTask() { return []; },
-  resolveArtifactPath(relativePath: string) { return join(projectDir, relativePath); },
-};
-
 const missions = buildMissions(missionStore, featureStore, assertionStore, checkpointStore);
 
 describe("exportBundle", () => {
   it("writes a manifest with schema v1 and the current maestro version", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missions, replyStore, handoffStore, archive },
+      { missions, replyStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,
@@ -142,7 +131,7 @@ describe("exportBundle", () => {
   it("resolves --out to an absolute path", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missions, replyStore, handoffStore, archive },
+      { missions, replyStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,
@@ -157,7 +146,7 @@ describe("exportBundle", () => {
   it("falls back to a timestamped default output name", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missions, replyStore, handoffStore, archive },
+      { missions, replyStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,

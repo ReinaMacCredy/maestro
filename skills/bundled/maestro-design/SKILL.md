@@ -71,7 +71,7 @@ When the user uses a defined term in a new way, stop and name the conflict:
 
 When the user states how something works, verify against the code:
 
-> "You said `task verify` re-runs all lints. The code in `src/v2/service/task-verify.usecase.ts` only runs architecture lints. Did you mean that, or do you want to broaden the verifier?"
+> "You said `task verify` re-runs all lints. The code in `src/service/task-verify.usecase.ts` only runs architecture lints. Did you mean that, or do you want to broaden the verifier?"
 
 Surface contradictions in the next turn. Don't hide confusion behind plausible spec language.
 
@@ -100,7 +100,7 @@ Slug rules:
 - kebab-case derived from the spec subject (2–4 words).
 - If `.maestro/specs/<slug>.md` already exists, append a numeric suffix (`<slug>-2.md`).
 
-Example frontmatter (refer to `src/v2/types/product-spec.ts` for the authoritative shape):
+Example frontmatter (refer to `src/types/product-spec.ts` for the authoritative shape):
 
 ```markdown
 ---

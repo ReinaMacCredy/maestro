@@ -1,6 +1,6 @@
-import type { Contract } from "@/v2/types/contract.js";
+import type { Contract } from "@/types/contract.js";
 import type { GitSignatureProbePort } from "./ports/git-signature.port.js";
-import type { TrustFinding, TrustVerifierResult } from "@/v2/types/trust.js";
+import type { TrustFinding, TrustVerifierResult } from "@/types/trust.js";
 import { checkScope } from "./checks/check-scope.js";
 import { checkLockfileParity } from "./checks/check-lockfile-parity.js";
 import { checkGeneratedFileParity } from "./checks/check-generated-file-parity.js";

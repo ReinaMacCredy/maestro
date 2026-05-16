@@ -45,7 +45,7 @@ Track consecutive verify failures on the active task. After each verify attempt:
   then write the exit sentinel with status `pass`.
 - Exit code 1 (FAIL): increment failure counter. If counter reaches 3 with no
   task state change between runs (check the `state` field of the task in
-  `.maestro/tasks/tasks.v2.jsonl`), write sentinel with status `fail-budget`
+  `.maestro/tasks/tasks.jsonl`), write sentinel with status `fail-budget`
   and stop.
 
 After 20 minutes of wall-clock time, write sentinel with status `timeout` and

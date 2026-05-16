@@ -26,15 +26,21 @@ cross_cutting:
   # docs/adr/0017-cross-cutting-import-semantics.md for the rationale.
   - providers
 
-# Globs (relative to repo root) that scope lint application. Phase 1 ships v2
-# only; v1 legitimately uses forbidden_patterns (setInterval, setTimeout) in
-# CLI spinners and fs-lock polling. Phase 4 broadens this to "src/**" after v1
-# is excised.
+# Globs (relative to repo root) that scope lint application. Lint runs only
+# against the layered sub-tree (config/providers/repo/runtime/service/types/ui);
+# other src/ directories (features/, infra/, shared/, tui/) follow legacy
+# conventions and are not subject to forward-only layer order.
 lint_scope:
-  - "src/v2/**/*.ts"
+  - "src/config/**/*.ts"
+  - "src/providers/**/*.ts"
+  - "src/repo/**/*.ts"
+  - "src/runtime/**/*.ts"
+  - "src/service/**/*.ts"
+  - "src/types/**/*.ts"
+  - "src/ui/**/*.ts"
 
 passive_harness:
-  # Patterns that must not appear in production v2 src code (tests/scripts exempt).
+  # Patterns that must not appear in production layered src code (tests/scripts exempt).
   # Enforces the "no daemon, no scheduler, no LLM call inside maestro" invariant.
   forbidden_patterns:
     - setInterval

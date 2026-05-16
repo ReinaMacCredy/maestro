@@ -65,7 +65,7 @@ After the intentional FAIL in message 3:
   with status `pass`.
 - If re-verify exits 1 (FAIL) again: this is an unexpected failure. Attempt to
   fix. If 3 consecutive FAILs occur with no state change (check the task
-  `state` field in `.maestro/tasks/tasks.v2.jsonl`), write sentinel with status
+  `state` field in `.maestro/tasks/tasks.jsonl`), write sentinel with status
   `fail-budget` and stop.
 
 After 20 minutes of wall-clock time, write sentinel with status `timeout` and

@@ -1,6 +1,6 @@
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
-import type { TrustFinding } from "@/v2/types/trust.js";
+import type { TrustFinding } from "@/types/trust.js";
 
 /**
  * Loads globs from `.maestro/policies/sensitive-paths.yaml` and emits a

@@ -1,4 +1,4 @@
-import type { RiskClass } from "@/v2/types/product-spec.js";
+import type { RiskClass } from "@/types/product-spec.js";
 
 export const RISK_CLASS_ORDER: readonly RiskClass[] = ["low", "medium", "high", "critical"];
 

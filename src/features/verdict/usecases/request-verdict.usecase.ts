@@ -1,11 +1,11 @@
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { ContractStoreQueryPort, ContractVersionStorePort } from "@/v2/repo/contract-store.port.js";
-import type { RunStateStorePort } from "@/v2/repo/run-state-store.port.js";
-import { checkCostBudget } from "@/v2/service/check-cost-budget.js";
-import { readCurrentContractWithBackfill, readDraftContract } from "@/v2/service/contract-helpers.js";
+import type { ContractStoreQueryPort, ContractVersionStorePort } from "@/repo/contract-store.port.js";
+import type { RunStateStorePort } from "@/repo/run-state-store.port.js";
+import { checkCostBudget } from "@/service/check-cost-budget.js";
+import { readCurrentContractWithBackfill, readDraftContract } from "@/service/contract-helpers.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
-import type { GitAnchorPort } from "@/v2/repo/git-anchor.port.js";
+import type { GitAnchorPort } from "@/repo/git-anchor.port.js";
 import type { PolicyServices } from "@/features/policy/services.js";
 import type { RiskServices } from "@/features/risk/services.js";
 import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";

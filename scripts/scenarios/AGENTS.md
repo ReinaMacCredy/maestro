@@ -71,7 +71,7 @@ bun scripts/scenarios/check.ts <name> <sandbox-dir>
 When a check fails, identify which category applies:
 
 **A - Maestro bug.** The evidence trail shows maestro did not produce the
-expected transition or emitted the wrong state. Fix in `src/v2/`. Most common.
+expected transition or emitted the wrong state. Fix in `src/`. Most common.
 
 **B - Rubric bug.** The predicate is wrong (e.g., wrong field name, wrong
 `to_state` value). Fix in `tests/scenarios/<name>/rubric.ts`. Re-run

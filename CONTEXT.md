@@ -7,7 +7,7 @@ The local-first harness OS for agent-generated codebases. Substrate that LLM cod
 ### Knowledge primitives (directories the agent reads)
 
 **design-docs**:
-Strategic / architectural documents that capture vision and core beliefs. Human-written, agent-read, with one carved-out exception: the `design-docs/learnings/` subdirectory is agent-writable so verify-FAIL evidence and migrated v1 memory entries can land as durable learnings (ADR-0015). The rest of `design-docs/` stays human-owned.
+Strategic / architectural documents that capture vision and core beliefs. Human-written, agent-read, with one carved-out exception: the `design-docs/learnings/` subdirectory is agent-writable so verify-FAIL evidence and migrated legacy memory entries can land as durable learnings. The rest of `design-docs/` stays human-owned.
 _Avoid_: brainstorm, notes
 
 **exec-plans**:
@@ -57,13 +57,13 @@ Artifact emitted at cross-session state transitions, carrying context for the ne
 _Avoid_: context-dump, session-state
 
 **grill**:
-The interview protocol `maestro-design` and `maestro-plan` skills run (ADR-0016): one question at a time, recommended answer per question, challenges language against CONTEXT.md, updates the glossary inline as terms resolve, offers ADRs sparingly. No dedicated verb; entering the design or plan skill runs the grill.
+The interview protocol `maestro-design` and `maestro-plan` skills run: one question at a time, recommended answer per question, challenges language against CONTEXT.md, updates the glossary inline as terms resolve, offers ADRs sparingly. No dedicated verb; entering the design or plan skill runs the grill.
 _Avoid_: interview, Q&A, drill
 
 ### Verification
 
 **scenario test**:
-End-to-end test where two sub-agents (user-mock + coding-agent) drive maestro through the full user -> coding-agent -> maestro -> PR cycle, scored against a rubric of must-happen and must-not-happen events on the evidence trail. Eight scenarios cover project × familiarity × workflow. Real LLM, scheduled nightly + on release-tag commits. See ADR-0019.
+End-to-end test where two sub-agents (user-mock + coding-agent) drive maestro through the full user -> coding-agent -> maestro -> PR cycle, scored against a rubric of must-happen and must-not-happen events on the evidence trail. Eight scenarios cover project × familiarity × workflow. Real LLM, scheduled nightly + on release-tag commits.
 _Avoid_: integration test, behavior test, smoke test
 
 **familiarity tier**:

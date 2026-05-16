@@ -1,7 +1,7 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import type { GitPort } from "../ports/git.port.js";
 import type { StatusReport } from "@/infra/domain/status-types.js";
-import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "@/features/handoff";
+import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "./count-legacy-handoff-files.usecase.js";
 
 export async function checkStatus(
   config: ConfigPort,

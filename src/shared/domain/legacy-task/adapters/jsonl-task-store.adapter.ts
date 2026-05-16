@@ -74,7 +74,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 
   private tasksPath(): string {
-    return join(this.tasksDir(), "tasks.jsonl");
+    return join(this.tasksDir(), "tasks-legacy.jsonl");
   }
 
   private batchesDir(): string {

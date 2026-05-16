@@ -17,7 +17,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { chmod, lstat, readdir, rm } from "node:fs/promises";
-import { DEFAULT_PRINCIPLES } from "@/v2/service/default-principles.js";
+import { DEFAULT_PRINCIPLES } from "@/service/default-principles.js";
 
 const RUNTIME_GITIGNORE_COMMENT = "# Maestro runtime state";
 const RUNTIME_GITIGNORE_LINES = [

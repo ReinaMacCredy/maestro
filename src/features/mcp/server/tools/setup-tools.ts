@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { setupCheck, migrateV2 } from "@/v2/service/index.js";
+import { setupCheck, migrateV2 } from "@/service/index.js";
 import { fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { SetupCheckInput, SetupMigrateV2Input } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";

@@ -14,7 +14,7 @@ import type { GithubApiPort } from "@/features/ci/ports/github-api.port.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { RiskServices } from "@/features/risk/services.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
-import type { Contract } from "@/v2/types/contract.js";
+import type { Contract } from "@/types/contract.js";
 import { mockContractStore } from "../../../../helpers/mocks.js";
 
 // ─── Console capture ──────────────────────────────────────────────────────────

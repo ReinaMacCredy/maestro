@@ -317,7 +317,7 @@ function shouldIgnoreContractPath(path: string, source: TouchedFileSource): bool
 
 function isAlwaysIgnoredContractRuntimePath(path: string): boolean {
   const normalized = normalizeSlashes(path);
-  return normalized === ".maestro/tasks/tasks.jsonl"
+  return normalized === ".maestro/tasks/tasks-legacy.jsonl"
     || normalized === ".maestro/tasks/NOW.md"
     || normalized === ".maestro/tasks/.tasks.lock"
     || normalized.startsWith(".maestro/tasks/continuations/")

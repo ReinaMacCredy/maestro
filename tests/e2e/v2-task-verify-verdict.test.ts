@@ -21,7 +21,7 @@ layers:
 cross_cutting:
   - providers
 lint_scope:
-  - "src/v2/**/*.ts"
+  - "src/service/**/*.ts"
 passive_harness:
   forbidden_patterns:
     - setInterval
@@ -63,12 +63,12 @@ async function readEvidenceRows(dir: string): Promise<readonly Record<string, un
 }
 
 async function readTaskState(dir: string, taskId: string): Promise<string> {
-  const text = await readFile(join(dir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+  const text = await readFile(join(dir, ".maestro/tasks/tasks.jsonl"), "utf8");
   for (const line of text.trim().split("\n")) {
     const t = JSON.parse(line) as { id: string; state: string };
     if (t.id === taskId) return t.state;
   }
-  throw new Error(`task ${taskId} not in tasks.v2.jsonl`);
+  throw new Error(`task ${taskId} not in tasks.jsonl`);
 }
 
 let slugSeq = 0;

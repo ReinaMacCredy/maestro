@@ -1,4 +1,4 @@
-import type { TrustFinding } from "@/v2/types/trust.js";
+import type { TrustFinding } from "@/types/trust.js";
 
 /**
  * Surfaces a warn finding when the diff between base and head is empty.

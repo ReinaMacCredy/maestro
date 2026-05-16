@@ -52,7 +52,7 @@ describe("maestro plan from-spec + plan show (v2)", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/^pln-\S+ specified \(demo-heavy\)$/m);
 
-    const text = await readFile(join(tmpDir, ".maestro/plans/plans.v2.jsonl"), "utf8");
+    const text = await readFile(join(tmpDir, ".maestro/plans/plans.jsonl"), "utf8");
     const lines = text.trim().split("\n");
     expect(lines.length).toBe(1);
     const plan = JSON.parse(lines[0]) as { state: string; slug: string };

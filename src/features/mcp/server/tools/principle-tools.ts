@@ -3,7 +3,7 @@ import {
   principlePromote,
   CorrectionNotFoundError,
   CorrectionNotLintViolationError,
-} from "@/v2/service/index.js";
+} from "@/service/index.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import {
   PrinciplePromoteInput,

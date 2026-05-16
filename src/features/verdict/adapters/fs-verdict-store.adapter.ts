@@ -13,7 +13,7 @@ import { readdir } from "node:fs/promises";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
-import { ANY_TASK_ID_PATTERN as TASK_ID_PATTERN } from "@/v2/types/task.js";
+import { ANY_TASK_ID_PATTERN as TASK_ID_PATTERN } from "@/types/task.js";
 import { VERDICT_ID_PATTERN } from "../domain/verdict-id.js";
 import type { Verdict } from "../domain/types.js";
 import type { VerdictStorePort } from "../ports/storage.js";

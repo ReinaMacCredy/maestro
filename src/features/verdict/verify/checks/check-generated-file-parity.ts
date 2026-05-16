@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { readText } from "@/shared/lib/fs.js";
-import type { TrustFinding } from "@/v2/types/trust.js";
+import type { TrustFinding } from "@/types/trust.js";
 
 // Detects sync:* scripts in package.json. Advisory only: lists the detected
 // generators so reviewers can verify outputs were regenerated before the diff.

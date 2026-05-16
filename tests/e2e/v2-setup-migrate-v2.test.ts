@@ -103,9 +103,9 @@ describe("maestro setup migrate-v2", () => {
     const result = await runCompiled(["setup", "migrate-v2", "--json"], tmpDir);
     expect(result.exitCode).toBe(0);
 
-    // tasks.v2.jsonl has 3 rows mirroring the v1 fixture
+    // tasks.jsonl has 3 rows mirroring the v1 fixture
     const tasks = await readFile(
-      join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"),
+      join(tmpDir, ".maestro/tasks/tasks.jsonl"),
       "utf8",
     );
     const taskRows = tasks
@@ -119,9 +119,9 @@ describe("maestro setup migrate-v2", () => {
       "tsk-v1-shipped",
     ]);
 
-    // plans.v2.jsonl has 1 row from .maestro/missions/mis-001/
+    // plans.jsonl has 1 row from .maestro/missions/mis-001/
     const plans = await readFile(
-      join(tmpDir, ".maestro/plans/plans.v2.jsonl"),
+      join(tmpDir, ".maestro/plans/plans.jsonl"),
       "utf8",
     );
     const planRows = plans

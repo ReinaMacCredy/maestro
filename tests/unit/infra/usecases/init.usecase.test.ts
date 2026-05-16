@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { initMaestro } from "@/infra/usecases/init.usecase.js";
 import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
 import { mockConfig } from "../../../helpers/mocks.js";
-import { DEFAULT_PRINCIPLES } from "@/v2/service/default-principles.js";
+import { DEFAULT_PRINCIPLES } from "@/service/default-principles.js";
 
 let tmpDir: string;
 

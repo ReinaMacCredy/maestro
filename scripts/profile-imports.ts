@@ -30,7 +30,6 @@ const features = [
   "@/features/memory/index.js",
   "@/features/memory-ratchet/index.js",
   "@/features/graph/index.js",
-  "@/features/handoff/index.js",
   "@/features/task/index.js",
   "@/features/bundle/index.js",
   "@/features/evidence/index.js",

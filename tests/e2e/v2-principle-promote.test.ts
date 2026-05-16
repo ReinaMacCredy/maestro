@@ -73,7 +73,7 @@ describe("maestro principle promote (v2)", () => {
       timestamp: "2026-05-15T10:01:00Z",
       rule_id: "layer_order",
       severity: "error",
-      file: "src/v2/repo/x.ts",
+      file: "src/repo/x.ts",
       line: 1,
       message: "violation",
     });

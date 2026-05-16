@@ -19,7 +19,6 @@ import type {
   MissionStorePort,
 } from "@/shared/domain/legacy-mission";
 import { buildMissions } from "@/shared/domain/legacy-mission";
-import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort, AgentReply } from "@/features/reply";
 
 const originalConsoleLog = console.log;
@@ -96,16 +95,6 @@ const replyStore: ReplyStorePort = {
   async markIngested() { /* noop */ },
 };
 
-const handoffStore: HandoffStorePort = {
-  async create(): Promise<HandoffRecord> { throw new Error("nope"); },
-  async update(record) { return record; },
-  async consume(): Promise<HandoffRecord> { throw new Error("nope"); },
-  async get() { return undefined; },
-  async list() { return []; },
-  async listOpenForTask() { return []; },
-  resolveArtifactPath(relativePath: string) { return join(tmpDir, relativePath); },
-};
-
 class RecordingArchive implements ArchivePort {
   readonly writes: Array<{ path: string; files: readonly BundleFile[] }> = [];
   readManifestCalls: string[] = [];
@@ -136,7 +125,6 @@ async function loadRegisterBundleCommand() {
       checkpointStore,
       missions: buildMissions(missionStore, featureStore, assertionStore, checkpointStore),
       replyStore,
-      handoffStore,
       archive,
       sessionDetect: undefined,
     } as never),

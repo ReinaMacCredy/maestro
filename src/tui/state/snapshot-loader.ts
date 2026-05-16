@@ -12,10 +12,9 @@ import type { PrincipleStorePort } from "@/features/principle";
 import type { AgentReply, ReplyStorePort } from "@/features/reply";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
-import type { HandoffStorePort } from "@/features/handoff";
 import type { TaskQueryPort } from "@/shared/domain/legacy-task";
-import type { ContractVersionStorePort, ContractStoreQueryPort } from "@/v2/repo/contract-store.port.js";
-import type { RunStateStorePort } from "@/v2/repo/run-state-store.port.js";
+import type { ContractVersionStorePort, ContractStoreQueryPort } from "@/repo/contract-store.port.js";
+import type { RunStateStorePort } from "@/repo/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence";
 import type { VerdictStorePort } from "@/features/verdict";
 import { buildAutopilotSnapshot } from "./autopilot-screen.js";
@@ -41,7 +40,6 @@ export interface SnapshotDeps {
   checkpointStore: CheckpointStorePort;
   config: ConfigPort;
   git: GitPort;
-  handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
@@ -56,7 +54,6 @@ export interface SnapshotDeps {
 export interface HomeSnapshotDeps {
   config: ConfigPort;
   git: GitPort;
-  handoffStore?: HandoffStorePort;
   taskStore?: TaskQueryPort;
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
@@ -109,7 +106,6 @@ export async function loadSnapshotInput(
         assertionStore: deps.assertionStore,
         replyStore: deps.replyStore,
         principleStore: deps.principleStore,
-        handoffStore: deps.handoffStore,
         cwd: deps.cwd,
       }, missionId, currentProjectRoot)
     : {

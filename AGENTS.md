@@ -13,32 +13,29 @@ repo-owned agent surfaces, and shared project state under `.maestro/`.
 
 Read `docs/harness-positioning.md` for the principle-to-primitive mapping.
 
-## Maestro v2 (Phases 1–4 landed)
+## Maestro harness
 
-Maestro v2 is the harness-OS layer. Phases 1, 1.5, 2, 3, and 4 — the v2
-spine, the principles + correction-recording bridge, the heavy-mode
-plan lifecycle, the observability + setup + worktree + handoff layer, and
-the docs + skill-surface cleanup — are feature-complete and dogfooded; see
-`docs/phase-1-done.md`, `docs/phase-1.5-done.md`, `docs/phase-2-done.md`,
-and `docs/phase-3-done.md` for the transition-evidence records. Phase 5
-(v1 source-code sunset + post-sunset doc audit) is the current track.
+Maestro is the harness-OS for agent-generated codebases. The spine
+(layered `src/` with forward-only imports), the principles +
+correction-recording bridge, the heavy-mode plan lifecycle, the
+observability + setup + worktree + handoff layer, and the agent-facing
+skill bundle ship as a single coherent system.
 
-- **Plan:** `docs/v2-master-plan.md` is the source of truth. Layered
-  architecture rules live in `docs/architecture.yaml` (loaded by the
-  v2 `ArchitectureRules` port and enforced by the lint runner). ADRs
-  under `docs/adr/` capture each binding decision (0001–0017).
+- **Architecture:** layered rules live in `docs/architecture.yaml`
+  (loaded by the `ArchitectureRules` port and enforced by the lint
+  runner). ADRs under `docs/adr/` capture each binding decision.
 - **Verb surface:** see `docs/cli-reference.md`. Lifecycle verbs:
   `spec new | validate`, `task from-spec | claim | verify | block |
   abandon | ship` (+ hot-path aliases `claim | verify | block | abandon
   | ship`), `plan from-spec | decompose | show`, `principle promote`,
-  `setup check | bootstrap | migrate-v2 | migrate-corrections`. Kept
-  from v1 unchanged: `evidence`, `contract`, `verdict`, `policy`, `ci`,
-  `merge auto`, `review ack`, `deploy`, `runtime`, `gc`, `recover`,
-  `bundle`, `mission-control`, `mcp`, `skills`, `worktree`.
-- **State + storage:** task state machine in `src/v2/types/task-state.ts`;
-  plan state machine in `src/v2/types/exec-plan-state.ts`; append-only
-  evidence at `.maestro/evidence/<date>.jsonl`; v2 tasks at
-  `.maestro/tasks/tasks.v2.jsonl`; v2 plans at `.maestro/plans/plans.v2.jsonl`;
+  `setup check | bootstrap | migrate-v2 | migrate-corrections`. Plus:
+  `evidence`, `contract`, `verdict`, `policy`, `ci`, `merge auto`,
+  `review ack`, `deploy`, `runtime`, `gc`, `recover`, `bundle`,
+  `mission-control`, `mcp`, `skills`, `worktree`.
+- **State + storage:** task state machine in `src/types/task-state.ts`;
+  plan state machine in `src/types/exec-plan-state.ts`; append-only
+  evidence at `.maestro/evidence/<date>.jsonl`; tasks at
+  `.maestro/tasks/tasks.jsonl`; plans at `.maestro/plans/plans.jsonl`;
   per-task observability at `.maestro/runs/<task-id>/observability.jsonl`;
   worktree records at `.maestro/worktrees/<task-id>.json`; handoff envelopes
   at `.maestro/handoffs/<id>.json`. Plans auto-advance off task transitions
@@ -49,11 +46,11 @@ and `docs/phase-3-done.md` for the transition-evidence records. Phase 5
   spec authoring), `maestro-plan` (heavy-mode decompose), `maestro-task`
   (lifecycle), `maestro-verify` (4-exit-code routing), `maestro-setup`
   (audit + bootstrap + migrate).
-- **Principles (Phase 1.5):** four default principles ship at
+- **Principles:** four default principles ship at
   `docs/principles/*.md` (`prefer-shared-utils`, `no-yolo-data-probing`,
   `passive-harness`, `layer-order`). `maestro principle promote <evd-id>`
   materializes new principles from `lint-violation` evidence rows.
-  `maestro setup migrate-corrections` moves v1
+  `maestro setup migrate-corrections` moves legacy
   `.maestro/memory/corrections/*.json` into `docs/principles/legacy/`.
   `gc slop-cleanup` folds principle findings into the per-file report.
 
@@ -75,11 +72,11 @@ maestro/
 |------|----------|
 | CLI entry / command registration | `src/index.ts` |
 | Dependency wiring | `src/services.ts` (composition root) |
-| v2 task / plan / spec lifecycle | `src/v2/runtime/{task,plan,spec,setup,principle}.command.ts` |
-| v2 layered architecture | `src/v2/{types,config,repo,service,runtime,providers}/` |
-| v2 architecture lints | `src/v2/service/architecture-lint.service.ts` |
-| v2 ports + adapters | `src/v2/repo/` (task store, plan store, spec store, evidence store, observability, worktree, handoff, principles) |
-| v2 use cases | `src/v2/service/` (task-claim, task-verify, plan-decompose, emit-handoff, migrate-v2, setup-check, principle-promote, ...) |
+| Task / plan / spec lifecycle | `src/runtime/{task,plan,spec,setup,principle}.command.ts` |
+| Layered architecture | `src/{types,config,repo,service,runtime,providers}/` |
+| Architecture lints | `src/service/architecture-lint.usecase.ts` |
+| Ports + adapters | `src/repo/` (task store, plan store, spec store, evidence store, observability, worktree, handoff, principles) |
+| Use cases | `src/service/` (task-claim, task-verify, plan-decompose, emit-handoff, migrate-v2, setup-check, principle-promote, ...) |
 | Feature boundaries | `src/features/`, `scripts/check-feature-boundaries-lib.ts` |
 | Mission Control TUI | `src/infra/commands/mission-control.command.ts`, `src/tui/state/snapshot.ts` |
 | Evidence logbook | `src/features/evidence/`; see `docs/witness-levels.md` |
@@ -126,7 +123,7 @@ maestro/
 
 ## ANTI-PATTERNS
 - Deep imports into another feature's `commands/`, `usecases/`, `domain/`, `ports/`, or `adapters/`.
-- Deep imports across v2 layers that violate forward-only-layers (ADR-0017).
+- Deep imports across layers that violate forward-only-layers.
 - Hidden writes or recovery logic inside Mission Control snapshot/preview paths.
 - Hand-editing generated embed files under `src/infra/domain/`.
 - Treating `bun run ci` as generic smoke; it performs release-prep.

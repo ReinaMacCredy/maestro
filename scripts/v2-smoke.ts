@@ -22,7 +22,7 @@ import { join, resolve } from "node:path";
 import { $ } from "bun";
 
 // Minimal docs/architecture.yaml required by `task verify` so the architecture
-// lint pass has a rules file to load. The lint_scope points at src/v2/**/*.ts
+// lint pass has a rules file to load. The lint_scope points at src/service/**/*.ts
 // which does not exist in the temp project, so 0 files are scanned, 0
 // violations, and the verify exit is PASS.
 const ARCHITECTURE_YAML = `version: 1
@@ -37,7 +37,7 @@ layers:
 cross_cutting:
   - providers
 lint_scope:
-  - "src/v2/**/*.ts"
+  - "src/service/**/*.ts"
 passive_harness:
   forbidden_patterns:
     - setInterval

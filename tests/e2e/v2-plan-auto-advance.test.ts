@@ -21,7 +21,7 @@ layers:
 cross_cutting:
   - providers
 lint_scope:
-  - "src/v2/**/*.ts"
+  - "src/service/**/*.ts"
 passive_harness:
   forbidden_patterns:
     - setInterval
@@ -63,16 +63,16 @@ async function readEvidenceRows(dir: string): Promise<readonly Record<string, un
 }
 
 async function readPlanState(dir: string, planId: string): Promise<string> {
-  const text = await readFile(join(dir, ".maestro/plans/plans.v2.jsonl"), "utf8");
+  const text = await readFile(join(dir, ".maestro/plans/plans.jsonl"), "utf8");
   for (const line of text.trim().split("\n")) {
     const p = JSON.parse(line) as { id: string; state: string };
     if (p.id === planId) return p.state;
   }
-  throw new Error(`plan ${planId} not in plans.v2.jsonl`);
+  throw new Error(`plan ${planId} not in plans.jsonl`);
 }
 
 async function readTasks(dir: string): Promise<readonly { id: string; slug: string }[]> {
-  const text = await readFile(join(dir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+  const text = await readFile(join(dir, ".maestro/tasks/tasks.jsonl"), "utf8");
   return text.trim().split("\n").map((l) => JSON.parse(l) as { id: string; slug: string });
 }
 
@@ -140,8 +140,7 @@ describe("maestro plan auto-advance (v2 ADR-0011)", () => {
     // state and asserts the verifying transition is allowed before re-running.
     // Use the verify verb directly: if the task isn't in 'verifying' it
     // transitions claimed -> verifying via the usecase's relaxation. The verify
-    // dogfood path for Phase 1 already exercised this for claimed tasks.
-    // (See docs/phase-1-done.md, evidence row evd-mp6x80mg-wd4wdo.)
+    // dogfood path already exercised this for claimed tasks.
     for (const task of [t1, t2, t3]) {
       const v = await runCompiled(["verify", task!.id], tmpDir);
       expect(v.exitCode).toBe(0);

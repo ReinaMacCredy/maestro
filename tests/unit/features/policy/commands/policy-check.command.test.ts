@@ -5,7 +5,7 @@ import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/poli
 import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort } from "@/shared/domain/legacy-task";
 import type { RiskServices } from "@/features/risk/services.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
-import type { Contract } from "@/v2/types/contract.js";
+import type { Contract } from "@/types/contract.js";
 
 // ─── Console capture ──────────────────────────────────────────────────────────
 

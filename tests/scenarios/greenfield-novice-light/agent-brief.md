@@ -43,7 +43,7 @@ Track consecutive verify failures. After each `maestro verify <id>` (or
   `maestro ship <id>` then write the exit sentinel.
 - If the exit code is 1 (FAIL), increment the failure counter. If the counter
   reaches 3 with no state change between runs (check by reading
-  `.maestro/tasks/tasks.v2.jsonl` and finding the task's current `state`
+  `.maestro/tasks/tasks.jsonl` and finding the task's current `state`
   field), write the exit sentinel with status `fail-budget` and stop.
 
 After 20 minutes of wall-clock time from the start of this brief, write the

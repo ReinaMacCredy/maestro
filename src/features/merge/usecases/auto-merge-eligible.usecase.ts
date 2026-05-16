@@ -4,7 +4,7 @@ import type { AutopilotPolicy } from "@/features/policy/index.js";
 import { compareRiskClass } from "@/features/risk/index.js";
 import type { Spec } from "@/shared/domain/legacy-spec/index.js";
 import { scoreSpec } from "@/shared/domain/legacy-spec/index.js";
-import type { Contract } from "@/v2/types/contract.js";
+import type { Contract } from "@/types/contract.js";
 import type { Verdict } from "@/features/verdict/index.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import type { EligibilityReason, EligibilityResult } from "../domain/eligibility-types.js";

@@ -11,16 +11,13 @@ import type {
   Missions,
 } from "@/shared/domain/legacy-mission";
 import { buildMissions } from "@/shared/domain/legacy-mission";
-import type { HandoffRecord, HandoffStorePort } from "@/features/handoff";
-import { isOpenHandoffRecord } from "@/features/handoff";
-import { isHandoffInProject } from "@/features/handoff/domain/project-scope.js";
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type {
   EvidenceRow,
   EvidenceStorePort,
 } from "@/features/evidence";
-import type { Contract } from "@/v2/types/contract.js";
+import type { Contract } from "@/types/contract.js";
 import type { LegacyTask as Task, ContractStorePort, GitAnchorPort, LegacyTaskStorePort as TaskStorePort } from "@/shared/domain/legacy-task";
 import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
 import type {
@@ -664,50 +661,3 @@ export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchor
   };
 }
 
-export function makeHandoffRecord(
-  partial: Partial<HandoffRecord> & { id: string; createdAt: string },
-): HandoffRecord {
-  return {
-    id: partial.id,
-    createdAt: partial.createdAt,
-    task: partial.task ?? "work",
-    name: partial.name ?? partial.id,
-    agent: partial.agent ?? "codex",
-    model: partial.model ?? "gpt-5.4",
-    status: partial.status ?? "launched",
-    wait: partial.wait ?? false,
-    sourceDir: partial.sourceDir ?? "/src",
-    targetDir: partial.targetDir ?? "/target",
-    promptPath: partial.promptPath ?? "prompt.md",
-    outputPath: partial.outputPath ?? "output.log",
-    command: partial.command ?? [],
-    refs: partial.refs ?? {},
-    ...(partial.consumedAt !== undefined ? { consumedAt: partial.consumedAt } : {}),
-    ...(partial.pickedUpByAgent !== undefined ? { pickedUpByAgent: partial.pickedUpByAgent } : {}),
-    ...(partial.pickedUpBySessionId !== undefined ? { pickedUpBySessionId: partial.pickedUpBySessionId } : {}),
-    ...(partial.pickedUpAt !== undefined ? { pickedUpAt: partial.pickedUpAt } : {}),
-    ...(partial.worktree !== undefined ? { worktree: partial.worktree } : {}),
-  };
-}
-
-export function mockHandoffStore(records: readonly HandoffRecord[] = []): HandoffStorePort {
-  const recordMap = new Map(records.map((record) => [record.id, record] as const));
-  return {
-    async create() { throw new Error("not used in mockHandoffStore"); },
-    async update(r) {
-      recordMap.set(r.id, r);
-      return r;
-    },
-    async consume() { throw new Error("not used in mockHandoffStore"); },
-    async get(id) { return recordMap.get(id); },
-    async list() { return [...recordMap.values()]; },
-    async listOpenForTask(input) {
-      return [...recordMap.values()].filter((record) => (
-        record.refs.taskId === input.taskId
-        && isOpenHandoffRecord(record)
-        && isHandoffInProject(record, input.projectRoot)
-      ));
-    },
-    resolveArtifactPath(p: string) { return p; },
-  };
-}

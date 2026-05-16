@@ -21,7 +21,7 @@ layers:
 cross_cutting:
   - providers
 lint_scope:
-  - "src/v2/**/*.ts"
+  - "src/service/**/*.ts"
 passive_harness:
   forbidden_patterns:
     - setInterval
@@ -74,15 +74,15 @@ async function setupClaimedTask(dir: string): Promise<string> {
 
 describe("maestro task verify / ship (v2)", () => {
   it("verify PASS auto-advances claimed -> verifying -> ready, ship -> shipped", async () => {
-    await mkdir(join(tmpDir, "src/v2/service"), { recursive: true });
-    await writeFile(join(tmpDir, "src/v2/service/clean.ts"), `export const X = 1;\n`);
+    await mkdir(join(tmpDir, "src/service"), { recursive: true });
+    await writeFile(join(tmpDir, "src/service/clean.ts"), `export const X = 1;\n`);
 
     const id = await setupClaimedTask(tmpDir);
     const verifyResult = await runCompiled(["task", "verify", id], tmpDir);
     expect(verifyResult.exitCode).toBe(0);
     expect(verifyResult.stdout).toContain("verified -> ready (PASS)");
 
-    const taskText = await readFile(join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+    const taskText = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
     const taskRow = JSON.parse(taskText.trim()) as { state: string };
     expect(taskRow.state).toBe("ready");
 
@@ -120,7 +120,7 @@ describe("maestro task verify / ship (v2)", () => {
       verdict: "PASS",
     });
 
-    const finalTaskText = await readFile(join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+    const finalTaskText = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
     const finalTask = JSON.parse(finalTaskText.trim()) as {
       state: string;
       pr_url?: string;
@@ -132,9 +132,9 @@ describe("maestro task verify / ship (v2)", () => {
   });
 
   it("verify FAIL keeps state at verifying and emits lint-violation rows tagged with task_id", async () => {
-    await mkdir(join(tmpDir, "src/v2/service"), { recursive: true });
+    await mkdir(join(tmpDir, "src/service"), { recursive: true });
     await writeFile(
-      join(tmpDir, "src/v2/service/bad.ts"),
+      join(tmpDir, "src/service/bad.ts"),
       `export function tick() { setInterval(() => null, 1000); }\n`,
     );
 
@@ -144,7 +144,7 @@ describe("maestro task verify / ship (v2)", () => {
     expect(result.stdout).toContain("verify FAIL");
     expect(result.stdout).toContain("passive-harness");
 
-    const taskText = await readFile(join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+    const taskText = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
     const taskRow = JSON.parse(taskText.trim()) as { state: string };
     expect(taskRow.state).toBe("verifying");
 
@@ -177,8 +177,8 @@ describe("maestro task verify / ship (v2)", () => {
   });
 
   it("hot-path aliases `verify` and `ship` work at the top level", async () => {
-    await mkdir(join(tmpDir, "src/v2/service"), { recursive: true });
-    await writeFile(join(tmpDir, "src/v2/service/clean.ts"), `export const X = 1;\n`);
+    await mkdir(join(tmpDir, "src/service"), { recursive: true });
+    await writeFile(join(tmpDir, "src/service/clean.ts"), `export const X = 1;\n`);
 
     const id = await setupClaimedTask(tmpDir);
     const v = await runCompiled(["verify", id], tmpDir);

@@ -6,10 +6,10 @@ import {
 import {
   principlesScan,
   type PrincipleScanFinding,
-} from "@/v2/service/principle-scan.usecase.js";
-import { buildV2Services } from "@/v2/providers/build-services.js";
-import type { PrinciplesStorePort } from "@/v2/repo/principles-store.port.js";
-import type { ProcessRunnerPort } from "@/v2/repo/process-runner.port.js";
+} from "@/service/principle-scan.usecase.js";
+import { buildV2Services } from "@/providers/build-services.js";
+import type { PrinciplesStorePort } from "@/repo/principles-store.port.js";
+import type { ProcessRunnerPort } from "@/repo/process-runner.port.js";
 
 export interface SlopCleanupArgs {
   readonly projectRoot: string;

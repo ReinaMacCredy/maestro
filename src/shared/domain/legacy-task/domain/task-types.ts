@@ -47,7 +47,7 @@ export const TASK_PRIORITIES: readonly TaskPriority[] = [0, 1, 2, 3, 4] as const
 /**
  * Work-type classification recorded on a task receipt. Inherited from the v1
  * intake decision tree; the live source is the `work_type` frontmatter on
- * product specs (see `src/v2/types/product-spec.ts`).
+ * product specs (see `src/types/product-spec.ts`).
  */
 export type TaskWorkType =
   | "new-spec"

@@ -1,5 +1,5 @@
 import type { Spec } from "@/shared/domain/legacy-spec/index.js";
-import type { Contract } from "@/v2/types/contract.js";
+import type { Contract } from "@/types/contract.js";
 import type { EvidenceRow, EvidenceKind, WitnessLevel } from "@/features/evidence/index.js";
 
 export interface ProofMapEvidence {

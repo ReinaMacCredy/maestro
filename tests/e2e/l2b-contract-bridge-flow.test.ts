@@ -190,7 +190,7 @@ async function assertL1AndL2Match(dir: string, taskId: string, expectedVersion: 
 }
 
 // TODO(v2/phase-4): re-enable or remove. v1 `task verify` is detached per ADR-0007 big-bang;
-// v2 equivalents live in src/v2/runtime/task.command.ts.
+// v2 equivalents live in src/runtime/task.command.ts.
 describe.skip("L2 contract bridge — end-to-end seam coverage", () => {
   it(
     "1. lock writes both stores",

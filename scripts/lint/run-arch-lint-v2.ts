@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { runArchitectureLints } from "@/v2/service/architecture-lint.usecase.js";
-import { YamlArchitectureRules } from "@/v2/repo/yaml-architecture-rules.adapter.js";
+import { runArchitectureLints } from "@/service/architecture-lint.usecase.js";
+import { YamlArchitectureRules } from "@/repo/yaml-architecture-rules.adapter.js";
 
 interface ParsedArgs {
   readonly json: boolean;

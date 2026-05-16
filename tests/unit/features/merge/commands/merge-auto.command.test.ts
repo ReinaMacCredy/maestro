@@ -7,7 +7,7 @@ import type { EvidenceRow, EvidenceStorePort } from "@/features/evidence/index.j
 import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort } from "@/shared/domain/legacy-task";
 import type { GithubApiPort } from "@/features/ci/ports/github-api.port.js";
 import type { AutopilotPolicy } from "@/features/policy/index.js";
-import type { Contract } from "@/v2/types/contract.js";
+import type { Contract } from "@/types/contract.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
 import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 

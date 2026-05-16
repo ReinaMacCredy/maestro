@@ -65,7 +65,7 @@ describe("maestro task block / abandon (v2)", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("blocked: waiting for design");
 
-    const text = await readFile(join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+    const text = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
     const task = JSON.parse(text.trim()) as { state: string; block_reason?: string };
     expect(task.state).toBe("blocked");
     expect(task.block_reason).toBe("waiting for design");

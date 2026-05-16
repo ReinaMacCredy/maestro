@@ -2,7 +2,6 @@ import { buildInfraServices, type InfraServices } from "./infra/services.js";
 import { buildLegacyMissionServices, type LegacyMissionServices } from "@/shared/domain/legacy-mission";
 import { buildPrincipleServices, type PrincipleServices } from "./features/principle/services.js";
 import { buildReplyServices, type ReplyServices } from "./features/reply/services.js";
-import { buildHandoffServices, type HandoffServices } from "./features/handoff/services.js";
 import { buildTaskServices, type TaskServices } from "@/shared/domain/legacy-task/index.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
 import { buildEvidenceServices, type EvidenceServices } from "./features/evidence/services.js";
@@ -17,14 +16,13 @@ import { buildCiServices, type CiServices } from "./features/ci/services.js";
 import { buildMergeServices, type MergeServices } from "./features/merge/services.js";
 import { buildDeployServices, type DeployServices } from "./features/deploy/services.js";
 import { buildRuntimeServices, type RuntimeServices } from "./features/runtime/services.js";
-import { buildV2Services, type V2Services } from "./v2/providers/build-services.js";
+import { buildV2Services, type V2Services } from "./providers/build-services.js";
 
 export interface Services extends
   InfraServices,
   LegacyMissionServices,
   PrincipleServices,
   ReplyServices,
-  HandoffServices,
   TaskServices,
   BundleServices,
   EvidenceServices,
@@ -52,7 +50,6 @@ export function createServices(
     ...buildLegacyMissionServices(projectDir),
     ...buildPrincipleServices(projectDir),
     ...buildReplyServices(projectDir),
-    ...buildHandoffServices(),
     ...buildTaskServices(projectDir),
     ...buildBundleServices(),
     ...buildEvidenceServices(projectDir),

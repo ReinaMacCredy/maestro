@@ -7,8 +7,8 @@
  * consumers.
  *
  * Confirmed v2 collisions requiring Legacy* rename:
- *   - Task        → LegacyTask        (src/v2/types/task.ts has Task)
- *   - TaskStorePort → LegacyTaskStorePort (src/v2/repo/task-store.port.ts has TaskStorePort)
+ *   - Task        → LegacyTask        (src/types/task.ts has Task)
+ *   - TaskStorePort → LegacyTaskStorePort (src/repo/task-store.port.ts has TaskStorePort)
  *
  * All other names are unchanged (no v2 namespace collision).
  *

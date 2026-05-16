@@ -32,7 +32,7 @@ afterEach(async () => {
 });
 
 // TODO(v2/phase-4): re-enable or remove. v1 `task claim` is detached per ADR-0007 big-bang;
-// v2 equivalents live in src/v2/runtime/task.command.ts.
+// v2 equivalents live in src/runtime/task.command.ts.
 describe.skip("agent session loop (plan -> next -> update)", () => {
   it("exposes the plan input schema via --schema", async () => {
     const result = await runCompiled(["task", "plan", "--schema"], tmpDir);
@@ -158,17 +158,3 @@ describe.skip("agent session loop (plan -> next -> update)", () => {
   }, SLOW_CLI_TIMEOUT_MS);
 });
 
-describe("handoff discovery surfaces", () => {
-  it("returns a JSON array", async () => {
-    const result = await runCompiled(["handoff", "list", "--json"], tmpDir);
-    expect(result.exitCode).toBe(0);
-    const payload = expectJson<unknown[]>(result);
-    expect(Array.isArray(payload)).toBe(true);
-  }, SLOW_CLI_TIMEOUT_MS);
-
-  it("errors with a helpful message on handoff show <missing>", async () => {
-    const result = await runCompiled(["handoff", "show", "swift-otter-9999"], tmpDir);
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr + result.stdout).toContain("Handoff packet not found");
-  }, SLOW_CLI_TIMEOUT_MS);
-});

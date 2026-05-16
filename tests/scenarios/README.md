@@ -1,6 +1,6 @@
 # Scenario Tests
 
-Behavioral gate for the Maestro v2.0 release (ADR-0019, Phase 6).
+Behavioral gate for the Maestro harness.
 
 Each scenario runs a full user → coding-agent → maestro → ship cycle in a
 sandboxed project directory. Rubrics score deterministically against the
@@ -78,9 +78,8 @@ bun tests/scenarios/greenfield-novice-light/rubric.ts /tmp/empty-dir
 
 ## Running the full swarm
 
-See Phase 6 in `docs/v2-master-plan.md`. The swarm dispatcher lives in
-`scripts/scenarios/swarm.ts` (PR 56). Run it from an interactive Claude Code
-session:
+The swarm dispatcher lives in `scripts/scenarios/swarm.ts`. Run it from an
+interactive Claude Code session:
 
 ```bash
 bun scripts/scenarios/swarm.ts

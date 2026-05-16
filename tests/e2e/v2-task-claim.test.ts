@@ -52,7 +52,7 @@ describe("maestro task from-spec + task claim (v2)", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/^tsk-\S+ draft \(demo-task\)$/m);
 
-    const text = await readFile(join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+    const text = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
     const lines = text.trim().split("\n");
     expect(lines.length).toBe(1);
     const task = JSON.parse(lines[0]) as { state: string; slug: string };
@@ -84,7 +84,7 @@ describe("maestro task from-spec + task claim (v2)", () => {
     expect(claim.exitCode).toBe(0);
     expect(claim.stdout).toContain("claimed by agent-a");
 
-    const text = await readFile(join(tmpDir, ".maestro/tasks/tasks.v2.jsonl"), "utf8");
+    const text = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
     const task = JSON.parse(text.trim().split("\n")[0]) as {
       state: string;
       assignee?: string;

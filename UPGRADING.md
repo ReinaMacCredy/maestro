@@ -2,7 +2,7 @@
 
 > **Status: Phase 7 finalized.** Breaking-changes list confirmed at Phase 5 source-code sunset. Verb wording, edge-case notes, and the v2.0.0 CHANGELOG header are confirmed against the actual v2 CLI shipped at the v2.0.0 tag. v0.LAST tag on `main` carries the last v1 commit (was v0.83.0) for downstream consumers who need to pin away from v2.
 
-v2 is a big-bang release (ADR-0007). There is no parallel binary, no aliasing of v1 verbs, and no compatibility shim. Existing v1 projects upgrade in one step via `maestro setup migrate-v2`.
+The current harness is a big-bang release. There is no parallel binary, no aliasing of legacy verbs, and no compatibility shim. Existing pre-rebuild projects upgrade in one step via `maestro setup migrate-v2`.
 
 If you are not ready to upgrade, pin to the `v0.LAST` tag on `main`. (Tag is named for the actual version lineage — maestro has only ever shipped `0.x` releases; v2 is the first major version.)
 
@@ -38,7 +38,7 @@ To restore: `tar -xzf .maestro/backups/pre-v2-<timestamp>.tar.gz -C .` (v2 does 
 | `maestro-classify` skill | Absorbed into `maestro-design` (work-type classification at spec authoring) |
 | `maestro-qa` skill | Absorbed into `maestro-setup --qa` |
 
-**Added (new in v2):** `spec new`, `spec validate`, `task from-spec`, `plan from-spec`, `plan decompose`, `principle promote`, `setup check`, `setup bootstrap`, `setup migrate-v2`, `setup migrate-corrections`. Hot-path aliases: `claim`, `verify`, `ship`, `block`, `abandon` (ADR-0014).
+**Added (new in v2):** `spec new`, `spec validate`, `task from-spec`, `plan from-spec`, `plan decompose`, `principle promote`, `setup check`, `setup bootstrap`, `setup migrate-v2`, `setup migrate-corrections`. Hot-path aliases: `claim`, `verify`, `ship`, `block`, `abandon`.
 
 ### Vocabulary
 
@@ -60,7 +60,7 @@ To restore: `tar -xzf .maestro/backups/pre-v2-<timestamp>.tar.gz -C .` (v2 does 
 | `.maestro/memory/ratchet/` | Deleted |
 | `.maestro/graph.json` | `docs/references/project-graph.yaml` |
 | `.maestro/session/` | Folded into `.maestro/runs/<id>/agent.json` for in-flight worktrees |
-| `tasks.jsonl` | `tasks.v2.jsonl` (v1 file preserved unchanged during migration) |
+| `tasks.jsonl` | `tasks.jsonl` (v1 file preserved unchanged during migration) |
 | `.maestro/MAESTRO.md` | Deleted — was a v1 operational compass referencing v1-only verbs (`intake`, `task plan`, `memory-correct`). v2 projects use `AGENTS.md` + `context/` for operator guidance. |
 | `skills/built-in/maestro:*` | Deleted (colon-namespaced tier removed) |
 
@@ -88,7 +88,7 @@ Kept unchanged: `task_claim`, `task_block`, `task_get`, `task_list`, all `eviden
 
 ### Skill bundle
 
-The 10-skill v1 bundle collapses to 5: `maestro-setup`, `maestro-design`, `maestro-plan`, `maestro-task`, `maestro-verify`. See ADR-0012, ADR-0015, ADR-0016.
+The 10-skill v1 bundle collapses to 5: `maestro-setup`, `maestro-design`, `maestro-plan`, `maestro-task`, `maestro-verify`.
 
 ---
 
@@ -120,7 +120,5 @@ If your usage is confined to these surfaces, the upgrade is a no-op apart from C
 
 ## Reference
 
-- Master plan: `docs/v2-master-plan.md` (§9 migration spec, §10 phase plan, §11 non-goals)
-- Decision register: `docs/adr/0001` through `docs/adr/0019`
+- Decision register: `docs/adr/`
 - CLI reference: `docs/cli-reference.md`
-- Migration internals (for maestro contributors): master-plan §9 mapping tables

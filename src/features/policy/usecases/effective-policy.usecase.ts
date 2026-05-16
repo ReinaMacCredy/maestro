@@ -13,7 +13,7 @@
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "../domain/policy-types.js";
 import type { PendingLoosening } from "./detect-pending-loosenings.usecase.js";
 import type { WitnessLevel } from "@/features/evidence/index.js";
-import type { RiskClass } from "@/v2/types/product-spec.js";
+import type { RiskClass } from "@/types/product-spec.js";
 import { RISK_CLASS_ORDER } from "@/features/risk/index.js";
 
 function revertRiskPolicyLoosening(

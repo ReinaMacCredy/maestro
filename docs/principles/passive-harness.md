@@ -6,11 +6,11 @@ Maestro never schedules background work. No `setInterval`, no detached daemons, 
 
 ## Rationale
 
-"Passive harness" is the load-bearing v2 invariant (master plan §1, ADR-0007). It is what lets a single repo-tracked state directory be safely shared across multiple agents and human operators: nothing is mutating the world while you read it. The moment Maestro starts its own timers or workers, that contract breaks and recovery becomes guesswork.
+"Passive harness" is the load-bearing harness invariant. It is what lets a single repo-tracked state directory be safely shared across multiple agents and human operators: nothing is mutating the world while you read it. The moment Maestro starts its own timers or workers, that contract breaks and recovery becomes guesswork.
 
 ## Scan Command
 
-! rg -n "setInterval|setTimeout|child_process\.fork|spawn.*detached|new Worker\(" --glob 'src/v2/**' --glob '!**/*.test.ts' --glob '!src/v2/repo/bun-process-runner.adapter.ts'
+! rg -n "setInterval|setTimeout|child_process\.fork|spawn.*detached|new Worker\(" --glob 'src/**' --glob '!**/*.test.ts' --glob '!src/repo/bun-process-runner.adapter.ts'
 
 ## Fix Recipe
 

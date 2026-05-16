@@ -4,10 +4,10 @@ import { resolveJsonFlag } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { type Services } from "@/services.js";
-import type { RiskClass } from "@/v2/types/product-spec.js";
+import type { RiskClass } from "@/types/product-spec.js";
 import { maxRiskClass } from "@/features/risk/index.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
-import { readCurrentContractWithBackfill } from "@/v2/service/contract-helpers.js";
+import { readCurrentContractWithBackfill } from "@/service/contract-helpers.js";
 
 interface PolicyCheckCommandDeps {
   readonly getServices: () => Pick<

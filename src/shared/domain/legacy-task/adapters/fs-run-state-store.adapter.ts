@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
-import { ANY_TASK_ID_PATTERN as TASK_ID_PATTERN } from "@/v2/types/task.js";
+import { ANY_TASK_ID_PATTERN as TASK_ID_PATTERN } from "@/types/task.js";
 import type { RunState } from "../domain/run-state.js";
 import type { RunStateDelta, RunStateStorePort } from "../ports/run-state-store.port.js";
 

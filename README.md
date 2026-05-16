@@ -8,7 +8,7 @@ is the substrate that gives every agent session durable primitives, lifecycle
 state, evidence, and golden rules without a daemon, a database, or a network
 API.
 
-The v2 vocabulary is `spec -> task -> verify -> ship`. One task equals one PR
+The vocabulary is `spec -> task -> verify -> ship`. One task equals one PR
 (ADR-0006). Multi-PR work decomposes into an exec-plan via `maestro-plan`.
 Maestro stays passive: no scheduler, no background process, no LLM call inside
 maestro. "Automatic" means computed from the result of the verb the agent just
@@ -79,7 +79,13 @@ layers:
 cross_cutting:
   - providers
 lint_scope:
-  - "src/v2/**/*.ts"
+  - "src/config/**/*.ts"
+  - "src/providers/**/*.ts"
+  - "src/repo/**/*.ts"
+  - "src/runtime/**/*.ts"
+  - "src/service/**/*.ts"
+  - "src/types/**/*.ts"
+  - "src/ui/**/*.ts"
 passive_harness:
   forbidden_patterns:
     - setInterval
@@ -95,7 +101,7 @@ For existing projects the file is usually already present. Skip this step if
 maestro setup bootstrap
 ```
 
-Creates the five v2 directories under `.maestro/` with `.gitkeep` placeholders.
+Creates the canonical directories under `.maestro/` with `.gitkeep` placeholders.
 Idempotent: safe to re-run.
 
 ### 4. Check setup
@@ -104,7 +110,7 @@ Idempotent: safe to re-run.
 maestro setup check
 ```
 
-Audits the v2 directory layout, principles pack, and config file. Exits 1 only
+Audits the directory layout, principles pack, and config file. Exits 1 only
 when an entry is `missing`; `warn` is informational. Add `--json` for machine
 output.
 
@@ -146,7 +152,7 @@ maestro task from-spec .maestro/specs/my-feature.md
 ```
 
 Creates a task in `draft` state and prints the task ID (`tsk-...`). The task
-is backed by `.maestro/tasks/tasks.v2.jsonl`.
+log is `.maestro/tasks/tasks.jsonl`.
 
 ### 7. Claim the task
 
@@ -208,7 +214,7 @@ start. Each skill is a markdown document in `skills/bundled/`.
 
 ### maestro-design
 
-Interview-driven product-spec authoring. Runs the grill protocol from ADR-0016:
+Interview-driven product-spec authoring. Runs the grill protocol:
 a one-question-at-a-time interview that walks acceptance criteria, non-goals,
 risk class, mode, and work type, challenging user language against `CONTEXT.md`
 and committed ADRs. Output is a committed `.maestro/specs/<slug>.md` ready for
@@ -243,29 +249,29 @@ complete; it is the shared pre-ship ritual every agent follows.
 
 ### maestro-setup
 
-Repository onboarding and v2 migration. The skill generates context docs under
+Repository onboarding. The skill generates context docs under
 `.maestro/context/`, a hierarchical `AGENTS.md`, language style guides, and a
 setup report. The CLI mirrors the skill: `setup check` audits drift, `setup
-bootstrap` scaffolds directories, `setup migrate-v2` performs the 11-step v1
-migration, and `setup migrate-corrections` moves v1 corrections into
-`docs/principles/legacy/`. Use this skill when initializing a new project or
-upgrading from v1.
+bootstrap` scaffolds directories, `setup migrate-v2` performs the 11-step
+upgrade from a pre-rebuild `.maestro/`, and `setup migrate-corrections` moves
+legacy corrections into `docs/principles/legacy/`. Use this skill when
+initializing a new project or upgrading an older `.maestro/` directory.
 
 ---
 
-## Architecture: src/v2/
+## Architecture: src/
 
 The implementation follows a forward-only layered architecture enforced by
 `docs/architecture.yaml` and checked at every `maestro task verify`:
 
 | Layer | Path | Role |
 |---|---|---|
-| `types` | `src/v2/types/` | Domain types: task state machine, exec-plan state machine, product-spec shape, evidence kinds |
-| `config` | `src/v2/config/` | Per-project and per-repo configuration loading |
-| `repo` | `src/v2/repo/` | Ports and adapters: task store, plan store, spec store, evidence store, worktree store, handoff store |
-| `service` | `src/v2/service/` | Use cases: task-claim, task-verify, plan-decompose, migrate-v2, setup-check, principle-promote |
-| `runtime` | `src/v2/runtime/` | CLI command registration: spec, task, plan, principle, setup verbs |
-| `providers` | `src/v2/providers/` | Cross-cutting service wiring (importable from any layer) |
+| `types` | `src/types/` | Domain types: task state machine, exec-plan state machine, product-spec shape, evidence kinds |
+| `config` | `src/config/` | Per-project and per-repo configuration loading |
+| `repo` | `src/repo/` | Ports and adapters: task store, plan store, spec store, evidence store, worktree store, handoff store |
+| `service` | `src/service/` | Use cases: task-claim, task-verify, plan-decompose, migrate-v2, setup-check, principle-promote |
+| `runtime` | `src/runtime/` | CLI command registration: spec, task, plan, principle, setup verbs |
+| `providers` | `src/providers/` | Cross-cutting service wiring (importable from any layer) |
 
 Layer-order imports are enforced mechanically. A service may not import from
 runtime; a repo adapter may not import from service. The `providers` layer is
@@ -285,9 +291,9 @@ files directly.
 .maestro/
   specs/              product-spec markdown files (<slug>.md, YAML frontmatter)
   tasks/
-    tasks.v2.jsonl    append-only task ledger
+    tasks.jsonl    append-only task ledger
   plans/
-    plans.v2.jsonl    exec-plan ledger
+    plans.jsonl    exec-plan ledger
     <slug>.md         optional human-readable plan sidecar
   evidence/
     <date>.jsonl      transition + ad-hoc evidence rows (per-machine)
@@ -335,17 +341,19 @@ Hot-path aliases (first-class; identical to their `task` counterparts):
 
 ---
 
-## Migrating from v1
+## Migrating from a pre-rebuild `.maestro/`
 
-v2 is a big-bang release with no backward-compatibility shims. Run:
+The current harness has no backward-compatibility shims for the
+pre-rebuild `.maestro/` directory layout. To upgrade:
 
 ```bash
 maestro setup migrate-v2
 ```
 
 This writes a backup tarball to `.maestro/backups/pre-v2-<timestamp>.tar.gz`,
-rewrites `.maestro/` to v2 shape, and stamps `.migrated-v2.json` for
-idempotency. Full verb-rename tables and the file-layout mapping are in
+rewrites `.maestro/` to the current shape, and stamps `.migrated-v2.json` for
+idempotency. Pin to the `v0.LAST` tag on `main` if you are not ready to
+upgrade. Full verb-rename tables and the file-layout mapping are in
 `UPGRADING.md`.
 
 ---
@@ -372,11 +380,8 @@ Conventions at a glance:
 
 ## Status
 
-Phase 5 (v1 source-code sunset) is complete: v1 feature directories have been
-deleted, the MCP server surface has been updated to v2 verbs, the install-smoke
-workflow exercises the v2 happy path, and this README reflects the current
-binary. Phase 6 (scenario testing: 8 behavioral scenarios across
-greenfield/brownfield workflows, validated by a sub-agent swarm-fix-loop) and
-Phase 7 (RC soak, CHANGELOG header, v2.0.0 release, v0.LAST tag) are the
-remaining gates before the 2.0 general release. The master plan and decision
-register live at `docs/v2-master-plan.md` and `docs/adr/`.
+The current `main` reflects the harness-OS rebuild: a layered `src/`
+(`types`, `config`, `repo`, `service`, `runtime`, `ui`, `providers`), a
+5-skill agent-facing bundle, the `spec -> task -> verify -> ship` vocabulary,
+the eight behavioral scenarios under `tests/scenarios/`, and the dispatch +
+rubric runner at `scripts/scenarios/`. The decision register lives at `docs/adr/`.

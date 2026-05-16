@@ -1,6 +1,6 @@
 ---
 name: maestro-plan
-description: Turn an approved heavy-mode product-spec into an executable v2 exec-plan with child tasks. Use after `maestro-design` has produced a `mode: heavy` spec, or when a single task has grown big enough that it should be decomposed into a multi-PR batch. Persists the plan to `.maestro/plans/plans.v2.jsonl` and the child tasks to `.maestro/tasks/tasks.v2.jsonl`.
+description: Turn an approved heavy-mode product-spec into an executable v2 exec-plan with child tasks. Use after `maestro-design` has produced a `mode: heavy` spec, or when a single task has grown big enough that it should be decomposed into a multi-PR batch. Persists the plan to `.maestro/plans/plans.jsonl` and the child tasks to `.maestro/tasks/tasks.jsonl`.
 ---
 
 # Maestro Plan
@@ -124,7 +124,7 @@ After the first child claim, load `maestro-task` and execute from there.
 
 ## Persist a human-readable plan note (optional)
 
-The plan record in `.maestro/plans/plans.v2.jsonl` carries `title`, `slug`, `spec_path`, and `state` — it does not carry narrative. For non-trivial plans, persist a markdown sidecar so future sessions and reviewers have the rationale:
+The plan record in `.maestro/plans/plans.jsonl` carries `title`, `slug`, `spec_path`, and `state` — it does not carry narrative. For non-trivial plans, persist a markdown sidecar so future sessions and reviewers have the rationale:
 
 `.maestro/plans/<slug>.md`:
 

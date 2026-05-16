@@ -7,7 +7,7 @@ import type {
   EvidenceRow,
   TransitionEvidenceRow,
   LintViolationEvidenceRow,
-} from "../../../src/v2/repo/evidence-store.port.js";
+} from "../../../src/repo/evidence-store.port.js";
 
 export type { EvidenceRow, TransitionEvidenceRow, LintViolationEvidenceRow };
 

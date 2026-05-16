@@ -1,7 +1,6 @@
 /** Token-budget projection helpers. See `docs/token-budget.md`. */
 
 import type { EvidenceRow, EvidenceSummary } from "@/features/evidence/domain/types.js";
-import type { HandoffRecord, HandoffSummary } from "@/features/handoff/domain/handoff-types.js";
 import type { Mission, MissionSummary } from "@/shared/domain/legacy-mission";
 import type { LegacyTask as Task, TaskSummary } from "@/shared/domain/legacy-task";
 
@@ -46,19 +45,3 @@ export function summarizeEvidence(row: EvidenceRow): EvidenceSummary {
   };
 }
 
-export function summarizeHandoff(record: HandoffRecord): HandoffSummary {
-  return {
-    name: record.name,
-    id: record.id,
-    status: record.status,
-    task: record.task,
-    agent: record.agent,
-    model: record.model,
-    createdAt: record.createdAt,
-    wait: record.wait,
-    ...(record.refs.taskId !== undefined ? { taskId: record.refs.taskId } : {}),
-    ...(record.refs.missionId !== undefined
-      ? { missionId: record.refs.missionId }
-      : {}),
-  };
-}

@@ -5,7 +5,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { ensureDir, readText, writeJson } from "@/shared/lib/fs.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
 import { validateContract } from "../domain/contract/contract-state.js";
-import { ANY_TASK_ID_PATTERN } from "@/v2/types/task.js";
+import { ANY_TASK_ID_PATTERN } from "@/types/task.js";
 import type { Contract } from "../domain/contract/contract-types.js";
 import type { ContractVersionStorePort } from "../ports/contract-version-store.port.js";
 

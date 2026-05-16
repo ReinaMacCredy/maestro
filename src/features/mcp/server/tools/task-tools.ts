@@ -4,8 +4,8 @@ import {
   taskBlock,
   taskShip,
   taskFromSpec,
-} from "@/v2/service/index.js";
-import type { Task } from "@/v2/types/task.js";
+} from "@/service/index.js";
+import type { Task } from "@/types/task.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import {

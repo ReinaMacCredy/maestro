@@ -6,9 +6,9 @@ import {
   scanSlopCleanup,
   formatSlopCleanupLines,
 } from "@/features/gc/usecases/slop-cleanup.usecase.js";
-import type { PrinciplesStorePort } from "@/v2/repo/principles-store.port.js";
-import type { ProcessRunnerPort } from "@/v2/repo/process-runner.port.js";
-import type { Principle } from "@/v2/types/principle.js";
+import type { PrinciplesStorePort } from "@/repo/principles-store.port.js";
+import type { ProcessRunnerPort } from "@/repo/process-runner.port.js";
+import type { Principle } from "@/types/principle.js";
 
 let dir: string;
 

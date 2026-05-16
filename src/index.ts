@@ -26,7 +26,6 @@ import { registerReplyCommand } from "./features/reply/index.js";
 // ~250ms on cold start, but is only needed when the `mission-control` verb
 // runs. Every other verb (and `--version`/`--help`) skips it entirely.
 // See profile-imports.ts for the measurements.
-import { registerHandoffCommand } from "./features/handoff/index.js";
 import { registerBundleCommand } from "./features/bundle/index.js";
 import { registerEvidenceCommand } from "./features/evidence/index.js";
 import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
@@ -45,12 +44,12 @@ import { registerWorktreeCommand } from "./features/worktree/index.js";
 import {
   checkSkillBinaryParity,
   renderDriftError,
-} from "@/v2/service/skill-binary-parity.js";
-import { registerSpecV2Commands } from "@/v2/runtime/spec.command.js";
-import { registerTaskV2Commands } from "@/v2/runtime/task.command.js";
-import { registerPlanV2Commands } from "@/v2/runtime/plan.command.js";
-import { registerPrincipleV2Commands } from "@/v2/runtime/principle.command.js";
-import { registerSetupV2Commands } from "@/v2/runtime/setup.command.js";
+} from "@/service/skill-binary-parity.js";
+import { registerSpecV2Commands } from "@/runtime/spec.command.js";
+import { registerTaskV2Commands } from "@/runtime/task.command.js";
+import { registerPlanV2Commands } from "@/runtime/plan.command.js";
+import { registerPrincipleV2Commands } from "@/runtime/principle.command.js";
+import { registerSetupV2Commands } from "@/runtime/setup.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -80,7 +79,6 @@ registerUninstallCommand(program);
 registerProvidersCommand(program);
 registerSkillsCommand(program);
 registerMcpCommand(program);
-registerHandoffCommand(program, deps);
 registerReplyCommand(program, deps);
 registerPrincipleCommand(program, deps);
 // v2 surface: attaches `principle promote <correctionId>` to the same parent.

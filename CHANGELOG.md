@@ -52,7 +52,7 @@ New: `principle_promote`, `setup_check`, `setup_migrate_v2`.
 | `.maestro/memory/corrections/*.json` | `docs/principles/legacy/*.md` |
 | `.maestro/graph.json` | `docs/references/project-graph.yaml` |
 | `.maestro/session/` | `.maestro/runs/<id>/agent.json` |
-| `tasks.jsonl` | `tasks.v2.jsonl` |
+| `tasks.jsonl` | `tasks.jsonl` |
 | `.maestro/MAESTRO.md` | Deleted |
 
 #### Skill bundle

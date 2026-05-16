@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { collectBundleSources } from "@/features/bundle/usecases/collect-bundle-sources.usecase.js";
 import type { BundleFile } from "@/features/bundle/domain/bundle-types.js";
 import { MaestroError } from "@/shared/errors.js";
-import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import type {
   Assertion,
   AssertionStorePort,
@@ -17,7 +16,6 @@ import type {
   MissionStorePort,
 } from "@/shared/domain/legacy-mission";
 import { buildMissions } from "@/shared/domain/legacy-mission";
-import type { HandoffRecord, HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort, AgentReply } from "@/features/reply";
 
 const MISSION_ID = "2026-04-13-001";
@@ -87,29 +85,6 @@ function buildCheckpoint(id: string): Checkpoint {
     timestamp: "2026-04-13T01:00:00.000Z",
     featureStatuses: { f1: "done" },
     assertionResults: { a1: "passed" },
-  };
-}
-
-function buildHandoff(
-  id: string,
-  refs: HandoffRecord["refs"],
-  dirs: { sourceDir?: string; targetDir?: string } = {},
-): HandoffRecord {
-  return {
-    id,
-    createdAt: "2026-04-13T02:00:00.000Z",
-    task: "bundle handoff",
-    name: "[Handoff] bundle handoff",
-    agent: "claude",
-    model: "opus",
-    status: "completed",
-    wait: true,
-    sourceDir: dirs.sourceDir ?? projectDir,
-    targetDir: dirs.targetDir ?? dirs.sourceDir ?? projectDir,
-    promptPath: `.maestro/handoff/${id}/prompt.md`,
-    outputPath: `.maestro/handoff/${id}/output.log`,
-    command: ["claude", "--print", "bundle handoff"],
-    refs,
   };
 }
 
@@ -186,21 +161,6 @@ class FakeReplyStore implements ReplyStorePort {
   async markIngested() { /* noop */ }
 }
 
-class FakeHandoffStore implements HandoffStorePort {
-  constructor(private readonly handoffs: readonly HandoffRecord[]) {}
-  async create(): Promise<HandoffRecord> { throw new Error("not implemented"); }
-  async update(record: HandoffRecord) { return record; }
-  async consume(): Promise<HandoffRecord> { throw new Error("not implemented"); }
-  async get(id: string) { return this.handoffs.find((handoff) => handoff.id === id); }
-  async list() { return this.handoffs; }
-  async listOpenForTask(input: { readonly taskId: string; readonly projectRoot: string }) {
-    return this.handoffs.filter(
-      (handoff) => handoff.refs.taskId === input.taskId && handoff.refs.projectRoot === input.projectRoot,
-    );
-  }
-  resolveArtifactPath(relativePath: string) { return join(projectDir, relativePath); }
-}
-
 async function seedAgents(featureId: string): Promise<void> {
   const dir = join(projectDir, ".maestro", "missions", MISSION_ID, "agents", featureId);
   await mkdir(dir, { recursive: true });
@@ -220,21 +180,11 @@ async function seedReplies(featureId: string): Promise<void> {
   );
 }
 
-async function seedPrinciplesAndOutcomes(
-  outcomes: readonly Record<string, unknown>[] = [
-    { principleId: "p1", handoffId: "h1", missionId: MISSION_ID, outcome: "helpful", recordedAt: "2026-04-13T00:00:00.000Z" },
-    { principleId: "p1", handoffId: "h2", missionId: "2020-01-01-999", outcome: "helpful", recordedAt: "2026-04-13T00:00:00.000Z" },
-  ],
-): Promise<void> {
+async function seedPrinciples(): Promise<void> {
   await mkdir(join(projectDir, ".maestro"), { recursive: true });
   await writeFile(
     join(projectDir, ".maestro", "principles.jsonl"),
     `${JSON.stringify({ id: "p1", rule: "Prefer simplicity" })}\n${JSON.stringify({ id: "p2", rule: "Cover edges" })}\n`,
-  );
-  await mkdir(join(projectDir, ".maestro", "principles"), { recursive: true });
-  await writeFile(
-    join(projectDir, ".maestro", "principles", "outcomes.jsonl"),
-    outcomes.map((record) => JSON.stringify(record)).join("\n") + "\n",
   );
 }
 
@@ -253,7 +203,6 @@ async function seedMemory(): Promise<void> {
 
 function makeDeps({
   replies = new Map<string, AgentReply>(),
-  handoffs = [] as readonly HandoffRecord[],
   checkpoints = [] as readonly Checkpoint[],
   assertions = [] as readonly Assertion[],
 } = {}) {
@@ -268,7 +217,6 @@ function makeDeps({
   return {
     missions: buildMissions(missionStore, featureStore, assertionStore, checkpointStore),
     replyStore: new FakeReplyStore(replies),
-    handoffStore: new FakeHandoffStore(handoffs),
   };
 }
 
@@ -277,7 +225,7 @@ function filesByPath(files: readonly BundleFile[]): Map<string, BundleFile> {
 }
 
 describe("collectBundleSources", () => {
-  it("aggregates a minimal mission without replies, handoffs, or memory", async () => {
+  it("aggregates a minimal mission without replies or memory", async () => {
     const deps = makeDeps();
     const result = await collectBundleSources(deps, {
       missionId: MISSION_ID,
@@ -298,18 +246,12 @@ describe("collectBundleSources", () => {
     expect(result.stats.memorySnapshot).toEqual({ corrections: 0, learnings: 0 });
   });
 
-  it("includes agent files, replies, handoffs, checkpoints, principles, and memory", async () => {
+  it("includes agent files, replies, checkpoints, principles, and memory", async () => {
     await seedAgents("f1");
     await seedAgents("f2");
     await seedReplies("f1");
     await seedMemory();
-
-    const handoffInScope = buildHandoff("2026-04-13-101", { missionId: MISSION_ID });
-    const handoffOutOfScope = buildHandoff("2026-04-13-102", { missionId: "2020-01-01-001" });
-    await seedPrinciplesAndOutcomes([
-      { principleId: "p1", handoffId: handoffInScope.id, missionId: MISSION_ID, outcome: "helpful", recordedAt: "2026-04-13T00:00:00.000Z" },
-      { principleId: "p1", handoffId: handoffOutOfScope.id, missionId: "2020-01-01-999", outcome: "helpful", recordedAt: "2026-04-13T00:00:00.000Z" },
-    ]);
+    await seedPrinciples();
 
     const replies = new Map<string, AgentReply>([
       [`${MISSION_ID}:f1`, buildReply("f1")],
@@ -317,7 +259,6 @@ describe("collectBundleSources", () => {
 
     const deps = makeDeps({
       replies,
-      handoffs: [handoffInScope, handoffOutOfScope],
       checkpoints: [buildCheckpoint("20260413-010000-000")],
       assertions: [buildAssertion("a1", "m1")],
     });
@@ -333,22 +274,18 @@ describe("collectBundleSources", () => {
     expect(files.has(`${MISSION_ID}.mission/mission/agents/f1/report.json`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/mission/agents/f2/prompt.md`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/replies/f1.yaml`)).toBe(true);
-    expect(files.has(`${MISSION_ID}.mission/handoffs/2026-04-13-101.json`)).toBe(true);
-    expect(files.has(`${MISSION_ID}.mission/handoffs/2026-04-13-102.json`)).toBe(false);
     expect(files.has(`${MISSION_ID}.mission/mission/checkpoints/20260413-010000-000.json`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/principles/principles.jsonl`)).toBe(true);
-    expect(files.has(`${MISSION_ID}.mission/principles/outcomes.jsonl`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/memory/corrections/c1.json`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/memory/learnings/_compiled.json`)).toBe(true);
 
     expect(result.stats.features).toBe(2);
     expect(result.stats.agents).toBe(2);
     expect(result.stats.replies).toBe(1);
-    expect(result.stats.handoffs).toBe(1);
+    expect(result.stats.handoffs).toBe(0);
     expect(result.stats.checkpoints).toBe(1);
     expect(result.stats.assertions).toBe(1);
     expect(result.stats.principlesSnapshot).toBe(2);
-    expect(result.stats.outcomesSnapshot).toBe(1); // unrelated mission filtered out
     expect(result.stats.memorySnapshot).toEqual({ corrections: 1, learnings: 2 });
   });
 
@@ -376,40 +313,6 @@ describe("collectBundleSources", () => {
 
     expect(result.stats.replies).toBe(0);
     expect(result.stats.memorySnapshot).toBeNull();
-  });
-
-  it("filters handoffs and principle outcomes to the current project when mission ids collide", async () => {
-    await seedPrinciplesAndOutcomes([
-      { principleId: "p1", handoffId: "2026-04-13-101", missionId: MISSION_ID, outcome: "helpful", recordedAt: "2026-04-13T00:00:00.000Z" },
-      { principleId: "p1", handoffId: "2026-04-13-102", missionId: MISSION_ID, outcome: "helpful", recordedAt: "2026-04-13T00:00:00.000Z" },
-    ]);
-
-    const foreignProjectDir = join(projectDir, "foreign-project");
-    const projectRoot = resolveMaestroProjectRoot(projectDir);
-    const handoffInScope = buildHandoff("2026-04-13-101", { missionId: MISSION_ID, projectRoot: projectRoot });
-    const handoffForeign = buildHandoff(
-      "2026-04-13-102",
-      { missionId: MISSION_ID, projectRoot: foreignProjectDir },
-      { sourceDir: foreignProjectDir, targetDir: foreignProjectDir },
-    );
-
-    const result = await collectBundleSources(
-      makeDeps({ handoffs: [handoffInScope, handoffForeign] }),
-      {
-        missionId: MISSION_ID,
-        projectDir,
-        options: { redact: [] },
-      },
-    );
-
-    const files = filesByPath(result.files);
-    expect(files.has(`${MISSION_ID}.mission/handoffs/2026-04-13-101.json`)).toBe(true);
-    expect(files.has(`${MISSION_ID}.mission/handoffs/2026-04-13-102.json`)).toBe(false);
-    expect(files.get(`${MISSION_ID}.mission/principles/outcomes.jsonl`)?.content).toBe(
-      `${JSON.stringify({ principleId: "p1", handoffId: "2026-04-13-101", missionId: MISSION_ID, outcome: "helpful", recordedAt: "2026-04-13T00:00:00.000Z" })}\n`,
-    );
-    expect(result.stats.handoffs).toBe(1);
-    expect(result.stats.outcomesSnapshot).toBe(1);
   });
 
   it("throws when the mission does not exist", async () => {

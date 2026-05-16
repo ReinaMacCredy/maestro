@@ -1,5 +1,5 @@
 import type { EvidenceKind } from "@/features/evidence/index.js";
-import type { RiskClass } from "@/v2/types/product-spec.js";
+import type { RiskClass } from "@/types/product-spec.js";
 
 export interface PlanInput {
   readonly intendedFiles: readonly string[];

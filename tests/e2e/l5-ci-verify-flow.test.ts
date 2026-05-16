@@ -218,7 +218,7 @@ async function writeEventFile(dir: string, pr: number): Promise<string> {
 // ─── Scenarios ────────────────────────────────────────────────────────────────
 
 // TODO(v2/phase-4): re-enable or remove. v1 `task verify` is detached per ADR-0007 big-bang;
-// v2 equivalents live in src/v2/runtime/task.command.ts.
+// v2 equivalents live in src/runtime/task.command.ts.
 describe.skip("L5 ci verify flow (compiled binary)", () => {
   // ── S1: Init ──────────────────────────────────────────────────────────────
 

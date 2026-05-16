@@ -1,6 +1,6 @@
 # Maestro CLI reference
 
-Verb-by-verb reference for the `maestro` CLI on v2. Each section names the verb, its flags, exit codes where relevant, and the canonical doc for the full contract.
+Verb-by-verb reference for the `maestro` CLI. Each section names the verb, its flags, exit codes where relevant, and the canonical doc for the full contract.
 
 For agent-facing usage, prefer the bundled skills under `skills/bundled/maestro-*` — they cross-reference these verbs in the right order. The five bundled skills are `maestro-task`, `maestro-plan`, `maestro-design`, `maestro-verify`, `maestro-setup`.
 
@@ -13,7 +13,7 @@ bun run build
 bun run check:boundaries
 bun run check:skills
 bun run check:bundled-skills
-bun run check:layers      # v2 forward-only layer enforcement (ADR-0017)
+bun run check:layers      # forward-only layer enforcement
 bun run test
 ./dist/maestro mission-control --render-check --size 120x40
 bun run release:local
@@ -32,7 +32,7 @@ maestro spec validate <path>
 
 `spec new` scaffolds `.maestro/specs/<slug>.md` with frontmatter (`mode: light | heavy`, `work_type`, `acceptance_criteria`, `non_goals`). `spec validate` parses an existing spec and reports frontmatter errors. Heavy-mode specs are the input to `plan from-spec`; light-mode specs feed `task from-spec`.
 
-Authored interactively through the `maestro-design` skill (grill protocol, ADR-0016).
+Authored interactively through the `maestro-design` skill (grill protocol).
 
 Exit codes: `spec validate` returns 1 on parse error or schema violation.
 
@@ -49,7 +49,7 @@ maestro task abandon <id> --reason <text>
 maestro task ship <id> [--pr-url <url>]
 ```
 
-Hot-path aliases (ADR-0014): `maestro claim <id>`, `maestro verify <id>`, `maestro block <id>`, `maestro abandon <id>`, `maestro ship <id>`. The aliases accept the same flags as their `task` counterparts.
+Hot-path aliases: `maestro claim <id>`, `maestro verify <id>`, `maestro block <id>`, `maestro abandon <id>`, `maestro ship <id>`. The aliases accept the same flags as their `task` counterparts.
 
 State machine (ADR-0003):
 
@@ -104,7 +104,7 @@ No hot-path aliases — plan verbs are heavy and not on the loop critical path.
 maestro principle promote <correctionId> [--json]
 ```
 
-Materializes `docs/principles/<slug>.md` from a `lint-violation` evidence row (slug derived from `rule_id`). Promotion is the only path from a one-off correction to a durable golden rule (ADR-0015).
+Materializes `docs/principles/<slug>.md` from a `lint-violation` evidence row (slug derived from `rule_id`). Promotion is the only path from a one-off correction to a durable golden rule.
 
 Exit code 1 when the correction id is missing or is not a `lint-violation` row.
 

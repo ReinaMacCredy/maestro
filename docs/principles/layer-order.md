@@ -2,11 +2,11 @@
 
 ## Rule
 
-V2 layers import forward-only along `types -> config -> repo -> service -> runtime -> ui`. Providers are cross-cutting and universally importable. No layer may import a sibling further down the stack; cross-feature reads in v1 must go through `@/features/<name>` public surfaces.
+Layers import forward-only along `types -> config -> repo -> service -> runtime -> ui`. Providers are cross-cutting and universally importable. No layer may import a sibling further down the stack.
 
 ## Rationale
 
-Layer-order is the spine of the v2 architecture (ADR-0017). Mechanical enforcement of the rule is the difference between "we have boundaries" and "the codebase quietly turned into a tangle of cross-imports". The lint runner already enforces this for v2 (`bun run lint:arch`); a same-rule principle keeps the rule legible to humans and agents.
+Layer-order is the spine of the architecture. Mechanical enforcement of the rule is the difference between "we have boundaries" and "the codebase quietly turned into a tangle of cross-imports". The lint runner already enforces this (`bun run lint:arch`); a same-rule principle keeps the rule legible to humans and agents.
 
 ## Scan Command
 
