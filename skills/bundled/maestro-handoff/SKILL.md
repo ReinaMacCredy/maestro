@@ -81,6 +81,13 @@ The MCP surface mirrors direct file reads. Use these instead of `ls`/`jq` when a
 
 `maestro_handoff_pickup` is a bookkeeping mark; it does **not** claim the task — call `maestro_task_claim` after pickup.
 
+## Hand off cleanly
+
+The next phase after this skill is `maestro-task` (after `task claim` re-establishes ownership) or `maestro-verify` (if the prior agent left mid-verification and the verdict loop should resume).
+
+Pass a re-claimed task whose envelope context — `agent_id`, `worktree_path`, `spec_path`, `reason` — has been internalized. Not just an envelope you glanced at.
+Do not invoke spec authoring or planning from this skill; this skill is read-only handoff plumbing.
+
 ## See also
 
 - `maestro-task` — full task lifecycle.

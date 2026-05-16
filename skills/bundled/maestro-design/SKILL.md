@@ -11,6 +11,14 @@ Use this skill to author or refine a product-spec via the grill protocol. The ou
 
 The grill protocol is the design skill's interview loop. It is the same pattern named by ADR-0016. Entering this skill IS running the grill — there is no separate `spec grill` verb.
 
+## Internal states
+
+Track which state you are in throughout the session. Surface the state to the user when it changes, when you are stuck, or when the handoff is imminent. Do not invent additional states.
+
+- `needs-clarification` — the most recent answer was vague, contradicted committed context, or reused a defined term in a new way. You cannot advance the decision tree until it resolves. Re-ask the same branch with the conflict named.
+- `design-in-progress` — the decision tree has open branches (`acceptance_criteria`, `non_goals`, `risk_class`, `mode`, `work_type`, `dependencies`). Walk them one question per turn.
+- `ready-for-planning` — the spec is written to `.maestro/specs/<slug>.md` and `maestro spec validate` passed. The next phase is `maestro-plan` (heavy) or `maestro-task` (light). Surface the state and the slug, then hand off.
+
 ## Hard rules
 
 1. One question per turn. Wait for the answer before asking the next.
@@ -139,9 +147,16 @@ Run `maestro spec validate .maestro/specs/<slug>.md`. Fix any frontmatter errors
 
 ### 9. Hand off cleanly
 
-When the spec validates, the design phase is done. The next step is `maestro task from-spec .maestro/specs/<slug>.md` to create the v2 task in `draft`. Tell the user the slug, the spec path, and the next verb to run.
+The next phase after this skill is `maestro-plan` (for `mode: heavy` specs) or `maestro-task` (for `mode: light` specs).
+Pass an approved, validated spec — not a vague direction.
+Do not invoke planning or implementation from this skill.
 
-Do not start planning or implementation inside this skill. The handoff is to `maestro-plan` (heavy mode) or directly to `maestro task claim <id>` followed by `maestro-task` (light mode).
+Tell the user the slug, the spec path, and the matching next verb:
+
+- Heavy mode → `maestro plan from-spec .maestro/specs/<slug>.md`, then load `maestro-plan`.
+- Light mode → `maestro task from-spec .maestro/specs/<slug>.md`, then load `maestro-task` and `maestro task claim <id>`.
+
+Routing the wrong verb at the wrong mode is a silent footgun: `task from-spec` will accept a heavy spec and materialize an orphan task instead of an exec-plan. Match the verb to the spec's `mode:`.
 
 ## What the grill is not
 

@@ -220,6 +220,13 @@ Report:
 Do not claim setup is complete unless root `AGENTS.md`, context docs,
 language guides, and `.maestro/setup-report.md` have all been checked.
 
+### 8. Hand off cleanly
+
+The next phase after this skill is `maestro-design` (to author a new spec) or `maestro-task` (to resume work against an existing spec under `.maestro/specs/`).
+
+Pass a bootstrapped repo with `.maestro/setup-report.md` written and `maestro setup check` returning a clean audit — not a half-installed harness.
+Do not invoke design, planning, or implementation from this skill.
+
 ## Context Doc Intent
 
 - `architecture.md`: current repo shape, owned modules, boundaries, known

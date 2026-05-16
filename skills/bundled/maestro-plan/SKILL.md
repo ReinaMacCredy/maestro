@@ -167,9 +167,13 @@ Skip this section entirely when no maestro project is detected.
 
 ---
 
-## Hand off to `maestro-task`
+## Hand off cleanly
 
-When tasks are created and the user approves, invoke the `Skill` tool with `skill: "maestro-task"`. Execution continues there. The handoff does not need a separate handoff envelope — `plan decompose` already emitted one, and the first `task claim` will emit `task:claim`.
+The next phase after this skill is `maestro-task`.
+Pass a decomposed plan with child tasks materialized — not just an `ExecPlan` record.
+Do not invoke implementation from this skill.
+
+When the child tasks exist and the user approves, invoke the `Skill` tool with `skill: "maestro-task"` and claim the first child. `plan decompose` does **not** emit a handoff envelope; the only handoff trigger here is the first `maestro task claim`, which writes a `task:claim` envelope to `.maestro/handoffs/<hnd-...>.json` (see `maestro-handoff` for the read side).
 
 ---
 

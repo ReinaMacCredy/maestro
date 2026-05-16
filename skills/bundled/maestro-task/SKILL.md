@@ -207,6 +207,19 @@ If MCP is unavailable, fall back to the CLI verbs above.
 
 ---
 
+## Hand off cleanly
+
+The next phase after this skill depends on where the single-task loop exits:
+
+- `ship` → loop is done. Surface the PR URL; no downstream skill.
+- `block` → the next agent enters via `maestro-handoff` and reads the `task:block` envelope. Surface `block_reason` and stop.
+- `verify --verdict human` → surface the reason to the user; do not retry. The user (or a follow-up agent via `maestro-handoff`) decides next.
+- Pre-ship verification is in-loop, not a downstream skill — `maestro-verify` is the protocol you run *inside* this skill at step 4, not a handoff target.
+
+Pass a claimed task with a clean evidence trail — not an in-flight scratchpad. Do not invoke spec authoring or planning from this skill.
+
+---
+
 ## See also
 
 - `maestro-design` — grill-protocol spec authoring (run before `task from-spec`).

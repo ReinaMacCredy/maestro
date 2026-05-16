@@ -75,6 +75,19 @@ The reference files are one level deep — do not link onward from inside them. 
 
 ---
 
+## Hand off cleanly
+
+The next phase after this skill depends on the verdict:
+
+- PASS → return to `maestro-task` step 6 and run `maestro task ship <id>` (or alias `maestro ship <id>`).
+- FAIL → stay in the implement → verify loop in `maestro-task`. Do not hand off — fix the cited findings and re-run.
+- HUMAN → surface to the user with the recorded reason; do not retry without guidance.
+- BLOCK → the next agent enters via `maestro-handoff` and reads the `task:block` envelope. Surface `block_reason` and stop.
+
+Pass a computed verdict envelope with evidence attached — not a partial check. Do not invoke implementation, spec authoring, or planning from this skill.
+
+---
+
 ## MCP tools (when available)
 
 Verification verbs are also exposed via MCP for runtimes that prefer structured tool calls. The MCP layer is a thin wrapper; semantics match the CLI exactly.
