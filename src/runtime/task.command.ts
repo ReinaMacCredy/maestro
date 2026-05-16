@@ -8,7 +8,8 @@ import { taskAbandon } from "../service/task-abandon.usecase.js";
 import { taskVerify, TaskVerifyReasonRequiredError } from "../service/task-verify.usecase.js";
 import { taskShip } from "../service/task-ship.usecase.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
-import { TaskTransitionError } from "../types/task-state.js";
+import { TaskTransitionError, TASK_STATES, type TaskState } from "../types/task-state.js";
+import type { Task } from "../types/task.js";
 
 export interface TaskCommandV2Options {
   readonly resolveRepoRoot: () => string;
@@ -299,6 +300,121 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .description("Hot-path alias for `task ship`")
     .option("--pr-url <url>", "PR URL recorded on the task")
     .action(shipAction);
+
+  const parseLimit = (v: string): number => {
+    const n = Number.parseInt(v, 10);
+    if (!Number.isFinite(n) || n < 1) {
+      throw new Error(`invalid --limit value: ${v}`);
+    }
+    return Math.min(n, 100);
+  };
+  const parseOffset = (v: string): number => {
+    const n = Number.parseInt(v, 10);
+    if (!Number.isFinite(n) || n < 0) {
+      throw new Error(`invalid --offset value: ${v}`);
+    }
+    return n;
+  };
+
+  const listAction = async function (
+    this: Command,
+    flags: { planId?: string; state?: string; limit?: number; offset?: number; json?: boolean },
+  ): Promise<void> {
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildV2Services({ repoRoot });
+      let tasks: readonly Task[];
+      if (flags.planId !== undefined) {
+        tasks = await services.taskStore.listByPlanId(flags.planId);
+      } else if (flags.state !== undefined) {
+        if (!(TASK_STATES as readonly string[]).includes(flags.state)) {
+          console.error(
+            `maestro task list: --state must be one of ${TASK_STATES.join("|")} (got '${flags.state}')`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        tasks = await services.taskStore.listByState(flags.state as TaskState);
+      } else {
+        tasks = await services.taskStore.list();
+      }
+      const limit = flags.limit ?? 20;
+      const offset = flags.offset ?? 0;
+      const page = tasks.slice(offset, offset + limit);
+      const wantJson = flags.json === true || this.optsWithGlobals().json === true;
+      if (wantJson) {
+        console.log(
+          JSON.stringify(
+            { items: page, total: tasks.length, limit, offset },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+      if (page.length === 0) {
+        console.log("No tasks");
+        return;
+      }
+      for (const t of page) {
+        const planNote = t.plan_id ? ` plan=${t.plan_id}` : "";
+        console.log(`${t.id}\t${t.state}\t${t.slug}\t${t.title}${planNote}`);
+      }
+    } catch (err) {
+      reportError("task list", err);
+    }
+  };
+
+  task
+    .command("list")
+    .description("List v2 tasks (filter by --plan-id or --state; paginated)")
+    .option("--plan-id <id>", "filter by plan id")
+    .option("--state <state>", `filter by state (${TASK_STATES.join("|")})`)
+    .option("--limit <n>", "page size (default 20, max 100)", parseLimit)
+    .option("--offset <n>", "page offset (default 0)", parseOffset)
+    .option("--json", "emit JSON {items,total,limit,offset}")
+    .action(listAction);
+
+  const getAction = async function (
+    this: Command,
+    id: string,
+    flags: { json?: boolean },
+  ): Promise<void> {
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildV2Services({ repoRoot });
+      const t = await services.taskStore.get(id);
+      if (!t) {
+        console.error(`maestro task get: task ${id} not found`);
+        process.exitCode = 1;
+        return;
+      }
+      const wantJson = flags.json === true || this.optsWithGlobals().json === true;
+      if (wantJson) {
+        console.log(JSON.stringify({ task: t }, null, 2));
+        return;
+      }
+      console.log(`${t.id} ${t.state} ${t.slug}`);
+      console.log(`  title:      ${t.title}`);
+      if (t.plan_id) console.log(`  plan_id:    ${t.plan_id}`);
+      if (t.spec_path) console.log(`  spec_path:  ${t.spec_path}`);
+      if (t.assignee) console.log(`  assignee:   ${t.assignee}`);
+      if (t.claimed_at) console.log(`  claimed_at: ${t.claimed_at}`);
+      if (t.pr_url) console.log(`  pr_url:     ${t.pr_url}`);
+      if (t.block_reason) console.log(`  blocked:    ${t.block_reason}`);
+      if (t.abandon_reason) console.log(`  abandoned:  ${t.abandon_reason}`);
+      console.log(`  created_at: ${t.created_at}`);
+      console.log(`  updated_at: ${t.updated_at}`);
+    } catch (err) {
+      reportError("task get", err);
+    }
+  };
+
+  task
+    .command("get <id>")
+    .description("Show a single v2 task by id")
+    .option("--json", "emit JSON {task: ...}")
+    .action(getAction);
 
   registerTaskObserveCommand(task, { resolveRepoRoot: opts.resolveRepoRoot });
 }

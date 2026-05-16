@@ -30,7 +30,7 @@ import { readCurrentContractWithBackfill } from "@/service/contract-helpers.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractStore" | "contractVersionStore">;
+  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractStore" | "contractVersionStore" | "v2">;
   readonly recordEvidence?: typeof defaultRecordEvidence;
 }
 
@@ -105,12 +105,14 @@ interface RecordOpts {
 }
 
 async function buildRecordInput(
-  services: Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractVersionStore" | "contractStore">,
+  services: Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractVersionStore" | "contractStore" | "v2">,
   opts: RecordOpts,
 ): Promise<RecordEvidenceInput> {
   const taskId = opts.task;
-  const task = await services.taskStore.get(taskId);
-  if (!task) {
+  // Look up in v1 first (legacy missionId-linked tasks). Fall back to v2.
+  const v1Task = await services.taskStore.get(taskId);
+  const v2Task = v1Task ? undefined : await services.v2.taskStore.get(taskId);
+  if (!v1Task && !v2Task) {
     throw new MaestroError(`Task not found: ${taskId}`, [
       "Run `maestro task list` to see available tasks",
     ]);
@@ -118,8 +120,10 @@ async function buildRecordInput(
 
   // When the task belongs to a Mission that has a Spec with at least one
   // criterion, --criterion is required and must match a known criterion id.
-  if (task.missionId) {
-    const spec = await services.specStore.read(task.missionId);
+  // (v1 only — v2 tasks reference specs via spec_path and skip this check;
+  // criterion validation for v2 happens against the contract below.)
+  if (v1Task?.missionId) {
+    const spec = await services.specStore.read(v1Task.missionId);
     if (spec && spec.acceptance_criteria.length > 0) {
       const ids = spec.acceptance_criteria.map((c) => c.id);
       if (!opts.criterion) {

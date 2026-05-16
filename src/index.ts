@@ -50,6 +50,7 @@ import { registerTaskV2Commands } from "@/runtime/task.command.js";
 import { registerPlanV2Commands } from "@/runtime/plan.command.js";
 import { registerPrincipleV2Commands } from "@/runtime/principle.command.js";
 import { registerSetupV2Commands } from "@/runtime/setup.command.js";
+import { registerContractCommands } from "@/runtime/contract.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -65,7 +66,7 @@ const deps = { getServices };
 
 export const program = new Command()
   .name("maestro")
-  .description("Conductor CLI -- shared mission, feature, and memory state for cross-agent workflows")
+  .description("The harness OS for agent-generated codebases. Humans steer, agents execute, maestro is the substrate.")
   .version(formatVersionOutputForArgv())
   .option("--json", "Output as JSON")
   .exitOverride();
@@ -94,6 +95,7 @@ registerSpecV2Commands(program, {
 registerTaskV2Commands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
+registerContractCommands(program, deps);
 registerPolicyCommand(program, deps);
 registerVerdictCommand(program, deps);
 

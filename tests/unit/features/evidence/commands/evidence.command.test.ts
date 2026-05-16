@@ -89,15 +89,27 @@ function evidenceDeps(overrides: DepsOverrides = {}) {
         taskStore: fakeTaskStore(tasks) as TaskStorePort,
         specStore,
         contractVersionStore: { write: async () => {}, readCurrent: async () => undefined, readVersion: async () => undefined, history: async () => [] },
-        contractStore: { 
-          get: async () => undefined, 
-          getByTaskId: async () => undefined, 
-          all: async () => [], 
+        contractStore: {
+          get: async () => undefined,
+          getByTaskId: async () => undefined,
+          all: async () => [],
           readIndex: async () => [],
           create: async () => { throw new Error("Not implemented"); },
           save: async () => { throw new Error("Not implemented"); },
           delete: async () => false,
         },
+        // v2 fallback lookup — empty store, mirrors absence of a v2-shaped task.
+        // Evidence record CLI tries v1 first then v2; tests exercise v1 paths.
+        v2: {
+          taskStore: {
+            create: async () => { throw new Error("Not implemented"); },
+            get: async () => undefined,
+            update: async () => { throw new Error("Not implemented"); },
+            list: async () => [],
+            listByState: async () => [],
+            listByPlanId: async () => [],
+          },
+        } as never,
       }),
       recordEvidence: overrides.recordEvidence ?? realRecordEvidence,
     },
