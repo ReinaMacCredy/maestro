@@ -60,6 +60,20 @@ _Avoid_: context-dump, session-state
 The interview protocol `maestro-design` and `maestro-plan` skills run (ADR-0016): one question at a time, recommended answer per question, challenges language against CONTEXT.md, updates the glossary inline as terms resolve, offers ADRs sparingly. No dedicated verb; entering the design or plan skill runs the grill.
 _Avoid_: interview, Q&A, drill
 
+### Verification
+
+**scenario test**:
+End-to-end test where two sub-agents (user-mock + coding-agent) drive maestro through the full user -> coding-agent -> maestro -> PR cycle, scored against a rubric of must-happen and must-not-happen events on the evidence trail. Eight scenarios cover project × familiarity × workflow. Real LLM, scheduled nightly + on release-tag commits. See ADR-0019.
+_Avoid_: integration test, behavior test, smoke test
+
+**familiarity tier**:
+The user-mock sub-agent's prompting style in a scenario. `novice` gives generic prompts without verb names ("set this up"); `expert` names verbs explicitly ("claim the first task"). Tests the coding-agent's ability to navigate maestro under low steering.
+_Avoid_: skill level, user persona
+
+**greenfield fixture / brownfield fixture**:
+Scenario starting state. Greenfield = empty repo + fresh `maestro setup`. Brownfield = frozen v1 `.maestro/` snapshot reused from `tests/fixtures/v1-maestro/`; brownfield scenarios open with `setup --migrate-v2`.
+_Avoid_: empty/populated, fresh/existing
+
 ## Operating modes
 
 **Light path**: task -> worktree -> loop -> handoff. Used for one-off small specs and single-PR work. No exec-plan required.

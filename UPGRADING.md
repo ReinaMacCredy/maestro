@@ -1,6 +1,6 @@
 # Upgrading maestro: v1 → v2
 
-> **Status: Phase 5 finalized.** Breaking-changes list confirmed at Phase 5 source-code sunset. Final verb wording and edge-case notes are confirmed against the actual v2 CLI. Any remaining phase-7 items (CHANGELOG header, RC soak) are tracked in `docs/v2-master-plan.md` §10 Phase 7.
+> **Status: Phase 7 finalized.** Breaking-changes list confirmed at Phase 5 source-code sunset. Verb wording, edge-case notes, and the v2.0.0 CHANGELOG header are confirmed against the actual v2 CLI shipped at the v2.0.0 tag. v0.LAST tag on `main` carries the last v1 commit (was v0.83.0) for downstream consumers who need to pin away from v2.
 
 v2 is a big-bang release (ADR-0007). There is no parallel binary, no aliasing of v1 verbs, and no compatibility shim. Existing v1 projects upgrade in one step via `maestro setup migrate-v2`.
 

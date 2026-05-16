@@ -19,20 +19,28 @@ afterEach(async () => {
 });
 
 describe("parseReleaseVersion", () => {
-  it("accepts the 0.x.y release scheme", () => {
-    expect(parseReleaseVersion("0.25.0")).toEqual({ feature: 25, patch: 0 });
-    expect(parseReleaseVersion("0.25.1")).toEqual({ feature: 25, patch: 1 });
+  it("accepts legacy 0.x.y versions", () => {
+    expect(parseReleaseVersion("0.25.0")).toEqual({ major: 0, feature: 25, patch: 0 });
+    expect(parseReleaseVersion("0.25.1")).toEqual({ major: 0, feature: 25, patch: 1 });
   });
 
-  it("rejects non-zero major versions", () => {
-    expect(() => parseReleaseVersion("2.4.2")).toThrow(
-      "Invalid Maestro release version '2.4.2'. Expected 0.x.y with a zero major version.",
-    );
+  it("accepts MAJOR.MINOR.PATCH for v2 and beyond", () => {
+    expect(parseReleaseVersion("2.0.0")).toEqual({ major: 2, feature: 0, patch: 0 });
+    expect(parseReleaseVersion("2.4.2")).toEqual({ major: 2, feature: 4, patch: 2 });
+  });
+
+  it("accepts pre-release suffixes for release candidates", () => {
+    expect(parseReleaseVersion("2.0.0-rc.1")).toEqual({
+      major: 2,
+      feature: 0,
+      patch: 0,
+      preRelease: "rc.1",
+    });
   });
 
   it("rejects malformed versions", () => {
     expect(() => parseReleaseVersion("0.25")).toThrow(
-      "Invalid Maestro release version '0.25'. Expected 0.x.y with a zero major version.",
+      "Invalid Maestro release version '0.25'. Expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-rc.N.",
     );
   });
 });
@@ -77,7 +85,7 @@ describe("writeVersionArtifacts", () => {
     expect(versionFile).toContain('export const RELEASED_AT = "');
   });
 
-  it("rejects invalid release versions before writing any artifacts", async () => {
+  it("rejects malformed release versions before writing any artifacts", async () => {
     const pkgPath = join(tmpDir, "package.json");
     const versionPath = join(tmpDir, "version.ts");
 
@@ -86,9 +94,9 @@ describe("writeVersionArtifacts", () => {
       pkgPath,
       versionPath,
       pkg: { version: "0.25.1" },
-      version: "1.0.0",
+      version: "not-a-version",
     })).rejects.toThrow(
-      "Invalid Maestro release version '1.0.0'. Expected 0.x.y with a zero major version.",
+      "Invalid Maestro release version 'not-a-version'. Expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-rc.N.",
     );
 
     expect(await Bun.file(pkgPath).exists()).toBe(false);
