@@ -31,7 +31,7 @@ describe("Edge Case 4: cost-budget BLOCK reason names the exhausted limit", () =
     const r = costBudgetExhausted("max-retries");
     expect(r.message).toContain("maestro task budget");
     expect(r.message).toContain("maestro contract amend");
-    expect(r.message).toContain("maestro handoff create");
+    expect(r.message).toContain("maestro handoff emit");
   });
 
   it("falls back to a generic message when reason is undefined", () => {

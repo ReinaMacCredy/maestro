@@ -569,20 +569,12 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
         ? v2Rows.slice(0, effectiveLimit)
         : v2Rows;
 
-      if (isJson && !isFull) {
-        if (v2Sliced.length === 0) {
-          output(true, sliced.map(summarizeEvidence), () => []);
-          return;
-        }
-        output(true, { v1: sliced.map(summarizeEvidence), v2: v2Sliced }, () => []);
-        return;
-      }
       if (isJson) {
-        if (v2Sliced.length === 0) {
-          output(true, sliced, () => []);
-          return;
-        }
-        output(true, { v1: sliced, v2: v2Sliced }, () => []);
+        const items = isFull ? sliced : sliced.map(summarizeEvidence);
+        const payload = v2Sliced.length > 0
+          ? { items, v2_items: v2Sliced }
+          : { items };
+        output(true, payload, () => []);
         return;
       }
       // Text mode: print v1 section, then a v2 section when present.

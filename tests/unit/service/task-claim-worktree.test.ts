@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { EvidenceStorePort } from "@/repo/evidence-store.port.js";
+import type { EvidenceRow, EvidenceStorePort } from "@/repo/evidence-store.port.js";
 import {
   TaskNotFoundError,
   type CreateTaskInput,
@@ -19,13 +19,16 @@ import type { TaskState } from "@/types/task-state.js";
 import type { Task, TaskId } from "@/types/task.js";
 
 function makeEvidence(): EvidenceStorePort {
-  const rows: unknown[] = [];
+  const rows: EvidenceRow[] = [];
   return {
     async append(row) {
       rows.push(row);
     },
     async list() {
-      return rows as never;
+      return rows;
+    },
+    async read(id) {
+      return rows.find((r) => r.id === id);
     },
   };
 }

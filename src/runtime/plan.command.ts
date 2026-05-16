@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
 import { buildV2Services } from "../providers/build-services.js";
+import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import {
   planFromSpec,
   PlanRequiresHeavyModeError,
@@ -152,6 +153,7 @@ export function registerPlanV2Commands(program: Command, opts: PlanCommandV2Opti
         for (const t of result.tasks) {
           console.log(`  ${t.id} draft ${t.slug} — ${t.title}`);
         }
+        await refreshNowMdFromServices(services);
       } catch (err) {
         reportError("plan decompose", err);
       }

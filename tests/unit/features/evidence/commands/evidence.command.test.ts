@@ -574,7 +574,7 @@ describe("evidence list", () => {
     expect(captured.logs.length).toBe(2);
   });
 
-  it("--json prints a parseable array", async () => {
+  it("--json prints a parseable { items, v2_items? } payload", async () => {
     const rows = [
       makeEvidenceRow({ id: "evd-0000000000001-aaaaaa" }),
     ];
@@ -587,10 +587,14 @@ describe("evidence list", () => {
     await program.parseAsync(["node", "maestro", "evidence", "list", "--json"]);
 
     expect(captured.logs.length).toBe(1);
-    const parsed = JSON.parse(captured.logs[0]!) as EvidenceRow[];
-    expect(Array.isArray(parsed)).toBe(true);
-    expect(parsed.length).toBe(1);
-    expect(parsed[0]!.id).toBe("evd-0000000000001-aaaaaa");
+    const parsed = JSON.parse(captured.logs[0]!) as {
+      items: EvidenceRow[];
+      v2_items?: unknown[];
+    };
+    expect(Array.isArray(parsed.items)).toBe(true);
+    expect(parsed.items.length).toBe(1);
+    expect(parsed.items[0]!.id).toBe("evd-0000000000001-aaaaaa");
+    expect(parsed.v2_items).toBeUndefined();
   });
 
   it("prints 'No evidence found.' when empty", async () => {

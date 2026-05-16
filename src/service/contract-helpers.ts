@@ -61,6 +61,9 @@ export async function readContractHistoryWithBackfill(
   return [legacy];
 }
 
+// Apply an amend batch's `add` / `remove` to a contract's existing path set.
+// Returns the new path set plus paths from `add` that conflicted with `base`.
+// In-batch duplicates within `add` are deduplicated silently (idempotent add).
 export function applyPathChanges(
   existing: readonly string[],
   add: readonly string[],

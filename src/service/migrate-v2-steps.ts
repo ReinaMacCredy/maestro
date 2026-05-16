@@ -1,7 +1,6 @@
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dirExists, fileExists } from "@/shared/lib/fs.js";
-import { truncateText } from "@/shared/lib/truncate.js";
 import {
   mapV1TaskToV2,
   type V1TaskShape,
@@ -106,8 +105,9 @@ export async function runMigrateTasks(
     try {
       parsed = JSON.parse(line);
     } catch {
-      const preview = truncateText(line.replace(/\s+/g, " "), 60);
-      recordSkip(`line ${lineIdx + 1}: invalid JSON (${preview})`);
+      // Avoid echoing line content so token-shaped prefixes don't leak.
+      const head = JSON.stringify(line.slice(0, 8));
+      recordSkip(`line ${lineIdx + 1}: invalid JSON (${line.length} bytes, starts: ${head})`);
       continue;
     }
     if (isAlreadyV2Task(parsed)) {

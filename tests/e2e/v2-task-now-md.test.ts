@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -63,6 +63,38 @@ describe("v2 task verbs refresh .maestro/tasks/NOW.md", () => {
     expect(md).toContain("## Ready to pick up (0)");
     expect(md).toContain(taskId);
     expect(md).toContain("Owner: agent-a");
+  });
+
+  it("plan decompose refreshes NOW.md with the new draft tasks", async () => {
+    await runCompiled(["spec", "new", "now-md-decompose", "--mode", "heavy"], tmpDir);
+    const planCreated = await runCompiled(
+      ["plan", "from-spec", ".maestro/specs/now-md-decompose.md"],
+      tmpDir,
+    );
+    const planId = (planCreated.stdout.match(/^(pln-\S+)/) ?? [])[1]!;
+    expect(planId).toBeDefined();
+
+    const batchPath = join(tmpDir, "batch.json");
+    await writeFile(
+      batchPath,
+      JSON.stringify([
+        { title: "First child", slug: "first" },
+        { title: "Second child", slug: "second" },
+      ]),
+    );
+    const decomposed = await runCompiled(
+      ["plan", "decompose", planId, "--file", batchPath],
+      tmpDir,
+    );
+    expect(decomposed.exitCode).toBe(0);
+    const taskIds = [...decomposed.stdout.matchAll(/(tsk-\S+)\s+draft/g)].map(
+      (m) => m[1]!,
+    );
+    expect(taskIds.length).toBe(2);
+
+    const md = await readNowMd();
+    expect(md).toContain("## Ready to pick up (2)");
+    for (const id of taskIds) expect(md).toContain(id);
   });
 
   it("task block moves the task into the Blocked section with its reason", async () => {

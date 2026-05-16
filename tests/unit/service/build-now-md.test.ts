@@ -133,8 +133,26 @@ describe("buildNowMd", () => {
     expect(out).toContain("Blocked by: tsk-x-1");
   });
 
-  it("caps Ready to pick up at 5 entries even when more drafts exist", () => {
-    const tasks = Array.from({ length: 7 }, (_, i) =>
+  it("caps Ready to pick up at 5 rendered entries, reports the true count, and appends an overflow line", () => {
+    const tasks = Array.from({ length: 8 }, (_, i) =>
+      makeTask({
+        id: `tsk-d-${i + 1}`,
+        state: "draft",
+        created_at: `2026-05-16T0${i}:00:00.000Z`,
+      }),
+    );
+    const out = buildNowMd({ tasks, now: NOW });
+    expect(out).toContain("## Ready to pick up (8)");
+    expect(out).toContain("tsk-d-1");
+    expect(out).toContain("tsk-d-5");
+    expect(out).not.toContain("tsk-d-6");
+    expect(out).not.toContain("tsk-d-7");
+    expect(out).not.toContain("tsk-d-8");
+    expect(out).toContain("(and 3 more)");
+  });
+
+  it("omits the overflow line when the draft count is at or below the cap", () => {
+    const tasks = Array.from({ length: 5 }, (_, i) =>
       makeTask({
         id: `tsk-d-${i + 1}`,
         state: "draft",
@@ -143,10 +161,8 @@ describe("buildNowMd", () => {
     );
     const out = buildNowMd({ tasks, now: NOW });
     expect(out).toContain("## Ready to pick up (5)");
-    expect(out).toContain("tsk-d-1");
-    expect(out).toContain("tsk-d-5");
-    expect(out).not.toContain("tsk-d-6");
-    expect(out).not.toContain("tsk-d-7");
+    expect(out).not.toContain("(and 0 more)");
+    expect(out).not.toMatch(/\(and \d+ more\)/);
   });
 
   it("classifies stuck strictly above the 4h threshold (boundary)", () => {

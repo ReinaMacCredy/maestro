@@ -33,10 +33,10 @@ export function buildNowMd({ tasks, now }: BuildNowMdInput): string {
 
   const inFlight = tasks.filter(isInFlight).sort(byClaimedAtThenId);
 
-  const ready = tasks
+  const readyAll = tasks
     .filter((t) => t.state === "draft" && t.blocked_by.length === 0)
-    .sort(byCreatedAt)
-    .slice(0, READY_LIMIT);
+    .sort(byCreatedAt);
+  const ready = readyAll.slice(0, READY_LIMIT);
 
   const readyToShip = tasks.filter((t) => t.state === "ready").sort(byUpdatedAt);
   const blocked = tasks.filter((t) => t.state === "blocked").sort(byCreatedAt);
@@ -58,11 +58,15 @@ export function buildNowMd({ tasks, now }: BuildNowMdInput): string {
   }
   lines.push("");
 
-  lines.push(`## Ready to pick up (${ready.length})`);
-  if (ready.length === 0) {
+  lines.push(`## Ready to pick up (${readyAll.length})`);
+  if (readyAll.length === 0) {
     lines.push("None.");
   } else {
     for (const t of ready) lines.push(...renderDraft(t));
+    if (readyAll.length > READY_LIMIT) {
+      lines.push(`(and ${readyAll.length - READY_LIMIT} more)`);
+      lines.push("");
+    }
   }
   lines.push("");
 

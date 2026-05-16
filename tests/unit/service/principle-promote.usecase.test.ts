@@ -18,6 +18,7 @@ function memEvidence(rows: EvidenceRow[]): EvidenceStorePort {
   return {
     append: async () => {},
     list: async () => rows,
+    read: async (id) => rows.find((r) => r.id === id),
   };
 }
 

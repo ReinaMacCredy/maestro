@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { EvidenceStorePort } from "@/repo/evidence-store.port.js";
+import type { EvidenceRow, EvidenceStorePort } from "@/repo/evidence-store.port.js";
 import type {
   HandoffEmitterPort,
   HandoffEnvelope,
@@ -17,13 +17,16 @@ import type { TaskState } from "@/types/task-state.js";
 import type { Task, TaskId } from "@/types/task.js";
 
 function makeEvidence(): EvidenceStorePort {
-  const rows: unknown[] = [];
+  const rows: EvidenceRow[] = [];
   return {
     async append(row) {
       rows.push(row);
     },
     async list() {
-      return rows as never;
+      return rows;
+    },
+    async read(id) {
+      return rows.find((r) => r.id === id);
     },
   };
 }

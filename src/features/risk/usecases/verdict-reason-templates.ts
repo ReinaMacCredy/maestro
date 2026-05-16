@@ -26,7 +26,7 @@ export function costBudgetExhausted(reason?: CostBudgetExhaustionReason): Verdic
       `Cost budget exhausted; further execution blocked. ${limitClause}` +
       "Run `maestro task budget --task <id>` to inspect the limits, " +
       "amend the contract's costBudget via `maestro contract amend` " +
-      "to raise the cap, or escalate to a human via `maestro handoff create`.",
+      "to raise the cap, or escalate to a human via `maestro handoff emit`.",
     ...(reason !== undefined ? { findingChecks: [reason] } : {}),
   };
 }
@@ -104,7 +104,7 @@ export function autoMergeNotAllowed(effectiveRiskClass: RiskClass): VerdictReaso
   return {
     category: "policy",
     code: "auto-merge-not-allowed",
-    message: `Auto-merge is opt-in and not enabled for risk class "${effectiveRiskClass}" in autopilot.yaml; the task can still complete via human review (run \`maestro handoff create\`, or set autoMergeAllowed.${effectiveRiskClass}: true — note: enabling auto-merge is a "loosening" and soaks for 30 days before taking effect; run \`maestro policy pending\` to see in-flight changes).`,
+    message: `Auto-merge is opt-in and not enabled for risk class "${effectiveRiskClass}" in autopilot.yaml; the task can still complete via human review (run \`maestro handoff emit\`, or set autoMergeAllowed.${effectiveRiskClass}: true — note: enabling auto-merge is a "loosening" and soaks for 30 days before taking effect; run \`maestro policy pending\` to see in-flight changes).`,
   };
 }
 

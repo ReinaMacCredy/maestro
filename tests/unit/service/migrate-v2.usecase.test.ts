@@ -232,6 +232,25 @@ describe("migrateV2 (scaffold)", () => {
     expect(after.trim().split("\n").length).toBe(1);
   });
 
+  it("redacts malformed JSON line content in the skip detail (no token-shaped substrings leak)", async () => {
+    // Write a malformed row that contains a token-shaped substring after byte 8.
+    // The skip detail must not echo the substring — it should only report the
+    // byte count and a short opaque head.
+    const secret = "ghp_thisisasecrettoken_morechars";
+    await writeFile(
+      join(root, ".maestro/tasks/tasks.jsonl"),
+      `{ this is not valid json with ${secret} embedded\n`,
+      "utf8",
+    );
+    const result = await migrateV2({ repoRoot: root, force: true });
+    const stepById = new Map(result.steps.map((s) => [s.id, s]));
+    const detail = stepById.get("migrate-tasks")?.detail ?? "";
+    expect(detail).toContain("invalid JSON");
+    expect(detail).not.toContain(secret);
+    expect(detail).not.toContain("ghp_thisis");
+    expect(detail).toMatch(/\d+ bytes, starts:/);
+  });
+
   it("skips write-flag when a prior step errored, so retries are not short-circuited", async () => {
     // Corrupt the corrections source so runMigrateCorrections returns error.
     await mkdir(join(root, ".maestro/memory/corrections"), { recursive: true });

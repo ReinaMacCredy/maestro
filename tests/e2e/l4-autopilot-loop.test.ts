@@ -238,7 +238,11 @@ describe.skip("L4 autopilot loop (compiled binary)", () => {
         dir,
       );
       expect(evidenceListResult.exitCode).toBe(0);
-      const evidenceRows = expectJson<Array<{ kind: string }>>(evidenceListResult);
+      const evidencePayload = expectJson<{
+        items: Array<{ kind: string }>;
+        v2_items?: ReadonlyArray<unknown>;
+      }>(evidenceListResult);
+      const evidenceRows = evidencePayload.items;
       expect(evidenceRows.length).toBeGreaterThanOrEqual(1);
       expect(evidenceRows.every((r) => r.kind === "plan-check")).toBe(true);
 
