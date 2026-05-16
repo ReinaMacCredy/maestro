@@ -911,6 +911,8 @@ Run `maestro <command> --help` for full flags and examples.
 
 ## Mission Control
 
+![Mission Control preview](assets/images/Misson_Control_Preview.png)
+
 Mission Control is a read-only dashboard over Maestro state. It supports:
 
 - Interactive TTY mode with `maestro mission-control`
