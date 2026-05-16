@@ -2,7 +2,7 @@
 
 Verb-by-verb reference for the `maestro` CLI. Each section names the verb, its flags, exit codes where relevant, and the canonical doc for the full contract.
 
-For agent-facing usage, prefer the bundled skills under `skills/bundled/maestro-*` — they cross-reference these verbs in the right order. The five bundled skills are `maestro-task`, `maestro-plan`, `maestro-design`, `maestro-verify`, `maestro-setup`.
+For agent-facing usage, prefer the bundled skills under `skills/bundled/maestro-*`; they cross-reference these verbs in the right order. The six bundled skills are `maestro-task`, `maestro-plan`, `maestro-design`, `maestro-verify`, `maestro-handoff`, `maestro-setup`.
 
 ---
 
@@ -70,6 +70,26 @@ Transitions are hybrid (ADR-0004): the agent enters check states manually; the h
 Each transition emits an evidence row (ADR-0009) into `.maestro/evidence/<date>.jsonl`, a parallel observability row into `.maestro/runs/<task-id>/observability.jsonl`, and a handoff envelope into `.maestro/handoffs/<id>.json`.
 
 One task = one PR (ADR-0006). Multi-PR work promotes to an exec-plan.
+
+---
+
+## task observe
+
+```bash
+maestro task observe metrics <promql> [--prometheus-url <url>] [--json] [--record --task <id>]
+maestro task observe logs [--log-file <path>] [--lines <n>] [--filter <text>] [--json] [--record --task <id>]
+```
+
+Dev-time per-worktree observability. Both subcommands are read-only by default; `--record --task <id>` writes a `manual-note` evidence row at witness level `agent-claimed-locally` with a `[dev-observation:metrics]` or `[dev-observation:logs]` payload note.
+
+- `task observe metrics <promql>` runs a one-shot PromQL query against the dev metrics backend. Base URL precedence: `--prometheus-url` → `MAESTRO_PROMETHEUS_URL`. Missing URL exits 1.
+- `task observe logs` tails the last N lines (default 100) from the dev log file declared by `--log-file` or `MAESTRO_DEV_LOG_FILE`. `--filter <text>` is a substring filter applied before tail; `--lines` must be a positive integer.
+- `--json` emits `{kind, ...}` envelopes (`kind: "metrics"` or `kind: "logs"`); the plain form prints a `[dev-metrics]` / `[dev-logs]` summary line.
+- `--record` without `--task` exits 1.
+
+Exit codes: 0 success, 1 config error (missing URL or log path, invalid `--lines`, `--record` without `--task`), 2 backend error (Prometheus query failed, log read failed, evidence record failed).
+
+See `docs/dev-observability.md`.
 
 ---
 
@@ -283,7 +303,7 @@ maestro skills list
 maestro skills sync
 ```
 
-Lists the five bundled skills and syncs their embedded templates with the source under `skills/bundled/`.
+Lists the six bundled skills and syncs their embedded templates with the source under `skills/bundled/`.
 
 ---
 
@@ -313,7 +333,27 @@ maestro mission-control --json [--filter task=<id>] [--filter feature=<id>]
 
 ## mcp
 
-The `mcp__maestro__*` tool surface ships with the binary and is consumed by host agents through MCP. Tools mirror the CLI verbs (`maestro_task_claim`, `maestro_task_block`, `maestro_task_list`, etc.); the filter field on `maestro_task_list` is `plan_id` on v2.
+```bash
+maestro mcp serve [--project-root <path>] [--transport stdio]
+maestro mcp check [--json]
+```
+
+The `mcp__maestro__*` tool surface ships with the binary and is consumed by host agents through MCP over stdio. Tools mirror the CLI verbs; the filter field on `maestro_task_list` is `plan_id`. Surfaces:
+
+| Surface | Tools |
+|---------|-------|
+| Task | `maestro_task_list`, `maestro_task_get`, `maestro_task_from_spec`, `maestro_task_claim`, `maestro_task_block`, `maestro_task_ship` |
+| Evidence | `maestro_evidence_record`, `maestro_evidence_list` |
+| Contract | `maestro_contract_show`, `maestro_contract_amend` |
+| Verdict | `maestro_verdict_show`, `maestro_verdict_request` |
+| Policy | `maestro_policy_check` |
+| Handoff | `maestro_handoff_list`, `maestro_handoff_show`, `maestro_handoff_emit`, `maestro_handoff_pickup` |
+| Principle | `maestro_principle_promote` |
+| Setup | `maestro_setup_check`, `maestro_setup_migrate_v2` |
+
+Project root resolves by walking up for `.maestro/`; override with `--project-root` or `MAESTRO_PROJECT_ROOT`. `mcp check` exits 1 when the installed binary is missing or stale.
+
+See `docs/mcp-server.md` for tool I/O schemas and error codes, and `docs/mcp-setup.md` for client wiring.
 
 ---
 

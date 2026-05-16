@@ -37,7 +37,7 @@ maestro/
 | CLI entry / command registration | `src/index.ts` |
 | Dependency wiring | `src/services.ts` (composition root) |
 | Task / plan / spec lifecycle | `src/runtime/{task,plan,spec,setup,principle}.command.ts` |
-| Layered architecture | `src/{types,config,repo,service,runtime,providers}/` |
+| Layered architecture | `src/{types,config,repo,service,runtime,ui,providers}/` (forward-only `types → config → repo → service → runtime → ui`; `providers` is cross-cutting) |
 | Architecture lints | `src/service/architecture-lint.usecase.ts` |
 | Ports + adapters | `src/repo/` (task, plan, spec, evidence, observability, worktree, handoff, principles) |
 | Use cases | `src/service/` (task-claim, task-verify, plan-decompose, emit-handoff, migrate-v2, setup-check, principle-promote, ...) |

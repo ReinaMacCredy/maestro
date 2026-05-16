@@ -88,7 +88,7 @@ Kept unchanged: `task_claim`, `task_block`, `task_get`, `task_list`, all `eviden
 
 ### Skill bundle
 
-The 10-skill v1 bundle collapses to 5: `maestro-setup`, `maestro-design`, `maestro-plan`, `maestro-task`, `maestro-verify`.
+The 10-skill v1 bundle collapses to 6: `maestro-setup`, `maestro-design`, `maestro-plan`, `maestro-task`, `maestro-verify`, `maestro-handoff`.
 
 ---
 

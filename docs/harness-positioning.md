@@ -2,24 +2,20 @@
 
 Maestro v2 is **the harness OS for agent-generated codebases**. Humans steer. Agents execute. Maestro is the substrate — local-first, verb-driven, passive. Host runtimes (Claude Code, Codex, Cursor, CI) call maestro verbs; maestro never schedules, daemonizes, or runs an LLM itself.
 
-This document maps the v2 primitives to the source locations that implement them. For the full verb surface, see `docs/cli-reference.md`. For the locked architectural decisions, see `docs/adr/0001..0017`.
+This document maps the v2 primitives to the source locations that implement them. For the full verb surface, see `docs/cli-reference.md`. For the locked architectural decisions, see `docs/adr/`.
 
 ---
 
 ## The two primitive families
 
-Maestro v2 has eight **knowledge primitives** (directories the agent reads at session start) and four **execution primitives** (the agent's verb-shaped surface). Everything else is either composed from these or is non-goal for v2.0.
+Maestro v2 has four **knowledge primitives** (directories the agent reads at session start) and four **execution primitives** (the agent's verb-shaped surface). Everything else is either composed from these or is non-goal for v2.0.
 
 ### Knowledge primitives
 
 | Primitive       | Source of truth                                  | What lives here                                                                |
 | --------------- | ------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `design-docs`   | `docs/design-docs/`                              | Human-written strategic / architectural notes. Read at orient time.            |
-| `exec-plans`    | `docs/exec-plans/active/` → `completed/`         | First-class decomposition artifacts for multi-PR work.                         |
 | `product-specs` | `.maestro/specs/<slug>.md`                       | Feature specifications with acceptance criteria + non-goals + work-type.       |
-| `references`    | `docs/references/`                               | LLM-targeted condensations of upstream library docs.                           |
-| `generated`     | `docs/generated/`                                | Auto-generated reference docs (wire contracts, schema dumps).                  |
-| `architecture`  | `docs/architecture.yaml` + `src/service/architecture-lint.service.ts` | Mechanically-enforced layering and dependency rules. |
+| `architecture`  | `docs/architecture.yaml` + `src/service/architecture-lint.usecase.ts` | Mechanically-enforced layering and dependency rules. |
 | `quality-score` | `.maestro/quality-score.json` (`gc grade`)       | Per-domain grade tracking gaps over time.                                      |
 | `principles`    | `docs/principles/*.md`                           | Named golden rules with `Rule | Rationale | Scan Command | Fix Recipe`.        |
 
@@ -44,7 +40,7 @@ The agent reads these; maestro writes them only on explicit verbs (`spec new`, `
 - `src/repo/fs-spec-store.adapter.ts` — filesystem reader with frontmatter parsing.
 - `src/service/spec-new.usecase.ts`, `spec-validate.usecase.ts` — author + lint.
 - `src/runtime/spec.command.ts` — `maestro spec new`, `maestro spec validate`.
-- Authored interactively via the `maestro-design` SKILL.md grill protocol (ADR-0016).
+- Authored interactively via the `maestro-design` SKILL.md grill protocol.
 
 ### `exec-plans`
 
@@ -55,16 +51,16 @@ The agent reads these; maestro writes them only on explicit verbs (`spec new`, `
 
 ### `principles`
 
-- `src/types/principle.ts`, `principles-schema.port.ts` — schema for the 4-section principle markdown.
-- `src/repo/fs-principles.adapter.ts` — filesystem reader for `docs/principles/*.md`.
-- `src/service/principles-scan.usecase.ts` — runs each rule's `Scan Command` ripgrep and reports violations.
+- `src/types/principle.ts`, `principles-store.port.ts` — schema for the 4-section principle markdown.
+- `src/repo/fs-principles-store.adapter.ts` — filesystem reader for `docs/principles/*.md`.
+- `src/service/principle-scan.usecase.ts` — runs each rule's `Scan Command` ripgrep and reports violations.
 - `src/service/principle-promote.usecase.ts` — materialize a principle from a lint-violation evidence row.
 - `src/service/default-principles.ts` — 4 default principle bodies embedded as TypeScript constants for `setup migrate-v2` seeding.
 - `src/runtime/principle.command.ts` — `maestro principle promote`.
 
 ### `architecture`
 
-- `src/service/architecture-lint.service.ts` — file-scan rules (`forward-only-layers`, `no-cross-feature-deep-imports`, `no-runner-inversion`, others).
+- `src/service/architecture-lint.usecase.ts` — file-scan rules (`forward-only-layers`, `no-cross-feature-deep-imports`, `no-runner-inversion`, others).
 - Wired into `task verify` as one of the architecture checks.
 
 ### `task` (lifecycle)
@@ -83,10 +79,10 @@ The agent reads these; maestro writes them only on explicit verbs (`spec new`, `
 
 ### `handoff`
 
-- `src/repo/handoff-emitter.port.ts` — write-only port; triggers are the lifecycle verbs (`task:claim | task:block | task:abandon | task:ship | task:verify`).
-- `src/repo/fs-handoff-emitter.adapter.ts` — writes one JSON envelope per emission to `.maestro/handoffs/<id>.json`.
+- `src/repo/handoff-emitter.port.ts` — write-only port; the trigger vocabulary is `task:claim | task:block | task:abandon | task:ship | task:verify`.
+- `src/repo/fs-handoff-emitter.adapter.ts` — writes one JSON envelope per emission to `.maestro/handoffs/<id>.json`, plus an exclusive-create pickup sidecar at `.maestro/handoffs/<id>.picked_up.json`.
 - `src/service/emit-handoff.ts` — stamps id + timestamp + trigger verb; omits optional fields when undefined; no-op when the emitter is not wired.
-- Every lifecycle verb calls `emitHandoff` after the state transition lands, so the next agent session can replay context from a single envelope file.
+- `task claim` and `task block` call `emitHandoff` after the state transition lands. The other three triggers (`abandon`, `ship`, `verify`) are reserved in the port vocabulary; envelope emission for those is roadmap.
 
 ### Observability (per-task)
 
@@ -126,7 +122,7 @@ Maestro deliberately is **not**:
 - **An LLM client.** Maestro never makes model API calls; agents do, and call maestro verbs in between.
 - **A background process.** No watcher, no filesystem poller, no long-lived state machine.
 
-The structural guarantee is the `no-runner-inversion` rule in `src/service/architecture-lint.service.ts`: maestro code may not invoke schedulers or spin up persistent loops. The lint enforces it at `error` severity.
+The structural guarantee is the `no-runner-inversion` rule in `src/service/architecture-lint.usecase.ts`: maestro code may not invoke schedulers or spin up persistent loops. The lint enforces it at `error` severity.
 
 ---
 
@@ -134,7 +130,7 @@ The structural guarantee is the `no-runner-inversion` rule in `src/service/archi
 
 `mission` → `exec-plan` · `spec` (old) → `product-spec` · `intake` / `brainstorm` → folded into `design-docs` reading + `product-spec` authoring · `session` / `notes` → folded into `handoff` (session-detect absorbed into `worktree` metadata).
 
-Three v1 feature dirs disappear because their job is now done by knowledge primitives the agent reads at session start: `memory` + `memory-ratchet` + `agent` (corrections live in `docs/principles/`, learnings in `docs/design-docs/learnings/`, agent prompt collapses into `AGENTS.md`); `graph` (project-to-project edges) → `docs/references/project-graph.yaml`; `session` → notes folded into handoff, detect folded into worktree. See ADR-0015.
+Three v1 feature dirs disappear because their job is now done by knowledge primitives the agent reads at session start: `memory` + `memory-ratchet` + `agent` (corrections live in `docs/principles/`, agent prompt collapses into `AGENTS.md`); `graph` (project-to-project edges) folded into `~/.maestro/graph/projects.json`; `session` → notes folded into handoff, detect folded into worktree.
 
 ---
 

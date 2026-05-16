@@ -25,26 +25,35 @@ Sources:
 - Port: `src/features/runtime/ports/dev-observability.port.ts`
 - Prometheus adapter (HTTP, no new deps): `src/features/runtime/adapters/dev-prometheus.adapter.ts`
 - File-tail adapter (no follow): `src/features/runtime/adapters/log-tail.adapter.ts`
-- Command: `src/v2/runtime/task.command.ts` (observe subcommand, if present; deleted with v1 `features/task/` in Phase 5)
+- Command: `src/features/runtime/commands/task-observe.command.ts`
 
 ---
 
 ## Verb surface
 
 ```bash
-maestro task observe metrics <promql> --task <id> [--provider-base-url <url>] [--record] [--json]
-maestro task observe logs --task <id> [--log-file <path>] [--lines <n>] [--filter <substring>] [--record] [--json]
+maestro task observe metrics <promql> [--prometheus-url <url>] [--json] [--record --task <id>]
+maestro task observe logs [--log-file <path>] [--lines <n>] [--filter <substring>] [--json] [--record --task <id>]
 ```
 
-Provider base URL precedence:
-`--provider-base-url` > `MAESTRO_PROMETHEUS_URL` > `http://localhost:9090`.
+Both subcommands are read-only by default. `--record --task <id>` writes a
+`manual-note` Evidence row at `agent-claimed-locally` whose payload note
+begins with `[dev-observation:metrics]` or `[dev-observation:logs]`. The
+note is not verdict-gating; it preserves the observation for the next
+`task introspect`.
+
+Prometheus URL precedence:
+`--prometheus-url` > `MAESTRO_PROMETHEUS_URL` > error (no implicit default).
 
 Log file path precedence:
 `--log-file` > `MAESTRO_DEV_LOG_FILE` > error (no implicit default).
 
-Exit codes: always 0 when the adapter call returns. Adapter errors
-(non-2xx, empty result vector, unreadable file) propagate as command
-failures with the original message.
+`--lines` must be a positive integer (default 100). `--filter <text>` is a
+substring filter applied before tail.
+
+Exit codes: 0 success, 1 config error (missing URL or log path, invalid
+`--lines`, `--record` without `--task`), 2 backend error (Prometheus query
+failed, log read failed, evidence record failed).
 
 ---
 
@@ -59,11 +68,6 @@ failures with the original message.
 - **Debug a recurring loop.** Combine with `task introspect`'s
   `loopWarning` — if the agent retries the same command, the log tail can
   expose *why* a unit test keeps failing.
-
-`--record` writes a `manual-note` Evidence row at
-`agent-claimed-locally` whose payload note begins with
-`[dev-observation]`. The note isn't verdict-gating; it preserves the
-observation for the next `task introspect`.
 
 ---
 
