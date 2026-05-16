@@ -8,12 +8,12 @@ Layout:
 .maestro/
 ├── evidence/
 │   └── 2026-04-01.jsonl
-├── handoffs/
 ├── memory/
 │   └── corrections/
 │       └── legacy-rule-1.json
 ├── missions/
-├── plans/
+│   └── mis-001/
+│       └── mission.json
 ├── policies/
 │   └── owners.yaml
 └── tasks/
@@ -22,3 +22,7 @@ Layout:
 
 The fixture is intentionally minimal: enough rows for the migration steps in
 PR 33 to assert against, but small enough to inspect by hand.
+
+Note: `handoffs/` and `plans/` are not present on disk -- earlier README
+versions listed them incorrectly. Phase 6 brownfield scenarios (5-8) consume
+this fixture; `setup migrate-v2` creates `plans/` during migration.

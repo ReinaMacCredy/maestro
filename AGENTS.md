@@ -97,6 +97,7 @@ maestro/
 | Runtime monitor | `src/features/runtime/`; `docs/runtime-monitoring.md` |
 | MCP server | `src/features/mcp/server/` |
 | Edge-case regression corpus | `tests/e2e/trust-benchmark/`, `tests/e2e/edge-cases/` |
+| Phase 6 scenario tests | `tests/scenarios/<name>/` (scenario.md, rubric.ts, agent-brief.md); shared helpers at `tests/scenarios/_helpers/` |
 
 ## CODE STYLE
 - Prefer `interface` for object shapes and `type` for unions/intersections.

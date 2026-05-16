@@ -1,0 +1,151 @@
+// Shared helpers for scenario rubric runners.
+// All rubric.ts files import from this module.
+
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import type {
+  EvidenceRow,
+  TransitionEvidenceRow,
+  LintViolationEvidenceRow,
+} from "../../../src/v2/repo/evidence-store.port.js";
+
+export type { EvidenceRow, TransitionEvidenceRow, LintViolationEvidenceRow };
+
+export interface CheckResult {
+  readonly id: string;
+  readonly description: string;
+  readonly pass: boolean;
+  readonly evidence?: string;
+  readonly note?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Evidence loading
+// ---------------------------------------------------------------------------
+
+export async function loadEvidence(projectDir: string): Promise<EvidenceRow[]> {
+  const dir = join(projectDir, ".maestro/evidence");
+  let entries: string[];
+  try {
+    entries = (await readdir(dir)).filter((f) => f.endsWith(".jsonl"));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw err;
+  }
+  const rows: EvidenceRow[] = [];
+  for (const name of entries.sort()) {
+    const content = await readFile(join(dir, name), "utf8");
+    for (const line of content.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        rows.push(JSON.parse(line) as EvidenceRow);
+      } catch {
+        // skip malformed lines
+      }
+    }
+  }
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Predicate checks
+// ---------------------------------------------------------------------------
+
+export function mustHave(
+  rows: readonly EvidenceRow[],
+  predicate: (r: EvidenceRow) => boolean,
+  id: string,
+  description: string,
+): CheckResult {
+  const hit = rows.find(predicate);
+  if (hit) {
+    return { id, description, pass: true, evidence: JSON.stringify(hit) };
+  }
+  return {
+    id,
+    description,
+    pass: false,
+    note: `no row matched predicate among ${rows.length} evidence row(s)`,
+  };
+}
+
+export function mustNotHave(
+  rows: readonly EvidenceRow[],
+  predicate: (r: EvidenceRow) => boolean,
+  id: string,
+  description: string,
+): CheckResult {
+  const hit = rows.find(predicate);
+  if (!hit) {
+    return { id, description, pass: true };
+  }
+  return {
+    id,
+    description,
+    pass: false,
+    evidence: JSON.stringify(hit),
+    note: "unexpected row found",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// File / directory checks
+// ---------------------------------------------------------------------------
+
+export async function mustExistFile(
+  path: string,
+  id: string,
+  description: string,
+): Promise<CheckResult> {
+  try {
+    const s = await stat(path);
+    if (s.isFile()) return { id, description, pass: true };
+    return { id, description, pass: false, note: `path exists but is not a file: ${path}` };
+  } catch {
+    return { id, description, pass: false, note: `file not found: ${path}` };
+  }
+}
+
+export async function mustExistDir(
+  path: string,
+  id: string,
+  description: string,
+): Promise<CheckResult> {
+  try {
+    const s = await stat(path);
+    if (s.isDirectory()) return { id, description, pass: true };
+    return { id, description, pass: false, note: `path exists but is not a directory: ${path}` };
+  } catch {
+    return { id, description, pass: false, note: `directory not found: ${path}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Migration flag
+// ---------------------------------------------------------------------------
+
+export async function loadMigrationFlag(
+  projectDir: string,
+): Promise<{ migrated_at: string } | null> {
+  const path = join(projectDir, ".maestro/.migrated-v2.json");
+  try {
+    const content = await readFile(path, "utf8");
+    return JSON.parse(content) as { migrated_at: string };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sub-agent exit sentinel
+// ---------------------------------------------------------------------------
+
+export async function readSubAgentExit(projectDir: string): Promise<unknown | null> {
+  const path = join(projectDir, ".maestro/scenarios/sub-agent-exit.json");
+  try {
+    const content = await readFile(path, "utf8");
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
