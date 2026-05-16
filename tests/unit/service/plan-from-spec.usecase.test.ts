@@ -73,6 +73,9 @@ function makeStores(): {
     async list(_filter?: EvidenceFilter) {
       return evidence;
     },
+    async read(id) {
+      return evidence.find((r) => r.id === id);
+    },
   };
   return { planStore, plans, evidenceStore, evidence };
 }

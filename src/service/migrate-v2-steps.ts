@@ -1,6 +1,7 @@
 import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dirExists, fileExists } from "@/shared/lib/fs.js";
+import { truncateText } from "@/shared/lib/truncate.js";
 import {
   mapV1TaskToV2,
   type V1TaskShape,
@@ -91,12 +92,22 @@ export async function runMigrateTasks(
   let migrated = 0;
   let preserved = 0;
   let skipped = 0;
-  for (const line of lines) {
+  // Bound the sample array regardless of how many bad rows the input has;
+  // formatSkipReasons reports the count separately from the previews.
+  const SKIP_SAMPLE_LIMIT = 5;
+  const skippedSamples: string[] = [];
+  const recordSkip = (reason: string): void => {
+    skipped++;
+    if (skippedSamples.length < SKIP_SAMPLE_LIMIT) skippedSamples.push(reason);
+  };
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx]!;
     let parsed: unknown;
     try {
       parsed = JSON.parse(line);
     } catch {
-      skipped++;
+      const preview = truncateText(line.replace(/\s+/g, " "), 60);
+      recordSkip(`line ${lineIdx + 1}: invalid JSON (${preview})`);
       continue;
     }
     if (isAlreadyV2Task(parsed)) {
@@ -106,7 +117,8 @@ export async function runMigrateTasks(
     }
     const v1 = parsed as V1TaskShape;
     if (typeof v1.id !== "string" || typeof v1.title !== "string" || typeof v1.status !== "string") {
-      skipped++;
+      const identifier = typeof v1.id === "string" ? v1.id : `line ${lineIdx + 1}`;
+      recordSkip(`${identifier}: missing required v1 field (id/title/status)`);
       continue;
     }
     const v2: Task = mapV1TaskToV2(v1);
@@ -116,12 +128,18 @@ export async function runMigrateTasks(
   await writeFile(`${dest}.tmp`, rows.join(""), "utf8");
   // Atomic swap so a crash mid-write cannot leave a truncated store.
   await rename(`${dest}.tmp`, dest);
+  const detailSuffix = skipped > 0 ? ` (skipped: ${formatSkipReasons(skippedSamples, skipped)})` : "";
   return {
     id: "migrate-tasks",
     label: "Translate v1 tasks into tasks.jsonl",
     status: "ok",
-    detail: `migrated ${migrated}, preserved ${preserved}, skipped ${skipped}`,
+    detail: `migrated ${migrated}, preserved ${preserved}, skipped ${skipped}${detailSuffix}`,
   };
+}
+
+function formatSkipReasons(samples: readonly string[], totalSkipped: number): string {
+  const head = samples.join("; ");
+  return totalSkipped > samples.length ? `${head}; +${totalSkipped - samples.length} more` : head;
 }
 
 // Step 6: migrate-plans — translate v1 mission directories into plans.jsonl.

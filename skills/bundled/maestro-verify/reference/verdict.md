@@ -25,7 +25,7 @@ Exit codes:
 |---|---|---|
 | `0` | `PASS` | Claim the task done. All criteria met at required witness level. |
 | `1` | `FAIL` | Fix the cited findings, then loop back to `maestro task verify`. |
-| `2` | `HUMAN` | Run `maestro handoff create`. This risk class requires human review before the task can complete. |
+| `2` | `HUMAN` | Stop and surface the verdict to the user — this risk class requires human review before the task can complete. The lifecycle verbs (`task claim`, `task block`) already drop a handoff envelope on disk; nothing extra to invoke here. |
 | `3` | `BLOCK` | Stop. A blocker condition is active — cost budget exhausted, critical risk class with no human signoff, or a pending policy loosening still soaking. Surface the reason to the user; do not retry without guidance. |
 
 Inspect an existing Verdict without re-running:

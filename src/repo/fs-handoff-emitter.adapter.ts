@@ -41,7 +41,12 @@ export class FsHandoffEmitter implements HandoffEmitterPort {
     const records: HandoffEnvelope[] = [];
     for (const f of files) {
       const raw = await readFile(join(this.#dir, f), "utf8");
-      records.push(JSON.parse(raw) as HandoffEnvelope);
+      try {
+        records.push(JSON.parse(raw) as HandoffEnvelope);
+      } catch {
+        // Skip malformed envelopes so one corrupt file doesn't take down list().
+        console.warn(`handoff list: skipping malformed envelope ${f}`);
+      }
     }
     return records;
   }
@@ -50,7 +55,18 @@ export class FsHandoffEmitter implements HandoffEmitterPort {
     const path = this.#filePath(id);
     if (!(await fileExists(path))) return undefined;
     const raw = await readFile(path, "utf8");
-    return JSON.parse(raw) as HandoffEnvelope;
+    try {
+      return JSON.parse(raw) as HandoffEnvelope;
+    } catch {
+      throw new MaestroError(
+        `Handoff envelope ${id} is malformed JSON`,
+        [
+          `Inspect the file on disk: .maestro/handoffs/${id}.json`,
+          "Delete or repair the file, then retry",
+        ],
+        "HANDOFF_MALFORMED",
+      );
+    }
   }
 
   async markPickedUp(envelopeId: string, pickup: HandoffPickup): Promise<void> {

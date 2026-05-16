@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsHandoffEmitter } from "@/repo/fs-handoff-emitter.adapter.js";
+import { MaestroError } from "@/shared/errors.js";
 
 describe("FsHandoffEmitter", () => {
   let root: string;
@@ -75,5 +76,29 @@ describe("FsHandoffEmitter", () => {
   it("get() returns undefined for unknown ids", async () => {
     const emitter = new FsHandoffEmitter({ repoRoot: root });
     expect(await emitter.get("hnd-missing")).toBeUndefined();
+  });
+
+  it("list() skips malformed envelopes instead of throwing", async () => {
+    const emitter = new FsHandoffEmitter({ repoRoot: root });
+    await emitter.emit({
+      id: "hnd-good",
+      task_id: "tsk-1",
+      trigger_verb: "task:claim",
+      created_at: "2026-05-15T10:00:00.000Z",
+    });
+    await mkdir(join(root, ".maestro/handoffs"), { recursive: true });
+    await writeFile(join(root, ".maestro/handoffs/hnd-bad.json"), "{ not json", "utf8");
+    const list = await emitter.list();
+    expect(list.map((r) => r.id)).toEqual(["hnd-good"]);
+  });
+
+  it("get() throws HANDOFF_MALFORMED for corrupt envelope", async () => {
+    const emitter = new FsHandoffEmitter({ repoRoot: root });
+    await mkdir(join(root, ".maestro/handoffs"), { recursive: true });
+    await writeFile(join(root, ".maestro/handoffs/hnd-bad.json"), "{ not json", "utf8");
+    await expect(emitter.get("hnd-bad")).rejects.toMatchObject({
+      name: MaestroError.name,
+      code: "HANDOFF_MALFORMED",
+    });
   });
 });

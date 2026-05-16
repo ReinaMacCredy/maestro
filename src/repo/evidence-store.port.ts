@@ -43,4 +43,5 @@ export interface EvidenceFilter {
 export interface EvidenceStorePort {
   append(row: EvidenceRow): Promise<void>;
   list(filter?: EvidenceFilter): Promise<readonly EvidenceRow[]>;
+  read(id: string): Promise<EvidenceRow | undefined>;
 }

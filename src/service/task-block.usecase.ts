@@ -48,11 +48,11 @@ export async function taskBlock(deps: TaskBlockDeps, input: TaskBlockInput): Pro
   await emitHandoff(
     { emitter: deps.handoffEmitter, clock: deps.clock },
     {
-      task_id: existing.id,
+      task_id: updated.id,
       trigger_verb: "task:block",
       reason: input.reason,
-      worktree_path: existing.worktree_path,
-      spec_path: existing.spec_path,
+      worktree_path: updated.worktree_path,
+      spec_path: updated.spec_path,
     },
   );
   return updated;

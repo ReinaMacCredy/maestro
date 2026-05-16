@@ -616,11 +616,8 @@ function registerShowCommand(parent: Command, root: Command, deps: EvidenceComma
       const row = await services.evidenceStore.read(id);
       if (row === undefined) {
         // Fall back to v2 evidence store (transition / lint-violation rows
-        // live there). Scan the result of list() because the v2 port does
-        // not expose a read-by-id verb. v2 may be absent in narrow test fixtures.
-        const v2Match = services.v2?.evidenceStore !== undefined
-          ? (await services.v2.evidenceStore.list()).find((r) => r.id === id)
-          : undefined;
+        // live there). v2 may be absent in narrow test fixtures.
+        const v2Match = await services.v2?.evidenceStore?.read(id);
         if (v2Match !== undefined) {
           output(isJson, v2Match, (r) => [
             `  ID:        ${r.id}`,

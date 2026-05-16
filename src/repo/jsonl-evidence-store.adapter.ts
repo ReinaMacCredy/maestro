@@ -68,4 +68,30 @@ export class JsonlEvidenceStore implements EvidenceStorePort {
     }
     return rows;
   }
+
+  // Walk newest file first and short-circuit on match. Evidence ids are
+  // unique, so the first hit is the answer. Worst case is still O(rows),
+  // but the average case is far smaller than read-all-then-find.
+  async read(id: string): Promise<EvidenceRow | undefined> {
+    let entries: string[];
+    try {
+      entries = await readdir(this.#dir);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw err;
+    }
+    const files = entries
+      .filter((name) => name.endsWith(".jsonl"))
+      .sort()
+      .reverse();
+    for (const name of files) {
+      const text = await readFile(join(this.#dir, name), "utf8");
+      for (const line of text.split("\n")) {
+        if (line.length === 0) continue;
+        const row = JSON.parse(line) as EvidenceRow;
+        if (row.id === id) return row;
+      }
+    }
+    return undefined;
+  }
 }

@@ -20,6 +20,9 @@ function makeStore(): { store: EvidenceStorePort; rows: EvidenceRow[] } {
     async list(_filter?: EvidenceFilter) {
       return rows;
     },
+    async read(id) {
+      return rows.find((r) => r.id === id);
+    },
   };
   return { store, rows };
 }

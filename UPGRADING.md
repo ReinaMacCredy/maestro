@@ -77,10 +77,11 @@ If your agent uses `mcp__maestro__*` tools, the surface area is unchanged but to
 | `task_complete` | `task_ship` |
 | `task_unblock` | Removed |
 | `task_create`, `task_plan` | `task_from_spec` |
+| `handoff_open_for_task` | `handoff_emit` (rename + new semantic: emits a `HandoffEnvelope` outside the lifecycle verbs that already emit) |
 
 New v2 MCP tools: `principle_promote`, `setup_check`, `setup_migrate_v2`. Grill-driven verbs (`spec new`, `plan from-spec`, `plan decompose`) are CLI-only — MCP cannot sustain the interactive grill protocol.
 
-Kept unchanged: `task_claim`, `task_block`, `task_get`, `task_list`, all `evidence_*`, `verdict_*`, `policy_*`, `handoff_*`, `contract_*` tools.
+Kept unchanged: `task_claim`, `task_block`, `task_get`, `task_list`, all `evidence_*`, `verdict_*`, `policy_*`, `contract_*` tools, plus `handoff_list`, `handoff_show`, `handoff_pickup`.
 
 **Semantic break — `task_block`:** the tool signature is unchanged but the semantics changed. In v1, `task block` was a bidirectional graph edge (calling it on task A added A to B's `blockedBy` list and B to A's `blocks` list symmetrically). In v2, `task block` is a one-directional state-transition verb with a required reason: it moves the task to the `blocked` state and records a `kind=transition` evidence row. The unblock path is now via `task verify` PASS (the harness auto-transitions `blocked → verifying` on PASS). If your agent called `task_block` to set up blocker-graph edges, update it to use the explicit `blockedBy` field on task creation via `task_from_spec` instead.
 

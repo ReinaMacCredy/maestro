@@ -67,16 +67,26 @@ export function applyPathChanges(
   remove: readonly string[],
 ): { result: string[]; skipped: string[] } {
   const removeSet = new Set(remove);
-  const result = existing.filter((p) => !removeSet.has(p));
-  const present = new Set(result);
+  const base = existing.filter((p) => !removeSet.has(p));
+  // Decide skip vs. accept against `base` only — never against the
+  // partially-built result. This keeps the outcome independent of the
+  // order paths appear in `add` (e.g., ["*.ts", "foo.ts"] and
+  // ["foo.ts", "*.ts"] now produce the same result).
+  const baseSet = new Set(base);
+  const accepted: string[] = [];
+  const acceptedSet = new Set<string>();
   const skipped: string[] = [];
   for (const p of add) {
-    if (present.has(p) || matchesAnyGlob(result, p)) {
+    if (baseSet.has(p) || matchesAnyGlob(base, p)) {
       skipped.push(p);
       continue;
     }
-    result.push(p);
-    present.add(p);
+    if (acceptedSet.has(p)) {
+      // Duplicate within the same batch — skip silently (idempotent add).
+      continue;
+    }
+    accepted.push(p);
+    acceptedSet.add(p);
   }
-  return { result, skipped };
+  return { result: [...base, ...accepted], skipped };
 }

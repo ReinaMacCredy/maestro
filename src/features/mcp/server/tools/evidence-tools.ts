@@ -16,7 +16,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
     {
       title: "List evidence rows",
       description:
-        "List evidence rows for a task. Filters: kind, witnessLevel. Paginated (default limit 20). view='summary' (default) returns id+task_id+kind+witness_level+created_at; view='full' includes the typed payload. Read-only.",
+        "List evidence rows for a task. Filters: kind, witnessLevel. Paginated (default limit 20) — `limit` applies per stream: v1 rows return under `items[]`, v2 rows (transition / lint-violation, present only when a v2 evidence store is wired) return under `v2_items[]` so a v2-only task is not invisible. Combine them client-side if you need a single view. view='summary' (default) returns id+task_id+kind+witness_level+created_at; view='full' includes the typed payload. Read-only.",
       inputSchema: EvidenceListInput,
       annotations: {
         readOnlyHint: true,
