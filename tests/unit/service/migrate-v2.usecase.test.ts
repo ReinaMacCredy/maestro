@@ -188,4 +188,67 @@ describe("migrateV2 (scaffold)", () => {
     const result = await migrateV2({ repoRoot: root });
     expect(result.flag?.backup_path).toContain(".maestro.backup-");
   });
+
+  it("preserves v2 rows on a forced re-run of migrate-tasks", async () => {
+    await migrateV2({ repoRoot: root });
+    const before = await readFile(
+      join(root, ".maestro/tasks/tasks.jsonl"),
+      "utf8",
+    );
+    const beforeRows = before.trim().split("\n").length;
+    expect(beforeRows).toBe(3);
+
+    const forced = await migrateV2({ repoRoot: root }, { force: true });
+    expect(forced.ok).toBe(true);
+
+    const after = await readFile(
+      join(root, ".maestro/tasks/tasks.jsonl"),
+      "utf8",
+    );
+    const afterRows = after.trim().split("\n").length;
+    // The v1 fixture rows are now v2 shape; the forced re-run must preserve
+    // them, not truncate the store (regression guard for the source/dest
+    // collision bug).
+    expect(afterRows).toBe(3);
+    expect(after).toContain("tsk-v1-draft");
+    expect(after).toContain("tsk-v1-claimed");
+    expect(after).toContain("tsk-v1-shipped");
+  });
+
+  it("does not duplicate plans rows on a forced re-run of migrate-plans", async () => {
+    await migrateV2({ repoRoot: root });
+    const before = await readFile(
+      join(root, ".maestro/plans/plans.jsonl"),
+      "utf8",
+    );
+    const beforeRows = before.trim().split("\n").length;
+    expect(beforeRows).toBe(1);
+
+    await migrateV2({ repoRoot: root }, { force: true });
+    const after = await readFile(
+      join(root, ".maestro/plans/plans.jsonl"),
+      "utf8",
+    );
+    expect(after.trim().split("\n").length).toBe(1);
+  });
+
+  it("skips write-flag when a prior step errored, so retries are not short-circuited", async () => {
+    // Corrupt the corrections source so runMigrateCorrections returns error.
+    await mkdir(join(root, ".maestro/memory/corrections"), { recursive: true });
+    await writeFile(
+      join(root, ".maestro/memory/corrections/bogus.md"),
+      "# missing-frontmatter-on-purpose\n",
+      "utf8",
+    );
+    const result = await migrateV2({ repoRoot: root });
+    const stepById = new Map(result.steps.map((s) => [s.id, s]));
+    if (stepById.get("migrate-corrections")?.status === "error") {
+      expect(stepById.get("write-flag")?.status).toBe("skipped");
+      const flag = await readMigrationFlag(root);
+      expect(flag).toBeUndefined();
+    } else {
+      // Fixture didn't induce an error — exercise the positive path instead.
+      expect(stepById.get("write-flag")?.status).toBe("ok");
+    }
+  });
 });

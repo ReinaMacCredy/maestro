@@ -163,11 +163,27 @@ export async function migrateV2(
     }
   }
 
-  // Step 10: write-flag. Run early in the scaffold so re-runs are idempotent
-  // even before steps 4-9 land. Flag records only the steps that ran ok.
+  // Step 10: write-flag. Only persists the migrated marker when every prior
+  // step completed without error, so a normal retry re-attempts failed work
+  // instead of taking the `already_migrated` short-circuit.
   const stepIdsCompleted = steps.filter((s) => s.status === "ok").map((s) => s.id);
+  const priorErrors = steps.filter((s) => s.status === "error");
   let flag: MigrationFlag | undefined;
-  if (!dryRun) {
+  if (dryRun) {
+    steps.push({
+      id: "write-flag",
+      label: "Write .maestro/.migrated-v2.json",
+      status: "skipped",
+      detail: "dry-run mode: flag not written",
+    });
+  } else if (priorErrors.length > 0) {
+    steps.push({
+      id: "write-flag",
+      label: "Write .maestro/.migrated-v2.json",
+      status: "skipped",
+      detail: `skipped: ${priorErrors.length} prior step${priorErrors.length === 1 ? "" : "s"} errored — retry without --force`,
+    });
+  } else {
     flag = {
       version: MIGRATION_FLAG_VERSION,
       migrated_at: clock().toISOString(),
@@ -179,13 +195,6 @@ export async function migrateV2(
       id: "write-flag",
       label: "Write .maestro/.migrated-v2.json",
       status: "ok",
-    });
-  } else {
-    steps.push({
-      id: "write-flag",
-      label: "Write .maestro/.migrated-v2.json",
-      status: "skipped",
-      detail: "dry-run mode: flag not written",
     });
   }
 

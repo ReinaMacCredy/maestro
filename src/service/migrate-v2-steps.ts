@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dirExists, fileExists } from "@/shared/lib/fs.js";
 import {
@@ -47,7 +47,30 @@ export async function runMigrateCorrections(
   }
 }
 
-// Step 5: migrate-tasks — translate v1 task rows into tasks.jsonl.
+// Step 5: migrate-tasks — translate v1 task rows in .maestro/tasks/tasks.jsonl
+// into v2 shape, atomically. Pass-through rows that are already v2 shape so
+// `--force` re-runs after a successful migration do not truncate the store.
+const V2_TASK_STATES = new Set<string>([
+  "draft",
+  "claimed",
+  "doing",
+  "verifying",
+  "blocked",
+  "ready",
+  "shipped",
+  "abandoned",
+]);
+
+function isAlreadyV2Task(parsed: unknown): parsed is Task {
+  if (typeof parsed !== "object" || parsed === null) return false;
+  const row = parsed as Record<string, unknown>;
+  return (
+    typeof row.id === "string" &&
+    typeof row.state === "string" &&
+    V2_TASK_STATES.has(row.state)
+  );
+}
+
 export async function runMigrateTasks(
   deps: MigrateStepDeps,
 ): Promise<MigrateV2StepResult> {
@@ -60,12 +83,13 @@ export async function runMigrateTasks(
       detail: "no v1 tasks.jsonl",
     };
   }
-  const dest = join(deps.repoRoot, ".maestro/tasks/tasks.jsonl");
+  const dest = source;
   await mkdir(join(deps.repoRoot, ".maestro/tasks"), { recursive: true });
   const raw = await readFile(source, "utf8");
   const lines = raw.split("\n").filter((l) => l.trim().length > 0);
-  const v2Rows: string[] = [];
+  const rows: string[] = [];
   let migrated = 0;
+  let preserved = 0;
   let skipped = 0;
   for (const line of lines) {
     let parsed: unknown;
@@ -75,25 +99,34 @@ export async function runMigrateTasks(
       skipped++;
       continue;
     }
+    if (isAlreadyV2Task(parsed)) {
+      rows.push(`${JSON.stringify(parsed)}\n`);
+      preserved++;
+      continue;
+    }
     const v1 = parsed as V1TaskShape;
     if (typeof v1.id !== "string" || typeof v1.title !== "string" || typeof v1.status !== "string") {
       skipped++;
       continue;
     }
     const v2: Task = mapV1TaskToV2(v1);
-    v2Rows.push(`${JSON.stringify(v2)}\n`);
+    rows.push(`${JSON.stringify(v2)}\n`);
     migrated++;
   }
-  await writeFile(dest, v2Rows.join(""), "utf8");
+  await writeFile(`${dest}.tmp`, rows.join(""), "utf8");
+  // Atomic swap so a crash mid-write cannot leave a truncated store.
+  await rename(`${dest}.tmp`, dest);
   return {
     id: "migrate-tasks",
     label: "Translate v1 tasks into tasks.jsonl",
     status: "ok",
-    detail: `migrated ${migrated}, skipped ${skipped}`,
+    detail: `migrated ${migrated}, preserved ${preserved}, skipped ${skipped}`,
   };
 }
 
 // Step 6: migrate-plans — translate v1 mission directories into plans.jsonl.
+// Skips missions whose id already appears in the destination JSONL so `--force`
+// re-runs do not append duplicate rows.
 export async function runMigratePlans(
   deps: MigrateStepDeps,
 ): Promise<MigrateV2StepResult> {
@@ -108,6 +141,19 @@ export async function runMigratePlans(
   }
   await mkdir(join(deps.repoRoot, ".maestro/plans"), { recursive: true });
   const dest = join(deps.repoRoot, ".maestro/plans/plans.jsonl");
+  const knownIds = new Set<string>();
+  if (await fileExists(dest)) {
+    const raw = await readFile(dest, "utf8");
+    for (const line of raw.split("\n")) {
+      if (line.trim().length === 0) continue;
+      try {
+        const row = JSON.parse(line) as { id?: unknown };
+        if (typeof row.id === "string") knownIds.add(row.id);
+      } catch {
+        // ignore malformed rows; they'll fall through unchanged
+      }
+    }
+  }
   const entries = await readdir(sourceDir);
   let migrated = 0;
   let skipped = 0;
@@ -131,6 +177,10 @@ export async function runMigratePlans(
         skipped++;
         continue;
       }
+      if (knownIds.has(v1.id)) {
+        skipped++;
+        continue;
+      }
       const now = (deps.clock ?? (() => new Date()))().toISOString();
       const plan: ExecPlan = {
         id: v1.id,
@@ -141,6 +191,7 @@ export async function runMigratePlans(
         updated_at: v1.updatedAt ?? now,
       };
       await appendFile(dest, `${JSON.stringify(plan)}\n`, "utf8");
+      knownIds.add(v1.id);
       migrated++;
     } catch {
       skipped++;

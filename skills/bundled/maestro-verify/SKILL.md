@@ -25,25 +25,23 @@ Run this loop before marking any task done. Steps are ordered; do not skip.
    maestro evidence record --task <id> --command "bun test" --exit 0
    ```
 
-3. **Verify** — `maestro task verify <id>`. Runs the architecture-lint corpus + Trust Verifier checks. Address every `error` finding. The 8 deterministic checks and architecture-lint rules: `reference/trust-verifier.md`.
+3. **Verify (arch-lint)** — `maestro task verify <id>`. Runs the architecture-lint corpus only. Address every `error` finding. Architecture-lint rules: `reference/trust-verifier.md`.
 
    To record an explicit human verdict instead of running lints, pass `--verdict {human,block} --reason <text>`:
 
    - `--verdict human` keeps the task at `verifying` (awaiting review), exit code `2`.
    - `--verdict block` transitions the task to `blocked` with `block_reason`, exit code `3`.
 
-4. **ProofMap** — `maestro task proof --task <id>`. Every criterion in the spec's `acceptance_criteria` must be covered at the required witness level. Coverage rules: `reference/plan-and-proof.md`.
+4. **Verdict** — `maestro verdict request --task <id>`. Runs the full decision tree: Trust Verifier (8 deterministic checks) + ProofMap coverage + autopilot policy + cost-budget. ProofMap diagnostics surface inside the verdict's `reasons[]` (see `reference/plan-and-proof.md`). Exit-code branching, cost-budget, AI Reviewer protocol (Rule 1), threat-model production: `reference/verdict.md`.
 
-5. **Verdict** — `maestro verdict request --task <id>`. Exit-code branching, cost-budget, AI Reviewer protocol (Rule 1), threat-model production: `reference/verdict.md`.
+5. **Branch on exit code** (the routing matches `task verify` and `verdict request`):
 
-6. **Branch on exit code** (the routing matches `task verify` and `verdict request`):
-
-   - `0` PASS — `task verify` auto-advanced the task to `ready`. Run `maestro task ship <id>` (or the alias `maestro ship <id>`) to close.
+   - `0` PASS — task is at `ready`. Run `maestro task ship <id>` (or the alias `maestro ship <id>`) to close.
    - `1` FAIL — fix the cited findings, loop back to step 3.
    - `2` HUMAN — task stays at `verifying` with the reason recorded. Surface to the user; do not retry without guidance.
    - `3` BLOCK — task is now `blocked` with `block_reason`. Surface the reason; do not retry.
 
-If retries are accumulating before step 5, run `maestro task budget --task <id>` to check consumption (`reference/verdict.md` covers cost-budget interpretation).
+If retries are accumulating before step 4, run `maestro task budget --task <id>` to check consumption (`reference/verdict.md` covers cost-budget interpretation).
 
 ### Harness-delta evidence
 

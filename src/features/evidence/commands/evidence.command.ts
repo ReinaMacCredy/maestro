@@ -556,11 +556,45 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
         ? rows.slice(0, effectiveLimit)
         : rows;
 
+      // Also surface v2 evidence rows (transition / lint-violation) so a v2-only
+      // task is not invisible to `evidence list`. Session filter is v1-only.
+      // `services.v2` may be absent in tests that mock a subset of the surface;
+      // treat that as "no v2 rows" rather than failing the listing.
+      const v2Rows = opts.session === undefined && services.v2?.evidenceStore !== undefined
+        ? await services.v2.evidenceStore.list({
+            ...(opts.task !== undefined ? { task_id: opts.task as string } : {}),
+          })
+        : [];
+      const v2Sliced = effectiveLimit !== undefined && effectiveLimit > 0
+        ? v2Rows.slice(0, effectiveLimit)
+        : v2Rows;
+
       if (isJson && !isFull) {
-        output(true, sliced.map(summarizeEvidence), () => []);
+        if (v2Sliced.length === 0) {
+          output(true, sliced.map(summarizeEvidence), () => []);
+          return;
+        }
+        output(true, { v1: sliced.map(summarizeEvidence), v2: v2Sliced }, () => []);
         return;
       }
-      output(isJson, sliced, formatEvidenceList);
+      if (isJson) {
+        if (v2Sliced.length === 0) {
+          output(true, sliced, () => []);
+          return;
+        }
+        output(true, { v1: sliced, v2: v2Sliced }, () => []);
+        return;
+      }
+      // Text mode: print v1 section, then a v2 section when present.
+      const textLines = [...formatEvidenceList(sliced)];
+      if (v2Sliced.length > 0) {
+        textLines.push("");
+        textLines.push("V2 evidence rows:");
+        for (const row of v2Sliced) {
+          textLines.push(`  ${row.timestamp}  ${row.id}  ${row.kind}  ${row.task_id ?? "-"}`);
+        }
+      }
+      output(isJson, textLines, (lines) => lines);
     });
 }
 
@@ -581,6 +615,21 @@ function registerShowCommand(parent: Command, root: Command, deps: EvidenceComma
 
       const row = await services.evidenceStore.read(id);
       if (row === undefined) {
+        // Fall back to v2 evidence store (transition / lint-violation rows
+        // live there). Scan the result of list() because the v2 port does
+        // not expose a read-by-id verb. v2 may be absent in narrow test fixtures.
+        const v2Match = services.v2?.evidenceStore !== undefined
+          ? (await services.v2.evidenceStore.list()).find((r) => r.id === id)
+          : undefined;
+        if (v2Match !== undefined) {
+          output(isJson, v2Match, (r) => [
+            `  ID:        ${r.id}`,
+            `  Kind:      ${r.kind}`,
+            `  Timestamp: ${r.timestamp}`,
+            ...(r.task_id !== undefined ? [`  Task:      ${r.task_id}`] : []),
+          ]);
+          return;
+        }
         throw new MaestroError(`Evidence not found: ${id}`, [
           "Run `maestro evidence list --task <id>` to see available evidence",
         ]);

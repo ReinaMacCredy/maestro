@@ -659,4 +659,30 @@ describe("MCP stdio flow", () => {
     const shipped = (shippedList.body as { items: unknown[] }).items;
     expect(shipped.length).toBe(0);
   });
+
+  it("maestro_task_list composes plan_id and state filters", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "compose-filter", "Compose Filter");
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
+    const taskId = (created.body as { task: { id: string; plan_id?: string } }).task.id;
+    const planId = (created.body as { task: { plan_id?: string } }).task.plan_id;
+
+    // Without plan_id the task should appear under state=draft.
+    const draftAll = await c.call("maestro_task_list", { state: "draft" });
+    const draftItems = (draftAll.body as { items: { id: string }[] }).items;
+    expect(draftItems.find((t) => t.id === taskId)).toBeDefined();
+
+    if (planId !== undefined) {
+      // With both filters, must still find the draft task in this plan.
+      const both = await c.call("maestro_task_list", { plan_id: planId, state: "draft" });
+      const bothItems = (both.body as { items: { id: string; state: string }[] }).items;
+      expect(bothItems.every((t) => t.state === "draft")).toBe(true);
+      expect(bothItems.find((t) => t.id === taskId)).toBeDefined();
+
+      // And no draft task should appear if we filter to a non-draft state.
+      const noneShipped = await c.call("maestro_task_list", { plan_id: planId, state: "shipped" });
+      const noneItems = (noneShipped.body as { items: unknown[] }).items;
+      expect(noneItems.length).toBe(0);
+    }
+  });
 });

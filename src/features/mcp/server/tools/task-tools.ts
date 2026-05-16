@@ -65,6 +65,11 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         } else {
           tasks = await services.v2.taskStore.list();
         }
+        // Apply state filter on top of plan_id (and vice versa) so both filters
+        // compose when supplied together, matching the tool description.
+        if (args.plan_id !== undefined && args.state !== undefined) {
+          tasks = tasks.filter((t) => t.state === args.state);
+        }
         const page = paginate(tasks, args.limit, args.offset);
         const projected = args.view === "full"
           ? page

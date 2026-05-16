@@ -562,7 +562,7 @@ The Risk Engine derives a risk class from deterministic diff signals and takes t
 
 ### ProofMap
 
-`maestro task proof --task <id>` produces a per-criterion coverage map: for each acceptance criterion in the linked Spec, it shows which Evidence rows satisfy it and at what witness level.
+ProofMap coverage is computed inside `maestro verdict request`. For every acceptance criterion in the linked Spec, the verdict checks which Evidence rows satisfy it at the required witness level; gaps surface as `proof-map-incomplete` diagnostics in the verdict's `reasons[]` array, with the failing criterion ids listed alongside.
 
 ### Asymmetric policy editing
 
@@ -577,9 +577,7 @@ maestro verdict request --task <id> --json
 maestro verdict show --task <id>
 maestro verdict show --task <id> --version <id>
 
-# ProofMap
-maestro task proof --task <id>
-maestro task proof --task <id> --json
+# ProofMap diagnostics surface inside `verdict request` (no separate verb)
 
 # Policy inspection
 maestro policy check --task <id>
@@ -604,31 +602,12 @@ The pre-claim loop closes the inner agent loop: the agent runs plan, implement, 
 
 Before claiming any non-trivial task done, the agent runs this ordered loop:
 
-1. **Intake** — run `maestro intake --paths <paths>` to classify the work as `tiny`, `normal`, or `high-risk` before writing code.
-2. **Plan** — write a plan file and run `maestro plan check` to catch problems before code is written.
-3. **Implement** — write code and record evidence after each verification command.
-4. **Verify** — run `maestro task verify` and address every `error` finding.
-5. **ProofMap** — run `maestro task proof` and confirm every acceptance criterion is covered.
-6. **Verdict** — run `maestro verdict request` and branch on the exit code.
+1. **Plan** — write a plan file and run `maestro plan check` to catch problems before code is written.
+2. **Implement** — write code and record evidence after each verification command.
+3. **Verify (arch-lint)** — run `maestro task verify` and address every `error` finding.
+4. **Verdict** — run `maestro verdict request` and branch on the exit code. The verdict runs Trust Verifier + ProofMap + autopilot policy; ProofMap gaps surface as `proof-map-incomplete` reasons.
 
 The canonical source for this ritual is the `maestro-verify` bundled skill.
-
-### Intake
-
-`maestro intake` is a deterministic plan-time risk classifier. It returns a lane and a recommended next step before code is written.
-
-| Lane | Trigger | Next step |
-|---|---|---|
-| `tiny` | 0–1 risk flags, no hard gate | Patch directly, run validation, close with reason. |
-| `normal` | 2–3 risk flags, no hard gate | Create a task via `maestro task plan` and follow the standard pre-claim loop. |
-| `high-risk` | Any hard gate, or 4+ flags | Build a Spec with acceptance criteria, plus a `threat-model` Evidence row when the diff intersects sensitive paths. |
-
-Hard gates (any one promotes to `high-risk`): `auth`, `authz`, `data-model`, `audit-security`, `external-systems`.
-
-```bash
-maestro intake --paths src/auth/session.ts --flag auth
-maestro intake --paths src/foo.ts,src/bar.ts --json
-```
 
 ### Plan-check
 
@@ -702,9 +681,6 @@ maestro task budget --task <id> --json
 ### CLI surface
 
 ```bash
-# Intake
-maestro intake --paths <list>
-
 # Plan-check
 maestro plan check --task <id> --plan-file <path>
 maestro plan check --task <id> --plan-file <path> --json
@@ -924,7 +900,6 @@ See [`docs/mcp-server.md`](docs/mcp-server.md) for the full tool and error-code 
 | `maestro verdict show --task <id>` | Show the latest verdict for a task. |
 | `maestro plan from-spec <path>` | Create an exec-plan from a heavy-mode spec. |
 | `maestro plan decompose <id> --file <path>` | Decompose an exec-plan into child tasks from a batch file. |
-| `maestro intake --paths <list>` | Classify intended work as `tiny`, `normal`, or `high-risk` before writing code. |
 | `maestro mcp serve` | Start the MCP server on stdio. Agents launch this; you do not start it manually. |
 | `maestro mcp check` | Verify the installed maestro binary and the canonical agent runtime config files. |
 | `maestro principle list` / `principle promote <evd-id>` | Inspect or promote a correction to a behavioral principle. |

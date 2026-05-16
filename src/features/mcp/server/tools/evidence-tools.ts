@@ -36,11 +36,23 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
         if (args.witnessLevel !== undefined) {
           rows = rows.filter((r) => r.witness_level === args.witnessLevel);
         }
+        // Also union v2 evidence rows (transition / lint-violation) so a v2-only
+        // task is not invisible. witnessLevel filter is v1-only and does not
+        // apply to v2 rows. v2 rows ride on a sibling `v2_items` key so existing
+        // `items[]` consumers keep working.
+        const v2Rows = services.v2?.evidenceStore !== undefined
+          ? await services.v2.evidenceStore.list({ task_id: args.taskId })
+          : [];
         const page = paginate(rows, args.limit, args.offset);
-        const projected = args.view === "full"
-          ? page
-          : { ...page, items: page.items.map(summarizeEvidence) };
-        return toCallToolResult(ok(projected));
+        const v2Page = paginate(v2Rows, args.limit, args.offset);
+        const projectedItems = args.view === "full" ? page.items : page.items.map(summarizeEvidence);
+        return toCallToolResult(
+          ok({
+            ...page,
+            items: projectedItems,
+            ...(v2Rows.length > 0 ? { v2_items: v2Page.items } : {}),
+          }),
+        );
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "EVIDENCE_LIST_FAILED"));
       }
