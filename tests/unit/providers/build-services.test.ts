@@ -11,6 +11,7 @@ describe("buildV2Services", () => {
     expect(svc.architectureRules).toBeDefined();
     expect(svc.principlesStore).toBeDefined();
     expect(svc.processRunner).toBeDefined();
+    expect(svc.nowMdWriter).toBeDefined();
   });
 
   it("respects overrides for new ports", () => {

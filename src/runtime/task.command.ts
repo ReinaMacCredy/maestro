@@ -8,6 +8,7 @@ import { taskBlock } from "../service/task-block.usecase.js";
 import { taskAbandon } from "../service/task-abandon.usecase.js";
 import { taskVerify, TaskVerifyReasonRequiredError } from "../service/task-verify.usecase.js";
 import { taskShip } from "../service/task-ship.usecase.js";
+import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError, TASK_STATES, type TaskState } from "../types/task-state.js";
 import type { Task } from "../types/task.js";
@@ -69,6 +70,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           pathArg,
         );
         console.log(`${created.id} draft (${created.slug})`);
+        await refreshNowMdFromServices(services);
       } catch (err) {
         reportError("task from-spec", err);
       }
@@ -96,6 +98,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       console.log(
         `${claimed.id} claimed${flags.agent ? ` by ${flags.agent}` : ""}${worktreeNote}`,
       );
+      await refreshNowMdFromServices(services);
     } catch (err) {
       reportError("task claim", err);
     }
@@ -134,6 +137,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         { id, reason: flags.reason },
       );
       console.log(`${blocked.id} blocked: ${flags.reason}`);
+      await refreshNowMdFromServices(services);
     } catch (err) {
       reportError("task block", err);
     }
@@ -170,6 +174,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         { id, reason: flags.reason },
       );
       console.log(`${abandoned.id} abandoned: ${flags.reason}`);
+      await refreshNowMdFromServices(services);
     } catch (err) {
       reportError("task abandon", err);
     }
@@ -247,6 +252,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       if (result.verdict === "FAIL") process.exitCode = 1;
       else if (result.verdict === "HUMAN") process.exitCode = 2;
       else if (result.verdict === "BLOCK") process.exitCode = 3;
+      await refreshNowMdFromServices(services);
     } catch (err) {
       reportError("task verify", err);
     }
@@ -285,6 +291,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         { id, pr_url: flags.prUrl },
       );
       console.log(`${shipped.id} shipped${flags.prUrl ? ` (${flags.prUrl})` : ""}`);
+      await refreshNowMdFromServices(services);
     } catch (err) {
       reportError("task ship", err);
     }

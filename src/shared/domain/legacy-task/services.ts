@@ -14,7 +14,6 @@ import { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
 import { FsCandidateStoreAdapter } from "./adapters/fs-candidate-store.adapter.js";
 import { FsTaskContinuationStoreAdapter } from "./adapters/fs-task-continuation-store.adapter.js";
 import { FsTaskContinuationHistoryStoreAdapter } from "./adapters/fs-task-continuation-history-store.adapter.js";
-import { FsNowMdWriterAdapter } from "./adapters/now-md-writer.adapter.js";
 import { FsContractStoreAdapter } from "./adapters/fs-contract-store.adapter.js";
 import { FsContractVersionStoreAdapter } from "./adapters/fs-contract-version-store.adapter.js";
 import { ShellGitAnchorAdapter } from "./adapters/git-anchor.adapter.js";
@@ -30,7 +29,6 @@ export interface TaskServices {
   readonly taskCandidateStore: CandidateStorePort;
   readonly taskContinuationStore: TaskContinuationStorePort;
   readonly taskContinuationHistory: TaskContinuationHistoryPort;
-  readonly taskNowMdWriter: FsNowMdWriterAdapter;
   readonly runStateStore: RunStateStorePort;
 }
 
@@ -56,7 +54,6 @@ export function buildTaskServices(projectDir: string): TaskServices {
     taskCandidateStore: new FsCandidateStoreAdapter(projectDir),
     taskContinuationStore: new FsTaskContinuationStoreAdapter(projectDir),
     taskContinuationHistory: new FsTaskContinuationHistoryStoreAdapter(projectDir),
-    taskNowMdWriter: new FsNowMdWriterAdapter(projectDir, contractStore),
     runStateStore: new FsRunStateStoreAdapter(projectDir),
   };
 }

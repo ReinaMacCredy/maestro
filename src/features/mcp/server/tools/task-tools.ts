@@ -5,6 +5,7 @@ import {
   taskShip,
   taskFromSpec,
 } from "@/service/index.js";
+import { refreshNowMdFromServices } from "@/service/refresh-now-md.js";
 import type { Task } from "@/types/task.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
@@ -140,6 +141,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           },
           args.spec_path,
         );
+        await refreshNowMdFromServices(services.v2);
         return toCallToolResult(ok({ task }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_CREATE_FAILED"));
@@ -176,6 +178,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           },
           { id: args.id, agentId },
         );
+        await refreshNowMdFromServices(services.v2);
         return toCallToolResult(ok({ task }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_CLAIM_FAILED"));
@@ -209,6 +212,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           },
           { id: args.id, pr_url: args.pr_url },
         );
+        await refreshNowMdFromServices(services.v2);
         return toCallToolResult(ok({ task }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_SHIP_FAILED"));
@@ -242,6 +246,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           },
           { id: args.id, reason: args.reason },
         );
+        await refreshNowMdFromServices(services.v2);
         return toCallToolResult(ok({ task }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_BLOCK_FAILED"));

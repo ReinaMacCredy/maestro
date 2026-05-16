@@ -117,7 +117,6 @@ export { FsRunStateStoreAdapter } from "./adapters/fs-run-state-store.adapter.js
 export { FsContractStoreAdapter } from "./adapters/fs-contract-store.adapter.js";
 export { FsContractVersionStoreAdapter } from "./adapters/fs-contract-version-store.adapter.js";
 export { ShellGitAnchorAdapter } from "./adapters/git-anchor.adapter.js";
-export { FsNowMdWriterAdapter } from "./adapters/now-md-writer.adapter.js";
 
 // ---- Usecases ----
 export { createTask } from "./usecases/create-task.usecase.js";

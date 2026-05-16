@@ -41,6 +41,8 @@ feedback.jsonl
 .maestro/missions/
 .maestro/tasks/local-history/
 .maestro/tasks/batches/
+# Derived dashboard refreshed on every task mutation; not authoritative state.
+.maestro/tasks/NOW.md
 
 # Claude plans
 .claude/plans/

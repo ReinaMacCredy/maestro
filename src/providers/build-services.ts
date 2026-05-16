@@ -39,6 +39,9 @@ import {
 } from "../repo/git-worktree-store.adapter.js";
 import { FsHandoffEmitter } from "../repo/fs-handoff-emitter.adapter.js";
 import type { HandoffEmitterPort } from "../repo/handoff-emitter.port.js";
+import { FsNowMdWriter } from "../repo/fs-now-md-writer.adapter.js";
+import type { NowMdWriterPort } from "../repo/now-md-writer.port.js";
+import { buildNowMd } from "../service/build-now-md.js";
 
 export interface V2Services {
   readonly specStore: SpecStorePort;
@@ -51,6 +54,7 @@ export interface V2Services {
   readonly observabilityStore: ObservabilityPort;
   readonly worktreeStore: WorktreeStorePort;
   readonly handoffEmitter: HandoffEmitterPort;
+  readonly nowMdWriter: NowMdWriterPort;
 }
 
 export interface BuildV2ServicesOptions {
@@ -73,5 +77,11 @@ export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
     worktreeStore:
       overrides?.worktreeStore ?? new GitWorktreeStore({ repoRoot, processRunner }),
     handoffEmitter: overrides?.handoffEmitter ?? new FsHandoffEmitter({ repoRoot }),
+    nowMdWriter:
+      overrides?.nowMdWriter
+      ?? new FsNowMdWriter({
+        repoRoot,
+        format: (tasks, now) => buildNowMd({ tasks, now }),
+      }),
   };
 }
