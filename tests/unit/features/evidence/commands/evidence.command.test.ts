@@ -98,8 +98,6 @@ function evidenceDeps(overrides: DepsOverrides = {}) {
           save: async () => { throw new Error("Not implemented"); },
           delete: async () => false,
         },
-        // v2 fallback lookup — empty store, mirrors absence of a v2-shaped task.
-        // Evidence record CLI tries v1 first then v2; tests exercise v1 paths.
         v2: {
           taskStore: {
             create: async () => { throw new Error("Not implemented"); },

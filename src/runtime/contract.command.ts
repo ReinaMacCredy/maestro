@@ -1,12 +1,9 @@
 import { Command } from "commander";
-import {
-  amendContract,
-  generateContractAmendmentId,
-  getCurrentContract,
-} from "@/service/index.js";
+import { getCurrentContract } from "@/service/index.js";
+import { amendContractScope } from "@/service/contract-amend.usecase.js";
 import { readContractHistoryWithBackfill } from "@/service/contract-helpers.js";
-import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
-import type { Contract, ContractAmendment } from "@/types/contract.js";
+import { parsePositiveInt } from "@/shared/lib/cli-options.js";
+import type { Contract } from "@/types/contract.js";
 import type { Services } from "@/services.js";
 
 interface ContractCommandDeps {
@@ -16,36 +13,8 @@ interface ContractCommandDeps {
   >;
 }
 
-function applyPathChanges(
-  existing: readonly string[],
-  add: readonly string[],
-  remove: readonly string[],
-): { result: string[]; skipped: string[] } {
-  const removeSet = new Set(remove);
-  const result = existing.filter((p) => !removeSet.has(p));
-  const present = new Set(result);
-  const skipped: string[] = [];
-  for (const p of add) {
-    if (present.has(p) || matchesAnyGlob(result, p)) {
-      skipped.push(p);
-      continue;
-    }
-    result.push(p);
-    present.add(p);
-  }
-  return { result, skipped };
-}
-
-function collectPath(value: string, previous: readonly string[] | undefined): string[] {
-  return [...(previous ?? []), value];
-}
-
-function parseVersion(value: string): number {
-  const n = Number.parseInt(value, 10);
-  if (!Number.isFinite(n) || n < 1) {
-    throw new Error(`--version must be a positive integer (got '${value}')`);
-  }
-  return n;
+function collectPath(value: string, previous: readonly string[]): string[] {
+  return [...previous, value];
 }
 
 export function registerContractCommands(
@@ -60,33 +29,30 @@ export function registerContractCommands(
   contract
     .command("show <taskId>")
     .description("Show the current contract for a task (or --version N)")
-    .option("--version <n>", "show a specific version instead of the current one", parseVersion)
-    .option("--json", "Output as JSON")
+    .option("--version <n>", "show a specific version instead of the current one", parsePositiveInt)
     .action(async function (
       this: Command,
       taskId: string,
-      flags: { version?: number; json?: boolean },
+      flags: { version?: number },
     ): Promise<void> {
       try {
         const services = deps.getServices();
-        let match: Contract | undefined;
-        let notFoundCode: string;
-        let notFoundMsg: string;
-        if (flags.version !== undefined) {
-          match = await services.contractVersionStore.readVersion(taskId, flags.version);
-          notFoundCode = "CONTRACT_VERSION_NOT_FOUND";
-          notFoundMsg = `Contract version ${flags.version} not found for task ${taskId}`;
-        } else {
-          match = await getCurrentContract(
-            services.contractVersionStore,
-            services.contractStore,
-            taskId,
-          );
-          notFoundCode = "CONTRACT_NOT_FOUND";
-          notFoundMsg = `No contract found for task ${taskId}`;
-        }
+        const match: Contract | undefined =
+          flags.version !== undefined
+            ? await services.contractVersionStore.readVersion(taskId, flags.version)
+            : await getCurrentContract(
+                services.contractVersionStore,
+                services.contractStore,
+                taskId,
+              );
         if (!match) {
-          console.error(JSON.stringify({ error: notFoundMsg, code: notFoundCode }));
+          const code =
+            flags.version !== undefined ? "CONTRACT_VERSION_NOT_FOUND" : "CONTRACT_NOT_FOUND";
+          const error =
+            flags.version !== undefined
+              ? `Contract version ${flags.version} not found for task ${taskId}`
+              : `No contract found for task ${taskId}`;
+          console.error(JSON.stringify({ error, code }));
           process.exitCode = 1;
           return;
         }
@@ -123,11 +89,9 @@ export function registerContractCommands(
           console.log(`No contract history for ${taskId}`);
           return;
         }
-        for (let i = 0; i < versions.length; i++) {
-          const c = versions[i];
-          const ver = i + 1;
+        for (const [i, c] of versions.entries()) {
           console.log(
-            `v${ver}\t${c.status}\tfilesExpected=${c.scope.filesExpected.length}\tamendments=${c.amendments.length}`,
+            `v${i + 1}\t${c.status}\tfilesExpected=${c.scope.filesExpected.length}\tamendments=${c.amendments.length}`,
           );
         }
       } catch (err) {
@@ -141,18 +105,8 @@ export function registerContractCommands(
     .description(
       "Add or remove paths on the current contract's filesExpected (versioned + evidence)",
     )
-    .option(
-      "--add <path>",
-      "add a path to filesExpected (repeatable)",
-      collectPath as unknown as (v: string, prev: string[]) => string[],
-      [] as readonly string[],
-    )
-    .option(
-      "--remove <path>",
-      "remove a path from filesExpected (repeatable)",
-      collectPath as unknown as (v: string, prev: string[]) => string[],
-      [] as readonly string[],
-    )
+    .option("--add <path>", "add a path to filesExpected (repeatable)", collectPath, [])
+    .option("--remove <path>", "remove a path from filesExpected (repeatable)", collectPath, [])
     .requiredOption("--reason <text>", "human-readable explanation of the amendment")
     .option("--by <actor>", "actor id recorded on the amendment", "maestro-cli")
     .option("--json", "Output as JSON")
@@ -178,13 +132,15 @@ export function registerContractCommands(
           return;
         }
 
-        const services = deps.getServices();
-        const before = await getCurrentContract(
-          services.contractVersionStore,
-          services.contractStore,
+        const outcome = await amendContractScope(deps.getServices(), {
           taskId,
-        );
-        if (!before) {
+          addPaths,
+          removePaths,
+          reason: flags.reason,
+          by: flags.by,
+        });
+
+        if (outcome.kind === "no-contract") {
           console.error(
             JSON.stringify({
               error: `No contract found for task ${taskId}`,
@@ -194,16 +150,7 @@ export function registerContractCommands(
           process.exitCode = 1;
           return;
         }
-
-        const { result: newFilesExpected, skipped: skippedAddPaths } =
-          applyPathChanges(before.scope.filesExpected, addPaths, removePaths);
-
-        const beforeSet = new Set(before.scope.filesExpected);
-        const afterSet = new Set(newFilesExpected);
-        const scopeChanged =
-          beforeSet.size !== afterSet.size ||
-          [...beforeSet].some((p) => !afterSet.has(p));
-        if (!scopeChanged) {
+        if (outcome.kind === "no-changes") {
           console.error(
             JSON.stringify({
               error: "No scope changes to apply",
@@ -214,38 +161,19 @@ export function registerContractCommands(
           return;
         }
 
-        const amendment: ContractAmendment = {
-          id: generateContractAmendmentId(),
-          at: new Date().toISOString(),
-          by: flags.by,
-          reason: flags.reason,
-          before: { scope: before.scope },
-          after: {
-            scope: {
-              filesExpected: newFilesExpected,
-              filesForbidden: before.scope.filesForbidden,
+        console.log(
+          JSON.stringify(
+            {
+              amendmentId: outcome.amendmentId,
+              newVersion: outcome.newVersion,
+              ...(outcome.skippedAddPaths.length > 0
+                ? { skippedAddPaths: outcome.skippedAddPaths }
+                : {}),
             },
-          },
-        };
-
-        const { newVersion, amendmentId } = await amendContract(
-          services.contractVersionStore,
-          services.contractStore,
-          services.evidenceStore,
-          {
-            taskId,
-            amendment,
-            addedPaths: addPaths,
-            removedPaths: removePaths,
-          },
+            null,
+            2,
+          ),
         );
-
-        const result = {
-          amendmentId,
-          newVersion,
-          ...(skippedAddPaths.length > 0 ? { skippedAddPaths } : {}),
-        };
-        console.log(JSON.stringify(result, null, 2));
       } catch (err) {
         console.error(`maestro contract amend: ${(err as Error).message}`);
         process.exitCode = 1;

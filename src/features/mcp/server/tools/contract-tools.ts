@@ -1,11 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
-import {
-  amendContract,
-  generateContractAmendmentId,
-  getCurrentContract,
-} from "@/service/index.js";
-import type { ContractAmendment } from "@/types/contract.js";
+import { getCurrentContract } from "@/service/index.js";
+import { amendContractScope } from "@/service/contract-amend.usecase.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { ContractAmendInput, ContractShowInput } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";
@@ -79,7 +74,6 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const services = deps.getServices();
         const addPaths = args.addPaths ?? [];
         const removePaths = args.removePaths ?? [];
         if (addPaths.length === 0 && removePaths.length === 0) {
@@ -92,32 +86,22 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
           );
         }
 
-        const before = await getCurrentContract(
-          services.contractVersionStore,
-          services.contractStore,
-          args.taskId,
-        );
-        if (before === undefined) {
+        const outcome = await amendContractScope(deps.getServices(), {
+          taskId: args.taskId,
+          addPaths,
+          removePaths,
+          reason: args.reason,
+          by: "maestro-mcp",
+        });
+
+        if (outcome.kind === "no-contract") {
           return toCallToolResult(
             fail("CONTRACT_NOT_FOUND", `No contract found for task ${args.taskId}`, {
               hints: ["Propose a contract before amending"],
             }),
           );
         }
-
-        const { result: newFilesExpected, skipped: skippedAddPaths } =
-          applyPathChanges(before.scope.filesExpected, addPaths, removePaths);
-
-        // Compare as sets so simultaneous remove+re-add of the same path
-        // (which reorders the array but leaves the semantic scope intact)
-        // doesn't trigger a spurious amendment.
-        const beforeSet = new Set(before.scope.filesExpected);
-        const afterSet = new Set(newFilesExpected);
-        const scopeChanged =
-          beforeSet.size !== afterSet.size ||
-          [...beforeSet].some((p) => !afterSet.has(p));
-
-        if (!scopeChanged) {
+        if (outcome.kind === "no-changes") {
           return toCallToolResult(
             fail("NO_SCOPE_CHANGES", "No scope changes to apply", {
               hints: ["All paths are already covered or were absent"],
@@ -125,37 +109,13 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
           );
         }
 
-        const amendment: ContractAmendment = {
-          id: generateContractAmendmentId(),
-          at: new Date().toISOString(),
-          by: "maestro-mcp",
-          reason: args.reason,
-          before: { scope: before.scope },
-          after: {
-            scope: {
-              filesExpected: newFilesExpected,
-              filesForbidden: before.scope.filesForbidden,
-            },
-          },
-        };
-
-        const { newVersion, amendmentId } = await amendContract(
-          services.contractVersionStore,
-          services.contractStore,
-          services.evidenceStore,
-          {
-            taskId: args.taskId,
-            amendment,
-            addedPaths: addPaths,
-            removedPaths: removePaths,
-          },
-        );
-
         return toCallToolResult(
           ok({
-            amendmentId,
-            newVersion,
-            ...(skippedAddPaths.length > 0 ? { skippedAddPaths } : {}),
+            amendmentId: outcome.amendmentId,
+            newVersion: outcome.newVersion,
+            ...(outcome.skippedAddPaths.length > 0
+              ? { skippedAddPaths: outcome.skippedAddPaths }
+              : {}),
           }),
         );
       } catch (err) {
@@ -165,22 +125,3 @@ export function registerContractTools(server: McpServer, deps: RegisterDeps): vo
   );
 }
 
-function applyPathChanges(
-  existing: readonly string[],
-  add: readonly string[],
-  remove: readonly string[],
-): { result: string[]; skipped: string[] } {
-  const removeSet = new Set(remove);
-  const result = existing.filter((p) => !removeSet.has(p));
-  const present = new Set(result);
-  const skipped: string[] = [];
-  for (const p of add) {
-    if (present.has(p) || matchesAnyGlob(result, p)) {
-      skipped.push(p);
-      continue;
-    }
-    result.push(p);
-    present.add(p);
-  }
-  return { result, skipped };
-}

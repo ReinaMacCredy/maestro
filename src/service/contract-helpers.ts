@@ -1,5 +1,6 @@
 import type { Contract } from "../types/contract.js";
 import type { ContractStoreQueryPort, ContractVersionStorePort } from "../repo/contract-store.port.js";
+import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 
 // Active L1 statuses that should be visible to the L2 readers. Drafts and
 // discarded contracts are deliberately invisible to the trust substrate.
@@ -58,4 +59,24 @@ export async function readContractHistoryWithBackfill(
 
   await versionStore.write(taskId, 1, legacy);
   return [legacy];
+}
+
+export function applyPathChanges(
+  existing: readonly string[],
+  add: readonly string[],
+  remove: readonly string[],
+): { result: string[]; skipped: string[] } {
+  const removeSet = new Set(remove);
+  const result = existing.filter((p) => !removeSet.has(p));
+  const present = new Set(result);
+  const skipped: string[] = [];
+  for (const p of add) {
+    if (present.has(p) || matchesAnyGlob(result, p)) {
+      skipped.push(p);
+      continue;
+    }
+    result.push(p);
+    present.add(p);
+  }
+  return { result, skipped };
 }

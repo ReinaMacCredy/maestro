@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
+import { parseNonNegativeInt } from "@/shared/lib/cli-options.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { summarizeEvidence } from "@/shared/lib/projection.js";
 import { type Services } from "@/services.js";
@@ -332,15 +333,6 @@ async function parseFindings(raw: string, taskId: string): Promise<readonly AIRe
   return findings;
 }
 
-function parseNonNegativeInt(raw: string): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
-    throw new MaestroError(`Invalid integer: ${raw}`, [
-      "Pass a non-negative integer (0 or greater)",
-    ]);
-  }
-  return n;
-}
 
 const VALID_RESIDUAL_RISKS = new Set(["low", "medium", "high"]);
 

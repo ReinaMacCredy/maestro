@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { registerTaskObserveCommand } from "../features/runtime/commands/task-observe.command.js";
 import { buildV2Services } from "../providers/build-services.js";
+import { parseNonNegativeInt, parsePositiveInt } from "../shared/lib/cli-options.js";
 import { taskFromSpec } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
 import { taskBlock } from "../service/task-block.usecase.js";
@@ -301,20 +302,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .option("--pr-url <url>", "PR URL recorded on the task")
     .action(shipAction);
 
-  const parseLimit = (v: string): number => {
-    const n = Number.parseInt(v, 10);
-    if (!Number.isFinite(n) || n < 1) {
-      throw new Error(`invalid --limit value: ${v}`);
-    }
-    return Math.min(n, 100);
-  };
-  const parseOffset = (v: string): number => {
-    const n = Number.parseInt(v, 10);
-    if (!Number.isFinite(n) || n < 0) {
-      throw new Error(`invalid --offset value: ${v}`);
-    }
-    return n;
-  };
+  const parseLimit = (v: string): number => Math.min(parsePositiveInt(v), 100);
 
   const listAction = async function (
     this: Command,
@@ -371,7 +359,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .option("--plan-id <id>", "filter by plan id")
     .option("--state <state>", `filter by state (${TASK_STATES.join("|")})`)
     .option("--limit <n>", "page size (default 20, max 100)", parseLimit)
-    .option("--offset <n>", "page offset (default 0)", parseOffset)
+    .option("--offset <n>", "page offset (default 0)", parseNonNegativeInt)
     .option("--json", "emit JSON {items,total,limit,offset}")
     .action(listAction);
 
