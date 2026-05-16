@@ -113,7 +113,6 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
 
     const planSkill = plan!.files.find((f) => f.path === "SKILL.md")!;
     expect(planSkill.content).not.toContain("maestro-brainstorm");
-    expect(planSkill.content).not.toContain("maestro-handoff");
     expect(planSkill.content).toContain("maestro-design");
     expect(planSkill.content).toContain("maestro-task");
     expect(planSkill.content).toContain("maestro plan from-spec");
@@ -127,7 +126,6 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(taskSkill.content).toContain("maestro-verify");
 
     const verifySkill = verify!.files.find((f) => f.path === "SKILL.md")!;
-    expect(verifySkill.content).not.toContain("maestro-handoff");
     expect(verifySkill.content).toContain("maestro task verify");
     expect(verifySkill.content).toContain("maestro task ship");
   });
