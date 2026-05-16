@@ -138,6 +138,29 @@ maestro task get <id>
 
 ---
 
+## Dev-time observability
+
+`maestro task observe` is the ad-hoc inspection verb for the agent's own worktree: one-shot metric query or last-N log lines. It does **not** gate any verdict — that is `runtime check`'s job (see `maestro-verify`).
+
+```bash
+maestro task observe metrics 'up' --prometheus-url http://localhost:9090
+maestro task observe metrics 'rate(errors[5m])' --json
+maestro task observe logs --log-file ./app.log --lines 50 --filter error
+```
+
+Flags:
+
+- `--prometheus-url <url>` overrides `MAESTRO_PROMETHEUS_URL`.
+- `--log-file <path>` overrides `MAESTRO_DEV_LOG_FILE`.
+- `--lines N` (logs only, default 100).
+- `--filter <substring>` (logs only, plain substring match).
+- `--json` emits a JSON envelope instead of plain text.
+- `--record --task <id>` writes a `manual-note` evidence row tagged `[dev-observation:metrics]` / `[dev-observation:logs]` so the observation appears in `evidence list`.
+
+Exit codes: `0` success, `1` config error (missing URL/path, `--record` without `--task`), `2` backend unreachable / empty vector / fs read error. The verb is one-shot — there is no `--follow`.
+
+---
+
 ## Recovery and worktrees
 
 ```bash

@@ -60,6 +60,8 @@ If the change touches `.maestro/`, `policies/`, `skills/`, or `hooks/`, record a
 
 These steps run after the verdict computes; they decide whether the change ships, not whether the work is done.
 
+`maestro task observe` is the dev-time inspection counterpart (one-shot PromQL or last-N log lines). It does **not** gate any verdict — `runtime check` is what samples a Spec's `runtime_signals` for pre-ship evidence. Use `task observe` when you want to look at metrics or logs while debugging, and reach for `runtime check` only when the Spec declares signals that must be witnessed before shipping. See `maestro-task` for the `task observe` flag surface.
+
 ---
 
 ## Reference map

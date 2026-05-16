@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { registerTaskObserveCommand } from "../features/runtime/commands/task-observe.command.js";
 import { buildV2Services } from "../providers/build-services.js";
 import { taskFromSpec } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
@@ -298,4 +299,6 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .description("Hot-path alias for `task ship`")
     .option("--pr-url <url>", "PR URL recorded on the task")
     .action(shipAction);
+
+  registerTaskObserveCommand(task, { resolveRepoRoot: opts.resolveRepoRoot });
 }
