@@ -113,7 +113,7 @@ If your usage is confined to these surfaces, the upgrade is a no-op apart from C
 
 1. **Migration failed mid-run.** Restore from `.maestro/backups/pre-v2-<timestamp>.tar.gz` (manual `tar -xzf`). File an issue with the migration command output.
 2. **A v1 verb you depended on is gone.** Check the renamed/replaced table above. If your verb is not listed and not in the removed list, that is a bug — file an issue.
-3. **Tests pass locally but CI fails after migration.** Verify your CI runner installs v2 (`v2.0.0` or later) and that `maestro ci verify` is bound to the v2 verb surface.
+3. **Tests pass locally but CI fails after migration.** Verify your CI runner installs v2 (`v0.100.0` or later) and that `maestro ci verify` is bound to the v2 verb surface.
 4. **You need to roll back the whole release.** Pin to `v0.LAST` until v2 lands the fix.
 
 ---

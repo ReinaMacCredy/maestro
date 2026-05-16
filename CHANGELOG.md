@@ -1,9 +1,11 @@
 # Changelog
 
-## v2.0.0 — 2026-05-16
+## 0.100.0 — 2026-05-16
 
-> Major release: the Maestro harness-OS rebuild. **v1 is end-of-life.**
-> Pin to `v0.LAST` (= v0.83.0) if you are not ready to upgrade.
+> The Maestro harness-OS rebuild. Breaking by content even though the version
+> number stays in the `0.x` line — maestro has never declared SemVer stability
+> and keeps the major at `0` deliberately. Pin to the `v0.LAST` tag on `main`
+> (carries the last pre-rebuild commit) if you are not ready to upgrade.
 > Upgrade guide: [UPGRADING.md](./UPGRADING.md).
 
 ### Identity
