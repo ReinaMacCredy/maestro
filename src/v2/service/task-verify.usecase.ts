@@ -6,6 +6,7 @@ import type { ObservabilityPort } from "../repo/observability.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import type { ArchitectureRulesPort } from "../repo/architecture-rules.port.js";
+import { ArchitectureRulesNotFoundError } from "../repo/architecture-rules.port.js";
 import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
@@ -137,10 +138,20 @@ export async function taskVerify(
     return { task: blocked, verdict: "BLOCK", violations: [] };
   }
 
-  const report = await runArchitectureLints({
-    repoRoot: deps.repoRoot,
-    rulesPort: deps.architectureRules,
-  });
+  let report: Awaited<ReturnType<typeof runArchitectureLints>>;
+  try {
+    report = await runArchitectureLints({
+      repoRoot: deps.repoRoot,
+      rulesPort: deps.architectureRules,
+    });
+  } catch (err) {
+    if (err instanceof ArchitectureRulesNotFoundError) {
+      // No docs/architecture.yaml in this project: skip lints, treat as PASS.
+      report = { violations: [], filesScanned: 0 };
+    } else {
+      throw err;
+    }
+  }
 
   if (report.violations.length === 0) {
     const advanced = await deps.taskStore.update(input.id, { state: "ready" });

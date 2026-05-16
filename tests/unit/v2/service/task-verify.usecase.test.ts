@@ -6,6 +6,7 @@ import type {
   ArchitectureRules,
   ArchitectureRulesPort,
 } from "@/v2/repo/architecture-rules.port.js";
+import { ArchitectureRulesNotFoundError } from "@/v2/repo/architecture-rules.port.js";
 import type {
   EvidenceFilter,
   EvidenceRow,
@@ -332,6 +333,26 @@ describe("taskVerify", () => {
         { id: "tsk-target", verdict: "BLOCK", reason: "  " },
       ),
     ).rejects.toBeInstanceOf(TaskVerifyReasonRequiredError);
+  });
+
+  it("PASS when docs/architecture.yaml is absent (ArchitectureRulesNotFoundError treated as zero violations)", async () => {
+    // External projects that lack docs/architecture.yaml should not crash on verify.
+    const taskStore = makeTaskStore([seedTask("claimed")]);
+    const { store: evidenceStore, rows } = makeEvidence();
+    const missingRules: ArchitectureRulesPort = {
+      load: async () => { throw new ArchitectureRulesNotFoundError("/no/such/path/docs/architecture.yaml"); },
+    };
+
+    const result = await taskVerify(
+      { repoRoot, taskStore, evidenceStore, architectureRules: missingRules },
+      { id: "tsk-target" },
+    );
+
+    expect(result.verdict).toBe("PASS");
+    expect(result.task.state).toBe("ready");
+    expect(result.violations).toEqual([]);
+    const passRow = rows.find((r) => r.kind === "transition" && (r as { verdict?: string }).verdict === "PASS");
+    expect(passRow).toBeDefined();
   });
 
   it("HUMAN verdict does not run lints (skips architecture rules)", async () => {
