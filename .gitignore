@@ -65,3 +65,5 @@ feedback.jsonl
 .maestro/runs/
 # L2 versioned contract mirror — derived from .maestro/tasks/contracts/ (canonical L1 store)
 .maestro/contracts/
+# Phase 6 swarm run state — per-run tmpdir map, not durable
+.maestro/scenarios/

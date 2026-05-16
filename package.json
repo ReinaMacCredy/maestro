@@ -28,7 +28,10 @@
     "test:unit": "bun test tests/unit --concurrent",
     "test:integration": "bun test tests/integration",
     "test:e2e": "bun test tests/e2e",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "scenarios:swarm": "bun scripts/scenarios/swarm.ts --all",
+    "scenarios:check": "bun scripts/scenarios/check.ts",
+    "scenarios:check-all": "bun scripts/scenarios/check-all.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

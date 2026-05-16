@@ -98,6 +98,7 @@ maestro/
 | MCP server | `src/features/mcp/server/` |
 | Edge-case regression corpus | `tests/e2e/trust-benchmark/`, `tests/e2e/edge-cases/` |
 | Phase 6 scenario tests | `tests/scenarios/<name>/` (scenario.md, rubric.ts, agent-brief.md); shared helpers at `tests/scenarios/_helpers/` |
+| Phase 6 swarm tooling | `scripts/scenarios/` (swarm.ts: sandbox prep; check.ts: single rubric; check-all.ts: summary; see `scripts/scenarios/AGENTS.md`) |
 
 ## CODE STYLE
 - Prefer `interface` for object shapes and `type` for unions/intersections.
