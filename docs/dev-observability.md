@@ -25,7 +25,7 @@ Sources:
 - Port: `src/features/runtime/ports/dev-observability.port.ts`
 - Prometheus adapter (HTTP, no new deps): `src/features/runtime/adapters/dev-prometheus.adapter.ts`
 - File-tail adapter (no follow): `src/features/runtime/adapters/log-tail.adapter.ts`
-- Command: `src/features/task/commands/task-observe.command.ts`
+- Command: `src/v2/runtime/task.command.ts` (observe subcommand, if present; deleted with v1 `features/task/` in Phase 5)
 
 ---
 

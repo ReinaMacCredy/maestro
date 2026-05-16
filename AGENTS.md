@@ -13,15 +13,15 @@ repo-owned agent surfaces, and shared project state under `.maestro/`.
 
 Read `docs/harness-positioning.md` for the principle-to-primitive mapping.
 
-## Maestro v2 (Phases 1–3 landed)
+## Maestro v2 (Phases 1–4 landed)
 
-Maestro v2 is the harness-OS layer. Phases 1, 1.5, 2, and 3 — the v2
+Maestro v2 is the harness-OS layer. Phases 1, 1.5, 2, 3, and 4 — the v2
 spine, the principles + correction-recording bridge, the heavy-mode
-plan lifecycle, and the observability + setup + worktree + handoff layer
-— are feature-complete and dogfooded; see `docs/phase-1-done.md`,
-`docs/phase-1.5-done.md`, `docs/phase-2-done.md`, and
-`docs/phase-3-done.md` for the transition-evidence records. Phase 4
-(polish + 2.0 release) is the current track.
+plan lifecycle, the observability + setup + worktree + handoff layer, and
+the docs + skill-surface cleanup — are feature-complete and dogfooded; see
+`docs/phase-1-done.md`, `docs/phase-1.5-done.md`, `docs/phase-2-done.md`,
+and `docs/phase-3-done.md` for the transition-evidence records. Phase 5
+(v1 source-code sunset + post-sunset doc audit) is the current track.
 
 - **Plan:** `docs/v2-master-plan.md` is the source of truth. Layered
   architecture rules live in `docs/architecture.yaml` (loaded by the
@@ -87,7 +87,7 @@ maestro/
 | Release and install | `scripts/build.ts`, `scripts/ci.ts`, `scripts/install-local.ts` |
 | Compiled-binary verification | `tests/e2e/`, `tests/helpers/run-compiled-cli.ts` |
 | Policy and owners loader | `src/features/policy/`; see `docs/owners-yaml-format.md` |
-| Trust Verifier | `src/features/verify/` |
+| Trust Verifier | `src/features/verdict/verify/` |
 | Risk Engine | `src/features/risk/`; see `docs/risk-class-derivation.md` |
 | Verdict types and store | `src/features/verdict/` |
 | AI Reviewer + Threat-Model | `src/features/risk/usecases/compute-risk.ts`; `docs/threat-model-format.md` |

@@ -101,10 +101,9 @@ then checks every evidence row linked to acceptance criteria. If any row's
 witness level is below the threshold for the effective risk class, the verdict
 downgrades from `PASS` to `HUMAN` (Rule 12 + autopilot policy).
 
-The ProofMap builder (`src/features/verify/usecases/proof-map.ts`) produces a
-per-criterion coverage map that shows which evidence rows satisfy each acceptance
-criterion and at what witness level, making the gap visible before a verdict is
-requested.
+The ProofMap builder produces a per-criterion coverage map that shows which
+evidence rows satisfy each acceptance criterion and at what witness level,
+making the gap visible before a verdict is requested.
 
 ## Phase 1 evidence kinds and their witness levels
 

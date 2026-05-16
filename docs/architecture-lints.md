@@ -108,16 +108,12 @@ do not import code). `src/services.ts` itself is exempt.
 
 Per-line escape: `// lint-arch-allow: composition-only-in-services-ts`.
 
-### `task-vs-mission-separation` — warn
+### `task-vs-mission-separation` — warn (historical)
 
-`src/features/task/**` and `src/features/mission/**` model different
-lifecycles and must not import each other. Shared logic belongs in a shared
-module (or composed via `src/services.ts`).
-
-The rule scans `src/features/{task,mission}/**` for cross-feature imports of
-the opposite feature.
-
-Per-line escape: `// lint-arch-allow: task-vs-mission-separation`.
+This rule was defined for v1 `src/features/task/**` and `src/features/mission/**`
+which were deleted in Phase 5. The rule is retained in the document for historical
+reference; it is a no-op at runtime because neither directory exists. Shared logic
+now belongs in `src/v2/` or `src/shared/`.
 
 The first two plan-listed Phase 3 rules (`no-deep-cross-feature-imports`,
 `feature-public-via-index`) are already enforced as errors by
@@ -126,7 +122,7 @@ The first two plan-listed Phase 3 rules (`no-deep-cross-feature-imports`,
 ## Adding a new rule
 
 1. Add a new `ArchitectureRuleId` literal in
-   `src/features/verify/usecases/checks/check-architecture-lints.ts`.
+   `src/shared/lib/arch-rules.ts`.
 2. Add a remediation string to `REMEDIATION` (used in violation output and
    Trust Verifier finding `details`).
 3. Implement the rule as an async function returning
@@ -135,7 +131,7 @@ The first two plan-listed Phase 3 rules (`no-deep-cross-feature-imports`,
 4. Wire severity intent: `error` for hard repo-shape violations,
    `warn` for heuristics with known false-positive risk, `info` for
    advisory-only.
-5. Add tests under `tests/unit/features/verify/usecases/checks/check-architecture-lints.test.ts`.
+5. Add tests under `tests/unit/shared/lib/arch-rules.test.ts`.
 6. Update this document.
 
 ## Rules (Phase 4 — taste)

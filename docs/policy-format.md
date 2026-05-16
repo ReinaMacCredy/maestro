@@ -160,7 +160,7 @@ requireProofMapComplete: true
 **Purpose:** Glob list of paths that trigger the `checkSensitivePaths` Trust
 Verifier finding when a diff touches them.
 
-**Loading code:** `src/features/verify/` (loaded as part of the Trust Verifier;
+**Loading code:** `src/features/verdict/verify/` (loaded as part of the Trust Verifier;
 not a standalone policy loader in `src/features/policy/`).
 
 **Schema:** A flat list of glob strings under the `paths` key.

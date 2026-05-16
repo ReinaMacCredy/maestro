@@ -181,8 +181,8 @@ maestro evidence record --task <id> --kind ai-review \
   --criterion ac-3
 ```
 
-The ProofMap builder (`src/features/verify/usecases/proof-map.ts`) counts
-`ai-review` rows as coverage for the named criterion. Without `criterion_id`,
+The ProofMap builder counts `ai-review` rows as coverage for the named criterion.
+Without `criterion_id`,
 the row contributes to the overall evidence corpus but does not satisfy any
 specific criterion gap.
 

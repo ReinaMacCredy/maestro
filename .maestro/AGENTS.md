@@ -20,7 +20,7 @@ Use this directory with the repo-root `AGENTS.md`. `.maestro/` is the repo-owned
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Shared operator guidance | `context/`, `MAESTRO.md` | Read before changing workflow assumptions |
+| Shared operator guidance | `context/` | Read before changing workflow assumptions |
 | Daily task queue | `tasks/tasks.jsonl` | Tracked durable state; reasons become history |
 | Task contracts | `tasks/contracts/` | Per-task intent/scope/verdict files with append-only `index.jsonl` history |
 | Contract draft templates | `tasks/contract-templates/` | Repo-local YAML seeds for `maestro task contract new <id> --from <name>` |
@@ -34,7 +34,7 @@ Use this directory with the repo-root `AGENTS.md`. `.maestro/` is the repo-owned
 
 ## CONVENTIONS
 - Treat `tasks/tasks.jsonl` as shared durable state. Review edits the same way you would review commit messages.
-- `context/` and `MAESTRO.md` are operator-facing guidance; keep them aligned with the current CLI behavior.
+- `context/` is operator-facing guidance; keep it aligned with the current CLI behavior.
 - `plans/`, `drafts/`, `wisdom/`, and `archive/` hold useful history, but they are not a substitute for current source verification.
 - Runtime skill lookup prefers `.maestro/skills/{agentType}/SKILL.md` before `skills/built-in/{agentType}/SKILL.md`.
 - `contracts/`, `policies/`, and `specs/` are committed. They are durable policy artifacts, not ephemeral state.
@@ -70,8 +70,6 @@ All other directories under `.maestro/` (including `contracts/`, `policies/`, `s
 - Do not put secrets or throwaway venting into tasks, notes, or long-lived plan text.
 - Do not treat archived guidance as the current contract without checking source or the current root docs.
 - Do not hand-edit generated indices unless you are fixing the generator or deliberately repairing broken state.
-
-@MAESTRO.md
 
 <!-- AGENTS-HIERARCHY:START -->
 ## AGENTS Hierarchy

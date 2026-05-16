@@ -68,9 +68,9 @@ interface RuntimeSignal {
 }
 ```
 
-Declare signals in the Spec (`maestro spec edit --mission <id>`). Signals
-with an unsupported provider are skipped and recorded with `note:
-"unsupported provider"`.
+Declare signals in the Spec (edit `.maestro/specs/<slug>.md` directly — there is
+no `spec edit` verb in v2). Signals with an unsupported provider are skipped
+and recorded with `note: "unsupported provider"`.
 
 **`runtime-signal` Evidence payload** (`RuntimeSignalPayload` shape):
 
