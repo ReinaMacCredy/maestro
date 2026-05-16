@@ -146,6 +146,7 @@ export async function planDecompose(
       },
       {
         task_id: task.id,
+        plan_id: plan.id,
         from_state: null,
         to_state: "draft",
         trigger_verb: "task:from-spec",

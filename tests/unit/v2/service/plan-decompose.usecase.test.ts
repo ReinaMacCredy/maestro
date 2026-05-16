@@ -205,18 +205,19 @@ describe("planDecompose", () => {
     const transitions = evidence.filter((e) => e.kind === "transition");
     expect(transitions.length).toBe(4);
     const taskTransitions = transitions.filter((e) => e.task_id !== undefined);
-    const planTransitions = transitions.filter((e) => e.plan_id !== undefined);
+    const planOnlyTransitions = transitions.filter((e) => e.plan_id !== undefined && e.task_id === undefined);
     expect(taskTransitions.length).toBe(3);
     for (const ev of taskTransitions) {
       expect(ev).toMatchObject({
         kind: "transition",
+        plan_id: plan.id,
         from_state: null,
         to_state: "draft",
         trigger_verb: "task:from-spec",
       });
     }
-    expect(planTransitions.length).toBe(1);
-    expect(planTransitions[0]).toMatchObject({
+    expect(planOnlyTransitions.length).toBe(1);
+    expect(planOnlyTransitions[0]).toMatchObject({
       kind: "transition",
       plan_id: plan.id,
       from_state: "specified",
