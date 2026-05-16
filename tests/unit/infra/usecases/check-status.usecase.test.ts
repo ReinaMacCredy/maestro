@@ -35,11 +35,12 @@ describe("checkStatus", () => {
     });
   });
 
-  it("reports legacy handoff artifacts in the project dir, ignoring home-dir launches", async () => {
-    const legacyDir = join(cwd, ".maestro", "handoffs");
-    await mkdir(legacyDir, { recursive: true });
-    await writeFile(join(legacyDir, "2026-04-20-001.json"), "{}\n");
-    await writeFile(join(legacyDir, "2026-04-20-002.json"), "{}\n");
+  it("reports legacy launch artifacts in the project dir, ignoring current handoffs and home-dir launches", async () => {
+    // Current handoffs are not legacy; canonical emit path is .maestro/handoffs/.
+    const currentHandoffsDir = join(cwd, ".maestro", "handoffs");
+    await mkdir(currentHandoffsDir, { recursive: true });
+    await writeFile(join(currentHandoffsDir, "2026-04-20-001.json"), "{}\n");
+    await writeFile(join(currentHandoffsDir, "2026-04-20-002.json"), "{}\n");
     const launchDir = join(cwd, ".maestro", "launches");
     await mkdir(launchDir, { recursive: true });
     await writeFile(join(launchDir, "2026-04-20-003.json"), "{}\n");
@@ -56,6 +57,6 @@ describe("checkStatus", () => {
       { homeDir },
     );
 
-    expect(status.legacyHandoffCount).toBe(3);
+    expect(status.legacyHandoffCount).toBe(1);
   });
 });

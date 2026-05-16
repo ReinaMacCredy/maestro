@@ -9,20 +9,15 @@ export interface CountLegacyHandoffFilesOptions {
 }
 
 /**
- * Counts legacy handoff/launch artifacts under the project's `.maestro/`
- * directory. Scoped to project state so doctor's per-project output
- * doesn't bleed in home-dir launches that belong to other repos.
+ * Counts legacy launch artifacts under the project's `.maestro/launches/`
+ * directory. `.maestro/handoffs/` is the canonical emit path for the
+ * current handoff system and is not counted here.
  */
 export async function countLegacyHandoffFiles(
   projectDir: string,
   _options: CountLegacyHandoffFilesOptions = {},
 ): Promise<number> {
-  return (
-    await Promise.all([
-      countEntries(join(projectDir, MAESTRO_DIR, "handoffs")),
-      countEntries(join(projectDir, MAESTRO_DIR, "launches")),
-    ])
-  ).reduce((sum, count) => sum + count, 0);
+  return countEntries(join(projectDir, MAESTRO_DIR, "launches"));
 }
 
 async function countEntries(dir: string): Promise<number> {
