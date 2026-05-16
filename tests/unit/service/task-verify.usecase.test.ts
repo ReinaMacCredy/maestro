@@ -5,29 +5,29 @@ import { join } from "node:path";
 import type {
   ArchitectureRules,
   ArchitectureRulesPort,
-} from "@/v2/repo/architecture-rules.port.js";
-import { ArchitectureRulesNotFoundError } from "@/v2/repo/architecture-rules.port.js";
+} from "@/repo/architecture-rules.port.js";
+import { ArchitectureRulesNotFoundError } from "@/repo/architecture-rules.port.js";
 import type {
   EvidenceFilter,
   EvidenceRow,
   EvidenceStorePort,
-} from "@/v2/repo/evidence-store.port.js";
+} from "@/repo/evidence-store.port.js";
 import {
   TaskNotFoundError,
   type CreateTaskInput,
   type TaskPatch,
   type TaskStorePort,
-} from "@/v2/repo/task-store.port.js";
-import { TaskTransitionError, type TaskState } from "@/v2/types/task-state.js";
-import type { Task, TaskId } from "@/v2/types/task.js";
-import { taskVerify, TaskVerifyReasonRequiredError } from "@/v2/service/task-verify.usecase.js";
+} from "@/repo/task-store.port.js";
+import { TaskTransitionError, type TaskState } from "@/types/task-state.js";
+import type { Task, TaskId } from "@/types/task.js";
+import { taskVerify, TaskVerifyReasonRequiredError } from "@/service/task-verify.usecase.js";
 
 const RULES: ArchitectureRules = {
   version: 1,
   forward_only: true,
   layers: ["types", "config", "repo", "service", "runtime", "ui"],
   cross_cutting: ["providers"],
-  lint_scope: ["src/v2/**/*.ts"],
+  lint_scope: ["src/service/**/*.ts"],
   passive_harness: { forbidden_patterns: ["setInterval"] },
 };
 
@@ -116,7 +116,7 @@ describe("taskVerify", () => {
 
   beforeEach(async () => {
     repoRoot = await mkdtemp(join(tmpdir(), "maestro-task-verify-"));
-    await mkdir(join(repoRoot, "src/v2/service"), { recursive: true });
+    await mkdir(join(repoRoot, "src/service"), { recursive: true });
   });
 
   afterEach(async () => {
@@ -124,7 +124,7 @@ describe("taskVerify", () => {
   });
 
   it("PASS auto-advances claimed -> verifying -> ready and emits two transition rows", async () => {
-    await writeFile(join(repoRoot, "src/v2/service/clean.ts"), `export const X = 1;\n`);
+    await writeFile(join(repoRoot, "src/service/clean.ts"), `export const X = 1;\n`);
     const taskStore = makeTaskStore([seedTask("claimed")]);
     const { store: evidenceStore, rows } = makeEvidence();
 
@@ -152,7 +152,7 @@ describe("taskVerify", () => {
   });
 
   it("PASS from doing also auto-advances to ready", async () => {
-    await writeFile(join(repoRoot, "src/v2/service/clean.ts"), `export const X = 1;\n`);
+    await writeFile(join(repoRoot, "src/service/clean.ts"), `export const X = 1;\n`);
     const taskStore = makeTaskStore([seedTask("doing")]);
     const { store: evidenceStore, rows } = makeEvidence();
 
@@ -168,7 +168,7 @@ describe("taskVerify", () => {
   });
 
   it("PASS from verifying (re-run) does not re-emit the entry transition row", async () => {
-    await writeFile(join(repoRoot, "src/v2/service/clean.ts"), `export const X = 1;\n`);
+    await writeFile(join(repoRoot, "src/service/clean.ts"), `export const X = 1;\n`);
     const taskStore = makeTaskStore([seedTask("verifying")]);
     const { store: evidenceStore, rows } = makeEvidence();
 
@@ -190,7 +190,7 @@ describe("taskVerify", () => {
 
   it("FAIL keeps state at verifying and emits one lint-violation row per finding with task_id set", async () => {
     await writeFile(
-      join(repoRoot, "src/v2/service/bad.ts"),
+      join(repoRoot, "src/service/bad.ts"),
       `export function tick() { setInterval(() => null, 1000); setInterval(() => null, 2000); }\n`,
     );
     const taskStore = makeTaskStore([seedTask("claimed")]);
@@ -359,7 +359,7 @@ describe("taskVerify", () => {
     // setInterval would normally trigger a violation under stubRules; HUMAN
     // verdict should skip lints entirely.
     await writeFile(
-      join(repoRoot, "src/v2/service/bad.ts"),
+      join(repoRoot, "src/service/bad.ts"),
       `export function tick() { setInterval(() => null, 1000); }\n`,
     );
     const taskStore = makeTaskStore([seedTask("verifying")]);

@@ -1,19 +1,19 @@
 import { describe, expect, it } from "bun:test";
-import type { EvidenceStorePort } from "@/v2/repo/evidence-store.port.js";
+import type { EvidenceStorePort } from "@/repo/evidence-store.port.js";
 import type {
   HandoffEmitterPort,
   HandoffEnvelope,
-} from "@/v2/repo/handoff-emitter.port.js";
+} from "@/repo/handoff-emitter.port.js";
 import {
   TaskNotFoundError,
   type CreateTaskInput,
   type TaskPatch,
   type TaskStorePort,
-} from "@/v2/repo/task-store.port.js";
-import { taskBlock } from "@/v2/service/task-block.usecase.js";
-import { taskClaim } from "@/v2/service/task-claim.usecase.js";
-import type { TaskState } from "@/v2/types/task-state.js";
-import type { Task, TaskId } from "@/v2/types/task.js";
+} from "@/repo/task-store.port.js";
+import { taskBlock } from "@/service/task-block.usecase.js";
+import { taskClaim } from "@/service/task-claim.usecase.js";
+import type { TaskState } from "@/types/task-state.js";
+import type { Task, TaskId } from "@/types/task.js";
 
 function makeEvidence(): EvidenceStorePort {
   const rows: unknown[] = [];

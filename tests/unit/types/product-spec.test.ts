@@ -6,12 +6,12 @@ import {
   isRiskClass,
   isSpecMode,
   isWorkType,
-} from "@/v2/types/product-spec.js";
+} from "@/types/product-spec.js";
 import {
   SPEC_SLUG_PATTERN,
   generateSpecSlug,
   isValidSpecSlug,
-} from "@/v2/types/spec-id.js";
+} from "@/types/spec-id.js";
 
 describe("WorkType / RiskClass / SpecMode guards", () => {
   it("isWorkType accepts all 6 ADR-0015 values and rejects others", () => {

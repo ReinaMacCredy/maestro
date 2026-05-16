@@ -4,7 +4,7 @@ import type { AutopilotSnapshotDeps } from "@/tui/state/autopilot-screen.js";
 import type { LegacyTask as Task } from "@/shared/domain/legacy-task";
 import type { RunState } from "@/shared/domain/legacy-task/domain/run-state.js";
 import type { Verdict } from "@/features/verdict";
-import type { Contract } from "@/v2/types/contract.js";
+import type { Contract } from "@/types/contract.js";
 import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
 import { mockContractStore } from "../../../helpers/mocks.js";
 

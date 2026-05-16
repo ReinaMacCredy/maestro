@@ -1,12 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
 import type { EvidenceRow } from "@/features/evidence/domain/types.js";
-import type { HandoffRecord } from "@/features/handoff/domain/handoff-types.js";
 import type { Mission } from "@/shared/domain/legacy-mission";
 import type { LegacyTask as Task } from "@/shared/domain/legacy-task";
 import {
   summarizeEvidence,
-  summarizeHandoff,
   summarizeMission,
   summarizeTask,
 } from "@/shared/lib/projection.js";
@@ -70,25 +68,6 @@ function makeEvidence(): EvidenceRow<"command"> {
       log_path: "/some/path",
       duration_ms: 1234,
     },
-  };
-}
-
-function makeHandoff(): HandoffRecord {
-  return {
-    id: "ho_001",
-    createdAt: "2026-05-13T00:00:00Z",
-    task: "investigate flake",
-    name: "investigate-flake",
-    agent: "codex",
-    model: "gpt-5.4",
-    status: "launched",
-    wait: false,
-    sourceDir: "/src",
-    targetDir: "/tgt",
-    promptPath: "/p",
-    outputPath: "/o",
-    command: ["codex", "exec"],
-    refs: { taskId: "task_001", missionId: "mission_001" },
   };
 }
 
@@ -169,35 +148,3 @@ describe("summarizeEvidence", () => {
   });
 });
 
-describe("summarizeHandoff", () => {
-  it("keeps semantic identifier and lifecycle fields, drops paths and command", () => {
-    const summary = summarizeHandoff(makeHandoff());
-    expect(summary).toEqual({
-      name: "investigate-flake",
-      id: "ho_001",
-      status: "launched",
-      task: "investigate flake",
-      agent: "codex",
-      model: "gpt-5.4",
-      createdAt: "2026-05-13T00:00:00Z",
-      wait: false,
-      taskId: "task_001",
-      missionId: "mission_001",
-    });
-    expect("sourceDir" in summary).toBe(false);
-    expect("targetDir" in summary).toBe(false);
-    expect("promptPath" in summary).toBe(false);
-    expect("outputPath" in summary).toBe(false);
-    expect("command" in summary).toBe(false);
-    expect("worktree" in summary).toBe(false);
-  });
-
-  it("omits refs when absent", () => {
-    const summary = summarizeHandoff({
-      ...makeHandoff(),
-      refs: {},
-    });
-    expect("taskId" in summary).toBe(false);
-    expect("missionId" in summary).toBe(false);
-  });
-});

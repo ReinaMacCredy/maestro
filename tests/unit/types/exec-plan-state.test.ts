@@ -9,7 +9,7 @@ import {
   isExecPlanState,
   isTerminalExecPlanState,
   type ExecPlanState,
-} from "@/v2/types/exec-plan-state.js";
+} from "@/types/exec-plan-state.js";
 
 describe("ExecPlanState union", () => {
   it("isExecPlanState recognizes every canonical state and rejects unknowns", () => {

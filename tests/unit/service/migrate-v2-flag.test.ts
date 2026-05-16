@@ -6,7 +6,7 @@ import {
   MIGRATION_FLAG_VERSION,
   readMigrationFlag,
   writeMigrationFlag,
-} from "@/v2/service/migrate-v2-flag.js";
+} from "@/service/migrate-v2-flag.js";
 
 describe("migrate-v2 flag", () => {
   let root: string;

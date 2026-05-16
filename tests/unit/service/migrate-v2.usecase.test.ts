@@ -5,13 +5,13 @@ import { join } from "node:path";
 import {
   migrateV2,
   MIGRATE_V2_STEP_TABLE,
-} from "@/v2/service/migrate-v2.usecase.js";
+} from "@/service/migrate-v2.usecase.js";
 import {
   MIGRATION_FLAG_REL,
   readMigrationFlag,
-} from "@/v2/service/migrate-v2-flag.js";
+} from "@/service/migrate-v2-flag.js";
 
-const FIXTURE = join(__dirname, "../../../fixtures/v1-maestro");
+const FIXTURE = join(__dirname, "../../fixtures/v1-maestro");
 
 describe("migrateV2 (scaffold)", () => {
   let root: string;
@@ -109,10 +109,10 @@ describe("migrateV2 (scaffold)", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("writes tasks.v2.jsonl rows that mirror the v1 source", async () => {
+  it("writes tasks.jsonl rows that mirror the v1 source", async () => {
     await migrateV2({ repoRoot: root });
     const raw = await readFile(
-      join(root, ".maestro/tasks/tasks.v2.jsonl"),
+      join(root, ".maestro/tasks/tasks.jsonl"),
       "utf8",
     );
     const rows = raw
@@ -125,10 +125,10 @@ describe("migrateV2 (scaffold)", () => {
     expect(rows.find((r) => r.id === "tsk-v1-shipped")?.state).toBe("shipped");
   });
 
-  it("writes plans.v2.jsonl from .maestro/missions/<id>/mission.json", async () => {
+  it("writes plans.jsonl from .maestro/missions/<id>/mission.json", async () => {
     await migrateV2({ repoRoot: root });
     const raw = await readFile(
-      join(root, ".maestro/plans/plans.v2.jsonl"),
+      join(root, ".maestro/plans/plans.jsonl"),
       "utf8",
     );
     const plans = raw

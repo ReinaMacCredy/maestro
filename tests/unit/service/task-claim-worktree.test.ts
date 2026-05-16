@@ -2,21 +2,21 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { EvidenceStorePort } from "@/v2/repo/evidence-store.port.js";
+import type { EvidenceStorePort } from "@/repo/evidence-store.port.js";
 import {
   TaskNotFoundError,
   type CreateTaskInput,
   type TaskPatch,
   type TaskStorePort,
-} from "@/v2/repo/task-store.port.js";
+} from "@/repo/task-store.port.js";
 import type {
   CreateWorktreeInput,
   WorktreeRecord,
   WorktreeStorePort,
-} from "@/v2/repo/worktree-store.port.js";
-import { taskClaim } from "@/v2/service/task-claim.usecase.js";
-import type { TaskState } from "@/v2/types/task-state.js";
-import type { Task, TaskId } from "@/v2/types/task.js";
+} from "@/repo/worktree-store.port.js";
+import { taskClaim } from "@/service/task-claim.usecase.js";
+import type { TaskState } from "@/types/task-state.js";
+import type { Task, TaskId } from "@/types/task.js";
 
 function makeEvidence(): EvidenceStorePort {
   const rows: unknown[] = [];

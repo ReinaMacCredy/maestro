@@ -8,14 +8,13 @@ describe("services composition root", () => {
     expect(source).not.toContain('./features/mission/');
     expect(source).toContain('./features/principle/services.js');
     expect(source).toContain('./features/reply/services.js');
-    expect(source).toContain('./features/handoff/services.js');
+    expect(source).not.toContain('./features/handoff/');
     // v1 task feature services.ts moved to @/shared/domain/legacy-task (D-task Phase 5)
     expect(source).toContain('@/shared/domain/legacy-task/index.js');
     expect(source).not.toContain('./features/task/services.js');
 
     expect(source).not.toContain('./features/principle/index.js');
     expect(source).not.toContain('./features/reply/index.js');
-    expect(source).not.toContain('./features/handoff/index.js');
     expect(source).not.toContain('./features/task/index.js');
 
     // v1 modules retired in Phase 4 (ADR-0015 + ADR-0018):
@@ -37,11 +36,6 @@ describe("services composition root", () => {
       git: expect.any(Object),
       missionStore: expect.any(Object),
       missions: expect.any(Object),
-      handoffStore: expect.any(Object),
-      handoffLaunchers: {
-        codex: expect.any(Object),
-        claude: expect.any(Object),
-      },
       taskStore: expect.any(Object),
       contractStore: expect.any(Object),
       gitAnchor: expect.any(Object),

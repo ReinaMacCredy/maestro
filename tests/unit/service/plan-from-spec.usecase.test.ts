@@ -6,19 +6,19 @@ import type {
   CreateExecPlanInput,
   ExecPlanPatch,
   ExecPlanStorePort,
-} from "@/v2/repo/exec-plan-store.port.js";
-import { DuplicateExecPlanSlugError } from "@/v2/repo/exec-plan-store.port.js";
+} from "@/repo/exec-plan-store.port.js";
+import { DuplicateExecPlanSlugError } from "@/repo/exec-plan-store.port.js";
 import type {
   EvidenceFilter,
   EvidenceRow,
   EvidenceStorePort,
-} from "@/v2/repo/evidence-store.port.js";
-import type { ExecPlan, ExecPlanId } from "@/v2/types/exec-plan.js";
-import type { ExecPlanState } from "@/v2/types/exec-plan-state.js";
+} from "@/repo/evidence-store.port.js";
+import type { ExecPlan, ExecPlanId } from "@/types/exec-plan.js";
+import type { ExecPlanState } from "@/types/exec-plan-state.js";
 import {
   planFromSpec,
   PlanRequiresHeavyModeError,
-} from "@/v2/service/plan-from-spec.usecase.js";
+} from "@/service/plan-from-spec.usecase.js";
 
 const FROZEN = new Date("2026-05-15T11:00:00.000Z");
 

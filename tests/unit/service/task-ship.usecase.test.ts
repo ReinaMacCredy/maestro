@@ -3,20 +3,20 @@ import type {
   EvidenceFilter,
   EvidenceRow,
   EvidenceStorePort,
-} from "@/v2/repo/evidence-store.port.js";
+} from "@/repo/evidence-store.port.js";
 import type {
   ObservabilityEvent,
   ObservabilityPort,
-} from "@/v2/repo/observability.port.js";
+} from "@/repo/observability.port.js";
 import {
   TaskNotFoundError,
   type CreateTaskInput,
   type TaskPatch,
   type TaskStorePort,
-} from "@/v2/repo/task-store.port.js";
-import { TaskTransitionError, type TaskState } from "@/v2/types/task-state.js";
-import type { Task, TaskId } from "@/v2/types/task.js";
-import { taskShip } from "@/v2/service/task-ship.usecase.js";
+} from "@/repo/task-store.port.js";
+import { TaskTransitionError, type TaskState } from "@/types/task-state.js";
+import type { Task, TaskId } from "@/types/task.js";
+import { taskShip } from "@/service/task-ship.usecase.js";
 
 function makeEvidence(): { store: EvidenceStorePort; rows: EvidenceRow[] } {
   const rows: EvidenceRow[] = [];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { EXEC_PLAN_ID_PATTERN, generateExecPlanId, isExecPlanId } from "@/v2/types/exec-plan.js";
+import { EXEC_PLAN_ID_PATTERN, generateExecPlanId, isExecPlanId } from "@/types/exec-plan.js";
 
 describe("ExecPlan id helpers", () => {
   it("generateExecPlanId produces ids matching the pln-<ts>-<rand> shape", () => {

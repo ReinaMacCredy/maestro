@@ -2,13 +2,13 @@ import { describe, expect, it } from "bun:test";
 import {
   parseScanLine,
   principlesScan,
-} from "@/v2/service/principle-scan.usecase.js";
-import type { Principle } from "@/v2/types/principle.js";
-import type { PrinciplesStorePort } from "@/v2/repo/principles-store.port.js";
+} from "@/service/principle-scan.usecase.js";
+import type { Principle } from "@/types/principle.js";
+import type { PrinciplesStorePort } from "@/repo/principles-store.port.js";
 import type {
   ProcessRunResult,
   ProcessRunnerPort,
-} from "@/v2/repo/process-runner.port.js";
+} from "@/repo/process-runner.port.js";
 
 function principle(slug: string, scan_command = `scan-${slug}`): Principle {
   return {

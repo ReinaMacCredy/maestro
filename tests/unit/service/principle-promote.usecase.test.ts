@@ -5,14 +5,14 @@ import {
   principlePromote,
   renderPrincipleScaffold,
   ruleIdToSlug,
-} from "@/v2/service/principle-promote.usecase.js";
+} from "@/service/principle-promote.usecase.js";
 import type {
   EvidenceRow,
   EvidenceStorePort,
   LintViolationEvidenceRow,
-} from "@/v2/repo/evidence-store.port.js";
-import type { PrinciplesStorePort } from "@/v2/repo/principles-store.port.js";
-import type { Principle } from "@/v2/types/principle.js";
+} from "@/repo/evidence-store.port.js";
+import type { PrinciplesStorePort } from "@/repo/principles-store.port.js";
+import type { Principle } from "@/types/principle.js";
 
 function memEvidence(rows: EvidenceRow[]): EvidenceStorePort {
   return {

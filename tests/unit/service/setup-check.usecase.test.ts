@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setupCheck } from "@/v2/service/setup-check.usecase.js";
+import { setupCheck } from "@/service/setup-check.usecase.js";
 
 describe("setupCheck", () => {
   let root: string;

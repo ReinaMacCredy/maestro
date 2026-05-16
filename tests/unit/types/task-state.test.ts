@@ -9,7 +9,7 @@ import {
   isTaskState,
   isTerminalTaskState,
   type TaskState,
-} from "@/v2/types/task-state.js";
+} from "@/types/task-state.js";
 
 describe("TaskState union", () => {
   it("isTaskState recognizes every canonical state and rejects unknowns", () => {

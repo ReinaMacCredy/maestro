@@ -3,22 +3,22 @@ import type {
   CreateExecPlanInput,
   ExecPlanPatch,
   ExecPlanStorePort,
-} from "@/v2/repo/exec-plan-store.port.js";
+} from "@/repo/exec-plan-store.port.js";
 import type {
   EvidenceFilter,
   EvidenceRow,
   EvidenceStorePort,
-} from "@/v2/repo/evidence-store.port.js";
+} from "@/repo/evidence-store.port.js";
 import type {
   CreateTaskInput,
   TaskPatch,
   TaskStorePort,
-} from "@/v2/repo/task-store.port.js";
-import type { ExecPlan, ExecPlanId } from "@/v2/types/exec-plan.js";
-import type { ExecPlanState } from "@/v2/types/exec-plan-state.js";
-import type { Task, TaskId } from "@/v2/types/task.js";
-import type { TaskState } from "@/v2/types/task-state.js";
-import { tryAdvancePlan } from "@/v2/service/try-advance-plan.usecase.js";
+} from "@/repo/task-store.port.js";
+import type { ExecPlan, ExecPlanId } from "@/types/exec-plan.js";
+import type { ExecPlanState } from "@/types/exec-plan-state.js";
+import type { Task, TaskId } from "@/types/task.js";
+import type { TaskState } from "@/types/task-state.js";
+import { tryAdvancePlan } from "@/service/try-advance-plan.usecase.js";
 
 const FROZEN = new Date("2026-05-15T11:00:00.000Z");
 

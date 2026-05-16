@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setupBootstrap } from "@/v2/service/setup-bootstrap.usecase.js";
+import { setupBootstrap } from "@/service/setup-bootstrap.usecase.js";
 
 const V2_DIRS = [
   ".maestro/tasks",

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   checkSkillBinaryParity,
   renderDriftError,
-} from "@/v2/service/skill-binary-parity.js";
+} from "@/service/skill-binary-parity.js";
 
 describe("checkSkillBinaryParity", () => {
   it("returns no findings when all skill-referenced verbs exist", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   isValidPrincipleSlug,
   PRINCIPLE_SLUG_PATTERN,
-} from "@/v2/types/principle.js";
+} from "@/types/principle.js";
 
 describe("PRINCIPLE_SLUG_PATTERN", () => {
   it("accepts kebab-case", () => {
