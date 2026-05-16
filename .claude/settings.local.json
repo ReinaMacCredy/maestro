@@ -17,7 +17,27 @@
       "Bash(rtk git *)",
       "Bash(mkdir -p /tmp/maestro-token-audit)",
       "Read(//private/tmp/maestro-token-audit/**)",
-      "Bash(rm -rf ./*)"
+      "Bash(rm -rf ./*)",
+      "Bash(rtk grep *)",
+      "Bash(maestro *)",
+      "Bash(ls *)",
+      "Bash(grep *)",
+      "Bash(jq *)",
+      "Bash(echo *)",
+      "Bash(printf *)",
+      "Bash(cat *)",
+      "Bash(sed *)",
+      "Bash(git -C /tmp/*)",
+      "Bash(git init *)",
+      "Bash(git status *)",
+      "Bash(git branch *)",
+      "Bash(rm -rf /tmp/maestro-smoke-*)",
+      "Bash(mkdir -p /tmp/maestro-smoke-*)",
+      "Bash(cd /tmp/maestro-smoke-*)",
+      "Bash(rtk gh *)",
+      "Bash(gh api *)",
+      "Bash(gh auth *)",
+      "Bash(unset GH_TOKEN)"
     ]
   },
   "outputStyle": "default"
