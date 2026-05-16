@@ -1,5 +1,5 @@
 import { MaestroError } from "@/shared/errors.js";
-import { TASK_ID_PATTERN } from "../task-id.js";
+import { ANY_TASK_ID_PATTERN as TASK_ID_PATTERN } from "@/v2/types/task.js";
 import { generateTaskId } from "../task-id.js";
 import type {
   AmendmentBudget,

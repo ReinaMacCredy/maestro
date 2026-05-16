@@ -5,7 +5,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { ensureDir, readText, writeJson } from "@/shared/lib/fs.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
 import { validateContract } from "../domain/contract/contract-state.js";
-import { TASK_ID_PATTERN } from "../domain/task-id.js";
+import { ANY_TASK_ID_PATTERN } from "@/v2/types/task.js";
 import type { Contract } from "../domain/contract/contract-types.js";
 import type { ContractVersionStorePort } from "../ports/contract-version-store.port.js";
 
@@ -13,7 +13,7 @@ export class FsContractVersionStoreAdapter implements ContractVersionStorePort {
   constructor(private readonly baseDir: string) {}
 
   async write(taskId: string, version: number, contract: Contract): Promise<void> {
-    assertSafeSegment(taskId, "task id", TASK_ID_PATTERN, "'tsk-' followed by 6 hex characters");
+    assertSafeSegment(taskId, "task id", ANY_TASK_ID_PATTERN, "'tsk-' followed by 6 hex chars or v2 base36 form");
     const dir = this.taskVersionDir(taskId);
     await ensureDir(dir);
     await writeJson(join(dir, `v${version}.json`), contract);
@@ -26,7 +26,7 @@ export class FsContractVersionStoreAdapter implements ContractVersionStorePort {
   }
 
   async readVersion(taskId: string, version: number): Promise<Contract | undefined> {
-    assertSafeSegment(taskId, "task id", TASK_ID_PATTERN, "'tsk-' followed by 6 hex characters");
+    assertSafeSegment(taskId, "task id", ANY_TASK_ID_PATTERN, "'tsk-' followed by 6 hex chars or v2 base36 form");
     const path = join(this.taskVersionDir(taskId), `v${version}.json`);
     const raw = await readText(path);
     if (raw === undefined) return undefined;
@@ -34,7 +34,7 @@ export class FsContractVersionStoreAdapter implements ContractVersionStorePort {
   }
 
   async history(taskId: string): Promise<readonly Contract[]> {
-    assertSafeSegment(taskId, "task id", TASK_ID_PATTERN, "'tsk-' followed by 6 hex characters");
+    assertSafeSegment(taskId, "task id", ANY_TASK_ID_PATTERN, "'tsk-' followed by 6 hex chars or v2 base36 form");
     const dir = this.taskVersionDir(taskId);
     const filenames = await this.listVersionFilenames(dir);
     const contracts: Contract[] = [];
