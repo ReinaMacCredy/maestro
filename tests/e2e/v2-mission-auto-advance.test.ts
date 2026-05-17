@@ -63,12 +63,12 @@ async function readEvidenceRows(dir: string): Promise<readonly Record<string, un
 }
 
 async function readPlanState(dir: string, planId: string): Promise<string> {
-  const text = await readFile(join(dir, ".maestro/missions/plans.jsonl"), "utf8");
+  const text = await readFile(join(dir, ".maestro/missions/missions.jsonl"), "utf8");
   for (const line of text.trim().split("\n")) {
     const p = JSON.parse(line) as { id: string; state: string };
     if (p.id === planId) return p.state;
   }
-  throw new Error(`plan ${planId} not in plans.jsonl`);
+  throw new Error(`plan ${planId} not in missions.jsonl`);
 }
 
 async function readTasks(dir: string): Promise<readonly { id: string; slug: string }[]> {

@@ -11,7 +11,7 @@ import {
   type MissionStorePort,
 } from "./mission-store.port.js";
 
-const DEFAULT_PATH = ".maestro/missions/plans.jsonl";
+const DEFAULT_PATH = ".maestro/missions/missions.jsonl";
 
 export interface JsonlMissionStoreOptions {
   readonly repoRoot: string;

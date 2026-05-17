@@ -16,6 +16,7 @@ export * from "./try-advance-mission.usecase.js";
 export * from "./principle-scan.usecase.js";
 export * from "./principle-promote.usecase.js";
 export * from "./setup-check.usecase.js";
+export * from "./setup.usecase.js";
 export * from "./check-cost-budget.js";
 export * from "./contract-helpers.js";
 export * from "./contract-amend.usecase.js";

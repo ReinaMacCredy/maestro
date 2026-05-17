@@ -76,7 +76,7 @@ describe("JsonlMissionStore", () => {
     const store = makeStore(root);
     await store.create({ slug: "alpha", title: "Alpha", state: "specified" });
     await store.create({ slug: "beta", title: "Beta", state: "specified" });
-    const text = await readFile(join(root, ".maestro/missions/plans.jsonl"), "utf8");
+    const text = await readFile(join(root, ".maestro/missions/missions.jsonl"), "utf8");
     const lines = text.trim().split("\n");
     expect(lines.length).toBe(2);
     const first = JSON.parse(lines[0]) as { id: string; slug: string };

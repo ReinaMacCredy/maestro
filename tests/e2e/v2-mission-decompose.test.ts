@@ -76,7 +76,7 @@ describe("maestro mission decompose (v2)", () => {
     expect(result.stdout).toMatch(/tsk-\S+ draft second/);
     expect(result.stdout).toMatch(/tsk-\S+ draft third/);
 
-    const planText = await readFile(join(tmpDir, ".maestro/missions/plans.jsonl"), "utf8");
+    const planText = await readFile(join(tmpDir, ".maestro/missions/missions.jsonl"), "utf8");
     const planLines = planText.trim().split("\n");
     expect(planLines.length).toBe(1);
     const plan = JSON.parse(planLines[0]!) as { state: string; id: string };

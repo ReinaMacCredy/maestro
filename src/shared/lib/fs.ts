@@ -83,6 +83,16 @@ export async function fileExists(path: string): Promise<boolean> {
   return Bun.file(path).exists();
 }
 
+export async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
+  }
+}
+
 interface RenameForInPlaceReplaceOptions {
   readonly removeImpl?: typeof rm;
   readonly renameImpl?: typeof rename;

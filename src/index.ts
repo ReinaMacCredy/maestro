@@ -124,6 +124,7 @@ registerGcCommand(program, deps);
 registerWorktreeCommand(program, deps);
 registerSetupV2Commands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+  getServices,
 });
 
 const mergeCmd = program
