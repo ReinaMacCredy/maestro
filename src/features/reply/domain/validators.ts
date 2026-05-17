@@ -9,8 +9,8 @@ import { z } from "zod";
 import {
   FEATURE_ID_PATTERN,
   MISSION_ID_PATTERN,
-  AgentReportSchema,
 } from "@/shared/domain/legacy-mission";
+import { AgentReportSchema } from "@/features/plan";
 import { MaestroError } from "@/shared/errors.js";
 import type { AgentReply } from "./types.js";
 import { REPLY_OUTCOMES } from "./types.js";
