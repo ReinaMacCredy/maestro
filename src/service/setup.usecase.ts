@@ -111,9 +111,9 @@ export async function runSetup(opts: RunSetupOptions): Promise<SetupReport> {
       steps: [
         {
           id: "guard-git",
-          label: "Guard: project is a git repo",
+          label: "Guard: not a git working tree",
           status: "error",
-          detail: "not a git working tree; pass --no-git-ok to override",
+          detail: "this directory is not a git repository; run `git init` first, or pass --no-git-ok to set up maestro without git",
           paths: [],
         },
       ],

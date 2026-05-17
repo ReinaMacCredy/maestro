@@ -255,9 +255,24 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
   async collectAddedLines(repoRoot: string, base: string, head: string): Promise<readonly string[]> {
     const result = await execArgv(["git", "diff", "--no-color", `${base}..${head}`], { cwd: repoRoot });
     if (result.exitCode !== 0 || !result.stdout) return [];
-    return result.stdout
-      .split("\n")
-      .filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+    // Track which file each added line belongs to and drop lines from lockfiles.
+    // Rationale: lockfile-parity check already gates lockfile changes; the
+    // secrets-in-diff heuristic false-positives on integrity hashes (e.g.
+    // sha512-XX...) and keyword-shaped package names that happen to look like
+    // credentials in context. Lockfile content is auto-generated, not authored.
+    const out: string[] = [];
+    let skipFile = false;
+    for (const line of result.stdout.split("\n")) {
+      if (line.startsWith("diff --git ")) {
+        const m = line.match(/^diff --git a\/(.+?) b\/.+$/);
+        const path = m?.[1];
+        skipFile = path !== undefined && isLockfilePath(path);
+        continue;
+      }
+      if (skipFile) continue;
+      if (line.startsWith("+") && !line.startsWith("+++")) out.push(line);
+    }
+    return out;
   }
 
   async collectUntrackedFiles(repoRoot: string): Promise<readonly string[]> {
@@ -350,6 +365,29 @@ function isIgnoredUntrackedContractRuntimePath(path: string): boolean {
 
 function isCodexRuntimeDatabasePath(path: string): boolean {
   return /^\.codex\/(?:logs|state)(?:_[^/]+)?\.sqlite(?:-(?:shm|wal))?$/.test(path);
+}
+
+// Files secrets-in-diff should not scan: auto-generated lockfiles whose
+// integrity hashes look credential-shaped. Lockfile-parity already gates
+// lockfile changes; this filter is about avoiding false-positive scans.
+const LOCKFILE_BASENAMES = new Set([
+  "bun.lock",
+  "bun.lockb",
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  "Cargo.lock",
+  "poetry.lock",
+  "Pipfile.lock",
+  "go.sum",
+  "Gemfile.lock",
+  "composer.lock",
+  "flake.lock",
+]);
+
+function isLockfilePath(path: string): boolean {
+  const base = normalizeSlashes(path).split("/").pop() ?? "";
+  return LOCKFILE_BASENAMES.has(base);
 }
 
 function splitPaths(output: string): readonly string[] {

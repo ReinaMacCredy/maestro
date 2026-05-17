@@ -53,6 +53,13 @@ export async function autoCreateContract(
   const criteria = spec.frontmatter.acceptance_criteria;
   if (criteria.length === 0) return undefined;
 
+  // Propagate the spec's declared risk_class so the verdict's proposed risk
+  // matches what the spec author intended. Without this, the contract falls
+  // back to the policy default "medium" and the spec's `risk_class: low` is
+  // silently lost — surfacing as "Risk: medium (proposed: medium)" in verdicts.
+  // Explicit caller override (input.riskClass) still wins.
+  const riskClass = input.riskClass ?? spec.frontmatter.risk_class;
+
   const now = (deps.clock ?? (() => new Date()))().toISOString();
   const draft: Contract = {
     schemaVersion: CONTRACT_SCHEMA_VERSION,
@@ -82,7 +89,7 @@ export async function autoCreateContract(
       staleReclaimContractPolicy: "inherit",
     },
     ...(input.missionId ? { missionId: input.missionId } : {}),
-    ...(input.riskClass ? { riskClass: input.riskClass } : {}),
+    ...(riskClass ? { riskClass } : {}),
   };
 
   const saved = await deps.contractStore.save(draft);

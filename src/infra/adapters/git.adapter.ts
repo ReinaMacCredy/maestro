@@ -61,6 +61,16 @@ export class ShellGitAdapter implements GitPort {
     const repoName = basename(repoRoot);
     const parentDir = dirname(repoRoot);
 
+    // Refuse early when the base branch has no commits yet (fresh `git init`
+    // with no `main`). `git worktree add` would otherwise fail with a verbose
+    // multi-line `fatal: invalid reference: main` error; instead emit a clean
+    // single-line message that the upstream catch can swallow without noise.
+    if (!(await this.branchExists(repoRoot, input.baseBranch))) {
+      throw new Error(
+        `base branch '${input.baseBranch}' has no commits yet; make an initial commit on '${input.baseBranch}' or claim with --skip-worktree`,
+      );
+    }
+
     for (let index = 0; index < 100; index += 1) {
       const suffix = index === 0 ? "" : `-${index + 1}`;
       const effectiveSlug = `${input.slug}${suffix}`;

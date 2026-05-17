@@ -162,7 +162,10 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
   if (releasePolicy.requireProofMapComplete) {
     const uncovered = uncoveredCriteria(spec, contract, evidenceRows);
     if (uncovered.length > 0) {
-      reasons.push(REASONS.proofMapIncomplete({ uncoveredIds: uncovered }));
+      reasons.push(REASONS.proofMapIncomplete({
+        uncoveredIds: uncovered.map((c) => c.id),
+        uncoveredCriteria: uncovered,
+      }));
       return buildVerdict("HUMAN", contract, proposedRiskClass, effectiveRiskClass, reasons, evidenceConsulted, policiesConsulted, trustVerifier);
     }
   }
@@ -198,14 +201,17 @@ function appendProofMapDiagnostic(
   const uncovered = uncoveredCriteria(spec, contract, evidenceRows);
   if (uncovered.length === 0) return;
   if (reasons.some((r) => r.code === "proof-map-incomplete")) return;
-  reasons.push(REASONS.proofMapIncomplete({ uncoveredIds: uncovered }));
+  reasons.push(REASONS.proofMapIncomplete({
+    uncoveredIds: uncovered.map((c) => c.id),
+    uncoveredCriteria: uncovered,
+  }));
 }
 
 function uncoveredCriteria(
   spec: Spec | undefined,
   contract: Contract,
   evidenceRows: readonly EvidenceRow[],
-): readonly string[] {
+): readonly { readonly id: string; readonly text: string }[] {
   const criteria = spec?.acceptance_criteria ?? contract.doneWhen ?? [];
   if (criteria.length === 0) return [];
   const coveredIds = new Set<string>();
@@ -216,7 +222,7 @@ function uncoveredCriteria(
   }
   return criteria
     .filter((c) => !coveredIds.has(c.id))
-    .map((c) => c.id);
+    .map((c) => ({ id: c.id, text: c.text }));
 }
 
 /**

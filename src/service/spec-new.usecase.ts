@@ -27,7 +27,10 @@ export class InvalidSpecSlugError extends Error {
   }
 }
 
-const SKELETON_ACCEPTANCE = "Replace this line with a falsifiable acceptance criterion";
+// First skeleton line demonstrates quoting so an agent that fills the spec with
+// a realistic criterion containing `{` or `[` (very common for JSON responses)
+// can see by example that those lines must be single-quoted in YAML.
+const SKELETON_ACCEPTANCE = "Replace this line. Quote with single quotes if the criterion contains { or [, e.g. 'GET /foo returns { ok: true }'.";
 const SKELETON_NON_GOAL = "Replace this line with an explicit non-goal";
 
 function buildSkeletonBody(title: string): string {
