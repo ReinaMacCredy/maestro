@@ -40,7 +40,7 @@ export async function setupCheck(deps: SetupCheckDeps): Promise<SetupCheckReport
       path: dir.path,
       kind: "directory",
       status: exists ? "ok" : "missing",
-      detail: exists ? undefined : "directory not found; run `maestro setup bootstrap`",
+      detail: exists ? undefined : "directory not found; run `maestro setup`",
     });
   }
 
@@ -53,7 +53,7 @@ export async function setupCheck(deps: SetupCheckDeps): Promise<SetupCheckReport
       status: principleFiles.length === 0 ? "warn" : "ok",
       detail:
         principleFiles.length === 0
-          ? "no principles found; run `maestro setup bootstrap` to seed the default pack"
+          ? "no principles found; run `maestro setup` to seed the default pack"
           : `${principleFiles.length} principle file${principleFiles.length === 1 ? "" : "s"}`,
     });
   } else {

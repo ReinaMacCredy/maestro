@@ -38,7 +38,6 @@ const sampleManifest: BundleManifest = {
     checkpoints: 0,
     principlesSnapshot: 0,
     outcomesSnapshot: 0,
-    memorySnapshot: { corrections: 0, learnings: 0 },
   },
   redacted: [],
   gitPatch: null,

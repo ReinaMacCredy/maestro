@@ -292,19 +292,6 @@ export const PrinciplePromoteInput = z
 // setupCheck takes no user inputs — it reads the project root from context.
 export const SetupCheckInput = z.object({}).strict();
 
-export const SetupMigrateV2Input = z
-  .object({
-    dry_run: z
-      .boolean()
-      .optional()
-      .describe("Report migration steps without applying changes. Defaults to false."),
-    force: z
-      .boolean()
-      .optional()
-      .describe("Re-run migration even if the .migrated-v2.json flag is present."),
-  })
-  .strict();
-
 export const HandoffListInput = z
   .object({
     task_id: taskId.optional(),

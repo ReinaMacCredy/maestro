@@ -4,7 +4,6 @@ export type {
   BundleGitPatchInfo,
   BundleManifest,
   BundleManifestMission,
-  BundleMemoryStats,
   BundleOptions,
   BundleRedactScope,
   BundleStats,

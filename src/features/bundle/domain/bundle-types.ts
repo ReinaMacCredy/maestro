@@ -11,7 +11,7 @@
 import type { MissionStatus } from "@/shared/domain/legacy-mission";
 
 /** Redaction scopes -- content dropped from the bundle when requested. */
-export type BundleRedactScope = "memory" | "prompts" | "replies";
+export type BundleRedactScope = "prompts" | "replies";
 
 /** Caller-facing options for `maestro bundle export`. */
 export interface BundleOptions {
@@ -26,11 +26,6 @@ export interface BundleFile {
   readonly content: string | Buffer;
 }
 
-export interface BundleMemoryStats {
-  readonly corrections: number;
-  readonly learnings: number;
-}
-
 export interface BundleStats {
   readonly features: number;
   readonly milestones: number;
@@ -41,7 +36,6 @@ export interface BundleStats {
   readonly checkpoints: number;
   readonly principlesSnapshot: number;
   readonly outcomesSnapshot: number;
-  readonly memorySnapshot: BundleMemoryStats | null;
 }
 
 export interface BundleGitPatchInfo {

@@ -17,7 +17,6 @@ import {
   TaskShipInput,
   PrinciplePromoteInput,
   SetupCheckInput,
-  SetupMigrateV2Input,
   VerdictRequestInput,
   VerdictShowInput,
 } from "@/features/mcp/server/schemas/inputs.js";
@@ -440,20 +439,9 @@ describe("HandoffPickupInput", () => {
   });
 });
 
-describe("SetupCheckInput / SetupMigrateV2Input", () => {
+describe("SetupCheckInput", () => {
   it("SetupCheckInput accepts empty payload", () => {
     expect(SetupCheckInput.safeParse({}).success).toBe(true);
-  });
-
-  it("SetupMigrateV2Input accepts optional flags", () => {
-    expect(SetupMigrateV2Input.safeParse({}).success).toBe(true);
-    expect(SetupMigrateV2Input.safeParse({ dry_run: true }).success).toBe(true);
-    expect(SetupMigrateV2Input.safeParse({ force: true }).success).toBe(true);
-    expect(SetupMigrateV2Input.safeParse({ dry_run: true, force: true }).success).toBe(true);
-  });
-
-  it("SetupMigrateV2Input rejects unknown fields", () => {
-    expect(SetupMigrateV2Input.safeParse({ unknown: true }).success).toBe(false);
   });
 });
 

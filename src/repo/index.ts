@@ -7,7 +7,6 @@ export * from "./spec-store.port.js";
 export * from "./fs-spec-store.adapter.js";
 export * from "./architecture-rules.port.js";
 export * from "./yaml-architecture-rules.adapter.js";
-export * from "./v1-state-mapping.js";
 export * from "./exec-plan-store.port.js";
 export * from "./jsonl-exec-plan-store.adapter.js";
 export * from "./principles-store.port.js";

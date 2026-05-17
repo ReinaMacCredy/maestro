@@ -157,9 +157,12 @@ beforeEach(async () => {
   const initRes = await runCompiled(["init"], tmpDir);
   expect(initRes.exitCode).toBe(0);
 
-  // Bootstrap v2 directory tree required by v2 task store and evidence store.
-  const bootstrapRes = await runCompiled(["setup", "bootstrap"], tmpDir);
-  expect(bootstrapRes.exitCode).toBe(0);
+  // v2 directories created by maestro init (Phase 3 will surface this via setup).
+  await mkdir(join(tmpDir, ".maestro/tasks"), { recursive: true });
+  await mkdir(join(tmpDir, ".maestro/plans"), { recursive: true });
+  await mkdir(join(tmpDir, ".maestro/evidence"), { recursive: true });
+  await mkdir(join(tmpDir, ".maestro/runs"), { recursive: true });
+  await mkdir(join(tmpDir, "docs/principles"), { recursive: true });
 
   server = spawn(DIST_CLI, ["mcp", "serve"], {
     cwd: tmpDir,
