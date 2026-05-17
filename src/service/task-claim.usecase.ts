@@ -9,6 +9,7 @@ import { TaskNotFoundError } from "../repo/task-store.port.js";
 import type { WorktreeStorePort } from "../repo/worktree-store.port.js";
 import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
+import { assertMissionActive } from "./assert-mission-active.js";
 import { emitHandoff } from "./emit-handoff.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
 import { tryAdvanceMission } from "./try-advance-mission.usecase.js";
@@ -34,6 +35,7 @@ export interface TaskClaimInput {
 export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Promise<Task> {
   const existing = await deps.taskStore.get(input.id);
   if (!existing) throw new TaskNotFoundError(input.id);
+  await assertMissionActive(deps.missionStore, existing.mission_id, "task:claim");
   assertTaskTransition(existing.state, "claimed");
   const claimed_at = (deps.clock ?? (() => new Date()))().toISOString();
 

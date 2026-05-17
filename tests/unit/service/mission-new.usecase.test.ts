@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   missionNew,
+  MissionNewInvalidFlagsError,
   MissionTemplateUnknownError,
   slugifyTitle,
 } from "@/service/mission-new.usecase.js";
@@ -77,8 +78,8 @@ describe("missionNew", () => {
     const deps = services();
     await expect(
       missionNew(deps, {
-        title: "x",
-        slug: "x",
+        title: "ghost",
+        slug: "ghost",
         mode: "template",
         template: "ghost-template",
       }),
@@ -171,6 +172,28 @@ describe("missionNew", () => {
     ).rejects.toThrow();
     const missions = await deps.missionStore.list();
     expect(missions).toEqual([]);
+  });
+
+  it("rejects an off-shape --slug before creating anything", async () => {
+    // Slug shape gate: user-supplied --slug must pass SPEC_SLUG_PATTERN so an
+    // exotic value (path traversal, whitespace, too short) can't propagate into
+    // child task slugs or the on-disk mission row.
+    const cases = [
+      "x", // too short (min 3)
+      "Has Caps", // uppercase + space
+      "../etc", // path traversal
+      "-leading-hyphen",
+      "trailing-hyphen-",
+      "double--hyphen",
+    ];
+    for (const bad of cases) {
+      const deps = services();
+      await expect(
+        missionNew(deps, { title: "ok", slug: bad, mode: "bare" }),
+      ).rejects.toBeInstanceOf(MissionNewInvalidFlagsError);
+      const missions = await deps.missionStore.list();
+      expect(missions).toEqual([]);
+    }
   });
 
   it("user-defined template overrides built-in", async () => {

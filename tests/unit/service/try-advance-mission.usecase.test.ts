@@ -19,6 +19,7 @@ import type { MissionState } from "@/types/mission-state.js";
 import type { Task, TaskId } from "@/types/task.js";
 import type { TaskState } from "@/types/task-state.js";
 import { tryAdvanceMission } from "@/service/try-advance-mission.usecase.js";
+import { MissionTransitionError } from "@/types/mission-state.js";
 
 const FROZEN = new Date("2026-05-15T11:00:00.000Z");
 
@@ -416,6 +417,75 @@ describe("tryAdvanceMission", () => {
     );
 
     expect(out!.state).toBe("completed");
+    expect(evidence.length).toBe(0);
+  });
+
+  it("is idempotent when a concurrent invocation already advanced the mission to next.to", async () => {
+    // Race window simulation: between our snapshot read (mission=planned) and
+    // the in-loop advanceRollup write, another process moved the mission to
+    // exactly the same target (in-progress). The freshness check must accept
+    // it as success — no second write, no duplicate evidence row.
+    const { missionStore, taskStore, evidenceStore, evidence, plans } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "planned", [
+      "claimed",
+      "draft",
+    ]);
+    let getCalls = 0;
+    const racingStore = {
+      ...missionStore,
+      get: async (id: MissionId) => {
+        getCalls += 1;
+        // First call: tryAdvanceMission's snapshot read. Returns the planned
+        // mission, so we enter the loop.
+        // Second call onward: advanceRollup's freshness check sees the
+        // concurrent writer's update.
+        if (getCalls >= 2) {
+          const existing = plans.get(id);
+          return existing ? { ...existing, state: "in-progress" as const } : undefined;
+        }
+        return plans.get(id);
+      },
+    };
+
+    const out = await tryAdvanceMission(
+      { missionStore: racingStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:claim" },
+    );
+
+    expect(out!.state).toBe("in-progress");
+    // No fresh evidence — the concurrent writer already emitted theirs.
+    expect(evidence.length).toBe(0);
+  });
+
+  it("throws MissionTransitionError if a concurrent writer moved the mission to an incompatible state", async () => {
+    // Race window: we computed next.to = in-progress from a planned snapshot,
+    // but a concurrent writer moved the mission to cancelled (terminal) before
+    // we wrote. Writing in-progress would silently regress a legitimate cancel,
+    // so the freshness check must throw instead of overwriting.
+    const { missionStore, taskStore, evidenceStore, evidence, plans } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "planned", [
+      "claimed",
+      "draft",
+    ]);
+    let getCalls = 0;
+    const racingStore = {
+      ...missionStore,
+      get: async (id: MissionId) => {
+        getCalls += 1;
+        if (getCalls >= 2) {
+          const existing = plans.get(id);
+          return existing ? { ...existing, state: "cancelled" as const } : undefined;
+        }
+        return plans.get(id);
+      },
+    };
+
+    await expect(
+      tryAdvanceMission(
+        { missionStore: racingStore, taskStore, evidenceStore },
+        { mission_id: plan.id, trigger_task_verb: "task:claim" },
+      ),
+    ).rejects.toBeInstanceOf(MissionTransitionError);
     expect(evidence.length).toBe(0);
   });
 

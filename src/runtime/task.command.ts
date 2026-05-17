@@ -8,6 +8,7 @@ import { taskBlock } from "../service/task-block.usecase.js";
 import { taskAbandon } from "../service/task-abandon.usecase.js";
 import { taskVerify, TaskVerifyReasonRequiredError } from "../service/task-verify.usecase.js";
 import { taskShip } from "../service/task-ship.usecase.js";
+import { MissionTerminalGuardError } from "../service/assert-mission-active.js";
 import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError, TASK_STATES, type TaskState } from "../types/task-state.js";
@@ -42,7 +43,8 @@ function reportError(verb: string, err: unknown): void {
   if (
     err instanceof TaskNotFoundError ||
     err instanceof TaskTransitionError ||
-    err instanceof TaskVerifyReasonRequiredError
+    err instanceof TaskVerifyReasonRequiredError ||
+    err instanceof MissionTerminalGuardError
   ) {
     console.error(`maestro ${verb}: ${(err as Error).message}`);
     process.exitCode = 1;

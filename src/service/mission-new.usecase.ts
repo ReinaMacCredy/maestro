@@ -3,7 +3,7 @@ import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
 import type { MissionStorePort } from "../repo/mission-store.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { readJson } from "@/shared/lib/fs.js";
-import { generateSpecSlug } from "../types/spec-id.js";
+import { generateSpecSlug, SPEC_SLUG_PATTERN } from "../types/spec-id.js";
 import type { Mission } from "../types/mission.js";
 import type { Task } from "../types/task.js";
 import {
@@ -60,6 +60,18 @@ export async function missionNew(
   deps: MissionNewDeps,
   input: MissionNewInput,
 ): Promise<MissionNewResult> {
+  // Slug shape gate. The auto-path (slugifyTitle -> generateSpecSlug) is
+  // shape-correct by construction; user-supplied --slug values aren't.
+  // Mission slugs are concatenated into child task slugs under --template
+  // (`${slug}-${seed.slug}`) and surface in CLI / on-disk records, so reject
+  // anything off-shape at the boundary rather than letting an exotic value
+  // (e.g. "../etc" or whitespace) propagate.
+  if (!SPEC_SLUG_PATTERN.test(input.slug)) {
+    throw new MissionNewInvalidFlagsError(
+      `--slug '${input.slug}' is not a valid mission slug (kebab-case, 3..64 chars, [a-z0-9-])`,
+    );
+  }
+
   if (input.mode === "from-spec") {
     if (!input.fromSpec) throw new MissionNewInvalidFlagsError("--from-spec requires a path");
     const mission = await missionFromSpec(

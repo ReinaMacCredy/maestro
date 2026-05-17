@@ -2,7 +2,11 @@ import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
 import type { MissionStorePort } from "../repo/mission-store.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import type { Mission } from "../types/mission.js";
-import { isTerminalMissionState, type MissionState } from "../types/mission-state.js";
+import {
+  assertMissionTransition,
+  isTerminalMissionState,
+  type MissionState,
+} from "../types/mission-state.js";
 import { isTerminalTaskState } from "../types/task-state.js";
 import type { Task } from "../types/task.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
@@ -143,6 +147,16 @@ async function advanceRollup(
   next: NextStep,
   tasks: readonly Task[],
 ): Promise<Mission> {
+  // Re-read inside the write boundary so a concurrent CLI invocation that
+  // already advanced this mission can't be silently regressed by our
+  // snapshot-computed `next.to`. If the fresh state is already where the
+  // rollup wants to land, accept that as idempotent success; otherwise
+  // assertMissionTransition throws MissionTransitionError loud rather than
+  // overwriting a legitimate concurrent transition.
+  const fresh = await deps.missionStore.get(mission.id);
+  if (!fresh) return mission;
+  if (fresh.state === next.to) return fresh;
+  assertMissionTransition(fresh.state, next.to);
   const updated = await deps.missionStore.update(mission.id, { state: next.to });
   await emitTransitionEvidence(
     {
@@ -152,7 +166,7 @@ async function advanceRollup(
     },
     {
       mission_id: mission.id,
-      from_state: mission.state,
+      from_state: fresh.state,
       to_state: next.to,
       trigger_verb: next.trigger_verb,
       trigger: "rollup",

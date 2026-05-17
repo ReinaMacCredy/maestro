@@ -5,6 +5,7 @@ import type { TaskStorePort } from "../repo/task-store.port.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
+import { assertMissionActive } from "./assert-mission-active.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
 import { tryAdvanceMission } from "./try-advance-mission.usecase.js";
 
@@ -25,6 +26,7 @@ export interface TaskShipInput {
 export async function taskShip(deps: TaskShipDeps, input: TaskShipInput): Promise<Task> {
   const existing = await deps.taskStore.get(input.id);
   if (!existing) throw new TaskNotFoundError(input.id);
+  await assertMissionActive(deps.missionStore, existing.mission_id, "task:ship");
   assertTaskTransition(existing.state, "shipped");
   const merged_at = (deps.clock ?? (() => new Date()))().toISOString();
   const updated = await deps.taskStore.update(input.id, {
