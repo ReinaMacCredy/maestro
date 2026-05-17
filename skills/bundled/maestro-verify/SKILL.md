@@ -1,13 +1,13 @@
 ---
 name: maestro-verify
-description: The canonical verification protocol for any task in a maestro v2 project. Documents witness levels, Trust Verifier scope, ProofMap, plan-check, verdict semantics, cost-budget monitoring, AI Reviewer protocol (Rule 1 veto-only), and threat-model production. Cross-referenced by `maestro-task` and `maestro-plan`. Read this skill when starting a non-trivial task or before declaring completion.
+description: The canonical verification protocol for any task in a maestro v2 project. Documents witness levels, Trust Verifier scope, ProofMap, plan-check, verdict semantics, cost-budget monitoring, AI Reviewer protocol (Rule 1 veto-only), and threat-model production. Cross-referenced by `maestro-task` and `maestro-mission`. Read this skill when starting a non-trivial task or before declaring completion.
 ---
 
 # Maestro Verify
 
 This skill is the canonical verification protocol every agent follows before claiming a task is done. Read it when planning a non-trivial task or before declaring completion.
 
-Cross-referenced by `maestro-task` (pre-ship ritual), `maestro-plan` (plan-check). When those skills say "see maestro-verify", this is the document.
+Cross-referenced by `maestro-task` (pre-ship ritual), `maestro-mission` (plan-check). When those skills say "see maestro-verify", this is the document.
 
 The trigger body below names the steps and points to one reference file per substantive topic. Open the matching reference when you reach that step in the pre-ship ritual.
 

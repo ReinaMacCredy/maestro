@@ -16,7 +16,7 @@ function makeTask(overrides: Partial<Task> & { id: string; state: TaskState }): 
     title: overrides.title ?? `title ${overrides.id}`,
     state: overrides.state,
     spec_path: overrides.spec_path,
-    plan_id: overrides.plan_id,
+    mission_id: overrides.mission_id,
     assignee: overrides.assignee,
     claimed_at: overrides.claimed_at,
     pr_url: overrides.pr_url,

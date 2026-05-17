@@ -10,11 +10,11 @@ const taskId = z
   .string()
   .regex(/^tsk-[0-9a-f]{6}$|^tsk-[a-z0-9]+-[a-z0-9]+$/, "Invalid task id")
   .describe("A maestro task id like 'tsk-abc123' (v1) or 'tsk-lp1abc-xy1234' (v2).");
-const planId = z
+const missionId = z
   .string()
-  .regex(/^pln-[a-z0-9]+-[a-z0-9]+$/, "Invalid exec-plan id")
+  .regex(/^pln-[a-z0-9]+-[a-z0-9]+$/, "Invalid mission id")
   .describe(
-    "A maestro exec-plan id like 'pln-1a2b3c4d5e6f-a1b2c3'.",
+    "A maestro mission id like 'pln-1a2b3c4d5e6f-a1b2c3'.",
   );
 const verdictId = z
   .string()
@@ -90,11 +90,11 @@ const offset = z
   .optional()
   .describe("Zero-based page offset. Defaults to 0 when omitted.");
 
-// v2 task list: only plan_id and state filters are supported.
+// v2 task list: only mission_id and state filters are supported.
 // Removed v1-only filters: type, priority, label, parentId, assignee.
 export const TaskListInput = z
   .object({
-    plan_id: planId.optional(),
+    mission_id: missionId.optional(),
     state: taskState
       .optional()
       .describe(
@@ -370,4 +370,4 @@ export const HandoffPickupInput = z
   })
   .strict();
 
-export { taskId, planId, verdictId, evidenceId, handoffId };
+export { taskId, missionId, verdictId, evidenceId, handoffId };

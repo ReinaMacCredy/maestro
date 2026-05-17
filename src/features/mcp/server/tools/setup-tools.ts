@@ -10,7 +10,7 @@ export function registerSetupTools(server: McpServer, deps: RegisterDeps): void 
     {
       title: "Check v2 project setup",
       description:
-        "Audit whether the v2 directory tree (.maestro/tasks, .maestro/plans, .maestro/evidence, .maestro/runs, docs/principles) is present and valid. Returns ok (bool) and a list of entries with status ok|warn|missing. Read-only.",
+        "Audit whether the v2 directory tree (.maestro/tasks, .maestro/missions, .maestro/evidence, .maestro/runs, docs/principles) is present and valid. Returns ok (bool) and a list of entries with status ok|warn|missing. Read-only.",
       inputSchema: SetupCheckInput,
       annotations: {
         readOnlyHint: true,

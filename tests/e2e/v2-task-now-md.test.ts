@@ -68,7 +68,7 @@ describe("v2 task verbs refresh .maestro/tasks/NOW.md", () => {
   it("plan decompose refreshes NOW.md with the new draft tasks", async () => {
     await runCompiled(["spec", "new", "now-md-decompose", "--mode", "heavy"], tmpDir);
     const planCreated = await runCompiled(
-      ["plan", "from-spec", ".maestro/specs/now-md-decompose.md"],
+      ["mission", "from-spec", ".maestro/specs/now-md-decompose.md"],
       tmpDir,
     );
     const planId = (planCreated.stdout.match(/^(pln-\S+)/) ?? [])[1]!;
@@ -83,7 +83,7 @@ describe("v2 task verbs refresh .maestro/tasks/NOW.md", () => {
       ]),
     );
     const decomposed = await runCompiled(
-      ["plan", "decompose", planId, "--file", batchPath],
+      ["mission", "decompose", planId, "--file", batchPath],
       tmpDir,
     );
     expect(decomposed.exitCode).toBe(0);

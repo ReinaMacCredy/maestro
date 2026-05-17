@@ -10,7 +10,7 @@ import {
   FEATURE_ID_PATTERN,
   MISSION_ID_PATTERN,
 } from "@/shared/domain/legacy-mission";
-import { AgentReportSchema } from "@/features/plan";
+import { AgentReportSchema } from "@/features/mission";
 import { MaestroError } from "@/shared/errors.js";
 import type { AgentReply } from "./types.js";
 import { REPLY_OUTCOMES } from "./types.js";

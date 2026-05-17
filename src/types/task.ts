@@ -8,7 +8,7 @@ export interface Task {
   readonly title: string;
   readonly state: TaskState;
   readonly spec_path?: string;
-  readonly plan_id?: string;
+  readonly mission_id?: string;
   readonly assignee?: string;
   readonly claimed_at?: string;
   readonly pr_url?: string;

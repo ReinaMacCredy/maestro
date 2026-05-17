@@ -30,7 +30,7 @@ import { registerBundleCommand } from "./features/bundle/index.js";
 import { registerEvidenceCommand } from "./features/evidence/index.js";
 import { registerPolicyCommand } from "./features/policy/commands/policy.command.js";
 import { registerVerdictCommand } from "./features/verdict/index.js";
-import { registerPlanCheckCommand } from "./features/plan/index.js";
+import { registerPlanCheckCommand } from "./features/mission/index.js";
 import { registerCiVerifyCommand } from "./features/ci/index.js";
 import { registerReviewCommand } from "./features/review/index.js";
 import { registerMergeAutoCommand } from "./features/merge/index.js";
@@ -47,7 +47,7 @@ import {
 } from "@/service/skill-binary-parity.js";
 import { registerSpecV2Commands } from "@/runtime/spec.command.js";
 import { registerTaskV2Commands } from "@/runtime/task.command.js";
-import { registerPlanV2Commands } from "@/runtime/plan.command.js";
+import { registerMissionV2Commands } from "@/runtime/mission.command.js";
 import { registerPrincipleV2Commands } from "@/runtime/principle.command.js";
 import { registerSetupV2Commands } from "@/runtime/setup.command.js";
 import { registerContractCommands } from "@/runtime/contract.command.js";
@@ -107,9 +107,9 @@ const planCmd = program
   .command("plan")
   .description("Plan-time checks for agent tasks");
 registerPlanCheckCommand(planCmd, program, deps);
-// v2 plan lifecycle verbs (from-spec, show). Attaches to the same `plan`
-// parent; v1 `plan check` and v2 `plan from-spec` coexist until Phase 4.
-registerPlanV2Commands(program, {
+// v2 mission lifecycle verbs (from-spec, show, decompose). Distinct parent
+// from `plan check`, which validates a plan artifact pre-implementation.
+registerMissionV2Commands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
 

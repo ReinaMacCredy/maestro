@@ -76,7 +76,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(names).toEqual([
       "maestro-design",
       "maestro-handoff",
-      "maestro-plan",
+      "maestro-mission",
       "maestro-setup",
       "maestro-task",
       "maestro-verify",
@@ -102,7 +102,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
 
   it("chain references are consistent", () => {
     const design = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-design");
-    const plan = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-plan");
+    const plan = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-mission");
     const task = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-task");
     const verify = BUNDLED_SKILL_TEMPLATES.find((t) => t.name === "maestro-verify");
 
@@ -122,7 +122,7 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(taskSkill.content).not.toContain("maestro session start");
     expect(taskSkill.content).not.toContain("ralph review");
     expect(taskSkill.content).toContain("maestro-design");
-    expect(taskSkill.content).toContain("maestro-plan");
+    expect(taskSkill.content).toContain("maestro-mission");
     expect(taskSkill.content).toContain("maestro-verify");
 
     const verifySkill = verify!.files.find((f) => f.path === "SKILL.md")!;
@@ -159,7 +159,7 @@ Before non-trivial work:
     expect(skill.content).toContain("maestro setup migrate-corrections");
 
     const planningTemplate = setup!.files.find((file) => file.path === "reference/context-templates/planning.md");
-    expect(planningTemplate?.content).toContain("Approved implementation plans live under `.maestro/plans/`");
+    expect(planningTemplate?.content).toContain("Approved implementation plans live under `.maestro/missions/`");
     expect(planningTemplate?.content).toContain("Convert plan phases into `maestro task` entries");
 
     const reportTemplate = setup!.files.find((file) => file.path === "reference/setup-report-template.md");

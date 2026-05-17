@@ -3,16 +3,16 @@
 // same store keyed by `kind`.
 
 import type { TaskState } from "../types/task-state.js";
-import type { ExecPlanState } from "../types/exec-plan-state.js";
+import type { MissionState } from "../types/mission-state.js";
 
 export interface TransitionEvidenceRow {
   readonly id: string;
   readonly kind: "transition";
   readonly timestamp: string;
   readonly task_id?: string;
-  readonly plan_id?: string;
-  readonly from_state: TaskState | ExecPlanState | null;
-  readonly to_state: TaskState | ExecPlanState;
+  readonly mission_id?: string;
+  readonly from_state: TaskState | MissionState | null;
+  readonly to_state: TaskState | MissionState;
   readonly trigger_verb: string;
   readonly verdict?: "PASS" | "FAIL" | "HUMAN" | "BLOCK";
   readonly agent_id?: string;
@@ -36,7 +36,7 @@ export type EvidenceRow = TransitionEvidenceRow | LintViolationEvidenceRow;
 
 export interface EvidenceFilter {
   readonly task_id?: string;
-  readonly plan_id?: string;
+  readonly mission_id?: string;
   readonly kind?: EvidenceRow["kind"];
 }
 

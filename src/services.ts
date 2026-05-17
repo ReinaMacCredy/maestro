@@ -11,7 +11,6 @@ import { buildPolicyServices, type PolicyServices } from "./features/policy/serv
 import { buildVerifyServices, type VerifyServices } from "./features/verdict/services.js";
 import { buildRiskServices, type RiskServices } from "./features/risk/services.js";
 import { buildVerdictServices, type VerdictServices } from "./features/verdict/services.js";
-import { buildPlanServices, type PlanServices } from "./features/plan/services.js";
 import { buildCiServices, type CiServices } from "./features/ci/services.js";
 import { buildMergeServices, type MergeServices } from "./features/merge/services.js";
 import { buildDeployServices, type DeployServices } from "./features/deploy/services.js";
@@ -30,7 +29,6 @@ export interface Services extends
   VerifyServices,
   RiskServices,
   VerdictServices,
-  PlanServices,
   CiServices,
   MergeServices,
   DeployServices,
@@ -58,7 +56,6 @@ export function createServices(
     ...buildVerifyServices(projectDir),
     ...buildRiskServices(),
     ...buildVerdictServices(projectDir),
-    ...buildPlanServices(),
     ...buildCiServices(),
     ...buildMergeServices(),
     ...buildDeployServices(),

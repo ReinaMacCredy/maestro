@@ -105,7 +105,7 @@ function evidenceDeps(overrides: DepsOverrides = {}) {
             update: async () => { throw new Error("Not implemented"); },
             list: async () => [],
             listByState: async () => [],
-            listByPlanId: async () => [],
+            listByMissionId: async () => [],
           },
         } as never,
       }),

@@ -7,7 +7,7 @@ description: Use at the start of any multi-step work in a maestro-initialized pr
 
 You are working in a maestro v2 project. Author a product-spec, materialize one task per PR, claim it, iterate until `task verify` returns PASS, then ship.
 
-This skill covers the **single-task path** (light-mode specs, one PR). For multi-PR work, see `maestro-plan` — heavy-mode specs decompose into a batch of child tasks via `plan from-spec` → `plan decompose`.
+This skill covers the **single-task path** (light-mode specs, one PR). For multi-PR work, see `maestro-mission` — heavy-mode specs decompose into a batch of child tasks via `plan from-spec` → `plan decompose`.
 
 ---
 
@@ -29,7 +29,7 @@ Do not activate for one-liner edits or read-only questions.
 2. **Every spec is authored through `maestro-design`** — do not write spec markdown by hand without grilling.
 3. **`claim` and `block` emit a handoff envelope** to `.maestro/handoffs/<hnd-...>.json`. This is automatic; do not invent parallel handoff files. `ship`, `verify`, and `abandon` do not emit yet.
 4. **Blockers carry a `--reason`.** Same for abandon and `verify --verdict {human,block}`.
-5. **Heavy-mode specs do not flow through this skill.** They go to `maestro-plan`.
+5. **Heavy-mode specs do not flow through this skill.** They go to `maestro-mission`.
 
 ---
 
@@ -179,7 +179,7 @@ If `task verify` repeats the same violations after two iterations, the loop is s
 
 - Read the failing rule's `Fix Recipe` in `docs/principles/<rule>.md`.
 - Run `maestro gc slop-cleanup` to see the violation grouped with the rest of the codebase.
-- Decompose into a plan: promote the spec to `mode: heavy` and use `maestro-plan` to break the work into smaller verifiable PRs.
+- Decompose into a plan: promote the spec to `mode: heavy` and use `maestro-mission` to break the work into smaller verifiable PRs.
 - Block the task with a precise reason and hand off.
 
 ---
@@ -223,7 +223,7 @@ Pass a claimed task with a clean evidence trail — not an in-flight scratchpad.
 ## See also
 
 - `maestro-design` — grill-protocol spec authoring (run before `task from-spec`).
-- `maestro-plan` — heavy-mode multi-PR work (skip `task from-spec`; use `plan from-spec` + `plan decompose`).
+- `maestro-mission` — heavy-mode multi-PR work (skip `task from-spec`; use `plan from-spec` + `plan decompose`).
 - `maestro-verify` — canonical verification protocol (PASS / FAIL / HUMAN / BLOCK routing).
 - `maestro-setup` — `setup check`, `setup bootstrap`, `setup migrate-v2`.
 - `docs/cli-reference.md` — verb-by-verb reference.

@@ -48,7 +48,7 @@ function makeTaskStore(): TaskStorePort {
     },
     async list() { return [...tasks.values()]; },
     async listByState(state: TaskState) { return [...tasks.values()].filter((t) => t.state === state); },
-    async listByPlanId(plan_id: string) { return [...tasks.values()].filter((t) => t.plan_id === plan_id); },
+    async listByMissionId(mission_id: string) { return [...tasks.values()].filter((t) => t.mission_id === mission_id); },
   };
 }
 

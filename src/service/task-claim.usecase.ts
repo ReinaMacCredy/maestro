@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
-import type { ExecPlanStorePort } from "../repo/exec-plan-store.port.js";
+import type { MissionStorePort } from "../repo/mission-store.port.js";
 import { parseSpecFile } from "../repo/fs-spec-store.adapter.js";
 import type { HandoffEmitterPort } from "../repo/handoff-emitter.port.js";
 import type { ObservabilityPort } from "../repo/observability.port.js";
@@ -11,12 +11,12 @@ import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
 import { emitHandoff } from "./emit-handoff.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
-import { tryAdvancePlan } from "./try-advance-plan.usecase.js";
+import { tryAdvanceMission } from "./try-advance-mission.usecase.js";
 
 export interface TaskClaimDeps {
   readonly taskStore: TaskStorePort;
   readonly evidenceStore: EvidenceStorePort;
-  readonly planStore?: ExecPlanStorePort;
+  readonly missionStore?: MissionStorePort;
   readonly observabilityStore?: ObservabilityPort;
   readonly worktreeStore?: WorktreeStorePort;
   readonly handoffEmitter?: HandoffEmitterPort;
@@ -87,16 +87,16 @@ export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Pro
       agent_id: input.agentId,
     },
   );
-  if (deps.planStore) {
-    await tryAdvancePlan(
+  if (deps.missionStore) {
+    await tryAdvanceMission(
       {
-        planStore: deps.planStore,
+        missionStore: deps.missionStore,
         taskStore: deps.taskStore,
         evidenceStore: deps.evidenceStore,
         clock: deps.clock,
         idFactory: deps.idFactory,
       },
-      { plan_id: updated.plan_id, trigger_task_verb: "task:claim" },
+      { mission_id: updated.mission_id, trigger_task_verb: "task:claim" },
     );
   }
 

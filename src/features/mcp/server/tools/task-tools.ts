@@ -25,7 +25,7 @@ interface V2TaskSummary {
   readonly slug: string;
   readonly title: string;
   readonly state: string;
-  readonly plan_id?: string;
+  readonly mission_id?: string;
   readonly assignee?: string;
 }
 
@@ -35,7 +35,7 @@ function summarizeV2Task(task: Task): V2TaskSummary {
     slug: task.slug,
     title: task.title,
     state: task.state,
-    ...(task.plan_id !== undefined ? { plan_id: task.plan_id } : {}),
+    ...(task.mission_id !== undefined ? { mission_id: task.mission_id } : {}),
     ...(task.assignee !== undefined ? { assignee: task.assignee } : {}),
   };
 }
@@ -46,7 +46,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "List maestro tasks",
       description:
-        "List v2 tasks. Filters: plan_id, state (draft|claimed|doing|verifying|blocked|ready|shipped|abandoned). Paginated (default limit 20, max 100). view='summary' (default) returns id+slug+title+state+plan_id+assignee; view='full' returns the full v2 Task. Sorted by created_at asc. v1 filters (type, priority, label, parentId, assignee) are not supported in v2 — omit them. Read-only.",
+        "List v2 tasks. Filters: mission_id, state (draft|claimed|doing|verifying|blocked|ready|shipped|abandoned). Paginated (default limit 20, max 100). view='summary' (default) returns id+slug+title+state+mission_id+assignee; view='full' returns the full v2 Task. Sorted by created_at asc. v1 filters (type, priority, label, parentId, assignee) are not supported in v2 — omit them. Read-only.",
       inputSchema: TaskListInput,
       annotations: {
         readOnlyHint: true,
@@ -59,16 +59,16 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       try {
         const services = deps.getServices();
         let tasks: readonly Task[];
-        if (args.plan_id !== undefined) {
-          tasks = await services.v2.taskStore.listByPlanId(args.plan_id);
+        if (args.mission_id !== undefined) {
+          tasks = await services.v2.taskStore.listByMissionId(args.mission_id);
         } else if (args.state !== undefined) {
           tasks = await services.v2.taskStore.listByState(args.state);
         } else {
           tasks = await services.v2.taskStore.list();
         }
-        // Apply state filter on top of plan_id (and vice versa) so both filters
+        // Apply state filter on top of mission_id (and vice versa) so both filters
         // compose when supplied together, matching the tool description.
-        if (args.plan_id !== undefined && args.state !== undefined) {
+        if (args.mission_id !== undefined && args.state !== undefined) {
           tasks = tasks.filter((t) => t.state === args.state);
         }
         const page = paginate(tasks, args.limit, args.offset);
@@ -171,7 +171,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           {
             taskStore: services.v2.taskStore,
             evidenceStore: services.v2.evidenceStore,
-            planStore: services.v2.planStore,
+            missionStore: services.v2.missionStore,
             observabilityStore: services.v2.observabilityStore,
             worktreeStore: services.v2.worktreeStore,
             handoffEmitter: services.v2.handoffEmitter,
@@ -207,7 +207,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           {
             taskStore: services.v2.taskStore,
             evidenceStore: services.v2.evidenceStore,
-            planStore: services.v2.planStore,
+            missionStore: services.v2.missionStore,
             observabilityStore: services.v2.observabilityStore,
           },
           { id: args.id, pr_url: args.pr_url },

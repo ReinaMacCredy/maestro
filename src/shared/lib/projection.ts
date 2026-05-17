@@ -10,7 +10,7 @@ export interface V2TaskSummary {
   readonly slug: string;
   readonly title: string;
   readonly state: string;
-  readonly plan_id?: string;
+  readonly mission_id?: string;
   readonly assignee?: string;
   readonly blocked_by_count: number;
 }
@@ -24,7 +24,7 @@ export function summarizeV2Task(task: V2Task): V2TaskSummary {
     slug: task.slug,
     title: task.title,
     state: task.state,
-    ...(task.plan_id !== undefined ? { plan_id: task.plan_id } : {}),
+    ...(task.mission_id !== undefined ? { mission_id: task.mission_id } : {}),
     ...(task.assignee !== undefined ? { assignee: task.assignee } : {}),
     blocked_by_count: task.blocked_by.length,
   };

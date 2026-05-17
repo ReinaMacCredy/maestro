@@ -1,0 +1,298 @@
+import { describe, expect, it } from "bun:test";
+import type {
+  CreateMissionInput,
+  MissionPatch,
+  MissionStorePort,
+} from "@/repo/mission-store.port.js";
+import type {
+  EvidenceFilter,
+  EvidenceRow,
+  EvidenceStorePort,
+} from "@/repo/evidence-store.port.js";
+import type {
+  CreateTaskInput,
+  TaskPatch,
+  TaskStorePort,
+} from "@/repo/task-store.port.js";
+import type { Mission, MissionId } from "@/types/mission.js";
+import type { MissionState } from "@/types/mission-state.js";
+import type { Task, TaskId } from "@/types/task.js";
+import type { TaskState } from "@/types/task-state.js";
+import { tryAdvanceMission } from "@/service/try-advance-mission.usecase.js";
+
+const FROZEN = new Date("2026-05-15T11:00:00.000Z");
+
+function makeStores(): {
+  missionStore: MissionStorePort;
+  plans: Map<MissionId, Mission>;
+  taskStore: TaskStorePort;
+  tasks: Map<TaskId, Task>;
+  evidenceStore: EvidenceStorePort;
+  evidence: EvidenceRow[];
+} {
+  const plans = new Map<MissionId, Mission>();
+  const tasks = new Map<TaskId, Task>();
+  const evidence: EvidenceRow[] = [];
+  let planN = 0;
+  let taskN = 0;
+  const missionStore: MissionStorePort = {
+    async create(input: CreateMissionInput) {
+      planN += 1;
+      const plan: Mission = {
+        id: `pln-${planN}`,
+        slug: input.slug,
+        title: input.title,
+        state: input.state,
+        spec_path: input.spec_path,
+        created_at: FROZEN.toISOString(),
+        updated_at: FROZEN.toISOString(),
+      };
+      plans.set(plan.id, plan);
+      return plan;
+    },
+    async get(id) {
+      return plans.get(id);
+    },
+    async update(id, patch: MissionPatch) {
+      const existing = plans.get(id);
+      if (!existing) throw new Error("not found");
+      const next: Mission = { ...existing, ...patch, updated_at: FROZEN.toISOString() };
+      plans.set(id, next);
+      return next;
+    },
+    async list() {
+      return [...plans.values()];
+    },
+    async listByState(state: MissionState) {
+      return [...plans.values()].filter((p) => p.state === state);
+    },
+  };
+  const taskStore: TaskStorePort = {
+    async create(input: CreateTaskInput) {
+      taskN += 1;
+      const task: Task = {
+        id: `tsk-${taskN}`,
+        slug: input.slug,
+        title: input.title,
+        state: input.state,
+        spec_path: input.spec_path,
+        mission_id: input.mission_id,
+        blocked_by: input.blocked_by ?? [],
+        created_at: FROZEN.toISOString(),
+        updated_at: FROZEN.toISOString(),
+      };
+      tasks.set(task.id, task);
+      return task;
+    },
+    async get(id) {
+      return tasks.get(id);
+    },
+    async update(id, patch: TaskPatch) {
+      const existing = tasks.get(id);
+      if (!existing) throw new Error("not found");
+      const next: Task = { ...existing, ...patch, updated_at: FROZEN.toISOString() };
+      tasks.set(id, next);
+      return next;
+    },
+    async list() {
+      return [...tasks.values()];
+    },
+    async listByState(state: TaskState) {
+      return [...tasks.values()].filter((t) => t.state === state);
+    },
+    async listByMissionId(mission_id: string) {
+      return [...tasks.values()].filter((t) => t.mission_id === mission_id);
+    },
+  };
+  const evidenceStore: EvidenceStorePort = {
+    async append(row) {
+      evidence.push(row);
+    },
+    async list(_filter?: EvidenceFilter) {
+      return evidence;
+    },
+    async read(id) {
+      return evidence.find((r) => r.id === id);
+    },
+  };
+  return { missionStore, plans, taskStore, tasks, evidenceStore, evidence };
+}
+
+async function seedPlanWithTasks(
+  ps: MissionStorePort,
+  ts: TaskStorePort,
+  planState: MissionState,
+  taskStates: readonly TaskState[],
+): Promise<Mission> {
+  const plan = await ps.create({ slug: "demo", title: "Demo", state: planState });
+  for (let i = 0; i < taskStates.length; i += 1) {
+    await ts.create({
+      slug: `child-${i + 1}`,
+      title: `Child ${i + 1}`,
+      state: taskStates[i]!,
+      mission_id: plan.id,
+    });
+  }
+  return plan;
+}
+
+describe("tryAdvanceMission", () => {
+  it("is a no-op when mission_id is undefined", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: undefined, trigger_task_verb: "task:claim" },
+    );
+    expect(out).toBeUndefined();
+    expect(evidence.length).toBe(0);
+  });
+
+  it("is a no-op when the plan id does not exist", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: "pln-missing", trigger_task_verb: "task:claim" },
+    );
+    expect(out).toBeUndefined();
+    expect(evidence.length).toBe(0);
+  });
+
+  it("advances planned -> in-progress on first task:claim and emits mission:auto-start", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "planned", [
+      "claimed",
+      "draft",
+      "draft",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:claim" },
+    );
+
+    expect(out!.state).toBe("in-progress");
+    expect(evidence.length).toBe(1);
+    expect(evidence[0]).toMatchObject({
+      kind: "transition",
+      mission_id: plan.id,
+      from_state: "planned",
+      to_state: "in-progress",
+      trigger_verb: "mission:auto-start",
+    });
+  });
+
+  it("is idempotent: a second task:claim against an in-progress plan emits nothing", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "in-progress", [
+      "claimed",
+      "doing",
+      "draft",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:claim" },
+    );
+
+    expect(out!.state).toBe("in-progress");
+    expect(evidence.length).toBe(0);
+  });
+
+  it("does not auto-complete on task:ship while a sibling is still non-terminal", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "in-progress", [
+      "shipped",
+      "doing",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:ship" },
+    );
+
+    expect(out!.state).toBe("in-progress");
+    expect(evidence.length).toBe(0);
+  });
+
+  it("advances in-progress -> completed on task:ship when every child is terminal", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "in-progress", [
+      "shipped",
+      "shipped",
+      "abandoned",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:ship" },
+    );
+
+    expect(out!.state).toBe("completed");
+    expect(evidence.length).toBe(1);
+    expect(evidence[0]).toMatchObject({
+      kind: "transition",
+      mission_id: plan.id,
+      from_state: "in-progress",
+      to_state: "completed",
+      trigger_verb: "mission:auto-complete",
+    });
+  });
+
+  it("steps through in-progress when planned plan has all children terminal (abandoned-before-claim path)", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "planned", [
+      "abandoned",
+      "abandoned",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:abandon" },
+    );
+
+    expect(out!.state).toBe("completed");
+    expect(evidence.length).toBe(2);
+    expect(evidence[0]).toMatchObject({
+      from_state: "planned",
+      to_state: "in-progress",
+      trigger_verb: "mission:auto-start",
+    });
+    expect(evidence[1]).toMatchObject({
+      from_state: "in-progress",
+      to_state: "completed",
+      trigger_verb: "mission:auto-complete",
+    });
+  });
+
+  it("is a no-op for plans already at a terminal state", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "completed", [
+      "shipped",
+      "shipped",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:ship" },
+    );
+
+    expect(out!.state).toBe("completed");
+    expect(evidence.length).toBe(0);
+  });
+
+  it("is a no-op when called with task:claim against an in-progress plan (claim only matters for planned)", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "in-progress", [
+      "claimed",
+      "draft",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:claim" },
+    );
+
+    expect(out!.state).toBe("in-progress");
+    expect(evidence.length).toBe(0);
+  });
+});

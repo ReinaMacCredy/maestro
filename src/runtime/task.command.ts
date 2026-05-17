@@ -98,7 +98,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         {
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
-          planStore: services.planStore,
+          missionStore: services.missionStore,
           observabilityStore: services.observabilityStore,
           worktreeStore: services.worktreeStore,
           handoffEmitter: services.handoffEmitter,
@@ -179,7 +179,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         {
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
-          planStore: services.planStore,
+          missionStore: services.missionStore,
           observabilityStore: services.observabilityStore,
         },
         { id, reason: flags.reason },
@@ -296,7 +296,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         {
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
-          planStore: services.planStore,
+          missionStore: services.missionStore,
           observabilityStore: services.observabilityStore,
         },
         { id, pr_url: flags.prUrl },
@@ -325,7 +325,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
   const listAction = async function (
     this: Command,
     flags: {
-      planId?: string;
+      missionId?: string;
       state?: string;
       limit?: number;
       offset?: number;
@@ -338,8 +338,8 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       const repoRoot = opts.resolveRepoRoot();
       const services = buildV2Services({ repoRoot });
       let tasks: readonly Task[];
-      if (flags.planId !== undefined) {
-        tasks = await services.taskStore.listByPlanId(flags.planId);
+      if (flags.missionId !== undefined) {
+        tasks = await services.taskStore.listByMissionId(flags.missionId);
       } else if (flags.state !== undefined) {
         if (!(TASK_STATES as readonly string[]).includes(flags.state)) {
           console.error(
@@ -374,7 +374,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         return;
       }
       for (const t of page) {
-        const planNote = t.plan_id ? ` plan=${t.plan_id}` : "";
+        const planNote = t.mission_id ? ` plan=${t.mission_id}` : "";
         console.log(`${t.id}\t${t.state}\t${t.slug}\t${t.title}${planNote}`);
       }
     } catch (err) {
@@ -384,8 +384,8 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
 
   task
     .command("list")
-    .description("List v2 tasks (filter by --plan-id or --state; paginated)")
-    .option("--plan-id <id>", "filter by plan id")
+    .description("List v2 tasks (filter by --mission-id or --state; paginated)")
+    .option("--mission-id <id>", "filter by mission id")
     .option("--state <state>", `filter by state (${TASK_STATES.join("|")})`)
     .option("--limit <n>", "page size (default 20, max 100)", parseLimit)
     .option("--offset <n>", "page offset (default 0)", parseNonNegativeInt)
@@ -415,7 +415,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       }
       console.log(`${t.id} ${t.state} ${t.slug}`);
       console.log(`  title:      ${t.title}`);
-      if (t.plan_id) console.log(`  plan_id:    ${t.plan_id}`);
+      if (t.mission_id) console.log(`  mission_id:    ${t.mission_id}`);
       if (t.spec_path) console.log(`  spec_path:  ${t.spec_path}`);
       if (t.assignee) console.log(`  assignee:   ${t.assignee}`);
       if (t.claimed_at) console.log(`  claimed_at: ${t.claimed_at}`);

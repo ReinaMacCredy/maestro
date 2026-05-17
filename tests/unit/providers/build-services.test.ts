@@ -6,7 +6,7 @@ describe("buildV2Services", () => {
     const svc = buildV2Services({ repoRoot: "/tmp" });
     expect(svc.specStore).toBeDefined();
     expect(svc.taskStore).toBeDefined();
-    expect(svc.planStore).toBeDefined();
+    expect(svc.missionStore).toBeDefined();
     expect(svc.evidenceStore).toBeDefined();
     expect(svc.architectureRules).toBeDefined();
     expect(svc.principlesStore).toBeDefined();

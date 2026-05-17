@@ -22,7 +22,7 @@ export interface SetupCheckDeps {
 
 const V2_DIRECTORIES: readonly { path: string; kind: "directory" }[] = [
   { path: ".maestro/tasks", kind: "directory" },
-  { path: ".maestro/plans", kind: "directory" },
+  { path: ".maestro/missions", kind: "directory" },
   { path: ".maestro/evidence", kind: "directory" },
   { path: ".maestro/runs", kind: "directory" },
   { path: "docs/principles", kind: "directory" },

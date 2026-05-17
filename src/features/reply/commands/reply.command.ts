@@ -14,7 +14,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { writeAgentReply } from "../usecases/write-reply.usecase.js";
 import type { ReplyOutcome, AgentReply } from "../domain/types.js";
 import { REPLY_OUTCOMES } from "../domain/types.js";
-import { AgentReportSchema, type AgentReport } from "@/features/plan";
+import { AgentReportSchema, type AgentReport } from "@/features/mission";
 
 interface ReplyCommandDeps {
   readonly getServices: () => Pick<Services, "replyStore">;
@@ -112,7 +112,7 @@ async function loadReport(reportFile: unknown): Promise<AgentReport | undefined>
     const first = result.error.issues[0];
     const path = first?.path.join(".") || "<root>";
     throw new MaestroError(`--report-file does not match AgentReport: ${path}: ${first?.message ?? "invalid"}`, [
-      "See AgentReport in src/features/plan/domain/legacy-report-schema.ts",
+      "See AgentReport in src/features/mission/domain/legacy-report-schema.ts",
     ]);
   }
   return result.data as AgentReport;

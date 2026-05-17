@@ -1,0 +1,161 @@
+import { Command } from "commander";
+import { readTextOrStdin } from "@/shared/lib/fs.js";
+import { buildV2Services } from "../providers/build-services.js";
+import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
+import {
+  missionFromSpec,
+  MissionRequiresHeavyModeError,
+} from "../service/mission-from-spec.usecase.js";
+import { missionShow } from "../service/mission-show.usecase.js";
+import {
+  parseMissionDecomposeBatch,
+  missionDecompose,
+  MissionDecomposeBatchEmptyError,
+  MissionDecomposeBatchInvalidError,
+  MissionDecomposeDuplicateSlugInBatchError,
+} from "../service/mission-decompose.usecase.js";
+import {
+  DuplicateMissionSlugError,
+  MissionNotFoundError,
+} from "../repo/mission-store.port.js";
+import { DuplicateSlugError } from "../repo/task-store.port.js";
+import { SpecParseError } from "../repo/spec-store.port.js";
+import { MissionTransitionError } from "../types/mission-state.js";
+
+export interface MissionCommandV2Options {
+  readonly resolveRepoRoot: () => string;
+}
+
+function findOrCreateMissionCommand(program: Command): Command {
+  const existing = program.commands.find((c) => c.name() === "mission");
+  if (existing) return existing;
+  return program.command("mission").description("Mission lifecycle (v2)");
+}
+
+function reportError(verb: string, err: unknown): void {
+  if (
+    err instanceof MissionNotFoundError ||
+    err instanceof MissionRequiresHeavyModeError ||
+    err instanceof SpecParseError ||
+    err instanceof DuplicateMissionSlugError ||
+    err instanceof DuplicateSlugError ||
+    err instanceof MissionDecomposeBatchEmptyError ||
+    err instanceof MissionDecomposeBatchInvalidError ||
+    err instanceof MissionDecomposeDuplicateSlugInBatchError ||
+    err instanceof MissionTransitionError
+  ) {
+    console.error(`maestro ${verb}: ${(err as Error).message}`);
+    process.exitCode = 1;
+    return;
+  }
+  throw err;
+}
+
+export function registerMissionV2Commands(program: Command, opts: MissionCommandV2Options): void {
+  const mission = findOrCreateMissionCommand(program);
+
+  mission
+    .command("from-spec <path>")
+    .description("Create a v2 mission in 'specified' from a heavy-mode product-spec markdown file")
+    .action(async (pathArg: string): Promise<void> => {
+      try {
+        const repoRoot = opts.resolveRepoRoot();
+        const services = buildV2Services({ repoRoot });
+        const created = await missionFromSpec(
+          {
+            repoRoot,
+            missionStore: services.missionStore,
+            evidenceStore: services.evidenceStore,
+          },
+          pathArg,
+        );
+        console.log(`${created.id} specified (${created.slug})`);
+      } catch (err) {
+        reportError("mission from-spec", err);
+      }
+    });
+
+  mission
+    .command("show <id>")
+    .description("Show a mission and its child tasks (state, slug, title)")
+    .option("--json", "emit JSON instead of text")
+    .action(async function (this: Command, id: string, flags: { json?: boolean }): Promise<void> {
+      try {
+        const repoRoot = opts.resolveRepoRoot();
+        const services = buildV2Services({ repoRoot });
+        const result = await missionShow(
+          { missionStore: services.missionStore, taskStore: services.taskStore },
+          id,
+        );
+        const wantJson = flags.json === true || this.optsWithGlobals().json === true;
+        if (wantJson) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        const { mission: m, tasks } = result;
+        console.log(`${m.id} ${m.state} (${m.slug}) — ${m.title}`);
+        if (m.spec_path) console.log(`  spec: ${m.spec_path}`);
+        if (tasks.length === 0) {
+          console.log("  (no child tasks yet)");
+          return;
+        }
+        console.log(`  tasks (${tasks.length}):`);
+        for (const t of tasks) {
+          console.log(`    ${t.id} ${t.state.padEnd(10)} ${t.slug} — ${t.title}`);
+        }
+      } catch (err) {
+        reportError("mission show", err);
+      }
+    });
+
+  mission
+    .command("decompose <id>")
+    .description(
+      "Decompose a 'specified' mission into child tasks; reads a task batch JSON from --file (or '-' for stdin)",
+    )
+    .requiredOption(
+      "--file <path>",
+      "path to a JSON file with the task batch ('-' to read from stdin)",
+    )
+    .action(async (id: string, flags: { file: string }): Promise<void> => {
+      try {
+        const repoRoot = opts.resolveRepoRoot();
+        const services = buildV2Services({ repoRoot });
+        const raw = await readTextOrStdin(flags.file);
+        if (raw === undefined) {
+          console.error(`maestro mission decompose: batch file not found: ${flags.file}`);
+          process.exitCode = 1;
+          return;
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (jsonErr) {
+          console.error(
+            `maestro mission decompose: invalid JSON in ${flags.file}: ${(jsonErr as Error).message}`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+        const tasks = parseMissionDecomposeBatch(parsed);
+        const result = await missionDecompose(
+          {
+            missionStore: services.missionStore,
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+            observabilityStore: services.observabilityStore,
+          },
+          { mission_id: id, tasks },
+        );
+        console.log(
+          `${result.mission.id} planned (${result.tasks.length} task${result.tasks.length === 1 ? "" : "s"})`,
+        );
+        for (const t of result.tasks) {
+          console.log(`  ${t.id} draft ${t.slug} — ${t.title}`);
+        }
+        await refreshNowMdFromServices(services);
+      } catch (err) {
+        reportError("mission decompose", err);
+      }
+    });
+}

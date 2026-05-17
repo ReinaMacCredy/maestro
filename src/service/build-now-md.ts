@@ -105,7 +105,7 @@ function renderInFlight(task: Task, now: Date): readonly string[] {
     const claimed = task.claimed_at ? formatRelativeAge(task.claimed_at, now) : "unknown";
     out.push(`Owner: ${owner} (claimed ${claimed})`);
   }
-  if (task.plan_id) out.push(`Plan: ${task.plan_id}`);
+  if (task.mission_id) out.push(`Mission: ${task.mission_id}`);
   if (task.worktree_path) out.push(`Worktree: ${task.worktree_path}`);
   out.push("");
   return out;
@@ -114,7 +114,7 @@ function renderInFlight(task: Task, now: Date): readonly string[] {
 function renderDraft(task: Task): readonly string[] {
   const out: string[] = [];
   out.push(`### ${task.id} . ${task.title}`);
-  if (task.plan_id) out.push(`Plan: ${task.plan_id}`);
+  if (task.mission_id) out.push(`Mission: ${task.mission_id}`);
   if (task.spec_path) out.push(`Spec: ${task.spec_path}`);
   out.push("");
   return out;

@@ -18,9 +18,9 @@ import {
   type ArchitectureRulesPort,
 } from "../repo/yaml-architecture-rules.adapter.js";
 import {
-  JsonlExecPlanStore,
-  type ExecPlanStorePort,
-} from "../repo/jsonl-exec-plan-store.adapter.js";
+  JsonlMissionStore,
+  type MissionStorePort,
+} from "../repo/jsonl-mission-store.adapter.js";
 import {
   FsPrinciplesStore,
   type PrinciplesStorePort,
@@ -46,7 +46,7 @@ import { buildNowMd } from "../service/build-now-md.js";
 export interface V2Services {
   readonly specStore: SpecStorePort;
   readonly taskStore: TaskStorePort;
-  readonly planStore: ExecPlanStorePort;
+  readonly missionStore: MissionStorePort;
   readonly evidenceStore: EvidenceStorePort;
   readonly architectureRules: ArchitectureRulesPort;
   readonly principlesStore: PrinciplesStorePort;
@@ -68,7 +68,7 @@ export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
   return {
     specStore: overrides?.specStore ?? new FsSpecStore({ repoRoot }),
     taskStore: overrides?.taskStore ?? new JsonlTaskStore({ repoRoot }),
-    planStore: overrides?.planStore ?? new JsonlExecPlanStore({ repoRoot }),
+    missionStore: overrides?.missionStore ?? new JsonlMissionStore({ repoRoot }),
     evidenceStore: overrides?.evidenceStore ?? new JsonlEvidenceStore({ repoRoot }),
     architectureRules: overrides?.architectureRules ?? new YamlArchitectureRules({ repoRoot }),
     principlesStore: overrides?.principlesStore ?? new FsPrinciplesStore({ repoRoot }),

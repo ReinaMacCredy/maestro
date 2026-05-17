@@ -41,8 +41,8 @@ export interface PlanRegenResult {
 }
 
 const PLAN_FILE_CANDIDATES = (taskId: string): string[] => [
-  `.maestro/plans/${taskId}.md`,
-  `.maestro/plans/${taskId}/plan.md`,
+  `.maestro/missions/${taskId}.md`,
+  `.maestro/missions/${taskId}/plan.md`,
   `.maestro/runs/${taskId}/plan.md`,
 ];
 

@@ -104,7 +104,7 @@ describe("emitTransitionEvidence", () => {
     await emitTransitionEvidence(
       { store, observabilityStore: port },
       {
-        plan_id: "pln-1",
+        mission_id: "pln-1",
         from_state: "specified",
         to_state: "planned",
         trigger_verb: "plan:decompose",

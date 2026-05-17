@@ -539,7 +539,7 @@ describe("manage-agents use case logic", () => {
       await injectAgentBlocks(tmpDir, "all", fakeHome);
 
       const linkPath = join(fakeHome, ".claude", "skills", "maestro-task");
-      const wrongTarget = join(fakeHome, ".maestro", "skills", "maestro-plan");
+      const wrongTarget = join(fakeHome, ".maestro", "skills", "maestro-mission");
       await rm(linkPath);
       await symlink(wrongTarget, linkPath);
 
@@ -572,7 +572,7 @@ describe("manage-agents use case logic", () => {
       expect(content).toBe("user override\n");
 
       // Other shipped skills still get linked normally.
-      const planLink = await lstat(join(fakeHome, ".claude", "skills", "maestro-plan"));
+      const planLink = await lstat(join(fakeHome, ".claude", "skills", "maestro-mission"));
       expect(planLink.isSymbolicLink()).toBe(true);
     });
 
@@ -711,15 +711,15 @@ describe("manage-agents use case logic", () => {
     it("ensures other agents still get clean symlinks for non-divergent skills", async () => {
       await mkdir(join(fakeHome, ".claude"), { recursive: true });
       await mkdir(join(fakeHome, ".codex"), { recursive: true });
-      // Only maestro-task diverges; maestro-plan is fresh on both sides.
+      // Only maestro-task diverges; maestro-mission is fresh on both sides.
       await seedLegacyAgentSkill(".claude", "maestro-task", { "SKILL.md": "claude\n" });
       await seedLegacyAgentSkill(".codex", "maestro-task", { "SKILL.md": "codex\n" });
 
       await injectAgentBlocks(tmpDir, "all", fakeHome);
 
-      // maestro-plan symlinks were created normally on both agents.
+      // maestro-mission symlinks were created normally on both agents.
       for (const agentDir of [".claude", ".codex"]) {
-        const planLink = await lstat(join(fakeHome, agentDir, "skills", "maestro-plan"));
+        const planLink = await lstat(join(fakeHome, agentDir, "skills", "maestro-mission"));
         expect(planLink.isSymbolicLink()).toBe(true);
       }
     });

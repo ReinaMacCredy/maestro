@@ -235,8 +235,8 @@ Do not invoke design, planning, or implementation from this skill.
 - `quality-gates.md`: build/test/lint/typecheck commands and review bar.
 - `security.md`: trust boundaries, sensitive files, approval gates.
 - `workflow.md`: human/agent delivery loop, review expectations, completion bar.
-- `planning.md`: thin policy bridge to `maestro-design`, `maestro-plan`,
-  `.maestro/plans/`, and `maestro-task`.
+- `planning.md`: thin policy bridge to `maestro-design`, `maestro-mission`,
+  `.maestro/missions/`, and `maestro-task`.
 - `index.md`: map of all context docs and copied style guides.
 
 ## CLI ↔ skill mapping

@@ -118,8 +118,8 @@ describe("regenPlan", () => {
   it("reports missing-acceptance-coverage when plan does not cover spec criteria", async () => {
     const ts = new FakeTaskStore();
     ts.set(tinyTask("tsk-aaa111", "mis-1"));
-    await mkdir(join(dir, ".maestro/plans"), { recursive: true });
-    await writeFile(join(dir, ".maestro/plans/tsk-aaa111.md"), "# Plan\n\nUnrelated content\n");
+    await mkdir(join(dir, ".maestro/missions"), { recursive: true });
+    await writeFile(join(dir, ".maestro/missions/tsk-aaa111.md"), "# Plan\n\nUnrelated content\n");
 
     const spec = {
       id: "mis-1",

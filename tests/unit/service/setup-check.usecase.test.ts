@@ -26,7 +26,7 @@ describe("setupCheck", () => {
   it("reports ok for present directories", async () => {
     for (const rel of [
       ".maestro/tasks",
-      ".maestro/plans",
+      ".maestro/missions",
       ".maestro/evidence",
       ".maestro/runs",
       "docs/principles",
@@ -43,7 +43,7 @@ describe("setupCheck", () => {
   it("warns (but stays ok) when principles directory is present but empty", async () => {
     for (const rel of [
       ".maestro/tasks",
-      ".maestro/plans",
+      ".maestro/missions",
       ".maestro/evidence",
       ".maestro/runs",
       "docs/principles",
@@ -59,7 +59,7 @@ describe("setupCheck", () => {
   it("warns (not missing) when only .maestro/config.yaml is absent", async () => {
     for (const rel of [
       ".maestro/tasks",
-      ".maestro/plans",
+      ".maestro/missions",
       ".maestro/evidence",
       ".maestro/runs",
       "docs/principles",

@@ -13,13 +13,13 @@ Create or update a plan before implementation when work involves:
 
 ## Plan Location
 
-Approved implementation plans live under `.maestro/plans/`.
+Approved implementation plans live under `.maestro/missions/`.
 
 ## Planning Flow
 
 1. Use `maestro-brainstorm` when the design is unclear.
-2. Use `maestro-plan` after design approval.
-3. Persist the approved plan to `.maestro/plans/<slug>.md`.
+2. Use `maestro-mission` after design approval.
+3. Persist the approved plan to `.maestro/missions/<slug>.md`.
 4. Convert plan phases into `maestro task` entries before implementation.
 5. Use `maestro-handoff` only for cross-session transfer.
 

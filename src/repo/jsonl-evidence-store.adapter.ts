@@ -19,9 +19,9 @@ function matchesFilter(row: EvidenceRow, filter: EvidenceFilter | undefined): bo
     const rowTaskId = "task_id" in row ? row.task_id : undefined;
     if (rowTaskId !== filter.task_id) return false;
   }
-  if (filter.plan_id !== undefined) {
-    const rowPlanId = "plan_id" in row ? row.plan_id : undefined;
-    if (rowPlanId !== filter.plan_id) return false;
+  if (filter.mission_id !== undefined) {
+    const rowPlanId = "mission_id" in row ? row.mission_id : undefined;
+    if (rowPlanId !== filter.mission_id) return false;
   }
   return true;
 }

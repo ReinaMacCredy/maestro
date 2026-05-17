@@ -11,7 +11,7 @@
 
 1. Clarify the task from repo evidence and user intent.
 2. Use `maestro-brainstorm` when design is unclear.
-3. Use `maestro-plan` when implementation needs an approved plan.
+3. Use `maestro-mission` when implementation needs an approved plan.
 4. Convert approved work into `maestro task` entries before execution when the repo uses Maestro tasks.
 5. Implement, verify, update docs, and report residual risks.
 

@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { MaestroError } from "@/shared/errors.js";
-import { AgentReportSchema } from "@/features/plan/domain/legacy-report-schema.js";
+import { AgentReportSchema } from "@/features/mission/domain/legacy-report-schema.js";
 import type {
   Mission,
   Milestone,
