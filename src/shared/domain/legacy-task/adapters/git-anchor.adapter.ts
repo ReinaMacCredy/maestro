@@ -255,18 +255,20 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
   async collectAddedLines(repoRoot: string, base: string, head: string): Promise<readonly string[]> {
     const result = await execArgv(["git", "diff", "--no-color", `${base}..${head}`], { cwd: repoRoot });
     if (result.exitCode !== 0 || !result.stdout) return [];
-    // Track which file each added line belongs to and drop lines from lockfiles.
-    // Rationale: lockfile-parity check already gates lockfile changes; the
-    // secrets-in-diff heuristic false-positives on integrity hashes (e.g.
-    // sha512-XX...) and keyword-shaped package names that happen to look like
-    // credentials in context. Lockfile content is auto-generated, not authored.
+    // Track which file each added line belongs to and drop lines from paths
+    // the secrets-in-diff scanner must not see: lockfiles (auto-generated
+    // integrity hashes look credential-shaped) and vendored/build output
+    // committed by accident (a brownfield repo with `node_modules/` checked
+    // in is the canonical case — every dependency string looks like a hit).
+    // Lockfile-parity and scope checks already gate those paths separately;
+    // this filter only narrows the secrets-heuristic surface.
     const out: string[] = [];
     let skipFile = false;
     for (const line of result.stdout.split("\n")) {
       if (line.startsWith("diff --git ")) {
         const m = line.match(/^diff --git a\/(.+?) b\/.+$/);
         const path = m?.[1];
-        skipFile = path !== undefined && isLockfilePath(path);
+        skipFile = path !== undefined && shouldSkipSecretsScan(path);
         continue;
       }
       if (skipFile) continue;
@@ -388,6 +390,41 @@ const LOCKFILE_BASENAMES = new Set([
 function isLockfilePath(path: string): boolean {
   const base = normalizeSlashes(path).split("/").pop() ?? "";
   return LOCKFILE_BASENAMES.has(base);
+}
+
+// Vendored / generated directories the secrets-in-diff scanner must skip.
+// These appear in committed form in misconfigured brownfield repos; their
+// contents are framework-emitted strings that trip credential heuristics
+// (e.g. `process.env.API_KEY = "..."` inside a bundled dist file). The
+// scope/lockfile-parity checks already cover the "should this even be in
+// the diff" question; this filter is strictly about which paths the secrets
+// regex is allowed to walk.
+const VENDORED_DIR_PREFIXES = [
+  "node_modules/",
+  "vendor/",
+  "dist/",
+  "build/",
+  ".next/",
+  ".nuxt/",
+  ".svelte-kit/",
+  ".turbo/",
+  "target/",
+  "__pycache__/",
+  ".venv/",
+  ".gradle/",
+  ".cache/",
+] as const;
+
+function isVendoredOrBuildPath(path: string): boolean {
+  const normalized = normalizeSlashes(path);
+  for (const prefix of VENDORED_DIR_PREFIXES) {
+    if (normalized.startsWith(prefix) || normalized.includes(`/${prefix}`)) return true;
+  }
+  return false;
+}
+
+function shouldSkipSecretsScan(path: string): boolean {
+  return isLockfilePath(path) || isVendoredOrBuildPath(path);
 }
 
 function splitPaths(output: string): readonly string[] {

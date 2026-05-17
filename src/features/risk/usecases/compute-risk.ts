@@ -89,6 +89,10 @@ export function computeRisk(input: ComputeRiskInput): Verdict {
     errors: errors.length,
     warns: warns.length,
     infos: infos.length,
+    // Carry the full finding list so `verdict show --json` surfaces
+    // per-finding paths/check names/details. Without this, agents see only
+    // counts and have to re-run `verify` to learn *which* file matched.
+    ...(trustFindings.length > 0 ? { findings: trustFindings } : {}),
   };
 
   const reasons: VerdictReason[] = [];

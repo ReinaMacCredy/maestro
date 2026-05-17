@@ -1,4 +1,5 @@
 import type { RiskClass } from "@/types/product-spec.js";
+import type { TrustFinding } from "@/types/trust.js";
 
 export interface VerdictSubject {
   readonly pr?: number;
@@ -54,5 +55,6 @@ export interface Verdict {
     readonly errors: number;
     readonly warns: number;
     readonly infos: number;
+    readonly findings?: readonly TrustFinding[];
   };
 }
