@@ -144,6 +144,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         {
           taskStore: services.taskStore,
           evidenceStore: services.evidenceStore,
+          missionStore: services.missionStore,
           observabilityStore: services.observabilityStore,
           handoffEmitter: services.handoffEmitter,
         },

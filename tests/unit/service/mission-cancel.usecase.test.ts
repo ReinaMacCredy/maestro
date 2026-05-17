@@ -198,7 +198,16 @@ describe("missionCancel", () => {
     const taskEvidence = evidence.filter((e) => "task_id" in e && e.task_id !== undefined);
     expect(taskEvidence.length).toBe(3);
     for (const row of taskEvidence) {
-      expect(row).toMatchObject({ to_state: "abandoned", trigger_verb: "mission:cancel" });
+      expect(row).toMatchObject({
+        to_state: "abandoned",
+        trigger_verb: "mission:cancel",
+        reason: "out of scope",
+      });
+    }
+
+    const cascadedTasks = await taskStore.listByMissionId(m.id);
+    for (const t of cascadedTasks) {
+      expect(t.abandon_reason).toBe("out of scope");
     }
 
     const missionEvidence = evidence.find(
@@ -210,6 +219,17 @@ describe("missionCancel", () => {
       cancelled_by: "user",
       reason: "out of scope",
     });
+  });
+
+  it("falls back to abandon_reason='mission cancelled' when no reason is given", async () => {
+    const { missionStore, taskStore, evidenceStore } = makeStores();
+    const m = await seed(missionStore, taskStore, "in-progress", ["claimed"]);
+    await missionCancel(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: m.id },
+    );
+    const cascadedTasks = await taskStore.listByMissionId(m.id);
+    expect(cascadedTasks[0]?.abandon_reason).toBe("mission cancelled");
   });
 
   it("skips already-terminal tasks during cascade", async () => {

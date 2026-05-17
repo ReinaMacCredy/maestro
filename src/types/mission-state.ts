@@ -39,7 +39,8 @@ export function isTerminalMissionState(state: MissionState): state is TerminalMi
 }
 
 export function canTransitionMission(from: MissionState, to: MissionState): boolean {
-  return (MISSION_TRANSITIONS[from] as readonly MissionState[]).includes(to);
+  const allowed = (MISSION_TRANSITIONS as Record<string, readonly MissionState[]>)[from];
+  return allowed !== undefined && allowed.includes(to);
 }
 
 export class MissionTransitionError extends Error {
@@ -48,9 +49,15 @@ export class MissionTransitionError extends Error {
   readonly allowed: readonly MissionState[];
 
   constructor(from: MissionState, to: MissionState) {
-    const allowed = MISSION_TRANSITIONS[from];
-    const hint =
-      allowed.length === 0
+    // `from` is typed as MissionState but reaches us as a string off-disk;
+    // a legacy/unknown value (e.g. v1 "specified") would surface a TypeError
+    // here instead of the intended MissionTransitionError. Default to [] so
+    // the message stays informative.
+    const allowed = (MISSION_TRANSITIONS as Record<string, readonly MissionState[]>)[from] ?? [];
+    const knownState = (MISSION_STATES as readonly string[]).includes(from);
+    const hint = !knownState
+      ? `${from} is not a recognized mission state (legacy data?)`
+      : allowed.length === 0
         ? `${from} is terminal`
         : `allowed from ${from}: ${allowed.join(", ")}`;
     super(`Invalid mission transition ${from} -> ${to} (${hint})`);

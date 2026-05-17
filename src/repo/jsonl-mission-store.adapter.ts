@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Mission, MissionId } from "../types/mission.js";
 import { generateMissionId } from "../types/mission.js";
-import type { MissionState } from "../types/mission-state.js";
+import { isMissionState, type MissionState } from "../types/mission-state.js";
 import {
   DuplicateMissionSlugError,
   MissionNotFoundError,
@@ -111,9 +111,23 @@ export class JsonlMissionStore implements MissionStorePort {
       throw err;
     }
     const out: Mission[] = [];
+    let lineNo = 0;
     for (const line of text.split("\n")) {
+      lineNo += 1;
       if (line.length === 0) continue;
-      out.push(JSON.parse(line) as Mission);
+      const row = JSON.parse(line) as Record<string, unknown>;
+      // Validate-on-read so legacy rows (e.g. v1 state "specified") surface as
+      // explicit errors instead of corrupting downstream readers. Run setup to
+      // migrate before reusing this store.
+      if (typeof row.id !== "string" || typeof row.slug !== "string" || typeof row.title !== "string") {
+        throw new Error(`${this.#file}:${lineNo}: mission row missing required string fields`);
+      }
+      if (typeof row.state !== "string" || !isMissionState(row.state)) {
+        throw new Error(
+          `${this.#file}:${lineNo}: mission row has unknown state '${String(row.state)}' (run \`maestro setup\` to migrate)`,
+        );
+      }
+      out.push(row as unknown as Mission);
     }
     return out;
   }

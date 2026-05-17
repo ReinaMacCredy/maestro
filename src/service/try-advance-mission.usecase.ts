@@ -18,7 +18,7 @@ export interface TryAdvanceMissionDeps {
 
 export interface TryAdvanceMissionInput {
   readonly mission_id?: string;
-  readonly trigger_task_verb: "task:claim" | "task:ship" | "task:abandon";
+  readonly trigger_task_verb: "task:claim" | "task:ship" | "task:abandon" | "task:block";
 }
 
 const FIXED_POINT_CAP = 10;

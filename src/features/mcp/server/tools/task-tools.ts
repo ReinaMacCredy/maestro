@@ -241,6 +241,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
           {
             taskStore: services.v2.taskStore,
             evidenceStore: services.v2.evidenceStore,
+            missionStore: services.v2.missionStore,
             observabilityStore: services.v2.observabilityStore,
             handoffEmitter: services.v2.handoffEmitter,
           },

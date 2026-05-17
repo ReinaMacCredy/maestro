@@ -225,7 +225,7 @@ describe("init CLI", () => {
     expect(result.skipped.some((path: string) => path.endsWith(join(".maestro", "config.yaml")))).toBe(true);
   });
 
-  it("hard-deletes legacy .factory directory on setup", async () => {
+  it("leaves .factory/ alone (owned by Factory.ai, not maestro v1)", async () => {
     await mkdir(join(tmpDir, ".factory", "library"), { recursive: true });
     await writeFile(
       join(tmpDir, ".factory", "services.yaml"),
@@ -235,7 +235,8 @@ describe("init CLI", () => {
     const { exitCode } = await run(["init", "--json"], tmpDir);
 
     expect(exitCode).toBe(0);
-    expect(await pathExists(join(tmpDir, ".factory"))).toBe(false);
+    expect(await pathExists(join(tmpDir, ".factory"))).toBe(true);
+    expect(await pathExists(join(tmpDir, ".factory", "services.yaml"))).toBe(true);
   });
 
   it("keeps runtime session logs ignored after init", async () => {

@@ -268,18 +268,28 @@ describe("runSetup (v1 hard-delete)", () => {
     await mkdir(join(tmpDir, ".maestro", "memory", "corrections"), { recursive: true });
     await mkdir(join(tmpDir, ".maestro", "memory", "learnings"), { recursive: true });
     await writeFile(join(tmpDir, ".maestro", ".migrated-v2.json"), "{}\n");
-    await mkdir(join(tmpDir, ".factory"), { recursive: true });
 
     const result = await runSetup(project());
 
     await expect(access(join(tmpDir, ".maestro", "memory", "corrections"))).rejects.toThrow();
     await expect(access(join(tmpDir, ".maestro", "memory", "learnings"))).rejects.toThrow();
     await expect(access(join(tmpDir, ".maestro", ".migrated-v2.json"))).rejects.toThrow();
-    await expect(access(join(tmpDir, ".factory"))).rejects.toThrow();
 
     const deleteStep = result.steps.find((s) => s.id === "delete-v1");
     expect(deleteStep?.status).toBe("changed");
-    expect(deleteStep?.paths.length).toBe(4);
+    expect(deleteStep?.paths.length).toBe(3);
+  });
+
+  it("leaves .factory/ alone (owned by Factory.ai, not maestro v1)", async () => {
+    const factoryDir = join(tmpDir, ".factory");
+    await mkdir(factoryDir, { recursive: true });
+    await writeFile(join(factoryDir, "marker.txt"), "factory-ai-state\n");
+
+    await runSetup(project());
+
+    await access(factoryDir);
+    const markerContent = await readFile(join(factoryDir, "marker.txt"), "utf8");
+    expect(markerContent).toBe("factory-ai-state\n");
   });
 
   it("reports no-op when v1 paths are absent", async () => {
@@ -329,6 +339,42 @@ describe("runSetup (plans -> missions migration)", () => {
     expect(result.ok).toBe(false);
     const step = result.steps.find((s) => s.id === "migrate-plans-to-missions");
     expect(step?.status).toBe("error");
+  });
+
+  it("rewrites legacy mission state 'specified' to 'approved' during migration", async () => {
+    const plansDir = join(tmpDir, ".maestro", "plans");
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, "plans.jsonl"),
+      '{"id":"pln-1","slug":"a","title":"A","state":"specified","created_at":"2026-04-01T00:00:00Z","updated_at":"2026-04-01T00:00:00Z"}\n' +
+        '{"id":"pln-2","slug":"b","title":"B","state":"planned","created_at":"2026-04-01T00:00:00Z","updated_at":"2026-04-01T00:00:00Z"}\n',
+    );
+
+    await runSetup(project());
+
+    const moved = await readFile(join(tmpDir, ".maestro", "missions", "missions.jsonl"), "utf8");
+    expect(moved).toContain('"state":"approved"');
+    expect(moved).not.toContain('"state":"specified"');
+    expect(moved).toContain('"state":"planned"');
+  });
+
+  it("rewrites legacy plan_id to mission_id on tasks during migration", async () => {
+    const tasksDir = join(tmpDir, ".maestro", "tasks");
+    await mkdir(tasksDir, { recursive: true });
+    await writeFile(
+      join(tasksDir, "tasks.jsonl"),
+      '{"id":"tsk-1","slug":"x","title":"X","state":"draft","plan_id":"pln-1","blocked_by":[],"created_at":"2026-04-01T00:00:00Z","updated_at":"2026-04-01T00:00:00Z"}\n',
+    );
+
+    const result = await runSetup(project());
+
+    const rewritten = await readFile(join(tasksDir, "tasks.jsonl"), "utf8");
+    expect(rewritten).toContain('"mission_id":"pln-1"');
+    expect(rewritten).not.toContain('"plan_id"');
+
+    const step = result.steps.find((s) => s.id === "migrate-task-fields");
+    expect(step?.status).toBe("changed");
+    expect(step?.detail).toContain("rewrote 1");
   });
 });
 

@@ -315,6 +315,28 @@ describe("tryAdvanceMission", () => {
     });
   });
 
+  it("auto-pauses when trigger is task:block (last active task is now blocked)", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "in-progress", [
+      "blocked",
+      "shipped",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:block" },
+    );
+
+    expect(out!.state).toBe("paused");
+    expect(evidence.length).toBe(1);
+    expect(evidence[0]).toMatchObject({
+      from_state: "in-progress",
+      to_state: "paused",
+      rule: "auto-pause",
+      trigger: "rollup",
+    });
+  });
+
   it("auto-resumes paused when at least one active task is unblocked", async () => {
     const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
     const plan = await seedPlanWithTasks(missionStore, taskStore, "paused", [

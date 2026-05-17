@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -102,6 +102,43 @@ describe("maestro task block / abandon (v2)", () => {
     );
     expect(second.exitCode).toBe(1);
     expect(second.stderr).toContain("Invalid task transition");
+  });
+
+  it("blocking the last active task auto-pauses the parent mission", async () => {
+    await runCompiled(["spec", "new", "pause-flow", "--mode", "heavy"], tmpDir);
+    const fromSpec = await runCompiled(
+      ["mission", "from-spec", ".maestro/specs/pause-flow.md"],
+      tmpDir,
+    );
+    const missionId = (fromSpec.stdout.match(/^(pln-\S+)/) ?? [])[1];
+    expect(missionId).toBeDefined();
+
+    const batchPath = join(tmpDir, "pause-flow-batch.json");
+    await writeFile(batchPath, JSON.stringify([{ title: "Only task", slug: "only" }]));
+    await runCompiled(["mission", "decompose", missionId!, "--file", batchPath], tmpDir);
+
+    const tasksJson = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
+    const taskId = (JSON.parse(tasksJson.trim()) as { id: string }).id;
+
+    await runCompiled(["task", "claim", taskId], tmpDir);
+
+    const missionAfterClaim = JSON.parse(
+      (await readFile(join(tmpDir, ".maestro/missions/missions.jsonl"), "utf8")).trim(),
+    ) as { state: string };
+    expect(missionAfterClaim.state).toBe("in-progress");
+
+    await runCompiled(["task", "block", taskId, "--reason", "waiting"], tmpDir);
+
+    const missionAfterBlock = JSON.parse(
+      (await readFile(join(tmpDir, ".maestro/missions/missions.jsonl"), "utf8")).trim(),
+    ) as { state: string };
+    expect(missionAfterBlock.state).toBe("paused");
+
+    const rows = await readEvidenceRows(tmpDir);
+    const pauseRow = rows.find(
+      (r) => r.to_state === "paused" && r.trigger_verb === "mission:auto-pause",
+    );
+    expect(pauseRow).toBeDefined();
   });
 
   it("hot-path aliases block and abandon work at top level", async () => {

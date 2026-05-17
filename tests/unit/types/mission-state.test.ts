@@ -107,4 +107,21 @@ describe("assertMissionTransition", () => {
     expect((caught as MissionTransitionError).from).toBe("intake");
     expect((caught as MissionTransitionError).to).toBe("completed");
   });
+
+  it("throws MissionTransitionError (not TypeError) when from is an unknown legacy state", () => {
+    let caught: unknown;
+    try {
+      // Cast: simulating an off-disk value that escaped validation.
+      assertMissionTransition("specified" as MissionState, "planned");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(MissionTransitionError);
+    expect((caught as MissionTransitionError).allowed).toEqual([]);
+    expect((caught as Error).message).toContain("not a recognized mission state");
+  });
+
+  it("canTransitionMission returns false for unknown from state", () => {
+    expect(canTransitionMission("specified" as MissionState, "planned")).toBe(false);
+  });
 });

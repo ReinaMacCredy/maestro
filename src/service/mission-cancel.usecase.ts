@@ -4,7 +4,7 @@ import { MissionNotFoundError } from "../repo/mission-store.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import type { Mission, MissionId } from "../types/mission.js";
 import { isTerminalMissionState } from "../types/mission-state.js";
-import { isTerminalTaskState } from "../types/task-state.js";
+import { assertTaskTransition, isTerminalTaskState } from "../types/task-state.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
 import { summarizeTasks } from "./task-summary.js";
 
@@ -74,11 +74,21 @@ export async function missionCancel(
   const tasks = await deps.taskStore.listByMissionId(mission.id);
   const cancelledTaskIds: string[] = [];
   const cascadeErrors: MissionCancelCascadeError[] = [];
+  const cascadeReason = input.reason ?? "mission cancelled";
 
   for (const task of tasks) {
     if (isTerminalTaskState(task.state)) continue;
     try {
-      await deps.taskStore.update(task.id, { state: "abandoned" });
+      // Mirror taskAbandon's state-machine guard so cascade respects the same
+      // transition table as the explicit `task abandon` verb. We don't call
+      // taskAbandon directly because the cascade preserves trigger_verb
+      // "mission:cancel" for observability, and rollup is deliberately
+      // suppressed (the mission is going to `cancelled` explicitly below).
+      assertTaskTransition(task.state, "abandoned");
+      await deps.taskStore.update(task.id, {
+        state: "abandoned",
+        abandon_reason: cascadeReason,
+      });
       await emitTransitionEvidence(
         {
           store: deps.evidenceStore,
@@ -91,7 +101,7 @@ export async function missionCancel(
           from_state: task.state,
           to_state: "abandoned",
           trigger_verb: "mission:cancel",
-          reason: input.reason,
+          reason: cascadeReason,
         },
       );
       cancelledTaskIds.push(task.id);

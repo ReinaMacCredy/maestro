@@ -1,5 +1,6 @@
 import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
 import type { HandoffEmitterPort } from "../repo/handoff-emitter.port.js";
+import type { MissionStorePort } from "../repo/mission-store.port.js";
 import type { ObservabilityPort } from "../repo/observability.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
@@ -7,10 +8,12 @@ import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
 import { emitHandoff } from "./emit-handoff.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
+import { tryAdvanceMission } from "./try-advance-mission.usecase.js";
 
 export interface TaskBlockDeps {
   readonly taskStore: TaskStorePort;
   readonly evidenceStore: EvidenceStorePort;
+  readonly missionStore?: MissionStorePort;
   readonly observabilityStore?: ObservabilityPort;
   readonly handoffEmitter?: HandoffEmitterPort;
   readonly clock?: () => Date;
@@ -55,5 +58,17 @@ export async function taskBlock(deps: TaskBlockDeps, input: TaskBlockInput): Pro
       spec_path: updated.spec_path,
     },
   );
+  if (deps.missionStore) {
+    await tryAdvanceMission(
+      {
+        missionStore: deps.missionStore,
+        taskStore: deps.taskStore,
+        evidenceStore: deps.evidenceStore,
+        clock: deps.clock,
+        idFactory: deps.idFactory,
+      },
+      { mission_id: updated.mission_id, trigger_task_verb: "task:block" },
+    );
+  }
   return updated;
 }
