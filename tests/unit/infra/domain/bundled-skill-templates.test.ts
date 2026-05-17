@@ -154,9 +154,12 @@ Before non-trivial work:
 <!-- maestro-setup:end -->`);
     expect(skill.content).toContain(".maestro/setup-report.md");
     expect(skill.content).toContain("maestro setup check");
-    expect(skill.content).toContain("maestro setup bootstrap");
-    expect(skill.content).toContain("maestro setup migrate-v2");
-    expect(skill.content).toContain("maestro setup migrate-corrections");
+    // Legacy subverbs were folded into the default `setup` action; assert their
+    // absence so this test ratchets the SKILL.md drift fix forward instead of
+    // pinning the stale text in place.
+    expect(skill.content).not.toContain("maestro setup bootstrap");
+    expect(skill.content).not.toContain("maestro setup migrate-v2");
+    expect(skill.content).not.toContain("maestro setup migrate-corrections");
 
     const planningTemplate = setup!.files.find((file) => file.path === "reference/context-templates/planning.md");
     expect(planningTemplate?.content).toContain("Approved implementation plans live under `.maestro/missions/`");

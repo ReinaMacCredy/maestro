@@ -146,7 +146,7 @@ maestro setup check [--json]
 `maestro setup` is the merged bootstrap + migration verb. Idempotent: detects the current state and only touches what changed.
 
 - Creates the v2 directory layout (`.maestro/{specs,missions,tasks,runs,evidence,handoffs,worktrees}`) with `.gitkeep` placeholders.
-- Migrates v1 `.maestro/` data and v0.100.0 `.maestro/plans/` to `.maestro/missions/`.
+- Hard-deletes v1 leftovers it owns (`.maestro/memory/corrections`, `.maestro/memory/learnings`, `.maestro/.migrated-v2.json`), migrates v0.100.0 `.maestro/plans/` to `.maestro/missions/` (including rewriting legacy `state: "specified"` rows to `state: "approved"`), and rewrites legacy `plan_id` → `mission_id` on `.maestro/tasks/tasks.jsonl`.
 - Writes default skill bundles and context templates; `--reset-templates` overwrites user-customized files.
 - `--resync-skills` reconciles `.claude/skills/` and `.codex/skills/` with shipped templates.
 - `--dry-run` plans without writing.
@@ -352,7 +352,7 @@ maestro mcp serve [--project-root <path>] [--transport stdio]
 maestro mcp check [--json]
 ```
 
-The `mcp__maestro__*` tool surface ships with the binary and is consumed by host agents through MCP over stdio. Tools mirror the CLI verbs; the filter field on `maestro_task_list` is `plan_id`. Surfaces:
+The `mcp__maestro__*` tool surface ships with the binary and is consumed by host agents through MCP over stdio. Tools mirror the CLI verbs; the filter field on `maestro_task_list` is `mission_id`. Surfaces:
 
 | Surface | Tools |
 |---------|-------|
@@ -363,7 +363,7 @@ The `mcp__maestro__*` tool surface ships with the binary and is consumed by host
 | Policy | `maestro_policy_check` |
 | Handoff | `maestro_handoff_list`, `maestro_handoff_show`, `maestro_handoff_emit`, `maestro_handoff_pickup` |
 | Principle | `maestro_principle_promote` |
-| Setup | `maestro_setup_check`, `maestro_setup_migrate_v2` |
+| Setup | `maestro_setup_check` |
 
 Project root resolves by walking up for `.maestro/`; override with `--project-root` or `MAESTRO_PROJECT_ROOT`. `mcp check` exits 1 when the installed binary is missing or stale.
 

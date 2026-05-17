@@ -18,7 +18,7 @@ their intent. Do not prompt the user to name a command -- translate their words
 into the right maestro verb and proceed.
 
 The project directory starts as a bare `git init` with no files. Run
-`maestro setup bootstrap` to scaffold the v2 layout before doing any other
+`maestro setup` to scaffold the v2 layout before doing any other
 maestro work.
 
 ## User-mock script

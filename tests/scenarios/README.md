@@ -90,11 +90,11 @@ bun scripts/scenarios/swarm.ts
 Rubrics read `.maestro/evidence/<date>.jsonl`. The two row kinds are:
 
 - `kind: "transition"` -- every task and plan state change. Fields: `task_id`,
-  `plan_id`, `from_state`, `to_state`, `trigger_verb`, `verdict`, `reason`.
+  `mission_id`, `from_state`, `to_state`, `trigger_verb`, `verdict`, `reason`.
 - `kind: "lint-violation"` -- architecture lint finding. Fields: `task_id`,
   `rule_id`, `severity`, `file`, `line`, `message`.
 
-Distinguish task vs plan transitions by which of `task_id` / `plan_id` is set.
+Distinguish task vs plan transitions by which of `task_id` / `mission_id` is set.
 
 Task states: `draft | claimed | doing | verifying | blocked | ready | shipped | abandoned`
 
@@ -103,7 +103,7 @@ Plan states: `intake | specified | planned | in-progress | completed | cancelled
 ## Brownfield fixture
 
 Brownfield scenarios (5-8) copy `tests/fixtures/v1-maestro/.maestro/` into a
-temp directory. The sub-agent must run `maestro setup migrate-v2` (expert
+temp directory. The sub-agent must run `maestro setup` (expert
 scenarios) or discover and run it unprompted (novice scenarios).
 
 Migration success is confirmed by:

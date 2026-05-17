@@ -29,9 +29,9 @@ The rubric checks for:
 
 1. File `.maestro/.migrated-v2.json` present (migration ran unprompted).
 2. File `docs/principles/legacy/legacy-rule-1.md` present (corrections migrated).
-3. A `transition` row with `plan_id` set and `to_state: "specified"`.
-4. A `transition` row with `plan_id` set and `to_state: "planned"`.
+3. A `transition` row with `mission_id` set and `to_state: "approved"`.
+4. A `transition` row with `mission_id` set and `to_state: "planned"`.
 5. At least 2 child task `transition` rows with `to_state: "draft"` and both
-   `task_id` and `plan_id` set.
+   `task_id` and `mission_id` set.
 6. A `transition` row with `task_id` set and `to_state: "claimed"`.
 7. A `transition` row with `task_id` set and `to_state: "shipped"`.

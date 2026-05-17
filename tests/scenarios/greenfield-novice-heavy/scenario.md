@@ -27,11 +27,11 @@ One of:
 
 The rubric checks for:
 
-1. A `transition` row with `plan_id` set and `to_state: "specified"` (plan
-   created from heavy-mode spec via `plan from-spec`).
-2. A `transition` row with `plan_id` set and `to_state: "planned"` (plan
-   decomposed into child tasks via `plan decompose`).
-3. A `transition` row with `plan_id` set and `to_state: "in-progress"` (first
+1. A `transition` row with `mission_id` set and `to_state: "approved"` (plan
+   created from heavy-mode spec via `mission from-spec`).
+2. A `transition` row with `mission_id` set and `to_state: "planned"` (plan
+   decomposed into child tasks via `mission decompose`).
+3. A `transition` row with `mission_id` set and `to_state: "in-progress"` (first
    child task claimed, plan auto-advanced per ADR-0011).
 4. At least two `transition` rows with `task_id` set and `to_state: "draft"` --
    confirming multiple child tasks were created.

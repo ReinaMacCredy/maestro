@@ -20,7 +20,7 @@ into the right maestro verb and proceed.
 The project directory has a v1 `.maestro/` tree already present. Before doing
 any new work, inspect `.maestro/` and determine whether migration to v2 is
 needed. If `.maestro/.migrated-v2.json` is absent, run
-`maestro setup migrate-v2` without being asked -- this is part of getting the
+`maestro setup` without being asked -- this is part of getting the
 project ready. The user's first message is about adding a feature, not about
 migration; you must discover and handle migration yourself.
 

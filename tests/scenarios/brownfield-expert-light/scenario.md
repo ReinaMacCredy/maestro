@@ -9,7 +9,7 @@
 
 The user knows maestro verb names and uses them explicitly.
 
-1. "Run `maestro setup migrate-v2` to upgrade to v2, then author a light-mode
+1. "Run `maestro setup` to upgrade to v2, then author a light-mode
    spec for a bug: the search filter ignores accented characters."
 2. "Run `task from-spec`, claim with `--skip-worktree`, fix the bug, verify,
    and ship."

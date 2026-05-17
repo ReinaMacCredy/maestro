@@ -6,12 +6,13 @@ description: Set up a repository as a long-running agent harness. Use when a pro
 # Maestro Setup
 
 Use this skill to create or refresh a long-running agent harness in a project.
-Skill and CLI mirror each other: `maestro setup` exposes drift detection and
-host-runtime hook install; the skill owns the content-generation flow.
+Skill and CLI mirror each other: `maestro setup` is the single idempotent
+entrypoint that scaffolds + migrates the project; the skill owns the
+content-generation flow that lives on top of it.
 
 ## Core Contract
 
-- Skill owns content; CLI owns audit + hooks + self-test.
+- Skill owns content; CLI owns audit + scaffold + migration + self-test.
 - Non-interactive by default. Do not ask questions during ordinary setup.
 - Evidence-first. Infer from repo files and mark uncertain facts as TODO.
 - Keep substantial setup content under `.maestro/context/`.
@@ -22,23 +23,39 @@ host-runtime hook install; the skill owns the content-generation flow.
 
 ## Setup CLI Surface
 
-- `maestro setup check` — read-only audit of the v2 directory layout
-  (`.maestro/{specs,plans,tasks,runs,evidence}`), the principles pack
-  (`docs/principles/`), and `.maestro/config.yaml`. Exit 1 only when an
-  entry is `missing`; `warn` (empty principles pack, absent
-  `config.yaml`) is informational. `--json` emits the full report.
-- `maestro setup bootstrap` — idempotent. Creates the five v2
-  directories with `.gitkeep` placeholders when empty. Skips dirs that
-  already exist.
-- `maestro setup migrate-v2` — 11-step v1 → v2 migration. Preflight,
-  backup to `.maestro.backup-<ts>/`, bootstrap-dirs, migrate-corrections,
-  migrate-tasks, migrate-plans, migrate-evidence, migrate-policies,
-  seed-principles, write-flag, verify. `--dry-run` plans without writing;
-  `--force` re-runs past `.maestro/.migrated-v2.json`.
-- `maestro setup migrate-corrections` — moves v1
-  `.maestro/memory/corrections/*.json` into `docs/principles/legacy/<id>.md`.
-  Exposed standalone for partial re-runs. `--overwrite` rewrites existing
-  legacy files.
+The setup verb is a single idempotent state machine. Re-running it is safe.
+
+- `maestro setup` — default action. Runs the full sequence in order:
+  detect-v1, delete-v1, migrate-plans-to-missions, migrate-task-fields,
+  bootstrap-dirs, write-project-config, drop-templates, seed-principles,
+  sync-skills. Each step is idempotent; existing artifacts are left in
+  place unless `--reset-templates` is passed.
+- `maestro setup --global` — write `~/.maestro/config.yaml` only; does
+  not touch the current project.
+- `maestro setup --dry-run` — preview the state machine's writes
+  (`would-create`, `would-overwrite`, `would-delete`) without mutating
+  the filesystem.
+- `maestro setup --resync-skills` — additionally remove any managed
+  skill directories under `.claude/skills/` and `.codex/skills/` that
+  are not in the current shipped set, then re-drop the canonical ones.
+- `maestro setup --reset-templates` — re-emit any project bootstrap
+  templates that the user previously customized back to their shipped
+  defaults (asks before overwriting unless run with `--json`).
+- `maestro setup --no-git-ok` — allow setup outside a git working tree.
+  Without this flag, setup refuses to run when `.git/` is absent.
+- `maestro setup --json` — emit the structured `SetupReport` instead of
+  the human-readable step listing.
+- `maestro setup check [--json]` — read-only audit of the v2 directory
+  layout (`.maestro/{tasks,missions,evidence,runs}`), `docs/principles/`,
+  and `.maestro/config.yaml`. Exit 1 only when an entry is `missing`;
+  `warn` (empty principles pack, absent `config.yaml`) is informational.
+
+The setup verb hard-deletes the v1 memory artifacts it owns
+(`.maestro/memory/corrections`, `.maestro/memory/learnings`,
+`.maestro/.migrated-v2.json`) and migrates `.maestro/plans/` →
+`.maestro/missions/`, including rewriting legacy `state: "specified"`
+rows to `state: "approved"` and `plan_id` → `mission_id` on tasks.
+`.factory/` is owned by an unrelated tool and is left alone.
 
 ## Managed Markers
 
@@ -244,9 +261,11 @@ Do not invoke design, planning, or implementation from this skill.
 The CLI mirrors this skill. When the skill says "set up the project",
 the binary's contract is:
 
-- `maestro setup check [--json]` — drift audit.
-- `maestro setup bootstrap [--json]` — directory scaffold.
-- `maestro setup migrate-v2 [--dry-run] [--force] [--json]` — v1 → v2 import.
-- `maestro setup migrate-corrections [--overwrite] [--json]` — corrections subset.
+- `maestro setup [--global] [--dry-run] [--resync-skills] [--reset-templates] [--no-git-ok] [--json]` — idempotent setup state machine.
+- `maestro setup check [--json]` — read-only drift audit.
+
+There are no other setup subverbs. The legacy `setup bootstrap`,
+`setup migrate-v2`, and `setup migrate-corrections` subverbs were folded
+into the default `setup` action.
 
 Do not design extra CLI behavior while running this skill.

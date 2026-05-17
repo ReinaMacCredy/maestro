@@ -22,7 +22,7 @@ export async function runRubric(projectDir: string): Promise<RubricResult> {
   const checks: CheckResult[] = [
     {
       id: "migration-flag-present",
-      description: ".maestro/.migrated-v2.json is present (setup migrate-v2 ran)",
+      description: ".maestro/.migrated-v2.json is present (setup ran)",
       pass: migrationFlag !== null,
       note: migrationFlag === null ? ".maestro/.migrated-v2.json not found" : undefined,
     },

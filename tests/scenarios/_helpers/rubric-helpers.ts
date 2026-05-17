@@ -40,12 +40,12 @@ export function isTaskTransitionTo(row: EvidenceRow, state: string): boolean {
   );
 }
 
-export function isPlanTransitionTo(row: EvidenceRow, state: string): boolean {
+export function isMissionTransitionTo(row: EvidenceRow, state: string): boolean {
   return (
     row.kind === "transition" &&
-    "plan_id" in row &&
-    typeof row.plan_id === "string" &&
-    row.plan_id.length > 0 &&
+    "mission_id" in row &&
+    typeof row.mission_id === "string" &&
+    row.mission_id.length > 0 &&
     !("task_id" in row && typeof row.task_id === "string" && row.task_id.length > 0) &&
     row.to_state === state
   );
@@ -57,9 +57,9 @@ export function isChildDraftRow(row: EvidenceRow): boolean {
     "task_id" in row &&
     typeof row.task_id === "string" &&
     row.task_id.length > 0 &&
-    "plan_id" in row &&
-    typeof row.plan_id === "string" &&
-    row.plan_id.length > 0 &&
+    "mission_id" in row &&
+    typeof row.mission_id === "string" &&
+    row.mission_id.length > 0 &&
     row.to_state === "draft"
   );
 }

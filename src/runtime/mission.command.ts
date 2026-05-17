@@ -26,7 +26,7 @@ import {
   missionCancel,
   MissionCancelTerminalError,
 } from "../service/mission-cancel.usecase.js";
-import { listTemplates } from "../features/mission/templates/loader.js";
+import { InvalidTemplateNameError, listTemplates } from "../features/mission/templates/loader.js";
 import { MissionTemplateLoadError } from "../features/mission/domain/template-types.js";
 import {
   DuplicateMissionSlugError,
@@ -61,6 +61,7 @@ function reportError(verb: string, err: unknown): void {
     err instanceof MissionNewInvalidFlagsError ||
     err instanceof MissionTemplateUnknownError ||
     err instanceof MissionTemplateLoadError ||
+    err instanceof InvalidTemplateNameError ||
     err instanceof MissionCancelTerminalError
   ) {
     console.error(`maestro ${verb}: ${(err as Error).message}`);

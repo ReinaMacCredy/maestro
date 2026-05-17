@@ -18,12 +18,12 @@ their intent. Do not prompt the user to name a command -- translate their words
 into the right maestro verb and proceed.
 
 The project directory has a v1 `.maestro/` tree. You must detect this and run
-`maestro setup migrate-v2` before doing any new work. The user has not asked
+`maestro setup` before doing any new work. The user has not asked
 you to migrate; you must do it unprompted because v1 state is incompatible
 with v2 verbs.
 
 When the user describes a large multi-PR feature, recognize this requires a
-heavy-mode spec, `plan from-spec`, and `plan decompose`. Translate their
+heavy-mode spec, `mission from-spec`, and `mission decompose`. Translate their
 intent into these verbs without asking them to name the commands.
 
 ## User-mock script

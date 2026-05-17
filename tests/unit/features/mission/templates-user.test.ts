@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listTemplates, loadTemplate } from "@/features/mission/templates/loader.js";
+import {
+  InvalidTemplateNameError,
+  listTemplates,
+  loadTemplate,
+} from "@/features/mission/templates/loader.js";
 import { MissionTemplateLoadError } from "@/features/mission/domain/template-types.js";
 import { BUILTIN_TEMPLATES } from "@/features/mission/templates/builtin.js";
 
@@ -193,5 +197,18 @@ seedTasks:
     const listed = await listTemplates(tmpDir);
     expect(listed.user.map((t) => t.name).sort()).toEqual(["refactor", "spike"]);
     expect(listed.overrides).toEqual(["refactor"]);
+  });
+
+  it("rejects path-traversal style template names", async () => {
+    await expect(loadTemplate("../../etc/passwd", tmpDir)).rejects.toBeInstanceOf(
+      InvalidTemplateNameError,
+    );
+    await expect(loadTemplate("foo/bar", tmpDir)).rejects.toBeInstanceOf(
+      InvalidTemplateNameError,
+    );
+    await expect(loadTemplate("", tmpDir)).rejects.toBeInstanceOf(InvalidTemplateNameError);
+    await expect(loadTemplate("Foo", tmpDir)).rejects.toBeInstanceOf(
+      InvalidTemplateNameError,
+    );
   });
 });

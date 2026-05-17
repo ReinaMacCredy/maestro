@@ -16,14 +16,14 @@ Your primary guidance comes from the 5 maestro skill files. Load them now:
 **Expert.** The user names maestro verbs explicitly. Execute them as directed.
 
 The project directory has a v1 `.maestro/` tree. The user's first message
-explicitly asks you to run `setup migrate-v2`.
+explicitly asks you to run `setup`.
 
 ## User-mock script
 
 Simulate the following user messages in order, one per turn. For each message,
 act on it fully before reading the next.
 
-User message 1: "Run `maestro setup migrate-v2` to upgrade to v2, then author a light-mode spec for a bug: the search filter ignores accented characters."
+User message 1: "Run `maestro setup` to upgrade to v2, then author a light-mode spec for a bug: the search filter ignores accented characters."
 
 User message 2: "Run `task from-spec`, claim with `--skip-worktree`, fix the bug, verify, and ship."
 

@@ -33,7 +33,12 @@ export function checkSkillBinaryParity(
       if (skipVerbs.has(verb)) continue;
       const head = firstSegment(verb);
       if (!head) continue;
-      if (!args.knownVerbs.has(head)) {
+      // `knownVerbs` carries both leaf names and full paths (see how
+      // src/index.ts walks the Commander tree). Validate the full verb path
+      // so a skill referencing `maestro setup migrate-v2` after that subverb
+      // is removed fails parity instead of slipping through on the top-level
+      // `setup` match.
+      if (!args.knownVerbs.has(verb)) {
         findings.push({ skill: skill.name, verb, status: "missing-in-binary" });
       }
     }

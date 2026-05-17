@@ -4,7 +4,7 @@
 import { join } from "node:path";
 import {
   isChildDraftRow,
-  isPlanTransitionTo,
+  isMissionTransitionTo,
   isTaskTransitionTo,
   loadEvidence,
   loadMigrationFlag,
@@ -34,8 +34,8 @@ export async function runRubric(projectDir: string): Promise<RubricResult> {
       "legacy-principle-migrated",
       "docs/principles/legacy/legacy-rule-1.md exists (corrections migrated)",
     ),
-    mustHave(rows, (r) => isPlanTransitionTo(r, "specified"), "plan-reached-specified", "a plan transition row with to_state=specified exists"),
-    mustHave(rows, (r) => isPlanTransitionTo(r, "planned"), "plan-reached-planned", "a plan transition row with to_state=planned exists"),
+    mustHave(rows, (r) => isMissionTransitionTo(r, "approved"), "mission-reached-approved", "a mission transition row with to_state=approved exists"),
+    mustHave(rows, (r) => isMissionTransitionTo(r, "planned"), "mission-reached-planned", "a mission transition row with to_state=planned exists"),
     {
       id: "multiple-child-tasks-drafted",
       description: "at least 2 child task draft rows exist",

@@ -7,6 +7,27 @@ import { parseTemplateYaml } from "./yaml-parse.js";
 
 const USER_TEMPLATES_DIR = join(".maestro", "templates", "missions");
 
+// Template names land in a `${name}.yaml` path under repoRoot, so anything
+// other than a simple slug would let a caller escape the templates dir
+// (e.g. `../../../etc/passwd`). Validate at the loader so every caller is
+// covered (CLI today, MCP/skill callers tomorrow).
+const TEMPLATE_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+export class InvalidTemplateNameError extends Error {
+  readonly name = "InvalidTemplateNameError";
+  readonly templateName: string;
+  constructor(templateName: string) {
+    super(
+      `invalid template name '${templateName}' — must match [a-z0-9][a-z0-9-]{0,63}`,
+    );
+    this.templateName = templateName;
+  }
+}
+
+function assertSafeTemplateName(name: string): void {
+  if (!TEMPLATE_NAME_PATTERN.test(name)) throw new InvalidTemplateNameError(name);
+}
+
 function userTemplatePath(repoRoot: string, name: string): string {
   return join(repoRoot, USER_TEMPLATES_DIR, `${name}.yaml`);
 }
@@ -15,6 +36,7 @@ export async function loadTemplate(
   name: string,
   repoRoot: string,
 ): Promise<MissionTemplate | undefined> {
+  assertSafeTemplateName(name);
   const userPath = userTemplatePath(repoRoot, name);
   const text = await readText(userPath);
   if (text !== undefined) return parseTemplateYaml(text, userPath, name);

@@ -23,11 +23,11 @@ explicitly asks you to migrate.
 Simulate the following user messages in order, one per turn. For each message,
 act on it fully before reading the next.
 
-User message 1: "Migrate to v2 first: run `maestro setup migrate-v2`."
+User message 1: "Migrate to v2 first: run `maestro setup`."
 
 User message 2: "Author a heavy spec for a reporting module: weekly digest, PDF export, and email delivery."
 
-User message 3: "Run `plan from-spec` then `plan decompose` -- break into at least 3 tasks."
+User message 3: "Run `mission from-spec` then `mission decompose` -- break into at least 3 tasks."
 
 User message 4: "Claim task-1. Implement it. Then run verify with `--verdict block --reason 'email service not configured'`."
 

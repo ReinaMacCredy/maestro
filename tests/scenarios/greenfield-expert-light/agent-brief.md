@@ -22,7 +22,7 @@ The project directory starts as a bare `git init` with no files.
 Simulate the following user messages in order, one per turn. For each message,
 act on it fully before reading the next.
 
-User message 1: "Run `maestro setup bootstrap` then author a light-mode spec for a bug: the login form doesn't clear on error."
+User message 1: "Run `maestro setup` then author a light-mode spec for a bug: the login form doesn't clear on error."
 
 User message 2: "Run `task from-spec`, claim with `--skip-worktree`, fix the bug, verify, and ship."
 
