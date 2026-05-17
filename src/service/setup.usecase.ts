@@ -32,10 +32,12 @@ export type SetupPathAction =
   | "create"
   | "delete"
   | "move"
+  | "overwrite"
   | "skip"
   | "would-create"
   | "would-delete"
-  | "would-move";
+  | "would-move"
+  | "would-overwrite";
 
 export interface SetupPathEntry {
   readonly path: string;
@@ -121,8 +123,9 @@ export async function runSetup(opts: RunSetupOptions): Promise<SetupReport> {
   const steps: SetupStepResult[] = [];
   steps.push(await stepDetectV1(opts.dir));
   steps.push(await stepDeleteV1(opts.dir, dryRun));
-  steps.push(await stepMigratePlansToMissions(opts.dir, dryRun));
-  if (steps[steps.length - 1].status === "error") {
+  const migrateStep = await stepMigratePlansToMissions(opts.dir, dryRun);
+  steps.push(migrateStep);
+  if (migrateStep.status === "error") {
     return finish(scope, dryRun, steps);
   }
   steps.push(await stepBootstrapDirs(opts.dir, dryRun));
@@ -545,13 +548,34 @@ async function syncManagedSkillTemplate(
     return;
   }
 
+  // Replacing an existing skill dir wipes any user edits to shipped files.
+  // Surface that explicitly so the report reflects the destructive write.
+  const replacing = await dirExists(skillDir);
+  const fileAction: SetupPathAction = replacing
+    ? dryRun ? "would-overwrite" : "overwrite"
+    : dryRun ? "would-create" : "create";
+
   if (dryRun) {
+    if (replacing) {
+      paths.push({
+        path: skillDir,
+        action: "would-overwrite",
+        detail: "replaces shipped skill dir (user edits will be lost)",
+      });
+    }
     for (const file of template.files) {
-      paths.push({ path: join(skillDir, file.path), action: "would-create" });
+      paths.push({ path: join(skillDir, file.path), action: fileAction });
     }
     return;
   }
 
+  if (replacing) {
+    paths.push({
+      path: skillDir,
+      action: "overwrite",
+      detail: "replaced shipped skill dir (user edits discarded)",
+    });
+  }
   await rm(skillDir, { recursive: true, force: true });
   await ensureDir(skillDir);
   for (const file of template.files) {
@@ -559,7 +583,7 @@ async function syncManagedSkillTemplate(
     await assertProjectLocalPathSafe(rootDir, target);
     await ensureDir(dirname(target));
     await writeText(target, file.content);
-    paths.push({ path: target, action: "create" });
+    paths.push({ path: target, action: fileAction });
   }
 }
 
@@ -573,13 +597,15 @@ async function skillDirMatchesTemplate(
   const actualFiles = await listFilesRecursive(skillDir);
   if (actualFiles.length !== template.files.length) return false;
 
-  for (const file of actualFiles) {
-    const relativePath = relative(skillDir, file).split(sep).join("/");
-    const expectedContent = expectedFiles.get(relativePath);
-    if (expectedContent === undefined) return false;
-    if ((await readText(file)) !== expectedContent) return false;
-  }
-  return true;
+  const matches = await Promise.all(
+    actualFiles.map(async (file) => {
+      const relativePath = relative(skillDir, file).split(sep).join("/");
+      const expected = expectedFiles.get(relativePath);
+      if (expected === undefined) return false;
+      return (await readText(file)) === expected;
+    }),
+  );
+  return matches.every(Boolean);
 }
 
 async function ensureRuntimeGitignore(

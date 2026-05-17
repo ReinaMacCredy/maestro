@@ -1,42 +1,24 @@
 // Composition root for v2 services. Producers can override individual ports
 // for tests by passing a partial overrides bag.
 
-import {
-  FsSpecStore,
-  type SpecStorePort,
-} from "../repo/fs-spec-store.adapter.js";
-import {
-  JsonlEvidenceStore,
-  type EvidenceStorePort,
-} from "../repo/jsonl-evidence-store.adapter.js";
-import {
-  JsonlTaskStore,
-  type TaskStorePort,
-} from "../repo/jsonl-task-store.adapter.js";
-import {
-  YamlArchitectureRules,
-  type ArchitectureRulesPort,
-} from "../repo/yaml-architecture-rules.adapter.js";
-import {
-  JsonlMissionStore,
-  type MissionStorePort,
-} from "../repo/jsonl-mission-store.adapter.js";
-import {
-  FsPrinciplesStore,
-  type PrinciplesStorePort,
-} from "../repo/fs-principles-store.adapter.js";
-import {
-  BunProcessRunner,
-  type ProcessRunnerPort,
-} from "../repo/bun-process-runner.adapter.js";
-import {
-  JsonlObservabilityAdapter,
-  type ObservabilityPort,
-} from "../repo/jsonl-observability.adapter.js";
-import {
-  GitWorktreeStore,
-  type WorktreeStorePort,
-} from "../repo/git-worktree-store.adapter.js";
+import { FsSpecStore } from "../repo/fs-spec-store.adapter.js";
+import type { SpecStorePort } from "../repo/spec-store.port.js";
+import { JsonlEvidenceStore } from "../repo/jsonl-evidence-store.adapter.js";
+import type { EvidenceStorePort } from "../repo/evidence-store.port.js";
+import { JsonlTaskStore } from "../repo/jsonl-task-store.adapter.js";
+import type { TaskStorePort } from "../repo/task-store.port.js";
+import { YamlArchitectureRules } from "../repo/yaml-architecture-rules.adapter.js";
+import type { ArchitectureRulesPort } from "../repo/architecture-rules.port.js";
+import { JsonlMissionStore } from "../repo/jsonl-mission-store.adapter.js";
+import type { MissionStorePort } from "../repo/mission-store.port.js";
+import { FsPrinciplesStore } from "../repo/fs-principles-store.adapter.js";
+import type { PrinciplesStorePort } from "../repo/principles-store.port.js";
+import { BunProcessRunner } from "../repo/bun-process-runner.adapter.js";
+import type { ProcessRunnerPort } from "../repo/process-runner.port.js";
+import { JsonlObservabilityAdapter } from "../repo/jsonl-observability.adapter.js";
+import type { ObservabilityPort } from "../repo/observability.port.js";
+import { GitWorktreeStore } from "../repo/git-worktree-store.adapter.js";
+import type { WorktreeStorePort } from "../repo/worktree-store.port.js";
 import { FsHandoffEmitter } from "../repo/fs-handoff-emitter.adapter.js";
 import type { HandoffEmitterPort } from "../repo/handoff-emitter.port.js";
 import { FsNowMdWriter } from "../repo/fs-now-md-writer.adapter.js";

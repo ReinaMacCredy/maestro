@@ -62,5 +62,5 @@ export async function missionFromSpec(
 
 function extractTitle(body: string): string | undefined {
   const match = body.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : undefined;
+  return match?.[1]?.trim();
 }

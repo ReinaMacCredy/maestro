@@ -7,7 +7,7 @@ description: Use at the start of any multi-step work in a maestro-initialized pr
 
 You are working in a maestro v2 project. Author a product-spec, materialize one task per PR, claim it, iterate until `task verify` returns PASS, then ship.
 
-This skill covers the **single-task path** (light-mode specs, one PR). For multi-PR work, see `maestro-mission` — heavy-mode specs decompose into a batch of child tasks via `plan from-spec` → `plan decompose`.
+This skill covers the **single-task path** (light-mode specs, one PR). For multi-PR work, see `maestro-mission` — heavy-mode specs decompose into a batch of child tasks via `mission from-spec` → `mission decompose`.
 
 ---
 
@@ -132,7 +132,7 @@ For AI review / threat-model rows, see `maestro-verify`.
 ```bash
 maestro task list                            # all tasks
 maestro task list --state claimed
-maestro task list --plan-id pln-...          # children of a plan
+maestro task list --mission-id pln-...       # children of a mission
 maestro task get <id>
 ```
 
@@ -201,7 +201,7 @@ The MCP tool surface mirrors the CLI:
 | `maestro_handoff_list`, `maestro_handoff_show` | `.maestro/handoffs/*.json` (read directly; see `maestro-handoff`) |
 | `maestro_handoff_emit`, `maestro_handoff_pickup` | emit envelope outside lifecycle / mark picked up (see `maestro-handoff`) |
 
-`maestro_task_list` accepts `plan_id` to filter to a plan's children. The MCP schema is strict — unknown fields fail rather than getting silently dropped.
+`maestro_task_list` accepts `mission_id` to filter to a mission's children. The MCP schema is strict — unknown fields fail rather than getting silently dropped.
 
 If MCP is unavailable, fall back to the CLI verbs above.
 
@@ -223,7 +223,7 @@ Pass a claimed task with a clean evidence trail — not an in-flight scratchpad.
 ## See also
 
 - `maestro-design` — grill-protocol spec authoring (run before `task from-spec`).
-- `maestro-mission` — heavy-mode multi-PR work (skip `task from-spec`; use `plan from-spec` + `plan decompose`).
+- `maestro-mission` — heavy-mode multi-PR work (skip `task from-spec`; use `mission from-spec` + `mission decompose`).
 - `maestro-verify` — canonical verification protocol (PASS / FAIL / HUMAN / BLOCK routing).
-- `maestro-setup` — `setup check`, `setup bootstrap`, `setup migrate-v2`.
+- `maestro-setup` — `setup` (idempotent default action) and `setup check`.
 - `docs/cli-reference.md` — verb-by-verb reference.

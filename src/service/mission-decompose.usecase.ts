@@ -133,17 +133,14 @@ export async function missionDecompose(
   if (!mission) throw new MissionNotFoundError(input.mission_id);
   assertMissionTransition(mission.state, "planned");
 
-  // decompose seeds fresh; refuse merge with existing tasks.
   const existingForMission = await deps.taskStore.listByMissionId(mission.id);
   if (existingForMission.length > 0) {
     throw new MissionDecomposeAlreadyHasTasksError(mission.id, existingForMission.length);
   }
 
-  const existing = await deps.taskStore.list();
+  const existingSlugs = new Set((await deps.taskStore.list()).map((e) => e.slug));
   for (const t of input.tasks) {
-    if (existing.some((e) => e.slug === t.slug)) {
-      throw new DuplicateSlugError(t.slug);
-    }
+    if (existingSlugs.has(t.slug)) throw new DuplicateSlugError(t.slug);
   }
 
   const created: Task[] = [];

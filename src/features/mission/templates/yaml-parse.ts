@@ -38,6 +38,9 @@ export function parseTemplateYaml(
   const parsed = templateSchema.safeParse(raw);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
+    if (issue === undefined) {
+      throw new MissionTemplateLoadError(filePath, "invalid template");
+    }
     const pathStr = issue.path.length > 0 ? issue.path.join(".") : undefined;
     throw new MissionTemplateLoadError(filePath, issue.message, pathStr);
   }
@@ -50,15 +53,16 @@ export function parseTemplateYaml(
   }
   const seen = new Set<string>();
   for (let i = 0; i < parsed.data.seedTasks.length; i += 1) {
-    const slug = parsed.data.seedTasks[i].slug;
-    if (seen.has(slug)) {
+    const task = parsed.data.seedTasks[i];
+    if (task === undefined) continue;
+    if (seen.has(task.slug)) {
       throw new MissionTemplateLoadError(
         filePath,
-        `slug '${slug}' appears more than once`,
+        `slug '${task.slug}' appears more than once`,
         `seedTasks.${i}.slug`,
       );
     }
-    seen.add(slug);
+    seen.add(task.slug);
   }
   return {
     name: parsed.data.name,

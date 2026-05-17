@@ -79,7 +79,7 @@ describe("JsonlMissionStore", () => {
     const text = await readFile(join(root, ".maestro/missions/missions.jsonl"), "utf8");
     const lines = text.trim().split("\n");
     expect(lines.length).toBe(2);
-    const first = JSON.parse(lines[0]) as { id: string; slug: string };
+    const first = JSON.parse(lines[0]!) as { id: string; slug: string };
     expect(first.slug).toBe("alpha");
   });
 
@@ -91,11 +91,11 @@ describe("JsonlMissionStore", () => {
 
     const planned_results = await store.listByState("planned");
     expect(planned_results.length).toBe(1);
-    expect(planned_results[0].slug).toBe("beta");
+    expect(planned_results[0]!.slug).toBe("beta");
 
     const approved = await store.listByState("approved");
     expect(approved.length).toBe(1);
-    expect(approved[0].slug).toBe("alpha");
+    expect(approved[0]!.slug).toBe("alpha");
   });
 
   it("serializes writes (FIFO ordering via internal queue)", async () => {

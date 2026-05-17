@@ -78,18 +78,7 @@ export async function missionNew(
   if (input.mode === "from-file") {
     if (!input.fromFile) throw new MissionNewInvalidFlagsError("--from-file requires a path");
     const tasks = await readDecomposeBatch(deps.repoRoot, input.fromFile);
-    const mission = await createIntakeMission(deps, input.slug, input.title);
-    const result = await missionDecompose(
-      {
-        missionStore: deps.missionStore,
-        taskStore: deps.taskStore,
-        evidenceStore: deps.evidenceStore,
-        clock: deps.clock,
-        idFactory: deps.idFactory,
-      },
-      { mission_id: mission.id, tasks },
-    );
-    return result;
+    return seedIntakeAndDecompose(deps, input.slug, input.title, tasks);
   }
 
   if (input.mode === "template") {
@@ -100,23 +89,30 @@ export async function missionNew(
       title: t.title,
       slug: `${input.slug}-${t.slug}`,
     }));
-    const mission = await createIntakeMission(deps, input.slug, input.title);
-    const result = await missionDecompose(
-      {
-        missionStore: deps.missionStore,
-        taskStore: deps.taskStore,
-        evidenceStore: deps.evidenceStore,
-        clock: deps.clock,
-        idFactory: deps.idFactory,
-      },
-      { mission_id: mission.id, tasks },
-    );
-    return result;
+    return seedIntakeAndDecompose(deps, input.slug, input.title, tasks);
   }
 
-  // Bare title -> intake.
   const mission = await createIntakeMission(deps, input.slug, input.title);
   return { mission, tasks: [] };
+}
+
+async function seedIntakeAndDecompose(
+  deps: MissionNewDeps,
+  slug: string,
+  title: string,
+  tasks: readonly MissionDecomposeTaskInput[],
+): Promise<MissionNewResult> {
+  const mission = await createIntakeMission(deps, slug, title);
+  return missionDecompose(
+    {
+      missionStore: deps.missionStore,
+      taskStore: deps.taskStore,
+      evidenceStore: deps.evidenceStore,
+      clock: deps.clock,
+      idFactory: deps.idFactory,
+    },
+    { mission_id: mission.id, tasks },
+  );
 }
 
 async function createIntakeMission(

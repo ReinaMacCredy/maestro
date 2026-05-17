@@ -143,7 +143,7 @@ function detectLoopWarning(rows: readonly EvidenceRow[]): LoopWarning | undefine
   let runCount = 0;
   let bestWarning: LoopWarning | undefined;
   for (const row of ordered) {
-    if (row.kind === "verdict-requested" || row.kind === "session-start" || row.kind === "session-exit") {
+    if (row.kind === "session-start" || row.kind === "session-exit") {
       runKind = undefined;
       runHash = undefined;
       runCount = 0;

@@ -12,7 +12,7 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 
 | Tool | Behavior |
 |------|----------|
-| `maestro_task_list` | Paginated list. Filters: `plan_id`, `status`, `type`, `priority`, `label`, `parentId`, `assignee`, plus `limit`/`offset`. |
+| `maestro_task_list` | Paginated list. Filters: `mission_id`, `state`, plus `limit`/`offset`. |
 | `maestro_task_get` | Fetch one task by id. Returns `code: TASK_NOT_FOUND` if missing. |
 | `maestro_task_from_spec` | Create a `draft` task from a product-spec markdown path. |
 | `maestro_task_claim` | Flip `draft → claimed`. Session id is auto-detected from `MAESTRO_SESSION_ID`, `CLAUDECODE_SESSION_ID`, `CODEX_THREAD_ID`, falling back to `<user>@<host>`. |
@@ -68,9 +68,10 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 | Tool | Behavior |
 |------|----------|
 | `maestro_setup_check` | Read-only audit of the v2 directory tree, principles pack, and `.maestro/config.yaml`. |
-| `maestro_setup_migrate_v2` | Run the 11-step v1→v2 migration. `dry_run` previews without side effects; `force` re-runs past the `.migrated-v2.json` flag. |
 
-Grill-driven verbs (`spec new`, `plan from-spec`, `plan decompose`) are CLI-only — the interactive grill protocol cannot be sustained over MCP.
+The merged `setup` verb (idempotent state machine, hard-deletes v1, migrates `.maestro/plans/` → `.maestro/missions/`) is CLI-only — destructive actions stay off the MCP surface.
+
+Grill-driven verbs (`spec new`, `mission from-spec`, `mission decompose`) are CLI-only — the interactive grill protocol cannot be sustained over MCP.
 
 ## Result shape
 

@@ -241,10 +241,8 @@ function buildMemoryModal(
   state: MemoryModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  // The v1 memory subsystem (corrections / learnings / ratchet) was retired
-  // in v2 and absorbed into the `principle` lifecycle. The Memory tab now
-  // surfaces only the project-graph context for backwards compatibility.
-  const graphContext = state.snapshot.memory?.graphContext;
+  // v1 memory/graph subsystems retired in v2; absorbed into `maestro principle`.
+  void state;
   return {
     mode: "info",
     title: "Memory",
@@ -255,9 +253,6 @@ function buildMemoryModal(
         tone: "muted" as const,
       },
       { text: "Promoted principles live under `maestro principle list`." },
-      { text: "" },
-      { text: "Project Graph", section: "Graph", tone: "accent" as const },
-      ...buildGraphImpactItems(graphContext),
     ],
     footer: buildTabbedOverlayFooter(returnTarget),
     returnTarget,
@@ -269,22 +264,18 @@ function buildGraphModal(
   state: GraphModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  const graphContext = state.snapshot.memory?.graphContext;
-  const entries = buildGraphListEntries(graphContext);
-  const selectedEntry = entries[state.modal.selectedItemIndex];
+  void state;
   return {
-    mode: "split",
+    mode: "info",
     title: "Project Graph",
-    eyebrow: "Cross-project relationships and impact analysis.",
-    items: entries.length > 0
-      ? entries.map((entry) => ({
-          label: entry.label,
-          detail: entry.detail,
-        }))
-      : [{ label: "No related projects", selectable: false, tone: "muted" }],
-    selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, entries.length - 1)),
-    detailItems: buildGraphDetailItems(graphContext, selectedEntry),
-    footer: buildListOverlayFooter(returnTarget),
+    eyebrow: "Retired in v2 · project-graph context is no longer surfaced.",
+    items: [
+      {
+        text: "Cross-project graph data was retired with the v1 memory subsystem.",
+        tone: "muted" as const,
+      },
+    ],
+    footer: buildTabbedOverlayFooter(returnTarget),
     returnTarget,
     renderSpec: buildOverlayRenderSpec("graph"),
   };
@@ -686,90 +677,6 @@ function findConfigValue(rows: readonly MissionControlConfigRow[], keyPath: stri
   return rows.find((row) => row.keyPath === keyPath)?.displayValueText;
 }
 
-
-interface GraphListEntry {
-  readonly label: string;
-  readonly detail: string;
-  readonly relationship?: NonNullable<NonNullable<MissionControlSnapshot["memory"]>["graphContext"]>["relationships"][number];
-}
-
-function buildGraphListEntries(
-  graphContext: NonNullable<MissionControlSnapshot["memory"]>["graphContext"] | undefined,
-): readonly GraphListEntry[] {
-  if (!graphContext) return [];
-
-  const currentProject = graphContext.currentProject;
-  const entries: GraphListEntry[] = [];
-  if (currentProject) {
-    entries.push({
-      label: `${currentProject.name}${currentProject.role ? ` (${currentProject.role})` : ""}`,
-      detail: "Current project",
-    });
-  }
-
-  for (const relationship of graphContext.relationships) {
-    entries.push({
-      label: `${relationship.project.name}${relationship.project.role ? ` (${relationship.project.role})` : ""}`,
-      detail: `${relationship.direction} · ${relationship.edge.relation}${relationship.edge.detail ? ` · ${relationship.edge.detail}` : ""}`,
-      relationship,
-    });
-  }
-
-  return entries;
-}
-
-function buildGraphDetailItems(
-  graphContext: NonNullable<MissionControlSnapshot["memory"]>["graphContext"] | undefined,
-  entry: GraphListEntry | undefined,
-) {
-  if (!graphContext) {
-    return [{ text: "No graph data available.", tone: "muted" as const }];
-  }
-
-  const currentProjectLabel = graphContext.currentProject
-    ? `${graphContext.currentProject.name}${graphContext.currentProject.role ? ` (${graphContext.currentProject.role})` : ""}`
-    : "Current project";
-  const relationship = entry?.relationship;
-
-  return [
-    { text: `Current project: ${currentProjectLabel}`, section: "Current Project", tone: "accent" as const, style: "block" as const },
-    { text: `Path: ${graphContext.currentProject?.path ?? "unknown path"}` },
-    ...(relationship
-      ? [
-          { text: "" },
-          { text: `Selected project: ${relationship.project.name}${relationship.project.role ? ` (${relationship.project.role})` : ""}`, section: "Selected Project" },
-          { text: `Path: ${relationship.project.path}` },
-          { text: `Relationship: ${relationship.direction} · ${relationship.edge.relation}` },
-          ...(relationship.edge.detail ? [{ text: `Detail: ${relationship.edge.detail}` }] : []),
-        ]
-      : graphContext.relationships.length > 0
-        ? [
-            { text: "" },
-            { text: "Relationships:", section: "Relationships" },
-            ...graphContext.relationships.map((candidate) => ({
-              text: `${candidate.direction === "outgoing" ? "-->" : "<--"} ${candidate.project.name} · ${candidate.edge.relation}${candidate.edge.detail ? ` · ${candidate.edge.detail}` : ""}`,
-            })),
-          ]
-        : [{ text: "Choose a related project.", tone: "muted" as const }]),
-    { text: "" },
-    ...buildGraphImpactItems(graphContext),
-    { text: `${graphContext.totalProjects} project(s) · ${graphContext.totalEdges} link(s)`, section: "Summary" },
-  ];
-}
-
-function buildGraphImpactItems(
-  graphContext: NonNullable<MissionControlSnapshot["memory"]>["graphContext"] | undefined,
-) {
-  if (!graphContext || graphContext.relationships.length === 0) {
-    return [{ text: "[ok] No downstream graph impacts recorded", tone: "muted" as const }];
-  }
-
-  return graphContext.relationships
-    .filter((relationship) => relationship.edge.detail)
-    .map((relationship) => ({
-      text: `[!] Changing ${relationship.edge.detail} will impact: ${relationship.project.name}`,
-    }));
-}
 
 function getFeatureActionFooter(modal: Extract<AppState["modal"], { kind: "feature-action" }>): string {
   if (modal.phase === "submitting") {

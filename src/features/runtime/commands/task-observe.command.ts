@@ -1,7 +1,9 @@
 import type { Command } from "commander";
-import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/index.js";
-import type { EvidenceStorePort } from "@/repo/evidence-store.port.js";
-import { buildV2Services } from "@/providers/build-services.js";
+import {
+  buildEvidenceServices,
+  recordEvidence as defaultRecordEvidence,
+} from "@/features/evidence/index.js";
+import type { EvidenceStorePort } from "@/features/evidence/index.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { DevPrometheusAdapter } from "../adapters/dev-prometheus.adapter.js";
 import { LogTailAdapter } from "../adapters/log-tail.adapter.js";
@@ -23,7 +25,7 @@ const defaultBuildLogTail = (filePath?: string): DevObservabilityPort =>
   new LogTailAdapter(filePath);
 
 const defaultGetEvidenceStore = (repoRoot: string): EvidenceStorePort =>
-  buildV2Services({ repoRoot }).evidenceStore;
+  buildEvidenceServices(repoRoot).evidenceStore;
 
 function isConfigError(message: string): boolean {
   return (

@@ -36,7 +36,7 @@ export function formatReport(report: SetupReport): string[] {
     const marker = STATUS_MARKER[step.status] ?? "[?]";
     lines.push(`${prefix}${marker} ${step.id}: ${step.label}${step.detail ? ` — ${step.detail}` : ""}`);
     for (const entry of step.paths) {
-      lines.push(`  ${entry.action.padEnd(13)} ${entry.path}${entry.detail ? ` (${entry.detail})` : ""}`);
+      lines.push(`  ${entry.action.padEnd(16)} ${entry.path}${entry.detail ? ` (${entry.detail})` : ""}`);
     }
   }
   lines.push(report.ok ? `${prefix}setup: OK` : `${prefix}setup: errors`);
@@ -49,7 +49,8 @@ export interface SetupFlags {
   global?: boolean;
   resyncSkills?: boolean;
   resetTemplates?: boolean;
-  noGitOk?: boolean;
+  // Commander parses `--no-git-ok` into `gitOk: false`; default is undefined.
+  gitOk?: boolean;
 }
 
 function shouldPromptForReplacement(isJson: boolean): boolean {
@@ -105,7 +106,7 @@ export async function runSetupCommand(
       dryRun: flags.dryRun === true,
       resyncSkills: flags.resyncSkills === true,
       resetTemplates: flags.resetTemplates === true,
-      noGitOk: flags.noGitOk === true,
+      noGitOk: flags.gitOk === false,
       confirmReplace: prompter?.confirmReplace,
     });
     return report;

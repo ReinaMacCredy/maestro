@@ -1375,22 +1375,16 @@ function nextMemoryTab(current: MemoryModalTab, delta: 1 | -1): MemoryModalTab {
 }
 
 function getMemorySelectableCount(snapshot: MissionControlSnapshot, tab: MemoryModalTab): number {
-  switch (tab) {
-    case "overview":
-    case "learnings":
-    case "config":
-      return 0;
-    case "corrections":
-      return snapshot.memory?.corrections.length ?? 0;
-    case "ratchet":
-      return snapshot.memory?.ratchetSuite.assertions.length ?? 0;
-  }
+  // v1 memory subsystem (corrections/ratchet) retired in v2; tabs render empty.
+  void snapshot;
+  void tab;
+  return 0;
 }
 
 function getGraphSelectableCount(snapshot: MissionControlSnapshot): number {
-  const graphContext = snapshot.memory?.graphContext;
-  if (!graphContext) return 0;
-  return graphContext.relationships.length + (graphContext.currentProject ? 1 : 0);
+  // Project-graph data was retired with the v1 memory subsystem.
+  void snapshot;
+  return 0;
 }
 
 function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppState {

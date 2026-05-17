@@ -28,10 +28,12 @@ function findOrCreateTaskCommand(program: Command): Command {
 // different signatures and semantics; on the harness-os branch v2 owns these
 // verbs. v1 versions return in Phase 4 only if a migration test pins them.
 function detachV1Overrides(task: Command, overrides: readonly string[]): void {
+  // Commander types `commands` as readonly but mutates it internally; cast once.
+  const commands = task.commands as Command[];
   for (const name of overrides) {
-    const idx = task.commands.findIndex((c) => c.name() === name);
+    const idx = commands.findIndex((c) => c.name() === name);
     if (idx !== -1) {
-      task.commands.splice(idx, 1);
+      commands.splice(idx, 1);
     }
   }
 }
@@ -374,8 +376,8 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
         return;
       }
       for (const t of page) {
-        const planNote = t.mission_id ? ` plan=${t.mission_id}` : "";
-        console.log(`${t.id}\t${t.state}\t${t.slug}\t${t.title}${planNote}`);
+        const missionNote = t.mission_id ? ` mission=${t.mission_id}` : "";
+        console.log(`${t.id}\t${t.state}\t${t.slug}\t${t.title}${missionNote}`);
       }
     } catch (err) {
       reportError("task list", err);
@@ -415,7 +417,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       }
       console.log(`${t.id} ${t.state} ${t.slug}`);
       console.log(`  title:      ${t.title}`);
-      if (t.mission_id) console.log(`  mission_id:    ${t.mission_id}`);
+      if (t.mission_id) console.log(`  mission_id: ${t.mission_id}`);
       if (t.spec_path) console.log(`  spec_path:  ${t.spec_path}`);
       if (t.assignee) console.log(`  assignee:   ${t.assignee}`);
       if (t.claimed_at) console.log(`  claimed_at: ${t.claimed_at}`);

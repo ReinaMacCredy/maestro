@@ -55,7 +55,7 @@ describe("maestro mission from-spec + mission show (v2)", () => {
     const text = await readFile(join(tmpDir, ".maestro/missions/missions.jsonl"), "utf8");
     const lines = text.trim().split("\n");
     expect(lines.length).toBe(1);
-    const mission = JSON.parse(lines[0]) as { state: string; slug: string };
+    const mission = JSON.parse(lines[0]!) as { state: string; slug: string };
     expect(mission.state).toBe("approved");
     expect(mission.slug).toBe("demo-heavy");
 

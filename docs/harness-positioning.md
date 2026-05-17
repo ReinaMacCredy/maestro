@@ -19,7 +19,7 @@ Maestro v2 has four **knowledge primitives** (directories the agent reads at ses
 | `quality-score` | `.maestro/quality-score.json` (`gc grade`)       | Per-domain grade tracking gaps over time.                                      |
 | `principles`    | `docs/principles/*.md`                           | Named golden rules with `Rule | Rationale | Scan Command | Fix Recipe`.        |
 
-The agent reads these; maestro writes them only on explicit verbs (`spec new`, `principle promote`, `plan from-spec`, etc.).
+The agent reads these; maestro writes them only on explicit verbs (`spec new`, `principle promote`, `mission from-spec`, etc.).
 
 ### Execution primitives
 
@@ -42,12 +42,12 @@ The agent reads these; maestro writes them only on explicit verbs (`spec new`, `
 - `src/runtime/spec.command.ts` — `maestro spec new`, `maestro spec validate`.
 - Authored interactively via the `maestro-design` SKILL.md grill protocol.
 
-### `exec-plans`
+### `missions`
 
-- `src/types/exec-plan.ts`, `exec-plan-state.ts` — state machine `intake → specified → planned → in-progress → completed | cancelled` (ADR-0011).
-- `src/repo/exec-plan-store.port.ts`, `jsonl-exec-plan-store.adapter.ts` — append-only log at `.maestro/plans/plans.jsonl`.
-- `src/service/plan-from-spec.usecase.ts`, `plan-show.usecase.ts`, `plan-decompose.usecase.ts`, `try-advance-plan.usecase.ts` — verbs + auto-advance helper.
-- `src/runtime/plan.command.ts` — `maestro plan from-spec | decompose | show`.
+- `src/types/mission.ts`, `mission-state.ts` — 8-state machine `intake → approved → planned → in-progress ↔ paused → completed | failed | cancelled` (ADR-0011).
+- `src/repo/mission-store.port.ts`, `jsonl-mission-store.adapter.ts` — append-only log at `.maestro/missions/missions.jsonl`.
+- `src/service/mission-new.usecase.ts`, `mission-from-spec.usecase.ts`, `mission-show.usecase.ts`, `mission-decompose.usecase.ts`, `mission-cancel.usecase.ts`, `try-advance-mission.usecase.ts` — verbs + auto-rollup helper.
+- `src/runtime/mission.command.ts` — `maestro mission new | from-spec | decompose | cancel | show`.
 
 ### `principles`
 
@@ -55,7 +55,7 @@ The agent reads these; maestro writes them only on explicit verbs (`spec new`, `
 - `src/repo/fs-principles-store.adapter.ts` — filesystem reader for `docs/principles/*.md`.
 - `src/service/principle-scan.usecase.ts` — runs each rule's `Scan Command` ripgrep and reports violations.
 - `src/service/principle-promote.usecase.ts` — materialize a principle from a lint-violation evidence row.
-- `src/service/default-principles.ts` — 4 default principle bodies embedded as TypeScript constants for `setup migrate-v2` seeding.
+- `src/service/default-principles.ts` — 4 default principle bodies embedded as TypeScript constants for the `setup` seed step.
 - `src/runtime/principle.command.ts` — `maestro principle promote`.
 
 ### `architecture`
@@ -128,7 +128,7 @@ The structural guarantee is the `no-runner-inversion` rule in `src/service/archi
 
 ## Vocabulary disappearances on v2 (no aliases)
 
-`mission` → `exec-plan` · `spec` (old) → `product-spec` · `intake` / `brainstorm` → folded into `design-docs` reading + `product-spec` authoring · `session` / `notes` → folded into `handoff` (session-detect absorbed into `worktree` metadata).
+v1 `mission` (and the brief `exec-plan` rename) → v2 `mission` (post-v0.101 rename) · `spec` (old) → `product-spec` · `intake` / `brainstorm` → folded into `design-docs` reading + `product-spec` authoring · `session` / `notes` → folded into `handoff` (session-detect absorbed into `worktree` metadata).
 
 Three v1 feature dirs disappear because their job is now done by knowledge primitives the agent reads at session start: `memory` + `memory-ratchet` + `agent` (corrections live in `docs/principles/`, agent prompt collapses into `AGENTS.md`); `graph` (project-to-project edges) folded into `~/.maestro/graph/projects.json`; `session` → notes folded into handoff, detect folded into worktree.
 

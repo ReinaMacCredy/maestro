@@ -55,7 +55,7 @@ describe("maestro task from-spec + task claim (v2)", () => {
     const text = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
     const lines = text.trim().split("\n");
     expect(lines.length).toBe(1);
-    const task = JSON.parse(lines[0]) as { state: string; slug: string };
+    const task = JSON.parse(lines[0]!) as { state: string; slug: string };
     expect(task.state).toBe("draft");
     expect(task.slug).toBe("demo-task");
 
@@ -85,7 +85,7 @@ describe("maestro task from-spec + task claim (v2)", () => {
     expect(claim.stdout).toContain("claimed by agent-a");
 
     const text = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
-    const task = JSON.parse(text.trim().split("\n")[0]) as {
+    const task = JSON.parse(text.trim().split("\n")[0]!) as {
       state: string;
       assignee?: string;
       claimed_at?: string;

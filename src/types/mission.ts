@@ -13,6 +13,9 @@ export interface Mission {
   readonly updated_at: string;
 }
 
+// `pln-` prefix is retained from the plan->mission rename: skills, MCP schemas,
+// and on-disk mission IDs all encode it. Changing the prefix would invalidate
+// existing state.
 export function generateMissionId(): MissionId {
   const rand = Math.random().toString(36).slice(2, 8);
   return `pln-${Date.now().toString(36)}-${rand}`;
