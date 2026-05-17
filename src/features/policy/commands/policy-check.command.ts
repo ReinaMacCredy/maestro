@@ -99,8 +99,8 @@ export function registerPolicyCheckCommand(
       );
       if (contract === undefined) {
         throw new MaestroError(`No contract found for task ${taskId}`, [
-          `Create one: maestro task contract new ${taskId}`,
-          `Then lock it: maestro task contract lock ${taskId}`,
+          "Claim a task created from a spec; the contract is synthesized automatically",
+          `Re-claim: maestro task claim ${taskId}`,
         ]);
       }
 

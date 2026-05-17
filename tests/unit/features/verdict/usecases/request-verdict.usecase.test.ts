@@ -223,8 +223,8 @@ describe("requestVerdict", () => {
       const { MaestroError } = await import("@/shared/errors.js");
       expect(err).toBeInstanceOf(MaestroError);
       const hints = (err as { hints?: readonly string[] }).hints ?? [];
-      expect(hints.some((h) => h.includes("contract new tsk-aaaaaa"))).toBe(true);
-      expect(hints.some((h) => h.includes("contract lock tsk-aaaaaa"))).toBe(true);
+      expect(hints.some((h) => h.includes("synthesized automatically"))).toBe(true);
+      expect(hints.some((h) => h.includes("maestro task claim tsk-aaaaaa"))).toBe(true);
     }
   });
 

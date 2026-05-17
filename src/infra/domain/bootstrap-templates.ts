@@ -36,7 +36,7 @@ not an encyclopedia — read it as pointers and open the linked docs as needed.
 
 - Pre-flight risk: \`maestro intake --paths <paths>\`
 - Plan check: \`maestro plan check --task <id> --plan-file <path>\`
-- Contract lifecycle: \`maestro task contract {new,lock,amend,show} <id>\` (see \`docs/cli-reference.md\`)
+- Contract lifecycle: contracts are auto-created on \`maestro task claim <id>\`; inspect via \`maestro contract show --task <id>\` and amend via \`maestro contract amend --task <id> --reason "..."\`
 - Verdict: \`maestro verdict request --task <id>\`
 - Recovery: \`maestro recover --task <id>\`
 - Convergence oracle: \`maestro ralph review --task <id>\`

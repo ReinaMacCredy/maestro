@@ -3,6 +3,7 @@ import type { MissionStorePort } from "../repo/mission-store.port.js";
 import type { ObservabilityPort } from "../repo/observability.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
+import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
 import { assertMissionActive } from "./assert-mission-active.js";
@@ -14,6 +15,7 @@ export interface TaskShipDeps {
   readonly evidenceStore: EvidenceStorePort;
   readonly missionStore?: MissionStorePort;
   readonly observabilityStore?: ObservabilityPort;
+  readonly verdictStore?: VerdictStorePort;
   readonly clock?: () => Date;
   readonly idFactory?: () => string;
 }
@@ -28,6 +30,15 @@ export async function taskShip(deps: TaskShipDeps, input: TaskShipInput): Promis
   if (!existing) throw new TaskNotFoundError(input.id);
   await assertMissionActive(deps.missionStore, existing.mission_id, "task:ship");
   assertTaskTransition(existing.state, "shipped");
+
+  if (deps.verdictStore) {
+    const latest = await deps.verdictStore.readLatest(existing.id).catch(() => undefined);
+    if (latest && (latest.decision === "FAIL" || latest.decision === "BLOCK")) {
+      process.stderr.write(
+        `[warn] shipping ${existing.id} despite ${latest.decision} verdict (local maestro is advisory; CI is authoritative)\n`,
+      );
+    }
+  }
   const merged_at = (deps.clock ?? (() => new Date()))().toISOString();
   const updated = await deps.taskStore.update(input.id, {
     state: "shipped",

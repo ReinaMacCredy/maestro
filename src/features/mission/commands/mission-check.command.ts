@@ -101,12 +101,14 @@ Checks (exit code is always 0; agents react to findings):
         const draft = await readDraftContract(services.contractStore, taskId);
         if (draft !== undefined) {
           throw new MaestroError(
-            `Contract ${draft.id} for task ${taskId} is in draft status — lock it first`,
-            [`maestro task contract lock ${taskId}`],
+            `Contract ${draft.id} for task ${taskId} is in draft status — re-claim the task to refresh it`,
+            ["Contracts are auto-created when a task is claimed from a spec"],
           );
         }
         throw new MaestroError(`No contract found for task: ${taskId}`, [
-          "Run `maestro contract show --task <id>` to inspect the contract",
+          "Claim a task created from a spec; the contract is synthesized automatically",
+          `Re-claim: maestro task claim ${taskId}`,
+          "Inspect: maestro contract show --task " + taskId,
         ]);
       }
 

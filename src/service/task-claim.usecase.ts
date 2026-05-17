@@ -7,9 +7,14 @@ import type { ObservabilityPort } from "../repo/observability.port.js";
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import type { WorktreeStorePort } from "../repo/worktree-store.port.js";
+import type {
+  ContractStorePort,
+  ContractVersionStorePort,
+} from "@/shared/domain/legacy-task/index.js";
 import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
 import { assertMissionActive } from "./assert-mission-active.js";
+import { autoCreateContract } from "./auto-create-contract.usecase.js";
 import { emitHandoff } from "./emit-handoff.js";
 import { emitTransitionEvidence } from "./emit-transition-evidence.js";
 import { tryAdvanceMission } from "./try-advance-mission.usecase.js";
@@ -21,6 +26,9 @@ export interface TaskClaimDeps {
   readonly observabilityStore?: ObservabilityPort;
   readonly worktreeStore?: WorktreeStorePort;
   readonly handoffEmitter?: HandoffEmitterPort;
+  readonly contractStore?: ContractStorePort;
+  readonly contractVersionStore?: ContractVersionStorePort;
+  readonly repoRoot?: string;
   readonly clock?: () => Date;
   readonly idFactory?: () => string;
 }
@@ -89,6 +97,39 @@ export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Pro
       agent_id: input.agentId,
     },
   );
+
+  // Synthesize a locked contract from the spec's acceptance_criteria so a
+  // later `verdict request` finds one without the agent running a separate
+  // contract-creation verb. v2 has no agent-facing contract verbs.
+  if (
+    deps.contractStore
+    && deps.contractVersionStore
+    && deps.repoRoot
+    && existing.spec_path
+  ) {
+    try {
+      await autoCreateContract(
+        {
+          repoRoot: deps.repoRoot,
+          contractStore: deps.contractStore,
+          contractVersionStore: deps.contractVersionStore,
+          clock: deps.clock,
+        },
+        {
+          taskId: existing.id,
+          specPath: existing.spec_path,
+          title: updated.title,
+          ...(input.agentId ? { agentId: input.agentId } : {}),
+          ...(updated.mission_id ? { missionId: updated.mission_id } : {}),
+        },
+      );
+    } catch (err) {
+      console.error(
+        `task claim: contract auto-create failed for ${existing.id}: ${(err as Error).message}`,
+      );
+    }
+  }
+
   if (deps.missionStore) {
     await tryAdvanceMission(
       {

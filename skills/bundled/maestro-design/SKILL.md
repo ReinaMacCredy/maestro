@@ -113,17 +113,14 @@ Example frontmatter (refer to `src/types/product-spec.ts` for the authoritative 
 ```markdown
 ---
 slug: <kebab-case>
-title: <short title>
-status: draft
-acceptance:
+acceptance_criteria:
   - <falsifiable criterion>
   - <falsifiable criterion>
 non_goals:
   - <out-of-scope item>
 risk_class: medium
 mode: light
-work_type: feature
-blocked_by: []
+work_type: new-spec
 ---
 
 # <title>

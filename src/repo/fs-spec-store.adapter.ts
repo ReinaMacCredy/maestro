@@ -74,10 +74,10 @@ function validateFrontmatter(value: unknown, path: string): ProductSpecFrontmatt
 
   const acceptance = obj.acceptance_criteria;
   if (!isStringArray(acceptance) || acceptance.length === 0) {
-    throw new SpecParseError(
-      `Spec ${path} requires acceptance_criteria: non-empty string array`,
-      "acceptance_criteria",
-    );
+    const hint = Array.isArray(acceptance) && acceptance.some((v) => v !== null && typeof v === "object")
+      ? `Spec ${path} acceptance_criteria contains a non-string item — likely a YAML inline mapping. Quote any line containing { or [, e.g. - "GET /healthz returns { ok: true }"`
+      : `Spec ${path} requires acceptance_criteria: non-empty string array`;
+    throw new SpecParseError(hint, "acceptance_criteria");
   }
 
   const nonGoals = obj.non_goals;
@@ -100,8 +100,10 @@ function validateFrontmatter(value: unknown, path: string): ProductSpecFrontmatt
   }
 
   if (!isWorkType(obj.work_type)) {
+    const guess = typeof obj.work_type === "string" ? workTypeSuggestion(obj.work_type) : undefined;
+    const base = `Spec ${path} requires work_type: new-spec | spec-slice | change-request | initiative | maintenance | harness-improvement`;
     throw new SpecParseError(
-      `Spec ${path} requires work_type: new-spec | spec-slice | change-request | initiative | maintenance | harness-improvement`,
+      guess ? `${base}. Got "${String(obj.work_type)}" — did you mean "${guess}"?` : base,
       "work_type",
     );
   }
@@ -114,6 +116,15 @@ function validateFrontmatter(value: unknown, path: string): ProductSpecFrontmatt
     mode: obj.mode,
     work_type: obj.work_type,
   };
+}
+
+function workTypeSuggestion(input: string): string | undefined {
+  const v = input.toLowerCase();
+  if (v === "feature" || v === "feat" || v === "new") return "new-spec";
+  if (v === "bug" || v === "fix" || v === "bugfix" || v === "patch") return "change-request";
+  if (v === "chore" || v === "cleanup" || v === "refactor") return "maintenance";
+  if (v === "epic" || v === "project") return "initiative";
+  return undefined;
 }
 
 function isStringArray(value: unknown): value is string[] {

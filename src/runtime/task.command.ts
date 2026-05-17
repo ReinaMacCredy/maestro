@@ -1,6 +1,11 @@
 import { Command } from "commander";
 import { registerTaskObserveCommand } from "../features/runtime/commands/task-observe.command.js";
 import { buildV2Services } from "../providers/build-services.js";
+import {
+  FsContractStoreAdapter,
+  FsContractVersionStoreAdapter,
+} from "@/shared/domain/legacy-task/index.js";
+import { FsVerdictStoreAdapter } from "@/features/verdict/adapters/fs-verdict-store.adapter.js";
 import { parseNonNegativeInt, parsePositiveInt } from "../shared/lib/cli-options.js";
 import { taskFromSpec, SpecFileNotFoundError } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
@@ -98,6 +103,8 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     try {
       const repoRoot = opts.resolveRepoRoot();
       const services = buildV2Services({ repoRoot });
+      const contractStore = new FsContractStoreAdapter(repoRoot);
+      const contractVersionStore = new FsContractVersionStoreAdapter(repoRoot);
       const claimed = await taskClaim(
         {
           taskStore: services.taskStore,
@@ -106,6 +113,9 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           observabilityStore: services.observabilityStore,
           worktreeStore: services.worktreeStore,
           handoffEmitter: services.handoffEmitter,
+          contractStore,
+          contractVersionStore,
+          repoRoot,
         },
         { id, agentId: flags.agent, skipWorktree: flags.skipWorktree === true },
       );
@@ -303,6 +313,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
           evidenceStore: services.evidenceStore,
           missionStore: services.missionStore,
           observabilityStore: services.observabilityStore,
+          verdictStore: new FsVerdictStoreAdapter(repoRoot),
         },
         { id, pr_url: flags.prUrl },
       );

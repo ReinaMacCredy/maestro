@@ -148,7 +148,7 @@ export async function missionDecompose(
       slug: t.slug,
       title: t.title,
       state: "draft" as const,
-      spec_path: t.spec_path,
+      spec_path: t.spec_path ?? mission.spec_path,
       mission_id: mission.id,
     })),
   );

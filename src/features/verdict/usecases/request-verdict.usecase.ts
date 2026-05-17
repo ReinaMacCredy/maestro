@@ -45,13 +45,13 @@ export async function requestVerdict(
     const draft = await readDraftContract(deps.contractStore, taskId);
     if (draft !== undefined) {
       throw new MaestroError(
-        `Contract ${draft.id} for task ${taskId} is in draft status — lock it first`,
-        [`maestro task contract lock ${taskId}`],
+        `Contract ${draft.id} for task ${taskId} is in draft status — discard it and re-claim the task`,
+        ["Contracts are auto-created when a task is claimed from a spec"],
       );
     }
     throw new MaestroError(`No contract found for task ${taskId}`, [
-      `Create one: maestro task contract new ${taskId}`,
-      `Then lock it: maestro task contract lock ${taskId}`,
+      "Claim a task created from a spec; the contract is synthesized automatically",
+      `Re-claim: maestro task claim ${taskId}`,
     ]);
   }
 
