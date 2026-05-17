@@ -154,15 +154,11 @@ beforeEach(async () => {
   await runCommand(["git", "config", "user.email", "e2e@maestro.test"], tmpDir);
   await runCommand(["git", "config", "user.name", "E2E"], tmpDir);
   await runCommand(["git", "commit", "--allow-empty", "-m", "init"], tmpDir);
-  const initRes = await runCompiled(["init"], tmpDir);
-  expect(initRes.exitCode).toBe(0);
-
-  // v2 directories created by maestro init (Phase 3 will surface this via setup).
-  await mkdir(join(tmpDir, ".maestro/tasks"), { recursive: true });
-  await mkdir(join(tmpDir, ".maestro/missions"), { recursive: true });
-  await mkdir(join(tmpDir, ".maestro/evidence"), { recursive: true });
-  await mkdir(join(tmpDir, ".maestro/runs"), { recursive: true });
-  await mkdir(join(tmpDir, "docs/principles"), { recursive: true });
+  // `setup` creates the `.maestro/{tasks,missions,evidence,runs}` and
+  // `docs/principles/` directories the MCP server reads from, so no manual
+  // mkdirs are needed here.
+  const setupRes = await runCompiled(["setup"], tmpDir);
+  expect(setupRes.exitCode).toBe(0);
 
   server = spawn(DIST_CLI, ["mcp", "serve"], {
     cwd: tmpDir,

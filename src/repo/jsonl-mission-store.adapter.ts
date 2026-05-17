@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { ensureDir, writeText } from "@/shared/lib/fs.js";
 import type { Mission, MissionId } from "../types/mission.js";
 import { generateMissionId } from "../types/mission.js";
 import { isMissionState, type MissionState } from "../types/mission-state.js";
@@ -133,8 +134,10 @@ export class JsonlMissionStore implements MissionStorePort {
   }
 
   async #write(plans: readonly Mission[]): Promise<void> {
-    await mkdir(dirname(this.#file), { recursive: true });
+    await ensureDir(dirname(this.#file));
     const body = plans.map((p) => JSON.stringify(p)).join("\n");
-    await writeFile(this.#file, body.length > 0 ? `${body}\n` : "", "utf8");
+    // writeText is tmp-file + rename, so a crash mid-write can't leave a
+    // half-truncated jsonl that fails validate-on-read on the next boot.
+    await writeText(this.#file, body.length > 0 ? `${body}\n` : "");
   }
 }

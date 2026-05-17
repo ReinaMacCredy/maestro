@@ -96,6 +96,11 @@ function makeStores(): {
       tasks.set(task.id, task);
       return task;
     },
+    async createMany(inputs: readonly CreateTaskInput[]) {
+      const out: Task[] = [];
+      for (const i of inputs) out.push(await taskStore.create(i));
+      return out;
+    },
     async get(id) {
       return tasks.get(id);
     },

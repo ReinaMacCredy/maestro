@@ -79,6 +79,7 @@ export interface HomeProjectionInput {
   readonly memorySnapshot: MissionControlMemorySnapshot | undefined;
   readonly taskBoard: TaskBoardSnapshot | undefined;
   readonly v2TaskCount?: number;
+  readonly v2TaskStoreError?: string;
   readonly replies: readonly AgentReply[] | undefined;
   readonly principleEffectiveness: readonly PrincipleEffectivenessRow[] | undefined;
   readonly cwd: string;
@@ -235,9 +236,18 @@ export function projectSnapshot(input: SnapshotProjectionInput): MissionControlS
 
 export function projectHomeSnapshot(input: HomeProjectionInput): MissionControlSnapshot {
   const { env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness, cwd } = input;
+  const v2TaskStoreCheck: DoctorCheck | undefined = input.v2TaskStoreError
+    ? {
+        name: "v2-task-store",
+        status: "fail",
+        message: `Cannot read .maestro/tasks/tasks.jsonl: ${input.v2TaskStoreError}`,
+        fix: "Run `maestro setup` to migrate legacy task rows, or inspect the file for hand-edits.",
+      }
+    : undefined;
   const checks = [
     ...env.checks,
     ...buildIgnoredProjectOverrideChecks(configLayers.project),
+    ...(v2TaskStoreCheck ? [v2TaskStoreCheck] : []),
   ];
   const { status } = env;
   const backgroundMode = getMissionControlBackgroundMode(configLayers.effective);

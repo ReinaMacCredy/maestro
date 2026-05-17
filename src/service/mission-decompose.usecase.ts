@@ -143,16 +143,16 @@ export async function missionDecompose(
     if (existingSlugs.has(t.slug)) throw new DuplicateSlugError(t.slug);
   }
 
-  const created: Task[] = [];
-  for (const t of input.tasks) {
-    const task = await deps.taskStore.create({
+  const created = await deps.taskStore.createMany(
+    input.tasks.map((t) => ({
       slug: t.slug,
       title: t.title,
-      state: "draft",
+      state: "draft" as const,
       spec_path: t.spec_path,
       mission_id: mission.id,
-    });
-    created.push(task);
+    })),
+  );
+  for (const task of created) {
     await emitTransitionEvidence(
       {
         store: deps.evidenceStore,

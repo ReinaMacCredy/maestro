@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { ensureDir, writeText } from "@/shared/lib/fs.js";
 import type { Task, TaskId } from "../types/task.js";
 import { generateTaskId } from "../types/task.js";
 import { isTaskState, type TaskState } from "../types/task-state.js";
@@ -51,6 +52,38 @@ export class JsonlTaskStore implements TaskStorePort {
       };
       tasks.push(task);
       return task;
+    });
+  }
+
+  async createMany(inputs: readonly CreateTaskInput[]): Promise<readonly Task[]> {
+    if (inputs.length === 0) return [];
+    return this.#mutate(async (tasks): Promise<readonly Task[]> => {
+      const inBatch = new Set<string>();
+      const existing = new Set(tasks.map((t) => t.slug));
+      for (const input of inputs) {
+        if (inBatch.has(input.slug) || existing.has(input.slug)) {
+          throw new DuplicateSlugError(input.slug);
+        }
+        inBatch.add(input.slug);
+      }
+      const now = this.#clock().toISOString();
+      const created: Task[] = [];
+      for (const input of inputs) {
+        const task: Task = {
+          id: this.#idFactory(),
+          slug: input.slug,
+          title: input.title,
+          state: input.state,
+          spec_path: input.spec_path,
+          mission_id: input.mission_id,
+          blocked_by: input.blocked_by ?? [],
+          created_at: now,
+          updated_at: now,
+        };
+        tasks.push(task);
+        created.push(task);
+      }
+      return created;
     });
   }
 
@@ -145,8 +178,10 @@ export class JsonlTaskStore implements TaskStorePort {
   }
 
   async #write(tasks: readonly Task[]): Promise<void> {
-    await mkdir(dirname(this.#file), { recursive: true });
+    await ensureDir(dirname(this.#file));
     const body = tasks.map((t) => JSON.stringify(t)).join("\n");
-    await writeFile(this.#file, body.length > 0 ? `${body}\n` : "", "utf8");
+    // writeText is tmp-file + rename, so a crash mid-write can't leave a
+    // half-truncated jsonl that fails validate-on-read on the next boot.
+    await writeText(this.#file, body.length > 0 ? `${body}\n` : "");
   }
 }

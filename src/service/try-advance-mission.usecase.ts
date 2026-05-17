@@ -21,7 +21,24 @@ export interface TryAdvanceMissionInput {
   readonly trigger_task_verb: "task:claim" | "task:ship" | "task:abandon" | "task:block";
 }
 
-const FIXED_POINT_CAP = 10;
+// Real chains top out at 2 (planned -> in-progress -> completed). 4 leaves
+// headroom for a fourth rule (e.g. an extra auto-resume hop) without normalising
+// a runaway loop. If the fixed-point hits the cap without reaching steady
+// state, that's a rollup-rule bug, so throw instead of silently returning.
+const FIXED_POINT_CAP = 4;
+
+export class MissionRollupCapExceededError extends Error {
+  readonly missionId: string;
+  readonly lastState: MissionState;
+  constructor(missionId: string, lastState: MissionState) {
+    super(
+      `mission ${missionId} did not reach a fixed point in ${FIXED_POINT_CAP} rollup iterations (stuck at ${lastState})`,
+    );
+    this.name = "MissionRollupCapExceededError";
+    this.missionId = missionId;
+    this.lastState = lastState;
+  }
+}
 
 export type MissionRollupRule =
   | "auto-start"
@@ -57,6 +74,11 @@ export async function tryAdvanceMission(
     const next = computeNext(mission.state, tasks);
     if (!next) return mission;
     mission = await advanceRollup(deps, mission, next, tasks);
+  }
+  // Reached the cap without computeNext returning undefined — this is a bug in
+  // the rule set, not a runtime data issue. Loud failure beats silent drift.
+  if (computeNext(mission.state, tasks)) {
+    throw new MissionRollupCapExceededError(mission.id, mission.state);
   }
   return mission;
 }

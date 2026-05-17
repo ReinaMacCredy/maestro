@@ -20,21 +20,27 @@ import { SpecFileNotFoundError, taskFromSpec } from "@/service/task-from-spec.us
 
 function makeTaskStore(): TaskStorePort {
   const tasks = new Map<TaskId, Task>();
+  const create = async (input: CreateTaskInput): Promise<Task> => {
+    const now = new Date().toISOString();
+    const task: Task = {
+      id: `tsk-${tasks.size + 1}`,
+      slug: input.slug,
+      title: input.title,
+      state: input.state,
+      spec_path: input.spec_path,
+      blocked_by: input.blocked_by ?? [],
+      created_at: now,
+      updated_at: now,
+    };
+    tasks.set(task.id, task);
+    return task;
+  };
   return {
-    async create(input: CreateTaskInput) {
-      const now = new Date().toISOString();
-      const task: Task = {
-        id: `tsk-${tasks.size + 1}`,
-        slug: input.slug,
-        title: input.title,
-        state: input.state,
-        spec_path: input.spec_path,
-        blocked_by: input.blocked_by ?? [],
-        created_at: now,
-        updated_at: now,
-      };
-      tasks.set(task.id, task);
-      return task;
+    create,
+    async createMany(inputs: readonly CreateTaskInput[]) {
+      const out: Task[] = [];
+      for (const i of inputs) out.push(await create(i));
+      return out;
     },
     async get(id) {
       return tasks.get(id);

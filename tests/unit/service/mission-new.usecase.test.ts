@@ -10,6 +10,23 @@ import {
 import { JsonlMissionStore } from "@/repo/jsonl-mission-store.adapter.js";
 import { JsonlTaskStore } from "@/repo/jsonl-task-store.adapter.js";
 import { JsonlEvidenceStore } from "@/repo/jsonl-evidence-store.adapter.js";
+import { DuplicateMissionSlugError } from "@/repo/mission-store.port.js";
+
+const HEAVY_SPEC = `---
+slug: demo-plan
+acceptance_criteria:
+  - it works
+non_goals:
+  - nothing
+risk_class: medium
+mode: heavy
+work_type: change-request
+---
+
+# Demo plan
+
+A heavy-mode spec.
+`;
 
 let tmpDir: string;
 
@@ -101,6 +118,59 @@ describe("missionNew", () => {
         fromFile: batchPath,
       }),
     ).rejects.toThrow();
+  });
+
+  it("--from-spec lands the mission at approved", async () => {
+    const specPath = join(tmpDir, ".maestro/specs/demo-plan.md");
+    await mkdir(join(tmpDir, ".maestro/specs"), { recursive: true });
+    await writeFile(specPath, HEAVY_SPEC, "utf8");
+    const result = await missionNew(services(), {
+      title: "ignored — spec slug wins",
+      slug: "ignored",
+      mode: "from-spec",
+      fromSpec: ".maestro/specs/demo-plan.md",
+    });
+    expect(result.mission.state).toBe("approved");
+    expect(result.mission.slug).toBe("demo-plan");
+    expect(result.tasks).toEqual([]);
+  });
+
+  it("rejects a duplicate slug with a clear error and leaves no orphan tasks", async () => {
+    const deps = services();
+    await missionNew(deps, {
+      title: "First",
+      slug: "dup",
+      mode: "bare",
+    });
+    await expect(
+      missionNew(deps, {
+        title: "Second",
+        slug: "dup",
+        mode: "template",
+        template: "refactor",
+      }),
+    ).rejects.toBeInstanceOf(DuplicateMissionSlugError);
+    // The first mission persists; the second must not have created any tasks.
+    const missions = await deps.missionStore.list();
+    expect(missions.length).toBe(1);
+    const tasks = await deps.taskStore.list();
+    expect(tasks).toEqual([]);
+  });
+
+  it("--from-file rejects malformed JSON before creating the mission", async () => {
+    const batchPath = join(tmpDir, "broken.json");
+    await writeFile(batchPath, "{not-json", "utf8");
+    const deps = services();
+    await expect(
+      missionNew(deps, {
+        title: "Broken",
+        slug: "broken",
+        mode: "from-file",
+        fromFile: batchPath,
+      }),
+    ).rejects.toThrow();
+    const missions = await deps.missionStore.list();
+    expect(missions).toEqual([]);
   });
 
   it("user-defined template overrides built-in", async () => {
