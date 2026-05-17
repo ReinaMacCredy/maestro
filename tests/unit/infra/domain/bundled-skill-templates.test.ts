@@ -115,8 +115,8 @@ describe("BUNDLED_SKILL_TEMPLATES", () => {
     expect(planSkill.content).not.toContain("maestro-brainstorm");
     expect(planSkill.content).toContain("maestro-design");
     expect(planSkill.content).toContain("maestro-task");
-    expect(planSkill.content).toContain("maestro plan from-spec");
-    expect(planSkill.content).toContain("maestro plan decompose");
+    expect(planSkill.content).toContain("maestro mission new");
+    expect(planSkill.content).toContain("maestro mission decompose");
 
     const taskSkill = task!.files.find((f) => f.path === "SKILL.md")!;
     expect(taskSkill.content).not.toContain("maestro session start");

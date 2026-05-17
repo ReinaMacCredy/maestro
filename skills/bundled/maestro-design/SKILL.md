@@ -153,10 +153,10 @@ Do not invoke planning or implementation from this skill.
 
 Tell the user the slug, the spec path, and the matching next verb:
 
-- Heavy mode → `maestro plan from-spec .maestro/specs/<slug>.md`, then load `maestro-mission`.
+- Heavy mode → `maestro mission new "<title>" --from-spec .maestro/specs/<slug>.md`, then load `maestro-mission`.
 - Light mode → `maestro task from-spec .maestro/specs/<slug>.md`, then load `maestro-task` and `maestro task claim <id>`.
 
-Routing the wrong verb at the wrong mode is a silent footgun: `task from-spec` will accept a heavy spec and materialize an orphan task instead of an exec-plan. Match the verb to the spec's `mode:`.
+Routing the wrong verb at the wrong mode is a silent footgun: `task from-spec` will accept a heavy spec and materialize an orphan task instead of a mission. Match the verb to the spec's `mode:`.
 
 ## What the grill is not
 

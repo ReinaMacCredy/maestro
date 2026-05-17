@@ -12,7 +12,7 @@ describe("checkSkillBinaryParity", () => {
       "worktree", "setup", "handoff", "bundle", "skills", "mcp",
       "recover", "gc", "principle", "init", "status", "doctor",
       "install", "update", "uninstall", "providers", "reply",
-      "mission-control", "claim", "block", "abandon", "ship", "verify",
+      "mission-control", "mission", "claim", "block", "abandon", "ship", "verify",
       "intake", "qa", "note", "inspect",
     ]);
     const report = checkSkillBinaryParity({ knownVerbs: allVerbs });
