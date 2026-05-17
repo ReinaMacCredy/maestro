@@ -54,6 +54,10 @@ describe("TASK_TRANSITIONS", () => {
     expect(canTransitionTask("verifying", "doing")).toBe(true);
     expect(canTransitionTask("doing", "verifying")).toBe(true);
   });
+
+  it("allows ready -> verifying re-entry (zero-diff PASS rescue path)", () => {
+    expect(canTransitionTask("ready", "verifying")).toBe(true);
+  });
 });
 
 describe("assertTaskTransition", () => {

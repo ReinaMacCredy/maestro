@@ -115,8 +115,13 @@ function parseGitFileChanges(output: string): GitFileChange[] {
     .map((line) => line.trimEnd())
     .filter(Boolean)
     .map((line) => {
-      const status = line.slice(0, 2);
-      const rawPath = line.slice(3).trim();
+      // execSpawn trims overall stdout, stripping the leading space when the
+      // first porcelain line has X=space (worktree-only changes like " M
+      // .maestro/tasks/NOW.md"). Re-pad so slice offsets land at the path
+      // start regardless of whether the leading space survived.
+      const padded = line.length >= 3 && line[2] === " " ? line : " " + line;
+      const status = padded.slice(0, 2);
+      const rawPath = padded.slice(3).trim();
       const path = status.includes("R") || status.includes("C")
         ? rawPath.split(" -> ").at(-1) ?? rawPath
         : rawPath;

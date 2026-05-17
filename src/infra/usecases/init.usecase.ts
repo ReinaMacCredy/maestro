@@ -68,6 +68,9 @@ export async function initMaestro(
     const activeContinuationDir = join(continuationDir, "active");
     const completedContinuationDir = join(continuationDir, "completed");
     const taskLocalHistoryDir = join(tasksDir, "local-history");
+    const plansDir = join(maestroDir, "plans");
+    const evidenceDir = join(maestroDir, "evidence");
+    const runsDir = join(maestroDir, "runs");
     const skillsDir = join(maestroDir, "skills");
     const bootstrapDir = join(maestroDir, "bootstrap");
     const configPath = join(maestroDir, "config.yaml");
@@ -81,6 +84,9 @@ export async function initMaestro(
     await ensureDirIfMissing(activeContinuationDir, created);
     await ensureDirIfMissing(completedContinuationDir, created);
     await ensureDirIfMissing(taskLocalHistoryDir, created);
+    await ensureDirIfMissing(plansDir, created);
+    await ensureDirIfMissing(evidenceDir, created);
+    await ensureDirIfMissing(runsDir, created);
     await ensureDirIfMissing(skillsDir, created);
     await ensureDirIfMissing(bootstrapDir, created);
 

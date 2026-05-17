@@ -3,6 +3,32 @@
 import type { EvidenceRow, EvidenceSummary } from "@/features/evidence/domain/types.js";
 import type { Mission, MissionSummary } from "@/shared/domain/legacy-mission";
 import type { LegacyTask as Task, TaskSummary } from "@/shared/domain/legacy-task";
+import type { Task as V2Task } from "@/types/task.js";
+
+export interface V2TaskSummary {
+  readonly id: string;
+  readonly slug: string;
+  readonly title: string;
+  readonly state: string;
+  readonly plan_id?: string;
+  readonly assignee?: string;
+  readonly blocked_by_count: number;
+}
+
+export function summarizeV2Task(task: V2Task): V2TaskSummary {
+  // Detail fields (created_at, updated_at, spec_path, pr_url, merged_at,
+  // claimed_at, worktree_path, block_reason, abandon_reason) live behind
+  // `--full` / `view: "full"` or recover via `task get <id>`.
+  return {
+    id: task.id,
+    slug: task.slug,
+    title: task.title,
+    state: task.state,
+    ...(task.plan_id !== undefined ? { plan_id: task.plan_id } : {}),
+    ...(task.assignee !== undefined ? { assignee: task.assignee } : {}),
+    blocked_by_count: task.blocked_by.length,
+  };
+}
 
 export const PROJECTION_VIEWS = ["summary", "full"] as const;
 export type ProjectionView = (typeof PROJECTION_VIEWS)[number];

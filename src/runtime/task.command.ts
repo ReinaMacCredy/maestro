@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { registerTaskObserveCommand } from "../features/runtime/commands/task-observe.command.js";
 import { buildV2Services } from "../providers/build-services.js";
 import { parseNonNegativeInt, parsePositiveInt } from "../shared/lib/cli-options.js";
-import { taskFromSpec } from "../service/task-from-spec.usecase.js";
+import { taskFromSpec, SpecFileNotFoundError } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
 import { taskBlock } from "../service/task-block.usecase.js";
 import { taskAbandon } from "../service/task-abandon.usecase.js";
@@ -12,6 +12,7 @@ import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError, TASK_STATES, type TaskState } from "../types/task-state.js";
 import type { Task } from "../types/task.js";
+import { summarizeV2Task } from "../shared/lib/projection.js";
 
 export interface TaskCommandV2Options {
   readonly resolveRepoRoot: () => string;
@@ -42,6 +43,16 @@ function reportError(verb: string, err: unknown): void {
     err instanceof TaskVerifyReasonRequiredError
   ) {
     console.error(`maestro ${verb}: ${(err as Error).message}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (err instanceof SpecFileNotFoundError) {
+    console.error(`maestro ${verb}: ${err.message}`);
+    const looksLikeSlug = !err.inputArg.includes("/") && !err.inputArg.endsWith(".md");
+    if (looksLikeSlug) {
+      console.error(`  Did you mean: maestro ${verb} .maestro/specs/${err.inputArg}.md ?`);
+    }
+    console.error(`  List specs:  ls .maestro/specs/`);
     process.exitCode = 1;
     return;
   }
@@ -313,7 +324,15 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
 
   const listAction = async function (
     this: Command,
-    flags: { planId?: string; state?: string; limit?: number; offset?: number; json?: boolean },
+    flags: {
+      planId?: string;
+      state?: string;
+      limit?: number;
+      offset?: number;
+      json?: boolean;
+      full?: boolean;
+      all?: boolean;
+    },
   ): Promise<void> {
     try {
       const repoRoot = opts.resolveRepoRoot();
@@ -333,14 +352,17 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       } else {
         tasks = await services.taskStore.list();
       }
-      const limit = flags.limit ?? 20;
       const offset = flags.offset ?? 0;
-      const page = tasks.slice(offset, offset + limit);
+      const limit = flags.all === true ? tasks.length - offset : (flags.limit ?? 20);
+      const page = tasks.slice(offset, offset + Math.max(limit, 0));
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
+        const items = flags.full === true
+          ? page
+          : page.map(summarizeV2Task);
         console.log(
           JSON.stringify(
-            { items: page, total: tasks.length, limit, offset },
+            { items, total: tasks.length, limit, offset },
             null,
             2,
           ),
@@ -367,6 +389,8 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     .option("--state <state>", `filter by state (${TASK_STATES.join("|")})`)
     .option("--limit <n>", "page size (default 20, max 100)", parseLimit)
     .option("--offset <n>", "page offset (default 0)", parseNonNegativeInt)
+    .option("--full", "emit full task records in JSON (default: summary projection)")
+    .option("--all", "drop the default 20-item cap")
     .option("--json", "emit JSON {items,total,limit,offset}")
     .action(listAction);
 

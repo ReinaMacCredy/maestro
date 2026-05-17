@@ -51,6 +51,7 @@ import { registerPlanV2Commands } from "@/runtime/plan.command.js";
 import { registerPrincipleV2Commands } from "@/runtime/principle.command.js";
 import { registerSetupV2Commands } from "@/runtime/setup.command.js";
 import { registerContractCommands } from "@/runtime/contract.command.js";
+import { registerHandoffV2Commands } from "@/runtime/handoff.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -93,6 +94,9 @@ registerSpecV2Commands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
 registerTaskV2Commands(program, {
+  resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+});
+registerHandoffV2Commands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
 registerContractCommands(program, deps);

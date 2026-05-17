@@ -50,8 +50,9 @@ export function registerSetupV2Commands(
         const report = await setupCheck({ repoRoot });
         const wantJson = flags.json === true || this.optsWithGlobals().json === true;
         if (wantJson) {
-          console.log(JSON.stringify(report, null, 2));
+          console.log(JSON.stringify({ ...report, project_root: repoRoot }, null, 2));
         } else {
+          console.log(`project root: ${repoRoot}`);
           for (const entry of report.entries) console.log(formatEntry(entry));
           console.log(report.ok ? "setup check: OK" : "setup check: action required");
         }
@@ -72,9 +73,10 @@ export function registerSetupV2Commands(
         const result = await setupBootstrap({ repoRoot });
         const wantJson = flags.json === true || this.optsWithGlobals().json === true;
         if (wantJson) {
-          console.log(JSON.stringify(result, null, 2));
+          console.log(JSON.stringify({ ...result, project_root: repoRoot }, null, 2));
           return;
         }
+        console.log(`project root: ${repoRoot}`);
         if (result.created.length === 0) {
           console.log(`nothing to create (${result.skipped.length} already present)`);
         } else {

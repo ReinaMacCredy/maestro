@@ -78,6 +78,7 @@ export interface HomeProjectionInput {
   readonly gitState: Awaited<ReturnType<GitPort["getState"]>> | undefined;
   readonly memorySnapshot: MissionControlMemorySnapshot | undefined;
   readonly taskBoard: TaskBoardSnapshot | undefined;
+  readonly v2TaskCount?: number;
   readonly replies: readonly AgentReply[] | undefined;
   readonly principleEffectiveness: readonly PrincipleEffectivenessRow[] | undefined;
   readonly cwd: string;
@@ -244,8 +245,11 @@ export function projectHomeSnapshot(input: HomeProjectionInput): MissionControlS
 
   // A task-only project should not present as "No missions yet" — that
   // makes the dashboard look empty when there's actually a backlog. When
-  // any task exists, surface the task count instead.
-  const taskCount = taskBoard?.totalCount ?? 0;
+  // any task exists, surface the task count instead. Counts come from
+  // both the legacy task board and the v2 task store (`.maestro/tasks/
+  // tasks.jsonl`); the dashboard headline reflects whichever pack the
+  // project is actually using.
+  const taskCount = (taskBoard?.totalCount ?? 0) + (input.v2TaskCount ?? 0);
   const hasTasks = taskCount > 0;
 
   const headline = status.gitAvailable
@@ -256,7 +260,7 @@ export function projectHomeSnapshot(input: HomeProjectionInput): MissionControlS
 
   const summary = status.gitAvailable
     ? hasTasks
-      ? "Run `maestro task status` to see your queue, or create a mission for larger work."
+      ? "Run `maestro task list` to see the queue, or create a mission for larger work."
       : "Initialize this repository, then create your first mission."
     : status.initialized
       ? "Global setup is ready. Open a project repository to start tracking missions here."

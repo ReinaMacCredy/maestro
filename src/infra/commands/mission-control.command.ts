@@ -135,6 +135,7 @@ export function registerMissionControlCommand(
           config: services.config,
           git: services.git,
           taskStore: services.taskStore,
+          v2TaskStore: services.v2.taskStore,
           evidenceStore: services.evidenceStore,
           replyStore: services.replyStore,
           principleStore: services.principleStore,

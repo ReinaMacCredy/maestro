@@ -14,6 +14,7 @@ export function resolveMaestroProjectRoot(startDir: string): string {
   while (true) {
     const gitPath = join(current, GIT_DIR);
     const hasGit = existsSync(gitPath);
+    const gitIsDir = hasGit && !isFile(gitPath);
 
     if (hasGit) {
       gitFallback ??= current;
@@ -29,6 +30,13 @@ export function resolveMaestroProjectRoot(startDir: string): string {
     }
 
     if (existsSync(join(current, MAESTRO_DIR))) {
+      return current;
+    }
+
+    // Stop at the main worktree of a git repo. Walking above the repo
+    // is unsafe — an unrelated `.maestro/` in an ancestor (e.g. a stray
+    // `/tmp/.maestro/`) would be silently adopted as the project root.
+    if (gitIsDir) {
       return current;
     }
 

@@ -13,6 +13,7 @@ import type { AgentReply, ReplyStorePort } from "@/features/reply";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { TaskQueryPort } from "@/shared/domain/legacy-task";
+import type { TaskStorePort as V2TaskStorePort } from "@/repo/task-store.port.js";
 import type { ContractVersionStorePort, ContractStoreQueryPort } from "@/repo/contract-store.port.js";
 import type { RunStateStorePort } from "@/repo/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence";
@@ -41,6 +42,7 @@ export interface SnapshotDeps {
   config: ConfigPort;
   git: GitPort;
   taskStore?: TaskQueryPort;
+  v2TaskStore?: V2TaskStorePort;
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
@@ -55,6 +57,7 @@ export interface HomeSnapshotDeps {
   config: ConfigPort;
   git: GitPort;
   taskStore?: TaskQueryPort;
+  v2TaskStore?: V2TaskStorePort;
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
@@ -173,7 +176,10 @@ export async function loadHomeSnapshotInput(
   const principleEffectivenessPromise = currentProjectRoot !== undefined
     ? loadPrincipleEffectiveness(deps, currentProjectRoot)
     : Promise.resolve(undefined);
-  const [env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness] = await Promise.all([
+  const v2TaskCountPromise = options.includeTaskBoard === true && deps.v2TaskStore
+    ? deps.v2TaskStore.list().then((tasks) => tasks.length).catch(() => 0)
+    : Promise.resolve(0);
+  const [env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness, v2TaskCount] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
@@ -181,6 +187,7 @@ export async function loadHomeSnapshotInput(
     taskBoardPromise,
     repliesPromise,
     principleEffectivenessPromise,
+    v2TaskCountPromise,
   ]);
 
   return {
@@ -189,6 +196,7 @@ export async function loadHomeSnapshotInput(
     gitState,
     memorySnapshot: memorySnapshot ?? undefined,
     taskBoard: taskBoard ?? undefined,
+    v2TaskCount,
     replies,
     principleEffectiveness,
     cwd: deps.cwd,

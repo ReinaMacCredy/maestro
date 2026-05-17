@@ -16,7 +16,7 @@ import {
 } from "../usecases/principle-effectiveness.usecase.js";
 
 interface PrincipleCommandDeps {
-  readonly getServices: () => Pick<Services, "principleStore">;
+  readonly getServices: () => Pick<Services, "principleStore" | "v2">;
 }
 
 export function registerPrincipleCommand(
@@ -30,7 +30,7 @@ export function registerPrincipleCommand(
 
   principleCmd
     .command("list")
-    .description("List active principles")
+    .description("List active principles (behavioral + lint packs)")
     .option("--profile <profile>", "Filter by milestone profile")
     .option("--json", "Output as JSON")
     .action(async (opts): Promise<void> => {
@@ -42,7 +42,18 @@ export function registerPrincipleCommand(
         ? await services.principleStore.listByProfile(profile)
         : await services.principleStore.list();
 
-      output(isJson, principles, formatPrincipleList);
+      // Profile filter only applies to behavioral principles; skip the lint
+      // pack when the caller narrowed the query.
+      const lintPack = profile
+        ? []
+        : await services.v2.principlesStore.list();
+
+      if (isJson) {
+        output(true, { behavioral: principles, lint: lintPack }, () => []);
+        return;
+      }
+
+      output(false, principles, (p) => formatPrincipleList(p, lintPack));
     });
 
   principleCmd
@@ -141,20 +152,36 @@ export function registerPrincipleCommand(
     });
 }
 
-function formatPrincipleList(principles: readonly Principle[]): string[] {
-  if (principles.length === 0) {
-    return ["No principles found"];
-  }
+function formatPrincipleList(
+  principles: readonly Principle[],
+  lintPack: readonly { readonly slug: string }[] = [],
+): string[] {
+  const lines: string[] = [];
 
-  const lines: string[] = [`${principles.length} principle(s)`, ""];
-  for (const p of principles) {
-    const badge = p.mode === "gate" ? "[GATE]" : "[adv] ";
-    const profiles = p.profiles.join(", ");
-    lines.push(`${badge} ${p.id.padEnd(24)} ${p.name.padEnd(24)} (${profiles})`);
-    if (p.mode === "gate" && p.gateField) {
-      lines.push(`       gate: ${p.gateField} -> ${p.gateCheck}`);
+  lines.push(`Behavioral principles (.maestro/principles.jsonl): ${principles.length}`);
+  if (principles.length === 0) {
+    lines.push("  (none — register one with `maestro principle add`)");
+  } else {
+    for (const p of principles) {
+      const badge = p.mode === "gate" ? "[GATE]" : "[adv] ";
+      const profiles = p.profiles.join(", ");
+      lines.push(`  ${badge} ${p.id.padEnd(24)} ${p.name.padEnd(24)} (${profiles})`);
+      if (p.mode === "gate" && p.gateField) {
+        lines.push(`         gate: ${p.gateField} -> ${p.gateCheck}`);
+      }
     }
   }
+
+  lines.push("");
+  lines.push(`Lint principles (docs/principles/*.md): ${lintPack.length}`);
+  if (lintPack.length === 0) {
+    lines.push("  (none — `maestro init` seeds the default pack)");
+  } else {
+    for (const p of lintPack) {
+      lines.push(`  ${p.slug}`);
+    }
+  }
+
   return lines;
 }
 
