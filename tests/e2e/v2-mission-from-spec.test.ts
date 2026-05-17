@@ -43,20 +43,20 @@ async function readEvidenceRows(dir: string): Promise<readonly Record<string, un
 }
 
 describe("maestro mission from-spec + mission show (v2)", () => {
-  it("mission from-spec on a heavy-mode spec creates a mission in 'specified' and emits one transition row", async () => {
+  it("mission from-spec on a heavy-mode spec creates a mission in 'approved' and emits one transition row", async () => {
     await runCompiled(["spec", "new", "demo-heavy", "--mode", "heavy"], tmpDir);
     const result = await runCompiled(
       ["mission", "from-spec", ".maestro/specs/demo-heavy.md"],
       tmpDir,
     );
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toMatch(/^pln-\S+ specified \(demo-heavy\)$/m);
+    expect(result.stdout).toMatch(/^pln-\S+ approved \(demo-heavy\)$/m);
 
     const text = await readFile(join(tmpDir, ".maestro/missions/missions.jsonl"), "utf8");
     const lines = text.trim().split("\n");
     expect(lines.length).toBe(1);
     const mission = JSON.parse(lines[0]) as { state: string; slug: string };
-    expect(mission.state).toBe("specified");
+    expect(mission.state).toBe("approved");
     expect(mission.slug).toBe("demo-heavy");
 
     const rows = await readEvidenceRows(tmpDir);
@@ -64,7 +64,7 @@ describe("maestro mission from-spec + mission show (v2)", () => {
     expect(rows[0]).toMatchObject({
       kind: "transition",
       from_state: null,
-      to_state: "specified",
+      to_state: "approved",
       trigger_verb: "mission:from-spec",
     });
   });
@@ -90,14 +90,14 @@ describe("maestro mission from-spec + mission show (v2)", () => {
 
     const text = await runCompiled(["mission", "show", missionId!], tmpDir);
     expect(text.exitCode).toBe(0);
-    expect(text.stdout).toContain(`${missionId} specified`);
+    expect(text.stdout).toContain(`${missionId} approved`);
     expect(text.stdout).toContain("(no child tasks yet)");
 
     const json = await runCompiled(["mission", "show", missionId!, "--json"], tmpDir);
     expect(json.exitCode).toBe(0);
     const parsed = JSON.parse(json.stdout) as { mission: { id: string; state: string }; tasks: unknown[] };
     expect(parsed.mission.id).toBe(missionId!);
-    expect(parsed.mission.state).toBe("specified");
+    expect(parsed.mission.state).toBe("approved");
     expect(parsed.tasks).toEqual([]);
   });
 

@@ -26,11 +26,19 @@ describe("MissionState union", () => {
       expect(isTerminalMissionState(state)).toBe(expected);
     }
   });
+
+  it("includes paused, failed, and renamed approved", () => {
+    expect((MISSION_STATES as readonly string[]).includes("paused")).toBe(true);
+    expect((MISSION_STATES as readonly string[]).includes("failed")).toBe(true);
+    expect((MISSION_STATES as readonly string[]).includes("approved")).toBe(true);
+    expect((MISSION_STATES as readonly string[]).includes("specified")).toBe(false);
+  });
 });
 
 describe("MISSION_TRANSITIONS", () => {
   it("declares no outgoing transitions from terminal states", () => {
     expect(MISSION_TRANSITIONS.completed).toEqual([]);
+    expect(MISSION_TRANSITIONS.failed).toEqual([]);
     expect(MISSION_TRANSITIONS.cancelled).toEqual([]);
   });
 
@@ -41,24 +49,50 @@ describe("MISSION_TRANSITIONS", () => {
     }
   });
 
-  it("covers the canonical happy path intake -> specified -> planned -> in-progress -> completed", () => {
-    expect(canTransitionMission("intake", "specified")).toBe(true);
-    expect(canTransitionMission("specified", "planned")).toBe(true);
+  it("covers the canonical happy path intake -> approved -> planned -> in-progress -> completed", () => {
+    expect(canTransitionMission("intake", "approved")).toBe(true);
+    expect(canTransitionMission("approved", "planned")).toBe(true);
     expect(canTransitionMission("planned", "in-progress")).toBe(true);
     expect(canTransitionMission("in-progress", "completed")).toBe(true);
+  });
+
+  it("allows intake -> planned (decompose bypass)", () => {
+    expect(canTransitionMission("intake", "planned")).toBe(true);
+  });
+
+  it("supports the paused round-trip (in-progress <-> paused)", () => {
+    expect(canTransitionMission("in-progress", "paused")).toBe(true);
+    expect(canTransitionMission("paused", "in-progress")).toBe(true);
+  });
+
+  it("permits failed from in-progress and paused but not from earlier states", () => {
+    expect(canTransitionMission("in-progress", "failed")).toBe(true);
+    expect(canTransitionMission("paused", "failed")).toBe(true);
+    expect(canTransitionMission("intake", "failed")).toBe(false);
+    expect(canTransitionMission("approved", "failed")).toBe(false);
+    expect(canTransitionMission("planned", "failed")).toBe(false);
+  });
+
+  it("paused -> completed remains in the table (belt-and-suspenders for fixtures)", () => {
+    expect(canTransitionMission("paused", "completed")).toBe(true);
   });
 
   it("forbids backward transitions", () => {
     expect(canTransitionMission("planned", "intake")).toBe(false);
     expect(canTransitionMission("in-progress", "planned")).toBe(false);
     expect(canTransitionMission("completed", "in-progress")).toBe(false);
+    expect(canTransitionMission("failed", "in-progress")).toBe(false);
+  });
+
+  it("forbids skipping in-progress (planned cannot land directly in paused)", () => {
+    expect(canTransitionMission("planned", "paused")).toBe(false);
   });
 });
 
 describe("assertMissionTransition", () => {
   it("returns void on valid transition", () => {
     expect(() => {
-      assertMissionTransition("intake", "specified");
+      assertMissionTransition("intake", "approved");
     }).not.toThrow();
   });
 

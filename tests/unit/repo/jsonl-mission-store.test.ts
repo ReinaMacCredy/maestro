@@ -40,11 +40,11 @@ describe("JsonlMissionStore", () => {
     const created = await store.create({
       slug: "alpha",
       title: "Alpha",
-      state: "specified",
+      state: "approved",
       spec_path: ".maestro/specs/alpha.md",
     });
     expect(created.id).toBe("pln-1");
-    expect(created.state).toBe("specified");
+    expect(created.state).toBe("approved");
     expect(created.spec_path).toBe(".maestro/specs/alpha.md");
     expect(created.created_at).toBe(FROZEN.toISOString());
 
@@ -59,9 +59,9 @@ describe("JsonlMissionStore", () => {
 
   it("rejects duplicate slugs", async () => {
     const store = makeStore(root);
-    await store.create({ slug: "alpha", title: "Alpha", state: "specified" });
+    await store.create({ slug: "alpha", title: "Alpha", state: "approved" });
     await expect(
-      store.create({ slug: "alpha", title: "Alpha again", state: "specified" }),
+      store.create({ slug: "alpha", title: "Alpha again", state: "approved" }),
     ).rejects.toBeInstanceOf(DuplicateMissionSlugError);
   });
 
@@ -74,8 +74,8 @@ describe("JsonlMissionStore", () => {
 
   it("persists each plan as one JSONL line", async () => {
     const store = makeStore(root);
-    await store.create({ slug: "alpha", title: "Alpha", state: "specified" });
-    await store.create({ slug: "beta", title: "Beta", state: "specified" });
+    await store.create({ slug: "alpha", title: "Alpha", state: "approved" });
+    await store.create({ slug: "beta", title: "Beta", state: "approved" });
     const text = await readFile(join(root, ".maestro/missions/missions.jsonl"), "utf8");
     const lines = text.trim().split("\n");
     expect(lines.length).toBe(2);
@@ -85,25 +85,25 @@ describe("JsonlMissionStore", () => {
 
   it("listByState filters by state", async () => {
     const store = makeStore(root);
-    await store.create({ slug: "alpha", title: "Alpha", state: "specified" });
-    const planned = await store.create({ slug: "beta", title: "Beta", state: "specified" });
+    await store.create({ slug: "alpha", title: "Alpha", state: "approved" });
+    const planned = await store.create({ slug: "beta", title: "Beta", state: "approved" });
     await store.update(planned.id, { state: "planned" });
 
     const planned_results = await store.listByState("planned");
     expect(planned_results.length).toBe(1);
     expect(planned_results[0].slug).toBe("beta");
 
-    const specified = await store.listByState("specified");
-    expect(specified.length).toBe(1);
-    expect(specified[0].slug).toBe("alpha");
+    const approved = await store.listByState("approved");
+    expect(approved.length).toBe(1);
+    expect(approved[0].slug).toBe("alpha");
   });
 
   it("serializes writes (FIFO ordering via internal queue)", async () => {
     const store = makeStore(root);
     const results = await Promise.all([
-      store.create({ slug: "a", title: "A", state: "specified" }),
-      store.create({ slug: "b", title: "B", state: "specified" }),
-      store.create({ slug: "c", title: "C", state: "specified" }),
+      store.create({ slug: "a", title: "A", state: "approved" }),
+      store.create({ slug: "b", title: "B", state: "approved" }),
+      store.create({ slug: "c", title: "C", state: "approved" }),
     ]);
     expect(results.map((r) => r.id)).toEqual(["pln-1", "pln-2", "pln-3"]);
     const plans = await store.list();

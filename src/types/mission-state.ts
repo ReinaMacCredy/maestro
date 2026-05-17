@@ -1,26 +1,32 @@
-// v2 mission lifecycle (ADR-0003). Auto-completes when every child task is
-// in a terminal state (ADR-0011); cancellation is the only manual terminal.
+// `approved` means "spec parsed via mission new --from-spec", NOT a human gate.
+// v2 mission gates are task-level (policy + verdict), not mission-level.
+// `intake -> planned` exists so `mission decompose` can advance bare-title
+// missions without forcing them through `approved` first.
 
 export const MISSION_STATES = [
   "intake",
-  "specified",
+  "approved",
   "planned",
   "in-progress",
+  "paused",
   "completed",
+  "failed",
   "cancelled",
 ] as const;
 
 export type MissionState = (typeof MISSION_STATES)[number];
 
-export const MISSION_TERMINAL_STATES = ["completed", "cancelled"] as const;
+export const MISSION_TERMINAL_STATES = ["completed", "failed", "cancelled"] as const;
 export type TerminalMissionState = (typeof MISSION_TERMINAL_STATES)[number];
 
 export const MISSION_TRANSITIONS = {
-  intake: ["specified", "cancelled"],
-  specified: ["planned", "cancelled"],
+  intake: ["approved", "planned", "cancelled"],
+  approved: ["planned", "cancelled"],
   planned: ["in-progress", "cancelled"],
-  "in-progress": ["completed", "cancelled"],
+  "in-progress": ["paused", "completed", "failed", "cancelled"],
+  paused: ["in-progress", "completed", "failed", "cancelled"],
   completed: [],
+  failed: [],
   cancelled: [],
 } as const satisfies Record<MissionState, readonly MissionState[]>;
 

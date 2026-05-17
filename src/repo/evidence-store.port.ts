@@ -17,6 +17,14 @@ export interface TransitionEvidenceRow {
   readonly verdict?: "PASS" | "FAIL" | "HUMAN" | "BLOCK";
   readonly agent_id?: string;
   readonly reason?: string;
+  // Mission rollup / verb metadata (mission transitions only).
+  readonly trigger?: "rollup" | "verb";
+  readonly rule?: "auto-start" | "auto-pause" | "auto-resume" | "complete-or-fail";
+  readonly cancelled_by?: "user";
+  readonly task_summary?: {
+    readonly total: number;
+    readonly byState: Record<TaskState, number>;
+  };
 }
 
 export interface LintViolationEvidenceRow {

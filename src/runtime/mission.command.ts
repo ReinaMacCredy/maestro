@@ -13,7 +13,21 @@ import {
   MissionDecomposeBatchEmptyError,
   MissionDecomposeBatchInvalidError,
   MissionDecomposeDuplicateSlugInBatchError,
+  MissionDecomposeAlreadyHasTasksError,
 } from "../service/mission-decompose.usecase.js";
+import {
+  missionNew,
+  MissionNewInvalidFlagsError,
+  MissionTemplateUnknownError,
+  slugifyTitle,
+  type MissionNewMode,
+} from "../service/mission-new.usecase.js";
+import {
+  missionCancel,
+  MissionCancelTerminalError,
+} from "../service/mission-cancel.usecase.js";
+import { listTemplates } from "../features/mission/templates/loader.js";
+import { MissionTemplateLoadError } from "../features/mission/domain/template-types.js";
 import {
   DuplicateMissionSlugError,
   MissionNotFoundError,
@@ -42,7 +56,12 @@ function reportError(verb: string, err: unknown): void {
     err instanceof MissionDecomposeBatchEmptyError ||
     err instanceof MissionDecomposeBatchInvalidError ||
     err instanceof MissionDecomposeDuplicateSlugInBatchError ||
-    err instanceof MissionTransitionError
+    err instanceof MissionDecomposeAlreadyHasTasksError ||
+    err instanceof MissionTransitionError ||
+    err instanceof MissionNewInvalidFlagsError ||
+    err instanceof MissionTemplateUnknownError ||
+    err instanceof MissionTemplateLoadError ||
+    err instanceof MissionCancelTerminalError
   ) {
     console.error(`maestro ${verb}: ${(err as Error).message}`);
     process.exitCode = 1;
@@ -55,8 +74,122 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
   const mission = findOrCreateMissionCommand(program);
 
   mission
+    .command("new [title...]")
+    .description(
+      "Create a mission. Bare title -> intake; --from-spec/--from-file/--template seed further state.",
+    )
+    .option("--from-spec <path>", "create at 'approved' from a heavy-mode product-spec markdown file")
+    .option("--from-file <path>", "create at 'planned' from a JSON task-batch file")
+    .option("--template <name>", "create at 'planned' using a built-in or user template")
+    .option("--slug <slug>", "explicit slug (default: slugified title)")
+    .option("--list-templates", "list available templates and exit")
+    .action(async function (this: Command, titleParts: string[], flags): Promise<void> {
+      try {
+        const repoRoot = opts.resolveRepoRoot();
+        const services = buildV2Services({ repoRoot });
+
+        if (flags.listTemplates === true) {
+          const listed = await listTemplates(repoRoot);
+          console.log("built-in templates:");
+          for (const t of listed.builtin) {
+            console.log(`  ${t.name.padEnd(10)} ${t.description}`);
+          }
+          if (listed.user.length > 0) {
+            console.log("");
+            console.log("user templates (.maestro/templates/missions/):");
+            for (const t of listed.user) {
+              const overrideTag = listed.overrides.includes(t.name)
+                ? "  (overrides built-in)"
+                : "";
+              console.log(`  ${t.name.padEnd(10)} ${t.description}${overrideTag}`);
+            }
+          }
+          return;
+        }
+
+        const title = titleParts.join(" ").trim();
+        if (title.length === 0) {
+          console.error("maestro mission new: title is required (or pass --list-templates)");
+          process.exitCode = 1;
+          return;
+        }
+
+        const mode = pickMode(flags);
+
+        const slug = typeof flags.slug === "string" && flags.slug.length > 0
+          ? flags.slug
+          : slugifyTitle(title);
+
+        const result = await missionNew(
+          {
+            repoRoot,
+            missionStore: services.missionStore,
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+          },
+          {
+            title,
+            slug,
+            mode,
+            fromSpec: flags.fromSpec,
+            fromFile: flags.fromFile,
+            template: flags.template,
+          },
+        );
+
+        console.log(`${result.mission.id} ${result.mission.state} (${result.mission.slug})`);
+        if (result.tasks.length > 0) {
+          for (const t of result.tasks) {
+            console.log(`  ${t.id} draft ${t.slug} -- ${t.title}`);
+          }
+          await refreshNowMdFromServices(services);
+        }
+      } catch (err) {
+        reportError("mission new", err);
+      }
+    });
+
+  mission
+    .command("cancel <id>")
+    .description("Cancel a mission and cascade-abandon its active tasks")
+    .option("--reason <text>", "human-readable cancel reason")
+    .action(async (id: string, flags: { reason?: string }): Promise<void> => {
+      try {
+        const repoRoot = opts.resolveRepoRoot();
+        const services = buildV2Services({ repoRoot });
+        const result = await missionCancel(
+          {
+            missionStore: services.missionStore,
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+          },
+          { mission_id: id, reason: flags.reason },
+        );
+        if (result.alreadyCancelled) {
+          console.log(`${result.mission.id} cancelled (no-op; already cancelled)`);
+          return;
+        }
+        console.log(
+          `${result.mission.id} cancelled (${result.cancelledTaskIds.length} task${result.cancelledTaskIds.length === 1 ? "" : "s"} abandoned)`,
+        );
+        for (const taskId of result.cancelledTaskIds) {
+          console.log(`  ${taskId} abandoned`);
+        }
+        if (result.cascadeErrors.length > 0) {
+          console.error("cascade errors:");
+          for (const e of result.cascadeErrors) {
+            console.error(`  ${e.taskId}: ${e.message}`);
+          }
+          process.exitCode = 1;
+        }
+      } catch (err) {
+        reportError("mission cancel", err);
+      }
+    });
+
+  mission
     .command("from-spec <path>")
-    .description("Create a v2 mission in 'specified' from a heavy-mode product-spec markdown file")
+    .description("Create a v2 mission in 'approved' from a heavy-mode product-spec markdown file")
     .action(async (pathArg: string): Promise<void> => {
       try {
         const repoRoot = opts.resolveRepoRoot();
@@ -69,7 +202,7 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
           },
           pathArg,
         );
-        console.log(`${created.id} specified (${created.slug})`);
+        console.log(`${created.id} approved (${created.slug})`);
       } catch (err) {
         reportError("mission from-spec", err);
       }
@@ -93,7 +226,7 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
           return;
         }
         const { mission: m, tasks } = result;
-        console.log(`${m.id} ${m.state} (${m.slug}) — ${m.title}`);
+        console.log(`${m.id} ${m.state} (${m.slug}) -- ${m.title}`);
         if (m.spec_path) console.log(`  spec: ${m.spec_path}`);
         if (tasks.length === 0) {
           console.log("  (no child tasks yet)");
@@ -101,7 +234,7 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
         }
         console.log(`  tasks (${tasks.length}):`);
         for (const t of tasks) {
-          console.log(`    ${t.id} ${t.state.padEnd(10)} ${t.slug} — ${t.title}`);
+          console.log(`    ${t.id} ${t.state.padEnd(10)} ${t.slug} -- ${t.title}`);
         }
       } catch (err) {
         reportError("mission show", err);
@@ -111,7 +244,7 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
   mission
     .command("decompose <id>")
     .description(
-      "Decompose a 'specified' mission into child tasks; reads a task batch JSON from --file (or '-' for stdin)",
+      "Decompose an 'intake' or 'approved' mission into child tasks; reads a task batch JSON from --file (or '-' for stdin)",
     )
     .requiredOption(
       "--file <path>",
@@ -151,11 +284,30 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
           `${result.mission.id} planned (${result.tasks.length} task${result.tasks.length === 1 ? "" : "s"})`,
         );
         for (const t of result.tasks) {
-          console.log(`  ${t.id} draft ${t.slug} — ${t.title}`);
+          console.log(`  ${t.id} draft ${t.slug} -- ${t.title}`);
         }
         await refreshNowMdFromServices(services);
       } catch (err) {
         reportError("mission decompose", err);
       }
     });
+}
+
+function pickMode(flags: {
+  fromSpec?: string;
+  fromFile?: string;
+  template?: string;
+}): MissionNewMode {
+  const set = [
+    flags.fromSpec ? "from-spec" : null,
+    flags.fromFile ? "from-file" : null,
+    flags.template ? "template" : null,
+  ].filter((v): v is string => v !== null);
+  if (set.length > 1) {
+    throw new MissionNewInvalidFlagsError(
+      `--from-spec, --from-file, --template are mutually exclusive (got ${set.join(", ")})`,
+    );
+  }
+  if (set.length === 0) return "bare";
+  return set[0] as MissionNewMode;
 }

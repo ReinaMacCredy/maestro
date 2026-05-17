@@ -105,7 +105,7 @@ describe("emitTransitionEvidence", () => {
       { store, observabilityStore: port },
       {
         mission_id: "pln-1",
-        from_state: "specified",
+        from_state: "approved",
         to_state: "planned",
         trigger_verb: "plan:decompose",
       },

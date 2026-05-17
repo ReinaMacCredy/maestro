@@ -214,12 +214,12 @@ describe("tryAdvanceMission", () => {
     expect(evidence.length).toBe(0);
   });
 
-  it("advances in-progress -> completed on task:ship when every child is terminal", async () => {
+  it("advances in-progress -> completed when every child is shipped", async () => {
     const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
     const plan = await seedPlanWithTasks(missionStore, taskStore, "in-progress", [
       "shipped",
       "shipped",
-      "abandoned",
+      "shipped",
     ]);
 
     const out = await tryAdvanceMission(
@@ -235,6 +235,34 @@ describe("tryAdvanceMission", () => {
       from_state: "in-progress",
       to_state: "completed",
       trigger_verb: "mission:auto-complete",
+      trigger: "rollup",
+      rule: "complete-or-fail",
+    });
+    expect((evidence[0] as { task_summary?: { total: number } }).task_summary).toMatchObject({
+      total: 3,
+    });
+  });
+
+  it("advances in-progress -> failed when at least one child is abandoned (terminal mixed)", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "in-progress", [
+      "shipped",
+      "shipped",
+      "abandoned",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:ship" },
+    );
+
+    expect(out!.state).toBe("failed");
+    expect(evidence.length).toBe(1);
+    expect(evidence[0]).toMatchObject({
+      from_state: "in-progress",
+      to_state: "failed",
+      rule: "complete-or-fail",
+      trigger: "rollup",
     });
   });
 
@@ -250,7 +278,7 @@ describe("tryAdvanceMission", () => {
       { mission_id: plan.id, trigger_task_verb: "task:abandon" },
     );
 
-    expect(out!.state).toBe("completed");
+    expect(out!.state).toBe("failed");
     expect(evidence.length).toBe(2);
     expect(evidence[0]).toMatchObject({
       from_state: "planned",
@@ -259,9 +287,93 @@ describe("tryAdvanceMission", () => {
     });
     expect(evidence[1]).toMatchObject({
       from_state: "in-progress",
-      to_state: "completed",
-      trigger_verb: "mission:auto-complete",
+      to_state: "failed",
+      trigger_verb: "mission:auto-fail",
     });
+  });
+
+  it("auto-pauses in-progress when every active task is blocked", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "in-progress", [
+      "blocked",
+      "blocked",
+      "shipped",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:claim" },
+    );
+
+    expect(out!.state).toBe("paused");
+    expect(evidence.length).toBe(1);
+    expect(evidence[0]).toMatchObject({
+      from_state: "in-progress",
+      to_state: "paused",
+      rule: "auto-pause",
+      trigger: "rollup",
+    });
+  });
+
+  it("auto-resumes paused when at least one active task is unblocked", async () => {
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "paused", [
+      "blocked",
+      "doing",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:claim" },
+    );
+
+    expect(out!.state).toBe("in-progress");
+    expect(evidence.length).toBe(1);
+    expect(evidence[0]).toMatchObject({
+      from_state: "paused",
+      to_state: "in-progress",
+      rule: "auto-resume",
+    });
+  });
+
+  it("never produces a planned -> paused transition", async () => {
+    // Structural invariant from plan: TASK_TRANSITIONS forbids draft -> blocked,
+    // so the only way into "blocked" is via "claimed" which fires planned ->
+    // in-progress first. Combinations that include blocked + non-claimed tasks
+    // can't legitimately occur, but the rollup must not synthesize paused from
+    // planned even if presented with one.
+    const { missionStore, taskStore, evidenceStore } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "planned", [
+      "blocked",
+      "draft",
+    ]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:claim" },
+    );
+
+    expect(out!.state).not.toBe("paused");
+  });
+
+  it("fixed-point loop handles single-tick multi-hop (planned -> in-progress -> completed)", async () => {
+    // Edge case 2: a one-task mission whose only task is already shipped at
+    // the time the rollup fires must reach the completed terminal state in
+    // a single call, not stop at in-progress.
+    const { missionStore, taskStore, evidenceStore, evidence } = makeStores();
+    const plan = await seedPlanWithTasks(missionStore, taskStore, "planned", ["shipped"]);
+
+    const out = await tryAdvanceMission(
+      { missionStore, taskStore, evidenceStore },
+      { mission_id: plan.id, trigger_task_verb: "task:ship" },
+    );
+
+    expect(out!.state).toBe("completed");
+    expect(evidence.length).toBe(2);
+    expect(evidence.map((e) => (e as { to_state: string }).to_state)).toEqual([
+      "in-progress",
+      "completed",
+    ]);
   });
 
   it("is a no-op for plans already at a terminal state", async () => {

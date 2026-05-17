@@ -124,7 +124,7 @@ describe("missionFromSpec", () => {
     await rm(repoRoot, { recursive: true, force: true });
   });
 
-  it("creates an Mission in 'specified' from a heavy-mode spec and emits one transition row", async () => {
+  it("creates an Mission in 'approved' from a heavy-mode spec and emits one transition row", async () => {
     const specPath = join(repoRoot, ".maestro/specs/demo-plan.md");
     await writeFile(specPath, HEAVY_SPEC);
     const { missionStore, evidenceStore, evidence } = makeStores();
@@ -136,7 +136,7 @@ describe("missionFromSpec", () => {
 
     expect(plan.id).toBe("pln-1");
     expect(plan.slug).toBe("demo-plan");
-    expect(plan.state).toBe("specified");
+    expect(plan.state).toBe("approved");
     expect(plan.title).toBe("Demo plan");
     expect(plan.spec_path).toBe(specPath);
 
@@ -145,7 +145,7 @@ describe("missionFromSpec", () => {
       kind: "transition",
       mission_id: "pln-1",
       from_state: null,
-      to_state: "specified",
+      to_state: "approved",
       trigger_verb: "mission:from-spec",
     });
   });

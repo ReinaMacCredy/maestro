@@ -105,7 +105,7 @@ describe("maestro mission decompose (v2)", () => {
     expect(missionDecompose).toMatchObject({
       kind: "transition",
       mission_id: planId,
-      from_state: "specified",
+      from_state: "approved",
       to_state: "planned",
       trigger_verb: "mission:decompose",
     });

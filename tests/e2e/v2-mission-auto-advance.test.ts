@@ -176,7 +176,7 @@ describe("maestro plan auto-advance (v2 ADR-0011)", () => {
     });
   });
 
-  it("abandoning the last non-terminal sibling auto-completes the plan", async () => {
+  it("abandoning every sibling auto-fails the plan", async () => {
     await runCompiled(["spec", "new", "demo-heavy", "--mode", "heavy"], tmpDir);
     const created = await runCompiled(
       ["mission", "from-spec", ".maestro/specs/demo-heavy.md"],
@@ -203,6 +203,6 @@ describe("maestro plan auto-advance (v2 ADR-0011)", () => {
     await runCompiled(["abandon", a!.id, "--reason", "no longer needed"], tmpDir);
     expect(await readPlanState(tmpDir, planId)).toBe("in-progress"); // b still draft
     await runCompiled(["abandon", b!.id, "--reason", "out of scope"], tmpDir);
-    expect(await readPlanState(tmpDir, planId)).toBe("completed");
+    expect(await readPlanState(tmpDir, planId)).toBe("failed");
   });
 });

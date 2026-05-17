@@ -61,6 +61,19 @@ export class MissionDecomposeDuplicateSlugInBatchError extends Error {
   }
 }
 
+export class MissionDecomposeAlreadyHasTasksError extends Error {
+  readonly missionId: string;
+  readonly count: number;
+  constructor(missionId: string, count: number) {
+    super(
+      `mission ${missionId} already has ${count} task(s); decompose only accepts missions with zero tasks. Use \`task new\` to add more tasks manually, or \`mission cancel\` and start over.`,
+    );
+    this.name = "MissionDecomposeAlreadyHasTasksError";
+    this.missionId = missionId;
+    this.count = count;
+  }
+}
+
 export function parseMissionDecomposeBatch(raw: unknown): readonly MissionDecomposeTaskInput[] {
   const arr = Array.isArray(raw)
     ? raw
@@ -119,6 +132,12 @@ export async function missionDecompose(
   const mission = await deps.missionStore.get(input.mission_id);
   if (!mission) throw new MissionNotFoundError(input.mission_id);
   assertMissionTransition(mission.state, "planned");
+
+  // decompose seeds fresh; refuse merge with existing tasks.
+  const existingForMission = await deps.taskStore.listByMissionId(mission.id);
+  if (existingForMission.length > 0) {
+    throw new MissionDecomposeAlreadyHasTasksError(mission.id, existingForMission.length);
+  }
 
   const existing = await deps.taskStore.list();
   for (const t of input.tasks) {

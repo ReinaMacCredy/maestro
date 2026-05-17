@@ -134,7 +134,7 @@ async function seedSpecifiedPlan(missionStore: MissionStorePort): Promise<Missio
   return missionStore.create({
     slug: "demo-plan",
     title: "Demo plan",
-    state: "specified",
+    state: "approved",
   });
 }
 
@@ -176,6 +176,51 @@ describe("parseMissionDecomposeBatch", () => {
     expect(() => parseMissionDecomposeBatch([{ title: "A", slug: "a", spec_path: 42 }])).toThrow(
       MissionDecomposeBatchInvalidError,
     );
+  });
+});
+
+describe("missionDecompose intake-state input (relaxed source)", () => {
+  it("accepts intake as input state and advances intake -> planned", async () => {
+    const { missionStore, taskStore, evidenceStore } = makeStores();
+    const mission = await missionStore.create({
+      slug: "bare-mission",
+      title: "Bare",
+      state: "intake",
+    });
+    const result = await missionDecompose(
+      { missionStore, taskStore, evidenceStore },
+      {
+        mission_id: mission.id,
+        tasks: [{ title: "A", slug: "a" }],
+      },
+    );
+    expect(result.mission.state).toBe("planned");
+  });
+});
+
+describe("missionDecompose rejects missions with existing tasks", () => {
+  it("errors when mission already owns tasks", async () => {
+    const { missionStore, taskStore, evidenceStore } = makeStores();
+    const mission = await missionStore.create({
+      slug: "with-tasks",
+      title: "With tasks",
+      state: "intake",
+    });
+    await taskStore.create({
+      slug: "pre-existing",
+      title: "Pre-existing",
+      state: "draft",
+      mission_id: mission.id,
+    });
+    await expect(
+      missionDecompose(
+        { missionStore, taskStore, evidenceStore },
+        {
+          mission_id: mission.id,
+          tasks: [{ title: "New", slug: "new" }],
+        },
+      ),
+    ).rejects.toThrow(/already has 1 task/);
   });
 });
 
@@ -223,7 +268,7 @@ describe("missionDecompose", () => {
     expect(planOnlyTransitions[0]).toMatchObject({
       kind: "transition",
       mission_id: plan.id,
-      from_state: "specified",
+      from_state: "approved",
       to_state: "planned",
       trigger_verb: "mission:decompose",
     });
@@ -240,7 +285,7 @@ describe("missionDecompose", () => {
     expect(evidence.length).toBe(0);
   });
 
-  it("rejects when the plan is not in 'specified' (e.g. already planned)", async () => {
+  it("rejects when the plan is not in 'approved' (e.g. already planned)", async () => {
     const { missionStore, taskStore, evidenceStore } = makeStores();
     const plan = await seedSpecifiedPlan(missionStore);
     await missionStore.update(plan.id, { state: "planned" });
@@ -296,6 +341,6 @@ describe("missionDecompose", () => {
     ).rejects.toBeInstanceOf(DuplicateSlugError);
     // pre-validation should have prevented any task or plan transition writes
     expect(evidence.length).toBe(0);
-    expect((await missionStore.get(plan.id))!.state).toBe("specified");
+    expect((await missionStore.get(plan.id))!.state).toBe("approved");
   });
 });

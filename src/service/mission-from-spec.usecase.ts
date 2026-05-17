@@ -41,7 +41,7 @@ export async function missionFromSpec(
   const mission = await deps.missionStore.create({
     slug: spec.frontmatter.slug,
     title,
-    state: "specified",
+    state: "approved",
     spec_path: path,
   });
   await emitTransitionEvidence(
@@ -53,7 +53,7 @@ export async function missionFromSpec(
     {
       mission_id: mission.id,
       from_state: null,
-      to_state: "specified",
+      to_state: "approved",
       trigger_verb: "mission:from-spec",
     },
   );
