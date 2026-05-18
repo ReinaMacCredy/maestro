@@ -5,7 +5,10 @@ import { output } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 
 interface DoctorCommandDeps {
-  readonly getServices: () => Pick<Services, "git" | "config">;
+  readonly getServices: () => Pick<
+    Services,
+    "config" | "git" | "taskStore" | "verdictStore"
+  >;
 }
 
 export function registerDoctorCommand(
@@ -14,14 +17,22 @@ export function registerDoctorCommand(
 ): void {
   program
     .command("doctor")
-    .description("Verify maestro dependencies and configuration")
+    .description("Verify maestro health (3 fast dimensions; --full adds build + tests)")
     .option("--json", "Output as JSON")
+    .option("--full", "Also run build and tests (warn-only)")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
-      const checks = await runDoctor(
-        services.git,
-        services.config,
-        resolveMaestroProjectRoot(process.cwd()),
+      const projectDir = resolveMaestroProjectRoot(process.cwd());
+      const checks = await runDoctor({
+        taskStore: services.taskStore,
+        verdictStore: services.verdictStore,
+        config: services.config,
+        projectDir,
+        full: opts.full === true,
+      });
+
+      const scaffoldFailed = checks.some(
+        (c) => c.name === "scaffold" && c.status === "fail",
       );
 
       const isJson = opts.json ?? program.opts().json;
@@ -33,24 +44,25 @@ export function registerDoctorCommand(
               ? "[ok]"
               : check.status === "warn"
                 ? "[--]"
-                : "[!!]";
+                : "[!]";
           lines.push(`${marker} ${check.name}: ${check.message}`);
           if (check.fix) {
             lines.push(`     Fix: ${check.fix}`);
           }
         }
-
-        const fails = list.filter((c) => c.status === "fail").length;
-        if (fails > 0) {
-          lines.push("", `${fails} issue(s) found`);
-        } else {
-          lines.push("", "All checks passed");
-        }
-
+        lines.push(
+          "",
+          scaffoldFailed
+            ? "Scaffold check failed -- run `maestro setup` and re-run"
+            : "All required checks passed",
+        );
         return lines;
       });
 
-      const hasFails = checks.some((c) => c.status === "fail");
-      if (hasFails) process.exit(1);
+      // Exit code semantics: only scaffold failure gates the exit code.
+      // Other checks (verdict-freshness, build, tests) produce warnings but
+      // don't fail doctor. This keeps the fast form (what init.sh calls)
+      // sub-second and ensures doctor is a status check, not a gate.
+      if (scaffoldFailed) process.exit(1);
     });
 }

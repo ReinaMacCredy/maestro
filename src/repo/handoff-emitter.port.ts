@@ -39,4 +39,5 @@ export interface HandoffEmitterPort {
   get(id: string): Promise<HandoffEnvelope | undefined>;
   markPickedUp(envelopeId: string, pickup: HandoffPickup): Promise<void>;
   getPickup(envelopeId: string): Promise<HandoffPickup | undefined>;
+  listPickups(): Promise<readonly HandoffPickup[]>;
 }

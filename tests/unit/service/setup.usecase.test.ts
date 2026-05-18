@@ -1,10 +1,15 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runSetup } from "@/service/setup.usecase.js";
+import { runDoctor } from "@/infra/usecases/run-doctor.usecase.js";
 import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
-import { mockConfig } from "../../helpers/mocks.js";
+import {
+  mockConfig,
+  mockRepoTaskStore,
+  mockVerdictStore,
+} from "../../helpers/mocks.js";
 import { DEFAULT_PRINCIPLES } from "@/service/default-principles.js";
 
 let tmpDir: string;
@@ -261,6 +266,179 @@ describe("runSetup (project scope)", () => {
     expect(content).toContain("require_signed_commits");
     expect(content).toContain("require_proof_map_complete");
   });
+
+  it("emits an executable init.sh at the project root on fresh setup", async () => {
+    const result = await runSetup(project());
+    const initPath = join(tmpDir, "init.sh");
+    expect(result.created).toContain(initPath);
+
+    const content = await readFile(initPath, "utf8");
+    expect(content).toContain("maestro doctor");
+    expect(content).toContain("maestro status");
+
+    if (process.platform !== "win32") {
+      const s = await stat(initPath);
+      expect(s.mode & 0o111).not.toBe(0);
+    }
+  });
+
+  it("does not overwrite an existing init.sh on rerun", async () => {
+    const initPath = join(tmpDir, "init.sh");
+    await writeFile(initPath, "#!/usr/bin/env bash\necho user-init\n");
+
+    const result = await runSetup(project());
+
+    expect(result.skipped).toContain(initPath);
+    expect(result.created).not.toContain(initPath);
+    expect(await readFile(initPath, "utf8")).toBe(
+      "#!/usr/bin/env bash\necho user-init\n",
+    );
+  });
+
+  it("seeds project-root AGENTS.md with the managed setup block on fresh setup", async () => {
+    const result = await runSetup(project());
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    expect(result.created).toContain(agentsPath);
+
+    const content = await readFile(agentsPath, "utf8");
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content).toContain("<!-- maestro-setup:end -->");
+    expect(content).toContain("## Maestro");
+    expect(content).toContain("./init.sh");
+  });
+
+  it("preserves existing AGENTS.md content and appends the managed block", async () => {
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    const userContent = "# My Project\n\nLong-standing notes the user keeps here.\n";
+    await writeFile(agentsPath, userContent);
+
+    const result = await runSetup(project());
+
+    const pointerStep = result.steps.find((s) => s.id === "write-project-pointers");
+    const entry = pointerStep?.paths.find((p) => p.path === agentsPath);
+    expect(entry?.action).toBe("overwrite");
+
+    const content = await readFile(agentsPath, "utf8");
+    expect(content).toContain("# My Project");
+    expect(content).toContain("Long-standing notes the user keeps here.");
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content.indexOf("# My Project")).toBeLessThan(
+      content.indexOf("<!-- maestro-setup:start -->"),
+    );
+  });
+
+  it("emits AGENTS.md with both the project-conventions template and the managed setup block on fresh setup", async () => {
+    await runSetup(project());
+
+    const content = await readFile(join(tmpDir, "AGENTS.md"), "utf8");
+    expect(content).toContain("# Project Conventions");
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content).toContain("## Maestro");
+    expect(content.indexOf("# Project Conventions")).toBeLessThan(
+      content.indexOf("<!-- maestro-setup:start -->"),
+    );
+  });
+
+  it("preserves an existing legacy maestro block alongside the new setup block", async () => {
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    const legacyBlock =
+      "<!-- maestro:start -->\n## Cross-Agent Handoff (maestro)\n\nLegacy content.\n<!-- maestro:end -->";
+    await writeFile(agentsPath, `# My Project\n\n${legacyBlock}\n`);
+
+    await runSetup(project());
+
+    const content = await readFile(agentsPath, "utf8");
+    expect(content).toContain("<!-- maestro:start -->");
+    expect(content).toContain("<!-- maestro:end -->");
+    expect(content).toContain("Legacy content.");
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content).toContain("<!-- maestro-setup:end -->");
+  });
+
+  it("does not re-inject the AGENTS.md block on rerun", async () => {
+    await runSetup(project());
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    const afterFirst = await readFile(agentsPath, "utf8");
+
+    const second = await runSetup(project());
+    expect(second.skipped).toContain(agentsPath);
+    expect(second.created).not.toContain(agentsPath);
+    expect(await readFile(agentsPath, "utf8")).toBe(afterFirst);
+  });
+
+  it("seeds project-root CLAUDE.md with the @AGENTS.md reference on fresh setup", async () => {
+    const result = await runSetup(project());
+    const claudePath = join(tmpDir, "CLAUDE.md");
+    expect(result.created).toContain(claudePath);
+
+    const content = await readFile(claudePath, "utf8");
+    expect(content).toContain("@AGENTS.md");
+  });
+
+  it("preserves existing CLAUDE.md content and appends the @AGENTS.md reference", async () => {
+    const claudePath = join(tmpDir, "CLAUDE.md");
+    const userContent = "# My CLAUDE.md\n\n@my-other-doc.md\n";
+    await writeFile(claudePath, userContent);
+
+    const result = await runSetup(project());
+
+    const pointerStep = result.steps.find((s) => s.id === "write-project-pointers");
+    const entry = pointerStep?.paths.find((p) => p.path === claudePath);
+    expect(entry?.action).toBe("overwrite");
+
+    const content = await readFile(claudePath, "utf8");
+    expect(content).toContain("@my-other-doc.md");
+    expect(content).toContain("@AGENTS.md");
+  });
+
+  it("does not re-inject the CLAUDE.md reference on rerun", async () => {
+    await runSetup(project());
+    const claudePath = join(tmpDir, "CLAUDE.md");
+    const afterFirst = await readFile(claudePath, "utf8");
+
+    const second = await runSetup(project());
+    expect(second.skipped).toContain(claudePath);
+    expect(second.created).not.toContain(claudePath);
+    expect(await readFile(claudePath, "utf8")).toBe(afterFirst);
+  });
+
+  it("syncs all 6 bundled maestro-* skills under .claude/skills/ and .codex/skills/", async () => {
+    // Regression: setup.usecase.ts previously iterated BUILT_IN_SKILL_TEMPLATES
+    // (empty `[]` since v0.100.0), leaving project-level skill directories
+    // empty. The 6 shipped skills live in BUNDLED_SKILL_TEMPLATES.
+    await runSetup(project());
+
+    const expectedSkills = [
+      "maestro-design",
+      "maestro-handoff",
+      "maestro-mission",
+      "maestro-setup",
+      "maestro-task",
+      "maestro-verify",
+    ];
+
+    for (const skill of expectedSkills) {
+      for (const root of [".claude", ".codex"]) {
+        const skillFile = join(tmpDir, root, "skills", skill, "SKILL.md");
+        const content = await readFile(skillFile, "utf8");
+        expect(content.length).toBeGreaterThan(0);
+        expect(content).toContain(`name: ${skill}`);
+      }
+    }
+  });
+
+  it("emitted init.sh satisfies maestro doctor's init-script dimension", async () => {
+    await runSetup(project());
+
+    const checks = await runDoctor({
+      taskStore: mockRepoTaskStore(),
+      verdictStore: mockVerdictStore(),
+      projectDir: tmpDir,
+    });
+
+    const initCheck = checks.find((c) => c.name === "init-script");
+    expect(initCheck?.status).toBe("ok");
+  });
 });
 
 describe("runSetup (dry-run)", () => {
@@ -276,6 +454,33 @@ describe("runSetup (dry-run)", () => {
     const result = await runSetup(project({ dryRun: true }));
     const allActions = result.steps.flatMap((s) => s.paths.map((p) => p.action));
     expect(allActions).toContain("would-create");
+  });
+
+  it("reports would-create for project-root pointers when files are absent", async () => {
+    const result = await runSetup(project({ dryRun: true }));
+    const pointerStep = result.steps.find((s) => s.id === "write-project-pointers");
+    const agentsEntry = pointerStep?.paths.find((p) => p.path === join(tmpDir, "AGENTS.md"));
+    const claudeEntry = pointerStep?.paths.find((p) => p.path === join(tmpDir, "CLAUDE.md"));
+
+    expect(agentsEntry?.action).toBe("would-create");
+    expect(claudeEntry?.action).toBe("would-create");
+    await expect(access(join(tmpDir, "AGENTS.md"))).rejects.toThrow();
+    await expect(access(join(tmpDir, "CLAUDE.md"))).rejects.toThrow();
+  });
+
+  it("reports would-overwrite for project-root pointers when files pre-exist without the block", async () => {
+    await writeFile(join(tmpDir, "AGENTS.md"), "# Existing notes\n");
+    await writeFile(join(tmpDir, "CLAUDE.md"), "@my-other-doc.md\n");
+
+    const result = await runSetup(project({ dryRun: true }));
+    const pointerStep = result.steps.find((s) => s.id === "write-project-pointers");
+    const agentsEntry = pointerStep?.paths.find((p) => p.path === join(tmpDir, "AGENTS.md"));
+    const claudeEntry = pointerStep?.paths.find((p) => p.path === join(tmpDir, "CLAUDE.md"));
+
+    expect(agentsEntry?.action).toBe("would-overwrite");
+    expect(claudeEntry?.action).toBe("would-overwrite");
+    expect(await readFile(join(tmpDir, "AGENTS.md"), "utf8")).toBe("# Existing notes\n");
+    expect(await readFile(join(tmpDir, "CLAUDE.md"), "utf8")).toBe("@my-other-doc.md\n");
   });
 });
 

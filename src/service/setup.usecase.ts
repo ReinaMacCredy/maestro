@@ -21,10 +21,32 @@ import {
   type BootstrapTemplateFile,
 } from "@/infra/domain/bootstrap-templates.js";
 import {
-  BUILT_IN_SKILL_TEMPLATES,
-  type BuiltInSkillTemplate,
-} from "@/infra/domain/built-in-skill-templates.js";
+  BUNDLED_SKILL_TEMPLATES,
+  type BundledSkillTemplate,
+} from "@/infra/domain/bundled-skill-templates.js";
+import {
+  hasSetupBlock,
+  injectSetupBlock,
+  hasSetupReference,
+  injectSetupReference,
+} from "@/infra/lib/agent-block.js";
 import { DEFAULT_PRINCIPLES } from "./default-principles.js";
+
+// Minimal pointer block written into project-root AGENTS.md by `maestro
+// setup`. The `maestro-setup` skill swaps this in place for the richer
+// init-deep block via `replaceSetupBlock`. The seed deliberately
+// references only files the CLI itself emits (`.maestro/`, `init.sh`,
+// `maestro doctor|status`) so there are no dangling pointers when the
+// skill hasn't run.
+const PROJECT_ROOT_POINTER_BLOCK = `## Maestro
+
+This project is wired into the Maestro harness. State and config live
+under \`.maestro/\`. Run \`./init.sh\` to bring a fresh checkout up; run
+\`maestro doctor\` and \`maestro status\` to see what Maestro knows.
+
+Preserve content outside this managed block; the block is rewritten by
+\`maestro setup\` and the \`maestro-setup\` skill, but everything else in
+this file is yours.`;
 
 export type SetupStepStatus = "ok" | "skipped" | "changed" | "error";
 export type SetupPathAction =
@@ -115,6 +137,7 @@ export async function runSetup(opts: RunSetupOptions): Promise<SetupReport> {
   steps.push(await stepBootstrapDirs(opts.dir, dryRun));
   steps.push(await stepWriteProjectConfig(opts, dryRun));
   steps.push(await stepDropTemplates(opts, dryRun));
+  steps.push(await stepWriteProjectRootPointers(opts.dir, dryRun));
   steps.push(await stepSeedPrinciples(opts.dir, dryRun));
   steps.push(await stepSyncSkills(opts, dryRun));
 
@@ -278,11 +301,7 @@ async function stepDropTemplates(
     const existing = await readText(target);
     if (existing !== undefined) {
       // `--reset-templates` is the non-interactive force flag (CI / scripted
-      // use, where no TTY prompter is wired up). When no flag is set, fall
-      // back to the interactive confirm. The previous form gated on a
-      // `shouldAutoMigrateLegacyTemplate` predicate that was symbolically
-      // always false (it compared `nextContent` to the template content it
-      // was derived from), so `--reset-templates` quietly did nothing.
+      // use); otherwise fall back to the interactive confirm.
       const okToReplace =
         opts.resetTemplates === true ||
         (opts.confirmReplace !== undefined && (await opts.confirmReplace(target)));
@@ -311,6 +330,60 @@ async function stepDropTemplates(
     status: statusFor(paths),
     paths,
   };
+}
+
+async function stepWriteProjectRootPointers(
+  dir: string,
+  dryRun: boolean,
+): Promise<SetupStepResult> {
+  const paths = await Promise.all([
+    ensureProjectRootBlock(join(dir, "AGENTS.md"), dir, PROJECT_ROOT_POINTER_BLOCK, dryRun),
+    ensureProjectRootReference(join(dir, "CLAUDE.md"), dir, dryRun),
+  ]);
+
+  return {
+    id: "write-project-pointers",
+    label: "Write project-root AGENTS.md / CLAUDE.md pointers",
+    status: statusFor(paths),
+    paths,
+  };
+}
+
+async function ensureProjectRootBlock(
+  target: string,
+  rootDir: string,
+  body: string,
+  dryRun: boolean,
+): Promise<SetupPathEntry> {
+  await assertProjectLocalPathSafe(rootDir, target);
+  const existing = await readText(target);
+  if (existing !== undefined && hasSetupBlock(existing)) {
+    return { path: target, action: "skip" };
+  }
+  const replacing = existing !== undefined;
+  if (dryRun) {
+    return { path: target, action: replacing ? "would-overwrite" : "would-create" };
+  }
+  await writeText(target, injectSetupBlock(existing ?? "", body));
+  return { path: target, action: replacing ? "overwrite" : "create" };
+}
+
+async function ensureProjectRootReference(
+  target: string,
+  rootDir: string,
+  dryRun: boolean,
+): Promise<SetupPathEntry> {
+  await assertProjectLocalPathSafe(rootDir, target);
+  const existing = await readText(target);
+  if (existing !== undefined && hasSetupReference(existing)) {
+    return { path: target, action: "skip" };
+  }
+  const replacing = existing !== undefined;
+  if (dryRun) {
+    return { path: target, action: replacing ? "would-overwrite" : "would-create" };
+  }
+  await writeText(target, injectSetupReference(existing ?? ""));
+  return { path: target, action: replacing ? "overwrite" : "create" };
 }
 
 async function stepSeedPrinciples(dir: string, dryRun: boolean): Promise<SetupStepResult> {
@@ -369,7 +442,7 @@ async function stepSyncSkills(
       await removeStaleManagedSkillDirs(opts.dir, skillRoot, dryRun, paths);
     }
 
-    for (const template of BUILT_IN_SKILL_TEMPLATES) {
+    for (const template of BUNDLED_SKILL_TEMPLATES) {
       await syncManagedSkillTemplate(opts.dir, skillRoot, template, dryRun, paths);
     }
   }
@@ -389,7 +462,7 @@ async function removeStaleManagedSkillDirs(
   paths: SetupPathEntry[],
 ): Promise<void> {
   const shippedSkillDirNames = new Set(
-    BUILT_IN_SKILL_TEMPLATES.map((template) => resolveSkillDirectoryName(template.name)),
+    BUNDLED_SKILL_TEMPLATES.map((template) => resolveSkillDirectoryName(template.name)),
   );
   let entries;
   try {
@@ -418,7 +491,7 @@ async function removeStaleManagedSkillDirs(
 async function syncManagedSkillTemplate(
   rootDir: string,
   skillRoot: string,
-  template: BuiltInSkillTemplate,
+  template: BundledSkillTemplate,
   dryRun: boolean,
   paths: SetupPathEntry[],
 ): Promise<void> {
@@ -470,7 +543,7 @@ async function syncManagedSkillTemplate(
 
 async function skillDirMatchesTemplate(
   skillDir: string,
-  template: BuiltInSkillTemplate,
+  template: BundledSkillTemplate,
 ): Promise<boolean> {
   if (!(await dirExists(skillDir))) return false;
 

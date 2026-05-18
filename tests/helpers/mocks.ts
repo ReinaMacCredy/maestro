@@ -32,6 +32,23 @@ import type {
   UpdateFeatureInput,
   UpdateAssertionInput,
 } from "@/shared/domain/legacy-mission";
+import type {
+  TaskStorePort as RepoTaskStorePort,
+} from "@/repo/task-store.port.js";
+import type { Task as RepoTask } from "@/types/task.js";
+import type { TaskState as RepoTaskState } from "@/types/task-state.js";
+import type {
+  EvidenceStorePort as RepoEvidenceStorePort,
+  EvidenceRow as RepoEvidenceRow,
+  EvidenceFilter as RepoEvidenceFilter,
+} from "@/repo/evidence-store.port.js";
+import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
+import type { Verdict } from "@/features/verdict/domain/types.js";
+import type {
+  HandoffEmitterPort,
+  HandoffEnvelope,
+  HandoffPickup,
+} from "@/repo/handoff-emitter.port.js";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
   return {
@@ -657,6 +674,128 @@ export function mockGitAnchor(overrides: Partial<GitAnchorPort> = {}): GitAnchor
     collectAddedLines: async () => [],
     collectUntrackedFiles: async () => [],
     resolveTreeSha: async () => "tree-sha-123",
+    ...overrides,
+  };
+}
+
+// Mocks for @/repo/* ports. The Repo prefix disambiguates from the
+// shared/domain TaskStorePort and features/evidence EvidenceStorePort, which
+// are structurally distinct ports that coexist in the codebase.
+
+export function mockRepoTaskStore(
+  initial: readonly RepoTask[] = [],
+  overrides: Partial<RepoTaskStorePort> = {},
+): RepoTaskStorePort {
+  const tasks = new Map<string, RepoTask>(initial.map((task) => [task.id, task]));
+  return {
+    create: async () => {
+      throw new Error("mockRepoTaskStore.create not implemented");
+    },
+    createMany: async () => {
+      throw new Error("mockRepoTaskStore.createMany not implemented");
+    },
+    get: async (id) => tasks.get(id),
+    update: async (id, patch) => {
+      const existing = tasks.get(id);
+      if (!existing) throw new Error(`mockRepoTaskStore.update: not found: ${id}`);
+      const next: RepoTask = {
+        ...existing,
+        ...patch,
+        updated_at: new Date().toISOString(),
+      };
+      tasks.set(id, next);
+      return next;
+    },
+    list: async () => [...tasks.values()],
+    listByState: async (state: RepoTaskState) =>
+      [...tasks.values()].filter((task) => task.state === state),
+    listByMissionId: async (mission_id: string) =>
+      [...tasks.values()].filter((task) => task.mission_id === mission_id),
+    ...overrides,
+  };
+}
+
+export function mockRepoEvidenceStore(
+  initial: readonly RepoEvidenceRow[] = [],
+  overrides: Partial<RepoEvidenceStorePort> = {},
+): RepoEvidenceStorePort {
+  const rows = new Map<string, RepoEvidenceRow>(initial.map((row) => [row.id, row]));
+  return {
+    append: async (row) => {
+      rows.set(row.id, row);
+    },
+    list: async (filter: RepoEvidenceFilter = {}) => {
+      const out: RepoEvidenceRow[] = [];
+      for (const row of rows.values()) {
+        if (filter.task_id !== undefined && row.task_id !== filter.task_id) continue;
+        if (filter.mission_id !== undefined) {
+          if (!("mission_id" in row) || row.mission_id !== filter.mission_id) continue;
+        }
+        if (filter.kind !== undefined && row.kind !== filter.kind) continue;
+        out.push(row);
+      }
+      return out.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    },
+    read: async (id) => rows.get(id),
+    ...overrides,
+  };
+}
+
+export function mockHandoffEmitter(
+  initial: { envelopes?: readonly HandoffEnvelope[]; pickups?: readonly HandoffPickup[] } = {},
+  overrides: Partial<HandoffEmitterPort> = {},
+): HandoffEmitterPort {
+  const envelopes = new Map<string, HandoffEnvelope>();
+  for (const e of initial.envelopes ?? []) envelopes.set(e.id, e);
+  const pickups = new Map<string, HandoffPickup>();
+  for (const p of initial.pickups ?? []) pickups.set(p.envelope_id, p);
+  return {
+    emit: async (envelope) => {
+      envelopes.set(envelope.id, envelope);
+    },
+    list: async () => Array.from(envelopes.values()),
+    get: async (id) => envelopes.get(id),
+    markPickedUp: async (envelopeId, pickup) => {
+      pickups.set(envelopeId, pickup);
+    },
+    getPickup: async (envelopeId) => pickups.get(envelopeId),
+    listPickups: async () => Array.from(pickups.values()),
+    ...overrides,
+  };
+}
+
+export function mockVerdictStore(
+  initial: readonly Verdict[] = [],
+  overrides: Partial<VerdictStorePort> = {},
+): VerdictStorePort {
+  const histories = new Map<string, Verdict[]>();
+  for (const verdict of initial) {
+    const list = histories.get(verdict.taskId) ?? [];
+    list.push(verdict);
+    histories.set(verdict.taskId, list);
+  }
+  return {
+    write: async (taskId, verdict) => {
+      const list = histories.get(taskId) ?? [];
+      list.push(verdict);
+      histories.set(taskId, list);
+    },
+    readLatest: async (taskId) => {
+      const list = histories.get(taskId);
+      return list && list.length > 0 ? list[list.length - 1] : undefined;
+    },
+    readVersion: async (taskId, verdictId) =>
+      histories.get(taskId)?.find((v) => v.id === verdictId),
+    history: async (taskId) => histories.get(taskId) ?? [],
+    findByTreeSha: async (treeSha) => {
+      const out: Verdict[] = [];
+      for (const list of histories.values()) {
+        for (const verdict of list) {
+          if (verdict.subject?.tree_sha === treeSha) out.push(verdict);
+        }
+      }
+      return out;
+    },
     ...overrides,
   };
 }

@@ -13,6 +13,15 @@ export const BLOCK_END_MARKER = "<!-- maestro:end -->";
 
 export const REFERENCE_FILE = "MAESTRO.md";
 
+// Marker pair and reference file used by `maestro setup` when seeding the
+// project-root `AGENTS.md` and `CLAUDE.md`. Distinct from the legacy values
+// above so `cleanupLegacyMaestroMd` in `manage-agents.usecase.ts` continues
+// to strip pre-redesign installs without touching the new seed.
+export const SETUP_BLOCK_START_MARKER = "<!-- maestro-setup:start -->";
+export const SETUP_BLOCK_END_MARKER = "<!-- maestro-setup:end -->";
+
+export const SETUP_REFERENCE_FILE = "AGENTS.md";
+
 export interface AgentConfigSpec {
   readonly slug: string;
   readonly displayName: string;

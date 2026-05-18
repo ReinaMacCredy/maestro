@@ -197,21 +197,62 @@ describe("CLI integration", () => {
     expect(stdout).not.toContain("\n  init ");
   });
 
-  it("doctor --json returns structured output", async () => {
-    const { stdout, exitCode } = await run(["doctor", "--json"]);
-    expect(exitCode).toBe(0);
+  it("doctor --json returns structured output; exits 1 when scaffold incomplete", async () => {
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    const { stdout, exitCode } = await run(["doctor", "--json"], tmpDir);
+    // Incomplete scaffold (only .maestro/, no subdirs) drives the non-zero exit.
+    expect(exitCode).toBe(1);
     const checks = JSON.parse(stdout);
     expect(Array.isArray(checks)).toBe(true);
-    expect(checks.length).toBeGreaterThan(0);
-    expect(checks[0]).toHaveProperty("name");
-    expect(checks[0]).toHaveProperty("status");
+    expect(checks.map((c: { name: string }) => c.name).sort()).toEqual([
+      "init-script",
+      "scaffold",
+      "verdict-freshness",
+    ]);
+    for (const c of checks) {
+      expect(c).toHaveProperty("status");
+    }
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("status --json returns structured output", async () => {
-    const { stdout, exitCode } = await run(["status", "--json"]);
+  it("status --json returns cold-start sections", async () => {
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    const { stdout, exitCode } = await run(["status", "--json"], tmpDir);
     expect(exitCode).toBe(0);
-    const status = JSON.parse(stdout);
-    expect(status).toHaveProperty("gitAvailable");
+    const report = JSON.parse(stdout);
+    expect(report).toHaveProperty("maestro_health");
+    expect(report).toHaveProperty("project_state");
+    expect(Array.isArray(report.missions)).toBe(true);
+    expect(Array.isArray(report.recent_transitions)).toBe(true);
+    // next_ready is undefined when no tasks are ready -- JSON.stringify drops
+    // undefined fields, so the key may be absent. Assert presence only when set.
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("status --json --terse warns and ignores terse flag", async () => {
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    const { stdout, stderr, exitCode } = await run(["status", "--json", "--terse"], tmpDir);
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("terse");
+    const report = JSON.parse(stdout);
+    expect(report).toHaveProperty("maestro_health");
+    expect(Array.isArray(report.recent_transitions)).toBe(true);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("doctor --json works via compiled binary", async () => {
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    const { stdout, exitCode } = await runCompiled(["doctor", "--json"], tmpDir);
+    expect(exitCode).toBe(1); // Incomplete scaffold
+    const checks = JSON.parse(stdout);
+    expect(Array.isArray(checks)).toBe(true);
+    expect(checks.some((c: { name: string }) => c.name === "scaffold")).toBe(true);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("status --json works via compiled binary", async () => {
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    const { stdout, exitCode } = await runCompiled(["status", "--json"], tmpDir);
+    expect(exitCode).toBe(0);
+    const report = JSON.parse(stdout);
+    expect(report).toHaveProperty("maestro_health");
+    expect(report).toHaveProperty("project_state");
   }, SLOW_CLI_TIMEOUT_MS);
 
 });
