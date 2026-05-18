@@ -1,6 +1,6 @@
 ---
 name: maestro-mission
-description: Turn an approved heavy-mode product-spec into an executable v2 mission with child tasks. Use after `maestro-design` has produced a `mode: heavy` spec, or when a single task has grown big enough that it should be decomposed into a multi-PR batch. Persists the mission to `.maestro/missions/missions.jsonl` and the child tasks to `.maestro/tasks/tasks.jsonl`.
+description: Turn an approved heavy-mode product-spec into an executable mission with child tasks. Use after `maestro-design` has produced a `mode: heavy` spec, or when a single task has grown big enough that it should be decomposed into a multi-PR batch. Persists the mission to `.maestro/missions/missions.jsonl` and the child tasks to `.maestro/tasks/tasks.jsonl`.
 ---
 
 # Maestro Mission
@@ -75,7 +75,7 @@ The verification protocol is `maestro-verify` — every task ends with `maestro 
 
 ## Materialize the mission and child tasks
 
-When the user approves, run the v2 mission lifecycle. There are four entry points; pick whichever matches the starting material:
+When the user approves, run the mission lifecycle. There are four entry points; pick whichever matches the starting material:
 
 ### A. From a heavy-mode spec (most common path)
 
@@ -153,7 +153,7 @@ intake -> approved -> planned -> in-progress ---------+                         
 ```
 
 - `intake → planned` is the bare-title decompose path.
-- `approved` is the spec-parsed state, not a reviewer gate (v2 gates are task-level).
+- `approved` is the spec-parsed state, not a reviewer gate (gates are task-level).
 - `paused` fires automatically when every active task is blocked; `in-progress` resumes when any unblocks.
 - `completed` requires every task `shipped`; any `abandoned` task flips the terminal to `failed`.
 - `completed`, `failed`, `cancelled` are absorbing. To "retry" a failed mission, create a new one.
@@ -209,7 +209,7 @@ Skip this section entirely when no maestro project is detected.
 
 ## What this skill does not do
 
-- Does **not** propose a contract. v2 contracts are derived from the spec's path globs and the task's diff; the agent does not author them in the plan.
+- Does **not** propose a contract. Contracts are derived from the spec's path globs and the task's diff; the agent does not author them in the plan.
 - Does **not** lock a risk class. Maestro derives it from the diff; you cannot lower it from the plan.
 - Does **not** open PRs. Each child task ends with `maestro task ship`; the PR opens through normal git flow before `ship`.
 - Does **not** schedule iteration. Maestro stays passive (no cron, no daemon).

@@ -1,5 +1,5 @@
 import type { VerdictDecision, VerdictStorePort } from "@/features/verdict";
-import type { TaskQueryPort } from "@/shared/domain/legacy-task";
+import type { TaskQueryPort } from "@/shared/domain/task";
 import type { ContractVersionStorePort, ContractStoreQueryPort } from "@/repo/contract-store.port.js";
 import type { RunStateStorePort } from "@/repo/run-state-store.port.js";
 import { readCurrentContractWithBackfill } from "@/service/contract-helpers.js";

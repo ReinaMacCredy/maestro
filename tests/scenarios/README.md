@@ -6,7 +6,7 @@ Each scenario runs a full user → coding-agent → maestro → ship cycle in a
 sandboxed project directory. Rubrics score deterministically against the
 `.maestro/evidence/<date>.jsonl` trail — no LLM-as-judge.
 
-## The 8 scenarios
+## The 4 scenarios
 
 | # | Name | Project | Familiarity | Mode | Task shape |
 |---|------|---------|-------------|------|-----------|
@@ -14,10 +14,6 @@ sandboxed project directory. Rubrics score deterministically against the
 | 2 | `greenfield-novice-heavy` | greenfield | novice | heavy | feature (multi-PR) |
 | 3 | `greenfield-expert-light` | greenfield | expert | light | bug |
 | 4 | `greenfield-expert-heavy` | greenfield | expert | heavy | feature (lint-violation recovery) |
-| 5 | `brownfield-novice-light` | brownfield | novice | light | feature |
-| 6 | `brownfield-novice-heavy` | brownfield | novice | heavy | feature (multi-PR) |
-| 7 | `brownfield-expert-light` | brownfield | expert | light | bug |
-| 8 | `brownfield-expert-heavy` | brownfield | expert | heavy | feature (block recovery) |
 
 ## Directory layout
 
@@ -99,14 +95,3 @@ Distinguish task vs plan transitions by which of `task_id` / `mission_id` is set
 Task states: `draft | claimed | doing | verifying | blocked | ready | shipped | abandoned`
 
 Plan states: `intake | specified | planned | in-progress | completed | cancelled`
-
-## Brownfield fixture
-
-Brownfield scenarios (5-8) copy `tests/fixtures/v1-maestro/.maestro/` into a
-temp directory. The sub-agent must run `maestro setup` (expert
-scenarios) or discover and run it unprompted (novice scenarios).
-
-Migration success is confirmed by:
-- File `.maestro/.migrated-v2.json` present (written by step 10 of migrate-v2)
-- File `docs/principles/legacy/legacy-rule-1.md` present (migrated from the
-  fixture's single correction)

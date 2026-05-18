@@ -3,7 +3,7 @@ import { checkPlan } from "@/features/mission/usecases/check-mission.js";
 import type { PlanInput } from "@/features/mission/domain/types.js";
 import type { Contract } from "@/types/contract.js";
 import type { Spec } from "@/shared/domain/legacy-spec/index.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 
 function makeContract(filesExpected: string[] = []): Contract {
   return {

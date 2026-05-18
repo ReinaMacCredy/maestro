@@ -3,15 +3,15 @@ import { parseSpecFile } from "../repo/fs-spec-store.adapter.js";
 import {
   generateContractId,
   generateDoneWhenId,
-} from "@/shared/domain/legacy-task/domain/contract/contract-state.js";
+} from "@/shared/domain/task/domain/contract/contract-state.js";
 import {
   CONTRACT_SCHEMA_VERSION,
   type Contract,
-} from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+} from "@/shared/domain/task/domain/contract/contract-types.js";
 import type {
   ContractStorePort,
   ContractVersionStorePort,
-} from "@/shared/domain/legacy-task/index.js";
+} from "@/shared/domain/task/index.js";
 import type { TaskId } from "../types/task.js";
 
 export interface AutoCreateContractDeps {
@@ -30,9 +30,9 @@ export interface AutoCreateContractInput {
   readonly riskClass?: "low" | "medium" | "high" | "critical";
 }
 
-// Synthesize a locked contract for a v2 task at claim time so that downstream
+// Synthesize a locked contract for a task at claim time so that downstream
 // verdict requests find a contract without the agent running a separate
-// `task contract new`/`lock` flow. v2 has no agent-facing contract verbs;
+// `task contract new`/`lock` flow. There are no agent-facing contract verbs;
 // contracts are internal to the trust substrate.
 export async function autoCreateContract(
   deps: AutoCreateContractDeps,

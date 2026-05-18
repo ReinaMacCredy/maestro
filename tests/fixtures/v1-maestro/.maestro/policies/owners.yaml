@@ -1,6 +1,0 @@
-version: 1
-roles:
-  policy_approver:
-    - reina@reinamaccredy.me
-  deploy_approver:
-    - reina@reinamaccredy.me

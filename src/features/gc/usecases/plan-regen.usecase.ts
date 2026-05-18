@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { LegacyTaskStorePort as TaskStorePort, LegacyTask as Task } from "@/shared/domain/legacy-task";
+import type { TaskStorePort, Task } from "@/shared/domain/task";
 import type { VerdictStorePort, Verdict } from "@/features/verdict";
 import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import type { EvidenceStorePort, EvidenceRow } from "@/features/evidence";

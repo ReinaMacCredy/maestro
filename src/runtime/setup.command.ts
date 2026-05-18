@@ -4,7 +4,7 @@ import { setupCheck, type SetupCheckEntry } from "../service/setup-check.usecase
 import { runSetup, type SetupReport } from "../service/setup.usecase.js";
 import type { Services } from "@/services.js";
 
-export interface SetupCommandV2Options {
+export interface SetupCommandOptions {
   readonly resolveRepoRoot: () => string;
   readonly getServices: () => Pick<Services, "config">;
 }
@@ -12,7 +12,7 @@ export interface SetupCommandV2Options {
 function findOrCreateSetupCommand(program: Command): Command {
   const existing = program.commands.find((c) => c.name() === "setup");
   if (existing) return existing;
-  return program.command("setup").description("Initialize and migrate the .maestro/ layout");
+  return program.command("setup").description("Initialize the .maestro/ layout");
 }
 
 function formatEntry(entry: SetupCheckEntry): string {
@@ -92,7 +92,7 @@ function createReplacementPrompter(): {
 
 export async function runSetupCommand(
   flags: SetupFlags,
-  deps: SetupCommandV2Options,
+  deps: SetupCommandOptions,
 ): Promise<SetupReport> {
   const services = deps.getServices();
   const isJson = flags.json === true;
@@ -119,7 +119,7 @@ export async function runSetupCommand(
   }
 }
 
-export function registerSetupV2Commands(program: Command, opts: SetupCommandV2Options): void {
+export function registerSetupCommands(program: Command, opts: SetupCommandOptions): void {
   const setup = findOrCreateSetupCommand(program);
 
   setup
@@ -146,7 +146,7 @@ export function registerSetupV2Commands(program: Command, opts: SetupCommandV2Op
 
   setup
     .command("check")
-    .description("Audit the v2 directory layout (.maestro/{tasks,missions,evidence,runs}, docs/principles)")
+    .description("Audit the .maestro/ directory layout (.maestro/{tasks,missions,evidence,runs}, docs/principles)")
     .option("--json", "emit JSON instead of text")
     .action(async function (this: Command, flags: { json?: boolean }): Promise<void> {
       try {

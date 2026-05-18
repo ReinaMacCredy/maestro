@@ -1,12 +1,12 @@
-# Maestro v2 ArchitectureRules port: source of truth (ADR-0005).
+# Maestro ArchitectureRules port: source of truth (ADR-0005).
 #
 # Layers list is order-significant: each layer may import only from layers
 # listed earlier in the array. `providers` is the single cross-cutting boundary
 # allowed to import from any layer (composition root).
 #
-# Enforced by the v2 architecture-lint runner (PR 12) and surfaced through the
-# ArchitectureRulesPort (PR 11). The passive_harness section enforces the
-# no-runner-inversion invariant from §13 of the master plan.
+# Enforced by the architecture-lint runner and surfaced through the
+# ArchitectureRulesPort. The passive_harness section enforces the
+# no-runner-inversion invariant.
 
 version: 1
 forward_only: true

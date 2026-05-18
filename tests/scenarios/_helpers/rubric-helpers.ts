@@ -170,22 +170,6 @@ export async function mustExistDir(
 }
 
 // ---------------------------------------------------------------------------
-// Migration flag
-// ---------------------------------------------------------------------------
-
-export async function loadMigrationFlag(
-  projectDir: string,
-): Promise<{ migrated_at: string } | null> {
-  const path = join(projectDir, ".maestro/.migrated-v2.json");
-  try {
-    const content = await readFile(path, "utf8");
-    return JSON.parse(content) as { migrated_at: string };
-  } catch {
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Sub-agent exit sentinel
 // ---------------------------------------------------------------------------
 

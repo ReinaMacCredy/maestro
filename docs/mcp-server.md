@@ -67,9 +67,9 @@ The server is the same maestro binary, run with `maestro mcp serve`. Agents laun
 
 | Tool | Behavior |
 |------|----------|
-| `maestro_setup_check` | Read-only audit of the v2 directory tree, principles pack, and `.maestro/config.yaml`. |
+| `maestro_setup_check` | Read-only audit of the `.maestro/` directory tree, principles pack, and `.maestro/config.yaml`. |
 
-The merged `setup` verb (idempotent state machine, hard-deletes v1, migrates `.maestro/plans/` → `.maestro/missions/`) is CLI-only — destructive actions stay off the MCP surface.
+The `setup` verb (idempotent state machine that scaffolds directories, skill bundles, and templates) is CLI-only — directory-mutating actions stay off the MCP surface.
 
 Grill-driven verbs (`spec new`, `mission from-spec`, `mission decompose`) are CLI-only — the interactive grill protocol cannot be sustained over MCP.
 

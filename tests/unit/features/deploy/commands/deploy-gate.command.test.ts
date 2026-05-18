@@ -5,7 +5,7 @@ import { mockEvidenceStore, mockTaskStore } from "../../../../helpers/mocks.js";
 import type { RecordEvidenceInput } from "@/features/evidence/index.js";
 import type { EvidenceRow, DeployReadinessPayload } from "@/features/evidence/index.js";
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
-import type { LegacyTaskStorePort as TaskStorePort, LegacyTask as Task } from "@/shared/domain/legacy-task";
+import type { TaskStorePort, Task } from "@/shared/domain/task";
 import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec/index.js";
 import type { Owners } from "@/features/policy/index.js";
 
@@ -108,9 +108,9 @@ function makeProgram(opts: {
 
   registerDeployGateCommand(deployCmd, program, {
     getServices: () => ({
-      evidenceStore,
-      taskStore,
-      specStore: mockSpecStore(spec),
+      legacyEvidenceStore: evidenceStore,
+      legacyTaskStore: taskStore,
+      trustSpecStore: mockSpecStore(spec),
       projectRoot: "/test",
     }),
     recordEvidence: async (

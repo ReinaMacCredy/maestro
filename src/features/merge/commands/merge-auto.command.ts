@@ -11,12 +11,12 @@ interface MergeAutoCommandDeps {
   readonly getServices: () => Pick<
     Services,
     | "verdictStore"
-    | "evidenceStore"
+    | "legacyEvidenceStore"
     | "contractVersionStore"
     | "contractStore"
     | "gitAnchor"
     | "getEffectiveAutopilotPolicy"
-    | "specStore"
+    | "trustSpecStore"
     | "githubApi"
     | "projectRoot"
   >;
@@ -106,11 +106,11 @@ export function registerMergeAutoCommand(
 
       // 4. Resolve all remaining inputs in parallel
       const [evidenceRows, sensitiveGlobs, autopilotPolicy, spec] = await Promise.all([
-        services.evidenceStore.list({ task_id: taskId }),
+        services.legacyEvidenceStore.list({ task_id: taskId }),
         loadSensitivePathsGlobs(services.projectRoot),
         services.getEffectiveAutopilotPolicy(),
         contract.missionId !== undefined
-          ? services.specStore.read(contract.missionId)
+          ? services.trustSpecStore.read(contract.missionId)
           : Promise.resolve(undefined),
       ]);
 

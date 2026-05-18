@@ -7,13 +7,13 @@ import { registerCiVerifyCommand } from "@/features/ci/commands/ci-verify.comman
 import type { Verdict, VerdictDecision } from "@/features/verdict/domain/types.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
-import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort, RunStateStorePort } from "@/shared/domain/legacy-task";
+import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort, RunStateStorePort } from "@/shared/domain/task";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import type { GithubApiPort } from "@/features/ci/ports/github-api.port.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
 import type { RiskServices } from "@/features/risk/services.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 import type { Contract } from "@/types/contract.js";
 import { mockContractStore } from "../../../../helpers/mocks.js";
 
@@ -169,8 +169,8 @@ interface FakeServices {
   contractVersionStore: ContractVersionStorePort;
   contractStore: ContractStorePort;
   runStateStore: RunStateStorePort;
-  evidenceStore: EvidenceStorePort;
-  specStore: SpecStorePort;
+  legacyEvidenceStore: EvidenceStorePort;
+  trustSpecStore: SpecStorePort;
   getEffectiveRiskPolicy: () => Promise<RiskPolicy>;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
   getEffectiveReleasePolicy: () => Promise<ReleasePolicy>;
@@ -190,8 +190,8 @@ function makeServices(verdict: Verdict): FakeServices {
     contractVersionStore: fakeContractVersionStore(),
     contractStore: mockContractStore(),
     runStateStore: fakeRunStateStore(),
-    evidenceStore: fakeEvidenceStore(),
-    specStore: { read: async () => undefined, write: async () => {}, list: async () => [] },
+    legacyEvidenceStore: fakeEvidenceStore(),
+    trustSpecStore: { read: async () => undefined, write: async () => {}, list: async () => [] },
     getEffectiveRiskPolicy: async () => makeRiskPolicy(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
     getEffectiveReleasePolicy: async () => makeReleasePolicy(),

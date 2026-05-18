@@ -66,4 +66,4 @@ rules, and policy interaction.
 | Kind | Recorded by | Purpose |
 |---|---|---|
 | `lint-violation` | `task verify` (agent-claimed-locally), `ci verify` (witnessed-by-ci) | One row per architecture-lint finding |
-| `session-start`, `session-exit` | preserved kinds — no live emitter after the v2 pivot, legacy rows still parse | (legacy) anchored session boundaries for arch-lint baselines |
+| `session-start`, `session-exit` | preserved kinds — no live emitter, legacy rows still parse | (legacy) anchored session boundaries for arch-lint baselines |

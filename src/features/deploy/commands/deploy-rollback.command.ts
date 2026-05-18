@@ -6,7 +6,7 @@ import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/ind
 import type { RollbackExercisedPayload, WitnessLevel } from "@/features/evidence/index.js";
 
 interface DeployRollbackCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore">;
+  readonly getServices: () => Pick<Services, "legacyEvidenceStore" | "legacyTaskStore">;
   readonly recordEvidence?: typeof defaultRecordEvidence;
   readonly spawnSync?: (cmd: string) => { exitCode: number };
   readonly isCI?: () => boolean;
@@ -35,7 +35,7 @@ export function registerDeployRollbackCommand(
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const task = await services.taskStore.get(taskId);
+      const task = await services.legacyTaskStore.get(taskId);
       if (task === undefined) {
         throw new MaestroError(`Task not found: ${taskId}`, [
           "Run `maestro task list` to see available tasks",
@@ -53,7 +53,7 @@ export function registerDeployRollbackCommand(
         exit: exitCode,
       };
 
-      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, {
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.legacyEvidenceStore, {
         task_id: taskId,
         kind: "rollback-exercised",
         payload,

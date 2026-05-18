@@ -1,4 +1,4 @@
-// v2/types: pure domain types. Forward-only: imports nothing from sibling v2 layers.
+// types: pure domain types. Forward-only: imports nothing from sibling layers.
 export * from "./task-state.js";
 export * from "./mission-state.js";
 export * from "./product-spec.js";

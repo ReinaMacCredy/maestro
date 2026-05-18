@@ -1,4 +1,4 @@
-import { chmod, lstat, readdir, rename, rm } from "node:fs/promises";
+import { chmod, lstat, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import {
@@ -6,7 +6,6 @@ import {
   ensureDir,
   fileExists,
   listFilesRecursive,
-  pathExists,
   readText,
   writeText,
 } from "@/shared/lib/fs.js";
@@ -31,12 +30,10 @@ export type SetupStepStatus = "ok" | "skipped" | "changed" | "error";
 export type SetupPathAction =
   | "create"
   | "delete"
-  | "move"
   | "overwrite"
   | "skip"
   | "would-create"
   | "would-delete"
-  | "would-move"
   | "would-overwrite";
 
 export interface SetupPathEntry {
@@ -85,14 +82,6 @@ const MANAGED_AGENT_SKILL_ROOTS = [
   [".claude", "skills"],
   [".codex", "skills"],
 ] as const;
-// `.factory/` is owned by Factory.ai (an unrelated agent tool). Removing it
-// would corrupt a user's parallel install. v1 maestro never wrote that path,
-// so it does not belong in the v1 cleanup set.
-const V1_PATHS_REL = [
-  ".maestro/memory/corrections",
-  ".maestro/memory/learnings",
-  ".maestro/.migrated-v2.json",
-] as const;
 
 export async function runSetup(opts: RunSetupOptions): Promise<SetupReport> {
   const scope: "global" | "project" = opts.global ? "global" : "project";
@@ -123,15 +112,6 @@ export async function runSetup(opts: RunSetupOptions): Promise<SetupReport> {
   }
 
   const steps: SetupStepResult[] = [];
-  const detectResult = await stepDetectV1(opts.dir);
-  steps.push(detectResult);
-  steps.push(await stepDeleteV1(detectResult, dryRun));
-  const migrateStep = await stepMigratePlansToMissions(opts.dir, dryRun);
-  steps.push(migrateStep);
-  if (migrateStep.status === "error") {
-    return finish(scope, dryRun, steps);
-  }
-  steps.push(await stepMigrateTaskFields(opts.dir, dryRun));
   steps.push(await stepBootstrapDirs(opts.dir, dryRun));
   steps.push(await stepWriteProjectConfig(opts, dryRun));
   steps.push(await stepDropTemplates(opts, dryRun));
@@ -150,7 +130,7 @@ function finish(
   const skipped: string[] = [];
   for (const step of steps) {
     for (const entry of step.paths) {
-      if (entry.action === "create" || entry.action === "move" || entry.action === "delete") {
+      if (entry.action === "create" || entry.action === "delete") {
         created.push(entry.path);
       } else if (entry.action === "skip") {
         skipped.push(entry.path);
@@ -161,275 +141,8 @@ function finish(
   return { ok, scope, dryRun, steps, created, skipped };
 }
 
-async function stepDetectV1(dir: string): Promise<SetupStepResult> {
-  const found: SetupPathEntry[] = [];
-  for (const rel of V1_PATHS_REL) {
-    const abs = join(dir, rel);
-    if (await pathExists(abs)) {
-      found.push({ path: abs, action: "skip", detail: "v1 artifact present" });
-    }
-  }
-  return {
-    id: "detect-v1",
-    label: "Detect v1 leftovers",
-    status: found.length === 0 ? "ok" : "changed",
-    detail: found.length === 0 ? "no v1 paths found" : `${found.length} v1 path(s) detected`,
-    paths: found,
-  };
-}
-
-async function stepDeleteV1(
-  detectResult: SetupStepResult,
-  dryRun: boolean,
-): Promise<SetupStepResult> {
-  if (detectResult.paths.length === 0) {
-    return {
-      id: "delete-v1",
-      label: "Delete v1 leftovers",
-      status: "ok",
-      detail: "no v1 paths found by detect-v1",
-      paths: [],
-    };
-  }
-
-  const paths: SetupPathEntry[] = [];
-  for (const detected of detectResult.paths) {
-    const abs = detected.path;
-    if (!(await pathExists(abs))) continue;
-    if (dryRun) {
-      paths.push({ path: abs, action: "would-delete" });
-      continue;
-    }
-    await rm(abs, { recursive: true, force: true });
-    paths.push({ path: abs, action: "delete" });
-  }
-  return {
-    id: "delete-v1",
-    label: "Delete v1 leftovers",
-    status: paths.length === 0 ? "ok" : "changed",
-    paths,
-  };
-}
-
-async function stepMigratePlansToMissions(
-  dir: string,
-  dryRun: boolean,
-): Promise<SetupStepResult> {
-  const plansDir = join(dir, ".maestro", "plans");
-  const missionsDir = join(dir, ".maestro", "missions");
-  // Staging dir: `.maestro/plans/` is renamed here as the first atomic
-  // boundary; the second boundary is per-file move into `.maestro/missions/`.
-  // Crashing between the two boundaries leaves `.maestro/missions.tmp/`,
-  // which the next setup invocation finds and resumes from.
-  const tmpDir = join(dir, ".maestro", "missions.tmp");
-  await assertProjectLocalPathSafe(dir, plansDir);
-  await assertProjectLocalPathSafe(dir, missionsDir);
-  await assertProjectLocalPathSafe(dir, tmpDir);
-
-  const tmpExists = await dirExists(tmpDir);
-  const plansExists = await dirExists(plansDir);
-
-  if (!plansExists && !tmpExists) {
-    return {
-      id: "migrate-plans-to-missions",
-      label: "Migrate .maestro/plans/ -> .maestro/missions/",
-      status: "ok",
-      detail: "no .maestro/plans/ to migrate",
-      paths: [],
-    };
-  }
-
-  // Pre-flight: only fire the "real v2 data already here" guard when we're
-  // NOT in recovery mode. If tmpDir exists, missions/ may already hold
-  // partially-moved files from a previous crash; treat that as a resume,
-  // not a collision.
-  if (!tmpExists) {
-    const existingMissions = await listFilesIfDir(missionsDir);
-    if (existingMissions.some((p) => /\.jsonl$/.test(p))) {
-      return {
-        id: "migrate-plans-to-missions",
-        label: "Migrate .maestro/plans/ -> .maestro/missions/",
-        status: "error",
-        detail:
-          ".maestro/missions/ already has v2 data; resolve manually before re-running setup",
-        paths: [{ path: missionsDir, action: "skip" }],
-      };
-    }
-  }
-
-  const paths: SetupPathEntry[] = [];
-  if (dryRun) {
-    paths.push({ path: missionsDir, action: "would-create" });
-    paths.push({ path: plansDir, action: "would-delete" });
-    return {
-      id: "migrate-plans-to-missions",
-      label: "Migrate .maestro/plans/ -> .maestro/missions/",
-      status: "changed",
-      paths,
-    };
-  }
-
-  // Step 1: atomic stage. Single rename moves plans/ → missions.tmp/. After
-  // this, .maestro/plans no longer exists; everything is under tmpDir.
-  if (!tmpExists && plansExists) {
-    await rename(plansDir, tmpDir);
-    paths.push({ path: tmpDir, action: "move", detail: `from ${plansDir} (staged)` });
-  } else if (tmpExists) {
-    paths.push({
-      path: tmpDir,
-      action: "skip",
-      detail: "resuming previously staged migration",
-    });
-  }
-
-  // Step 2: rewrite and move each entry. Rewrites are atomic per-file (tmp+
-  // rename inside writeText); per-file renames into missions/ are themselves
-  // single rename ops, so an interruption leaves either the source in tmpDir
-  // or the destination in missionsDir, never both.
-  await ensureDir(missionsDir);
-  const entries = await readdir(tmpDir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fromPath = join(tmpDir, entry.name);
-    const toName = renamePlansFile(entry.name);
-    const toPath = join(missionsDir, toName);
-    await assertProjectLocalPathSafe(dir, fromPath);
-    await assertProjectLocalPathSafe(dir, toPath);
-    let rewritten = 0;
-    if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-      // Idempotent: rewriting an already-migrated row (state already
-      // "approved") is a no-op and returns 0.
-      rewritten = await rewriteMissionJsonlContent(fromPath);
-    }
-    await rename(fromPath, toPath);
-    paths.push({
-      path: toPath,
-      action: "move",
-      detail:
-        rewritten > 0
-          ? `from ${fromPath}; rewrote ${rewritten} row(s)`
-          : `from ${fromPath}`,
-    });
-  }
-
-  // Step 3: drop the now-empty staging dir.
-  await rm(tmpDir, { recursive: true, force: true });
-  paths.push({ path: tmpDir, action: "delete" });
-
-  return {
-    id: "migrate-plans-to-missions",
-    label: "Migrate .maestro/plans/ -> .maestro/missions/",
-    status: "changed",
-    paths,
-  };
-}
-
 function statusFor(paths: readonly SetupPathEntry[]): SetupStepStatus {
   return paths.some((p) => p.action !== "skip") ? "changed" : "ok";
-}
-
-function renamePlansFile(name: string): string {
-  if (name === "plans.jsonl") return "missions.jsonl";
-  if (name === "plans.v2.jsonl") return "missions.v2.jsonl";
-  return name;
-}
-
-// v1 plan state "specified" was renamed to "approved" in the 8-state mission
-// machine. Rewrite migrated jsonl rows so the mission store doesn't read
-// unknown state values.
-async function rewriteMissionJsonlContent(file: string): Promise<number> {
-  const text = await readText(file);
-  if (text === undefined || text.length === 0) return 0;
-  let changed = 0;
-  const out: string[] = [];
-  for (const line of text.split("\n")) {
-    if (line.length === 0) {
-      out.push(line);
-      continue;
-    }
-    try {
-      const row = JSON.parse(line) as Record<string, unknown>;
-      if (row.state === "specified") {
-        row.state = "approved";
-        changed += 1;
-      }
-      out.push(JSON.stringify(row));
-    } catch {
-      out.push(line);
-    }
-  }
-  if (changed === 0) return 0;
-  const body = out.join("\n");
-  await writeText(file, body.endsWith("\n") ? body : `${body}\n`);
-  return changed;
-}
-
-// v1 tasks carried `plan_id`; v2 renamed it to `mission_id`. Rewrite in place
-// so the task store doesn't reject legacy rows on read.
-async function stepMigrateTaskFields(
-  dir: string,
-  dryRun: boolean,
-): Promise<SetupStepResult> {
-  const tasksFile = join(dir, ".maestro", "tasks", "tasks.jsonl");
-  await assertProjectLocalPathSafe(dir, tasksFile);
-  const text = await readText(tasksFile);
-  if (text === undefined || text.length === 0) {
-    return {
-      id: "migrate-task-fields",
-      label: "Rewrite legacy task fields (plan_id -> mission_id)",
-      status: "ok",
-      detail: "no .maestro/tasks/tasks.jsonl to migrate",
-      paths: [],
-    };
-  }
-  let changed = 0;
-  const out: string[] = [];
-  for (const line of text.split("\n")) {
-    if (line.length === 0) {
-      out.push(line);
-      continue;
-    }
-    try {
-      const row = JSON.parse(line) as Record<string, unknown>;
-      if ("plan_id" in row && !("mission_id" in row)) {
-        row.mission_id = row.plan_id;
-        delete row.plan_id;
-        changed += 1;
-      } else if ("plan_id" in row) {
-        delete row.plan_id;
-        changed += 1;
-      }
-      out.push(JSON.stringify(row));
-    } catch {
-      out.push(line);
-    }
-  }
-  if (changed === 0) {
-    return {
-      id: "migrate-task-fields",
-      label: "Rewrite legacy task fields (plan_id -> mission_id)",
-      status: "ok",
-      detail: "no legacy task fields found",
-      paths: [],
-    };
-  }
-  if (dryRun) {
-    return {
-      id: "migrate-task-fields",
-      label: "Rewrite legacy task fields (plan_id -> mission_id)",
-      status: "changed",
-      detail: `${changed} row(s) need rewrite`,
-      paths: [{ path: tasksFile, action: "would-overwrite" }],
-    };
-  }
-  const body = out.join("\n");
-  await writeText(tasksFile, body.endsWith("\n") ? body : `${body}\n`);
-  return {
-    id: "migrate-task-fields",
-    label: "Rewrite legacy task fields (plan_id -> mission_id)",
-    status: "changed",
-    detail: `rewrote ${changed} row(s)`,
-    paths: [{ path: tasksFile, action: "overwrite" }],
-  };
 }
 
 async function stepBootstrapDirs(dir: string, dryRun: boolean): Promise<SetupStepResult> {
@@ -797,15 +510,6 @@ async function ensureRuntimeGitignore(
   const comment = lines.has(RUNTIME_GITIGNORE_COMMENT) ? "" : `${RUNTIME_GITIGNORE_COMMENT}\n`;
   await writeText(gitignorePath, `${existing}${prefix}${comment}${missingLines.join("\n")}\n`);
   return { path: gitignorePath, action: "create" };
-}
-
-async function listFilesIfDir(dir: string): Promise<readonly string[]> {
-  try {
-    return await readdir(dir);
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw err;
-  }
 }
 
 async function assertProjectLocalPathSafe(rootDir: string, target: string): Promise<void> {

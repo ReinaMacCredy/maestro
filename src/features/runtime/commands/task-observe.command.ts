@@ -25,7 +25,7 @@ const defaultBuildLogTail = (filePath?: string): DevObservabilityPort =>
   new LogTailAdapter(filePath);
 
 const defaultGetEvidenceStore = (repoRoot: string): EvidenceStorePort =>
-  buildEvidenceServices(repoRoot).evidenceStore;
+  buildEvidenceServices(repoRoot).legacyEvidenceStore;
 
 function isConfigError(message: string): boolean {
   return (

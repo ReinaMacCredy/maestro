@@ -110,8 +110,8 @@ Per-line escape: `// lint-arch-allow: composition-only-in-services-ts`.
 
 ### `task-vs-mission-separation` — warn (historical)
 
-This rule was defined for v1 `src/features/task/**` and `src/features/mission/**`
-which were deleted in Phase 5. The rule is retained in the document for historical
+This rule was defined for `src/features/task/**` and `src/features/mission/**`,
+which no longer exist. The rule is retained in the document for historical
 reference; it is a no-op at runtime because neither directory exists. Shared logic
 now belongs in `src/` or `src/shared/`.
 

@@ -11,7 +11,7 @@ import { regenPlan, formatPlanRegenLines } from "../usecases/plan-regen.usecase.
 interface GcDeps {
   readonly getServices: () => Pick<
     Services,
-    "evidenceStore" | "projectRoot" | "taskStore" | "verdictStore" | "specStore"
+    "legacyEvidenceStore" | "projectRoot" | "legacyTaskStore" | "verdictStore" | "trustSpecStore"
   >;
 }
 
@@ -37,7 +37,7 @@ export function registerGcCommand(
       const taskId: string | undefined = typeof opts.task === "string" ? opts.task : undefined;
 
       const result = await scanDocGardening(
-        { evidenceStore: services.evidenceStore },
+        { evidenceStore: services.legacyEvidenceStore },
         {
           projectRoot: services.projectRoot,
           taskId,
@@ -74,10 +74,10 @@ export function registerGcCommand(
       const isJson = resolveJsonFlag(opts, program);
       const result = await regenPlan(
         {
-          taskStore: services.taskStore,
+          taskStore: services.legacyTaskStore,
           verdictStore: services.verdictStore,
-          specStore: services.specStore,
-          evidenceStore: services.evidenceStore,
+          specStore: services.trustSpecStore,
+          evidenceStore: services.legacyEvidenceStore,
         },
         {
           projectRoot: services.projectRoot,

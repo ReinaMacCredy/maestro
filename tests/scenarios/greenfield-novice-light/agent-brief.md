@@ -7,7 +7,7 @@ All `maestro` commands run from that directory.
 Your primary guidance comes from the 5 maestro skill files. Load them now:
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-setup/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-design/SKILL.md
-- <MAESTRO_CHECKOUT>/skills/bundled/maestro-plan/SKILL.md
+- <MAESTRO_CHECKOUT>/skills/bundled/maestro-mission/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-task/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-verify/SKILL.md
 

@@ -25,7 +25,7 @@ export function registerMissionTools(server: McpServer, deps: RegisterDeps): voi
     {
       title: "Create a maestro mission",
       description:
-        "Create a v2 mission. mode='bare' (default) creates an intake mission with no tasks; 'from-spec' requires from_spec (heavy-mode spec path) and lands at 'approved'; 'from-file' requires from_file (JSON task batch) and lands at 'planned'; 'template' requires template (built-in or user template name) and lands at 'planned'. slug defaults to slugified title. Error codes: MISSION_CREATE_FAILED.",
+        "Create a mission. mode='bare' (default) creates an intake mission with no tasks; 'from-spec' requires from_spec (heavy-mode spec path) and lands at 'approved'; 'from-file' requires from_file (JSON task batch) and lands at 'planned'; 'template' requires template (built-in or user template name) and lands at 'planned'. slug defaults to slugified title. Error codes: MISSION_CREATE_FAILED.",
       inputSchema: MissionNewShape,
       annotations: {
         readOnlyHint: false,
@@ -55,9 +55,9 @@ export function registerMissionTools(server: McpServer, deps: RegisterDeps): voi
         const result = await missionNew(
           {
             repoRoot: services.projectRoot,
-            missionStore: services.v2.missionStore,
-            taskStore: services.v2.taskStore,
-            evidenceStore: services.v2.evidenceStore,
+            missionStore: services.missionStore,
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
           },
           {
             title: args.title,
@@ -69,7 +69,7 @@ export function registerMissionTools(server: McpServer, deps: RegisterDeps): voi
           },
         );
         if (result.tasks.length > 0) {
-          await refreshNowMdFromServices(services.v2);
+          await refreshNowMdFromServices(services);
         }
         return toCallToolResult(ok({ mission: result.mission, tasks: result.tasks }));
       } catch (err) {
@@ -97,9 +97,9 @@ export function registerMissionTools(server: McpServer, deps: RegisterDeps): voi
         const services = deps.getServices();
         const result = await missionCancel(
           {
-            missionStore: services.v2.missionStore,
-            taskStore: services.v2.taskStore,
-            evidenceStore: services.v2.evidenceStore,
+            missionStore: services.missionStore,
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
           },
           { mission_id: args.mission_id, reason: args.reason },
         );
@@ -136,14 +136,14 @@ export function registerMissionTools(server: McpServer, deps: RegisterDeps): voi
         const services = deps.getServices();
         const result = await missionDecompose(
           {
-            missionStore: services.v2.missionStore,
-            taskStore: services.v2.taskStore,
-            evidenceStore: services.v2.evidenceStore,
-            observabilityStore: services.v2.observabilityStore,
+            missionStore: services.missionStore,
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+            observabilityStore: services.observabilityStore,
           },
           { mission_id: args.mission_id, tasks: args.tasks },
         );
-        await refreshNowMdFromServices(services.v2);
+        await refreshNowMdFromServices(services);
         return toCallToolResult(ok({ mission: result.mission, tasks: result.tasks }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "MISSION_DECOMPOSE_FAILED"));
@@ -170,8 +170,8 @@ export function registerMissionTools(server: McpServer, deps: RegisterDeps): voi
         const services = deps.getServices();
         const result = await missionShow(
           {
-            missionStore: services.v2.missionStore,
-            taskStore: services.v2.taskStore,
+            missionStore: services.missionStore,
+            taskStore: services.taskStore,
           },
           args.mission_id,
         );
@@ -187,7 +187,7 @@ export function registerMissionTools(server: McpServer, deps: RegisterDeps): voi
     {
       title: "Create a mission from a heavy-mode spec",
       description:
-        "Create a v2 mission in 'approved' state from a heavy-mode product-spec markdown file. Light-mode specs go through maestro_task_from_spec instead. Error codes: MISSION_CREATE_FAILED.",
+        "Create a mission in 'approved' state from a heavy-mode product-spec markdown file. Light-mode specs go through maestro_task_from_spec instead. Error codes: MISSION_CREATE_FAILED.",
       inputSchema: MissionFromSpecInput,
       annotations: {
         readOnlyHint: false,
@@ -202,8 +202,8 @@ export function registerMissionTools(server: McpServer, deps: RegisterDeps): voi
         const created = await missionFromSpec(
           {
             repoRoot: services.projectRoot,
-            missionStore: services.v2.missionStore,
-            evidenceStore: services.v2.evidenceStore,
+            missionStore: services.missionStore,
+            evidenceStore: services.evidenceStore,
           },
           args.spec_path,
         );

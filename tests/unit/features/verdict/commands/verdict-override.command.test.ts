@@ -94,7 +94,7 @@ function makeProgram(opts: {
   
   const services = {
     verdictStore,
-    evidenceStore,
+    legacyEvidenceStore: evidenceStore,
     contractVersionStore: {
       readLatest: async () => undefined,
       readVersion: async () => undefined,
@@ -102,7 +102,7 @@ function makeProgram(opts: {
       history: async () => [],
     },
     contractStore: mockContractStore(),
-    specStore: { read: async () => undefined, write: async () => {}, list: async () => [] },
+    trustSpecStore: { read: async () => undefined, write: async () => {}, list: async () => [] },
     runStateStore: {
       read: async () => undefined,
       write: async () => {},

@@ -46,13 +46,13 @@ import {
   renderDriftError,
 } from "@/service/skill-binary-parity.js";
 import { collectKnownVerbs } from "@/service/known-verbs.js";
-import { registerSpecV2Commands } from "@/runtime/spec.command.js";
-import { registerTaskV2Commands } from "@/runtime/task.command.js";
-import { registerMissionV2Commands } from "@/runtime/mission.command.js";
-import { registerPrincipleV2Commands } from "@/runtime/principle.command.js";
-import { registerSetupV2Commands } from "@/runtime/setup.command.js";
+import { registerSpecCommands } from "@/runtime/spec.command.js";
+import { registerTaskCommands } from "@/runtime/task.command.js";
+import { registerMissionCommands } from "@/runtime/mission.command.js";
+import { registerPrincipleCommands } from "@/runtime/principle.command.js";
+import { registerSetupCommands } from "@/runtime/setup.command.js";
 import { registerContractCommands } from "@/runtime/contract.command.js";
-import { registerHandoffV2Commands } from "@/runtime/handoff.command.js";
+import { registerHandoffCommands } from "@/runtime/handoff.command.js";
 
 // One process-wide cache for the composed Services graph. The thunk stays
 // lazy so `--version`, `--help`, and other info-only paths never bootstrap
@@ -84,20 +84,19 @@ registerSkillsCommand(program);
 registerMcpCommand(program);
 registerReplyCommand(program, deps);
 registerPrincipleCommand(program, deps);
-// v2 surface: attaches `principle promote <correctionId>` to the same parent.
-registerPrincipleV2Commands(program, {
+// Attaches `principle promote <correctionId>` to the same parent.
+registerPrincipleCommands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
 registerBundleCommand(program, deps);
 registerEvidenceCommand(program, deps);
-// v2 spec surface: spec new + spec validate
-registerSpecV2Commands(program, {
+registerSpecCommands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
-registerTaskV2Commands(program, {
+registerTaskCommands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
-registerHandoffV2Commands(program, {
+registerHandoffCommands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
 registerContractCommands(program, deps);
@@ -108,9 +107,9 @@ const planCmd = program
   .command("plan")
   .description("Plan-time checks for agent tasks");
 registerPlanCheckCommand(planCmd, program, deps);
-// v2 mission lifecycle verbs (from-spec, show, decompose). Distinct parent
+// Mission lifecycle verbs (from-spec, show, decompose). Distinct parent
 // from `plan check`, which validates a plan artifact pre-implementation.
-registerMissionV2Commands(program, {
+registerMissionCommands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
 });
 
@@ -123,7 +122,7 @@ registerReviewCommand(program, deps);
 registerRecoverCommand(program, deps);
 registerGcCommand(program, deps);
 registerWorktreeCommand(program, deps);
-registerSetupV2Commands(program, {
+registerSetupCommands(program, {
   resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
   getServices,
 });

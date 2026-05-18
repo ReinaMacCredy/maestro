@@ -14,7 +14,7 @@ function isMirrorableStatus(contract: Contract): boolean {
 }
 
 // Read the current versioned contract; if missing but an active L1 record
-// exists for the task, backfill the L2 store with v1 first.
+// exists for the task, backfill the L2 store with version 1 first.
 export async function readCurrentContractWithBackfill(
   versionStore: ContractVersionStorePort,
   legacyStore: ContractStoreQueryPort | undefined,

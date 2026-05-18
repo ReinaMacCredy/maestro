@@ -6,7 +6,7 @@ Phase 6 swarm tooling: sandbox prep, rubric dispatch, and result evaluation.
 
 | File | Purpose |
 |------|---------|
-| `_scenarios.ts` | Single source of truth: the 8 scenario names + `projectTypeOf()` |
+| `_scenarios.ts` | Single source of truth: the 4 scenario names |
 | `swarm.ts` | Prepares sandboxes, fills agent-brief placeholders, writes `last-run.json`, prints dispatch instructions |
 | `check.ts` | Single-scenario rubric runner: `bun scripts/scenarios/check.ts <name> <dir>` |
 | `check-all.ts` | Multi-scenario runner: reads `last-run.json`, prints summary table |
@@ -18,7 +18,7 @@ bun run release:local
 ```
 
 This rebuilds `dist/maestro` and installs it to `~/.local/bin/maestro`. The
-greenfield sandbox prep calls `maestro setup bootstrap` via PATH. Stale or
+greenfield sandbox prep calls `maestro setup` via PATH. Stale or
 missing binary -> step fails. Run this before every swarm.
 
 ## Swarm workflow
@@ -28,7 +28,7 @@ missing binary -> step fails. Run this before every swarm.
    ```bash
    bun scripts/scenarios/swarm.ts --all
    # or a subset:
-   bun scripts/scenarios/swarm.ts --scenarios greenfield-novice-light,brownfield-novice-light
+   bun scripts/scenarios/swarm.ts --scenarios greenfield-novice-light,greenfield-expert-heavy
    ```
 
 2. Read what `swarm.ts` printed. For each scenario, open an Agent tool call
@@ -52,7 +52,7 @@ greenfield-novice-light     PASS    5/5
 greenfield-novice-heavy     FAIL    3/4    [task-reached-ready FAIL]
 ...
 
-OVERALL: 7/8 PASS
+OVERALL: 3/4 PASS
 ```
 
 - PASS = all checks in the rubric matched the `.maestro/evidence/<date>.jsonl`

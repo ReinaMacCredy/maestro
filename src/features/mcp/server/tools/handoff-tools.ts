@@ -55,7 +55,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
-        const emitter = services.v2.handoffEmitter;
+        const emitter = services.handoffEmitter;
         const all = await emitter.list();
         const filtered = all
           .filter((e: HandoffEnvelope) => args.task_id === undefined || e.task_id === args.task_id)
@@ -108,7 +108,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
-        const emitter = services.v2.handoffEmitter;
+        const emitter = services.handoffEmitter;
         let envelope: HandoffEnvelope | undefined;
         try {
           envelope = await emitter.get(args.id);
@@ -170,7 +170,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         const services = deps.getServices();
         const agentId = args.agent_id ?? deps.sessionId;
         const envelope = await emitHandoff(
-          { emitter: services.v2.handoffEmitter },
+          { emitter: services.handoffEmitter },
           {
             task_id: args.task_id,
             trigger_verb: args.trigger_verb,
@@ -183,7 +183,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
         if (envelope === undefined) {
           return toCallToolResult(
             fail("HANDOFF_EMIT_FAILED", "Handoff emitter is not configured", {
-              hints: ["Confirm services.v2.handoffEmitter is wired"],
+              hints: ["Confirm services.handoffEmitter is wired"],
             }),
           );
         }
@@ -211,7 +211,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     async (args): Promise<CallToolResult> => {
       try {
         const services = deps.getServices();
-        const emitter = services.v2.handoffEmitter;
+        const emitter = services.handoffEmitter;
         let envelope: HandoffEnvelope | undefined;
         try {
           envelope = await emitter.get(args.id);

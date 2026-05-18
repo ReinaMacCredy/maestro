@@ -1,14 +1,14 @@
 # Harness positioning
 
-Maestro v2 is **the harness OS for agent-generated codebases**. Humans steer. Agents execute. Maestro is the substrate — local-first, verb-driven, passive. Host runtimes (Claude Code, Codex, Cursor, CI) call maestro verbs; maestro never schedules, daemonizes, or runs an LLM itself.
+Maestro is **the harness OS for agent-generated codebases**. Humans steer. Agents execute. Maestro is the substrate — local-first, verb-driven, passive. Host runtimes (Claude Code, Codex, Cursor, CI) call maestro verbs; maestro never schedules, daemonizes, or runs an LLM itself.
 
-This document maps the v2 primitives to the source locations that implement them. For the full verb surface, see `docs/cli-reference.md`. For the locked architectural decisions, see `docs/adr/`.
+This document maps the primitives to the source locations that implement them. For the full verb surface, see `docs/cli-reference.md`. For the locked architectural decisions, see `docs/adr/`.
 
 ---
 
 ## The two primitive families
 
-Maestro v2 has four **knowledge primitives** (directories the agent reads at session start) and four **execution primitives** (the agent's verb-shaped surface). Everything else is either composed from these or is non-goal for v2.0.
+Maestro has four **knowledge primitives** (directories the agent reads at session start) and four **execution primitives** (the agent's verb-shaped surface). Everything else is either composed from these or is non-goal.
 
 ### Knowledge primitives
 
@@ -90,12 +90,11 @@ The agent reads these; maestro writes them only on explicit verbs (`spec new`, `
 - `src/repo/jsonl-observability.adapter.ts` — writes `.maestro/runs/<task-id>/observability.jsonl`.
 - `emit-transition-evidence.ts` mirrors every transition into the observability log in addition to the evidence log; the two logs are eventually-consistent without coupling. Option C from the master plan (minimal log-only default) is the locked Phase 3 scope.
 
-### Setup + migration
+### Setup
 
-- `src/service/setup-check.usecase.ts` — audits the five v2 directories, principles pack, and config.
-- `src/service/setup-bootstrap.usecase.ts` — idempotent dir creation with `.gitkeep`.
-- `src/service/migrate-v2.usecase.ts` + `migrate-v2-steps.ts` — 11-step v1→v2 migration.
-- `src/runtime/setup.command.ts` — `maestro setup check | bootstrap | migrate-v2 | migrate-corrections`.
+- `src/service/setup-check.usecase.ts` — audits the `.maestro/` directories, principles pack, and config.
+- `src/service/setup.usecase.ts` — idempotent state machine that scaffolds directories, seeds skill bundles + context templates, and reconciles drift.
+- `src/runtime/setup.command.ts` — `maestro setup | setup check`.
 
 ### Loop primitive
 
@@ -123,14 +122,6 @@ Maestro deliberately is **not**:
 - **A background process.** No watcher, no filesystem poller, no long-lived state machine.
 
 The structural guarantee is the `no-runner-inversion` rule in `src/service/architecture-lint.usecase.ts`: maestro code may not invoke schedulers or spin up persistent loops. The lint enforces it at `error` severity.
-
----
-
-## Vocabulary disappearances on v2 (no aliases)
-
-v1 `mission` (and the brief `exec-plan` rename) → v2 `mission` (post-v0.101 rename) · `spec` (old) → `product-spec` · `intake` / `brainstorm` → folded into `design-docs` reading + `product-spec` authoring · `session` / `notes` → folded into `handoff` (session-detect absorbed into `worktree` metadata).
-
-Three v1 feature dirs disappear because their job is now done by knowledge primitives the agent reads at session start: `memory` + `memory-ratchet` + `agent` (corrections live in `docs/principles/`, agent prompt collapses into `AGENTS.md`); `graph` (project-to-project edges) folded into `~/.maestro/graph/projects.json`; `session` → notes folded into handoff, detect folded into worktree.
 
 ---
 

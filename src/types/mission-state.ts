@@ -1,5 +1,5 @@
 // `approved` means "spec parsed via mission new --from-spec", NOT a human gate.
-// v2 mission gates are task-level (policy + verdict), not mission-level.
+// Mission gates are task-level (policy + verdict), not mission-level.
 // `intake -> planned` exists so `mission decompose` can advance bare-title
 // missions without forcing them through `approved` first.
 

@@ -296,6 +296,25 @@ describe("MCP stdio flow", () => {
     expect(items.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("evidence_list surfaces system_items for transition rows", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "system-items-flow", "System Items Flow");
+
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
+    const taskId = (created.body as { task: { id: string } }).task.id;
+
+    // Claim emits a transition evidence row into the canonical (system) store.
+    await c.call("maestro_task_claim", { id: taskId });
+
+    const list = await c.call("maestro_evidence_list", { taskId });
+    const body = list.body as { items: unknown[]; system_items?: { kind: string }[] };
+    expect(body.system_items).toBeDefined();
+    expect(body.system_items!.length).toBeGreaterThanOrEqual(1);
+    expect(body.system_items!.some((r) => r.kind === "transition")).toBe(true);
+    // Guard against a regression that reintroduces the old key.
+    expect((body as Record<string, unknown>).v2_items).toBeUndefined();
+  });
+
   it("task_block requires a reason (rejects missing reason)", async () => {
     const c = client!;
     const r = await c.rpc("tools/call", {

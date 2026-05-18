@@ -1,57 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
 import type { EvidenceRow } from "@/features/evidence/domain/types.js";
-import type { Mission } from "@/shared/domain/legacy-mission";
-import type { LegacyTask as Task } from "@/shared/domain/legacy-task";
-import {
-  summarizeEvidence,
-  summarizeMission,
-  summarizeTask,
-} from "@/shared/lib/projection.js";
-
-function makeTask(overrides: Partial<Task> = {}): Task {
-  return {
-    id: "task_001",
-    title: "do thing",
-    description: "long description that should not survive projection",
-    type: "task",
-    priority: 2,
-    status: "pending",
-    slug: "implement/do-thing",
-    labels: ["alpha", "beta"],
-    blocks: [],
-    blockedBy: ["task_other"],
-    parentId: undefined,
-    assignee: "claude",
-    claimedAt: "2026-05-13T00:00:00Z",
-    createdAt: "2026-05-13T00:00:00Z",
-    updatedAt: "2026-05-13T00:00:00Z",
-    lastActivityAt: "2026-05-13T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function makeMission(): Mission {
-  return {
-    id: "mission_001",
-    status: "executing",
-    title: "ship doctrine",
-    description: "verbose description that the summary drops",
-    proposal: "lengthy proposal body",
-    milestones: [
-      {
-        id: "m1",
-        title: "phase 1",
-        description: "long description",
-        order: 1,
-        featureIds: ["f1", "f2"],
-      },
-    ],
-    features: ["f1", "f2"],
-    createdAt: "2026-05-13T00:00:00Z",
-    updatedAt: "2026-05-13T01:00:00Z",
-  };
-}
+import type { Task } from "@/types/task.js";
+import { summarizeEvidence, summarizeTask } from "@/shared/lib/projection.js";
 
 function makeEvidence(): EvidenceRow<"command"> {
   return {
@@ -71,58 +22,56 @@ function makeEvidence(): EvidenceRow<"command"> {
   };
 }
 
+function makeTask(overrides: Partial<Task> = {}): Task {
+  return {
+    id: "tsk-abc-123",
+    slug: "implement-thing",
+    title: "implement thing",
+    state: "doing",
+    mission_id: "mis-xyz-789",
+    assignee: "claude",
+    claimed_at: "2026-05-13T00:00:00Z",
+    pr_url: "https://example/pr/1",
+    blocked_by: ["tsk-blk-001"],
+    worktree_path: "/tmp/wt",
+    created_at: "2026-05-13T00:00:00Z",
+    updated_at: "2026-05-13T01:00:00Z",
+    ...overrides,
+  };
+}
+
 describe("summarizeTask", () => {
-  it("preserves identifiers and routing fields, drops description and timestamps", () => {
+  it("preserves lean fields, drops detail timestamps and paths", () => {
     const summary = summarizeTask(makeTask());
     expect(summary).toEqual({
-      slug: "implement/do-thing",
-      id: "task_001",
-      title: "do thing",
-      status: "pending",
-      type: "task",
-      priority: 2,
-      blockedByCount: 1,
+      id: "tsk-abc-123",
+      slug: "implement-thing",
+      title: "implement thing",
+      state: "doing",
+      mission_id: "mis-xyz-789",
+      assignee: "claude",
+      blocked_by_count: 1,
     });
-    expect("description" in summary).toBe(false);
-    expect("labels" in summary).toBe(false);
-    expect("createdAt" in summary).toBe(false);
-    expect("updatedAt" in summary).toBe(false);
-    expect("receipt" in summary).toBe(false);
+    expect("created_at" in summary).toBe(false);
+    expect("updated_at" in summary).toBe(false);
+    expect("claimed_at" in summary).toBe(false);
+    expect("pr_url" in summary).toBe(false);
+    expect("worktree_path" in summary).toBe(false);
+  });
+
+  it("omits mission_id and assignee when undefined", () => {
+    const summary = summarizeTask(
+      makeTask({ mission_id: undefined, assignee: undefined }),
+    );
+    expect("mission_id" in summary).toBe(false);
     expect("assignee" in summary).toBe(false);
   });
 
-  it("omits optional fields when undefined", () => {
+  it("reduces blocked_by[] to a count", () => {
     const summary = summarizeTask(
-      makeTask({ slug: undefined, assignee: undefined, parentId: undefined }),
+      makeTask({ blocked_by: ["a", "b", "c"] }),
     );
-    expect("slug" in summary).toBe(false);
-    expect("assignee" in summary).toBe(false);
-    expect("parentId" in summary).toBe(false);
-  });
-
-  it("reduces blockedBy[] to a count", () => {
-    const summary = summarizeTask(
-      makeTask({ blockedBy: ["a", "b", "c", "d"] }),
-    );
-    expect(summary.blockedByCount).toBe(4);
-  });
-});
-
-describe("summarizeMission", () => {
-  it("replaces nested arrays with counts and drops description", () => {
-    const summary = summarizeMission(makeMission());
-    expect(summary).toEqual({
-      id: "mission_001",
-      title: "ship doctrine",
-      status: "executing",
-      milestoneCount: 1,
-      featureCount: 2,
-      updatedAt: "2026-05-13T01:00:00Z",
-    });
-    expect("description" in summary).toBe(false);
-    expect("milestones" in summary).toBe(false);
-    expect("features" in summary).toBe(false);
-    expect("proposal" in summary).toBe(false);
+    expect(summary.blocked_by_count).toBe(3);
   });
 });
 
@@ -147,4 +96,3 @@ describe("summarizeEvidence", () => {
     expect("session_id" in summary).toBe(false);
   });
 });
-

@@ -12,8 +12,8 @@ interface CiVerifyCommandDeps {
     | "contractVersionStore"
     | "contractStore"
     | "runStateStore"
-    | "evidenceStore"
-    | "specStore"
+    | "legacyEvidenceStore"
+    | "trustSpecStore"
     | "getEffectiveRiskPolicy"
     | "getEffectiveAutopilotPolicy"
     | "getEffectiveReleasePolicy"
@@ -53,15 +53,15 @@ export function registerCiVerifyCommand(
         },
         {
           env: ciEnv,
-          evidenceStore: services.evidenceStore,
+          evidenceStore: services.legacyEvidenceStore,
           verdict: { request: requestVerdict },
           verdictDeps: {
             contractVersionStore: services.contractVersionStore,
             contractStore: services.contractStore,
             runStateStore: services.runStateStore,
-            evidenceStore: services.evidenceStore,
+            evidenceStore: services.legacyEvidenceStore,
             verdictStore: services.verdictStore,
-            specStore: services.specStore,
+            specStore: services.trustSpecStore,
             getEffectiveRiskPolicy: services.getEffectiveRiskPolicy,
             getEffectiveAutopilotPolicy: services.getEffectiveAutopilotPolicy,
             getEffectiveReleasePolicy: services.getEffectiveReleasePolicy,

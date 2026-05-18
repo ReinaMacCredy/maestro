@@ -2,8 +2,8 @@
  * Sync `src/infra/domain/bundled-skill-templates.ts` with `skills/bundled/`.
  *
  * `skills/bundled/` is the single source of truth for the maestro skill bundle
- * (maestro-brainstorm, maestro-plan, maestro-task, maestro-mission,
- * maestro-handoff, maestro-setup). This script walks it and emits the embedded
+ * (maestro-design, maestro-handoff, maestro-mission, maestro-setup,
+ * maestro-task, maestro-verify). This script walks it and emits the embedded
  * TS module the compiled binary needs to install skills into
  * `~/.claude/skills/` and `~/.codex/skills/` via `maestro install` /
  * `maestro update` (the install-site has no repo checkout).

@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { writeFile, mkdtemp, rm } from "node:fs/promises";
 import { Command } from "commander";
 import { registerPlanCheckCommand } from "@/features/mission/commands/mission-check.command.js";
-import type { ContractVersionStorePort } from "@/shared/domain/legacy-task";
+import type { ContractVersionStorePort } from "@/shared/domain/task";
 import type { EvidenceRow, EvidenceStorePort } from "@/features/evidence/index.js";
 import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 import type { Contract } from "@/types/contract.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 
 // ─── Console capture ──────────────────────────────────────────────────────────
 
@@ -102,8 +102,8 @@ describe("registerPlanCheckCommand", () => {
 
     const services = {
       contractVersionStore: fakeContractVersionStore(contract),
-      evidenceStore,
-      specStore: fakeSpecStore(),
+      legacyEvidenceStore: evidenceStore,
+      trustSpecStore: fakeSpecStore(),
       contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     };
 
@@ -130,8 +130,8 @@ describe("registerPlanCheckCommand", () => {
 
     const services = {
       contractVersionStore: fakeContractVersionStore(contract),
-      evidenceStore,
-      specStore: fakeSpecStore(),
+      legacyEvidenceStore: evidenceStore,
+      trustSpecStore: fakeSpecStore(),
       contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     };
 
@@ -162,8 +162,8 @@ describe("registerPlanCheckCommand", () => {
 
     const services = {
       contractVersionStore: fakeContractVersionStore(contract),
-      evidenceStore,
-      specStore: fakeSpecStore(),
+      legacyEvidenceStore: evidenceStore,
+      trustSpecStore: fakeSpecStore(),
       contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     };
 
@@ -200,8 +200,8 @@ describe("registerPlanCheckCommand", () => {
 
     const services = {
       contractVersionStore: fakeContractVersionStore(contract),
-      evidenceStore,
-      specStore: fakeSpecStore(),
+      legacyEvidenceStore: evidenceStore,
+      trustSpecStore: fakeSpecStore(),
       contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     };
 

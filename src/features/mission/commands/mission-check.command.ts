@@ -16,7 +16,7 @@ import type { PlanCheckPayload } from "@/features/evidence/index.js";
 interface PlanCheckCommandDeps {
   readonly getServices: () => Pick<
     Services,
-    "contractVersionStore" | "contractStore" | "evidenceStore" | "specStore"
+    "contractVersionStore" | "contractStore" | "legacyEvidenceStore" | "trustSpecStore"
   >;
 }
 
@@ -113,7 +113,7 @@ Checks (exit code is always 0; agents react to findings):
       }
 
       const spec = contract.missionId !== undefined
-        ? await services.specStore.read(contract.missionId)
+        ? await services.trustSpecStore.read(contract.missionId)
         : undefined;
 
       const derived = deriveRiskClassFromDiff({ changedPaths: plan.intendedFiles });
@@ -136,7 +136,7 @@ Checks (exit code is always 0; agents react to findings):
         warnCount: result.warnCount,
       };
 
-      await recordEvidence(services.evidenceStore, {
+      await recordEvidence(services.legacyEvidenceStore, {
         task_id: taskId,
         kind: "plan-check",
         payload: evidencePayload,

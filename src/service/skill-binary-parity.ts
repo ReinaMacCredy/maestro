@@ -41,10 +41,9 @@ export function checkSkillBinaryParity(
         const head = firstSegment(verb);
         if (!head) continue;
         // `knownVerbs` carries both leaf names and full paths (see how
-        // src/index.ts walks the Commander tree). Validate the full verb path
-        // so a skill referencing `maestro setup migrate-v2` after that subverb
-        // is removed fails parity instead of slipping through on the top-level
-        // `setup` match.
+        // src/index.ts walks the Commander tree). Validate the full verb
+        // path so a skill referencing a removed subverb fails parity
+        // instead of slipping through on the top-level verb match.
         if (!args.knownVerbs.has(verb)) {
           findings.push({ skill: skill.name, verb, status: "missing-in-binary" });
         }
@@ -79,7 +78,7 @@ function findSkillMd(skill: { readonly files: readonly { readonly path: string; 
 }
 
 // Verbs cited in `reference/*.md` are install-shipped docs that agents will
-// read alongside SKILL.md. They must stay parity-checked, or stale v1 doc
+// read alongside SKILL.md. They must stay parity-checked, or stale doc
 // drift hides behind a check that only watches the top-level skill file.
 function collectSkillVerbSources(
   skill: { readonly files: readonly { readonly path: string; readonly content: string }[] },

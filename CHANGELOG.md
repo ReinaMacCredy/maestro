@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.102.0 — 2026-05-18
+
+Cleanup release. v1 is gone; the v1/v2 distinction in code, docs, and the
+agent-facing surface goes with it. Pre-0.100.0 user data is no longer migrated.
+
+### Breaking
+
+#### Removed migration verbs
+
+The v1-to-v2 migration verbs from the 0.100.0 release are removed:
+
+| Removed | Replacement |
+|---|---|
+| `maestro setup migrate-v2` (CLI) | `maestro setup` (idempotent; no per-release migration) |
+| `maestro setup migrate-corrections` (CLI) | Hand-edit, or stay on the prior tag |
+| `maestro_setup_migrate_v2` (MCP) | `maestro_setup_check` + `maestro setup` |
+
+If you have not yet migrated from a pre-0.100.0 install, pin to the `0.100.x`
+line, run the migration there, then upgrade.
+
+#### MCP `maestro_evidence_list` response shape
+
+The sibling page key for system-generated rows is renamed:
+
+| 0.100.x | 0.102.0 |
+|---|---|
+| `v2_items` | `system_items` |
+
+There is no transitional alias. Clients that filter on `v2_items` will see
+`undefined` and silently report zero system rows. Update any MCP client that
+reads from this tool.
+
+### Added
+
+#### Task summary shape (`maestro task list --json` / `maestro_task_list`)
+
+The lean task summary projection gains a `blocked_by_count: number` field
+derived from the task's `blocked_by` array. Additive; clients that ignore
+unknown keys are unaffected. Clients that hand-validate the shape (strict
+schemas, exhaustive type narrowing) must add the field.
+
+### Internal
+
+The repo no longer carries a parallel "v1" code path. Notable consequences:
+
+- The `legacy-task` module is renamed to `task`. Trust-pipeline callers use
+  the explicitly-named `legacyTaskStore`, `legacyEvidenceStore`,
+  `trustSpecStore`, and `featureMissionStore` to disambiguate from the
+  canonical `taskStore` / `evidenceStore` / `specStore` / `missionStore`.
+- The `services.v2.*` namespace is flattened. `Services` extends the core
+  services directly; consumers read `services.taskStore` instead of
+  `services.v2.taskStore`.
+- The `(v2)` qualifier is dropped from CLI command descriptions, layer banner
+  comments, and bundled-skill markdown.
+
 ## 0.100.0 — 2026-05-16
 
 > The Maestro harness-OS rebuild. Breaking by content even though the version

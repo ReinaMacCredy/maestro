@@ -30,8 +30,8 @@ interface VerdictCommandDeps {
     | "contractVersionStore"
     | "contractStore"
     | "runStateStore"
-    | "evidenceStore"
-    | "specStore"
+    | "legacyEvidenceStore"
+    | "trustSpecStore"
     | "getEffectiveRiskPolicy"
     | "getEffectiveAutopilotPolicy"
     | "getEffectiveReleasePolicy"
@@ -89,7 +89,7 @@ export function registerVerdictCommand(
           console.log(JSON.stringify(verdict, null, 2));
         } else {
           const overrides = await loadVerdictOverrides(
-            services.evidenceStore,
+            services.legacyEvidenceStore,
             taskId,
             verdict.id,
           );
@@ -119,7 +119,7 @@ export function registerVerdictCommand(
         console.log(JSON.stringify(verdict, null, 2));
       } else {
         const overrides = await loadVerdictOverrides(
-          services.evidenceStore,
+          services.legacyEvidenceStore,
           taskId,
           verdict.id,
         );
@@ -144,9 +144,9 @@ export function registerVerdictCommand(
           contractVersionStore: services.contractVersionStore,
           contractStore: services.contractStore,
           runStateStore: services.runStateStore,
-          evidenceStore: services.evidenceStore,
+          evidenceStore: services.legacyEvidenceStore,
           verdictStore: services.verdictStore,
-          specStore: services.specStore,
+          specStore: services.trustSpecStore,
           getEffectiveRiskPolicy: services.getEffectiveRiskPolicy,
           getEffectiveAutopilotPolicy: services.getEffectiveAutopilotPolicy,
           getEffectiveReleasePolicy: services.getEffectiveReleasePolicy,
@@ -243,7 +243,7 @@ Examples:
       };
 
       const recordFn = deps.recordEvidence ?? defaultRecordEvidence;
-      const row = await recordFn(services.evidenceStore, {
+      const row = await recordFn(services.legacyEvidenceStore, {
         task_id: taskId,
         kind: "verdict-override",
         payload,

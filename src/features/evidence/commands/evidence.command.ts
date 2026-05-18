@@ -31,7 +31,7 @@ import { readCurrentContractWithBackfill } from "@/service/contract-helpers.js";
 import type { EvidenceListFilter } from "../ports/storage.js";
 
 interface EvidenceCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractStore" | "contractVersionStore" | "v2">;
+  readonly getServices: () => Pick<Services, "legacyEvidenceStore" | "legacyTaskStore" | "trustSpecStore" | "contractStore" | "contractVersionStore" | "evidenceStore" | "taskStore">;
   readonly recordEvidence?: typeof defaultRecordEvidence;
 }
 
@@ -83,7 +83,7 @@ Examples:
       const isJson = resolveJsonFlag(opts, root) || (parent.opts().json as boolean | undefined) === true;
 
       const input = await buildRecordInput(services, opts);
-      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, input);
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.legacyEvidenceStore, input);
       output(isJson, row, (r) => formatEvidenceRow(r, "Evidence recorded"));
     });
 }
@@ -106,14 +106,15 @@ interface RecordOpts {
 }
 
 async function buildRecordInput(
-  services: Pick<Services, "evidenceStore" | "taskStore" | "specStore" | "contractVersionStore" | "contractStore" | "v2">,
+  services: Pick<Services, "legacyEvidenceStore" | "legacyTaskStore" | "trustSpecStore" | "contractVersionStore" | "contractStore" | "evidenceStore" | "taskStore">,
   opts: RecordOpts,
 ): Promise<RecordEvidenceInput> {
   const taskId = opts.task;
-  // Look up in v1 first (legacy missionId-linked tasks). Fall back to v2.
-  const v1Task = await services.taskStore.get(taskId);
-  const v2Task = v1Task ? undefined : await services.v2.taskStore.get(taskId);
-  if (!v1Task && !v2Task) {
+  // Look up in the legacy task store first (mission-linked tasks). Fall back
+  // to the system task store.
+  const legacyTask = await services.legacyTaskStore.get(taskId);
+  const systemTask = legacyTask ? undefined : await services.taskStore.get(taskId);
+  if (!legacyTask && !systemTask) {
     throw new MaestroError(`Task not found: ${taskId}`, [
       "Run `maestro task list` to see available tasks",
     ]);
@@ -121,10 +122,10 @@ async function buildRecordInput(
 
   // When the task belongs to a Mission that has a Spec with at least one
   // criterion, --criterion is required and must match a known criterion id.
-  // (v1 only — v2 tasks reference specs via spec_path and skip this check;
-  // criterion validation for v2 happens against the contract below.)
-  if (v1Task?.missionId) {
-    const spec = await services.specStore.read(v1Task.missionId);
+  // (Legacy-mission-linked tasks only; system tasks reference specs via
+  // spec_path and validate criteria against the contract below.)
+  if (legacyTask?.missionId) {
+    const spec = await services.trustSpecStore.read(legacyTask.missionId);
     if (spec && spec.acceptance_criteria.length > 0) {
       const ids = spec.acceptance_criteria.map((c) => c.id);
       if (!opts.criterion) {
@@ -551,38 +552,39 @@ function registerListCommand(parent: Command, root: Command, deps: EvidenceComma
         ...(opts.kind !== undefined ? { kind: parseKind(opts.kind as string) } : {}),
       };
 
-      const rows = await listEvidence(services.evidenceStore, filter);
+      const rows = await listEvidence(services.legacyEvidenceStore, filter);
       const sliced = effectiveLimit !== undefined && effectiveLimit > 0
         ? rows.slice(0, effectiveLimit)
         : rows;
 
-      // Also surface v2 evidence rows (transition / lint-violation) so a v2-only
-      // task is not invisible to `evidence list`. Session filter is v1-only.
-      // `services.v2` may be absent in tests that mock a subset of the surface;
-      // treat that as "no v2 rows" rather than failing the listing.
-      const v2Rows = opts.session === undefined && services.v2?.evidenceStore !== undefined
-        ? await services.v2.evidenceStore.list({
+      // Also surface system evidence rows (transition / lint-violation) so a
+      // system-only task is not invisible to `evidence list`. Session filter
+      // only applies to legacy rows. `services.evidenceStore` may be absent
+      // in tests that mock a subset of the surface; treat that as "no system
+      // rows" rather than failing the listing.
+      const systemRows = opts.session === undefined && services.evidenceStore !== undefined
+        ? await services.evidenceStore.list({
             ...(opts.task !== undefined ? { task_id: opts.task as string } : {}),
           })
         : [];
-      const v2Sliced = effectiveLimit !== undefined && effectiveLimit > 0
-        ? v2Rows.slice(0, effectiveLimit)
-        : v2Rows;
+      const systemSliced = effectiveLimit !== undefined && effectiveLimit > 0
+        ? systemRows.slice(0, effectiveLimit)
+        : systemRows;
 
       if (isJson) {
         const items = isFull ? sliced : sliced.map(summarizeEvidence);
-        const payload = v2Sliced.length > 0
-          ? { items, v2_items: v2Sliced }
+        const payload = systemSliced.length > 0
+          ? { items, system_items: systemSliced }
           : { items };
         output(true, payload, () => []);
         return;
       }
-      // Text mode: print v1 section, then a v2 section when present.
+      // Text mode: print the legacy section, then a system section when present.
       const textLines = [...formatEvidenceList(sliced)];
-      if (v2Sliced.length > 0) {
+      if (systemSliced.length > 0) {
         textLines.push("");
-        textLines.push("V2 evidence rows:");
-        for (const row of v2Sliced) {
+        textLines.push("System evidence rows:");
+        for (const row of systemSliced) {
           textLines.push(`  ${row.timestamp}  ${row.id}  ${row.kind}  ${row.task_id ?? "-"}`);
         }
       }
@@ -605,13 +607,13 @@ function registerShowCommand(parent: Command, root: Command, deps: EvidenceComma
         ]);
       }
 
-      const row = await services.evidenceStore.read(id);
+      const row = await services.legacyEvidenceStore.read(id);
       if (row === undefined) {
-        // Fall back to v2 evidence store (transition / lint-violation rows
-        // live there). v2 may be absent in narrow test fixtures.
-        const v2Match = await services.v2?.evidenceStore?.read(id);
-        if (v2Match !== undefined) {
-          output(isJson, v2Match, (r) => [
+        // Fall back to the system evidence store (transition / lint-violation
+        // rows live there). May be absent in narrow test fixtures.
+        const systemMatch = await services.evidenceStore?.read(id);
+        if (systemMatch !== undefined) {
+          output(isJson, systemMatch, (r) => [
             `  ID:        ${r.id}`,
             `  Kind:      ${r.kind}`,
             `  Timestamp: ${r.timestamp}`,

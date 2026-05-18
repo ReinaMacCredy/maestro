@@ -1,10 +1,10 @@
 import { Command } from "commander";
 import { registerTaskObserveCommand } from "../features/runtime/commands/task-observe.command.js";
-import { buildV2Services } from "../providers/build-services.js";
+import { buildCoreServices } from "../providers/build-services.js";
 import {
   FsContractStoreAdapter,
   FsContractVersionStoreAdapter,
-} from "@/shared/domain/legacy-task/index.js";
+} from "@/shared/domain/task/index.js";
 import { FsVerdictStoreAdapter } from "@/features/verdict/adapters/fs-verdict-store.adapter.js";
 import { parseNonNegativeInt, parsePositiveInt } from "../shared/lib/cli-options.js";
 import { taskFromSpec, SpecFileNotFoundError } from "../service/task-from-spec.usecase.js";
@@ -18,30 +18,16 @@ import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError, TASK_STATES, type TaskState } from "../types/task-state.js";
 import type { Task } from "../types/task.js";
-import { summarizeV2Task } from "../shared/lib/projection.js";
+import { summarizeTask } from "../shared/lib/projection.js";
 
-export interface TaskCommandV2Options {
+export interface TaskCommandOptions {
   readonly resolveRepoRoot: () => string;
 }
 
 function findOrCreateTaskCommand(program: Command): Command {
   const existing = program.commands.find((c) => c.name() === "task");
   if (existing) return existing;
-  return program.command("task").description("Task lifecycle (v2)");
-}
-
-// Remove v1 subcommands that v2 overrides. v1 task claim / block / verify have
-// different signatures and semantics; on the harness-os branch v2 owns these
-// verbs. v1 versions return in Phase 4 only if a migration test pins them.
-function detachV1Overrides(task: Command, overrides: readonly string[]): void {
-  // Commander types `commands` as readonly but mutates it internally; cast once.
-  const commands = task.commands as Command[];
-  for (const name of overrides) {
-    const idx = commands.findIndex((c) => c.name() === name);
-    if (idx !== -1) {
-      commands.splice(idx, 1);
-    }
-  }
+  return program.command("task").description("Task lifecycle");
 }
 
 function reportError(verb: string, err: unknown): void {
@@ -68,17 +54,16 @@ function reportError(verb: string, err: unknown): void {
   throw err;
 }
 
-export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Options): void {
+export function registerTaskCommands(program: Command, opts: TaskCommandOptions): void {
   const task = findOrCreateTaskCommand(program);
-  detachV1Overrides(task, ["claim", "block", "verify", "ship"]);
 
   task
     .command("from-spec <path>")
-    .description("Create a v2 task in draft from a product-spec markdown file")
+    .description("Create a task in draft from a product-spec markdown file")
     .action(async (pathArg: string): Promise<void> => {
       try {
         const repoRoot = opts.resolveRepoRoot();
-        const services = buildV2Services({ repoRoot });
+        const services = buildCoreServices({ repoRoot });
         const created = await taskFromSpec(
           {
             repoRoot,
@@ -102,7 +87,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
   ): Promise<void> => {
     try {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       const contractStore = new FsContractStoreAdapter(repoRoot);
       const contractVersionStore = new FsContractVersionStoreAdapter(repoRoot);
       const claimed = await taskClaim(
@@ -151,7 +136,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     }
     try {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       const blocked = await taskBlock(
         {
           taskStore: services.taskStore,
@@ -189,7 +174,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
     }
     try {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       const abandoned = await taskAbandon(
         {
           taskStore: services.taskStore,
@@ -225,7 +210,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
   ): Promise<void> {
     try {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       let explicit: "HUMAN" | "BLOCK" | undefined;
       if (flags.verdict !== undefined) {
         const v = flags.verdict.toLowerCase();
@@ -306,7 +291,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
   const shipAction = async (id: string, flags: { prUrl?: string }): Promise<void> => {
     try {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       const shipped = await taskShip(
         {
           taskStore: services.taskStore,
@@ -352,7 +337,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
   ): Promise<void> {
     try {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       let tasks: readonly Task[];
       if (flags.missionId !== undefined) {
         tasks = await services.taskStore.listByMissionId(flags.missionId);
@@ -375,7 +360,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
       if (wantJson) {
         const items = flags.full === true
           ? page
-          : page.map(summarizeV2Task);
+          : page.map(summarizeTask);
         console.log(
           JSON.stringify(
             { items, total: tasks.length, limit, offset },
@@ -400,7 +385,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
 
   task
     .command("list")
-    .description("List v2 tasks (filter by --mission-id or --state; paginated)")
+    .description("List tasks (filter by --mission-id or --state; paginated)")
     .option("--mission-id <id>", "filter by mission id")
     .option("--state <state>", `filter by state (${TASK_STATES.join("|")})`)
     .option("--limit <n>", "page size (default 20, max 100)", parseLimit)
@@ -417,7 +402,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
   ): Promise<void> {
     try {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       const t = await services.taskStore.get(id);
       if (!t) {
         console.error(`maestro task get: task ${id} not found`);
@@ -447,7 +432,7 @@ export function registerTaskV2Commands(program: Command, opts: TaskCommandV2Opti
 
   task
     .command("get <id>")
-    .description("Show a single v2 task by id")
+    .description("Show a single task by id")
     .option("--json", "emit JSON {task: ...}")
     .action(getAction);
 

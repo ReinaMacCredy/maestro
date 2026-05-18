@@ -20,7 +20,7 @@ import {
   type ModalOptions,
 } from "../shared/modal-model.js";
 import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
-import { TASK_STATUSES } from "@/shared/domain/legacy-task";
+import { TASK_STATUSES } from "@/shared/domain/task";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, TASK_STATUS_COLUMN_LABEL, AGENT_STATUS_LABEL } from "../shared/theme.js";
   import {
     getConfigRowsForTab,
@@ -241,15 +241,15 @@ function buildMemoryModal(
   state: MemoryModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  // v1 memory/graph subsystems retired in v2; absorbed into `maestro principle`.
+  // Memory/graph subsystems were retired; durable rules live under `maestro principle`.
   void state;
   return {
     mode: "info",
     title: "Memory",
-    eyebrow: "Retired in v2 · see `maestro principle` for the new surface.",
+    eyebrow: "Retired · see `maestro principle` for the durable-rule surface.",
     items: [
       {
-        text: "The v1 memory subsystem (corrections, learnings, ratchet) was retired.",
+        text: "The earlier memory subsystem (corrections, learnings, ratchet) was retired.",
         tone: "muted" as const,
       },
       { text: "Promoted principles live under `maestro principle list`." },
@@ -268,10 +268,10 @@ function buildGraphModal(
   return {
     mode: "info",
     title: "Project Graph",
-    eyebrow: "Retired in v2 · project-graph context is no longer surfaced.",
+    eyebrow: "Retired · project-graph context is no longer surfaced.",
     items: [
       {
-        text: "Cross-project graph data was retired with the v1 memory subsystem.",
+        text: "Cross-project graph data was retired with the earlier memory subsystem.",
         tone: "muted" as const,
       },
     ],

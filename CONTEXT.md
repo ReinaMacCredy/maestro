@@ -57,7 +57,7 @@ Artifact emitted at cross-session state transitions, carrying context for the ne
 _Avoid_: context-dump, session-state
 
 **grill**:
-The interview protocol `maestro-design` and `maestro-plan` skills run: one question at a time, recommended answer per question, challenges language against CONTEXT.md, updates the glossary inline as terms resolve, offers ADRs sparingly. No dedicated verb; entering the design or plan skill runs the grill.
+The interview protocol `maestro-design` and `maestro-mission` skills run: one question at a time, recommended answer per question, challenges language against CONTEXT.md, updates the glossary inline as terms resolve, offers ADRs sparingly. No dedicated verb; entering the design or mission skill runs the grill.
 _Avoid_: interview, Q&A, drill
 
 ### Verification
@@ -70,8 +70,8 @@ _Avoid_: integration test, behavior test, smoke test
 The user-mock sub-agent's prompting style in a scenario. `novice` gives generic prompts without verb names ("set this up"); `expert` names verbs explicitly ("claim the first task"). Tests the coding-agent's ability to navigate maestro under low steering.
 _Avoid_: skill level, user persona
 
-**greenfield fixture / brownfield fixture**:
-Scenario starting state. Greenfield = empty repo + fresh `maestro setup`. Brownfield = frozen v1 `.maestro/` snapshot reused from `tests/fixtures/v1-maestro/`; brownfield scenarios open with `setup --migrate-v2`.
+**greenfield fixture**:
+Scenario starting state: empty repo + fresh `maestro setup`.
 _Avoid_: empty/populated, fresh/existing
 
 ## Operating modes

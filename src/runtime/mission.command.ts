@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
-import { buildV2Services } from "../providers/build-services.js";
+import { buildCoreServices } from "../providers/build-services.js";
 import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import {
   missionFromSpec,
@@ -36,14 +36,14 @@ import { DuplicateSlugError } from "../repo/task-store.port.js";
 import { SpecParseError } from "../repo/spec-store.port.js";
 import { MissionTransitionError } from "../types/mission-state.js";
 
-export interface MissionCommandV2Options {
+export interface MissionCommandOptions {
   readonly resolveRepoRoot: () => string;
 }
 
 function findOrCreateMissionCommand(program: Command): Command {
   const existing = program.commands.find((c) => c.name() === "mission");
   if (existing) return existing;
-  return program.command("mission").description("Mission lifecycle (v2)");
+  return program.command("mission").description("Mission lifecycle");
 }
 
 function reportError(verb: string, err: unknown): void {
@@ -71,7 +71,7 @@ function reportError(verb: string, err: unknown): void {
   throw err;
 }
 
-export function registerMissionV2Commands(program: Command, opts: MissionCommandV2Options): void {
+export function registerMissionCommands(program: Command, opts: MissionCommandOptions): void {
   const mission = findOrCreateMissionCommand(program);
 
   mission
@@ -87,7 +87,7 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
     .action(async function (this: Command, titleParts: string[], flags): Promise<void> {
       try {
         const repoRoot = opts.resolveRepoRoot();
-        const services = buildV2Services({ repoRoot });
+        const services = buildCoreServices({ repoRoot });
 
         if (flags.listTemplates === true) {
           const listed = await listTemplates(repoRoot);
@@ -157,7 +157,7 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
     .action(async (id: string, flags: { reason?: string }): Promise<void> => {
       try {
         const repoRoot = opts.resolveRepoRoot();
-        const services = buildV2Services({ repoRoot });
+        const services = buildCoreServices({ repoRoot });
         const result = await missionCancel(
           {
             missionStore: services.missionStore,
@@ -190,11 +190,11 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
 
   mission
     .command("from-spec <path>")
-    .description("Create a v2 mission in 'approved' from a heavy-mode product-spec markdown file")
+    .description("Create a mission in 'approved' from a heavy-mode product-spec markdown file")
     .action(async (pathArg: string): Promise<void> => {
       try {
         const repoRoot = opts.resolveRepoRoot();
-        const services = buildV2Services({ repoRoot });
+        const services = buildCoreServices({ repoRoot });
         const created = await missionFromSpec(
           {
             repoRoot,
@@ -216,7 +216,7 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
     .action(async function (this: Command, id: string, flags: { json?: boolean }): Promise<void> {
       try {
         const repoRoot = opts.resolveRepoRoot();
-        const services = buildV2Services({ repoRoot });
+        const services = buildCoreServices({ repoRoot });
         const result = await missionShow(
           { missionStore: services.missionStore, taskStore: services.taskStore },
           id,
@@ -254,7 +254,7 @@ export function registerMissionV2Commands(program: Command, opts: MissionCommand
     .action(async (id: string, flags: { file: string }): Promise<void> => {
       try {
         const repoRoot = opts.resolveRepoRoot();
-        const services = buildV2Services({ repoRoot });
+        const services = buildCoreServices({ repoRoot });
         const raw = await readTextOrStdin(flags.file);
         if (raw === undefined) {
           console.error(`maestro mission decompose: batch file not found: ${flags.file}`);

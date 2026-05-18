@@ -18,8 +18,8 @@ import type {
   EvidenceStorePort,
 } from "@/features/evidence";
 import type { Contract } from "@/types/contract.js";
-import type { LegacyTask as Task, ContractStorePort, GitAnchorPort, LegacyTaskStorePort as TaskStorePort } from "@/shared/domain/legacy-task";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import type { Task, ContractStorePort, GitAnchorPort, TaskStorePort } from "@/shared/domain/task";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 import type {
   Mission,
   Feature,

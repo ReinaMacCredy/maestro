@@ -1,4 +1,4 @@
-// v2/service: use cases. Allowed to import from types, config, repo.
+// service: use cases. Allowed to import from types, config, repo.
 export * from "./emit-transition-evidence.js";
 export * from "./spec-new.usecase.js";
 export * from "./spec-validate.usecase.js";
@@ -24,6 +24,6 @@ export * from "./check-cost-budget.js";
 export * from "./contract-helpers.js";
 export * from "./contract-amend.usecase.js";
 // Contract helpers re-exported here so MCP tools can import from @/service
-// without depending on @/shared/domain/legacy-task.
-export { getCurrentContract } from "@/shared/domain/legacy-task/usecases/get-current-contract.usecase.js";
-export { buildTaskOwnerId } from "@/shared/domain/legacy-task/usecases/task-continuation.usecase.js";
+// without depending on @/shared/domain/task.
+export { getCurrentContract } from "@/shared/domain/task/usecases/get-current-contract.usecase.js";
+export { buildTaskOwnerId } from "@/shared/domain/task/usecases/task-continuation.usecase.js";

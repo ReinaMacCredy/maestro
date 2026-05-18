@@ -133,15 +133,14 @@ export class JsonlMissionStore implements MissionStorePort {
       lineNo += 1;
       if (line.length === 0) continue;
       const row = JSON.parse(line) as Record<string, unknown>;
-      // Validate-on-read so legacy rows (e.g. v1 state "specified") surface as
-      // explicit errors instead of corrupting downstream readers. Run setup to
-      // migrate before reusing this store.
+      // Validate-on-read so malformed rows surface as explicit errors instead
+      // of corrupting downstream readers.
       if (typeof row.id !== "string" || typeof row.slug !== "string" || typeof row.title !== "string") {
         throw new Error(`${this.#file}:${lineNo}: mission row missing required string fields`);
       }
       if (typeof row.state !== "string" || !isMissionState(row.state)) {
         throw new Error(
-          `${this.#file}:${lineNo}: mission row has unknown state '${String(row.state)}' (run \`maestro setup\` to migrate)`,
+          `${this.#file}:${lineNo}: mission row has unknown state '${String(row.state)}'; edit the file manually or remove it`,
         );
       }
       out.push(row as unknown as Mission);

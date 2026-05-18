@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-description: Interview-driven product-spec authoring for maestro v2. Runs the grill protocol from ADR-0016 — walks the decision tree one branch at a time, challenges user language against CONTEXT.md and committed ADRs, cross-references claims against code when verifiable, updates CONTEXT.md inline as terms resolve, and offers ADRs sparingly. Produces a committed product-spec markdown at `.maestro/specs/<slug>.md` ready for `maestro task from-spec`. Use when the user wants to author or refine a spec before planning or implementation.
+description: Interview-driven product-spec authoring for maestro. Runs the grill protocol from ADR-0016 — walks the decision tree one branch at a time, challenges user language against CONTEXT.md and committed ADRs, cross-references claims against code when verifiable, updates CONTEXT.md inline as terms resolve, and offers ADRs sparingly. Produces a committed product-spec markdown at `.maestro/specs/<slug>.md` ready for `maestro task from-spec`. Use when the user wants to author or refine a spec before planning or implementation.
 parity-skip-verbs:
   - principle promote
   - spec grill

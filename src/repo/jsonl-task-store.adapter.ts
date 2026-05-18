@@ -172,20 +172,19 @@ export class JsonlTaskStore implements TaskStorePort {
       lineNo += 1;
       if (line.length === 0) continue;
       const row = JSON.parse(line) as Record<string, unknown>;
-      // Validate-on-read so legacy v1 rows (carrying `plan_id`) surface as
-      // explicit errors instead of silently corrupting filters that key on
-      // mission_id. Run `maestro setup` to rewrite legacy task rows.
+      // Validate-on-read so malformed rows surface as explicit errors instead
+      // of silently corrupting filters that key on mission_id.
       if (typeof row.id !== "string" || typeof row.slug !== "string" || typeof row.title !== "string") {
         throw new Error(`${this.#file}:${lineNo}: task row missing required string fields`);
       }
       if (typeof row.state !== "string" || !isTaskState(row.state)) {
         throw new Error(
-          `${this.#file}:${lineNo}: task row has unknown state '${String(row.state)}' (run \`maestro setup\` to migrate)`,
+          `${this.#file}:${lineNo}: task row has unknown state '${String(row.state)}'; edit the file manually or remove it`,
         );
       }
       if ("plan_id" in row) {
         throw new Error(
-          `${this.#file}:${lineNo}: task row carries legacy 'plan_id' field; run \`maestro setup\` to migrate it to 'mission_id'`,
+          `${this.#file}:${lineNo}: task row carries legacy 'plan_id' field; rename it to 'mission_id' manually or remove the row`,
         );
       }
       out.push(row as unknown as Task);

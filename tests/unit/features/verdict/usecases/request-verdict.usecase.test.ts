@@ -6,12 +6,12 @@ import type { Contract } from "@/types/contract.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/types/trust.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
-import type { ContractVersionStorePort, RunStateStorePort, RunStateDelta, GitAnchorPort } from "@/shared/domain/legacy-task";
-import type { RunState } from "@/shared/domain/legacy-task/domain/run-state.js";
+import type { ContractVersionStorePort, RunStateStorePort, RunStateDelta, GitAnchorPort } from "@/shared/domain/task";
+import type { RunState } from "@/shared/domain/task/domain/run-state.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import type { EvidenceStorePort } from "@/features/evidence/ports/storage.js";
 import { generateVerdictId } from "@/features/verdict/domain/verdict-id.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { buildV2Services } from "@/providers/build-services.js";
+import { buildCoreServices } from "@/providers/build-services.js";
 
-describe("buildV2Services", () => {
+describe("buildCoreServices", () => {
   it("wires every default port including principlesStore and processRunner", () => {
-    const svc = buildV2Services({ repoRoot: "/tmp" });
+    const svc = buildCoreServices({ repoRoot: "/tmp" });
     expect(svc.specStore).toBeDefined();
     expect(svc.taskStore).toBeDefined();
     expect(svc.missionStore).toBeDefined();
@@ -16,7 +16,7 @@ describe("buildV2Services", () => {
 
   it("respects overrides for new ports", () => {
     const fakeRunner = { run: async () => ({ stdout: "", stderr: "", exitCode: 0 }) };
-    const svc = buildV2Services({
+    const svc = buildCoreServices({
       repoRoot: "/tmp",
       overrides: { processRunner: fakeRunner },
     });

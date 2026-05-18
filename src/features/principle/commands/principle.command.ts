@@ -16,7 +16,7 @@ import {
 } from "../usecases/principle-effectiveness.usecase.js";
 
 interface PrincipleCommandDeps {
-  readonly getServices: () => Pick<Services, "principleStore" | "v2">;
+  readonly getServices: () => Pick<Services, "principleStore" | "principlesStore">;
 }
 
 export function registerPrincipleCommand(
@@ -46,7 +46,7 @@ export function registerPrincipleCommand(
       // pack when the caller narrowed the query.
       const lintPack = profile
         ? []
-        : await services.v2.principlesStore.list();
+        : await services.principlesStore.list();
 
       if (isJson) {
         output(true, { behavioral: principles, lint: lintPack }, () => []);

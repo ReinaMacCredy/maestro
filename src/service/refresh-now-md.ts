@@ -1,6 +1,6 @@
 import type { TaskStorePort } from "../repo/task-store.port.js";
 import type { NowMdWriterPort } from "../repo/now-md-writer.port.js";
-import type { V2Services } from "../providers/build-services.js";
+import type { CoreServices } from "../providers/build-services.js";
 
 export interface RefreshNowMdInput {
   readonly taskStore: TaskStorePort;
@@ -21,7 +21,7 @@ export async function refreshNowMd(input: RefreshNowMdInput): Promise<void> {
   }
 }
 
-export async function refreshNowMdFromServices(services: V2Services): Promise<void> {
+export async function refreshNowMdFromServices(services: CoreServices): Promise<void> {
   await refreshNowMd({
     taskStore: services.taskStore,
     nowMdWriter: services.nowMdWriter,

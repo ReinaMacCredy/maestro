@@ -2,7 +2,7 @@
 
 Verb-by-verb reference for the `maestro` CLI. Each section names the verb, its flags, exit codes where relevant, and the canonical doc for the full contract.
 
-For agent-facing usage, prefer the bundled skills under `skills/bundled/maestro-*`; they cross-reference these verbs in the right order. The six bundled skills are `maestro-task`, `maestro-plan`, `maestro-design`, `maestro-verify`, `maestro-handoff`, `maestro-setup`.
+For agent-facing usage, prefer the bundled skills under `skills/bundled/maestro-*`; they cross-reference these verbs in the right order. The six bundled skills are `maestro-task`, `maestro-mission`, `maestro-design`, `maestro-verify`, `maestro-handoff`, `maestro-setup`.
 
 ---
 
@@ -143,10 +143,9 @@ maestro setup [--global] [--dry-run] [--resync-skills] [--reset-templates] [--no
 maestro setup check [--json]
 ```
 
-`maestro setup` is the merged bootstrap + migration verb. Idempotent: detects the current state and only touches what changed.
+`maestro setup` scaffolds the `.maestro/` layout. Idempotent: detects the current state and only touches what changed.
 
-- Creates the v2 directory layout (`.maestro/{specs,missions,tasks,runs,evidence,handoffs,worktrees}`) with `.gitkeep` placeholders.
-- Hard-deletes v1 leftovers it owns (`.maestro/memory/corrections`, `.maestro/memory/learnings`, `.maestro/.migrated-v2.json`), migrates v0.100.0 `.maestro/plans/` to `.maestro/missions/` (including rewriting legacy `state: "specified"` rows to `state: "approved"`), and rewrites legacy `plan_id` → `mission_id` on `.maestro/tasks/tasks.jsonl`.
+- Creates `.maestro/{specs,missions,tasks,runs,evidence,handoffs,worktrees}` with `.gitkeep` placeholders.
 - Writes default skill bundles and context templates; `--reset-templates` overwrites user-customized files.
 - `--resync-skills` reconciles `.claude/skills/` and `.codex/skills/` with shipped templates.
 - `--dry-run` plans without writing.
@@ -154,7 +153,7 @@ maestro setup check [--json]
 - `--no-git-ok` allows running outside a git working tree (default refuses).
 - `--json` emits the full report; otherwise prints one line per step.
 
-`setup check` audits the v2 directory layout, the principles pack (`docs/principles/`), and `.maestro/config.yaml`. Exit 1 only when an entry is `missing`; `warn` (empty principles pack, absent config.yaml) is informational.
+`setup check` audits the `.maestro/` directory layout, the principles pack (`docs/principles/`), and `.maestro/config.yaml`. Exit 1 only when an entry is `missing`; `warn` (empty principles pack, absent config.yaml) is informational.
 
 `maestro init` is a hidden alias for `maestro setup` retained for muscle memory.
 

@@ -58,7 +58,7 @@ jobs:
         env:
           HOME: ${{ runner.temp }}/maestro-home
           MAESTRO_INSTALL_DIR: ${{ runner.temp }}/maestro-bin
-        run: bun scripts/v2-smoke.ts
+        run: bun scripts/smoke.ts
 
   local-install-windows:
     name: Local Install Windows
@@ -94,7 +94,7 @@ jobs:
         env:
           HOME: ${{ runner.temp }}\maestro-home
           MAESTRO_INSTALL_DIR: ${{ runner.temp }}\maestro-bin
-        run: bun scripts/v2-smoke.ts
+        run: bun scripts/smoke.ts
 
   install-script-linux:
     name: Release Installer Linux

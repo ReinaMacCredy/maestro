@@ -697,7 +697,7 @@ describe.skip("L6 auto-merge flow (compiled binary)", () => {
       expect(listResult.exitCode).toBe(0);
       const listPayload = expectJson<{
         items: Array<{ kind: string }>;
-        v2_items?: ReadonlyArray<unknown>;
+        system_items?: ReadonlyArray<unknown>;
       }>(listResult);
       expect(listPayload.items.some((r) => r.kind === "verdict-override")).toBe(true);
 

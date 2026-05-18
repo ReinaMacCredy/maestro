@@ -1,8 +1,8 @@
 import { Command } from "commander";
-import { buildV2Services } from "../providers/build-services.js";
+import { buildCoreServices } from "../providers/build-services.js";
 import type { HandoffEnvelope } from "../repo/handoff-emitter.port.js";
 
-export interface HandoffCommandV2Options {
+export interface HandoffCommandOptions {
   readonly resolveRepoRoot: () => string;
 }
 
@@ -14,9 +14,9 @@ function findOrCreateHandoffCommand(program: Command): Command {
     .description("Inspect handoff envelopes emitted by task lifecycle verbs");
 }
 
-export function registerHandoffV2Commands(
+export function registerHandoffCommands(
   program: Command,
-  opts: HandoffCommandV2Options,
+  opts: HandoffCommandOptions,
 ): void {
   const handoff = findOrCreateHandoffCommand(program);
 
@@ -28,7 +28,7 @@ export function registerHandoffV2Commands(
     .option("--json", "Output as JSON")
     .action(async (opts2: { task?: string; trigger?: string; json?: boolean }): Promise<void> => {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       let envelopes = await services.handoffEmitter.list();
       if (opts2.task) envelopes = envelopes.filter((e) => e.task_id === opts2.task);
       if (opts2.trigger) envelopes = envelopes.filter((e) => e.trigger_verb === opts2.trigger);
@@ -58,7 +58,7 @@ export function registerHandoffV2Commands(
     .option("--json", "Output as JSON")
     .action(async (id: string, opts2: { json?: boolean }): Promise<void> => {
       const repoRoot = opts.resolveRepoRoot();
-      const services = buildV2Services({ repoRoot });
+      const services = buildCoreServices({ repoRoot });
       const envelope = await services.handoffEmitter.get(id);
       const pickup = envelope ? await services.handoffEmitter.getPickup(id) : undefined;
 

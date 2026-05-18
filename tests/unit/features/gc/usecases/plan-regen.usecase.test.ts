@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { regenPlan } from "@/features/gc/usecases/plan-regen.usecase.js";
-import type { LegacyTaskStorePort as TaskStorePort, LegacyTask as Task } from "@/shared/domain/legacy-task";
+import type { TaskStorePort, Task } from "@/shared/domain/task";
 import type { VerdictStorePort, Verdict } from "@/features/verdict";
 import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec";
 import { FsEvidenceStoreAdapter, recordEvidence } from "@/features/evidence";

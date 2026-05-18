@@ -13,7 +13,7 @@ function makeProgram(
 ): Command {
   const program = new Command().exitOverride();
   registerReviewCommand(program, {
-    getServices: () => ({ evidenceStore: store }),
+    getServices: () => ({ legacyEvidenceStore: store }),
     recordEvidence: async <K extends import("@/features/evidence/index.js").EvidenceKind>(
       s: EvidenceStorePort,
       input: RecordEvidenceInput<K>,

@@ -1,7 +1,7 @@
 import { applyPathChanges } from "./contract-helpers.js";
-import { amendContract } from "@/shared/domain/legacy-task/usecases/amend-contract.usecase.js";
-import { getCurrentContract } from "@/shared/domain/legacy-task/usecases/get-current-contract.usecase.js";
-import { generateContractAmendmentId } from "@/shared/domain/legacy-task/domain/contract/contract-state.js";
+import { amendContract } from "@/shared/domain/task/usecases/amend-contract.usecase.js";
+import { getCurrentContract } from "@/shared/domain/task/usecases/get-current-contract.usecase.js";
+import { generateContractAmendmentId } from "@/shared/domain/task/domain/contract/contract-state.js";
 import type { ContractAmendment } from "@/types/contract.js";
 import type { Services } from "@/services.js";
 
@@ -26,7 +26,7 @@ export interface AmendContractScopeInput {
 export async function amendContractScope(
   services: Pick<
     Services,
-    "contractStore" | "contractVersionStore" | "evidenceStore"
+    "contractStore" | "contractVersionStore" | "legacyEvidenceStore"
   >,
   input: AmendContractScopeInput,
 ): Promise<AmendContractScopeResult> {
@@ -67,7 +67,7 @@ export async function amendContractScope(
   const { newVersion, amendmentId } = await amendContract(
     services.contractVersionStore,
     services.contractStore,
-    services.evidenceStore,
+    services.legacyEvidenceStore,
     {
       taskId: input.taskId,
       amendment,

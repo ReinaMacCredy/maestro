@@ -19,7 +19,6 @@ const lastRunPath = join(repoRoot, ".maestro/scenarios/last-run.json");
 interface ScenarioRecord {
   name: string;
   project_dir: string;
-  project_type: "greenfield" | "brownfield";
   prepared_at: string;
   brief_path: string;
 }

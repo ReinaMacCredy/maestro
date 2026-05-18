@@ -15,7 +15,7 @@ repo-owned agent surfaces, and shared project state under `.maestro/`.
 - Full verb reference: `docs/cli-reference.md`.
 - Layered architecture rules: `docs/architecture.yaml`; binding decisions in `docs/adr/`.
 - State on disk: `.maestro/{evidence,tasks,plans,runs,worktrees,handoffs}/`. Auto-advance rules in ADR-0011; heavy-mode worktrees in ADR-0008.
-- Six bundled skills: `maestro-design`, `maestro-handoff`, `maestro-plan`, `maestro-task`, `maestro-verify`, `maestro-setup`.
+- Six bundled skills: `maestro-design`, `maestro-handoff`, `maestro-mission`, `maestro-task`, `maestro-verify`, `maestro-setup`.
 - Default principles: `docs/principles/*.md`; promote new ones with `maestro principle promote <evd-id>`.
 
 ## STRUCTURE
@@ -40,7 +40,7 @@ maestro/
 | Layered architecture | `src/{types,config,repo,service,runtime,ui,providers}/` (forward-only `types → config → repo → service → runtime → ui`; `providers` is cross-cutting) |
 | Architecture lints | `src/service/architecture-lint.usecase.ts` |
 | Ports + adapters | `src/repo/` (task, plan, spec, evidence, observability, worktree, handoff, principles) |
-| Use cases | `src/service/` (task-claim, task-verify, plan-decompose, emit-handoff, migrate-v2, setup-check, principle-promote, ...) |
+| Use cases | `src/service/` (task-claim, task-verify, plan-decompose, emit-handoff, setup-check, principle-promote, ...) |
 | Feature boundaries | `src/features/`, `scripts/check-feature-boundaries-lib.ts` |
 | Mission Control TUI | `src/infra/commands/mission-control.command.ts`, `src/tui/state/snapshot.ts` |
 | Evidence logbook | `src/features/evidence/`; see `docs/witness-levels.md` |

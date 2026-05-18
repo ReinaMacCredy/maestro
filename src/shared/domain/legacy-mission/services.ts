@@ -9,7 +9,7 @@ import { FsCheckpointStoreAdapter } from "./adapters/checkpoint-store.adapter.js
 import { buildMissions, type Missions } from "./missions.js";
 
 export interface LegacyMissionServices {
-  readonly missionStore: MissionStorePort;
+  readonly featureMissionStore: MissionStorePort;
   readonly featureStore: FeatureStorePort;
   readonly assertionStore: AssertionStorePort;
   readonly checkpointStore: CheckpointStorePort;
@@ -24,7 +24,7 @@ export function buildLegacyMissionServices(projectDir: string): LegacyMissionSer
   const missions = buildMissions(missionStore, featureStore, assertionStore, checkpointStore);
 
   return {
-    missionStore,
+    featureMissionStore: missionStore,
     featureStore,
     assertionStore,
     checkpointStore,

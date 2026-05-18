@@ -9,7 +9,7 @@ import type { Services } from "@/services.js";
 interface ContractCommandDeps {
   readonly getServices: () => Pick<
     Services,
-    "contractStore" | "contractVersionStore" | "evidenceStore"
+    "contractStore" | "contractVersionStore" | "legacyEvidenceStore"
   >;
 }
 

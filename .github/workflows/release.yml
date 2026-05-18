@@ -93,8 +93,8 @@ jobs:
           fi
       - name: Smoke-test Mission Control renderer
         run: ./dist/maestro mission-control --render-check --size 120x40
-      - name: v2 hot-path smoke
-        run: bun scripts/v2-smoke.ts ./dist/maestro
+      - name: Hot-path smoke
+        run: bun scripts/smoke.ts ./dist/maestro
 
   install-smoke:
     name: Install Smoke

@@ -2,7 +2,7 @@ import { buildInfraServices, type InfraServices } from "./infra/services.js";
 import { buildLegacyMissionServices, type LegacyMissionServices } from "@/shared/domain/legacy-mission";
 import { buildPrincipleServices, type PrincipleServices } from "./features/principle/services.js";
 import { buildReplyServices, type ReplyServices } from "./features/reply/services.js";
-import { buildTaskServices, type TaskServices } from "@/shared/domain/legacy-task/index.js";
+import { buildTaskServices, type TaskServices } from "@/shared/domain/task/index.js";
 import { buildBundleServices, type BundleServices } from "./features/bundle/services.js";
 import { buildEvidenceServices, type EvidenceServices } from "./features/evidence/services.js";
 import { FsSpecStoreAdapter } from "@/shared/domain/legacy-spec/index.js";
@@ -15,7 +15,7 @@ import { buildCiServices, type CiServices } from "./features/ci/services.js";
 import { buildMergeServices, type MergeServices } from "./features/merge/services.js";
 import { buildDeployServices, type DeployServices } from "./features/deploy/services.js";
 import { buildRuntimeServices, type RuntimeServices } from "./features/runtime/services.js";
-import { buildV2Services, type V2Services } from "./providers/build-services.js";
+import { buildCoreServices, type CoreServices } from "./providers/build-services.js";
 
 export interface Services extends
   InfraServices,
@@ -32,11 +32,10 @@ export interface Services extends
   CiServices,
   MergeServices,
   DeployServices,
-  RuntimeServices {
-  readonly specStore: LegacySpecStorePort;
+  RuntimeServices,
+  CoreServices {
+  readonly trustSpecStore: LegacySpecStorePort;
   readonly projectRoot: string;
-  /** v2 service bundle — MCP tools for v2 verbs consume these directly. */
-  readonly v2: V2Services;
 }
 
 export function createServices(
@@ -51,7 +50,7 @@ export function createServices(
     ...buildTaskServices(projectDir),
     ...buildBundleServices(),
     ...buildEvidenceServices(projectDir),
-    specStore: new FsSpecStoreAdapter(projectDir),
+    trustSpecStore: new FsSpecStoreAdapter(projectDir),
     ...buildPolicyServices(projectDir),
     ...buildVerifyServices(projectDir),
     ...buildRiskServices(),
@@ -61,7 +60,7 @@ export function createServices(
     ...buildDeployServices(),
     ...buildRuntimeServices(),
     projectRoot: projectDir,
-    v2: buildV2Services({ repoRoot: projectDir }),
+    ...buildCoreServices({ repoRoot: projectDir }),
   };
   return overrides ? { ...base, ...overrides } : base;
 }

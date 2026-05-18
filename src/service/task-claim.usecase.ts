@@ -10,7 +10,7 @@ import type { WorktreeStorePort } from "../repo/worktree-store.port.js";
 import type {
   ContractStorePort,
   ContractVersionStorePort,
-} from "@/shared/domain/legacy-task/index.js";
+} from "@/shared/domain/task/index.js";
 import { assertTaskTransition } from "../types/task-state.js";
 import type { Task, TaskId } from "../types/task.js";
 import { assertMissionActive } from "./assert-mission-active.js";
@@ -100,7 +100,7 @@ export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Pro
 
   // Synthesize a locked contract from the spec's acceptance_criteria so a
   // later `verdict request` finds one without the agent running a separate
-  // contract-creation verb. v2 has no agent-facing contract verbs.
+  // contract-creation verb (there are no agent-facing contract verbs).
   if (
     deps.contractStore
     && deps.contractVersionStore

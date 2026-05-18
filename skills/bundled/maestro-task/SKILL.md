@@ -5,7 +5,7 @@ description: Use at the start of any multi-step work in a maestro-initialized pr
 
 # Maestro Task
 
-You are working in a maestro v2 project. Author a product-spec, materialize one task per PR, claim it, iterate until `task verify` returns PASS, then ship.
+You are working in a maestro project. Author a product-spec, materialize one task per PR, claim it, iterate until `task verify` returns PASS, then ship.
 
 This skill covers the **single-task path** (light-mode specs, one PR). For multi-PR work, see `maestro-mission` — heavy-mode specs decompose into a batch of child tasks via `mission from-spec` → `mission decompose`.
 
@@ -17,7 +17,7 @@ Auto-activate when:
 
 1. The user asks for a multi-step implementation.
 2. The user names a task id (`tsk-...`) or says "resume this task".
-3. Starting a fresh session in a maestro v2 project (`.maestro/specs/` exists).
+3. Starting a fresh session in a maestro project (`.maestro/specs/` exists).
 
 Do not activate for one-liner edits or read-only questions.
 

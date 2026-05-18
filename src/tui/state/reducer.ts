@@ -9,7 +9,7 @@ import type {
 import type { ConfigScope } from "@/infra/ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
-import { TASK_STATUSES, type TaskStatus } from "@/shared/domain/legacy-task";
+import { TASK_STATUSES, type TaskStatus } from "@/shared/domain/task";
 import type { EventStreamEntry } from "./screen-types.js";
 import { getConfigRowsForTab, isGlobalOnlyConfigKey, resolveConfigScopeForKey } from "./config-inspector.js";
 
@@ -1375,14 +1375,14 @@ function nextMemoryTab(current: MemoryModalTab, delta: 1 | -1): MemoryModalTab {
 }
 
 function getMemorySelectableCount(snapshot: MissionControlSnapshot, tab: MemoryModalTab): number {
-  // v1 memory subsystem (corrections/ratchet) retired in v2; tabs render empty.
+  // The earlier memory subsystem (corrections/ratchet) was retired; tabs render empty.
   void snapshot;
   void tab;
   return 0;
 }
 
 function getGraphSelectableCount(snapshot: MissionControlSnapshot): number {
-  // Project-graph data was retired with the v1 memory subsystem.
+  // Project-graph data was retired with the earlier memory subsystem.
   void snapshot;
   return 0;
 }

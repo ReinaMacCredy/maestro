@@ -1,4 +1,4 @@
-// Composition root for v2 services. Producers can override individual ports
+// Composition root for the core service bundle. Producers can override individual ports
 // for tests by passing a partial overrides bag.
 
 import { FsSpecStore } from "../repo/fs-spec-store.adapter.js";
@@ -25,7 +25,7 @@ import { FsNowMdWriter } from "../repo/fs-now-md-writer.adapter.js";
 import type { NowMdWriterPort } from "../repo/now-md-writer.port.js";
 import { buildNowMd } from "../service/build-now-md.js";
 
-export interface V2Services {
+export interface CoreServices {
   readonly specStore: SpecStorePort;
   readonly taskStore: TaskStorePort;
   readonly missionStore: MissionStorePort;
@@ -39,12 +39,12 @@ export interface V2Services {
   readonly nowMdWriter: NowMdWriterPort;
 }
 
-export interface BuildV2ServicesOptions {
+export interface BuildCoreServicesOptions {
   readonly repoRoot: string;
-  readonly overrides?: Partial<V2Services>;
+  readonly overrides?: Partial<CoreServices>;
 }
 
-export function buildV2Services(options: BuildV2ServicesOptions): V2Services {
+export function buildCoreServices(options: BuildCoreServicesOptions): CoreServices {
   const { repoRoot, overrides } = options;
   const processRunner = overrides?.processRunner ?? new BunProcessRunner();
   return {

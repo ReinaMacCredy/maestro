@@ -1,4 +1,4 @@
-// v2 task lifecycle (ADR-0003). Hybrid transitions (ADR-0004): agent enters
+// Task lifecycle (ADR-0003). Hybrid transitions (ADR-0004): agent enters
 // check states manually; harness auto-exits based on verdict result.
 
 export const TASK_STATES = [

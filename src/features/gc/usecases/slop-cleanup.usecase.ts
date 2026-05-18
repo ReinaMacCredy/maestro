@@ -7,7 +7,7 @@ import {
   principlesScan,
   type PrincipleScanFinding,
 } from "@/service/principle-scan.usecase.js";
-import { buildV2Services } from "@/providers/build-services.js";
+import { buildCoreServices } from "@/providers/build-services.js";
 import type { PrinciplesStorePort } from "@/repo/principles-store.port.js";
 import type { ProcessRunnerPort } from "@/repo/process-runner.port.js";
 
@@ -55,10 +55,10 @@ export async function scanSlopCleanup(
         processRunner: args.processRunner,
       }
     : (() => {
-        const v2 = buildV2Services({ repoRoot: args.projectRoot });
+        const core = buildCoreServices({ repoRoot: args.projectRoot });
         return {
-          principlesStore: v2.principlesStore,
-          processRunner: v2.processRunner,
+          principlesStore: core.principlesStore,
+          processRunner: core.processRunner,
         };
       })();
 
