@@ -207,11 +207,17 @@ describe("CLI integration", () => {
     expect(checks[0]).toHaveProperty("status");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("status --json returns structured output", async () => {
-    const { stdout, exitCode } = await run(["status", "--json"]);
+  it("status --json returns cold-start sections", async () => {
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    const { stdout, exitCode } = await run(["status", "--json"], tmpDir);
     expect(exitCode).toBe(0);
-    const status = JSON.parse(stdout);
-    expect(status).toHaveProperty("gitAvailable");
+    const report = JSON.parse(stdout);
+    expect(report).toHaveProperty("maestro_health");
+    expect(report).toHaveProperty("project_state");
+    expect(Array.isArray(report.missions)).toBe(true);
+    expect(Array.isArray(report.recent_transitions)).toBe(true);
+    // next_ready is undefined when no tasks are ready -- JSON.stringify drops
+    // undefined fields, so the key may be absent. Assert presence only when set.
   }, SLOW_CLI_TIMEOUT_MS);
 
 });

@@ -17,7 +17,7 @@ import {
   type MissionReport,
 } from "@/shared/domain/legacy-mission";
 import { getMissionControlBackgroundMode } from "@/tui/shared/ui-config.js";
-import type { DoctorCheck, StatusReport } from "@/infra/domain/status-types.js";
+import type { DoctorCheck, EnvironmentStatus } from "@/infra/domain/status-types.js";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";
 import type {
@@ -53,7 +53,7 @@ interface FeatureGraphEntry {
 }
 
 export interface EnvironmentSummary {
-  readonly status: StatusReport;
+  readonly status: EnvironmentStatus;
   readonly checks: readonly DoctorCheck[];
 }
 
@@ -342,7 +342,7 @@ function findActiveFeature(taskPreviews: readonly TaskPreviewPane[]): MissionCon
 }
 
 function buildHomeActions(
-  status: StatusReport,
+  status: EnvironmentStatus,
   checks: readonly DoctorCheck[],
   hasTasks = false,
 ): readonly MissionControlHomeAction[] {

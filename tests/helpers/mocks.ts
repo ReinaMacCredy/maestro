@@ -44,6 +44,11 @@ import type {
 } from "@/repo/evidence-store.port.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import type { Verdict } from "@/features/verdict/domain/types.js";
+import type {
+  HandoffEmitterPort,
+  HandoffEnvelope,
+  HandoffPickup,
+} from "@/repo/handoff-emitter.port.js";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
   return {
@@ -732,6 +737,28 @@ export function mockRepoEvidenceStore(
       return out.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     },
     read: async (id) => rows.get(id),
+    ...overrides,
+  };
+}
+
+export function mockHandoffEmitter(
+  initial: { envelopes?: readonly HandoffEnvelope[]; pickups?: readonly HandoffPickup[] } = {},
+  overrides: Partial<HandoffEmitterPort> = {},
+): HandoffEmitterPort {
+  const envelopes = new Map<string, HandoffEnvelope>();
+  for (const e of initial.envelopes ?? []) envelopes.set(e.id, e);
+  const pickups = new Map<string, HandoffPickup>();
+  for (const p of initial.pickups ?? []) pickups.set(p.envelope_id, p);
+  return {
+    emit: async (envelope) => {
+      envelopes.set(envelope.id, envelope);
+    },
+    list: async () => Array.from(envelopes.values()),
+    get: async (id) => envelopes.get(id),
+    markPickedUp: async (envelopeId, pickup) => {
+      pickups.set(envelopeId, pickup);
+    },
+    getPickup: async (envelopeId) => pickups.get(envelopeId),
     ...overrides,
   };
 }
