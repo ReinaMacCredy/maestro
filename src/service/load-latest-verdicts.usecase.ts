@@ -11,6 +11,7 @@ export interface LatestVerdictSummary {
 export interface VerdictsByTaskResult {
   readonly byTaskId: ReadonlyMap<string, Verdict>;
   readonly latest: LatestVerdictSummary | undefined;
+  readonly corruptCount: number;
 }
 
 // A single corrupt verdict file must not poison consumers — they need the
@@ -19,12 +20,14 @@ export async function loadLatestVerdictsByTask(
   tasks: readonly Task[],
   verdictStore: VerdictStorePort,
 ): Promise<VerdictsByTaskResult> {
+  let corruptCount = 0;
   const entries = await Promise.all(
     tasks.map(async (t): Promise<[string, Verdict] | undefined> => {
       try {
         const v = await verdictStore.readLatest(t.id);
         return v ? [t.id, v] : undefined;
       } catch {
+        corruptCount++;
         return undefined;
       }
     }),
@@ -44,5 +47,5 @@ export async function loadLatestVerdictsByTask(
       };
     }
   }
-  return { byTaskId, latest };
+  return { byTaskId, latest, corruptCount };
 }

@@ -73,11 +73,17 @@ export async function buildStatusReport(
     (r): r is TransitionEvidenceRow => r.kind === "transition",
   );
 
-  const { byTaskId: verdictsByTaskId, latest: latestVerdict } =
+  const { byTaskId: verdictsByTaskId, latest: latestVerdict, corruptCount } =
     await loadLatestVerdictsByTask(allTasks, deps.verdictStore);
   const latestTransitionByTaskId = indexLatestTransitionByTaskId(transitions);
 
-  const project_state = buildProjectState(allTasks, latestVerdict, staleHandoffCount, now);
+  const project_state = buildProjectState(
+    allTasks,
+    latestVerdict,
+    staleHandoffCount,
+    corruptCount,
+    now,
+  );
   const missions = buildMissionGroups(
     allMissions,
     allTasks,
@@ -117,6 +123,7 @@ function buildProjectState(
   allTasks: readonly Task[],
   latest: LatestVerdictSummary | undefined,
   stale_handoff_count: number,
+  corrupt_verdict_count: number,
   now: number,
 ): ProjectVerifiedState {
   const stuck_verifying_count = allTasks.filter((t) => {
@@ -130,6 +137,7 @@ function buildProjectState(
     latest_verdict: latest,
     stuck_verifying_count,
     stale_handoff_count,
+    corrupt_verdict_count,
   };
 }
 
@@ -139,12 +147,10 @@ function buildMissionGroups(
   verdictsByTaskId: ReadonlyMap<string, Verdict>,
   latestTransitionByTaskId: ReadonlyMap<string, TransitionEvidenceRow>,
 ): MissionGroup[] {
-  // Terminal-state tasks (shipped, abandoned) are work history and belong
-  // in Recent transitions, not under their parent mission.
+  const activeTasks = filterActiveTasksForMissions(allTasks);
   const tasksByMissionId = new Map<string, Task[]>();
   const unscoped: Task[] = [];
-  for (const t of allTasks) {
-    if (isTerminalTaskState(t.state)) continue;
+  for (const t of activeTasks) {
     if (t.mission_id === undefined) {
       unscoped.push(t);
     } else {
@@ -222,21 +228,27 @@ async function countStaleHandoffs(
   emitter: HandoffEmitterPort,
   now: number,
 ): Promise<number> {
-  const envelopes = await emitter.list();
-  const results = await Promise.all(
-    envelopes.map(async (e): Promise<0 | 1> => {
-      if (!isStaleEnvelope(e, now)) return 0;
-      const pickup = await emitter.getPickup(e.id);
-      return pickup ? 0 : 1;
-    }),
-  );
-  let stale = 0;
-  for (const r of results) stale += r;
-  return stale;
+  const [envelopes, pickups] = await Promise.all([
+    emitter.list(),
+    emitter.listPickups(),
+  ]);
+  const pickedUpIds = new Set(pickups.map((p) => p.envelope_id));
+  return envelopes.filter(
+    (e) => isStaleEnvelope(e, now) && !pickedUpIds.has(e.id),
+  ).length;
 }
 
 function isStaleEnvelope(envelope: HandoffEnvelope, now: number): boolean {
   const createdAt = Date.parse(envelope.created_at);
   if (Number.isNaN(createdAt)) return false;
   return now - createdAt > ONE_DAY_MS;
+}
+
+/**
+ * Filter out terminal-state tasks (shipped, abandoned) from mission display.
+ * Terminal tasks are work history and belong in Recent transitions, not under
+ * their parent mission in the Active missions section.
+ */
+function filterActiveTasksForMissions(tasks: readonly Task[]): Task[] {
+  return tasks.filter((t) => !isTerminalTaskState(t.state));
 }

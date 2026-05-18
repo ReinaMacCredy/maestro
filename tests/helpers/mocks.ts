@@ -759,6 +759,7 @@ export function mockHandoffEmitter(
       pickups.set(envelopeId, pickup);
     },
     getPickup: async (envelopeId) => pickups.get(envelopeId),
+    listPickups: async () => Array.from(pickups.values()),
     ...overrides,
   };
 }

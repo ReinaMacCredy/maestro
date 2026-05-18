@@ -94,6 +94,7 @@ describe("buildStatusReport", () => {
     expect(report.recent_transitions).toEqual([]);
     expect(report.project_state.stuck_verifying_count).toBe(0);
     expect(report.project_state.stale_handoff_count).toBe(0);
+    expect(report.project_state.corrupt_verdict_count).toBe(0);
     expect(report.project_state.latest_verdict).toBeUndefined();
   });
 
@@ -101,6 +102,7 @@ describe("buildStatusReport", () => {
     const report = await buildStatusReport(baseDeps(cwd));
 
     expect(Object.keys(report.project_state).sort()).toEqual([
+      "corrupt_verdict_count",
       "latest_verdict",
       "stale_handoff_count",
       "stuck_verifying_count",
@@ -243,5 +245,22 @@ describe("buildStatusReport", () => {
     });
 
     expect(report.project_state.latest_verdict?.taskId).toBe("tsk-good");
+    expect(report.project_state.corrupt_verdict_count).toBe(1);
+  });
+
+  it("includes missions with zero tasks and shows empty-state hint in plain output", async () => {
+    const emptyMission = makeMission({ id: "mis-empty", status: "executing" });
+    const report = await buildStatusReport({
+      ...baseDeps(cwd),
+      featureMissionStore: mockMissionStore([emptyMission]),
+    });
+
+    expect(report.missions).toHaveLength(1);
+    const group = report.missions[0];
+    if (!group) throw new Error("missing mission group");
+    expect("synthetic" in group.mission).toBe(false);
+    if ("synthetic" in group.mission) throw new Error("unreachable");
+    expect(group.mission.id).toBe("mis-empty");
+    expect(group.tasks).toHaveLength(0);
   });
 });

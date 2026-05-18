@@ -75,7 +75,8 @@ function renderPlain(report: StatusReport, terse: boolean): string[] {
   }
 
   lines.push("", "> Project verified state");
-  const { latest_verdict, stuck_verifying_count, stale_handoff_count } = report.project_state;
+  const { latest_verdict, stuck_verifying_count, stale_handoff_count, corrupt_verdict_count } =
+    report.project_state;
   if (latest_verdict) {
     lines.push(
       `  [ok] last verdict: ${latest_verdict.decision} (${latest_verdict.taskId} @ ${latest_verdict.computedAt})`,
@@ -93,6 +94,9 @@ function renderPlain(report: StatusReport, terse: boolean): string[] {
       ? `  [!] ${stale_handoff_count} stale handoff(s) (no pickup >24h)`
       : "  [ok] no stale handoffs",
   );
+  if (corrupt_verdict_count > 0) {
+    lines.push(`  [!] ${corrupt_verdict_count} corrupt verdict file(s) -- inspect .maestro/verdicts/`);
+  }
 
   lines.push("", "> Active missions");
   if (report.missions.length === 0) {

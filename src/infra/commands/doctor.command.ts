@@ -59,6 +59,10 @@ export function registerDoctorCommand(
         return lines;
       });
 
+      // Exit code semantics: only scaffold failure gates the exit code.
+      // Other checks (verdict-freshness, build, tests) produce warnings but
+      // don't fail doctor. This keeps the fast form (what init.sh calls)
+      // sub-second and ensures doctor is a status check, not a gate.
       if (scaffoldFailed) process.exit(1);
     });
 }

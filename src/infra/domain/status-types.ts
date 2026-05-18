@@ -1,4 +1,4 @@
-import type { SetupCheckReport } from "@/service/setup-check.usecase.js";
+import type { SetupCheckReport, SetupCheckEntry } from "@/service/setup-check.usecase.js";
 import type { LatestVerdictSummary } from "@/service/load-latest-verdicts.usecase.js";
 import type { TransitionEvidenceRow } from "@/repo/evidence-store.port.js";
 import type { Task } from "@/types/task.js";
@@ -7,12 +7,19 @@ import type { VerdictDecision } from "@/features/verdict/domain/types.js";
 
 export type { LatestVerdictSummary };
 
+// DoctorCheck is structurally compatible with SetupCheckEntry but uses
+// "fail" instead of "missing" for the status field. The TUI uses DoctorCheck
+// for its own checks (git, config) while SetupCheckReport uses SetupCheckEntry
+// for scaffold checks. Both are spread into the same checks array in the TUI.
 export interface DoctorCheck {
   readonly name: string;
   readonly status: "ok" | "warn" | "fail";
   readonly message: string;
   readonly fix?: string;
 }
+
+// Re-export SetupCheckEntry for use in status report
+export type { SetupCheckEntry };
 
 export interface EnvironmentStatus {
   readonly initialized: boolean;
@@ -25,6 +32,7 @@ export interface ProjectVerifiedState {
   readonly latest_verdict: LatestVerdictSummary | undefined;
   readonly stuck_verifying_count: number;
   readonly stale_handoff_count: number;
+  readonly corrupt_verdict_count: number;
 }
 
 export type TaskSignal =

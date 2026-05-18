@@ -554,7 +554,9 @@ set -euo pipefail
 
 # Check maestro is available
 if ! command -v maestro &> /dev/null; then
-  echo "maestro not found in PATH. Install it first." >&2
+  echo "maestro not found in PATH." >&2
+  echo "Install maestro or ensure it's in your PATH." >&2
+  echo "If installed to a custom location, add it to PATH or set MAESTRO_BIN." >&2
   exit 1
 fi
 
