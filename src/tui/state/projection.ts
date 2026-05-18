@@ -392,7 +392,7 @@ function buildHomeActions(
     actions.push({
       label: "Run environment checks",
       command: "maestro doctor",
-      detail: "Verify git and config health before starting work.",
+      detail: "Verify scaffold, init.sh, and verdict freshness.",
     });
   }
 

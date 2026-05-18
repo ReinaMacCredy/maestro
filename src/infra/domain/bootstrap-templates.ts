@@ -93,7 +93,7 @@ maestro intake --paths <paths> [--flag <flag>]        # pre-code risk classifier
 maestro task from-spec <path>                         # materialize a task from an authored spec
 maestro mission decompose <pln-id> --file -           # heavy-mode: batch-create child tasks
 maestro plan check --task <id> --plan-file <path>     # plan-time consistency check
-maestro doctor                                        # harness drift checks
+maestro doctor                                        # scaffold + init.sh + verdict freshness
 \`\`\`
 `,
   },

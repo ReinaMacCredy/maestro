@@ -197,14 +197,21 @@ describe("CLI integration", () => {
     expect(stdout).not.toContain("\n  init ");
   });
 
-  it("doctor --json returns structured output", async () => {
-    const { stdout, exitCode } = await run(["doctor", "--json"]);
-    expect(exitCode).toBe(0);
+  it("doctor --json returns structured output; exits 1 when scaffold incomplete", async () => {
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    const { stdout, exitCode } = await run(["doctor", "--json"], tmpDir);
+    // Incomplete scaffold (only .maestro/, no subdirs) drives the non-zero exit.
+    expect(exitCode).toBe(1);
     const checks = JSON.parse(stdout);
     expect(Array.isArray(checks)).toBe(true);
-    expect(checks.length).toBeGreaterThan(0);
-    expect(checks[0]).toHaveProperty("name");
-    expect(checks[0]).toHaveProperty("status");
+    expect(checks.map((c: { name: string }) => c.name).sort()).toEqual([
+      "init-script",
+      "scaffold",
+      "verdict-freshness",
+    ]);
+    for (const c of checks) {
+      expect(c).toHaveProperty("status");
+    }
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("status --json returns cold-start sections", async () => {

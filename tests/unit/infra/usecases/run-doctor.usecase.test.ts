@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runDoctor } from "@/infra/usecases/run-doctor.usecase.js";
@@ -94,6 +94,61 @@ describe("runDoctor (--full)", () => {
 
     expect(checks.find((c) => c.name === "build")?.status).not.toBe("fail");
     expect(checks.find((c) => c.name === "tests")?.status).not.toBe("fail");
+  });
+});
+
+describe("runDoctor (additional coverage)", () => {
+  it("scaffold returns fail when expected directories are missing", async () => {
+    // Default tmpdir has only .maestro/; setup-check expects .maestro/tasks etc.
+    const checks = await runDoctor(baseDeps(cwd));
+    const scaffold = checks.find((c) => c.name === "scaffold");
+    expect(scaffold?.status).toBe("fail");
+  });
+
+  it("init-script is ok when present and executable", async () => {
+    await writeFile(join(cwd, "init.sh"), "#!/bin/sh\nexit 0\n");
+    await chmod(join(cwd, "init.sh"), 0o755);
+    const checks = await runDoctor(baseDeps(cwd));
+    expect(checks.find((c) => c.name === "init-script")?.status).toBe("ok");
+  });
+
+  it("verdict-freshness is ok in a vacuous repo (no tasks, no verdicts)", async () => {
+    const checks = await runDoctor(baseDeps(cwd));
+    expect(checks.find((c) => c.name === "verdict-freshness")?.status).toBe("ok");
+  });
+
+  it("verdict-freshness falls back to config.doctor.verdictStaleDays when env is unset", async () => {
+    delete process.env.MAESTRO_VERDICT_STALE_DAYS;
+    const oldVerdict: Verdict = {
+      schemaVersion: 1,
+      id: "vrd-old",
+      taskId: "tsk-test-0001",
+      contractVersion: 1,
+      computedAt: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+      decision: "PASS",
+      effectiveRiskClass: "low",
+      reasons: [],
+      evidenceConsulted: [],
+      policiesConsulted: [],
+      trustVerifier: { findingsCount: 0, errors: 0, warns: 0, infos: 0 },
+    };
+    const tightConfig = mockConfig({
+      loadLayers: async () => ({
+        defaults: {},
+        effective: { doctor: { verdictStaleDays: 1 } },
+        global: {},
+        project: {},
+        errors: [],
+        paths: { project: "", global: "" },
+      }),
+    });
+    const checks = await runDoctor({
+      ...baseDeps(cwd),
+      config: tightConfig,
+      taskStore: mockRepoTaskStore([makeTask()]),
+      verdictStore: mockVerdictStore([oldVerdict]),
+    });
+    expect(checks.find((c) => c.name === "verdict-freshness")?.status).toBe("warn");
   });
 });
 
