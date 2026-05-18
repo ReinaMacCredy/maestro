@@ -43,7 +43,7 @@ src/
 - Keep feature logic in the owning feature, plumbing in `infra/`, and generic helpers in `shared/`.
 - `src/index.ts` and `src/services.ts` stay thin.
 - Mission Control snapshot builders remain read-only; recovery and workflow mutation stay out of `buildSnapshot()` and `buildHomeSnapshot()`.
-- `skills/built-in/` syncs into `src/infra/domain/built-in-skill-templates.ts`; do not hand-edit the generated file from inside `src/`.
+- `skills/bundled/` syncs into `src/infra/domain/bundled-skill-templates.ts`; do not hand-edit the generated file from inside `src/`.
 
 ## COMMON CHECKS
 - `bun run build`

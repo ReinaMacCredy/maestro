@@ -21,10 +21,9 @@ This document lists all justified type assertions (`as any`, `as unknown as`, `@
 
 The following generated files contain type assertions but are excluded from this audit as they are auto-generated:
 
-- `src/infra/domain/built-in-skill-templates.ts` - Generated from `skills/built-in/`
 - `src/infra/domain/bundled-skill-templates.ts` - Generated from `skills/bundled/`
 
-These files are regenerated via `bun run sync:skills` and `bun run sync:bundled-skills` respectively.
+This file is regenerated via `bun run sync:bundled-skills`.
 
 ## Verification
 
@@ -32,10 +31,10 @@ To verify no unsafe assertions exist in source code (excluding generated files):
 
 ```bash
 # Check for 'as any' (should return 0 or only documented cases)
-grep -rn "as any" src/ --include="*.ts" | grep -v "bundled-skill-templates.ts" | grep -v "built-in-skill-templates.ts"
+grep -rn "as any" src/ --include="*.ts" | grep -v "bundled-skill-templates.ts"
 
 # Check for 'as unknown as' (should return 0 or only documented cases)
-grep -rn "as unknown as" src/ --include="*.ts" | grep -v "bundled-skill-templates.ts" | grep -v "built-in-skill-templates.ts"
+grep -rn "as unknown as" src/ --include="*.ts" | grep -v "bundled-skill-templates.ts"
 
 # Check for '@ts-ignore' (should return 0 or only documented cases)
 grep -rn "@ts-ignore" src/ --include="*.ts"

@@ -52,9 +52,9 @@ const REMEDIATION: Record<ArchitectureRuleId, string> = {
     "Re-read state in the snapshot path; do not produce new state there. " +
     "Agents inspect Mission Control assuming side-effect-free reads.",
   "no-hand-edit-generated":
-    "Templates files are generated. Hand-edits are silently overwritten. " +
-    "Edit source under skills/built-in/ or skills/bundled/ and run " +
-    "`bun run sync:built-in-skills` or `bun run sync:bundled-skills`. " +
+    "Template file is generated. Hand-edits are silently overwritten. " +
+    "Edit source under skills/bundled/ and run " +
+    "`bun run sync:bundled-skills`. " +
     "`bun run check:bundled-skills` enforces parity in CI.",
   "composition-only-in-services-ts":
     "Cross-feature composition (importing another feature's `services.ts`) " +
@@ -112,11 +112,10 @@ const WRITE_METHOD_NAMES = new Set([
 const MISSION_CONTROL_FUNCTIONS = ["buildSnapshot", "buildHomeSnapshot"];
 
 const GENERATED_TEMPLATE_PATHS = [
-  "src/infra/domain/built-in-skill-templates.ts",
   "src/infra/domain/bundled-skill-templates.ts",
 ];
 
-const GENERATED_SOURCE_PREFIXES = ["skills/built-in/", "skills/bundled/"];
+const GENERATED_SOURCE_PREFIXES = ["skills/bundled/"];
 
 const ALLOW_RE = /\/\/\s*lint-arch-allow:\s*([a-z-,\s]+)/i;
 
@@ -516,7 +515,6 @@ async function checkFileSizeLimit(
   for await (const relPath of glob.scan({ cwd: repoRoot })) {
     if (shouldSkipPath(relPath)) continue;
     const posix = toPosix(relPath);
-    if (posix === "src/infra/domain/built-in-skill-templates.ts") continue;
     if (posix === "src/infra/domain/bundled-skill-templates.ts") continue;
     const file = Bun.file(join(repoRoot, relPath));
     // size is a cheap header read; only fall through to a full read when the

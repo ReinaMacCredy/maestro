@@ -51,11 +51,9 @@ it before opening a substantive PR.
   commit.
 - Repo-tracked behavior changes bump the CLI version (`bun run bump patch` or
   `bun run bump feature`). Docs- or comment-only changes do not.
-- The bundled skill set under `skills/built-in/` and `skills/bundled/` is the
-  source of truth for what agents see. The embeds at
-  `src/infra/domain/built-in-skill-templates.ts` and
-  `bundled-skill-templates.ts` are generated; do not hand-edit. Run
-  `bun run sync:built-in-skills` and `bun run sync:bundled-skills` after
+- The bundled skill set under `skills/bundled/` is the source of truth for
+  what agents see. The embed at `src/infra/domain/bundled-skill-templates.ts`
+  is generated; do not hand-edit. Run `bun run sync:bundled-skills` after
   editing skill content.
 
 ## Required checks before opening a PR

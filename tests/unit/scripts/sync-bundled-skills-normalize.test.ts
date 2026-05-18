@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { normalizeLineEndings } from "../../../scripts/sync-built-in-skills";
+import { normalizeLineEndings } from "../../../scripts/sync-bundled-skills";
 
 describe("normalizeLineEndings", () => {
   it("normalizes CRLF content to LF for cross-platform generated templates", () => {
