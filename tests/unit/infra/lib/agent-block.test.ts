@@ -158,8 +158,6 @@ describe("injectSetupBlock", () => {
   it("preserves the existing block when re-injecting (idempotency is callsite-checked)", () => {
     const seeded = `# Config\n\n${SETUP_WRAPPED}\n`;
     const result = injectSetupBlock(seeded, SETUP_SAMPLE);
-    // injectSetupBlock unconditionally appends; the call site uses hasSetupBlock
-    // first to gate the call. Test that the original block is still present.
     expect(result).toContain(SETUP_WRAPPED);
   });
 

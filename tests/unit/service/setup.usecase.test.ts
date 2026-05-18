@@ -327,12 +327,12 @@ describe("runSetup (project scope)", () => {
   it("does not re-inject the AGENTS.md block on rerun", async () => {
     await runSetup(project());
     const agentsPath = join(tmpDir, "AGENTS.md");
-    const after_first = await readFile(agentsPath, "utf8");
+    const afterFirst = await readFile(agentsPath, "utf8");
 
     const second = await runSetup(project());
     expect(second.skipped).toContain(agentsPath);
     expect(second.created).not.toContain(agentsPath);
-    expect(await readFile(agentsPath, "utf8")).toBe(after_first);
+    expect(await readFile(agentsPath, "utf8")).toBe(afterFirst);
   });
 
   it("seeds project-root CLAUDE.md with the @AGENTS.md reference on fresh setup", async () => {
@@ -360,12 +360,12 @@ describe("runSetup (project scope)", () => {
   it("does not re-inject the CLAUDE.md reference on rerun", async () => {
     await runSetup(project());
     const claudePath = join(tmpDir, "CLAUDE.md");
-    const after_first = await readFile(claudePath, "utf8");
+    const afterFirst = await readFile(claudePath, "utf8");
 
     const second = await runSetup(project());
     expect(second.skipped).toContain(claudePath);
     expect(second.created).not.toContain(claudePath);
-    expect(await readFile(claudePath, "utf8")).toBe(after_first);
+    expect(await readFile(claudePath, "utf8")).toBe(afterFirst);
   });
 
   it("syncs all 6 bundled maestro-* skills under .claude/skills/ and .codex/skills/", async () => {

@@ -6,10 +6,7 @@ import {
   SETUP_BLOCK_END_MARKER,
   SETUP_REFERENCE_FILE,
 } from "../domain/agents.js";
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+import { escapeRegex } from "@/shared/lib/regex.js";
 
 function buildBlockRegex(startMarker: string, endMarker: string): RegExp {
   return new RegExp(`${escapeRegex(startMarker)}[\\s\\S]*?${escapeRegex(endMarker)}`);
@@ -25,6 +22,8 @@ const LEGACY_HEADING_REGEX = /\n## Cross-Agent Handoff \(maestro\)[\s\S]*?(?=\n#
 
 const REFERENCE_LINE = `@${REFERENCE_FILE}`;
 const SETUP_REFERENCE_LINE = `@${SETUP_REFERENCE_FILE}`;
+const REFERENCE_REGEX = buildReferenceRegex(REFERENCE_LINE);
+const SETUP_REFERENCE_REGEX = buildReferenceRegex(SETUP_REFERENCE_LINE);
 
 function wrapWithMarkers(content: string, startMarker: string, endMarker: string): string {
   return `${startMarker}\n${content}\n${endMarker}`;
@@ -36,15 +35,14 @@ function injectWrappedBlock(content: string, wrapped: string): string {
   return trimmed + "\n\n" + wrapped + "\n";
 }
 
-function injectReferenceLine(content: string, line: string): string {
-  if (buildReferenceRegex(line).test(content)) return content;
+function appendReferenceIfMissing(content: string, line: string, regex: RegExp): string {
+  if (regex.test(content)) return content;
   const trimmed = content.trimEnd();
   if (trimmed.length === 0) return line + "\n";
   return trimmed + "\n\n" + line + "\n";
 }
 
-function removeReferenceLine(content: string, line: string): string | null {
-  const regex = buildReferenceRegex(line);
+function stripReferenceIfPresent(content: string, regex: RegExp): string | null {
   if (!regex.test(content)) return null;
   return content
     .replace(regex, "")
@@ -53,23 +51,23 @@ function removeReferenceLine(content: string, line: string): string | null {
 }
 
 export function hasReference(content: string): boolean {
-  return buildReferenceRegex(REFERENCE_LINE).test(content);
+  return REFERENCE_REGEX.test(content);
 }
 
 export function injectReference(content: string): string {
-  return injectReferenceLine(content, REFERENCE_LINE);
+  return appendReferenceIfMissing(content, REFERENCE_LINE, REFERENCE_REGEX);
 }
 
 export function removeReference(content: string): string | null {
-  return removeReferenceLine(content, REFERENCE_LINE);
+  return stripReferenceIfPresent(content, REFERENCE_REGEX);
 }
 
 export function hasSetupReference(content: string): boolean {
-  return buildReferenceRegex(SETUP_REFERENCE_LINE).test(content);
+  return SETUP_REFERENCE_REGEX.test(content);
 }
 
 export function injectSetupReference(content: string): string {
-  return injectReferenceLine(content, SETUP_REFERENCE_LINE);
+  return appendReferenceIfMissing(content, SETUP_REFERENCE_LINE, SETUP_REFERENCE_REGEX);
 }
 
 export function wrapBlock(content: string): string {
@@ -116,7 +114,7 @@ export function removeLegacyBlock(content: string): string | null {
     .trimEnd() + "\n";
 }
 
-export function wrapSetupBlock(content: string): string {
+function wrapSetupBlock(content: string): string {
   return wrapWithMarkers(content, SETUP_BLOCK_START_MARKER, SETUP_BLOCK_END_MARKER);
 }
 

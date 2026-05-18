@@ -340,18 +340,10 @@ async function stepWriteProjectRootPointers(
   dir: string,
   dryRun: boolean,
 ): Promise<SetupStepResult> {
-  const paths: SetupPathEntry[] = [];
-  paths.push(
-    await ensureProjectRootBlock(
-      join(dir, "AGENTS.md"),
-      dir,
-      PROJECT_ROOT_POINTER_BLOCK,
-      dryRun,
-    ),
-  );
-  paths.push(
-    await ensureProjectRootReference(join(dir, "CLAUDE.md"), dir, dryRun),
-  );
+  const paths = await Promise.all([
+    ensureProjectRootBlock(join(dir, "AGENTS.md"), dir, PROJECT_ROOT_POINTER_BLOCK, dryRun),
+    ensureProjectRootReference(join(dir, "CLAUDE.md"), dir, dryRun),
+  ]);
 
   return {
     id: "write-project-pointers",
@@ -375,10 +367,7 @@ async function ensureProjectRootBlock(
   if (dryRun) {
     return { path: target, action: "would-create" };
   }
-  const next = existing === undefined
-    ? injectSetupBlock("", body)
-    : injectSetupBlock(existing, body);
-  await writeText(target, next);
+  await writeText(target, injectSetupBlock(existing ?? "", body));
   return { path: target, action: "create" };
 }
 
@@ -395,10 +384,7 @@ async function ensureProjectRootReference(
   if (dryRun) {
     return { path: target, action: "would-create" };
   }
-  const next = existing === undefined
-    ? injectSetupReference("")
-    : injectSetupReference(existing);
-  await writeText(target, next);
+  await writeText(target, injectSetupReference(existing ?? ""));
   return { path: target, action: "create" };
 }
 
