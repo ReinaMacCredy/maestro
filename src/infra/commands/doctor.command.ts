@@ -5,7 +5,10 @@ import { output } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 
 interface DoctorCommandDeps {
-  readonly getServices: () => Pick<Services, "git" | "config">;
+  readonly getServices: () => Pick<
+    Services,
+    "config" | "git" | "taskStore" | "verdictStore"
+  >;
 }
 
 export function registerDoctorCommand(

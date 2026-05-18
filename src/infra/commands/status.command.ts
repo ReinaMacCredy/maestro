@@ -4,7 +4,10 @@ import { checkStatus } from "@/infra/usecases/check-status.usecase.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 
 interface StatusCommandDeps {
-  readonly getServices: () => Pick<Services, "config" | "git">;
+  readonly getServices: () => Pick<
+    Services,
+    "config" | "git" | "taskStore" | "featureMissionStore" | "verdictStore" | "evidenceStore"
+  >;
 }
 
 export function registerStatusCommand(
