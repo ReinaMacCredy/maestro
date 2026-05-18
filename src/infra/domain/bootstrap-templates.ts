@@ -542,4 +542,21 @@ require_signed_commits: false     # Tighten at L8 when signing is enforced repo-
 require_proof_map_complete: false # Tighten at L8 when proof maps are required
 `,
   },
+  // Cold-start trigger at the repo root; distinct from `.maestro/bootstrap/init.sh`
+  // (project bootstrapper for dependency installs).
+  {
+    path: "init.sh",
+    executable: true,
+    content: `#!/usr/bin/env bash
+# Project init -- emitted once by \`maestro setup\` and never overwritten.
+# Edit freely; Maestro will not touch this file again unless you delete it.
+set -euo pipefail
+
+# Health gate -- exits non-zero if .maestro/ scaffold is broken.
+maestro doctor
+
+# Cold-start view -- one-screen resume snapshot.
+maestro status
+`,
+  },
 ];

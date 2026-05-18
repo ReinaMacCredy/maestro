@@ -1,10 +1,15 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runSetup } from "@/service/setup.usecase.js";
+import { runDoctor } from "@/infra/usecases/run-doctor.usecase.js";
 import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
-import { mockConfig } from "../../helpers/mocks.js";
+import {
+  mockConfig,
+  mockRepoTaskStore,
+  mockVerdictStore,
+} from "../../helpers/mocks.js";
 import { DEFAULT_PRINCIPLES } from "@/service/default-principles.js";
 
 let tmpDir: string;
@@ -260,6 +265,47 @@ describe("runSetup (project scope)", () => {
     const content = await readFile(releasePath, "utf8");
     expect(content).toContain("require_signed_commits");
     expect(content).toContain("require_proof_map_complete");
+  });
+
+  it("emits an executable init.sh at the project root on fresh setup", async () => {
+    const result = await runSetup(project());
+    const initPath = join(tmpDir, "init.sh");
+    expect(result.created).toContain(initPath);
+
+    const content = await readFile(initPath, "utf8");
+    expect(content).toContain("maestro doctor");
+    expect(content).toContain("maestro status");
+
+    if (process.platform !== "win32") {
+      const s = await stat(initPath);
+      expect(s.mode & 0o111).not.toBe(0);
+    }
+  });
+
+  it("does not overwrite an existing init.sh on rerun", async () => {
+    const initPath = join(tmpDir, "init.sh");
+    await writeFile(initPath, "#!/usr/bin/env bash\necho user-init\n");
+
+    const result = await runSetup(project());
+
+    expect(result.skipped).toContain(initPath);
+    expect(result.created).not.toContain(initPath);
+    expect(await readFile(initPath, "utf8")).toBe(
+      "#!/usr/bin/env bash\necho user-init\n",
+    );
+  });
+
+  it("emitted init.sh satisfies maestro doctor's init-script dimension", async () => {
+    await runSetup(project());
+
+    const checks = await runDoctor({
+      taskStore: mockRepoTaskStore(),
+      verdictStore: mockVerdictStore(),
+      projectDir: tmpDir,
+    });
+
+    const initCheck = checks.find((c) => c.name === "init-script");
+    expect(initCheck?.status).toBe("ok");
   });
 });
 
