@@ -17,6 +17,8 @@ The trigger body below names the steps and points to one reference file per subs
 
 Run this loop before marking any task done. Steps are ordered; do not skip.
 
+**Cold resume.** When picking up an unfamiliar session, run `maestro doctor` first (or `./init.sh`, which calls doctor then status). A failing scaffold or stale verdict dimension means the harness itself is broken; fix that before attempting verification. The doctor pass is not a substitute for the steps below. It confirms the floor.
+
 1. **Plan** — write a plan file and run `maestro plan check --task <id> --plan-file <path>`. Address `scope-widens`, `missing-proof`, and `risk-class-too-low` before writing code. Plan file schema: `reference/plan-and-proof.md`.
 
 2. **Implement** — write code. Record evidence after each verification command. Witness levels and evidence kinds: `reference/witness-levels.md`.

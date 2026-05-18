@@ -49,6 +49,14 @@ The setup verb is a single idempotent state machine. Re-running it is safe.
   and `.maestro/config.yaml`. Exit 1 only when an entry is `missing`;
   `warn` (empty principles pack, absent `config.yaml`) is informational.
 
+## Cold-start trigger
+
+One of the `drop-templates` outputs is `init.sh` at the repo root. It is emitted
+exactly once (mode 0755 on non-Windows) and never overwritten on rerun. The
+body invokes `maestro doctor` followed by `maestro status`, so a fresh session
+can resume by running `./init.sh`. To regenerate, delete the file and rerun
+`maestro setup`. Full template body and contract: `docs/init-sh-template.md`.
+
 ## Managed Markers
 
 Use these exact markers.
