@@ -295,6 +295,79 @@ describe("runSetup (project scope)", () => {
     );
   });
 
+  it("seeds project-root AGENTS.md with the managed setup block on fresh setup", async () => {
+    const result = await runSetup(project());
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    expect(result.created).toContain(agentsPath);
+
+    const content = await readFile(agentsPath, "utf8");
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content).toContain("<!-- maestro-setup:end -->");
+    expect(content).toContain("## Maestro");
+    expect(content).toContain("./init.sh");
+  });
+
+  it("preserves existing AGENTS.md content and appends the managed block", async () => {
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    const userContent = "# My Project\n\nLong-standing notes the user keeps here.\n";
+    await writeFile(agentsPath, userContent);
+
+    const result = await runSetup(project());
+
+    expect(result.created).toContain(agentsPath);
+    const content = await readFile(agentsPath, "utf8");
+    expect(content).toContain("# My Project");
+    expect(content).toContain("Long-standing notes the user keeps here.");
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content.indexOf("# My Project")).toBeLessThan(
+      content.indexOf("<!-- maestro-setup:start -->"),
+    );
+  });
+
+  it("does not re-inject the AGENTS.md block on rerun", async () => {
+    await runSetup(project());
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    const after_first = await readFile(agentsPath, "utf8");
+
+    const second = await runSetup(project());
+    expect(second.skipped).toContain(agentsPath);
+    expect(second.created).not.toContain(agentsPath);
+    expect(await readFile(agentsPath, "utf8")).toBe(after_first);
+  });
+
+  it("seeds project-root CLAUDE.md with the @AGENTS.md reference on fresh setup", async () => {
+    const result = await runSetup(project());
+    const claudePath = join(tmpDir, "CLAUDE.md");
+    expect(result.created).toContain(claudePath);
+
+    const content = await readFile(claudePath, "utf8");
+    expect(content).toContain("@AGENTS.md");
+  });
+
+  it("preserves existing CLAUDE.md content and appends the @AGENTS.md reference", async () => {
+    const claudePath = join(tmpDir, "CLAUDE.md");
+    const userContent = "# My CLAUDE.md\n\n@my-other-doc.md\n";
+    await writeFile(claudePath, userContent);
+
+    const result = await runSetup(project());
+
+    expect(result.created).toContain(claudePath);
+    const content = await readFile(claudePath, "utf8");
+    expect(content).toContain("@my-other-doc.md");
+    expect(content).toContain("@AGENTS.md");
+  });
+
+  it("does not re-inject the CLAUDE.md reference on rerun", async () => {
+    await runSetup(project());
+    const claudePath = join(tmpDir, "CLAUDE.md");
+    const after_first = await readFile(claudePath, "utf8");
+
+    const second = await runSetup(project());
+    expect(second.skipped).toContain(claudePath);
+    expect(second.created).not.toContain(claudePath);
+    expect(await readFile(claudePath, "utf8")).toBe(after_first);
+  });
+
   it("syncs all 6 bundled maestro-* skills under .claude/skills/ and .codex/skills/", async () => {
     // Regression: setup.usecase.ts previously iterated BUILT_IN_SKILL_TEMPLATES
     // (empty `[]` since v0.100.0), leaving project-level skill directories

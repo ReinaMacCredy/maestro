@@ -24,7 +24,29 @@ import {
   BUNDLED_SKILL_TEMPLATES,
   type BundledSkillTemplate,
 } from "@/infra/domain/bundled-skill-templates.js";
+import {
+  hasSetupBlock,
+  injectSetupBlock,
+  hasSetupReference,
+  injectSetupReference,
+} from "@/infra/lib/agent-block.js";
 import { DEFAULT_PRINCIPLES } from "./default-principles.js";
+
+// Minimal pointer block written into project-root AGENTS.md by `maestro
+// setup`. The `maestro-setup` skill swaps this in place for the richer
+// init-deep block via `replaceSetupBlock`. The seed deliberately
+// references only files the CLI itself emits (`.maestro/`, `init.sh`,
+// `maestro doctor|status`) so there are no dangling pointers when the
+// skill hasn't run.
+const PROJECT_ROOT_POINTER_BLOCK = `## Maestro
+
+This project is wired into the Maestro harness. State and config live
+under \`.maestro/\`. Run \`./init.sh\` to bring a fresh checkout up; run
+\`maestro doctor\` and \`maestro status\` to see what Maestro knows.
+
+Preserve content outside this managed block; the block is rewritten by
+\`maestro setup\` and the \`maestro-setup\` skill, but everything else in
+this file is yours.`;
 
 export type SetupStepStatus = "ok" | "skipped" | "changed" | "error";
 export type SetupPathAction =
@@ -115,6 +137,7 @@ export async function runSetup(opts: RunSetupOptions): Promise<SetupReport> {
   steps.push(await stepBootstrapDirs(opts.dir, dryRun));
   steps.push(await stepWriteProjectConfig(opts, dryRun));
   steps.push(await stepDropTemplates(opts, dryRun));
+  steps.push(await stepWriteProjectRootPointers(opts.dir, dryRun));
   steps.push(await stepSeedPrinciples(opts.dir, dryRun));
   steps.push(await stepSyncSkills(opts, dryRun));
 
@@ -311,6 +334,72 @@ async function stepDropTemplates(
     status: statusFor(paths),
     paths,
   };
+}
+
+async function stepWriteProjectRootPointers(
+  dir: string,
+  dryRun: boolean,
+): Promise<SetupStepResult> {
+  const paths: SetupPathEntry[] = [];
+  paths.push(
+    await ensureProjectRootBlock(
+      join(dir, "AGENTS.md"),
+      dir,
+      PROJECT_ROOT_POINTER_BLOCK,
+      dryRun,
+    ),
+  );
+  paths.push(
+    await ensureProjectRootReference(join(dir, "CLAUDE.md"), dir, dryRun),
+  );
+
+  return {
+    id: "write-project-pointers",
+    label: "Write project-root AGENTS.md / CLAUDE.md pointers",
+    status: statusFor(paths),
+    paths,
+  };
+}
+
+async function ensureProjectRootBlock(
+  target: string,
+  rootDir: string,
+  body: string,
+  dryRun: boolean,
+): Promise<SetupPathEntry> {
+  await assertProjectLocalPathSafe(rootDir, target);
+  const existing = await readText(target);
+  if (existing !== undefined && hasSetupBlock(existing)) {
+    return { path: target, action: "skip" };
+  }
+  if (dryRun) {
+    return { path: target, action: "would-create" };
+  }
+  const next = existing === undefined
+    ? injectSetupBlock("", body)
+    : injectSetupBlock(existing, body);
+  await writeText(target, next);
+  return { path: target, action: "create" };
+}
+
+async function ensureProjectRootReference(
+  target: string,
+  rootDir: string,
+  dryRun: boolean,
+): Promise<SetupPathEntry> {
+  await assertProjectLocalPathSafe(rootDir, target);
+  const existing = await readText(target);
+  if (existing !== undefined && hasSetupReference(existing)) {
+    return { path: target, action: "skip" };
+  }
+  if (dryRun) {
+    return { path: target, action: "would-create" };
+  }
+  const next = existing === undefined
+    ? injectSetupReference("")
+    : injectSetupReference(existing);
+  await writeText(target, next);
+  return { path: target, action: "create" };
 }
 
 async function stepSeedPrinciples(dir: string, dryRun: boolean): Promise<SetupStepResult> {
