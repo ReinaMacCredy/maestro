@@ -150,6 +150,32 @@ describe("buildStatusReport", () => {
     expect(unscopedGroup.tasks.map((t) => t.task.id)).toEqual(["tsk-3"]);
   });
 
+  it("excludes terminal-state tasks (shipped, abandoned) from Active missions", async () => {
+    const mission = makeMission({ id: "mis-x", status: "executing" });
+    const tasks = [
+      makeTask({ id: "tsk-ready", slug: "a", title: "A", state: "ready", mission_id: "mis-x" }),
+      makeTask({ id: "tsk-shipped", slug: "b", title: "B", state: "shipped", mission_id: "mis-x" }),
+      makeTask({ id: "tsk-abandoned", slug: "c", title: "C", state: "abandoned", mission_id: "mis-x" }),
+      makeTask({ id: "tsk-unscoped-shipped", slug: "d", title: "D", state: "shipped" }),
+      makeTask({ id: "tsk-unscoped-draft", slug: "e", title: "E", state: "draft" }),
+    ];
+
+    const report = await buildStatusReport({
+      ...baseDeps(cwd),
+      taskStore: mockRepoTaskStore(tasks),
+      featureMissionStore: mockMissionStore([mission]),
+    });
+
+    const missionGroup = report.missions[0];
+    if (!missionGroup) throw new Error("missing mission group");
+    expect(missionGroup.tasks.map((t) => t.task.id)).toEqual(["tsk-ready"]);
+
+    const unscopedGroup = report.missions[1];
+    if (!unscopedGroup) throw new Error("missing unscoped group");
+    expect("synthetic" in unscopedGroup.mission).toBe(true);
+    expect(unscopedGroup.tasks.map((t) => t.task.id)).toEqual(["tsk-unscoped-draft"]);
+  });
+
   it("only stale handoffs (no pickup, >24h old) count toward stale_handoff_count", async () => {
     const now = Date.now();
     const dayAgo = new Date(now - 86_400_000 - 60_000).toISOString();

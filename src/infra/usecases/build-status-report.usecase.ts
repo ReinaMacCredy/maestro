@@ -15,6 +15,7 @@ import type {
   HandoffEnvelope,
 } from "@/repo/handoff-emitter.port.js";
 import type { Task } from "@/types/task.js";
+import { isTerminalTaskState } from "@/types/task-state.js";
 import { dirExists } from "@/shared/lib/fs.js";
 import { setupCheck } from "@/service/setup-check.usecase.js";
 import { join } from "node:path";
@@ -170,9 +171,15 @@ function buildMissionGroups(
   verdictsByTaskId: ReadonlyMap<string, Verdict>,
   latestTransitionByTaskId: ReadonlyMap<string, TransitionEvidenceRow>,
 ): MissionGroup[] {
+  // Active missions surfaces "what's still in flight." Tasks that have
+  // reached a terminal state (shipped, abandoned) are work history and
+  // belong in Recent transitions, not under their parent mission.
+  // The deeper fix — mission auto-rollup to `completed` when every child
+  // ships — is filed as a follow-up.
   const tasksByMissionId = new Map<string, Task[]>();
   const unscoped: Task[] = [];
   for (const t of allTasks) {
+    if (isTerminalTaskState(t.state)) continue;
     if (t.mission_id === undefined) {
       unscoped.push(t);
     } else {
