@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { type Services } from "@/services.js";
 import { buildStatusReport } from "@/infra/usecases/build-status-report.usecase.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
-import type { SetupCheckEntry, SetupCheckReport } from "@/service/setup-check.usecase.js";
+import type { SetupCheckEntry } from "@/service/setup-check.usecase.js";
 import type {
   MissionGroup,
   StatusReport,
@@ -28,7 +28,7 @@ export function registerStatusCommand(
     .command("status")
     .description("Show current maestro state (cold-start view)")
     .option("--json", "Output as JSON")
-    .option("--terse", "Collapse maestro_health to failing rows and omit recent transitions (plain output only)")
+    .option("--terse", "Collapse maestro_health to failing rows and omit recent transitions (plain text only, ignored with --json)")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
@@ -47,7 +47,6 @@ export function registerStatusCommand(
           evidenceStore: services.evidenceStore,
           handoffEmitter: services.handoffEmitter,
           projectDir: process.cwd(),
-          terse: effectiveTerse,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -63,11 +62,15 @@ export function registerStatusCommand(
 function renderPlain(report: StatusReport, terse: boolean): string[] {
   const lines: string[] = [];
 
+  const healthRows = terse
+    ? report.maestro_health.entries.filter((e) => e.status !== "ok")
+    : report.maestro_health.entries;
+
   lines.push("> Maestro health");
-  for (const entry of healthEntries(report.maestro_health)) {
+  for (const entry of healthRows) {
     lines.push(`  ${glyph(entry.status)} ${entry.path}${entry.detail ? ` -- ${entry.detail}` : ""}`);
   }
-  if (terse && healthEntries(report.maestro_health).length === 0) {
+  if (terse && healthRows.length === 0) {
     lines.push("  [ok] no failing health rows");
   }
 
@@ -128,12 +131,6 @@ function renderPlain(report: StatusReport, terse: boolean): string[] {
   }
 
   return lines;
-}
-
-function healthEntries(
-  health: SetupCheckReport | readonly SetupCheckEntry[],
-): readonly SetupCheckEntry[] {
-  return Array.isArray(health) ? health : (health as SetupCheckReport).entries;
 }
 
 function glyph(status: SetupCheckEntry["status"]): string {

@@ -1,8 +1,11 @@
-import type { SetupCheckEntry, SetupCheckReport } from "@/service/setup-check.usecase.js";
+import type { SetupCheckReport } from "@/service/setup-check.usecase.js";
+import type { LatestVerdictSummary } from "@/service/load-latest-verdicts.usecase.js";
 import type { TransitionEvidenceRow } from "@/repo/evidence-store.port.js";
 import type { Task } from "@/types/task.js";
 import type { Mission } from "@/shared/domain/legacy-mission";
 import type { VerdictDecision } from "@/features/verdict/domain/types.js";
+
+export type { LatestVerdictSummary };
 
 export interface DoctorCheck {
   readonly name: string;
@@ -16,12 +19,6 @@ export interface EnvironmentStatus {
   readonly configSource: "global" | "project" | "none";
   readonly gitAvailable: boolean;
   readonly legacyHandoffCount: number;
-}
-
-export interface LatestVerdictSummary {
-  readonly taskId: string;
-  readonly decision: VerdictDecision;
-  readonly computedAt: string;
 }
 
 export interface ProjectVerifiedState {
@@ -61,7 +58,7 @@ export interface MissionGroup {
 }
 
 export interface StatusReport {
-  readonly maestro_health: SetupCheckReport | readonly SetupCheckEntry[];
+  readonly maestro_health: SetupCheckReport;
   readonly project_state: ProjectVerifiedState;
   readonly missions: readonly MissionGroup[];
   readonly next_ready: Task | undefined;

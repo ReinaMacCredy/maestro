@@ -301,11 +301,7 @@ async function stepDropTemplates(
     const existing = await readText(target);
     if (existing !== undefined) {
       // `--reset-templates` is the non-interactive force flag (CI / scripted
-      // use, where no TTY prompter is wired up). When no flag is set, fall
-      // back to the interactive confirm. The previous form gated on a
-      // `shouldAutoMigrateLegacyTemplate` predicate that was symbolically
-      // always false (it compared `nextContent` to the template content it
-      // was derived from), so `--reset-templates` quietly did nothing.
+      // use); otherwise fall back to the interactive confirm.
       const okToReplace =
         opts.resetTemplates === true ||
         (opts.confirmReplace !== undefined && (await opts.confirmReplace(target)));

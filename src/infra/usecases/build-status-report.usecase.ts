@@ -18,10 +18,13 @@ import type { Task } from "@/types/task.js";
 import { isTerminalTaskState } from "@/types/task-state.js";
 import { dirExists } from "@/shared/lib/fs.js";
 import { setupCheck } from "@/service/setup-check.usecase.js";
+import {
+  loadLatestVerdictsByTask,
+  type LatestVerdictSummary,
+} from "@/service/load-latest-verdicts.usecase.js";
 import { join } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import type {
-  LatestVerdictSummary,
   MissionGroup,
   ProjectVerifiedState,
   StatusReport,
@@ -36,7 +39,6 @@ export interface BuildStatusReportDeps {
   readonly evidenceStore: EvidenceStorePort;
   readonly handoffEmitter: HandoffEmitterPort;
   readonly projectDir: string;
-  readonly terse?: boolean;
 }
 
 const ONE_DAY_MS = 86_400_000;
@@ -71,10 +73,11 @@ export async function buildStatusReport(
     (r): r is TransitionEvidenceRow => r.kind === "transition",
   );
 
-  const verdictsByTaskId = await readVerdictsByTaskId(allTasks, deps.verdictStore);
+  const { byTaskId: verdictsByTaskId, latest: latestVerdict } =
+    await loadLatestVerdictsByTask(allTasks, deps.verdictStore);
   const latestTransitionByTaskId = indexLatestTransitionByTaskId(transitions);
 
-  const project_state = buildProjectState(allTasks, verdictsByTaskId, staleHandoffCount, now);
+  const project_state = buildProjectState(allTasks, latestVerdict, staleHandoffCount, now);
   const missions = buildMissionGroups(
     allMissions,
     allTasks,
@@ -86,38 +89,14 @@ export async function buildStatusReport(
     .slice()
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
     .slice(0, 10);
-  const maestro_health = deps.terse
-    ? fullHealth.entries.filter((e) => e.status !== "ok")
-    : fullHealth;
 
   return {
-    maestro_health,
+    maestro_health: fullHealth,
     project_state,
     missions,
     next_ready,
     recent_transitions,
   };
-}
-
-async function readVerdictsByTaskId(
-  allTasks: readonly Task[],
-  verdictStore: VerdictStorePort,
-): Promise<ReadonlyMap<string, Verdict>> {
-  const entries = await Promise.all(
-    allTasks.map(async (t): Promise<[string, Verdict] | undefined> => {
-      // A single corrupt verdict file must not poison the entire cold-start
-      // view — agents need the rest of the report to triage.
-      try {
-        const v = await verdictStore.readLatest(t.id);
-        return v ? [t.id, v] : undefined;
-      } catch {
-        return undefined;
-      }
-    }),
-  );
-  const map = new Map<string, Verdict>();
-  for (const e of entries) if (e) map.set(e[0], e[1]);
-  return map;
 }
 
 function indexLatestTransitionByTaskId(
@@ -136,21 +115,10 @@ function indexLatestTransitionByTaskId(
 
 function buildProjectState(
   allTasks: readonly Task[],
-  verdictsByTaskId: ReadonlyMap<string, Verdict>,
+  latest: LatestVerdictSummary | undefined,
   stale_handoff_count: number,
   now: number,
 ): ProjectVerifiedState {
-  let latest: LatestVerdictSummary | undefined;
-  for (const v of verdictsByTaskId.values()) {
-    if (!latest || v.computedAt.localeCompare(latest.computedAt) > 0) {
-      latest = {
-        taskId: v.taskId,
-        decision: v.decision,
-        computedAt: v.computedAt,
-      };
-    }
-  }
-
   const stuck_verifying_count = allTasks.filter((t) => {
     if (t.state !== "verifying") return false;
     const updated = Date.parse(t.updated_at);
@@ -171,11 +139,8 @@ function buildMissionGroups(
   verdictsByTaskId: ReadonlyMap<string, Verdict>,
   latestTransitionByTaskId: ReadonlyMap<string, TransitionEvidenceRow>,
 ): MissionGroup[] {
-  // Active missions surfaces "what's still in flight." Tasks that have
-  // reached a terminal state (shipped, abandoned) are work history and
-  // belong in Recent transitions, not under their parent mission.
-  // The deeper fix — mission auto-rollup to `completed` when every child
-  // ships — is filed as a follow-up.
+  // Terminal-state tasks (shipped, abandoned) are work history and belong
+  // in Recent transitions, not under their parent mission.
   const tasksByMissionId = new Map<string, Task[]>();
   const unscoped: Task[] = [];
   for (const t of allTasks) {

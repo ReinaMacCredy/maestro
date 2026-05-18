@@ -107,10 +107,11 @@ describe("buildStatusReport", () => {
     ]);
   });
 
-  it("terse mode collapses maestro_health to a SetupCheckEntry array; recent_transitions stays a stable array", async () => {
-    const report = await buildStatusReport({ ...baseDeps(cwd), terse: true });
+  it("maestro_health is always a SetupCheckReport; recent_transitions stays a stable array", async () => {
+    const report = await buildStatusReport(baseDeps(cwd));
 
-    expect(Array.isArray(report.maestro_health)).toBe(true);
+    expect(Array.isArray(report.maestro_health.entries)).toBe(true);
+    expect(typeof report.maestro_health.ok).toBe("boolean");
     expect(Array.isArray(report.recent_transitions)).toBe(true);
   });
 

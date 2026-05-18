@@ -5,6 +5,7 @@ import type { TaskStorePort } from "@/repo/task-store.port.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
 import { setupCheck, type SetupCheckEntry } from "@/service/setup-check.usecase.js";
+import { loadLatestVerdictsByTask } from "@/service/load-latest-verdicts.usecase.js";
 import { execArgv } from "@/shared/lib/shell.js";
 
 export interface RunDoctorDeps {
@@ -112,24 +113,7 @@ async function verdictFreshnessCheck(deps: RunDoctorDeps): Promise<DoctorCheck> 
     };
   }
 
-  const verdicts = await Promise.all(
-    tasks.map(async (t): Promise<Awaited<ReturnType<VerdictStorePort["readLatest"]>>> => {
-      // A single corrupt verdict file must not block the dimension.
-      try {
-        return await deps.verdictStore.readLatest(t.id);
-      } catch {
-        return undefined;
-      }
-    }),
-  );
-
-  let newest: { taskId: string; computedAt: string } | undefined;
-  for (const v of verdicts) {
-    if (!v) continue;
-    if (!newest || v.computedAt.localeCompare(newest.computedAt) > 0) {
-      newest = { taskId: v.taskId, computedAt: v.computedAt };
-    }
-  }
+  const { latest: newest } = await loadLatestVerdictsByTask(tasks, deps.verdictStore);
 
   if (!newest) {
     return {
@@ -141,8 +125,17 @@ async function verdictFreshnessCheck(deps: RunDoctorDeps): Promise<DoctorCheck> 
   }
 
   const staleDays = await resolveStaleDays(deps);
-  const ageMs = Date.now() - Date.parse(newest.computedAt);
-  if (Number.isNaN(ageMs) || ageMs > staleDays * DAY_MS) {
+  const computedAtMs = Date.parse(newest.computedAt);
+  if (Number.isNaN(computedAtMs)) {
+    return {
+      name: "verdict-freshness",
+      status: "warn",
+      message: `Latest verdict (${newest.taskId}) has malformed timestamp: ${newest.computedAt}`,
+      fix: "Run: maestro task verify <id>",
+    };
+  }
+  const ageMs = Date.now() - computedAtMs;
+  if (ageMs > staleDays * DAY_MS) {
     return {
       name: "verdict-freshness",
       status: "warn",

@@ -552,6 +552,12 @@ require_proof_map_complete: false # Tighten at L8 when proof maps are required
 # Edit freely; Maestro will not touch this file again unless you delete it.
 set -euo pipefail
 
+# Check maestro is available
+if ! command -v maestro &> /dev/null; then
+  echo "maestro not found in PATH. Install it first." >&2
+  exit 1
+fi
+
 # Health gate -- exits non-zero if .maestro/ scaffold is broken.
 maestro doctor
 
