@@ -26,9 +26,10 @@ flow that lives on top of it.
 The setup verb is a single idempotent state machine. Re-running it is safe.
 
 - `maestro setup` — default action. Runs the full sequence in order:
-  bootstrap-dirs, write-project-config, drop-templates, seed-principles,
-  sync-skills. Each step is idempotent; existing artifacts are left in
-  place unless `--reset-templates` is passed.
+  bootstrap-dirs, write-project-config, drop-templates,
+  write-project-pointers, seed-principles, sync-skills. Each step is
+  idempotent; existing artifacts are left in place unless
+  `--reset-templates` is passed.
 - `maestro setup --global` — write `~/.maestro/config.yaml` only; does
   not touch the current project.
 - `maestro setup --dry-run` — preview the state machine's writes
@@ -176,6 +177,15 @@ This step owns the root `AGENTS.md` end-to-end and produces:
 - a root `PROJECT KNOWLEDGE BASE` AGENTS.md
 - complexity-scored child `AGENTS.md` files in qualifying subdirectories
 - the `<!-- AGENTS-HIERARCHY:START -->` block per file linking parent and children
+
+**Relationship to the CLI seed.** `maestro setup` always injects a *minimal*
+maestro-setup block into root `AGENTS.md` (and a `@AGENTS.md` reference into
+`CLAUDE.md`) before this skill runs. The seed references only files the CLI
+itself emits (`.maestro/`, `init.sh`, `maestro doctor`/`status`). This step's
+job is to *replace* that seed in place with the richer block below using the
+existing `<!-- maestro-setup:start -->` / `<!-- maestro-setup:end -->` marker
+pair, and to move the block to its canonical home immediately after
+`## OVERVIEW` in the init-deep output.
 
 **Absorbed Maestro pointer block.** The root `AGENTS.md` body must include the
 maestro-setup pointer placed immediately after the `## OVERVIEW` section, wrapped
