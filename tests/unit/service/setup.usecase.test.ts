@@ -295,6 +295,31 @@ describe("runSetup (project scope)", () => {
     );
   });
 
+  it("syncs all 6 bundled maestro-* skills under .claude/skills/ and .codex/skills/", async () => {
+    // Regression: setup.usecase.ts previously iterated BUILT_IN_SKILL_TEMPLATES
+    // (empty `[]` since v0.100.0), leaving project-level skill directories
+    // empty. The 6 shipped skills live in BUNDLED_SKILL_TEMPLATES.
+    await runSetup(project());
+
+    const expectedSkills = [
+      "maestro-design",
+      "maestro-handoff",
+      "maestro-mission",
+      "maestro-setup",
+      "maestro-task",
+      "maestro-verify",
+    ];
+
+    for (const skill of expectedSkills) {
+      for (const root of [".claude", ".codex"]) {
+        const skillFile = join(tmpDir, root, "skills", skill, "SKILL.md");
+        const content = await readFile(skillFile, "utf8");
+        expect(content.length).toBeGreaterThan(0);
+        expect(content).toContain(`name: ${skill}`);
+      }
+    }
+  });
+
   it("emitted init.sh satisfies maestro doctor's init-script dimension", async () => {
     await runSetup(project());
 

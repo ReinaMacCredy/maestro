@@ -21,9 +21,9 @@ import {
   type BootstrapTemplateFile,
 } from "@/infra/domain/bootstrap-templates.js";
 import {
-  BUILT_IN_SKILL_TEMPLATES,
-  type BuiltInSkillTemplate,
-} from "@/infra/domain/built-in-skill-templates.js";
+  BUNDLED_SKILL_TEMPLATES,
+  type BundledSkillTemplate,
+} from "@/infra/domain/bundled-skill-templates.js";
 import { DEFAULT_PRINCIPLES } from "./default-principles.js";
 
 export type SetupStepStatus = "ok" | "skipped" | "changed" | "error";
@@ -369,7 +369,7 @@ async function stepSyncSkills(
       await removeStaleManagedSkillDirs(opts.dir, skillRoot, dryRun, paths);
     }
 
-    for (const template of BUILT_IN_SKILL_TEMPLATES) {
+    for (const template of BUNDLED_SKILL_TEMPLATES) {
       await syncManagedSkillTemplate(opts.dir, skillRoot, template, dryRun, paths);
     }
   }
@@ -389,7 +389,7 @@ async function removeStaleManagedSkillDirs(
   paths: SetupPathEntry[],
 ): Promise<void> {
   const shippedSkillDirNames = new Set(
-    BUILT_IN_SKILL_TEMPLATES.map((template) => resolveSkillDirectoryName(template.name)),
+    BUNDLED_SKILL_TEMPLATES.map((template) => resolveSkillDirectoryName(template.name)),
   );
   let entries;
   try {
@@ -418,7 +418,7 @@ async function removeStaleManagedSkillDirs(
 async function syncManagedSkillTemplate(
   rootDir: string,
   skillRoot: string,
-  template: BuiltInSkillTemplate,
+  template: BundledSkillTemplate,
   dryRun: boolean,
   paths: SetupPathEntry[],
 ): Promise<void> {
@@ -470,7 +470,7 @@ async function syncManagedSkillTemplate(
 
 async function skillDirMatchesTemplate(
   skillDir: string,
-  template: BuiltInSkillTemplate,
+  template: BundledSkillTemplate,
 ): Promise<boolean> {
   if (!(await dirExists(skillDir))) return false;
 
