@@ -314,7 +314,10 @@ describe("runSetup (project scope)", () => {
 
     const result = await runSetup(project());
 
-    expect(result.created).toContain(agentsPath);
+    const pointerStep = result.steps.find((s) => s.id === "write-project-pointers");
+    const entry = pointerStep?.paths.find((p) => p.path === agentsPath);
+    expect(entry?.action).toBe("overwrite");
+
     const content = await readFile(agentsPath, "utf8");
     expect(content).toContain("# My Project");
     expect(content).toContain("Long-standing notes the user keeps here.");
@@ -322,6 +325,34 @@ describe("runSetup (project scope)", () => {
     expect(content.indexOf("# My Project")).toBeLessThan(
       content.indexOf("<!-- maestro-setup:start -->"),
     );
+  });
+
+  it("emits AGENTS.md with both the project-conventions template and the managed setup block on fresh setup", async () => {
+    await runSetup(project());
+
+    const content = await readFile(join(tmpDir, "AGENTS.md"), "utf8");
+    expect(content).toContain("# Project Conventions");
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content).toContain("## Maestro");
+    expect(content.indexOf("# Project Conventions")).toBeLessThan(
+      content.indexOf("<!-- maestro-setup:start -->"),
+    );
+  });
+
+  it("preserves an existing legacy maestro block alongside the new setup block", async () => {
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    const legacyBlock =
+      "<!-- maestro:start -->\n## Cross-Agent Handoff (maestro)\n\nLegacy content.\n<!-- maestro:end -->";
+    await writeFile(agentsPath, `# My Project\n\n${legacyBlock}\n`);
+
+    await runSetup(project());
+
+    const content = await readFile(agentsPath, "utf8");
+    expect(content).toContain("<!-- maestro:start -->");
+    expect(content).toContain("<!-- maestro:end -->");
+    expect(content).toContain("Legacy content.");
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content).toContain("<!-- maestro-setup:end -->");
   });
 
   it("does not re-inject the AGENTS.md block on rerun", async () => {
@@ -351,7 +382,10 @@ describe("runSetup (project scope)", () => {
 
     const result = await runSetup(project());
 
-    expect(result.created).toContain(claudePath);
+    const pointerStep = result.steps.find((s) => s.id === "write-project-pointers");
+    const entry = pointerStep?.paths.find((p) => p.path === claudePath);
+    expect(entry?.action).toBe("overwrite");
+
     const content = await readFile(claudePath, "utf8");
     expect(content).toContain("@my-other-doc.md");
     expect(content).toContain("@AGENTS.md");
@@ -420,6 +454,33 @@ describe("runSetup (dry-run)", () => {
     const result = await runSetup(project({ dryRun: true }));
     const allActions = result.steps.flatMap((s) => s.paths.map((p) => p.action));
     expect(allActions).toContain("would-create");
+  });
+
+  it("reports would-create for project-root pointers when files are absent", async () => {
+    const result = await runSetup(project({ dryRun: true }));
+    const pointerStep = result.steps.find((s) => s.id === "write-project-pointers");
+    const agentsEntry = pointerStep?.paths.find((p) => p.path === join(tmpDir, "AGENTS.md"));
+    const claudeEntry = pointerStep?.paths.find((p) => p.path === join(tmpDir, "CLAUDE.md"));
+
+    expect(agentsEntry?.action).toBe("would-create");
+    expect(claudeEntry?.action).toBe("would-create");
+    await expect(access(join(tmpDir, "AGENTS.md"))).rejects.toThrow();
+    await expect(access(join(tmpDir, "CLAUDE.md"))).rejects.toThrow();
+  });
+
+  it("reports would-overwrite for project-root pointers when files pre-exist without the block", async () => {
+    await writeFile(join(tmpDir, "AGENTS.md"), "# Existing notes\n");
+    await writeFile(join(tmpDir, "CLAUDE.md"), "@my-other-doc.md\n");
+
+    const result = await runSetup(project({ dryRun: true }));
+    const pointerStep = result.steps.find((s) => s.id === "write-project-pointers");
+    const agentsEntry = pointerStep?.paths.find((p) => p.path === join(tmpDir, "AGENTS.md"));
+    const claudeEntry = pointerStep?.paths.find((p) => p.path === join(tmpDir, "CLAUDE.md"));
+
+    expect(agentsEntry?.action).toBe("would-overwrite");
+    expect(claudeEntry?.action).toBe("would-overwrite");
+    expect(await readFile(join(tmpDir, "AGENTS.md"), "utf8")).toBe("# Existing notes\n");
+    expect(await readFile(join(tmpDir, "CLAUDE.md"), "utf8")).toBe("@my-other-doc.md\n");
   });
 });
 

@@ -364,11 +364,12 @@ async function ensureProjectRootBlock(
   if (existing !== undefined && hasSetupBlock(existing)) {
     return { path: target, action: "skip" };
   }
+  const replacing = existing !== undefined;
   if (dryRun) {
-    return { path: target, action: "would-create" };
+    return { path: target, action: replacing ? "would-overwrite" : "would-create" };
   }
   await writeText(target, injectSetupBlock(existing ?? "", body));
-  return { path: target, action: "create" };
+  return { path: target, action: replacing ? "overwrite" : "create" };
 }
 
 async function ensureProjectRootReference(
@@ -381,11 +382,12 @@ async function ensureProjectRootReference(
   if (existing !== undefined && hasSetupReference(existing)) {
     return { path: target, action: "skip" };
   }
+  const replacing = existing !== undefined;
   if (dryRun) {
-    return { path: target, action: "would-create" };
+    return { path: target, action: replacing ? "would-overwrite" : "would-create" };
   }
   await writeText(target, injectSetupReference(existing ?? ""));
-  return { path: target, action: "create" };
+  return { path: target, action: replacing ? "overwrite" : "create" };
 }
 
 async function stepSeedPrinciples(dir: string, dryRun: boolean): Promise<SetupStepResult> {
