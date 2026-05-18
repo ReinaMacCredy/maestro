@@ -95,6 +95,82 @@ project root alone except for `init.sh`. The user's ask is whether the
 CLI should also do some of this work directly, so a project's bootstrap
 is not contingent on someone invoking the skill.
 
+## Grill resolutions (2026-05-18)
+
+Five decisions locked during `/grill-me` on this sketch. Recorded inline
+so a reader doesn't have to reconstruct them from chat history.
+
+**Q1 — Block scope: option B2 (refined).** Pick option B, *and* shrink
+the CLI-emitted block so it only references files Maestro CLI actually
+emits. Anything forward-pointing (skills, context docs that don't yet
+exist on disk) lives in the skill's richer replacement block, not in
+the CLI's seed. Reasons:
+
+- A CLI-only `maestro setup` run leaves a working bootstrap contract
+  with zero dangling pointers.
+- The skill remains the upgrade path that adds the `.maestro/context/`
+  fan-out via `replaceBlock`.
+- Idempotency is already covered by `hasBlock`; B2 doesn't change that.
+
+This shrinks the block body documented below (see [block body](#block-body)).
+
+**Q2 — Constants alignment: parameterize, do NOT change in place.**
+The original sketch proposed changing `BLOCK_START_MARKER`,
+`BLOCK_END_MARKER`, and `REFERENCE_FILE` in
+`src/infra/domain/agents.ts`. **A grep across `src/` after the grill
+showed live production callers of the legacy values:**
+
+- `src/infra/usecases/manage-agents.usecase.ts:10` imports `agentReferencePath`
+- `src/infra/usecases/manage-agents.usecase.ts:119` calls it inside
+  `cleanupLegacyMaestroMd`, which strips `@MAESTRO.md` and removes the
+  legacy `~/.claude/MAESTRO.md` file
+- `tests/unit/infra/usecases/manage-agents.usecase.test.ts:23,26`
+  consumes `REFERENCE_FILE` to assert the cleanup target
+
+If `REFERENCE_FILE` flips to `"AGENTS.md"` in place, the legacy cleanup
+would (a) remove the active `@AGENTS.md` line the user wants kept, and
+(b) try to delete an `AGENTS.md` file at the agent reference path —
+exactly what setup just wrote. Same shape for the markers: the helper's
+`removeBlock` regex is built from `BLOCK_START_MARKER`; changing it
+silently leaves stale `<!-- maestro:start -->` blocks unreclaimable.
+
+Resolution: introduce a second, setup-only value. Concrete options:
+
+1. **Parameterize the helpers** so `injectReference(content, fileName)`
+   and `injectBlock(content, block, markers)` accept overrides; the
+   legacy cleanup path passes the legacy constants, setup passes the
+   new ones.
+2. **Parallel constants** — keep `REFERENCE_FILE = "MAESTRO.md"` and
+   `BLOCK_START_MARKER = "<!-- maestro:start -->"` for cleanup; add
+   `SETUP_REFERENCE_FILE = "AGENTS.md"` and
+   `SETUP_BLOCK_*_MARKER = "<!-- maestro-setup:start/end -->"` for
+   emission; add `setupInjectBlock` / `setupInjectReference` wrappers.
+
+(1) is the cleaner shape long-term; (2) is the smaller diff today.
+Decision deferred to implementation.
+
+**Q3 — Clean git checkpoint (Lecture 06 output 5): out of scope.**
+Maestro stays passive about repository git state outside its own paths
+(consistent with the existing "no cron/daemon/background" feedback).
+Drop the `--commit` follow-up entirely; do not even file it as a
+phasing step.
+
+**Q4 — `.maestro/AGENTS.md` vs project-root `AGENTS.md`: stay disjoint.**
+The two docs live at different layers: `.maestro/AGENTS.md` is
+Maestro's internal bootstrap; the project-root file is the
+project-knowledge contract. The only link is the pointer block (under
+B2, the CLI's seed doesn't even include that — the skill adds it).
+Do not cross-reference; do not auto-sync.
+
+**Q5 — Destructive init-deep edge case.** If a user (or another tool)
+hand-edits the `<!-- AGENTS-HIERARCHY:START -->` block, init-deep's
+next run replaces it; the maestro-setup block sits in a different
+marker pair and is untouched. The reverse holds. The single failure
+mode is a user merging the two blocks into one — they then own the
+result; neither tool can recover automatically. Document this in the
+skill, not in the CLI; the CLI's idempotency check is marker-presence,
+not content-shape.
+
 ## What Lecture 06 actually adds
 
 Lecture 06 is not a new primitive. It's a restatement of why init needs
@@ -147,21 +223,38 @@ runs init-deep, generates a real hierarchical knowledge base, and uses
 `replaceBlock` (`agent-block.ts:57`) to swap the CLI's minimal block
 for the richer version embedded after `## OVERVIEW`.
 
-Block body the CLI writes (verbatim, from the skill's own template):
+<a id="block-body"></a>
+Block body the CLI writes under B2 (shrunken from the skill's template
+so it only references files Maestro CLI actually emits):
 
 ```md
 <!-- maestro-setup:start -->
-## Maestro Context
+## Maestro
 
-Before non-trivial work:
-- Load `.maestro/context/index.md` first.
-- Open only the specific context docs relevant to the task.
-- Follow detected language guides under `.maestro/context/code_styleguides/`.
-- Preserve user content outside managed setup sections.
-- If context docs conflict with closer repo instructions, follow the closer
-  instruction file and report the conflict.
+This project is wired into the Maestro harness. State and config live
+under `.maestro/`. Run `./init.sh` to bring a fresh checkout up; run
+`maestro doctor` and `maestro status` to see what Maestro knows.
+
+Preserve content outside this managed block; the block is rewritten by
+`maestro setup` and the `maestro-setup` skill, but everything else in
+this file is yours.
 <!-- maestro-setup:end -->
 ```
+
+Three deliberate omissions vs the skill's richer block:
+
+- No bullet pointing at `.maestro/context/index.md` — the CLI doesn't
+  create that directory; the skill does. Including the pointer in the
+  seed would violate B2's own rule.
+- No "follow detected language guides" line — same reason; the CLI
+  doesn't detect language or emit code-style guides.
+- No "load only relevant context docs" instruction — that's
+  skill-tier guidance; including it in the seed promises a context fan-out
+  the CLI hasn't produced yet.
+
+The skill's Step 5 swaps this seed for the richer block via
+`replaceBlock`. Both blocks use the same `<!-- maestro-setup:start/end -->`
+marker pair, so the swap is in-place and idempotent.
 
 Pros: any `maestro setup` run produces a working bootstrap contract,
 even without the skill. Skill remains the upgrade path. Helpers already
@@ -190,10 +283,13 @@ that drifts.
 
 ### Recommendation
 
-**B.** It closes the lecture's bootstrap-contract gap with the helpers
-that already exist, preserves the skill's role as the rich-content
-owner, and the idempotency rule (CLI writes only when `hasBlock` is
-false) makes the CLI-vs-skill ordering safe in either direction.
+**B2** (option B with the shrunken seed block — see [Grill
+resolutions](#grill-resolutions-2026-05-18)). It closes the lecture's
+bootstrap-contract gap with the helpers that already exist, preserves
+the skill's role as the rich-content owner, and the idempotency rule
+(CLI writes only when `hasBlock` is false) makes the CLI-vs-skill
+ordering safe in either direction. The B2 refinement keeps the CLI's
+seed from making promises the CLI itself can't keep.
 
 ## Brownfield handling rule
 
@@ -279,46 +375,58 @@ If we go with option B, `maestro setup` writes both:
 Both calls are idempotent — re-running setup is a no-op once the
 artifacts are in place.
 
-## Open questions (not blocking; flag for design review)
+## Open questions (post-grill)
 
-1. **Reference target.** `agent-block.ts` hard-codes `REFERENCE_FILE =
-   "MAESTRO.md"`. Most projects today reference `@AGENTS.md` instead.
-   Pick one: either change the constant, parameterize it, or accept
-   that the reference points at a file Maestro itself doesn't currently
-   emit (it would need to land too).
-2. **Marker mismatch.** Helpers in `agent-block.ts` default to
-   `<!-- maestro:start -->`. The skill uses
-   `<!-- maestro-setup:start -->`. If the CLI is going to call these
-   helpers as-is, the constants need to change to match the skill;
-   otherwise the helpers produce blocks the skill can't read.
-3. **Clean git checkpoint** (Lecture 06's 5th output). Worth a `maestro
-   setup --commit` flag, or out of scope? Maestro is currently
-   passive about git state outside its own paths; an opt-in flag
-   feels right but is a separable design.
-4. **`.maestro/AGENTS.md` vs project-root `AGENTS.md`.** The former
-   already exists (Maestro-internal bootstrap). Cross-reference them
-   from each other? Or keep them strictly disjoint? Today the
-   maestro-setup skill embeds a pointer to `.maestro/context/` from the
-   root file; that's the only link.
+Most of the original open questions were closed by the grill (see
+[Grill resolutions](#grill-resolutions-2026-05-18)). What remains:
+
+1. **Helper-overrides vs parallel-constants.** Q2 of the grill ruled
+   out an in-place constant change. The two surviving shapes (overload
+   the helpers with override args, or add `setup*` constants and
+   wrappers) are equivalent in behavior; pick at implementation time
+   based on which produces the smaller, easier-to-test diff.
+2. **Opt-out gap.** B2's idempotency rule is *marker-presence*: if a
+   user deliberately deletes the maestro-setup block, the next
+   `maestro setup` run silently re-injects it. Three ways to handle:
+   - (a) sentinel file `.maestro/no-root-emit` — setup checks for it
+     and skips block injection
+   - (b) `maestro setup --skip-root-pointers` flag — explicit opt-out
+     per invocation, no persistent state
+   - (c) document as papercut — re-running setup re-installs maestro
+     by definition, so a user who wants the block gone should also
+     `maestro uninstall`
+   Default to (c) until someone complains; revisit with (a) if it
+   becomes a real friction point.
 
 ## Phasing if approved
 
-1. **Spec sign-off.** Lock option B, settle marker + reference-file
-   constants.
-2. **Code.** Change `BLOCK_START_MARKER` / `BLOCK_END_MARKER` constants
-   in `src/infra/domain/agents.ts` to `maestro-setup:start/end`. Add a
-   step to `setup.usecase.ts` that calls `injectBlock` / `injectReference`
-   against project-root `AGENTS.md` and `CLAUDE.md` after the existing
-   `init.sh` emission. Idempotent via `hasBlock` / `hasReference`.
-3. **Tests.** Greenfield, brownfield-with-content, brownfield-with-
+1. **Spec sign-off.** Lock option B2 and the helper-override shape
+   (helper args vs parallel constants — pick by smallest diff).
+2. **Helpers.** Extend `agent-block.ts` so `injectBlock` /
+   `replaceBlock` / `hasBlock` / `injectReference` / `hasReference`
+   accept the marker pair and reference filename as overridable inputs
+   (or add `setup*` wrappers that pass the new values). Keep the
+   legacy `MAESTRO.md` / `<!-- maestro:start -->` defaults intact so
+   `manage-agents.usecase.ts`'s `cleanupLegacyMaestroMd` continues to
+   strip legacy installations.
+3. **Setup step.** Add a step to `setup.usecase.ts` that calls the
+   new setup-flavor helpers against project-root `AGENTS.md` and
+   `CLAUDE.md` after the existing `init.sh` emission. Idempotent via
+   `hasBlock` / `hasReference`. Block body is the shrunken B2 seed
+   from this spec.
+4. **Tests.** Greenfield, brownfield-with-content, brownfield-with-
    legacy-heading-only, rerun-is-noop, skill-wrote-richer-block-don't-
-   clobber. Mirror the existing `.maestro/AGENTS.md` test shape in
-   `tests/unit/service/setup.usecase.test.ts`.
-4. **Skill alignment.** Update `maestro-setup` SKILL.md to note that
+   clobber, legacy-cleanup-still-works (regression for Q2). Mirror the
+   existing `.maestro/AGENTS.md` test shape in
+   `tests/unit/service/setup.usecase.test.ts`. Add a paired test in
+   `tests/unit/infra/usecases/manage-agents.usecase.test.ts` proving
+   the cleanup path still targets the legacy `MAESTRO.md` value.
+5. **Skill alignment.** Update `maestro-setup` SKILL.md to note that
    the CLI now seeds the block; the skill's Step 5 still owns the
    richer init-deep path and uses `replaceBlock` to upgrade in place.
-5. **Optional follow-up.** `--commit` flag for the lecture-06 clean
-   checkpoint output.
+
+Out of phasing (per grill Q3): no `--commit` flag, no clean-checkpoint
+behavior. Maestro stays passive about git state outside its own paths.
 
 ## Non-goals
 
