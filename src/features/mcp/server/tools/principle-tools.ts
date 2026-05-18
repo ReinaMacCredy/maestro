@@ -30,8 +30,8 @@ export function registerPrincipleTools(server: McpServer, deps: RegisterDeps): v
         const services = deps.getServices();
         const result = await principlePromote(
           {
-            evidenceStore: services.v2.evidenceStore,
-            principlesStore: services.v2.principlesStore,
+            evidenceStore: services.evidenceStore,
+            principlesStore: services.principlesStore,
           },
           { correction_id: args.correction_id },
         );

@@ -3,19 +3,17 @@ import {
   checkSkillBinaryParity,
   renderDriftError,
 } from "@/service/skill-binary-parity.js";
+import { collectKnownVerbs } from "@/service/known-verbs.js";
+import { program } from "@/index.js";
 
 describe("checkSkillBinaryParity", () => {
-  it("returns no findings when all skill-referenced verbs exist", () => {
-    const allVerbs = new Set<string>([
-      "evidence", "contract", "task", "spec", "plan", "verdict",
-      "policy", "ci", "merge", "deploy", "runtime", "review",
-      "worktree", "setup", "handoff", "bundle", "skills", "mcp",
-      "recover", "gc", "principle", "init", "status", "doctor",
-      "install", "update", "uninstall", "providers", "reply",
-      "mission-control", "claim", "block", "abandon", "ship", "verify",
-      "intake", "qa", "note", "inspect",
-    ]);
-    const report = checkSkillBinaryParity({ knownVerbs: allVerbs });
+  it("returns no findings when verbs are collected from the real Commander tree", () => {
+    // Walk the actual program in src/index.ts so the test cannot drift away
+    // from what the binary actually exposes. If a skill (SKILL.md or any
+    // reference/*.md) references a dead verb, this test fails and surfaces
+    // the exact skill+verb pair.
+    const knownVerbs = collectKnownVerbs(program);
+    const report = checkSkillBinaryParity({ knownVerbs });
     expect(report.skillsChecked).toBeGreaterThan(0);
     expect(report.findings).toEqual([]);
   });

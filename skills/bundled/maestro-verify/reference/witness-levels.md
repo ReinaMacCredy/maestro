@@ -65,6 +65,5 @@ rules, and policy interaction.
 
 | Kind | Recorded by | Purpose |
 |---|---|---|
-| `lint-violation` | `task verify` (agent-claimed-locally), `ci verify` (witnessed-by-ci), `session start`/`exit` (witnessed-by-maestro) | One row per architecture-lint finding, queryable by `task introspect` |
-| `session-start` | `maestro session start` (witnessed-by-maestro) | Anchors `headSha` for "recent commits since session" calculation |
-| `session-exit` | `maestro session exit` (witnessed-by-maestro) | Records baseline arch-lint count and dirty-tree state at session close |
+| `lint-violation` | `task verify` (agent-claimed-locally), `ci verify` (witnessed-by-ci) | One row per architecture-lint finding |
+| `session-start`, `session-exit` | preserved kinds — no live emitter, legacy rows still parse | (legacy) anchored session boundaries for arch-lint baselines |

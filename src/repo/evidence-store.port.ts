@@ -3,20 +3,28 @@
 // same store keyed by `kind`.
 
 import type { TaskState } from "../types/task-state.js";
-import type { ExecPlanState } from "../types/exec-plan-state.js";
+import type { MissionState } from "../types/mission-state.js";
 
 export interface TransitionEvidenceRow {
   readonly id: string;
   readonly kind: "transition";
   readonly timestamp: string;
   readonly task_id?: string;
-  readonly plan_id?: string;
-  readonly from_state: TaskState | ExecPlanState | null;
-  readonly to_state: TaskState | ExecPlanState;
+  readonly mission_id?: string;
+  readonly from_state: TaskState | MissionState | null;
+  readonly to_state: TaskState | MissionState;
   readonly trigger_verb: string;
   readonly verdict?: "PASS" | "FAIL" | "HUMAN" | "BLOCK";
   readonly agent_id?: string;
   readonly reason?: string;
+  // Mission rollup / verb metadata (mission transitions only).
+  readonly trigger?: "rollup" | "verb";
+  readonly rule?: "auto-start" | "auto-pause" | "auto-resume" | "complete-or-fail";
+  readonly cancelled_by?: "user";
+  readonly task_summary?: {
+    readonly total: number;
+    readonly byState: Record<TaskState, number>;
+  };
 }
 
 export interface LintViolationEvidenceRow {
@@ -36,7 +44,7 @@ export type EvidenceRow = TransitionEvidenceRow | LintViolationEvidenceRow;
 
 export interface EvidenceFilter {
   readonly task_id?: string;
-  readonly plan_id?: string;
+  readonly mission_id?: string;
   readonly kind?: EvidenceRow["kind"];
 }
 

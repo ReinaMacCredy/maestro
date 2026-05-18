@@ -7,7 +7,7 @@ All `maestro` commands run from that directory.
 Your primary guidance comes from the 5 maestro skill files. Load them now:
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-setup/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-design/SKILL.md
-- <MAESTRO_CHECKOUT>/skills/bundled/maestro-plan/SKILL.md
+- <MAESTRO_CHECKOUT>/skills/bundled/maestro-mission/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-task/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-verify/SKILL.md
 
@@ -18,7 +18,7 @@ their intent. Do not prompt the user to name a command -- translate their words
 into the right maestro verb and proceed.
 
 The project directory starts as a bare `git init` with no files. Run
-`maestro setup bootstrap` to scaffold the v2 layout before doing any other
+`maestro setup` to scaffold the v2 layout before doing any other
 maestro work.
 
 ## User-mock script

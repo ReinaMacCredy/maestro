@@ -41,8 +41,8 @@ the plan is internally consistent.
 ## ProofMap
 
 Every acceptance criterion in the linked Spec needs at least one Evidence row
-covering it at the required witness level before the Verdict can pass. In v2
-the ProofMap computation runs inside `maestro verdict request` rather than as
+covering it at the required witness level before the Verdict can pass. The
+ProofMap computation runs inside `maestro verdict request` rather than as
 a standalone verb. The verdict's `reasons[]` array surfaces gaps through the
 `proof-map-incomplete` diagnostic code; the failing criterion ids are listed
 alongside.

@@ -148,8 +148,8 @@ async function tryReadRow(path: string): Promise<EvidenceRow | undefined> {
 /**
  * Validates and coerces a raw JSON value to an EvidenceRow.
  *
- * - v1 rows missing `witness_level` are synthesized to "agent-claimed-locally".
- * - v2 and v3 rows must carry `witness_level`; rows without it are rejected.
+ * - schema_version 1 rows missing `witness_level` are synthesized to "agent-claimed-locally".
+ * - schema_version 2 and 3 rows must carry `witness_level`; rows without it are rejected.
  */
 function coerceEvidenceRow(value: unknown): EvidenceRow | undefined {
   if (typeof value !== "object" || value === null) return undefined;
@@ -174,11 +174,11 @@ function coerceEvidenceRow(value: unknown): EvidenceRow | undefined {
     return value as EvidenceRow;
   }
 
-  // v1 rows may pre-date witness_level — synthesize a safe default
+  // schema_version 1 rows may pre-date witness_level — synthesize a safe default
   if (version === 1) {
     return { ...(value as object), witness_level: "agent-claimed-locally" } as EvidenceRow;
   }
 
-  // v2 and v3 rows must carry witness_level
+  // schema_version 2 and 3 rows must carry witness_level
   return undefined;
 }

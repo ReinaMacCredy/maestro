@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { regenPlan } from "@/features/gc/usecases/plan-regen.usecase.js";
-import type { LegacyTaskStorePort as TaskStorePort, LegacyTask as Task } from "@/shared/domain/legacy-task";
+import type { TaskStorePort, Task } from "@/shared/domain/task";
 import type { VerdictStorePort, Verdict } from "@/features/verdict";
 import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec";
 import { FsEvidenceStoreAdapter, recordEvidence } from "@/features/evidence";
@@ -118,8 +118,8 @@ describe("regenPlan", () => {
   it("reports missing-acceptance-coverage when plan does not cover spec criteria", async () => {
     const ts = new FakeTaskStore();
     ts.set(tinyTask("tsk-aaa111", "mis-1"));
-    await mkdir(join(dir, ".maestro/plans"), { recursive: true });
-    await writeFile(join(dir, ".maestro/plans/tsk-aaa111.md"), "# Plan\n\nUnrelated content\n");
+    await mkdir(join(dir, ".maestro/missions"), { recursive: true });
+    await writeFile(join(dir, ".maestro/missions/tsk-aaa111.md"), "# Plan\n\nUnrelated content\n");
 
     const spec = {
       id: "mis-1",

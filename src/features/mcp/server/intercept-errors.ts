@@ -40,15 +40,16 @@ const INPUT_VALIDATION_PREFIX = "MCP error -32602: Input validation error:";
 
 function rewriteInvalidParamsError(result: unknown): unknown {
   if (!isInvalidParamsResult(result)) return result;
-  const text = result.content[0].text;
-  const stripped = text.slice(INPUT_VALIDATION_PREFIX.length).trim();
+  const firstContent = result.content[0];
+  if (firstContent === undefined) return result;
+  const stripped = firstContent.text.slice(INPUT_VALIDATION_PREFIX.length).trim();
   const issues = extractZodIssues(stripped);
-  const first = issues[0];
-  if (first === undefined) {
+  const firstIssue = issues[0];
+  if (firstIssue === undefined) {
     return toCallToolResult(fail("INVALID_ARG", stripped));
   }
-  const arg = pathToArg(first.path);
-  const message = first.message ?? "Invalid argument";
+  const arg = pathToArg(firstIssue.path);
+  const message = firstIssue.message ?? "Invalid argument";
   return toCallToolResult(fail("INVALID_ARG", message, { arg }));
 }
 

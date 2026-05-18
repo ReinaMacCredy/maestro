@@ -36,7 +36,7 @@ not an encyclopedia — read it as pointers and open the linked docs as needed.
 
 - Pre-flight risk: \`maestro intake --paths <paths>\`
 - Plan check: \`maestro plan check --task <id> --plan-file <path>\`
-- Contract lifecycle: \`maestro task contract {new,lock,amend,show} <id>\` (see \`docs/cli-reference.md\`)
+- Contract lifecycle: contracts are auto-created on \`maestro task claim <id>\`; inspect via \`maestro contract show --task <id>\` and amend via \`maestro contract amend --task <id> --reason "..."\`
 - Verdict: \`maestro verdict request --task <id>\`
 - Recovery: \`maestro recover --task <id>\`
 - Convergence oracle: \`maestro ralph review --task <id>\`
@@ -73,7 +73,7 @@ If two sources conflict, the lower-numbered file is operational; the higher-numb
 Pre-flight risk classification before writing code. \`maestro intake --paths <paths> [--flag <flag> ...]\` returns a lane (\`tiny\` | \`normal\` | \`high-risk\`), the derived risk class, and the recommended next step. Use it as the entry point for any non-trivial change.
 
 - \`tiny\` — patch directly, run validation, close with reason.
-- \`normal\` — \`maestro task plan\` then \`maestro plan check\`.
+- \`normal\` — \`maestro spec new\` then \`maestro task from-spec\`, then \`maestro plan check\`.
 - \`high-risk\` — Spec acceptance criteria plus threat-model evidence required.
 
 ## Two outputs per task
@@ -90,7 +90,8 @@ If the harness delta is non-trivial, capture it before the close so the next ses
 \`\`\`bash
 maestro status --json                                 # what is in flight
 maestro intake --paths <paths> [--flag <flag>]        # pre-code risk classifier
-maestro task plan --file - --start <name>             # batch-create tasks atomically
+maestro task from-spec <path>                         # materialize a task from an authored spec
+maestro mission decompose <pln-id> --file -           # heavy-mode: batch-create child tasks
 maestro plan check --task <id> --plan-file <path>     # plan-time consistency check
 maestro doctor                                        # harness drift checks
 \`\`\`

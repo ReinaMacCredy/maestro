@@ -171,7 +171,7 @@ describe("bundle commands", () => {
     expect(captured.logs.some((l) => l.includes("Mission: 2026-04-15-001"))).toBe(true);
   });
 
-  it("parses comma-separated --redact flags and drops memory files", async () => {
+  it("parses comma-separated --redact flags and drops prompt files", async () => {
     captureConsole();
     const { registerBundleCommand } = await loadRegisterBundleCommand();
 
@@ -187,16 +187,14 @@ describe("bundle commands", () => {
       "--out",
       join(tmpDir, "redacted.tar.gz"),
       "--redact",
-      "memory,prompts",
+      "prompts,replies",
     ]);
 
     expect(archive.writes).toHaveLength(1);
     const files = archive.writes[0]!.files;
-    expect(files.some((f) => f.path.includes("/memory/"))).toBe(false);
     const manifestFile = files.find((f) => f.path.endsWith("manifest.json"))!;
     const manifest = JSON.parse(manifestFile.content as string) as BundleManifest;
-    expect(manifest.redacted).toEqual(["memory", "prompts"]);
-    expect(manifest.stats.memorySnapshot).toBeNull();
+    expect(manifest.redacted).toEqual(["prompts", "replies"]);
   });
 
   it("rejects unknown --redact scopes", async () => {
@@ -213,7 +211,7 @@ describe("bundle commands", () => {
         "export",
         "2026-04-15-001",
         "--redact",
-        "memory,bogus",
+        "prompts,bogus",
       ]),
     ).rejects.toMatchObject({ message: expect.stringContaining("bogus") });
   });
@@ -266,7 +264,6 @@ describe("bundle commands", () => {
         checkpoints: 0,
         principlesSnapshot: 0,
         outcomesSnapshot: 0,
-        memorySnapshot: null,
       },
       redacted: [],
       gitPatch: null,
@@ -286,6 +283,5 @@ describe("bundle commands", () => {
     expect(archive.readManifestCalls).toEqual(["/tmp/does-not-matter.tar.gz"]);
     expect(captured.logs[0]).toBe("Bundle abc-123");
     expect(captured.logs.some((line) => line.includes("0 handoff"))).toBe(true);
-    expect(captured.logs.some((l) => l.includes("Memory:  (redacted)"))).toBe(true);
   });
 });

@@ -7,7 +7,7 @@ All `maestro` commands run from that directory.
 Your primary guidance comes from the 5 maestro skill files. Load them now:
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-setup/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-design/SKILL.md
-- <MAESTRO_CHECKOUT>/skills/bundled/maestro-plan/SKILL.md
+- <MAESTRO_CHECKOUT>/skills/bundled/maestro-mission/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-task/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-verify/SKILL.md
 
@@ -22,9 +22,9 @@ The project directory starts as a bare `git init` with no files.
 Simulate the following user messages in order, one per turn. For each message,
 act on it fully before reading the next.
 
-User message 1: "Run `maestro setup bootstrap`, then author a heavy-mode spec for a feature: a data pipeline that ingests CSV files, transforms rows, and writes output. Break it into 3 tasks."
+User message 1: "Run `maestro setup`, then author a heavy-mode spec for a feature: a data pipeline that ingests CSV files, transforms rows, and writes output. Break it into 3 tasks."
 
-User message 2: "Run `plan from-spec`, then `plan decompose` with at least 3 child tasks. Show me the plan."
+User message 2: "Run `mission from-spec`, then `mission decompose` with at least 3 child tasks. Show me the plan."
 
 User message 3: "Claim task-1. Before implementing, create `docs/architecture.yaml` with a `passive_harness` forbidden pattern `pollInterval`. Implement the ingest step using that pattern so verify catches it."
 

@@ -1,13 +1,13 @@
 ---
 name: maestro-verify
-description: The canonical verification protocol for any task in a maestro v2 project. Documents witness levels, Trust Verifier scope, ProofMap, plan-check, verdict semantics, cost-budget monitoring, AI Reviewer protocol (Rule 1 veto-only), and threat-model production. Cross-referenced by `maestro-task` and `maestro-plan`. Read this skill when starting a non-trivial task or before declaring completion.
+description: The canonical verification protocol for any task in a maestro project. Documents witness levels, Trust Verifier scope, ProofMap, plan-check, verdict semantics, cost-budget monitoring, AI Reviewer protocol (Rule 1 veto-only), and threat-model production. Cross-referenced by `maestro-task` and `maestro-mission`. Read this skill when starting a non-trivial task or before declaring completion.
 ---
 
 # Maestro Verify
 
 This skill is the canonical verification protocol every agent follows before claiming a task is done. Read it when planning a non-trivial task or before declaring completion.
 
-Cross-referenced by `maestro-task` (pre-ship ritual), `maestro-plan` (plan-check). When those skills say "see maestro-verify", this is the document.
+Cross-referenced by `maestro-task` (pre-ship ritual), `maestro-mission` (plan-check). When those skills say "see maestro-verify", this is the document.
 
 The trigger body below names the steps and points to one reference file per substantive topic. Open the matching reference when you reach that step in the pre-ship ritual.
 
@@ -41,7 +41,7 @@ Run this loop before marking any task done. Steps are ordered; do not skip.
    - `2` HUMAN — task stays at `verifying` with the reason recorded. Surface to the user; do not retry without guidance.
    - `3` BLOCK — task is now `blocked` with `block_reason`. Surface the reason; do not retry.
 
-If retries are accumulating before step 4, run `maestro task budget --task <id>` to check consumption (`reference/verdict.md` covers cost-budget interpretation).
+If retries are accumulating before step 4, the verdict envelope's `costBudgetExhausted` / `costBudgetReason` fields report the budget state directly (see `reference/verdict.md` for cost-budget interpretation). When the budget is exhausted, the next `verdict request` returns BLOCK.
 
 ### Harness-delta evidence
 

@@ -40,7 +40,7 @@ describe("JsonlEvidenceStore", () => {
     expect(rows).toEqual([row]);
   });
 
-  it("filters by task_id, plan_id, and kind", async () => {
+  it("filters by task_id, mission_id, and kind", async () => {
     const store = new JsonlEvidenceStore({ repoRoot: root, clock: () => FROZEN });
     const t1: TransitionEvidenceRow = {
       id: "a",

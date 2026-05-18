@@ -1,103 +1,38 @@
 import type { Command } from "commander";
-import { createInterface } from "node:readline/promises";
 import { type Services } from "@/services.js";
-import { initMaestro } from "../usecases/init.usecase.js";
-import { output } from "@/shared/lib/output.js";
+import { formatReport, runSetupCommand } from "@/runtime/setup.command.js";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 
 interface InitCommandDeps {
   readonly getServices: () => Pick<Services, "config">;
 }
 
-export function registerInitCommand(
-  program: Command,
-  deps: InitCommandDeps,
-): void {
+export function registerInitCommand(program: Command, deps: InitCommandDeps): void {
   program
-    .command("init")
-    .description("Initialize maestro in the current project or globally")
+    .command("init", { hidden: true })
+    .description("Alias for `maestro setup` (kept for backward compatibility)")
     .option("--global", "Initialize global config at ~/.maestro/")
+    .option("--dry-run", "Show what would change without writing")
+    .option("--resync-skills", "Reconcile .claude/skills and .codex/skills with shipped templates")
+    .option("--reset-templates", "Replace customized bootstrap templates")
+    .option("--no-git-ok", "Allow setup outside a git working tree")
     .option("--json", "Output as JSON")
-    .action(async (opts): Promise<void> => {
-      const services = deps.getServices();
-      const isJson = opts.json ?? program.opts().json ?? false;
-      const replacementPrompter = shouldPromptForReplacement(isJson)
-        ? createReplacementPrompter()
-        : undefined;
-
+    .action(async function (this: Command, opts): Promise<void> {
       try {
-        const result = await initMaestro(services.config, {
-          global: opts.global ?? false,
-          dir: process.cwd(),
-          confirmReplace: replacementPrompter?.confirmReplace,
+        const report = await runSetupCommand(opts, {
+          resolveRepoRoot: () => resolveMaestroProjectRoot(process.cwd()),
+          getServices: deps.getServices,
         });
-
-        output(isJson, result, (r) => {
-          const lines = [
-            `[ok] Initialized ${r.scope} ${r.bootstrapGenerated ? "bootstrap" : "config"}`,
-            ...r.created.map((p) => `  --> ${p}`),
-            ...r.skipped.map((p) => `  [skip] ${p}`),
-            "",
-            "Next: run `maestro install` to install the bundled agent skills into",
-            "      ~/.claude/skills/ and ~/.codex/skills/ for Claude Code / Codex.",
-          ];
-          if (r.scope === "project" && r.created.length > 0) {
-            lines.push(
-              "",
-              "Tip: commit the substrate maestro just wrote (`.claude/`, `.codex/`,",
-              "     `.maestro/`, `.gitignore`) before locking your first contract.",
-              "     Bundled `maestro:` skill paths are exempt from scope checks, but",
-              "     committing them up-front keeps your task diff minimal.",
-            );
-          }
-          return lines;
-        });
-      } finally {
-        replacementPrompter?.close();
+        const isJson = opts.json === true || this.optsWithGlobals().json === true;
+        if (isJson) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          for (const line of formatReport(report)) console.log(line);
+        }
+        if (!report.ok) process.exitCode = 1;
+      } catch (err) {
+        console.error(`maestro init: ${(err as Error).message}`);
+        process.exitCode = 1;
       }
     });
-}
-
-function shouldPromptForReplacement(isJson: boolean): boolean {
-  return !isJson && Boolean(process.stdin.isTTY && process.stdout.isTTY);
-}
-
-function createReplacementPrompter(): {
-  readonly confirmReplace: (path: string) => Promise<boolean>;
-  readonly close: () => void;
-} {
-  let rl: ReturnType<typeof createInterface> | undefined;
-  let defaultDecision: boolean | undefined;
-
-  return {
-    confirmReplace: async (path: string): Promise<boolean> => {
-      if (defaultDecision !== undefined) {
-        return defaultDecision;
-      }
-
-      rl ??= createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-
-      const answer = (await rl.question(
-        `Replace existing file ${path}? [y]es/[n]o/[a]ll yes/[s]kip all: `,
-      )).trim().toLowerCase();
-
-      if (answer === "a") {
-        defaultDecision = true;
-        return true;
-      }
-
-      if (answer === "s") {
-        defaultDecision = false;
-        return false;
-      }
-
-      return answer === "y" || answer === "yes";
-    },
-    close: () => {
-      rl?.close();
-      rl = undefined;
-    },
-  };
 }

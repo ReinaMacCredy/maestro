@@ -191,9 +191,10 @@ describe("CLI integration", () => {
   it("prints help with all commands", async () => {
     const { stdout, exitCode } = await run(["--help"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("init");
+    expect(stdout).toContain("setup");
     expect(stdout).toContain("status");
     expect(stdout).toContain("doctor");
+    expect(stdout).not.toContain("\n  init ");
   });
 
   it("doctor --json returns structured output", async () => {

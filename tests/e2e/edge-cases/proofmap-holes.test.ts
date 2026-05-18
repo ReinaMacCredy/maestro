@@ -9,7 +9,7 @@ import { describe, it, expect } from "bun:test";
 import { computeRisk } from "@/features/risk/usecases/compute-risk.js";
 import type { ComputeRiskInput } from "@/features/risk/usecases/compute-risk.js";
 import type { Contract } from "@/types/contract.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 import type { EvidenceRow } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/types/trust.js";
 

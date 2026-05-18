@@ -4,7 +4,7 @@
 import {
   isChildDraftRow,
   isLintViolation,
-  isPlanTransitionTo,
+  isMissionTransitionTo,
   isTaskTransitionTo,
   loadEvidence,
   mustHave,
@@ -20,8 +20,8 @@ export async function runRubric(projectDir: string): Promise<RubricResult> {
   const childDraftRows = rows.filter(isChildDraftRow);
 
   const checks: CheckResult[] = [
-    mustHave(rows, (r) => isPlanTransitionTo(r, "specified"), "plan-reached-specified", "a plan transition row with to_state=specified exists (plan from-spec ran)"),
-    mustHave(rows, (r) => isPlanTransitionTo(r, "planned"), "plan-reached-planned", "a plan transition row with to_state=planned exists (plan decompose ran)"),
+    mustHave(rows, (r) => isMissionTransitionTo(r, "approved"), "mission-reached-approved", "a mission transition row with to_state=approved exists (mission from-spec ran)"),
+    mustHave(rows, (r) => isMissionTransitionTo(r, "planned"), "mission-reached-planned", "a mission transition row with to_state=planned exists (mission decompose ran)"),
     {
       id: "multiple-child-tasks-drafted",
       description: "at least 2 child task draft rows exist (multi-task decomposition)",

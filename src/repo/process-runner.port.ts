@@ -1,4 +1,4 @@
-// Process runner port lets v2 services exec shell commands (e.g. principle
+// Process runner port lets services exec shell commands (e.g. principle
 // scan commands) without the service layer importing Bun or node:child_process
 // directly. Tests can pass an in-memory mock.
 

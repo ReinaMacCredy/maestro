@@ -40,12 +40,12 @@ export function isTaskTransitionTo(row: EvidenceRow, state: string): boolean {
   );
 }
 
-export function isPlanTransitionTo(row: EvidenceRow, state: string): boolean {
+export function isMissionTransitionTo(row: EvidenceRow, state: string): boolean {
   return (
     row.kind === "transition" &&
-    "plan_id" in row &&
-    typeof row.plan_id === "string" &&
-    row.plan_id.length > 0 &&
+    "mission_id" in row &&
+    typeof row.mission_id === "string" &&
+    row.mission_id.length > 0 &&
     !("task_id" in row && typeof row.task_id === "string" && row.task_id.length > 0) &&
     row.to_state === state
   );
@@ -57,9 +57,9 @@ export function isChildDraftRow(row: EvidenceRow): boolean {
     "task_id" in row &&
     typeof row.task_id === "string" &&
     row.task_id.length > 0 &&
-    "plan_id" in row &&
-    typeof row.plan_id === "string" &&
-    row.plan_id.length > 0 &&
+    "mission_id" in row &&
+    typeof row.mission_id === "string" &&
+    row.mission_id.length > 0 &&
     row.to_state === "draft"
   );
 }
@@ -166,22 +166,6 @@ export async function mustExistDir(
     return { id, description, pass: false, note: `path exists but is not a directory: ${path}` };
   } catch {
     return { id, description, pass: false, note: `directory not found: ${path}` };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Migration flag
-// ---------------------------------------------------------------------------
-
-export async function loadMigrationFlag(
-  projectDir: string,
-): Promise<{ migrated_at: string } | null> {
-  const path = join(projectDir, ".maestro/.migrated-v2.json");
-  try {
-    const content = await readFile(path, "utf8");
-    return JSON.parse(content) as { migrated_at: string };
-  } catch {
-    return null;
   }
 }
 

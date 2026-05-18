@@ -2,7 +2,7 @@
 
 Verb-by-verb reference for the `maestro` CLI. Each section names the verb, its flags, exit codes where relevant, and the canonical doc for the full contract.
 
-For agent-facing usage, prefer the bundled skills under `skills/bundled/maestro-*`; they cross-reference these verbs in the right order. The six bundled skills are `maestro-task`, `maestro-plan`, `maestro-design`, `maestro-verify`, `maestro-handoff`, `maestro-setup`.
+For agent-facing usage, prefer the bundled skills under `skills/bundled/maestro-*`; they cross-reference these verbs in the right order. The six bundled skills are `maestro-task`, `maestro-mission`, `maestro-design`, `maestro-verify`, `maestro-handoff`, `maestro-setup`.
 
 ---
 
@@ -30,7 +30,7 @@ maestro spec new <slug> [--title <text>] [--mode light|heavy]
 maestro spec validate <path>
 ```
 
-`spec new` scaffolds `.maestro/specs/<slug>.md` with frontmatter (`mode: light | heavy`, `work_type`, `acceptance_criteria`, `non_goals`). `spec validate` parses an existing spec and reports frontmatter errors. Heavy-mode specs are the input to `plan from-spec`; light-mode specs feed `task from-spec`.
+`spec new` scaffolds `.maestro/specs/<slug>.md` with frontmatter (`mode: light | heavy`, `work_type`, `acceptance_criteria`, `non_goals`). `spec validate` parses an existing spec and reports frontmatter errors. Heavy-mode specs are the input to `mission new --from-spec`; light-mode specs feed `task from-spec`.
 
 Authored interactively through the `maestro-design` skill (grill protocol).
 
@@ -69,7 +69,7 @@ Transitions are hybrid (ADR-0004): the agent enters check states manually; the h
 
 Each transition emits an evidence row (ADR-0009) into `.maestro/evidence/<date>.jsonl`, a parallel observability row into `.maestro/runs/<task-id>/observability.jsonl`, and a handoff envelope into `.maestro/handoffs/<id>.json`.
 
-One task = one PR (ADR-0006). Multi-PR work promotes to an exec-plan.
+One task = one PR (ADR-0006). Multi-PR work promotes to a mission.
 
 ---
 
@@ -93,28 +93,34 @@ See `docs/dev-observability.md`.
 
 ---
 
-## plan
+## mission
 
 ```bash
-maestro plan from-spec <path>
-maestro plan decompose <id> --file <path|->
-maestro plan show <id> [--json]
+maestro mission new [title...] [--from-spec <path>] [--from-file <path>] [--template <name>] [--slug <slug>] [--list-templates]
+maestro mission from-spec <path>
+maestro mission decompose <id> --file <path|->
+maestro mission cancel <id> [--reason <text>]
+maestro mission show <id> [--json]
 ```
 
 State machine (ADR-0011):
 
 ```
-intake → specified → planned → in-progress → completed
-                                                       ↘ (any state) → cancelled
+intake → approved → planned → in-progress ↔ paused → completed | failed
+                                                              ↘ (any state) → cancelled
 ```
 
-- `plan from-spec` requires `mode: heavy` on the spec; creates an exec-plan in `specified`.
-- `plan decompose` reads a task batch (JSON file or `-` for stdin) and creates child tasks. The plan transitions `specified → planned`.
-- `plan show` prints the plan and its child tasks; `--json` emits the full record.
+- `mission new <title>` creates a bare mission in `intake`. Pass `--from-spec` (creates at `approved`), `--from-file` (creates at `planned` with seeded tasks), or `--template <name>` (creates at `planned` with built-in or user template tasks). Flags are mutually exclusive. `--list-templates` prints built-ins and user overrides without creating a mission.
+- `mission from-spec` is the spec-first shortcut (equivalent to `mission new <spec-title> --from-spec <path>`); requires `mode: heavy`.
+- `mission decompose` reads a task batch (JSON file or `-` for stdin) and creates child tasks. Accepts both `intake` and `approved` input states; advances the mission to `planned`. Refuses missions that already have any tasks.
+- `mission cancel` cascades active tasks to `abandoned`, then transitions the mission to `cancelled`. Idempotent on already-cancelled; errors on `completed` / `failed`.
+- `mission show` prints the mission and its child tasks; `--json` emits the full record.
 
-Auto-advance is wired into `task claim` / `task ship` / `task abandon`: `planned → in-progress` on the first child claim; `in-progress → completed` when every child reaches a terminal state. The plan never decomposes itself — the agent authors the batch.
+Auto-advance (ADR-0011) is wired into `task claim` / `task ship` / `task abandon` / `task block`. Rollup rules: `planned → in-progress` on the first non-draft task; `in-progress → paused` when every active task is `blocked`; `paused → in-progress` when any unblocks; terminal rollup to `completed` when every task `shipped`, or `failed` when any `abandoned`. Auto-rollup evidence rows carry `trigger: "rollup"` plus the matching rule and a task summary.
 
-No hot-path aliases — plan verbs are heavy and not on the loop critical path.
+Built-in templates: `refactor`, `feature`, `bug`, `migration`. User templates live at `.maestro/templates/missions/<name>.yaml` and override built-ins of the same name; `name` in the YAML must match the filename.
+
+No hot-path aliases — mission verbs are heavy and not on the loop critical path.
 
 ---
 
@@ -133,16 +139,23 @@ Exit code 1 when the correction id is missing or is not a `lint-violation` row.
 ## setup
 
 ```bash
+maestro setup [--global] [--dry-run] [--resync-skills] [--reset-templates] [--no-git-ok] [--json]
 maestro setup check [--json]
-maestro setup bootstrap [--json]
-maestro setup migrate-v2 [--dry-run] [--force] [--json]
-maestro setup migrate-corrections [--overwrite] [--json]
 ```
 
-- `setup check` audits the five v2 directories (`.maestro/{specs,plans,tasks,runs,evidence}`), the principles pack (`docs/principles/`), and `.maestro/config.yaml`. Exit 1 only when an entry is `missing`; `warn` (empty principles pack, absent config.yaml) is informational.
-- `setup bootstrap` creates the five v2 directories (with `.gitkeep` when empty). Idempotent.
-- `setup migrate-v2` runs the 11-step v1→v2 migration: preflight → backup to `.maestro.backup-<ts>/` → bootstrap-dirs → migrate-corrections → migrate-tasks → migrate-plans → migrate-evidence → migrate-policies → seed-principles → write-flag → verify. `--dry-run` plans without writing; `--force` re-runs past `.maestro/.migrated-v2.json`.
-- `setup migrate-corrections` is a sub-step of `migrate-v2` exposed standalone; copies v1 `.maestro/memory/corrections/*.json` to `docs/principles/legacy/<id>.md`.
+`maestro setup` scaffolds the `.maestro/` layout. Idempotent: detects the current state and only touches what changed.
+
+- Creates `.maestro/{specs,missions,tasks,runs,evidence,handoffs,worktrees}` with `.gitkeep` placeholders.
+- Writes default skill bundles and context templates; `--reset-templates` overwrites user-customized files.
+- `--resync-skills` reconciles `.claude/skills/` and `.codex/skills/` with shipped templates.
+- `--dry-run` plans without writing.
+- `--global` initializes `~/.maestro/` for the user instead of the repo.
+- `--no-git-ok` allows running outside a git working tree (default refuses).
+- `--json` emits the full report; otherwise prints one line per step.
+
+`setup check` audits the `.maestro/` directory layout, the principles pack (`docs/principles/`), and `.maestro/config.yaml`. Exit 1 only when an entry is `missing`; `warn` (empty principles pack, absent config.yaml) is informational.
+
+`maestro init` is a hidden alias for `maestro setup` retained for muscle memory.
 
 ---
 
@@ -292,7 +305,7 @@ Resolves the last `PASS` verdict, finds a commit whose tree matches `verdict.sub
 maestro bundle export <missionId> --out <path>
 ```
 
-Exports a mission bundle for review. The `mission` vocabulary in `bundle` is a historical alias for exec-plan; the verb surface is unchanged in v2.0.
+Exports a mission bundle for review.
 
 ---
 
@@ -338,7 +351,7 @@ maestro mcp serve [--project-root <path>] [--transport stdio]
 maestro mcp check [--json]
 ```
 
-The `mcp__maestro__*` tool surface ships with the binary and is consumed by host agents through MCP over stdio. Tools mirror the CLI verbs; the filter field on `maestro_task_list` is `plan_id`. Surfaces:
+The `mcp__maestro__*` tool surface ships with the binary and is consumed by host agents through MCP over stdio. Tools mirror the CLI verbs; the filter field on `maestro_task_list` is `mission_id`. Surfaces:
 
 | Surface | Tools |
 |---------|-------|
@@ -349,7 +362,7 @@ The `mcp__maestro__*` tool surface ships with the binary and is consumed by host
 | Policy | `maestro_policy_check` |
 | Handoff | `maestro_handoff_list`, `maestro_handoff_show`, `maestro_handoff_emit`, `maestro_handoff_pickup` |
 | Principle | `maestro_principle_promote` |
-| Setup | `maestro_setup_check`, `maestro_setup_migrate_v2` |
+| Setup | `maestro_setup_check` |
 
 Project root resolves by walking up for `.maestro/`; override with `--project-root` or `MAESTRO_PROJECT_ROOT`. `mcp check` exits 1 when the installed binary is missing or stale.
 

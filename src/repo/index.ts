@@ -1,4 +1,4 @@
-// v2/repo: ports and storage adapters. Allowed to import from types and config.
+// repo: ports and storage adapters. Allowed to import from types and config.
 export * from "./evidence-store.port.js";
 export * from "./jsonl-evidence-store.adapter.js";
 export * from "./task-store.port.js";
@@ -7,9 +7,8 @@ export * from "./spec-store.port.js";
 export * from "./fs-spec-store.adapter.js";
 export * from "./architecture-rules.port.js";
 export * from "./yaml-architecture-rules.adapter.js";
-export * from "./v1-state-mapping.js";
-export * from "./exec-plan-store.port.js";
-export * from "./jsonl-exec-plan-store.adapter.js";
+export * from "./mission-store.port.js";
+export * from "./jsonl-mission-store.adapter.js";
 export * from "./principles-store.port.js";
 export * from "./fs-principles-store.adapter.js";
 export * from "./process-runner.port.js";

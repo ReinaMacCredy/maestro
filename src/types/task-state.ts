@@ -1,4 +1,4 @@
-// v2 task lifecycle (ADR-0003). Hybrid transitions (ADR-0004): agent enters
+// Task lifecycle (ADR-0003). Hybrid transitions (ADR-0004): agent enters
 // check states manually; harness auto-exits based on verdict result.
 
 export const TASK_STATES = [
@@ -23,7 +23,11 @@ export const TASK_TRANSITIONS = {
   doing: ["verifying", "blocked", "abandoned"],
   verifying: ["doing", "ready", "blocked", "abandoned"],
   blocked: ["doing", "verifying", "abandoned"],
-  ready: ["shipped", "abandoned"],
+  // `verifying` re-entry: zero-diff PASS on a task that wasn't actually done
+  // strands the agent if `ready` can't go back. Re-verification is intended
+  // (see task-verify.usecase.ts:69) — the gate is human ship/abandon, not the
+  // transition itself.
+  ready: ["shipped", "abandoned", "verifying"],
   shipped: [],
   abandoned: [],
 } as const satisfies Record<TaskState, readonly TaskState[]>;

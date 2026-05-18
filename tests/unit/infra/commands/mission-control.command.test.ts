@@ -11,7 +11,7 @@ import { buildMissions, createMission as createMissionRecord, updateFeature } fr
     createMissionControlSnapshotLoader,
     loadMissionControlSnapshot,
   } from "@/infra/commands/mission-control.command.js";
-  import type { LegacyTask as Task, TaskQueryPort } from "@/shared/domain/legacy-task";
+  import type { Task, TaskQueryPort } from "@/shared/domain/task";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { SnapshotDeps } from "@/tui/state/snapshot.js";

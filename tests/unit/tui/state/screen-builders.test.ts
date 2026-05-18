@@ -14,7 +14,7 @@ import { createInitialState, reduce } from "@/tui/state/reducer.js";
 import type { Feature, Milestone } from "@/shared/domain/legacy-mission";
 import type { Principle, PrincipleOutcomeRecord, PrincipleStorePort } from "@/features/principle";
 import type { MissionControlEvent, MissionControlSnapshot } from "@/tui/state/types.js";
-import type { LegacyTask as Task, TaskQueryPort } from "@/shared/domain/legacy-task";
+import type { Task, TaskQueryPort } from "@/shared/domain/task";
 import type { AgentReply } from "@/features/reply";
 import type { EvidenceSummary } from "@/tui/state/screen-types.js";
 import { mockConfig, mockGit } from "../../../helpers/mocks.js";

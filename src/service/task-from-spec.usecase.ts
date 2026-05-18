@@ -18,12 +18,31 @@ export interface TaskFromSpecDeps {
   readonly idFactory?: () => string;
 }
 
+export class SpecFileNotFoundError extends Error {
+  readonly path: string;
+  readonly inputArg: string;
+  constructor(path: string, inputArg: string) {
+    super(`Spec file not found: ${path}`);
+    this.name = "SpecFileNotFoundError";
+    this.path = path;
+    this.inputArg = inputArg;
+  }
+}
+
 export async function taskFromSpec(
   deps: TaskFromSpecDeps,
   specPathArg: string,
 ): Promise<Task> {
   const path = isAbsolute(specPathArg) ? specPathArg : resolve(deps.repoRoot, specPathArg);
-  const raw = await readFile(path, "utf8");
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new SpecFileNotFoundError(path, specPathArg);
+    }
+    throw err;
+  }
   const spec = parseSpecFile(raw, path);
   const title = extractTitle(spec.body) ?? spec.frontmatter.slug;
   const task = await deps.taskStore.create({
@@ -51,5 +70,5 @@ export async function taskFromSpec(
 
 function extractTitle(body: string): string | undefined {
   const match = body.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : undefined;
+  return match?.[1]?.trim();
 }

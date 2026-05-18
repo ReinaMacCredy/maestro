@@ -9,7 +9,7 @@ import { checkRuntimeSignals } from "../usecases/check-runtime-signals.usecase.j
 import type { RuntimeMonitorPort } from "../ports/monitor.port.js";
 
 interface RuntimeCheckCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore" | "taskStore" | "specStore">;
+  readonly getServices: () => Pick<Services, "legacyEvidenceStore" | "legacyTaskStore" | "trustSpecStore">;
   readonly recordEvidence?: typeof defaultRecordEvidence;
   readonly buildMonitor?: (baseUrl: string) => RuntimeMonitorPort;
 }
@@ -33,7 +33,7 @@ export function registerRuntimeCheckCommand(
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const task = await services.taskStore.get(taskId);
+      const task = await services.legacyTaskStore.get(taskId);
       if (task === undefined) {
         throw new MaestroError(`Task not found: ${taskId}`, [
           "Run `maestro task list` to see available tasks",
@@ -46,7 +46,7 @@ export function registerRuntimeCheckCommand(
         ]);
       }
 
-      const spec = await services.specStore.read(task.missionId);
+      const spec = await services.trustSpecStore.read(task.missionId);
       if (spec === undefined) {
         throw new MaestroError(`No Spec found for mission: ${task.missionId}`, [
           "Run `maestro spec show --mission <id>` to inspect the spec",
@@ -103,7 +103,7 @@ export function registerRuntimeCheckCommand(
               note,
             };
 
-        const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, {
+        const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.legacyEvidenceStore, {
           task_id: taskId,
           kind: "runtime-signal",
           payload,

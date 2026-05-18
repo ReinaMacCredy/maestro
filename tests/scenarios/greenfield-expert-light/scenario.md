@@ -9,7 +9,7 @@
 
 The user knows maestro verb names and uses them explicitly.
 
-1. "Run `maestro setup bootstrap` then author a light-mode spec for a bug:
+1. "Run `maestro setup` then author a light-mode spec for a bug:
    the login form doesn't clear on error."
 2. "Run `task from-spec`, claim with `--skip-worktree`, fix the bug, verify,
    and ship."

@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { buildV2Services } from "../providers/build-services.js";
+import { buildCoreServices } from "../providers/build-services.js";
 import { specNew, InvalidSpecSlugError } from "../service/spec-new.usecase.js";
 import { specValidate } from "../service/spec-validate.usecase.js";
 import {
@@ -8,17 +8,17 @@ import {
 } from "../repo/spec-store.port.js";
 import { isSpecMode } from "../types/product-spec.js";
 
-export interface SpecCommandV2Options {
+export interface SpecCommandOptions {
   readonly resolveRepoRoot: () => string;
 }
 
 function findOrCreateSpecCommand(program: Command): Command {
   const existing = program.commands.find((c) => c.name() === "spec");
   if (existing) return existing;
-  return program.command("spec").description("Product-spec authoring (v2)");
+  return program.command("spec").description("Product-spec authoring");
 }
 
-export function registerSpecV2Commands(program: Command, opts: SpecCommandV2Options): void {
+export function registerSpecCommands(program: Command, opts: SpecCommandOptions): void {
   const spec = findOrCreateSpecCommand(program);
 
   spec
@@ -33,7 +33,7 @@ export function registerSpecV2Commands(program: Command, opts: SpecCommandV2Opti
       ): Promise<void> => {
         try {
           const repoRoot = opts.resolveRepoRoot();
-          const services = buildV2Services({ repoRoot });
+          const services = buildCoreServices({ repoRoot });
           const mode = flags.mode;
           if (mode !== undefined && !isSpecMode(mode)) {
             console.error(`maestro spec new: invalid --mode value "${mode}" (expected light | heavy)`);

@@ -6,7 +6,7 @@ import { recoverTask, type RecoverResult } from "../usecases/recover.usecase.js"
 interface RecoverDeps {
   readonly getServices: () => Pick<
     Services,
-    "evidenceStore" | "verdictStore" | "projectRoot"
+    "legacyEvidenceStore" | "verdictStore" | "projectRoot"
   >;
 }
 
@@ -28,7 +28,7 @@ export function registerRecoverCommand(
 
       const result = await recoverTask(
         {
-          evidenceStore: services.evidenceStore,
+          evidenceStore: services.legacyEvidenceStore,
           verdictStore: services.verdictStore,
         },
         {

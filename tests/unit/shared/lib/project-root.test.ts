@@ -37,6 +37,20 @@ describe("resolveMaestroProjectRoot", () => {
     expect(resolveMaestroProjectRoot(repo)).toBe(await realpath(repo));
   });
 
+  it("does not walk past the git repo root to an unrelated ancestor .maestro/", async () => {
+    // Regression: a stray .maestro/ in an ancestor (e.g. /tmp/.maestro/ from
+    // a prior test) was silently adopted as the project root for any non-
+    // maestro git repo nested under it. setup verbs reported [ok] while
+    // doing nothing in the user's actual repo.
+    const ancestor = join(tmp, "ancestor");
+    const repo = join(ancestor, "non-maestro-repo");
+
+    await mkdir(join(ancestor, ".maestro"), { recursive: true });
+    await mkdir(join(repo, ".git"), { recursive: true });
+
+    expect(resolveMaestroProjectRoot(repo)).toBe(await realpath(repo));
+  });
+
   it("returns the main repo root when the worktree has a tracked local .maestro/", async () => {
     // Reproduces the v0.72.2 demo bug: in a real worktree created from a
     // commit that already had .maestro/ committed, the worktree's checkout

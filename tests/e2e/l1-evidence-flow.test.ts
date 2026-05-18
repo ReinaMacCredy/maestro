@@ -144,7 +144,7 @@ describe.skip("L1 evidence flow E2E", () => {
       expect(listResult.exitCode).toBe(0);
       const listPayload = expectJson<{
         items: Array<{ id: string; kind: string; witness_level: string; created_at: string }>;
-        v2_items?: ReadonlyArray<unknown>;
+        system_items?: ReadonlyArray<unknown>;
       }>(listResult);
       const rows = listPayload.items;
       expect(rows.length).toBe(3);
@@ -195,7 +195,7 @@ describe.skip("L1 evidence flow E2E", () => {
       expect(listAfter.exitCode).toBe(0);
       const listAfterPayload = expectJson<{
         items: Array<{ id: string }>;
-        v2_items?: ReadonlyArray<unknown>;
+        system_items?: ReadonlyArray<unknown>;
       }>(listAfter);
       expect(listAfterPayload.items.length).toBe(3);
 

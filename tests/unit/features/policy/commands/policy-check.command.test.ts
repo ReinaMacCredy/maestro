@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { Command } from "commander";
 import { registerPolicyCheckCommand } from "@/features/policy/commands/policy-check.command.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
-import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort } from "@/shared/domain/legacy-task";
+import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort } from "@/shared/domain/task";
 import type { RiskServices } from "@/features/risk/services.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 import type { Contract } from "@/types/contract.js";
 
 // ─── Console capture ──────────────────────────────────────────────────────────

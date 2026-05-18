@@ -5,7 +5,7 @@ import { mockEvidenceStore, mockTaskStore } from "../../../../helpers/mocks.js";
 import type { RecordEvidenceInput } from "@/features/evidence/index.js";
 import type { EvidenceRow, RollbackExercisedPayload } from "@/features/evidence/index.js";
 import type { EvidenceStorePort } from "@/features/evidence/index.js";
-import type { LegacyTaskStorePort as TaskStorePort, LegacyTask as Task } from "@/shared/domain/legacy-task";
+import type { TaskStorePort, Task } from "@/shared/domain/task";
 
 const STUB_TASK: Task = {
   id: "tsk-aaaaaa",
@@ -35,7 +35,7 @@ function makeProgram(opts: {
     .description("Deploy safety commands");
 
   registerDeployRollbackCommand(deployCmd, program, {
-    getServices: () => ({ evidenceStore, taskStore }),
+    getServices: () => ({ legacyEvidenceStore: evidenceStore, legacyTaskStore: taskStore }),
     recordEvidence: async <K extends import("@/features/evidence/index.js").EvidenceKind>(
       s: EvidenceStorePort,
       input: RecordEvidenceInput<K>,

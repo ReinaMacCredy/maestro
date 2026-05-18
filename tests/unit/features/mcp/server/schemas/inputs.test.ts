@@ -17,7 +17,6 @@ import {
   TaskShipInput,
   PrinciplePromoteInput,
   SetupCheckInput,
-  SetupMigrateV2Input,
   VerdictRequestInput,
   VerdictShowInput,
 } from "@/features/mcp/server/schemas/inputs.js";
@@ -37,18 +36,18 @@ describe("input schemas — id format", () => {
     expect(TaskGetInput.safeParse({ id: "task-abc123" }).success).toBe(false);
   });
 
-  it("accepts valid exec-plan ids in TaskListInput", () => {
-    expect(TaskListInput.safeParse({ plan_id: "pln-1a2b3c4d5e6f-a1b2c3" }).success).toBe(true);
+  it("accepts valid mission ids in TaskListInput", () => {
+    expect(TaskListInput.safeParse({ mission_id: "pln-1a2b3c4d5e6f-a1b2c3" }).success).toBe(true);
   });
 
-  it("rejects v1 mission id format on TaskListInput plan_id", () => {
-    expect(TaskListInput.safeParse({ plan_id: "msn-abc123" }).success).toBe(false);
+  it("rejects v1 mission id format on TaskListInput mission_id", () => {
+    expect(TaskListInput.safeParse({ mission_id: "msn-abc123" }).success).toBe(false);
   });
 });
 
 describe("strict mode (unknown fields)", () => {
   it("TaskFromSpecInput rejects unknown fields", () => {
-    const r = TaskFromSpecInput.safeParse({ spec_path: "docs/specs/foo.md", plan_id: "pln-1a2b3c4d5e6f-a1b2c3" });
+    const r = TaskFromSpecInput.safeParse({ spec_path: "docs/specs/foo.md", mission_id: "pln-1a2b3c4d5e6f-a1b2c3" });
     expect(r.success).toBe(false);
   });
 
@@ -440,20 +439,9 @@ describe("HandoffPickupInput", () => {
   });
 });
 
-describe("SetupCheckInput / SetupMigrateV2Input", () => {
+describe("SetupCheckInput", () => {
   it("SetupCheckInput accepts empty payload", () => {
     expect(SetupCheckInput.safeParse({}).success).toBe(true);
-  });
-
-  it("SetupMigrateV2Input accepts optional flags", () => {
-    expect(SetupMigrateV2Input.safeParse({}).success).toBe(true);
-    expect(SetupMigrateV2Input.safeParse({ dry_run: true }).success).toBe(true);
-    expect(SetupMigrateV2Input.safeParse({ force: true }).success).toBe(true);
-    expect(SetupMigrateV2Input.safeParse({ dry_run: true, force: true }).success).toBe(true);
-  });
-
-  it("SetupMigrateV2Input rejects unknown fields", () => {
-    expect(SetupMigrateV2Input.safeParse({ unknown: true }).success).toBe(false);
   });
 });
 

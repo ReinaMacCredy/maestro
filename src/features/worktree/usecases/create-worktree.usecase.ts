@@ -43,6 +43,6 @@ export function formatCreateWorktreeLines(r: CreateWorktreeResult): string[] {
     `  Base:   ${r.worktree.baseBranch}`,
     `  Runs:   ${r.runsDir}`,
     "",
-    `Next: cd ${r.worktree.path} && maestro session start <task-id>`,
+    `Next: cd ${r.worktree.path} && maestro task claim <task-id>`,
   ];
 }

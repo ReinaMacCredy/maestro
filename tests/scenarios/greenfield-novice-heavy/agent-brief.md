@@ -7,7 +7,7 @@ All `maestro` commands run from that directory.
 Your primary guidance comes from the 5 maestro skill files. Load them now:
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-setup/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-design/SKILL.md
-- <MAESTRO_CHECKOUT>/skills/bundled/maestro-plan/SKILL.md
+- <MAESTRO_CHECKOUT>/skills/bundled/maestro-mission/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-task/SKILL.md
 - <MAESTRO_CHECKOUT>/skills/bundled/maestro-verify/SKILL.md
 
@@ -18,11 +18,11 @@ their intent. Do not prompt the user to name a command -- translate their words
 into the right maestro verb and proceed.
 
 The project directory starts as a bare `git init` with no files. Run
-`maestro setup bootstrap` before any other maestro work.
+`maestro setup` before any other maestro work.
 
 When the user describes a large multi-PR feature, recognize this requires a
 heavy-mode spec (`maestro spec new <slug> --mode heavy`), followed by
-`maestro plan from-spec` and `maestro plan decompose`. The user does not
+`maestro mission from-spec` and `maestro mission decompose`. The user does not
 know these verbs; you must infer them from the scope they describe.
 
 ## User-mock script

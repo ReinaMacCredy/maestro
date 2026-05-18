@@ -72,6 +72,11 @@ function makeTaskStore(seed: readonly Task[] = []): TaskStorePort & { tasks: Map
       tasks.set(task.id, task);
       return task;
     },
+    async createMany(inputs: readonly CreateTaskInput[]) {
+      const out: Task[] = [];
+      for (const i of inputs) out.push(await this.create(i));
+      return out;
+    },
     async get(id) {
       return tasks.get(id);
     },
@@ -95,8 +100,8 @@ function makeTaskStore(seed: readonly Task[] = []): TaskStorePort & { tasks: Map
     async listByState(state: TaskState) {
       return [...tasks.values()].filter((t) => t.state === state);
     },
-    async listByPlanId(plan_id: string) {
-      return [...tasks.values()].filter((t) => t.plan_id === plan_id);
+    async listByMissionId(mission_id: string) {
+      return [...tasks.values()].filter((t) => t.mission_id === mission_id);
     },
   };
 }
@@ -239,7 +244,7 @@ describe("taskVerify", () => {
     ).rejects.toBeInstanceOf(TaskNotFoundError);
   });
 
-  it("throws TaskTransitionError when the source state is not in {claimed,doing,verifying}", async () => {
+  it("throws TaskTransitionError when the source state is terminal (shipped)", async () => {
     const taskStore = makeTaskStore([seedTask("shipped")]);
     const { store: evidenceStore } = makeEvidence();
     await expect(
@@ -248,6 +253,25 @@ describe("taskVerify", () => {
         { id: "tsk-target" },
       ),
     ).rejects.toBeInstanceOf(TaskTransitionError);
+  });
+
+  it("re-enters verifying from ready (zero-diff PASS rescue path)", async () => {
+    // Agent claimed, ran verify with no work done, got zero-violations PASS
+    // and was advanced to ready. They then made the real edits and re-ran
+    // verify. ready -> verifying must be allowed or the task is stranded.
+    await writeFile(join(repoRoot, "src/service/clean.ts"), `export const X = 1;\n`);
+    const taskStore = makeTaskStore([seedTask("ready")]);
+    const { store: evidenceStore, rows } = makeEvidence();
+
+    const result = await taskVerify(
+      { repoRoot, taskStore, evidenceStore, architectureRules: stubRules() },
+      { id: "tsk-target" },
+    );
+
+    expect(result.verdict).toBe("PASS");
+    expect(result.task.state).toBe("ready");
+    const entry = rows.find((r) => r.kind === "transition" && r.to_state === "verifying");
+    expect(entry).toMatchObject({ from_state: "ready", to_state: "verifying" });
   });
 
   it("HUMAN verdict keeps task at verifying and emits a verdict=HUMAN evidence row with reason", async () => {

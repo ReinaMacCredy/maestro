@@ -16,7 +16,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
     {
       title: "List evidence rows",
       description:
-        "List evidence rows for a task. Filters: kind, witnessLevel. Paginated (default limit 20) — `limit` applies per stream: v1 rows return under `items[]`, v2 rows (transition / lint-violation, present only when a v2 evidence store is wired) return under `v2_items[]` so a v2-only task is not invisible. Combine them client-side if you need a single view. view='summary' (default) returns id+task_id+kind+witness_level+created_at; view='full' includes the typed payload. Read-only.",
+        "List evidence rows for a task. Filters: kind, witnessLevel. Paginated (default limit 20) — `limit` applies per stream: user-recorded rows return under `items[]`, system-generated rows (transition / lint-violation) return under `system_items[]` when present. Combine them client-side if you need a single view. view='summary' (default) returns id+task_id+kind+witness_level+created_at; view='full' includes the typed payload. Read-only.",
       inputSchema: EvidenceListInput,
       annotations: {
         readOnlyHint: true,
@@ -32,25 +32,22 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
           task_id: args.taskId,
           ...(args.kind !== undefined ? { kind: args.kind } : {}),
         };
-        let rows = await listEvidence(services.evidenceStore, filter);
+        let rows = await listEvidence(services.legacyEvidenceStore, filter);
         if (args.witnessLevel !== undefined) {
           rows = rows.filter((r) => r.witness_level === args.witnessLevel);
         }
-        // Also union v2 evidence rows (transition / lint-violation) so a v2-only
-        // task is not invisible. witnessLevel filter is v1-only and does not
-        // apply to v2 rows. v2 rows ride on a sibling `v2_items` key so existing
-        // `items[]` consumers keep working.
-        const v2Rows = services.v2?.evidenceStore !== undefined
-          ? await services.v2.evidenceStore.list({ task_id: args.taskId })
+        // Also union system-generated rows (transition / lint-violation) so a system-only task is not invisible. witnessLevel filter does not apply to those rows. They ride on a sibling `system_items` key so existing `items[]` consumers keep working.
+        const systemRows = services.evidenceStore !== undefined
+          ? await services.evidenceStore.list({ task_id: args.taskId })
           : [];
         const page = paginate(rows, args.limit, args.offset);
-        const v2Page = paginate(v2Rows, args.limit, args.offset);
+        const systemPage = paginate(systemRows, args.limit, args.offset);
         const projectedItems = args.view === "full" ? page.items : page.items.map(summarizeEvidence);
         return toCallToolResult(
           ok({
             ...page,
             items: projectedItems,
-            ...(v2Rows.length > 0 ? { v2_items: v2Page.items } : {}),
+            ...(systemRows.length > 0 ? { system_items: systemPage.items } : {}),
           }),
         );
       } catch (err) {
@@ -95,7 +92,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
         const { sessionId } = deps;
         const wLevel = args.witnessLevel ?? "agent-claimed-locally";
         if (args.command !== undefined) {
-          const row = await recordEvidence<"command">(services.evidenceStore, {
+          const row = await recordEvidence<"command">(services.legacyEvidenceStore, {
             task_id: args.taskId,
             session_id: sessionId,
             kind: "command",
@@ -104,7 +101,7 @@ export function registerEvidenceTools(server: McpServer, deps: RegisterDeps): vo
           });
           return toCallToolResult(ok({ evidence: row }));
         }
-        const row = await recordEvidence<"manual-note">(services.evidenceStore, {
+        const row = await recordEvidence<"manual-note">(services.legacyEvidenceStore, {
           task_id: args.taskId,
           session_id: sessionId,
           kind: "manual-note",

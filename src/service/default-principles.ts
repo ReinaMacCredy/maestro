@@ -1,8 +1,9 @@
-// Default principles pack seeded by `setup migrate-v2` step "seed-principles"
-// when docs/principles/ is empty. Each entry maps to docs/principles/<slug>.md.
-// Markdown bodies live in @/shared/data/default-principle-content so the
-// passive-harness lint (scoped to layered src/) does not match the token names
-// embedded in the rule prose.
+// Default principles pack written by the `seed-principles` step of
+// `maestro setup` when docs/principles/ is empty. Each entry maps to
+// docs/principles/<slug>.md. Markdown bodies live in
+// @/shared/data/default-principle-content so the passive-harness lint
+// (scoped to layered src/) does not match the token names embedded in
+// the rule prose.
 
 import {
   LAYER_ORDER_MD,

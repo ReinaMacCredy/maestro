@@ -1,4 +1,4 @@
-// v2 product-spec frontmatter shapes (ADR-0010 document-driven workflow).
+// Product-spec frontmatter shapes (ADR-0010 document-driven workflow).
 // The spec markdown file is the source of truth for both light and heavy paths.
 
 export const WORK_TYPES = [

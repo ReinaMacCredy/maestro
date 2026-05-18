@@ -53,8 +53,17 @@ async function writeAtomic(path: string, content: string): Promise<void> {
   // same millisecond; a colliding tmp path could otherwise be overwritten and
   // the loser's rename would read partial content.
   const tmp = `${path}.tmp.${randomUUID()}`;
-  await Bun.write(tmp, content);
-  await rename(tmp, path);
+  try {
+    await Bun.write(tmp, content);
+    await rename(tmp, path);
+  } catch (err) {
+    // Clean up the tmp file on any failure so a crashed writer doesn't
+    // leave `.tmp.<uuid>` orphans next to the real file. Best-effort: if
+    // tmp itself was never created (Bun.write failed pre-open), rm fires
+    // ENOENT and we swallow it.
+    await rm(tmp).catch(() => undefined);
+    throw err;
+  }
 }
 
 export async function removeIfExists(
@@ -81,6 +90,16 @@ export async function dirExists(dir: string): Promise<boolean> {
 
 export async function fileExists(path: string): Promise<boolean> {
   return Bun.file(path).exists();
+}
+
+export async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
+  }
 }
 
 interface RenameForInPlaceReplaceOptions {

@@ -37,7 +37,8 @@
       "Bash(rtk gh *)",
       "Bash(gh api *)",
       "Bash(gh auth *)",
-      "Bash(unset GH_TOKEN)"
+      "Bash(unset GH_TOKEN)",
+      "Bash(./dist/maestro setup *)"
     ]
   },
   "outputStyle": "default"

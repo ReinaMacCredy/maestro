@@ -23,7 +23,7 @@ import type { ArchivePort } from "../ports/archive.port.js";
 import type { BundleFile, BundleManifest } from "../domain/bundle-types.js";
 
 const SUPPORTED_SCHEMA_VERSIONS: readonly number[] = [1];
-const BundleRedactScopeSchema = z.enum(["memory", "prompts", "replies"]);
+const BundleRedactScopeSchema = z.enum(["prompts", "replies"]);
 const BundleManifestSchema = z.object({
   schemaVersion: z.literal(1),
   bundleId: z.string().min(1),
@@ -47,10 +47,6 @@ const BundleManifestSchema = z.object({
     checkpoints: z.number().int().nonnegative(),
     principlesSnapshot: z.number().int().nonnegative(),
     outcomesSnapshot: z.number().int().nonnegative(),
-    memorySnapshot: z.object({
-      corrections: z.number().int().nonnegative(),
-      learnings: z.number().int().nonnegative(),
-    }).nullable(),
   }).strict(),
   redacted: z.array(BundleRedactScopeSchema),
   gitPatch: z.object({

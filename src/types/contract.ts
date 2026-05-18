@@ -1,6 +1,5 @@
-// v2 stable home for v1 Contract types. These types are consumed by
-// evidence, verdict, policy, risk, merge, and plan — all §11-kept features.
-// Implementations remain in src/features/task/ until PR-D-task deletes them.
+// Stable home for Contract types consumed by evidence, verdict, policy,
+// risk, merge, and plan. Implementations remain in src/features/task/.
 
 import type { RiskClass } from "./product-spec.js";
 

@@ -182,7 +182,7 @@ describe("init CLI", () => {
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
     expect(result.scope).toBe("project");
-    expect(result.bootstrapGenerated).toBe(true);
+    expect(result.ok).toBe(true);
 
     expect(await Bun.file(join(tmpDir, ".maestro", "AGENTS.md")).exists()).toBe(true);
     expect(await Bun.file(join(tmpDir, ".maestro", "bootstrap", "init.sh")).exists()).toBe(true);
@@ -199,7 +199,6 @@ describe("init CLI", () => {
     expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/tasks/local-history/");
     expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/evidence/");
     expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/runs/");
-    expect(await pathExists(join(tmpDir, ".factory"))).toBe(false);
   });
 
   it("skips existing files in non-interactive mode", async () => {
@@ -226,26 +225,18 @@ describe("init CLI", () => {
     expect(result.skipped.some((path: string) => path.endsWith(join(".maestro", "config.yaml")))).toBe(true);
   });
 
-  it("migrates legacy .factory bootstrap files into .maestro", async () => {
+  it("leaves .factory/ alone (owned by Factory.ai, not maestro v1)", async () => {
     await mkdir(join(tmpDir, ".factory", "library"), { recursive: true });
     await writeFile(
       join(tmpDir, ".factory", "services.yaml"),
       "commands:\n  test: echo legacy-test\nservices: {}\n",
     );
-    await writeFile(
-      join(tmpDir, ".factory", "library", "architecture.md"),
-      "# Legacy Architecture\n",
-    );
 
     const { exitCode } = await run(["init", "--json"], tmpDir);
 
     expect(exitCode).toBe(0);
-    expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "services.yaml"), "utf8")).toContain(
-      "legacy-test",
-    );
-    expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "library", "architecture.md"), "utf8")).toContain(
-      "# Legacy Architecture",
-    );
+    expect(await pathExists(join(tmpDir, ".factory"))).toBe(true);
+    expect(await pathExists(join(tmpDir, ".factory", "services.yaml"))).toBe(true);
   });
 
   it("keeps runtime session logs ignored after init", async () => {
@@ -291,6 +282,6 @@ describe("init CLI", () => {
 
     expect(result.timedOut).toBe(false);
     expect(result.exitCode).toBe(0);
-    expect(result.rawOutput).toContain("[ok] Initialized project bootstrap");
+    expect(result.rawOutput).toContain("setup: OK");
   }, PTY_TIMEOUT_MS);
 });

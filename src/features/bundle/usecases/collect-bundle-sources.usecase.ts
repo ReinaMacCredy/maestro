@@ -15,11 +15,10 @@ import type {
 import { MISSION_ID_PATTERN } from "@/shared/domain/legacy-mission";
 import type { ReplyStorePort } from "@/features/reply";
 import { readText, dirExists } from "@/shared/lib/fs.js";
-import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
 import type {
   BundleFile,
-  BundleMemoryStats,
   BundleOptions,
   BundleRedactScope,
   BundleStats,
@@ -148,13 +147,6 @@ export async function collectBundleSources(
   });
   const outcomesSnapshot = countJsonlLines(outcomesContent);
 
-  // memory snapshot (corrections + learnings)
-  let memorySnapshot: BundleMemoryStats | null = null;
-  if (!redact.has("memory")) {
-    const memoryStats = await collectMemoryFiles(projectDir, files, root);
-    memorySnapshot = memoryStats;
-  }
-
   const stats: BundleStats = {
     features: features.length,
     milestones: mission.milestones.length,
@@ -165,7 +157,6 @@ export async function collectBundleSources(
     checkpoints: checkpoints.length,
     principlesSnapshot,
     outcomesSnapshot,
-    memorySnapshot,
   };
 
   return {
@@ -175,40 +166,6 @@ export async function collectBundleSources(
     files,
     stats,
   };
-}
-
-async function collectMemoryFiles(
-  projectDir: string,
-  files: BundleFile[],
-  root: string,
-): Promise<BundleMemoryStats> {
-  const memoryDir = join(projectDir, MAESTRO_DIR, MEMORY_DIR);
-  const correctionsDir = join(memoryDir, "corrections");
-  const learningsCompiled = join(memoryDir, "learnings", "_compiled.json");
-
-  let corrections = 0;
-  for (const entry of await safeReaddir(correctionsDir)) {
-    if (!entry.endsWith(".json")) continue;
-    const text = await readText(join(correctionsDir, entry));
-    if (text === undefined) continue;
-    corrections++;
-    files.push({
-      path: `${root}/memory/corrections/${entry}`,
-      content: text,
-    });
-  }
-
-  let learnings = 0;
-  const compiledText = await readText(learningsCompiled);
-  if (compiledText !== undefined) {
-    files.push({
-      path: `${root}/memory/learnings/_compiled.json`,
-      content: compiledText,
-    });
-    learnings = countLearnings(compiledText);
-  }
-
-  return { corrections, learnings };
 }
 
 async function listSubdirectories(dir: string): Promise<string[]> {
@@ -240,22 +197,5 @@ function stringifyJson(value: unknown): string {
 function countJsonlLines(content: string): number {
   if (!content) return 0;
   return content.split("\n").filter((line) => line.trim().length > 0).length;
-}
-
-function countLearnings(compiledText: string): number {
-  try {
-    const parsed = JSON.parse(compiledText) as unknown;
-    if (Array.isArray(parsed)) return parsed.length;
-    if (
-      parsed
-      && typeof parsed === "object"
-      && Array.isArray((parsed as { learnings?: unknown[] }).learnings)
-    ) {
-      return (parsed as { learnings: unknown[] }).learnings.length;
-    }
-    return 0;
-  } catch {
-    return 0;
-  }
 }
 

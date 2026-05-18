@@ -1,12 +1,12 @@
 # Architecture-lint and Trust Verifier
 
-Two distinct check sets in v2: `maestro task verify` runs the lightweight
+Two distinct check sets: `maestro task verify` runs the lightweight
 architecture-lint corpus; `maestro verdict request` runs the heavier Trust
 Verifier (8 deterministic checks) plus ProofMap and policy.
 
 ## Architecture-lint (run by `task verify`)
 
-Enforces the v2 layered architecture and the passive-harness invariant
+Enforces the layered architecture and the passive-harness invariant
 against `src/{config,providers,repo,runtime,service,types,ui}/**`. Findings
 are written as `lint-violation` evidence rows.
 

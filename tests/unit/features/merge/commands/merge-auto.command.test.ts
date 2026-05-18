@@ -4,11 +4,11 @@ import { registerMergeAutoCommand } from "@/features/merge/commands/merge-auto.c
 import type { Verdict } from "@/features/verdict/domain/types.js";
 import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import type { EvidenceRow, EvidenceStorePort } from "@/features/evidence/index.js";
-import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort } from "@/shared/domain/legacy-task";
+import type { ContractVersionStorePort, ContractStorePort, GitAnchorPort } from "@/shared/domain/task";
 import type { GithubApiPort } from "@/features/ci/ports/github-api.port.js";
 import type { AutopilotPolicy } from "@/features/policy/index.js";
 import type { Contract } from "@/types/contract.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 import type { LegacySpecStorePort as SpecStorePort } from "@/shared/domain/legacy-spec/index.js";
 
 // ─── Console / process capture ────────────────────────────────────────────────
@@ -172,12 +172,12 @@ function fakeSpecStore(): SpecStorePort {
 
 interface FakeMergeServices {
   verdictStore: VerdictStorePort;
-  evidenceStore: EvidenceStorePort;
+  legacyEvidenceStore: EvidenceStorePort;
   contractVersionStore: ContractVersionStorePort;
   contractStore: ContractStorePort;
   gitAnchor: GitAnchorPort;
   getEffectiveAutopilotPolicy: () => Promise<AutopilotPolicy>;
-  specStore: SpecStorePort;
+  trustSpecStore: SpecStorePort;
   githubApi: GithubApiPort;
   projectRoot: string;
 }
@@ -204,12 +204,12 @@ function makeEligibleServices(): { services: FakeMergeServices; githubApiCalls: 
   const verdict = makeVerdict({ decision: "PASS", effectiveRiskClass: "low" });
   const services: FakeMergeServices = {
     verdictStore: fakeVerdictStore(verdict),
-    evidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
+    legacyEvidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
     contractVersionStore: fakeContractVersionStore(makeContract()),
     contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     gitAnchor: fakeGitAnchor(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
-    specStore: fakeSpecStore(),
+    trustSpecStore: fakeSpecStore(),
     githubApi: api,
     projectRoot: "/tmp/test-project",
   };
@@ -222,12 +222,12 @@ function makeIneligibleServices(): { services: FakeMergeServices; githubApiCalls
   const verdict = makeVerdict({ decision: "FAIL", effectiveRiskClass: "low" });
   const services: FakeMergeServices = {
     verdictStore: fakeVerdictStore(verdict),
-    evidenceStore: fakeEvidenceStore(),
+    legacyEvidenceStore: fakeEvidenceStore(),
     contractVersionStore: fakeContractVersionStore(makeContract()),
     contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
     gitAnchor: fakeGitAnchor(),
     getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
-    specStore: fakeSpecStore(),
+    trustSpecStore: fakeSpecStore(),
     githubApi: api,
     projectRoot: "/tmp/test-project",
   };
@@ -414,12 +414,12 @@ describe("merge auto — verdict identity is bound to (pr, tree_sha)", () => {
         // Crucially, current tree (deadbeef) does not match staleVerdict.subject.tree_sha
         findByTreeSha: async (sha) => sha === "stale123" ? [staleVerdict] : [],
       },
-      evidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
+      legacyEvidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
       contractVersionStore: fakeContractVersionStore(makeContract()),
       contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       gitAnchor: fakeGitAnchor(),
       getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
-      specStore: fakeSpecStore(),
+      trustSpecStore: fakeSpecStore(),
       githubApi: api,
       projectRoot: "/tmp/test-project",
     };
@@ -454,12 +454,12 @@ describe("merge auto — verdict identity is bound to (pr, tree_sha)", () => {
         history: async () => [wrongPrVerdict],
         findByTreeSha: async () => [wrongPrVerdict],
       },
-      evidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
+      legacyEvidenceStore: fakeEvidenceStore([makeRollbackEvidenceRow()]),
       contractVersionStore: fakeContractVersionStore(makeContract()),
       contractStore: { get: async () => undefined, getByTaskId: async () => undefined, all: async () => [], readIndex: async () => [], create: async () => { throw new Error("Not implemented"); }, save: async () => { throw new Error("Not implemented"); }, delete: async () => false },
       gitAnchor: fakeGitAnchor(),
       getEffectiveAutopilotPolicy: async () => makeAutopilotPolicy(),
-      specStore: fakeSpecStore(),
+      trustSpecStore: fakeSpecStore(),
       githubApi: api,
       projectRoot: "/tmp/test-project",
     };

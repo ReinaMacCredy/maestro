@@ -61,6 +61,16 @@ export class ShellGitAdapter implements GitPort {
     const repoName = basename(repoRoot);
     const parentDir = dirname(repoRoot);
 
+    // Refuse early when the base branch has no commits yet (fresh `git init`
+    // with no `main`). `git worktree add` would otherwise fail with a verbose
+    // multi-line `fatal: invalid reference: main` error; instead emit a clean
+    // single-line message that the upstream catch can swallow without noise.
+    if (!(await this.branchExists(repoRoot, input.baseBranch))) {
+      throw new Error(
+        `base branch '${input.baseBranch}' has no commits yet; make an initial commit on '${input.baseBranch}' or claim with --skip-worktree`,
+      );
+    }
+
     for (let index = 0; index < 100; index += 1) {
       const suffix = index === 0 ? "" : `-${index + 1}`;
       const effectiveSlug = `${input.slug}${suffix}`;
@@ -115,8 +125,13 @@ function parseGitFileChanges(output: string): GitFileChange[] {
     .map((line) => line.trimEnd())
     .filter(Boolean)
     .map((line) => {
-      const status = line.slice(0, 2);
-      const rawPath = line.slice(3).trim();
+      // execSpawn trims overall stdout, stripping the leading space when the
+      // first porcelain line has X=space (worktree-only changes like " M
+      // .maestro/tasks/NOW.md"). Re-pad so slice offsets land at the path
+      // start regardless of whether the leading space survived.
+      const padded = line.length >= 3 && line[2] === " " ? line : " " + line;
+      const status = padded.slice(0, 2);
+      const rawPath = padded.slice(3).trim();
       const path = status.includes("R") || status.includes("C")
         ? rawPath.split(" -> ").at(-1) ?? rawPath
         : rawPath;

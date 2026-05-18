@@ -66,6 +66,18 @@ describe("ShellGitAdapter", () => {
       expect(state.changedFiles).not.toContain("ackage.json");
     });
 
+    it("preserves leading dot on dotfiles in fileChanges (Mission Control Files panel)", async () => {
+      // R2 regression: `parseGitFileChanges` had the same leading-space-strip
+      // bug as the changedFiles parser. A first porcelain line of
+      // ` M .gitignore` arrived as `M .gitignore` and the path slice dropped
+      // the `.`, producing `gitignore` in the Mission Control Files panel.
+      await Bun.write(join(tempRepo, ".gitignore"), "node_modules/\n");
+      const state = await git.getState(tempRepo);
+      const paths = (state.fileChanges ?? []).map((c) => c.path);
+      expect(paths).toContain(".gitignore");
+      expect(paths).not.toContain("gitignore");
+    });
+
     it("returns the renamed path rather than `orig -> new` for rename entries", async () => {
       await Bun.write(join(tempRepo, "old-name.txt"), "hi\n");
       await runCommand(["git", "add", "old-name.txt"], tempRepo);

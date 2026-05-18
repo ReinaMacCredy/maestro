@@ -12,7 +12,8 @@ import type { PrincipleStorePort } from "@/features/principle";
 import type { AgentReply, ReplyStorePort } from "@/features/reply";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
-import type { TaskQueryPort } from "@/shared/domain/legacy-task";
+import type { TaskQueryPort } from "@/shared/domain/task";
+import type { TaskStorePort } from "@/repo/task-store.port.js";
 import type { ContractVersionStorePort, ContractStoreQueryPort } from "@/repo/contract-store.port.js";
 import type { RunStateStorePort } from "@/repo/run-state-store.port.js";
 import type { EvidenceStorePort } from "@/features/evidence";
@@ -41,6 +42,7 @@ export interface SnapshotDeps {
   config: ConfigPort;
   git: GitPort;
   taskStore?: TaskQueryPort;
+  systemTaskStore?: TaskStorePort;
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
@@ -55,6 +57,7 @@ export interface HomeSnapshotDeps {
   config: ConfigPort;
   git: GitPort;
   taskStore?: TaskQueryPort;
+  systemTaskStore?: TaskStorePort;
   evidenceStore?: EvidenceStorePort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
@@ -173,7 +176,20 @@ export async function loadHomeSnapshotInput(
   const principleEffectivenessPromise = currentProjectRoot !== undefined
     ? loadPrincipleEffectiveness(deps, currentProjectRoot)
     : Promise.resolve(undefined);
-  const [env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness] = await Promise.all([
+  // Returns {count, error?}. Without a captured error a corrupt tasks.jsonl
+  // would silently project as "No missions yet" and the dashboard would lie
+  // about an empty queue.
+  const systemTaskInfoPromise: Promise<{ count: number; error?: string }> =
+    options.includeTaskBoard === true && deps.systemTaskStore
+      ? deps.systemTaskStore
+          .list()
+          .then((tasks) => ({ count: tasks.length }))
+          .catch((err) => ({
+            count: 0,
+            error: err instanceof Error ? err.message : String(err),
+          }))
+      : Promise.resolve({ count: 0 });
+  const [env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness, systemTaskInfo] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(resolveMaestroProjectRoot(deps.cwd)),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
@@ -181,6 +197,7 @@ export async function loadHomeSnapshotInput(
     taskBoardPromise,
     repliesPromise,
     principleEffectivenessPromise,
+    systemTaskInfoPromise,
   ]);
 
   return {
@@ -189,6 +206,8 @@ export async function loadHomeSnapshotInput(
     gitState,
     memorySnapshot: memorySnapshot ?? undefined,
     taskBoard: taskBoard ?? undefined,
+    systemTaskCount: systemTaskInfo.count,
+    systemTaskStoreError: systemTaskInfo.error,
     replies,
     principleEffectiveness,
     cwd: deps.cwd,

@@ -154,12 +154,11 @@ beforeEach(async () => {
   await runCommand(["git", "config", "user.email", "e2e@maestro.test"], tmpDir);
   await runCommand(["git", "config", "user.name", "E2E"], tmpDir);
   await runCommand(["git", "commit", "--allow-empty", "-m", "init"], tmpDir);
-  const initRes = await runCompiled(["init"], tmpDir);
-  expect(initRes.exitCode).toBe(0);
-
-  // Bootstrap v2 directory tree required by v2 task store and evidence store.
-  const bootstrapRes = await runCompiled(["setup", "bootstrap"], tmpDir);
-  expect(bootstrapRes.exitCode).toBe(0);
+  // `setup` creates the `.maestro/{tasks,missions,evidence,runs}` and
+  // `docs/principles/` directories the MCP server reads from, so no manual
+  // mkdirs are needed here.
+  const setupRes = await runCompiled(["setup"], tmpDir);
+  expect(setupRes.exitCode).toBe(0);
 
   server = spawn(DIST_CLI, ["mcp", "serve"], {
     cwd: tmpDir,
@@ -295,6 +294,25 @@ describe("MCP stdio flow", () => {
     const list = await c.call("maestro_evidence_list", { taskId });
     const items = (list.body as { items: { id: string }[] }).items;
     expect(items.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("evidence_list surfaces system_items for transition rows", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "system-items-flow", "System Items Flow");
+
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
+    const taskId = (created.body as { task: { id: string } }).task.id;
+
+    // Claim emits a transition evidence row into the canonical (system) store.
+    await c.call("maestro_task_claim", { id: taskId });
+
+    const list = await c.call("maestro_evidence_list", { taskId });
+    const body = list.body as { items: unknown[]; system_items?: { kind: string }[] };
+    expect(body.system_items).toBeDefined();
+    expect(body.system_items!.length).toBeGreaterThanOrEqual(1);
+    expect(body.system_items!.some((r) => r.kind === "transition")).toBe(true);
+    // Guard against a regression that reintroduces the old key.
+    expect((body as Record<string, unknown>).v2_items).toBeUndefined();
   });
 
   it("task_block requires a reason (rejects missing reason)", async () => {
@@ -660,27 +678,27 @@ describe("MCP stdio flow", () => {
     expect(shipped.length).toBe(0);
   });
 
-  it("maestro_task_list composes plan_id and state filters", async () => {
+  it("maestro_task_list composes mission_id and state filters", async () => {
     const c = client!;
     const specPath = await writeSpec(tmpDir, "compose-filter", "Compose Filter");
     const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
-    const taskId = (created.body as { task: { id: string; plan_id?: string } }).task.id;
-    const planId = (created.body as { task: { plan_id?: string } }).task.plan_id;
+    const taskId = (created.body as { task: { id: string; mission_id?: string } }).task.id;
+    const planId = (created.body as { task: { mission_id?: string } }).task.mission_id;
 
-    // Without plan_id the task should appear under state=draft.
+    // Without mission_id the task should appear under state=draft.
     const draftAll = await c.call("maestro_task_list", { state: "draft" });
     const draftItems = (draftAll.body as { items: { id: string }[] }).items;
     expect(draftItems.find((t) => t.id === taskId)).toBeDefined();
 
     if (planId !== undefined) {
       // With both filters, must still find the draft task in this plan.
-      const both = await c.call("maestro_task_list", { plan_id: planId, state: "draft" });
+      const both = await c.call("maestro_task_list", { mission_id: planId, state: "draft" });
       const bothItems = (both.body as { items: { id: string; state: string }[] }).items;
       expect(bothItems.every((t) => t.state === "draft")).toBe(true);
       expect(bothItems.find((t) => t.id === taskId)).toBeDefined();
 
       // And no draft task should appear if we filter to a non-draft state.
-      const noneShipped = await c.call("maestro_task_list", { plan_id: planId, state: "shipped" });
+      const noneShipped = await c.call("maestro_task_list", { mission_id: planId, state: "shipped" });
       const noneItems = (noneShipped.body as { items: unknown[] }).items;
       expect(noneItems.length).toBe(0);
     }

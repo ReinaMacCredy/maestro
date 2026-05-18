@@ -78,6 +78,8 @@ export interface HomeProjectionInput {
   readonly gitState: Awaited<ReturnType<GitPort["getState"]>> | undefined;
   readonly memorySnapshot: MissionControlMemorySnapshot | undefined;
   readonly taskBoard: TaskBoardSnapshot | undefined;
+  readonly systemTaskCount?: number;
+  readonly systemTaskStoreError?: string;
   readonly replies: readonly AgentReply[] | undefined;
   readonly principleEffectiveness: readonly PrincipleEffectivenessRow[] | undefined;
   readonly cwd: string;
@@ -220,7 +222,6 @@ export function projectSnapshot(input: SnapshotProjectionInput): MissionControlS
     canPause: mission.status === "executing",
     canResume: mission.status === "paused",
     memory: memorySnapshot,
-    memoryStats: memorySnapshot?.stats ?? null,
     agentGrid,
     dispatchQueue,
     eventStream,
@@ -235,17 +236,29 @@ export function projectSnapshot(input: SnapshotProjectionInput): MissionControlS
 
 export function projectHomeSnapshot(input: HomeProjectionInput): MissionControlSnapshot {
   const { env, configLayers, gitState, memorySnapshot, taskBoard, replies, principleEffectiveness, cwd } = input;
+  const systemTaskStoreCheck: DoctorCheck | undefined = input.systemTaskStoreError
+    ? {
+        name: "system-task-store",
+        status: "fail",
+        message: `Cannot read .maestro/tasks/tasks.jsonl: ${input.systemTaskStoreError}`,
+        fix: "Run `maestro setup` to initialize the layout, or inspect the file for hand-edits.",
+      }
+    : undefined;
   const checks = [
     ...env.checks,
     ...buildIgnoredProjectOverrideChecks(configLayers.project),
+    ...(systemTaskStoreCheck ? [systemTaskStoreCheck] : []),
   ];
   const { status } = env;
   const backgroundMode = getMissionControlBackgroundMode(configLayers.effective);
 
   // A task-only project should not present as "No missions yet" — that
   // makes the dashboard look empty when there's actually a backlog. When
-  // any task exists, surface the task count instead.
-  const taskCount = taskBoard?.totalCount ?? 0;
+  // any task exists, surface the task count instead. Counts come from
+  // both the legacy task board and the system task store (`.maestro/tasks/
+  // tasks.jsonl`); the dashboard headline reflects whichever pack the
+  // project is actually using.
+  const taskCount = (taskBoard?.totalCount ?? 0) + (input.systemTaskCount ?? 0);
   const hasTasks = taskCount > 0;
 
   const headline = status.gitAvailable
@@ -256,7 +269,7 @@ export function projectHomeSnapshot(input: HomeProjectionInput): MissionControlS
 
   const summary = status.gitAvailable
     ? hasTasks
-      ? "Run `maestro task status` to see your queue, or create a mission for larger work."
+      ? "Run `maestro task list` to see the queue, or create a mission for larger work."
       : "Initialize this repository, then create your first mission."
     : status.initialized
       ? "Global setup is ready. Open a project repository to start tracking missions here."
@@ -305,7 +318,6 @@ export function projectHomeSnapshot(input: HomeProjectionInput): MissionControlS
     canPause: false,
     canResume: false,
     memory: memorySnapshot,
-    memoryStats: memorySnapshot?.stats ?? null,
     agentGrid,
     dispatchQueue: [],
     eventStream: homeEventStream,

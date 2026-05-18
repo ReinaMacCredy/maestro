@@ -14,8 +14,28 @@ import {
 } from "@/features/evidence";
 import { join } from "node:path";
 import { mockEvidenceStore } from "../../../../helpers/mocks.js";
-import type { LegacyTask as Task, LegacyTaskStorePort as TaskStorePort } from "@/shared/domain/legacy-task";
+import type { Task, TaskStorePort } from "@/shared/domain/task";
 import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec/index.js";
+import type {
+  EvidenceRow as SystemEvidenceRow,
+  EvidenceStorePort as SystemEvidenceStorePort,
+} from "@/repo/evidence-store.port.js";
+
+function mockSystemEvidenceStore(initial: readonly SystemEvidenceRow[] = []): SystemEvidenceStorePort {
+  const rows: SystemEvidenceRow[] = [...initial];
+  return {
+    append: async (row) => { rows.push(row); },
+    list: async (filter) => {
+      if (!filter) return rows;
+      return rows.filter((r) =>
+        (filter.task_id === undefined || r.task_id === filter.task_id)
+        && (filter.mission_id === undefined || r.mission_id === filter.mission_id)
+        && (filter.kind === undefined || r.kind === filter.kind),
+      );
+    },
+    read: async (id) => rows.find((r) => r.id === id),
+  };
+}
 
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
@@ -76,18 +96,20 @@ interface DepsOverrides {
   readonly evidenceStore?: EvidenceStorePort;
   readonly specStore?: SpecStorePort;
   readonly recordEvidence?: typeof realRecordEvidence;
+  readonly systemEvidenceStore?: SystemEvidenceStorePort;
 }
 
 function evidenceDeps(overrides: DepsOverrides = {}) {
   const tasks = overrides.tasks ?? [makeTask("tsk-aaaaaa")];
   const evidenceStore = overrides.evidenceStore ?? mockEvidenceStore();
   const specStore = overrides.specStore ?? mockSpecStore();
+  const systemEvidenceStore = overrides.systemEvidenceStore;
   return {
     deps: {
       getServices: () => ({
-        evidenceStore,
-        taskStore: fakeTaskStore(tasks) as TaskStorePort,
-        specStore,
+        legacyEvidenceStore: evidenceStore,
+        legacyTaskStore: fakeTaskStore(tasks) as TaskStorePort,
+        trustSpecStore: specStore,
         contractVersionStore: { write: async () => {}, readCurrent: async () => undefined, readVersion: async () => undefined, history: async () => [] },
         contractStore: {
           get: async () => undefined,
@@ -98,16 +120,15 @@ function evidenceDeps(overrides: DepsOverrides = {}) {
           save: async () => { throw new Error("Not implemented"); },
           delete: async () => false,
         },
-        v2: {
-          taskStore: {
-            create: async () => { throw new Error("Not implemented"); },
-            get: async () => undefined,
-            update: async () => { throw new Error("Not implemented"); },
-            list: async () => [],
-            listByState: async () => [],
-            listByPlanId: async () => [],
-          },
-        } as never,
+        taskStore: {
+          create: async () => { throw new Error("Not implemented"); },
+          get: async () => undefined,
+          update: async () => { throw new Error("Not implemented"); },
+          list: async () => [],
+          listByState: async () => [],
+          listByMissionId: async () => [],
+        },
+        evidenceStore: (systemEvidenceStore ?? undefined) as never,
       }),
       recordEvidence: overrides.recordEvidence ?? realRecordEvidence,
     },
@@ -574,7 +595,7 @@ describe("evidence list", () => {
     expect(captured.logs.length).toBe(2);
   });
 
-  it("--json prints a parseable { items, v2_items? } payload", async () => {
+  it("--json prints a parseable { items, system_items? } payload", async () => {
     const rows = [
       makeEvidenceRow({ id: "evd-0000000000001-aaaaaa" }),
     ];
@@ -589,12 +610,62 @@ describe("evidence list", () => {
     expect(captured.logs.length).toBe(1);
     const parsed = JSON.parse(captured.logs[0]!) as {
       items: EvidenceRow[];
-      v2_items?: unknown[];
+      system_items?: unknown[];
     };
     expect(Array.isArray(parsed.items)).toBe(true);
     expect(parsed.items.length).toBe(1);
     expect(parsed.items[0]!.id).toBe("evd-0000000000001-aaaaaa");
-    expect(parsed.v2_items).toBeUndefined();
+    expect(parsed.system_items).toBeUndefined();
+  });
+
+  describe("system_items surfacing", () => {
+    const legacyRow = makeEvidenceRow({ id: "evd-0000000000001-aaaaaa" });
+    const systemRow: SystemEvidenceRow = {
+      id: "evd-0000000000002-bbbbbb",
+      kind: "transition",
+      timestamp: "2026-05-03T00:00:00.000Z",
+      task_id: "tsk-aaaaaa",
+      from_state: "draft",
+      to_state: "claimed",
+      trigger_verb: "task claim",
+    };
+
+    function arrange() {
+      const captured = captureConsole();
+      const { deps } = evidenceDeps({
+        evidenceStore: mockEvidenceStore([legacyRow]),
+        systemEvidenceStore: mockSystemEvidenceStore([systemRow]),
+      });
+      const program = makeProgram();
+      registerEvidenceCommand(program, deps);
+      return { captured, program };
+    }
+
+    it("--json surfaces system_items when the system evidence store has rows", async () => {
+      const { captured, program } = arrange();
+      await program.parseAsync(["node", "maestro", "evidence", "list", "--json"]);
+
+      expect(captured.logs.length).toBe(1);
+      const parsed = JSON.parse(captured.logs[0]!) as {
+        items: EvidenceRow[];
+        system_items?: SystemEvidenceRow[];
+      };
+      expect(parsed.items.length).toBe(1);
+      expect(parsed.system_items).toBeDefined();
+      expect(parsed.system_items!.length).toBe(1);
+      expect(parsed.system_items![0]!.id).toBe("evd-0000000000002-bbbbbb");
+      expect(parsed.system_items![0]!.kind).toBe("transition");
+    });
+
+    it("text mode renders a 'System evidence rows:' section", async () => {
+      const { captured, program } = arrange();
+      await program.parseAsync(["node", "maestro", "evidence", "list"]);
+
+      const joined = captured.logs.join("\n");
+      expect(joined).toContain("System evidence rows:");
+      expect(joined).toContain("evd-0000000000002-bbbbbb");
+      expect(joined).toContain("transition");
+    });
   });
 
   it("prints 'No evidence found.' when empty", async () => {

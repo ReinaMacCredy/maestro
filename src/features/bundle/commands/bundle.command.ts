@@ -11,7 +11,6 @@ import type {
 } from "../domain/bundle-types.js";
 
 const VALID_REDACT_SCOPES: readonly BundleRedactScope[] = [
-  "memory",
   "prompts",
   "replies",
 ];
@@ -48,7 +47,7 @@ function registerExportCommand(
 Examples:
   maestro bundle export 2026-04-15-001
   maestro bundle export 2026-04-15-001 --out ./review.mission.tar.gz
-  maestro bundle export 2026-04-15-001 --base main --redact memory,prompts
+  maestro bundle export 2026-04-15-001 --base main --redact prompts,replies
 `)
     .option("--out <path>", "Output path for the bundle archive")
     .option("--base <ref>", "Include diff.patch computed from <ref>..HEAD")
@@ -135,13 +134,6 @@ function formatExportResult(result: BundleExportResult): string[] {
     formatBundleStats(manifest, { includeMilestones: false }),
     `  Principles: ${manifest.stats.principlesSnapshot} principles, ${manifest.stats.outcomesSnapshot} outcomes`,
   ];
-  if (manifest.stats.memorySnapshot) {
-    lines.push(
-      `  Memory:  ${manifest.stats.memorySnapshot.corrections} corrections, ${manifest.stats.memorySnapshot.learnings} learnings`,
-    );
-  } else {
-    lines.push("  Memory:  (redacted)");
-  }
   if (manifest.redacted.length > 0) {
     lines.push(`  Redacted: ${manifest.redacted.join(", ")}`);
   }
@@ -164,13 +156,6 @@ function formatInspectResult(manifest: BundleManifest): string[] {
     formatBundleStats(manifest, { includeMilestones: true }),
     `  Principles: ${manifest.stats.principlesSnapshot} principles, ${manifest.stats.outcomesSnapshot} outcomes`,
   ];
-  if (manifest.stats.memorySnapshot) {
-    lines.push(
-      `  Memory:  ${manifest.stats.memorySnapshot.corrections} corrections, ${manifest.stats.memorySnapshot.learnings} learnings`,
-    );
-  } else {
-    lines.push("  Memory:  (redacted)");
-  }
   if (manifest.redacted.length > 0) {
     lines.push(`  Redacted: ${manifest.redacted.join(", ")}`);
   }

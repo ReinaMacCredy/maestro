@@ -7,11 +7,11 @@ export const LAYER_ORDER_MD = `# layer-order
 
 ## Rule
 
-V2 layers import forward-only along \`types -> config -> repo -> service -> runtime -> ui\`. Providers are cross-cutting and universally importable. No layer may import a sibling further down the stack.
+Layers import forward-only along \`types -> config -> repo -> service -> runtime -> ui\`. Providers are cross-cutting and universally importable. No layer may import a sibling further down the stack.
 
 ## Rationale
 
-Layer-order is the spine of the v2 architecture (ADR-0017). Mechanical enforcement keeps boundaries real instead of aspirational.
+Layer-order is the spine of the architecture (ADR-0017). Mechanical enforcement keeps boundaries real instead of aspirational.
 
 ## Scan Command
 

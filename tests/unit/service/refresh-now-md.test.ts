@@ -25,7 +25,7 @@ function makeStore(tasks: readonly Task[]): TaskStorePort {
     }),
     list: mock(async () => tasks),
     listByState: mock(async () => []),
-    listByPlanId: mock(async () => []),
+    listByMissionId: mock(async () => []),
   } as unknown as TaskStorePort;
 }
 
@@ -84,7 +84,7 @@ describe("refreshNowMd", () => {
         throw new Error("io error");
       }),
       listByState: mock(async () => []),
-      listByPlanId: mock(async () => []),
+      listByMissionId: mock(async () => []),
     } as unknown as TaskStorePort;
     let wrote = false;
     const writer: NowMdWriterPort = {

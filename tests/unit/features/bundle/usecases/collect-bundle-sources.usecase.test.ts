@@ -188,19 +188,6 @@ async function seedPrinciples(): Promise<void> {
   );
 }
 
-async function seedMemory(): Promise<void> {
-  const correctionsDir = join(projectDir, ".maestro", "memory", "corrections");
-  await mkdir(correctionsDir, { recursive: true });
-  await writeFile(join(correctionsDir, "c1.json"), JSON.stringify({ id: "c1" }));
-
-  const learningsDir = join(projectDir, ".maestro", "memory", "learnings");
-  await mkdir(learningsDir, { recursive: true });
-  await writeFile(
-    join(learningsDir, "_compiled.json"),
-    JSON.stringify({ learnings: [{ id: "l1" }, { id: "l2" }] }),
-  );
-}
-
 function makeDeps({
   replies = new Map<string, AgentReply>(),
   checkpoints = [] as readonly Checkpoint[],
@@ -225,7 +212,7 @@ function filesByPath(files: readonly BundleFile[]): Map<string, BundleFile> {
 }
 
 describe("collectBundleSources", () => {
-  it("aggregates a minimal mission without replies or memory", async () => {
+  it("aggregates a minimal mission without replies", async () => {
     const deps = makeDeps();
     const result = await collectBundleSources(deps, {
       missionId: MISSION_ID,
@@ -243,14 +230,12 @@ describe("collectBundleSources", () => {
     expect(result.stats.agents).toBe(0);
     expect(result.stats.replies).toBe(0);
     expect(result.stats.handoffs).toBe(0);
-    expect(result.stats.memorySnapshot).toEqual({ corrections: 0, learnings: 0 });
   });
 
-  it("includes agent files, replies, checkpoints, principles, and memory", async () => {
+  it("includes agent files, replies, checkpoints, and principles", async () => {
     await seedAgents("f1");
     await seedAgents("f2");
     await seedReplies("f1");
-    await seedMemory();
     await seedPrinciples();
 
     const replies = new Map<string, AgentReply>([
@@ -276,8 +261,6 @@ describe("collectBundleSources", () => {
     expect(files.has(`${MISSION_ID}.mission/replies/f1.yaml`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/mission/checkpoints/20260413-010000-000.json`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/principles/principles.jsonl`)).toBe(true);
-    expect(files.has(`${MISSION_ID}.mission/memory/corrections/c1.json`)).toBe(true);
-    expect(files.has(`${MISSION_ID}.mission/memory/learnings/_compiled.json`)).toBe(true);
 
     expect(result.stats.features).toBe(2);
     expect(result.stats.agents).toBe(2);
@@ -286,13 +269,11 @@ describe("collectBundleSources", () => {
     expect(result.stats.checkpoints).toBe(1);
     expect(result.stats.assertions).toBe(1);
     expect(result.stats.principlesSnapshot).toBe(2);
-    expect(result.stats.memorySnapshot).toEqual({ corrections: 1, learnings: 2 });
   });
 
   it("drops redacted scopes from the output", async () => {
     await seedAgents("f1");
     await seedReplies("f1");
-    await seedMemory();
 
     const replies = new Map<string, AgentReply>([
       [`${MISSION_ID}:f1`, buildReply("f1")],
@@ -302,17 +283,15 @@ describe("collectBundleSources", () => {
     const result = await collectBundleSources(deps, {
       missionId: MISSION_ID,
       projectDir,
-      options: { redact: ["memory", "prompts", "replies"] },
+      options: { redact: ["prompts", "replies"] },
     });
 
     const files = filesByPath(result.files);
     expect(files.has(`${MISSION_ID}.mission/mission/agents/f1/prompt.md`)).toBe(false);
     expect(files.has(`${MISSION_ID}.mission/mission/agents/f1/report.json`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/replies/f1.yaml`)).toBe(false);
-    expect([...files.keys()].some((p) => p.startsWith(`${MISSION_ID}.mission/memory/`))).toBe(false);
 
     expect(result.stats.replies).toBe(0);
-    expect(result.stats.memorySnapshot).toBeNull();
   });
 
   it("throws when the mission does not exist", async () => {

@@ -45,13 +45,13 @@ export async function requestVerdict(
     const draft = await readDraftContract(deps.contractStore, taskId);
     if (draft !== undefined) {
       throw new MaestroError(
-        `Contract ${draft.id} for task ${taskId} is in draft status — lock it first`,
-        [`maestro task contract lock ${taskId}`],
+        `Contract ${draft.id} for task ${taskId} is in draft status — discard it and re-claim the task`,
+        ["Contracts are auto-created when a task is claimed from a spec"],
       );
     }
     throw new MaestroError(`No contract found for task ${taskId}`, [
-      `Create one: maestro task contract new ${taskId}`,
-      `Then lock it: maestro task contract lock ${taskId}`,
+      "Claim a task created from a spec; the contract is synthesized automatically",
+      `Re-claim: maestro task claim ${taskId}`,
     ]);
   }
 
@@ -120,9 +120,27 @@ export async function requestVerdict(
 
   // Stamp subject with tree SHA so verdicts are bound to diff content,
   // not a specific commit hash. Squash survives; force-push invalidates.
-  const treeSha = await deps.gitAnchor.resolveTreeSha(repoRoot);
-  const subject: VerdictSubject = { tree_sha: treeSha, ...(args.pr !== undefined ? { pr: args.pr } : {}) };
-  const verdict: Verdict = { ...rawVerdict, subject };
+  // When the project is not a git repo (e.g. greenfield sandbox started with
+  // `setup --no-git-ok`), omit the subject so local maestro stays advisory.
+  // CI Maestro is the merge gate — it always runs in a git context.
+  let treeSha: string | undefined;
+  try {
+    treeSha = await deps.gitAnchor.resolveTreeSha(repoRoot);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const reason = /not a git repository/i.test(msg)
+      ? "not a git working tree"
+      : /ambiguous argument 'HEAD\^?\{tree\}'|unknown revision/i.test(msg)
+      ? "no commits yet on HEAD"
+      : "git tree SHA unavailable";
+    process.stderr.write(
+      `[warn] verdict not anchored to tree_sha (${reason}); local maestro is advisory, CI Maestro is the merge gate\n`,
+    );
+  }
+  const subject: VerdictSubject | undefined = treeSha !== undefined
+    ? { tree_sha: treeSha, ...(args.pr !== undefined ? { pr: args.pr } : {}) }
+    : undefined;
+  const verdict: Verdict = subject !== undefined ? { ...rawVerdict, subject } : rawVerdict;
 
   await deps.verdictStore.write(taskId, verdict);
 

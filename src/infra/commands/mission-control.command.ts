@@ -128,14 +128,15 @@ export function registerMissionControlCommand(
       const services = deps.getServices();
         const snapshotDeps = {
           missions: services.missions,
-          missionStore: services.missionStore,
+          missionStore: services.featureMissionStore,
           featureStore: services.featureStore,
           assertionStore: services.assertionStore,
           checkpointStore: services.checkpointStore,
           config: services.config,
           git: services.git,
-          taskStore: services.taskStore,
-          evidenceStore: services.evidenceStore,
+          taskStore: services.legacyTaskStore,
+          systemTaskStore: services.taskStore,
+          evidenceStore: services.legacyEvidenceStore,
           replyStore: services.replyStore,
           principleStore: services.principleStore,
           verdictStore: services.verdictStore,

@@ -5,7 +5,7 @@ import type { RuntimeMonitorPort } from "@/features/runtime/ports/monitor.port.j
 import type { RuntimeSignalResult } from "@/features/runtime/domain/types.js";
 import type { EvidenceStorePort, EvidenceRow, RecordEvidenceInput } from "@/features/evidence/index.js";
 import type { RuntimeSignalPayload } from "@/features/evidence/index.js";
-import type { LegacyTaskStorePort as TaskStorePort, LegacyTask as Task } from "@/shared/domain/legacy-task";
+import type { TaskStorePort, Task } from "@/shared/domain/task";
 import type { LegacySpecStorePort as SpecStorePort, Spec } from "@/shared/domain/legacy-spec/index.js";
 import { mockEvidenceStore, mockTaskStore } from "../../../../helpers/mocks.js";
 
@@ -68,7 +68,7 @@ function makeProgram(opts: {
     .description("Runtime commands");
 
   registerRuntimeCheckCommand(runtimeCmd, program, {
-    getServices: () => ({ evidenceStore, taskStore, specStore }),
+    getServices: () => ({ legacyEvidenceStore: evidenceStore, legacyTaskStore: taskStore, trustSpecStore: specStore }),
     recordEvidence: async <K extends import("@/features/evidence/index.js").EvidenceKind>(
       s: EvidenceStorePort,
       input: RecordEvidenceInput<K>,

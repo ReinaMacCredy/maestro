@@ -7,7 +7,7 @@ import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/ind
 import type { ReviewAckPayload } from "@/features/evidence/index.js";
 
 interface ReviewAckCommandDeps {
-  readonly getServices: () => Pick<Services, "evidenceStore">;
+  readonly getServices: () => Pick<Services, "legacyEvidenceStore">;
   readonly recordEvidence?: typeof defaultRecordEvidence;
   readonly getUsername?: () => string;
 }
@@ -68,7 +68,7 @@ Examples:
         criteria,
       };
 
-      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, {
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.legacyEvidenceStore, {
         task_id: taskId,
         kind: "review-ack",
         payload,

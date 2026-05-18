@@ -7,7 +7,7 @@ import type { EvidenceRow, ThreatModelPayload } from "@/features/evidence/index.
 import type { AIReviewPayload } from "@/features/evidence/index.js";
 import type { TrustFinding } from "@/types/trust.js";
 import type { RiskPolicy, AutopilotPolicy, ReleasePolicy } from "@/features/policy/index.js";
-import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/legacy-task/domain/contract/contract-types.js";
+import { CONTRACT_SCHEMA_VERSION } from "@/shared/domain/task/domain/contract/contract-types.js";
 
 // --- Factories ---
 

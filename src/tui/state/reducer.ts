@@ -9,7 +9,7 @@ import type {
 import type { ConfigScope } from "@/infra/ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "@/shared/domain/legacy-mission";
-import { TASK_STATUSES, type TaskStatus } from "@/shared/domain/legacy-task";
+import { TASK_STATUSES, type TaskStatus } from "@/shared/domain/task";
 import type { EventStreamEntry } from "./screen-types.js";
 import { getConfigRowsForTab, isGlobalOnlyConfigKey, resolveConfigScopeForKey } from "./config-inspector.js";
 
@@ -1375,22 +1375,16 @@ function nextMemoryTab(current: MemoryModalTab, delta: 1 | -1): MemoryModalTab {
 }
 
 function getMemorySelectableCount(snapshot: MissionControlSnapshot, tab: MemoryModalTab): number {
-  switch (tab) {
-    case "overview":
-    case "learnings":
-    case "config":
-      return 0;
-    case "corrections":
-      return snapshot.memory?.corrections.length ?? 0;
-    case "ratchet":
-      return snapshot.memory?.ratchetSuite.assertions.length ?? 0;
-  }
+  // The earlier memory subsystem (corrections/ratchet) was retired; tabs render empty.
+  void snapshot;
+  void tab;
+  return 0;
 }
 
 function getGraphSelectableCount(snapshot: MissionControlSnapshot): number {
-  const graphContext = snapshot.memory?.graphContext;
-  if (!graphContext) return 0;
-  return graphContext.relationships.length + (graphContext.currentProject ? 1 : 0);
+  // Project-graph data was retired with the earlier memory subsystem.
+  void snapshot;
+  return 0;
 }
 
 function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppState {

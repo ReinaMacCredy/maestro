@@ -27,14 +27,26 @@ export function checkSkillBinaryParity(
     const md = findSkillMd(skill);
     if (!md) continue;
     skillsChecked += 1;
+    // SKILL.md frontmatter is the per-skill skip list. Reference docs ride on
+    // it: any verb the SKILL.md author opted out of must not re-appear in
+    // reference/*.md without explicit re-opt-in (handled by listing it again).
     const skipVerbs = extractParitySkipVerbs(md.content);
-    const verbs = extractVerbs(md.content);
-    for (const verb of verbs) {
-      if (skipVerbs.has(verb)) continue;
-      const head = firstSegment(verb);
-      if (!head) continue;
-      if (!args.knownVerbs.has(head)) {
-        findings.push({ skill: skill.name, verb, status: "missing-in-binary" });
+    const mdFiles = collectSkillVerbSources(skill);
+    const seen = new Set<string>();
+    for (const file of mdFiles) {
+      for (const verb of extractVerbs(file.content)) {
+        if (skipVerbs.has(verb)) continue;
+        if (seen.has(verb)) continue;
+        seen.add(verb);
+        const head = firstSegment(verb);
+        if (!head) continue;
+        // `knownVerbs` carries both leaf names and full paths (see how
+        // src/index.ts walks the Commander tree). Validate the full verb
+        // path so a skill referencing a removed subverb fails parity
+        // instead of slipping through on the top-level verb match.
+        if (!args.knownVerbs.has(verb)) {
+          findings.push({ skill: skill.name, verb, status: "missing-in-binary" });
+        }
       }
     }
   }
@@ -65,10 +77,26 @@ function findSkillMd(skill: { readonly files: readonly { readonly path: string; 
   return skill.files.find((f) => f.path === "SKILL.md");
 }
 
+// Verbs cited in `reference/*.md` are install-shipped docs that agents will
+// read alongside SKILL.md. They must stay parity-checked, or stale doc
+// drift hides behind a check that only watches the top-level skill file.
+function collectSkillVerbSources(
+  skill: { readonly files: readonly { readonly path: string; readonly content: string }[] },
+): readonly { readonly path: string; readonly content: string }[] {
+  return skill.files.filter(
+    (f) =>
+      f.path === "SKILL.md" ||
+      (f.path.startsWith("reference/") && f.path.endsWith(".md")),
+  );
+}
+
 function extractVerbs(content: string): readonly string[] {
   const verbs = new Set<string>();
   for (const match of content.matchAll(VERB_PATTERN)) {
-    const v = match[1]?.trim();
+    // VERB_PATTERN's `\s+` between segments matches across markdown soft-wraps
+    // (``maestro plan\ncheck``). Normalize internal whitespace so the verb
+    // shape matches the Commander tree's single-space form.
+    const v = match[1]?.trim().replace(/\s+/g, " ");
     if (v) verbs.add(v);
   }
   return [...verbs];

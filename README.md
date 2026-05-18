@@ -115,13 +115,13 @@ maestro init
 
 Creates the local `.maestro/` workspace for the current repository and writes `.maestro/MAESTRO.md` — a read-order compass that points fresh agents at the right files.
 
-### 2. Bootstrap the directory layout
+### 2. Scaffold the directory layout
 
 ```bash
-maestro setup bootstrap
+maestro setup
 ```
 
-Creates the canonical subdirectories under `.maestro/` with `.gitkeep` placeholders. Idempotent: safe to re-run.
+Runs the idempotent setup state machine: scaffolds the canonical subdirectories under `.maestro/`, writes the project config, drops bundled skills, and seeds the default principles pack. Safe to re-run.
 
 ### 3. Check setup
 
@@ -226,9 +226,9 @@ Interview-driven product-spec authoring. Runs the grill protocol: a one-question
 
 Session handoff awareness for the passive handoff model. Describes the envelope schema, which lifecycle verbs emit envelopes (`task:claim`, `task:block`), and the read-only pickup protocol an incoming agent follows to resume a task left by a prior agent. Also documents the four handoff MCP tools for runtimes that prefer structured tool calls over direct file reads. Read this skill at session start in any `.maestro/` project to learn what the last agent left behind.
 
-### maestro-plan
+### maestro-mission
 
-Heavy-mode workflow. Takes an approved `mode: heavy` product-spec and turns it into an exec-plan with child tasks via `maestro plan from-spec` followed by `maestro plan decompose`. The decompose step runs the grill protocol against the spec, `CONTEXT.md`, and the architecture lint set before emitting the task batch. The exec-plan auto-completes when every child task reaches `shipped` or `abandoned` (ADR-0011). Use this skill when the work spans three or more vertical slices or multiple feature directories.
+Heavy-mode workflow. Takes an approved `mode: heavy` product-spec and turns it into a mission with child tasks via `maestro mission from-spec` followed by `maestro mission decompose`. The decompose step runs the grill protocol against the spec, `CONTEXT.md`, and the architecture lint set before emitting the task batch. The mission auto-completes when every child task reaches `shipped` or `abandoned` (ADR-0011). Use this skill when the work spans three or more vertical slices or multiple feature directories.
 
 ### maestro-task
 
@@ -236,11 +236,11 @@ Single-task execution loop for light-mode specs. Guides the agent from `task fro
 
 ### maestro-verify
 
-The canonical verification protocol. Documents exit-code routing (PASS / FAIL / HUMAN / BLOCK), the architecture-lint corpus, the Trust Verifier checks, and the ProofMap acceptance-criteria coverage gate. Cross-referenced by `maestro-task` and `maestro-plan`. Read this skill before declaring any task complete; it is the shared pre-ship ritual every agent follows.
+The canonical verification protocol. Documents exit-code routing (PASS / FAIL / HUMAN / BLOCK), the architecture-lint corpus, the Trust Verifier checks, and the ProofMap acceptance-criteria coverage gate. Cross-referenced by `maestro-task` and `maestro-mission`. Read this skill before declaring any task complete; it is the shared pre-ship ritual every agent follows.
 
 ### maestro-setup
 
-Repository onboarding. The skill generates context docs under `.maestro/context/`, a hierarchical `AGENTS.md`, language style guides, and a setup report. The CLI mirrors the skill: `setup check` audits drift, `setup bootstrap` scaffolds directories, `setup migrate-v2` performs the 11-step upgrade from a pre-rebuild `.maestro/`, and `setup migrate-corrections` moves legacy corrections into `docs/principles/legacy/`. Use this skill when initializing a new project or upgrading an older `.maestro/` directory.
+Repository onboarding. The skill generates context docs under `.maestro/context/`, a hierarchical `AGENTS.md`, language style guides, and a setup report. The CLI mirrors the skill: `setup check` audits drift; `setup` runs the idempotent state machine that scaffolds and reconciles the directory layout, drops bundled skills, and seeds the default principles pack. Use this skill when initializing a new project.
 
 ## Handoffs
 
@@ -487,7 +487,7 @@ The sections below cover each layer in turn. They are presented in the order a t
 
 This is the foundation. A contract pins down what a task is allowed to touch; the Trust Verifier checks the diff against that contract. Three behaviors define this layer:
 
-1. **Plan proposes a contract.** During `maestro-plan`, the plan must include a `proposed_contract` with `allowed_files`, `forbidden_paths`, `done_when` criteria, and an `amendment_budget`. Plan-time proposals are not amendments — they seed the contract that gets locked when the agent claims the task.
+1. **Plan proposes a contract.** During `maestro-mission`, the plan must include a `proposed_contract` with `allowed_files`, `forbidden_paths`, `done_when` criteria, and an `amendment_budget`. Plan-time proposals are not amendments — they seed the contract that gets locked when the agent claims the task.
 
 2. **Agent works within scope; amends on genuine discovery.** When work uncovers a file that lies outside the locked contract scope, the agent must amend before touching it:
 
@@ -834,7 +834,7 @@ Maestro ships a Model Context Protocol (MCP) server that exposes its core verbs 
 | Verdict | `maestro_verdict_show`, `maestro_verdict_request` |
 | Policy | `maestro_policy_check` |
 | Principle | `maestro_principle_promote` |
-| Setup | `maestro_setup_check`, `maestro_setup_migrate_v2` |
+| Setup | `maestro_setup_check` |
 | Handoff | `maestro_handoff_list`, `maestro_handoff_show`, `maestro_handoff_emit`, `maestro_handoff_pickup` |
 
 `maestro_task_list`, `maestro_evidence_list`, and `maestro_handoff_list` are paginated (`limit`/`offset` in, `pagination: { total, limit, offset, hasMore }` out). Every tool declares both a strict `inputSchema` (unknown fields error rather than being silently dropped) and an `outputSchema` mirroring the success-path `structuredContent`. Failures set `isError: true` with a stable `{ code, message, hints }` payload.
@@ -879,9 +879,8 @@ See [`docs/mcp-server.md`](docs/mcp-server.md) for the full tool and error-code 
 | `maestro providers list` / `maestro providers doctor` | Inspect runtime and skill-target provider configuration. |
 | `maestro skills list` / `maestro skills install <source>` | Discover, inspect, install, remove, and sync AgentSkills-compatible skills. |
 | `maestro status` | Inspect the current Maestro state quickly. |
-| `maestro setup bootstrap` | Scaffold the canonical `.maestro/` directory layout. |
+| `maestro setup` | Scaffold and reconcile the canonical `.maestro/` directory layout. Idempotent. |
 | `maestro setup check` | Audit the directory layout, principles pack, and config file for drift. |
-| `maestro setup migrate-v2` | Upgrade a pre-rebuild `.maestro/` to the current layout. |
 | `maestro spec new <slug>` | Author a product-spec with the grill protocol (`maestro-design` skill). |
 | `maestro spec validate <path>` | Check frontmatter and schema before creating a task. |
 | `maestro task from-spec <path>` | Create a task in `draft` state from a validated spec. |
@@ -898,8 +897,8 @@ See [`docs/mcp-server.md`](docs/mcp-server.md) for the full tool and error-code 
 | `maestro evidence list --task <id>` | List all evidence rows for a task. |
 | `maestro verdict request --task <id>` | Request a verdict (exit 0=PASS 1=FAIL 2=HUMAN 3=BLOCK). |
 | `maestro verdict show --task <id>` | Show the latest verdict for a task. |
-| `maestro plan from-spec <path>` | Create an exec-plan from a heavy-mode spec. |
-| `maestro plan decompose <id> --file <path>` | Decompose an exec-plan into child tasks from a batch file. |
+| `maestro mission from-spec <path>` | Create a mission from a heavy-mode spec. |
+| `maestro mission decompose <id> --file <path>` | Decompose a mission into child tasks from a batch file. |
 | `maestro mcp serve` | Start the MCP server on stdio. Agents launch this; you do not start it manually. |
 | `maestro mcp check` | Verify the installed maestro binary and the canonical agent runtime config files. |
 | `maestro principle list` / `principle promote <evd-id>` | Inspect or promote a correction to a behavioral principle. |
@@ -946,7 +945,7 @@ The implementation follows a forward-only layered architecture enforced by `docs
 | `types` | `src/types/` | Domain types: task state machine, exec-plan state machine, product-spec shape, evidence kinds |
 | `config` | `src/config/` | Per-project and per-repo configuration loading |
 | `repo` | `src/repo/` | Ports and adapters: task store, plan store, spec store, evidence store, worktree store, handoff store |
-| `service` | `src/service/` | Use cases: task-claim, task-verify, plan-decompose, migrate-v2, setup-check, principle-promote, emit-handoff |
+| `service` | `src/service/` | Use cases: task-claim, task-verify, plan-decompose, setup-check, principle-promote, emit-handoff |
 | `runtime` | `src/runtime/` | CLI command registration: spec, task, plan, principle, setup verbs |
 | `providers` | `src/providers/` | Cross-cutting service wiring (importable from any layer) |
 
@@ -983,8 +982,6 @@ Maestro stores project-local state in `.maestro/` and user-level defaults in `~/
 │   └── <task-id>.json  worktree binding records
 ├── context/            operator-authored context docs
 ├── policies/           risk, autopilot, release, sensitive-paths, owners
-├── backups/            migration backup tarballs (pre-v2-<ts>.tar.gz)
-├── .migrated-v2.json   migration idempotency stamp
 └── principles.jsonl    behavioral principles (repo-tracked)
 
 ~/.maestro/
@@ -1000,12 +997,12 @@ Maestro stores project-local state in `.maestro/` and user-level defaults in `~/
 Maestro is organized as a feature-first hexagonal codebase:
 
 - `src/features/<name>/` — each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `bundle`, `ci`, `deploy`, `evidence`, `gc`, `mcp`, `merge`, `plan`, `policy`, `principle`, `recover`, `reply`, `review`, `risk`, `runtime`, `skills`, `verdict`, `worktree`.
-- `src/runtime/` — v2 CLI command registration: `spec`, `task`, `plan`, `principle`, `setup` command trees.
+- `src/runtime/` — CLI command registration: `spec`, `task`, `plan`, `principle`, `setup` command trees.
 - `src/infra/` — plumbing that isn't a feature: init, doctor, status, install, update, uninstall, providers, and mission-control commands; config and git ports/adapters; infra-owned domain types.
 - `src/shared/` — generic utilities with no domain knowledge: filesystem, YAML, shell, path safety, and output formatting under `lib/`; cross-cutting primitives like IDs and UI config under `domain/`.
 - `src/tui/` — read-only rendering and input for Mission Control.
 - `src/repo/` — ports and adapters: task store, plan store, spec store, evidence store, worktree store, handoff emitter.
-- `src/service/` — use cases: task-claim, task-verify, plan-decompose, emit-handoff, migrate-v2, setup-check, principle-promote.
+- `src/service/` — use cases: task-claim, task-verify, plan-decompose, emit-handoff, setup-check, principle-promote.
 - `src/types/` — domain types for the task and exec-plan state machines.
 - `src/services.ts` — composition root that wires every feature's adapters into a single service object.
 - `src/index.ts` — Commander CLI entry point.
@@ -1013,16 +1010,6 @@ Maestro is organized as a feature-first hexagonal codebase:
 Cross-feature imports must go through `@/features/<name>`, which resolves to the feature's `index.ts`. Deep imports across feature boundaries are forbidden and enforced by `bun run check:boundaries` in CI.
 
 The runtime is intentionally narrow: filesystem-backed stores, git integration, config handling, and a terminal UI. There is no database adapter or network service in the main workflow.
-
-## Migrating from a pre-rebuild `.maestro/`
-
-The current harness has no backward-compatibility shims for the pre-rebuild `.maestro/` directory layout. To upgrade:
-
-```bash
-maestro setup migrate-v2
-```
-
-This writes a backup tarball to `.maestro/backups/pre-v2-<timestamp>.tar.gz`, rewrites `.maestro/` to the current shape, and stamps `.migrated-v2.json` for idempotency. Pin to the `v0.LAST` tag on `main` if you are not ready to upgrade. Full verb-rename tables and the file-layout mapping are in `UPGRADING.md`.
 
 ## Development
 
@@ -1102,7 +1089,7 @@ In-depth references live under [`docs/`](docs/):
 | MCP setup for Claude Code and Codex | [`mcp-setup.md`](docs/mcp-setup.md) |
 | Upgrade guide from pre-rebuild `.maestro/` | [`UPGRADING.md`](UPGRADING.md) |
 
-The agent-facing protocol is documented inside the bundled skills under [`skills/bundled/`](skills/bundled/). `maestro-verify` is the canonical verification protocol; `maestro-task`, `maestro-plan`, `maestro-design`, `maestro-handoff`, and `maestro-setup` cross-reference it. `maestro install` syncs all six into `~/.claude/skills/` and `~/.codex/skills/`.
+The agent-facing protocol is documented inside the bundled skills under [`skills/bundled/`](skills/bundled/). `maestro-verify` is the canonical verification protocol; `maestro-task`, `maestro-mission`, `maestro-design`, `maestro-handoff`, and `maestro-setup` cross-reference it. `maestro install` syncs all six into `~/.claude/skills/` and `~/.codex/skills/`.
 
 ## Contributing
 

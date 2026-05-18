@@ -16,7 +16,7 @@ import { checkDeployReadiness } from "../usecases/check-deploy-readiness.usecase
 export interface DeployGateCommandDeps {
   readonly getServices: () => Pick<
     Services,
-    "evidenceStore" | "taskStore" | "specStore" | "projectRoot"
+    "legacyEvidenceStore" | "legacyTaskStore" | "trustSpecStore" | "projectRoot"
   >;
 
   readonly recordEvidence?: (
@@ -46,7 +46,7 @@ export function registerDeployGateCommand(
       const services = deps.getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const task = await services.taskStore.get(taskId);
+      const task = await services.legacyTaskStore.get(taskId);
       if (task === undefined) {
         throw new MaestroError(`Task not found: ${taskId}`, [
           "Run `maestro task list` to see available tasks",
@@ -62,10 +62,10 @@ export function registerDeployGateCommand(
 
       let spec: Spec | undefined;
       if (task.missionId !== undefined) {
-        spec = await services.specStore.read(task.missionId);
+        spec = await services.trustSpecStore.read(task.missionId);
       }
 
-      const allEvidence = await services.evidenceStore.list({
+      const allEvidence = await services.legacyEvidenceStore.list({
         task_id: taskId,
         kind: "rollback-exercised",
       });
@@ -92,7 +92,7 @@ export function registerDeployGateCommand(
         gate: result.gate,
       };
 
-      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.evidenceStore, {
+      const row = await (deps.recordEvidence ?? defaultRecordEvidence)(services.legacyEvidenceStore, {
         task_id: taskId,
         kind: "deploy-readiness",
         payload,

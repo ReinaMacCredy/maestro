@@ -51,6 +51,11 @@ function makeTaskStore(seed: readonly Task[]): TaskStorePort {
       tasks.set(t.id, t);
       return t;
     },
+    async createMany(inputs: readonly CreateTaskInput[]) {
+      const out: Task[] = [];
+      for (const i of inputs) out.push(await this.create(i));
+      return out;
+    },
     async get(id) {
       return tasks.get(id);
     },
@@ -74,8 +79,8 @@ function makeTaskStore(seed: readonly Task[]): TaskStorePort {
     async listByState(state: TaskState) {
       return [...tasks.values()].filter((t) => t.state === state);
     },
-    async listByPlanId(plan_id: string) {
-      return [...tasks.values()].filter((t) => t.plan_id === plan_id);
+    async listByMissionId(mission_id: string) {
+      return [...tasks.values()].filter((t) => t.mission_id === mission_id);
     },
   };
 }

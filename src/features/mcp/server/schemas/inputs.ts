@@ -1,20 +1,20 @@
 import { z } from "zod";
 import { HANDOFF_TRIGGERS } from "@/repo/handoff-emitter.port.js";
 import { PROJECTION_VIEWS } from "@/shared/lib/projection.js";
+import { SPEC_SLUG_PATTERN } from "@/types/spec-id.js";
 import { TASK_STATES } from "@/types/task-state.js";
 
-// Accepts both v1 (tsk-aabbcc) and v2 (tsk-x-y) task ID formats.
-// v1 IDs are 6 lowercase hex chars; v2 IDs have two dash-separated alphanumeric
-// segments. The broader pattern here accepts both without special-casing.
+// Accepts the current `tsk-x-y` shape and the older 6-hex shape still present
+// on disk.
 const taskId = z
   .string()
   .regex(/^tsk-[0-9a-f]{6}$|^tsk-[a-z0-9]+-[a-z0-9]+$/, "Invalid task id")
-  .describe("A maestro task id like 'tsk-abc123' (v1) or 'tsk-lp1abc-xy1234' (v2).");
-const planId = z
+  .describe("A maestro task id like 'tsk-lp1abc-xy1234'.");
+const missionId = z
   .string()
-  .regex(/^pln-[a-z0-9]+-[a-z0-9]+$/, "Invalid exec-plan id")
+  .regex(/^pln-[a-z0-9]+-[a-z0-9]+$/, "Invalid mission id")
   .describe(
-    "A maestro exec-plan id like 'pln-1a2b3c4d5e6f-a1b2c3'.",
+    "A maestro mission id like 'pln-1a2b3c4d5e6f-a1b2c3'.",
   );
 const verdictId = z
   .string()
@@ -33,11 +33,10 @@ const handoffTrigger = z
   .describe(
     "Lifecycle verb that prompted the handoff: task:claim, task:block, task:abandon, task:ship, task:verify.",
   );
-// v2 task state enum. Replaces v1 status (pending|in_progress|completed).
 const taskState = z
   .enum(TASK_STATES)
   .describe(
-    "Filter by v2 task state. Values: draft, claimed, doing, verifying, blocked, ready, shipped, abandoned.",
+    "Filter by task state. Values: draft, claimed, doing, verifying, blocked, ready, shipped, abandoned.",
   );
 const witnessLevel = z
   .enum([
@@ -90,15 +89,14 @@ const offset = z
   .optional()
   .describe("Zero-based page offset. Defaults to 0 when omitted.");
 
-// v2 task list: only plan_id and state filters are supported.
-// Removed v1-only filters: type, priority, label, parentId, assignee.
+// Task list: only mission_id and state filters are supported.
 export const TaskListInput = z
   .object({
-    plan_id: planId.optional(),
+    mission_id: missionId.optional(),
     state: taskState
       .optional()
       .describe(
-        "Filter by v2 task state. v1 status (pending/in_progress/completed) is not supported; use state with v2 values.",
+        "Filter by task state.",
       ),
     limit,
     offset,
@@ -123,8 +121,8 @@ export const TaskClaimInput = z
   })
   .strict();
 
-// Task ship (renamed from task_complete). v2: pr_url replaces the receipt.
-// The verdict-PASS path is the authoritative completion receipt in v2.
+// Task ship: pr_url is the optional completion pointer; the verdict-PASS path
+// is the authoritative completion receipt.
 export const TaskShipInput = z
   .object({
     id: taskId,
@@ -136,8 +134,7 @@ export const TaskShipInput = z
   })
   .strict();
 
-// v2 task block: marks the task itself as blocked with a mandatory reason.
-// Removed v1 fields: blockedTaskIds[], force (bidirectional graph edges).
+// Task block: marks the task itself as blocked with a mandatory reason.
 export const TaskBlockInput = z
   .object({
     id: taskId,
@@ -148,7 +145,7 @@ export const TaskBlockInput = z
   })
   .strict();
 
-// task_from_spec creates a v2 task in draft state from a product-spec markdown file.
+// task_from_spec creates a task in draft state from a product-spec markdown file.
 // Takes a file path (absolute or relative to repo root), not a spec ID.
 export const TaskFromSpecInput = z
   .object({
@@ -157,6 +154,109 @@ export const TaskFromSpecInput = z
       .min(1)
       .describe(
         "Absolute or repo-root-relative path to the product-spec markdown file. Example: 'docs/specs/add-caching.md'.",
+      ),
+  })
+  .strict();
+
+// Slug shape mirrors generateSpecSlug output (kebab-case, 3..64 chars).
+// Reject off-shape values at the boundary -- the slug is concatenated into
+// child task slugs under --template, so an exotic value (whitespace, '../')
+// would leak into on-disk records and CLI output downstream.
+const missionSlug = z
+  .string()
+  .regex(SPEC_SLUG_PATTERN, "Invalid mission slug")
+  .describe("kebab-case slug, 3..64 chars, [a-z0-9-]. Defaults to slugified title when omitted.");
+
+// Raw shape exported for MCP SDK introspection; ZodEffects from .refine()
+// strips the .shape accessor and would surface as `"properties": {}` to
+// agents calling tools/list. Cross-field validation lives on MissionNewInput.
+export const MissionNewShape = {
+  title: z
+    .string()
+    .min(1)
+    .describe("Mission title. Required."),
+  slug: missionSlug.optional(),
+  mode: z
+    .enum(["bare", "from-spec", "from-file", "template"])
+    .optional()
+    .describe(
+      "Creation mode: 'bare' (default) -> intake; 'from-spec' -> approved from a heavy-mode spec; 'from-file' -> planned from a JSON task batch; 'template' -> planned from a named template.",
+    ),
+  from_spec: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Required when mode='from-spec'. Absolute or repo-root-relative path to a heavy-mode spec."),
+  from_file: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Required when mode='from-file'. Absolute or repo-root-relative path to a JSON task-batch file."),
+  template: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Required when mode='template'. Name of a built-in or user template."),
+} as const;
+
+export const MissionNewInput = z
+  .object(MissionNewShape)
+  .strict()
+  .refine(
+    (d) => d.mode !== "from-spec" || d.from_spec !== undefined,
+    { message: "from_spec is required when mode='from-spec'", path: ["from_spec"] },
+  )
+  .refine(
+    (d) => d.mode !== "from-file" || d.from_file !== undefined,
+    { message: "from_file is required when mode='from-file'", path: ["from_file"] },
+  )
+  .refine(
+    (d) => d.mode !== "template" || d.template !== undefined,
+    { message: "template is required when mode='template'", path: ["template"] },
+  );
+
+export const MissionCancelInput = z
+  .object({
+    mission_id: missionId,
+    reason: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Human-readable cancel reason recorded on the mission and cascaded task abandonments."),
+  })
+  .strict();
+
+export const MissionShowInput = z
+  .object({
+    mission_id: missionId,
+  })
+  .strict();
+
+export const MissionFromSpecInput = z
+  .object({
+    spec_path: z
+      .string()
+      .min(1)
+      .describe("Absolute or repo-root-relative path to a heavy-mode product-spec markdown file."),
+  })
+  .strict();
+
+const MissionDecomposeTaskShape = z
+  .object({
+    title: z.string().min(1),
+    slug: z.string().min(1),
+    spec_path: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const MissionDecomposeInput = z
+  .object({
+    mission_id: missionId,
+    tasks: z
+      .array(MissionDecomposeTaskShape)
+      .min(1)
+      .describe(
+        "Task batch. Each entry needs title + slug; spec_path is optional and inherits from the mission when omitted.",
       ),
   })
   .strict();
@@ -276,7 +376,7 @@ export const PolicyCheckInput = z
   })
   .strict();
 
-// --- New v2 hot-path inputs ---
+// --- Hot-path inputs ---
 
 export const PrinciplePromoteInput = z
   .object({
@@ -291,19 +391,6 @@ export const PrinciplePromoteInput = z
 
 // setupCheck takes no user inputs — it reads the project root from context.
 export const SetupCheckInput = z.object({}).strict();
-
-export const SetupMigrateV2Input = z
-  .object({
-    dry_run: z
-      .boolean()
-      .optional()
-      .describe("Report migration steps without applying changes. Defaults to false."),
-    force: z
-      .boolean()
-      .optional()
-      .describe("Re-run migration even if the .migrated-v2.json flag is present."),
-  })
-  .strict();
 
 export const HandoffListInput = z
   .object({
@@ -383,4 +470,4 @@ export const HandoffPickupInput = z
   })
   .strict();
 
-export { taskId, planId, verdictId, evidenceId, handoffId };
+export { taskId, missionId, verdictId, evidenceId, handoffId };

@@ -21,13 +21,18 @@ afterEach(async () => {
 describe("principle command", () => {
   it("lists bootstrapped default principles (v1 jsonl store starts empty on v2 init)", async () => {
     // v2 init seeds docs/principles/<slug>.md, not .maestro/principles.jsonl.
-    // The v1 `principle list` command reads from principles.jsonl which is
-    // empty on a fresh v2 project -- correct behaviour.
+    // `principle list --json` surfaces both packs: `behavioral` (from the v1
+    // jsonl store, empty on a fresh v2 project) and `lint` (the v2 markdown
+    // pack `setup check` validates).
     const result = await runCli(["principle", "list", "--json"], tmpDir);
     expect(result.exitCode).toBe(0);
 
-    const principles = JSON.parse(result.stdout) as Array<{ id: string }>;
-    expect(principles).toHaveLength(0);
+    const parsed = JSON.parse(result.stdout) as {
+      behavioral: Array<{ id: string }>;
+      lint: Array<{ slug: string }>;
+    };
+    expect(parsed.behavioral).toHaveLength(0);
+    expect(parsed.lint.length).toBeGreaterThan(0);
   });
 
   it("adds a principle and filters it by profile", async () => {
@@ -51,8 +56,10 @@ describe("principle command", () => {
     ], tmpDir);
     expect(listResult.exitCode).toBe(0);
 
-    const principles = JSON.parse(listResult.stdout) as Array<{ id: string }>;
-    expect(principles.map((principle) => principle.id)).toContain("test-review-principle");
+    const parsed = JSON.parse(listResult.stdout) as {
+      behavioral: Array<{ id: string }>;
+    };
+    expect(parsed.behavioral.map((principle) => principle.id)).toContain("test-review-principle");
   });
 
   it("rejects invalid profile filters", async () => {
@@ -89,8 +96,10 @@ describe("principle command", () => {
     expect(removeResult.exitCode).toBe(0);
 
     const listResult = await runCli(["principle", "list", "--json"], tmpDir);
-    const principles = JSON.parse(listResult.stdout) as Array<{ id: string }>;
-    expect(principles.map((principle) => principle.id)).not.toContain("temporary-principle");
+    const parsed = JSON.parse(listResult.stdout) as {
+      behavioral: Array<{ id: string }>;
+    };
+    expect(parsed.behavioral.map((principle) => principle.id)).not.toContain("temporary-principle");
   });
 
   it("rejects invalid gate principles without gate metadata", async () => {

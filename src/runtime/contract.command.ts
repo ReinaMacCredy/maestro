@@ -9,7 +9,7 @@ import type { Services } from "@/services.js";
 interface ContractCommandDeps {
   readonly getServices: () => Pick<
     Services,
-    "contractStore" | "contractVersionStore" | "evidenceStore"
+    "contractStore" | "contractVersionStore" | "legacyEvidenceStore"
   >;
 }
 
@@ -27,15 +27,22 @@ export function registerContractCommands(
     .option("--json", "Output as JSON");
 
   contract
-    .command("show <taskId>")
-    .description("Show the current contract for a task (or --version N)")
+    .command("show [taskId]")
+    .description("Show the current contract for a task (or --version N). Accepts task id as positional or via --task for consistency with sibling verbs.")
+    .option("--task <id>", "task id (alternative to positional)")
     .option("--version <n>", "show a specific version instead of the current one", parsePositiveInt)
     .action(async function (
       this: Command,
-      taskId: string,
-      flags: { version?: number },
+      taskIdArg: string | undefined,
+      flags: { task?: string; version?: number },
     ): Promise<void> {
       try {
+        const taskId = taskIdArg ?? flags.task;
+        if (taskId === undefined || taskId.length === 0) {
+          console.error("maestro contract show: task id required (positional <taskId> or --task <id>)");
+          process.exitCode = 1;
+          return;
+        }
         const services = deps.getServices();
         const match: Contract | undefined =
           flags.version !== undefined

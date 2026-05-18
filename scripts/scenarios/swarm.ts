@@ -1,5 +1,5 @@
 /**
- * Sandbox preparation + dispatch instruction printer for Phase 6 swarm.
+ * Sandbox preparation + dispatch instruction printer for the scenario swarm.
  *
  * Usage:
  *   bun scripts/scenarios/swarm.ts --all
@@ -7,8 +7,7 @@
  *
  * For each requested scenario this script:
  *   1. Creates a fresh mktemp sandbox.
- *   2. Prepares it (greenfield: git init + maestro setup bootstrap;
- *      brownfield: cp -R v1 fixture + git init).
+ *   2. Prepares it (git init + maestro setup).
  *   3. Fills agent-brief.md placeholders and writes to the sandbox.
  *   4. Writes .maestro/scenarios/last-run.json with the scenario->dir map.
  *   5. Prints operator dispatch instructions.
@@ -22,11 +21,7 @@
 import { $ } from "bun";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  isKnownScenario,
-  projectTypeOf,
-  SCENARIO_NAMES,
-} from "./_scenarios.js";
+import { isKnownScenario, SCENARIO_NAMES } from "./_scenarios.js";
 import type { ScenarioName } from "./_scenarios.js";
 
 const repoRoot = join(import.meta.dir, "../..");
@@ -69,16 +64,10 @@ async function makeTempDir(): Promise<string> {
 
 async function prepareGreenfield(tmpdir: string): Promise<void> {
   await $`git init -q -b main`.cwd(tmpdir).quiet();
-  await $`maestro setup bootstrap`
+  await $`maestro setup`
     .cwd(tmpdir)
     .env({ ...process.env, MAESTRO_NO_UPDATE_CHECK: "1" })
     .quiet();
-}
-
-async function prepareBrownfield(tmpdir: string): Promise<void> {
-  const fixtureDir = join(repoRoot, "tests/fixtures/v1-maestro/.maestro");
-  await $`cp -R ${fixtureDir} ${join(tmpdir, ".maestro")}`;
-  await $`git init -q -b main`.cwd(tmpdir).quiet();
 }
 
 async function fillBrief(
@@ -109,7 +98,6 @@ async function fillBrief(
 interface ScenarioRecord {
   name: string;
   project_dir: string;
-  project_type: "greenfield" | "brownfield";
   prepared_at: string;
   brief_path: string;
 }
@@ -121,24 +109,16 @@ console.log(`Preparing ${scenarios.length} scenario sandbox(es) in parallel...\n
 
 const records: ScenarioRecord[] = await Promise.all(
   scenarios.map(async (name) => {
-    const type = projectTypeOf(name);
     const tmpdir = await makeTempDir();
+    await prepareGreenfield(tmpdir);
 
-    if (type === "greenfield") {
-      await prepareGreenfield(tmpdir);
-    } else {
-      await prepareBrownfield(tmpdir);
-    }
-
-    await mkdir(join(tmpdir, ".maestro/scenarios"), { recursive: true });
     const briefPath = await fillBrief(name, tmpdir);
 
-    console.log(`  [${type}] ${name} -> ${tmpdir} ... done`);
+    console.log(`  ${name} -> ${tmpdir} ... done`);
 
     return {
       name,
       project_dir: tmpdir,
-      project_type: type,
       prepared_at: new Date().toISOString(),
       brief_path: briefPath,
     };
@@ -162,22 +142,15 @@ await writeFile(lastRunPath, JSON.stringify(lastRun, null, 2) + "\n", "utf8");
 // ---- print dispatch instructions --------------------------------------------
 
 const COL_NAME = 32;
-const COL_TYPE = 12;
 
 console.log("\n=== SWARM SANDBOX PREP COMPLETE ===");
 console.log(`Run ID: ${runId}`);
 console.log(`Prepared ${records.length} scenario(s):\n`);
 
-console.log(
-  "Scenario".padEnd(COL_NAME) + "Type".padEnd(COL_TYPE) + "Sandbox",
-);
+console.log("Scenario".padEnd(COL_NAME) + "Sandbox");
 console.log("-".repeat(80));
 for (const rec of records) {
-  console.log(
-    rec.name.padEnd(COL_NAME) +
-      rec.project_type.padEnd(COL_TYPE) +
-      rec.project_dir,
-  );
+  console.log(rec.name.padEnd(COL_NAME) + rec.project_dir);
 }
 
 console.log("\n=== DISPATCH INSTRUCTIONS ===\n");

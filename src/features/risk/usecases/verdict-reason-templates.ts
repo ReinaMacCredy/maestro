@@ -24,9 +24,10 @@ export function costBudgetExhausted(reason?: CostBudgetExhaustionReason): Verdic
     code: "cost-budget-exhausted",
     message:
       `Cost budget exhausted; further execution blocked. ${limitClause}` +
-      "Run `maestro task budget --task <id>` to inspect the limits, " +
+      "Inspect the current budget on `maestro contract show --task <id>`, " +
       "amend the contract's costBudget via `maestro contract amend` " +
-      "to raise the cap, or escalate to a human via `maestro handoff emit`.",
+      "to raise the cap, or block the task with a reason for human pickup " +
+      "via `maestro task block <id> --reason \"...\"`.",
     ...(reason !== undefined ? { findingChecks: [reason] } : {}),
   };
 }
@@ -92,11 +93,18 @@ export function evidenceWitnessLevelInsufficient(args: {
 
 export function proofMapIncomplete(args: {
   uncoveredIds: readonly string[];
+  uncoveredCriteria?: readonly { readonly id: string; readonly text: string }[];
 }): VerdictReason {
+  const labels = (args.uncoveredCriteria ?? []).map((c) => `${c.id} ("${c.text}")`);
+  const list = labels.length > 0 ? labels.join("; ") : args.uncoveredIds.join(", ");
+  const example = args.uncoveredIds[0] ?? "<criterion_id>";
   return {
     category: "evidence",
     code: "proof-map-incomplete",
-    message: `${args.uncoveredIds.length} acceptance criterion/criteria lack covering evidence: ${args.uncoveredIds.join(", ")}. Record covering evidence with \`maestro evidence record\` carrying the matching criterion_id in the payload.`,
+    message:
+      `${args.uncoveredIds.length} acceptance criterion/criteria lack covering evidence: ${list}. ` +
+      `Record covering evidence with \`maestro evidence record --task <id> --criterion ${example} --command "..." --exit 0\` ` +
+      `(criterion id matches the spec's acceptance_criteria — see \`maestro spec show <slug>\` or the spec frontmatter).`,
   };
 }
 

@@ -1,8 +1,9 @@
 ---
 name: maestro-design
-description: Interview-driven product-spec authoring for maestro v2. Runs the grill protocol from ADR-0016 — walks the decision tree one branch at a time, challenges user language against CONTEXT.md and committed ADRs, cross-references claims against code when verifiable, updates CONTEXT.md inline as terms resolve, and offers ADRs sparingly. Produces a committed product-spec markdown at `.maestro/specs/<slug>.md` ready for `maestro task from-spec`. Use when the user wants to author or refine a spec before planning or implementation.
+description: Interview-driven product-spec authoring for maestro. Runs the grill protocol from ADR-0016 — walks the decision tree one branch at a time, challenges user language against CONTEXT.md and committed ADRs, cross-references claims against code when verifiable, updates CONTEXT.md inline as terms resolve, and offers ADRs sparingly. Produces a committed product-spec markdown at `.maestro/specs/<slug>.md` ready for `maestro task from-spec`. Use when the user wants to author or refine a spec before planning or implementation.
 parity-skip-verbs:
   - principle promote
+  - spec grill
 ---
 
 # Maestro Design
@@ -17,7 +18,7 @@ Track which state you are in throughout the session. Surface the state to the us
 
 - `needs-clarification` — the most recent answer was vague, contradicted committed context, or reused a defined term in a new way. You cannot advance the decision tree until it resolves. Re-ask the same branch with the conflict named.
 - `design-in-progress` — the decision tree has open branches (`acceptance_criteria`, `non_goals`, `risk_class`, `mode`, `work_type`, `dependencies`). Walk them one question per turn.
-- `ready-for-planning` — the spec is written to `.maestro/specs/<slug>.md` and `maestro spec validate` passed. The next phase is `maestro-plan` (heavy) or `maestro-task` (light). Surface the state and the slug, then hand off.
+- `ready-for-planning` — the spec is written to `.maestro/specs/<slug>.md` and `maestro spec validate` passed. The next phase is `maestro-mission` (heavy) or `maestro-task` (light). Surface the state and the slug, then hand off.
 
 ## Hard rules
 
@@ -113,17 +114,14 @@ Example frontmatter (refer to `src/types/product-spec.ts` for the authoritative 
 ```markdown
 ---
 slug: <kebab-case>
-title: <short title>
-status: draft
-acceptance:
+acceptance_criteria:
   - <falsifiable criterion>
   - <falsifiable criterion>
 non_goals:
   - <out-of-scope item>
 risk_class: medium
 mode: light
-work_type: feature
-blocked_by: []
+work_type: new-spec
 ---
 
 # <title>
@@ -147,16 +145,16 @@ Run `maestro spec validate .maestro/specs/<slug>.md`. Fix any frontmatter errors
 
 ### 9. Hand off cleanly
 
-The next phase after this skill is `maestro-plan` (for `mode: heavy` specs) or `maestro-task` (for `mode: light` specs).
+The next phase after this skill is `maestro-mission` (for `mode: heavy` specs) or `maestro-task` (for `mode: light` specs).
 Pass an approved, validated spec — not a vague direction.
 Do not invoke planning or implementation from this skill.
 
 Tell the user the slug, the spec path, and the matching next verb:
 
-- Heavy mode → `maestro plan from-spec .maestro/specs/<slug>.md`, then load `maestro-plan`.
+- Heavy mode → `maestro mission new "<title>" --from-spec .maestro/specs/<slug>.md`, then load `maestro-mission`.
 - Light mode → `maestro task from-spec .maestro/specs/<slug>.md`, then load `maestro-task` and `maestro task claim <id>`.
 
-Routing the wrong verb at the wrong mode is a silent footgun: `task from-spec` will accept a heavy spec and materialize an orphan task instead of an exec-plan. Match the verb to the spec's `mode:`.
+Routing the wrong verb at the wrong mode is a silent footgun: `task from-spec` will accept a heavy spec and materialize an orphan task instead of a mission. Match the verb to the spec's `mode:`.
 
 ## What the grill is not
 

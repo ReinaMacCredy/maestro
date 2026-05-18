@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { buildV2Services } from "../providers/build-services.js";
+import { buildCoreServices } from "../providers/build-services.js";
 import {
   CorrectionNotFoundError,
   CorrectionNotLintViolationError,
@@ -7,14 +7,14 @@ import {
 } from "../service/principle-promote.usecase.js";
 import { PrincipleParseError } from "../types/principle.js";
 
-export interface PrincipleCommandV2Options {
+export interface PrincipleCommandOptions {
   readonly resolveRepoRoot: () => string;
 }
 
 function findOrCreatePrincipleCommand(program: Command): Command {
   const existing = program.commands.find((c) => c.name() === "principle");
   if (existing) return existing;
-  return program.command("principle").description("Behavioral principles (v2)");
+  return program.command("principle").description("Behavioral principles");
 }
 
 function reportError(verb: string, err: unknown): void {
@@ -30,9 +30,9 @@ function reportError(verb: string, err: unknown): void {
   throw err;
 }
 
-export function registerPrincipleV2Commands(
+export function registerPrincipleCommands(
   program: Command,
-  opts: PrincipleCommandV2Options,
+  opts: PrincipleCommandOptions,
 ): void {
   const principle = findOrCreatePrincipleCommand(program);
 
@@ -45,7 +45,7 @@ export function registerPrincipleV2Commands(
     .action(async function (this: Command, correctionId: string, flags: { json?: boolean }): Promise<void> {
       try {
         const repoRoot = opts.resolveRepoRoot();
-        const services = buildV2Services({ repoRoot });
+        const services = buildCoreServices({ repoRoot });
         const result = await principlePromote(
           {
             evidenceStore: services.evidenceStore,

@@ -20,12 +20,26 @@ export interface SetupCheckDeps {
   readonly repoRoot: string;
 }
 
-const V2_DIRECTORIES: readonly { path: string; kind: "directory" }[] = [
+const EXPECTED_DIRECTORIES: readonly { path: string; kind: "directory" }[] = [
   { path: ".maestro/tasks", kind: "directory" },
-  { path: ".maestro/plans", kind: "directory" },
+  { path: ".maestro/missions", kind: "directory" },
   { path: ".maestro/evidence", kind: "directory" },
   { path: ".maestro/runs", kind: "directory" },
   { path: "docs/principles", kind: "directory" },
+];
+
+// Directories left over from a pre-0.102.0 layout. They are no longer
+// auto-migrated; surface them as `warn` so an upgrader sees their data
+// is stranded instead of getting an unqualified "ok".
+const STRANDED_DIRECTORIES: readonly { path: string; detail: string }[] = [
+  {
+    path: ".maestro/plans",
+    detail: "left over from 0.100.x; copy data manually to .maestro/missions and remove",
+  },
+  {
+    path: ".maestro/missions.tmp",
+    detail: "left over from 0.100.x migration; safe to delete after verifying .maestro/missions",
+  },
 ];
 
 const PRINCIPLES_DIR = "docs/principles";
@@ -33,15 +47,26 @@ const PRINCIPLES_DIR = "docs/principles";
 export async function setupCheck(deps: SetupCheckDeps): Promise<SetupCheckReport> {
   const entries: SetupCheckEntry[] = [];
 
-  for (const dir of V2_DIRECTORIES) {
+  for (const dir of EXPECTED_DIRECTORIES) {
     const abs = join(deps.repoRoot, dir.path);
     const exists = await dirExists(abs);
     entries.push({
       path: dir.path,
       kind: "directory",
       status: exists ? "ok" : "missing",
-      detail: exists ? undefined : "directory not found; run `maestro setup bootstrap`",
+      detail: exists ? undefined : "directory not found; run `maestro setup`",
     });
+  }
+
+  for (const dir of STRANDED_DIRECTORIES) {
+    if (await dirExists(join(deps.repoRoot, dir.path))) {
+      entries.push({
+        path: dir.path,
+        kind: "directory",
+        status: "warn",
+        detail: dir.detail,
+      });
+    }
   }
 
   const principlesAbs = join(deps.repoRoot, PRINCIPLES_DIR);
@@ -53,7 +78,7 @@ export async function setupCheck(deps: SetupCheckDeps): Promise<SetupCheckReport
       status: principleFiles.length === 0 ? "warn" : "ok",
       detail:
         principleFiles.length === 0
-          ? "no principles found; run `maestro setup bootstrap` to seed the default pack"
+          ? "no principles found; run `maestro setup` to seed the default pack"
           : `${principleFiles.length} principle file${principleFiles.length === 1 ? "" : "s"}`,
     });
   } else {
