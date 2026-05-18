@@ -74,6 +74,31 @@ export async function setupCheck(deps: SetupCheckDeps): Promise<SetupCheckReport
     detail: configExists ? undefined : "config.yaml not present (optional)",
   });
 
+  // Surface leftover v1 dirs so operators don't silently run with both layouts.
+  // `setup` migrates plans/ → missions/ atomically, but a stale plans/ can
+  // also appear if someone restored from an old backup or copied .maestro
+  // wholesale. `missions.tmp/` means a previous setup crashed mid-migration
+  // and should be resumed by re-running `maestro setup`.
+  for (const legacy of [
+    {
+      path: ".maestro/plans",
+      detail: "legacy v1 directory; run `maestro setup` to migrate to .maestro/missions/",
+    },
+    {
+      path: ".maestro/missions.tmp",
+      detail: "staged migration left behind by a prior crash; re-run `maestro setup` to resume",
+    },
+  ]) {
+    if (await dirExists(join(deps.repoRoot, legacy.path))) {
+      entries.push({
+        path: legacy.path,
+        kind: "directory",
+        status: "warn",
+        detail: legacy.detail,
+      });
+    }
+  }
+
   // ok semantics: nothing is `missing`. `warn` entries (empty principles pack,
   // absent config.yaml) are informational and do not gate the report.
   const ok = entries.every((e) => e.status !== "missing");

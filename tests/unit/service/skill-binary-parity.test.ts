@@ -3,41 +3,17 @@ import {
   checkSkillBinaryParity,
   renderDriftError,
 } from "@/service/skill-binary-parity.js";
+import { collectKnownVerbs } from "@/service/known-verbs.js";
+import { program } from "@/index.js";
 
 describe("checkSkillBinaryParity", () => {
-  it("returns no findings when all skill-referenced verbs exist (full paths)", () => {
-    // The parity check now validates the *full* verb path (e.g. "setup
-    // migrate-v2"), not just the head. src/index.ts populates knownVerbs by
-    // walking the Commander tree, which adds both leaf names and full paths.
-    // Mirror that here: enumerate the real verbs/subverbs the bundled SKILLs
-    // reference. When a subverb is added or removed, update this set.
-    const allVerbs = new Set<string>([
-      // Top-level / hot-path aliases.
-      "evidence", "contract", "task", "spec", "plan", "verdict",
-      "policy", "ci", "merge", "deploy", "runtime", "review",
-      "worktree", "setup", "handoff", "bundle", "skills", "mcp",
-      "recover", "gc", "principle", "init", "status", "doctor",
-      "install", "update", "uninstall", "providers", "reply",
-      "mission-control", "mission", "claim", "block", "abandon", "ship", "verify",
-      "intake", "qa", "note", "inspect", "project",
-      // Full subverb paths referenced by skills.
-      "ci verify",
-      "contract amend", "contract show",
-      "evidence list", "evidence record",
-      "gc slop-cleanup",
-      "mission cancel", "mission decompose", "mission new", "mission show",
-      "plan check",
-      "policy check",
-      "principle promote",
-      "setup check",
-      "spec grill", "spec new", "spec validate",
-      "task abandon", "task block", "task budget", "task claim",
-      "task from-spec", "task get", "task list", "task observe",
-      "task ship", "task verify",
-      "verdict request", "verdict show",
-      "worktree create",
-    ]);
-    const report = checkSkillBinaryParity({ knownVerbs: allVerbs });
+  it("returns no findings when verbs are collected from the real Commander tree", () => {
+    // Walk the actual program in src/index.ts so the test cannot drift away
+    // from what the binary actually exposes. If a skill (SKILL.md or any
+    // reference/*.md) references a dead verb, this test fails and surfaces
+    // the exact skill+verb pair.
+    const knownVerbs = collectKnownVerbs(program);
+    const report = checkSkillBinaryParity({ knownVerbs });
     expect(report.skillsChecked).toBeGreaterThan(0);
     expect(report.findings).toEqual([]);
   });

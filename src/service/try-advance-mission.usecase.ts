@@ -70,18 +70,27 @@ export async function tryAdvanceMission(
   if (!mission) return undefined;
   if (isTerminalMissionState(mission.state)) return mission;
 
-  // Tasks don't change inside the loop (only mission state does), so read once.
-  const tasks = await deps.taskStore.listByMissionId(mission.id);
-
+  // Re-read tasks on every iteration. The previous form read once outside the
+  // loop; concurrent ship/abandon during rollup would then leave the mission
+  // stuck at in-progress because the loop kept computing against the stale
+  // snapshot. Cheap re-read beats silent drift.
   for (let i = 0; i < FIXED_POINT_CAP; i += 1) {
     if (isTerminalMissionState(mission.state)) return mission;
+    const tasks = await deps.taskStore.listByMissionId(mission.id);
     const next = computeNext(mission.state, tasks);
     if (!next) return mission;
     mission = await advanceRollup(deps, mission, next, tasks);
   }
   // Reached the cap without computeNext returning undefined — this is a bug in
   // the rule set, not a runtime data issue. Loud failure beats silent drift.
-  if (computeNext(mission.state, tasks)) {
+  const finalTasks = await deps.taskStore.listByMissionId(mission.id);
+  if (computeNext(mission.state, finalTasks)) {
+    // Stderr-log before throwing so mission-control's tailers and operators
+    // running setup check see the mission id and stuck state even when the
+    // throw is caught downstream and rendered as a generic command failure.
+    console.error(
+      `[maestro] mission rollup cap (${FIXED_POINT_CAP}) exceeded for ${mission.id} at state=${mission.state}; this is a rollup-rule bug, please file an issue.`,
+    );
     throw new MissionRollupCapExceededError(mission.id, mission.state);
   }
   return mission;

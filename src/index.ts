@@ -45,6 +45,7 @@ import {
   checkSkillBinaryParity,
   renderDriftError,
 } from "@/service/skill-binary-parity.js";
+import { collectKnownVerbs } from "@/service/known-verbs.js";
 import { registerSpecV2Commands } from "@/runtime/spec.command.js";
 import { registerTaskV2Commands } from "@/runtime/task.command.js";
 import { registerMissionV2Commands } from "@/runtime/mission.command.js";
@@ -182,18 +183,7 @@ function maybePrintSkillDriftHint(argv: readonly string[]): void {
   const verbCandidate = extractFailingVerb(argv);
   if (!verbCandidate) return;
   try {
-    const knownVerbs = new Set<string>();
-    const walk = (cmd: Command, prefix: string): void => {
-      for (const child of cmd.commands) {
-        const name = child.name();
-        const full = prefix ? `${prefix} ${name}` : name;
-        knownVerbs.add(name);
-        knownVerbs.add(full);
-        walk(child, full);
-      }
-    };
-    walk(program, "");
-    for (const lazy of ["mission-control"]) knownVerbs.add(lazy);
+    const knownVerbs = collectKnownVerbs(program);
     const report = checkSkillBinaryParity({ knownVerbs });
     const match = report.findings.find((f) => verbMatches(f.verb, verbCandidate));
     if (match) {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { HANDOFF_TRIGGERS } from "@/repo/handoff-emitter.port.js";
 import { PROJECTION_VIEWS } from "@/shared/lib/projection.js";
+import { SPEC_SLUG_PATTERN } from "@/types/spec-id.js";
 import { TASK_STATES } from "@/types/task-state.js";
 
 // Accepts both v1 (tsk-aabbcc) and v2 (tsk-x-y) task ID formats.
@@ -157,6 +158,109 @@ export const TaskFromSpecInput = z
       .min(1)
       .describe(
         "Absolute or repo-root-relative path to the product-spec markdown file. Example: 'docs/specs/add-caching.md'.",
+      ),
+  })
+  .strict();
+
+// Slug shape mirrors generateSpecSlug output (kebab-case, 3..64 chars).
+// Reject off-shape values at the boundary -- the slug is concatenated into
+// child task slugs under --template, so an exotic value (whitespace, '../')
+// would leak into on-disk records and CLI output downstream.
+const missionSlug = z
+  .string()
+  .regex(SPEC_SLUG_PATTERN, "Invalid mission slug")
+  .describe("kebab-case slug, 3..64 chars, [a-z0-9-]. Defaults to slugified title when omitted.");
+
+// Raw shape exported for MCP SDK introspection; ZodEffects from .refine()
+// strips the .shape accessor and would surface as `"properties": {}` to
+// agents calling tools/list. Cross-field validation lives on MissionNewInput.
+export const MissionNewShape = {
+  title: z
+    .string()
+    .min(1)
+    .describe("Mission title. Required."),
+  slug: missionSlug.optional(),
+  mode: z
+    .enum(["bare", "from-spec", "from-file", "template"])
+    .optional()
+    .describe(
+      "Creation mode: 'bare' (default) -> intake; 'from-spec' -> approved from a heavy-mode spec; 'from-file' -> planned from a JSON task batch; 'template' -> planned from a named template.",
+    ),
+  from_spec: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Required when mode='from-spec'. Absolute or repo-root-relative path to a heavy-mode spec."),
+  from_file: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Required when mode='from-file'. Absolute or repo-root-relative path to a JSON task-batch file."),
+  template: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Required when mode='template'. Name of a built-in or user template."),
+} as const;
+
+export const MissionNewInput = z
+  .object(MissionNewShape)
+  .strict()
+  .refine(
+    (d) => d.mode !== "from-spec" || d.from_spec !== undefined,
+    { message: "from_spec is required when mode='from-spec'", path: ["from_spec"] },
+  )
+  .refine(
+    (d) => d.mode !== "from-file" || d.from_file !== undefined,
+    { message: "from_file is required when mode='from-file'", path: ["from_file"] },
+  )
+  .refine(
+    (d) => d.mode !== "template" || d.template !== undefined,
+    { message: "template is required when mode='template'", path: ["template"] },
+  );
+
+export const MissionCancelInput = z
+  .object({
+    mission_id: missionId,
+    reason: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Human-readable cancel reason recorded on the mission and cascaded task abandonments."),
+  })
+  .strict();
+
+export const MissionShowInput = z
+  .object({
+    mission_id: missionId,
+  })
+  .strict();
+
+export const MissionFromSpecInput = z
+  .object({
+    spec_path: z
+      .string()
+      .min(1)
+      .describe("Absolute or repo-root-relative path to a heavy-mode product-spec markdown file."),
+  })
+  .strict();
+
+const MissionDecomposeTaskShape = z
+  .object({
+    title: z.string().min(1),
+    slug: z.string().min(1),
+    spec_path: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const MissionDecomposeInput = z
+  .object({
+    mission_id: missionId,
+    tasks: z
+      .array(MissionDecomposeTaskShape)
+      .min(1)
+      .describe(
+        "Task batch. Each entry needs title + slug; spec_path is optional and inherits from the mission when omitted.",
       ),
   })
   .strict();

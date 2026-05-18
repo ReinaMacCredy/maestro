@@ -120,7 +120,7 @@ Bare missions sit in `intake` until decompose attaches tasks. `mission decompose
 ]
 ```
 
-The batch is validated atomically: no duplicate slugs within the batch, no collisions with existing tasks. Decompose refuses missions that already have any tasks — use `task new` to add more tasks manually, or `mission cancel` and start over.
+The batch is validated atomically: no duplicate slugs within the batch, no collisions with existing tasks. Decompose refuses missions that already have any tasks — use `task from-spec` to add more tasks manually, or `mission cancel` and start over.
 
 ### Inspect the mission
 

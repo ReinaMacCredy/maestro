@@ -415,10 +415,19 @@ const VENDORED_DIR_PREFIXES = [
   ".cache/",
 ] as const;
 
-function isVendoredOrBuildPath(path: string): boolean {
+// Anchored to the repo root only. The earlier substring-match form
+// (`.includes('/node_modules/')`) allowed an attacker to plant a real secret
+// under `tests/fixtures/node_modules/` and slip past the scanner. The
+// false-negative cost of skipping a nested workspace's vendored dir is much
+// smaller than the false-negative cost of skipping an attacker-chosen path.
+//
+// Exported for the regression test in
+// tests/unit/shared/domain/legacy-task/git-anchor-vendored-skip.test.ts.
+// Production code reaches it via shouldSkipSecretsScan.
+export function isVendoredOrBuildPath(path: string): boolean {
   const normalized = normalizeSlashes(path);
   for (const prefix of VENDORED_DIR_PREFIXES) {
-    if (normalized.startsWith(prefix) || normalized.includes(`/${prefix}`)) return true;
+    if (normalized.startsWith(prefix)) return true;
   }
   return false;
 }

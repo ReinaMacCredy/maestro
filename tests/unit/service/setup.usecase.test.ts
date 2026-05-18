@@ -358,6 +358,26 @@ describe("runSetup (plans -> missions migration)", () => {
     expect(moved).toContain('"state":"planned"');
   });
 
+  it("resumes from .maestro/missions.tmp/ if a prior run crashed mid-migration", async () => {
+    // Simulate a crash after step 1 (plans -> missions.tmp rename) but before
+    // step 2 (per-file move into missions/). The next setup run must finish
+    // the migration without re-renaming plans (which no longer exists) and
+    // without tripping the "missions already has v2 data" guard.
+    const tmpStaging = join(tmpDir, ".maestro", "missions.tmp");
+    await mkdir(tmpStaging, { recursive: true });
+    await writeFile(join(tmpStaging, "plans.jsonl"), '{"id":"pln-1","slug":"a","title":"A","state":"approved","created_at":"2026-04-01T00:00:00Z","updated_at":"2026-04-01T00:00:00Z"}\n');
+
+    const result = await runSetup(project());
+
+    const moved = join(tmpDir, ".maestro", "missions", "missions.jsonl");
+    expect(await readFile(moved, "utf8")).toContain('"id":"pln-1"');
+    await expect(access(tmpStaging)).rejects.toThrow();
+
+    const step = result.steps.find((s) => s.id === "migrate-plans-to-missions");
+    expect(step?.status).toBe("changed");
+    expect(step?.paths.some((p) => p.detail?.includes("resuming"))).toBe(true);
+  });
+
   it("rewrites legacy plan_id to mission_id on tasks during migration", async () => {
     const tasksDir = join(tmpDir, ".maestro", "tasks");
     await mkdir(tasksDir, { recursive: true });

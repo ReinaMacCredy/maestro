@@ -56,6 +56,42 @@ describe("setupCheck", () => {
     expect(report.ok).toBe(true);
   });
 
+  it("warns when leftover .maestro/plans/ is present after migration", async () => {
+    for (const rel of [
+      ".maestro/tasks",
+      ".maestro/missions",
+      ".maestro/evidence",
+      ".maestro/runs",
+      "docs/principles",
+      ".maestro/plans",
+    ]) {
+      await mkdir(join(root, rel), { recursive: true });
+    }
+    await writeFile(join(root, "docs/principles/x.md"), "# x\n## Rule\n\nx\n## Rationale\n\nx\n## Scan Command\n\n! rg x\n## Fix Recipe\n\nx\n", "utf8");
+    const report = await setupCheck({ repoRoot: root });
+    const plans = report.entries.find((e) => e.path === ".maestro/plans");
+    expect(plans?.status).toBe("warn");
+    expect(plans?.detail).toContain("maestro setup");
+  });
+
+  it("warns when .maestro/missions.tmp/ remains from a crashed migration", async () => {
+    for (const rel of [
+      ".maestro/tasks",
+      ".maestro/missions",
+      ".maestro/evidence",
+      ".maestro/runs",
+      "docs/principles",
+      ".maestro/missions.tmp",
+    ]) {
+      await mkdir(join(root, rel), { recursive: true });
+    }
+    await writeFile(join(root, "docs/principles/x.md"), "# x\n## Rule\n\nx\n## Rationale\n\nx\n## Scan Command\n\n! rg x\n## Fix Recipe\n\nx\n", "utf8");
+    const report = await setupCheck({ repoRoot: root });
+    const tmp = report.entries.find((e) => e.path === ".maestro/missions.tmp");
+    expect(tmp?.status).toBe("warn");
+    expect(tmp?.detail).toContain("resume");
+  });
+
   it("warns (not missing) when only .maestro/config.yaml is absent", async () => {
     for (const rel of [
       ".maestro/tasks",

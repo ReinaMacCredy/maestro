@@ -41,7 +41,7 @@ Run this loop before marking any task done. Steps are ordered; do not skip.
    - `2` HUMAN — task stays at `verifying` with the reason recorded. Surface to the user; do not retry without guidance.
    - `3` BLOCK — task is now `blocked` with `block_reason`. Surface the reason; do not retry.
 
-If retries are accumulating before step 4, run `maestro task budget --task <id>` to check consumption (`reference/verdict.md` covers cost-budget interpretation).
+If retries are accumulating before step 4, the verdict envelope's `costBudgetExhausted` / `costBudgetReason` fields report the budget state directly (see `reference/verdict.md` for cost-budget interpretation). When the budget is exhausted, the next `verdict request` returns BLOCK.
 
 ### Harness-delta evidence
 

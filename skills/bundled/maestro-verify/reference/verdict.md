@@ -68,23 +68,17 @@ non-PASS verdict (full reference: `docs/edge-cases.md`):
 
 ## Cost-Budget Monitoring
 
-When retries are accumulating, check the current budget consumption before
-the next loop:
+When retries are accumulating, read the budget state directly from the most
+recent verdict envelope (`maestro verdict show --task <id> --json`):
 
-```bash
-maestro task budget --task <id>
-maestro task budget --task <id> --json
-```
+- `costBudgetExhausted: true | false`
+- `costBudgetReason: "max-retries" | "max-wall-clock-seconds" | "max-tokens"` (present only when exhausted)
 
-Fields reported:
-
-- `retryCount / maxRetries`
-- `wallClockElapsedSeconds / maxWallClockSeconds`
-- `tokensUsed / maxTokens` (when the contract sets a token cap)
-- `exhausted: yes/no` and reason when exhausted
+The contract's `costBudget` (visible via `maestro contract show --task <id>`) carries the configured `maxRetries`, `maxWallClockSeconds`, and `maxTokens` caps; the verdict envelope reports which one tripped.
 
 Once any limit is exceeded, the next `verdict request` returns `BLOCK`. At
-that point, stop and surface the reason to the user.
+that point, stop and surface the reason to the user — `maestro contract amend`
+can raise the cap if continued execution is warranted.
 
 ## AI Reviewer Protocol (Rule 1)
 

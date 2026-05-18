@@ -24,9 +24,10 @@ export function costBudgetExhausted(reason?: CostBudgetExhaustionReason): Verdic
     code: "cost-budget-exhausted",
     message:
       `Cost budget exhausted; further execution blocked. ${limitClause}` +
-      "Run `maestro task budget --task <id>` to inspect the limits, " +
+      "Inspect the current budget on `maestro contract show --task <id>`, " +
       "amend the contract's costBudget via `maestro contract amend` " +
-      "to raise the cap, or escalate to a human via `maestro handoff emit`.",
+      "to raise the cap, or block the task with a reason for human pickup " +
+      "via `maestro task block <id> --reason \"...\"`.",
     ...(reason !== undefined ? { findingChecks: [reason] } : {}),
   };
 }

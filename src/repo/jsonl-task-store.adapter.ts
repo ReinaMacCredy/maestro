@@ -21,10 +21,26 @@ export interface JsonlTaskStoreOptions {
   readonly idFactory?: () => TaskId;
 }
 
+/**
+ * Single-writer JSONL adapter. `#queue` is an in-process Promise chain — it
+ * serializes writes within ONE Node/Bun process only. Two `maestro` processes
+ * mutating the same `.maestro/tasks/tasks.jsonl` concurrently will race; the
+ * atomic `tmp+rename` pattern in `writeText` keeps individual writes
+ * crash-safe, but the read-modify-write cycle is NOT protected by any
+ * file-system lock.
+ *
+ * This is intentional: the agent harness's expected concurrency model is one
+ * driving CLI process per task. If that assumption changes (multi-process
+ * driver, IDE plugin co-driving an MCP server, etc.), this adapter needs a
+ * file-lock-based serializer — `#queue` is not enough.
+ */
 export class JsonlTaskStore implements TaskStorePort {
   readonly #file: string;
   readonly #clock: () => Date;
   readonly #idFactory: () => TaskId;
+  // In-process write serializer. See class-level doc above for the
+  // cross-process caveat — this Promise chain only orders writes within ONE
+  // process; concurrent processes still race.
   #queue: Promise<void> = Promise.resolve();
 
   constructor(options: JsonlTaskStoreOptions) {

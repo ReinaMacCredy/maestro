@@ -6,6 +6,10 @@ import {
   taskFromSpec,
 } from "@/service/index.js";
 import { refreshNowMdFromServices } from "@/service/refresh-now-md.js";
+import {
+  FsContractStoreAdapter,
+  FsContractVersionStoreAdapter,
+} from "@/shared/domain/legacy-task/index.js";
 import type { Task } from "@/types/task.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
@@ -175,6 +179,9 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
             observabilityStore: services.v2.observabilityStore,
             worktreeStore: services.v2.worktreeStore,
             handoffEmitter: services.v2.handoffEmitter,
+            contractStore: new FsContractStoreAdapter(services.projectRoot),
+            contractVersionStore: new FsContractVersionStoreAdapter(services.projectRoot),
+            repoRoot: services.projectRoot,
           },
           { id: args.id, agentId },
         );

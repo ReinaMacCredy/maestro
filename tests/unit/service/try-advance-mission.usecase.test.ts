@@ -504,4 +504,67 @@ describe("tryAdvanceMission", () => {
     expect(out!.state).toBe("in-progress");
     expect(evidence.length).toBe(0);
   });
+
+  it("throws MissionRollupCapExceededError when rollup never reaches steady state", async () => {
+    // Simulate a rule-set bug: listByMissionId returns task snapshots that
+    // alternate between "every active task blocked" and "some active task
+    // unblocked" on each call. That would drive a pause/resume bounce past
+    // the fixed-point cap. The cap is the safety net against silent drift.
+    const { missionStore, plans, evidenceStore } = makeStores();
+    const plan = await missionStore.create({
+      slug: "thrash",
+      title: "Thrash",
+      state: "in-progress",
+    });
+    // Mock task store whose listByMissionId toggles every call. Only the
+    // listByMissionId path matters for tryAdvanceMission's hot loop.
+    let call = 0;
+    const baseTask = {
+      id: "tsk-a" as TaskId,
+      slug: "a",
+      title: "A",
+      mission_id: plan.id,
+      blocked_by: [] as string[],
+      created_at: FROZEN.toISOString(),
+      updated_at: FROZEN.toISOString(),
+    };
+    const ponyTaskStore: TaskStorePort = {
+      async create() {
+        throw new Error("unused");
+      },
+      async createMany() {
+        throw new Error("unused");
+      },
+      async get() {
+        return undefined;
+      },
+      async update() {
+        throw new Error("unused");
+      },
+      async list() {
+        return [];
+      },
+      async listByState() {
+        return [];
+      },
+      async listByMissionId() {
+        call += 1;
+        const state: TaskState = call % 2 === 1 ? "blocked" : "doing";
+        return [{ ...baseTask, state }];
+      },
+    };
+    await expect(
+      tryAdvanceMission(
+        { missionStore, taskStore: ponyTaskStore, evidenceStore },
+        { mission_id: plan.id, trigger_task_verb: "task:block" },
+      ),
+    ).rejects.toMatchObject({
+      name: "MissionRollupCapExceededError",
+      missionId: plan.id,
+    });
+    // The mission record was advanced through several states but never
+    // reached the cap-clearing rule, so it sits at one of the bouncing states.
+    const final = plans.get(plan.id);
+    expect(["paused", "in-progress"]).toContain(final!.state);
+  });
 });

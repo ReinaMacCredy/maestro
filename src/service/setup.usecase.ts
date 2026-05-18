@@ -217,10 +217,19 @@ async function stepMigratePlansToMissions(
 ): Promise<SetupStepResult> {
   const plansDir = join(dir, ".maestro", "plans");
   const missionsDir = join(dir, ".maestro", "missions");
+  // Staging dir: `.maestro/plans/` is renamed here as the first atomic
+  // boundary; the second boundary is per-file move into `.maestro/missions/`.
+  // Crashing between the two boundaries leaves `.maestro/missions.tmp/`,
+  // which the next setup invocation finds and resumes from.
+  const tmpDir = join(dir, ".maestro", "missions.tmp");
   await assertProjectLocalPathSafe(dir, plansDir);
   await assertProjectLocalPathSafe(dir, missionsDir);
+  await assertProjectLocalPathSafe(dir, tmpDir);
 
-  if (!(await dirExists(plansDir))) {
+  const tmpExists = await dirExists(tmpDir);
+  const plansExists = await dirExists(plansDir);
+
+  if (!plansExists && !tmpExists) {
     return {
       id: "migrate-plans-to-missions",
       label: "Migrate .maestro/plans/ -> .maestro/missions/",
@@ -230,16 +239,22 @@ async function stepMigratePlansToMissions(
     };
   }
 
-  const existingMissions = await listFilesIfDir(missionsDir);
-  if (existingMissions.some((p) => /\.jsonl$/.test(p))) {
-    return {
-      id: "migrate-plans-to-missions",
-      label: "Migrate .maestro/plans/ -> .maestro/missions/",
-      status: "error",
-      detail:
-        ".maestro/missions/ already has v2 data; resolve manually before re-running setup",
-      paths: [{ path: missionsDir, action: "skip" }],
-    };
+  // Pre-flight: only fire the "real v2 data already here" guard when we're
+  // NOT in recovery mode. If tmpDir exists, missions/ may already hold
+  // partially-moved files from a previous crash; treat that as a resume,
+  // not a collision.
+  if (!tmpExists) {
+    const existingMissions = await listFilesIfDir(missionsDir);
+    if (existingMissions.some((p) => /\.jsonl$/.test(p))) {
+      return {
+        id: "migrate-plans-to-missions",
+        label: "Migrate .maestro/plans/ -> .maestro/missions/",
+        status: "error",
+        detail:
+          ".maestro/missions/ already has v2 data; resolve manually before re-running setup",
+        paths: [{ path: missionsDir, action: "skip" }],
+      };
+    }
   }
 
   const paths: SetupPathEntry[] = [];
@@ -254,35 +269,51 @@ async function stepMigratePlansToMissions(
     };
   }
 
-  await ensureDir(missionsDir);
-  paths.push({ path: missionsDir, action: "create" });
-
-  const entries = await readdir(plansDir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fromPath = join(plansDir, entry.name);
-    const toName = renamePlansFile(entry.name);
-    const toPath = join(missionsDir, toName);
-    // assertProjectLocalPathSafe lstats every segment, which refuses symlinked
-    // entries planted in .maestro/plans/ before they get renamed across roots.
-    await assertProjectLocalPathSafe(dir, fromPath);
-    await assertProjectLocalPathSafe(dir, toPath);
-    await rename(fromPath, toPath);
-    if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-      const rewritten = await rewriteMissionJsonlContent(toPath);
-      if (rewritten > 0) {
-        paths.push({
-          path: toPath,
-          action: "move",
-          detail: `from ${fromPath}; rewrote ${rewritten} row(s)`,
-        });
-        continue;
-      }
-    }
-    paths.push({ path: toPath, action: "move", detail: `from ${fromPath}` });
+  // Step 1: atomic stage. Single rename moves plans/ → missions.tmp/. After
+  // this, .maestro/plans no longer exists; everything is under tmpDir.
+  if (!tmpExists && plansExists) {
+    await rename(plansDir, tmpDir);
+    paths.push({ path: tmpDir, action: "move", detail: `from ${plansDir} (staged)` });
+  } else if (tmpExists) {
+    paths.push({
+      path: tmpDir,
+      action: "skip",
+      detail: "resuming previously staged migration",
+    });
   }
 
-  await rm(plansDir, { recursive: true, force: true });
-  paths.push({ path: plansDir, action: "delete" });
+  // Step 2: rewrite and move each entry. Rewrites are atomic per-file (tmp+
+  // rename inside writeText); per-file renames into missions/ are themselves
+  // single rename ops, so an interruption leaves either the source in tmpDir
+  // or the destination in missionsDir, never both.
+  await ensureDir(missionsDir);
+  const entries = await readdir(tmpDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fromPath = join(tmpDir, entry.name);
+    const toName = renamePlansFile(entry.name);
+    const toPath = join(missionsDir, toName);
+    await assertProjectLocalPathSafe(dir, fromPath);
+    await assertProjectLocalPathSafe(dir, toPath);
+    let rewritten = 0;
+    if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+      // Idempotent: rewriting an already-migrated row (state already
+      // "approved") is a no-op and returns 0.
+      rewritten = await rewriteMissionJsonlContent(fromPath);
+    }
+    await rename(fromPath, toPath);
+    paths.push({
+      path: toPath,
+      action: "move",
+      detail:
+        rewritten > 0
+          ? `from ${fromPath}; rewrote ${rewritten} row(s)`
+          : `from ${fromPath}`,
+    });
+  }
+
+  // Step 3: drop the now-empty staging dir.
+  await rm(tmpDir, { recursive: true, force: true });
+  paths.push({ path: tmpDir, action: "delete" });
 
   return {
     id: "migrate-plans-to-missions",
@@ -533,11 +564,14 @@ async function stepDropTemplates(
 
     const existing = await readText(target);
     if (existing !== undefined) {
-      const allowAutoMigrate =
-        opts.resetTemplates === true &&
-        shouldAutoMigrateLegacyTemplate(template.path, existing, template.content);
+      // `--reset-templates` is the non-interactive force flag (CI / scripted
+      // use, where no TTY prompter is wired up). When no flag is set, fall
+      // back to the interactive confirm. The previous form gated on a
+      // `shouldAutoMigrateLegacyTemplate` predicate that was symbolically
+      // always false (it compared `nextContent` to the template content it
+      // was derived from), so `--reset-templates` quietly did nothing.
       const okToReplace =
-        allowAutoMigrate ||
+        opts.resetTemplates === true ||
         (opts.confirmReplace !== undefined && (await opts.confirmReplace(target)));
       if (!okToReplace) {
         paths.push({ path: target, action: "skip" });
@@ -763,16 +797,6 @@ async function ensureRuntimeGitignore(
   const comment = lines.has(RUNTIME_GITIGNORE_COMMENT) ? "" : `${RUNTIME_GITIGNORE_COMMENT}\n`;
   await writeText(gitignorePath, `${existing}${prefix}${comment}${missingLines.join("\n")}\n`);
   return { path: gitignorePath, action: "create" };
-}
-
-function shouldAutoMigrateLegacyTemplate(
-  relativePath: string,
-  existingContent: string,
-  nextContent: string,
-): boolean {
-  const defaultTemplate = PROJECT_BOOTSTRAP_TEMPLATES.find((t) => t.path === relativePath);
-  if (!defaultTemplate) return false;
-  return existingContent === defaultTemplate.content && nextContent !== defaultTemplate.content;
 }
 
 async function listFilesIfDir(dir: string): Promise<readonly string[]> {

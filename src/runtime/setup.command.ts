@@ -100,7 +100,11 @@ export async function runSetupCommand(
 
   try {
     const report = await runSetup({
-      dir: process.cwd(),
+      // Walk to the canonical project root (linked-worktree-aware, gitfallback,
+      // existing-.maestro-aware) instead of writing to wherever the agent's cwd
+      // happens to be. Without this, running `maestro setup` from a subdir of a
+      // git repo would scatter .maestro/ into the subdir.
+      dir: deps.resolveRepoRoot(),
       global: flags.global === true,
       config: services.config,
       dryRun: flags.dryRun === true,

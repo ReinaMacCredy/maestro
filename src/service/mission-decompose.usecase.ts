@@ -66,7 +66,7 @@ export class MissionDecomposeAlreadyHasTasksError extends Error {
   readonly count: number;
   constructor(missionId: string, count: number) {
     super(
-      `mission ${missionId} already has ${count} task(s); decompose only accepts missions with zero tasks. Use \`task new\` to add more tasks manually, or \`mission cancel\` and start over.`,
+      `mission ${missionId} already has ${count} task(s); decompose only accepts missions with zero tasks. Use \`task from-spec\` to add more tasks manually, or \`mission cancel\` and start over.`,
     );
     this.name = "MissionDecomposeAlreadyHasTasksError";
     this.missionId = missionId;
