@@ -196,7 +196,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     {
       title: "Mark a handoff envelope as picked up",
       description:
-        "Record that the calling agent has read this envelope and is taking the work, so concurrent agents do not duplicate. This is a bookkeeping mark; it does not claim the task — call maestro_task_claim separately. Writes a sidecar at .maestro/handoffs/<id>.picked_up.json using exclusive create; a second pickup attempt returns HANDOFF_ALREADY_PICKED_UP. Error codes: HANDOFF_NOT_FOUND, HANDOFF_ALREADY_PICKED_UP, HANDOFF_PICKUP_FAILED, HANDOFF_MALFORMED.",
+        "Record that the calling agent has read this envelope and is taking the work, so concurrent agents do not duplicate. This is a bookkeeping mark; it does not claim the task — call maestro_task_claim separately. Writes a sidecar at .maestro/handoffs/<id>.picked_up.json using exclusive create; a second pickup attempt returns HANDOFF_ALREADY_PICKED_UP. Error codes: HANDOFF_NOT_FOUND, HANDOFF_ALREADY_PICKED_UP, HANDOFF_PICKUP_FAILED, HANDOFF_MALFORMED. Returns a top-level warnings: string[] field when the envelope's to_agent differs from picked_up_by; the pickup still succeeds.",
       inputSchema: HandoffPickupInput,
       annotations: {
         readOnlyHint: false,
@@ -234,7 +234,15 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
           ...(args.note !== undefined ? { note: args.note } : {}),
         };
         await emitter.markPickedUp(args.id, pickup);
-        return toCallToolResult(ok({ envelope, pickup }));
+        const warnings =
+          envelope.to_agent !== undefined && envelope.to_agent !== pickup.picked_up_by
+            ? [
+                `Envelope was addressed to '${envelope.to_agent}'; picked up by '${pickup.picked_up_by}'. Pickup recorded; verify this is the envelope you intended.`,
+              ]
+            : undefined;
+        return toCallToolResult(
+          ok(warnings !== undefined ? { envelope, pickup, warnings } : { envelope, pickup }),
+        );
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "HANDOFF_PICKUP_FAILED"));
       }
