@@ -20,6 +20,7 @@ export interface HandoffEnvelope {
   readonly trigger_verb: HandoffTrigger;
   readonly created_at: string;
   readonly agent_id?: string;
+  readonly to_agent?: string;
   readonly worktree_path?: string;
   readonly spec_path?: string;
   readonly reason?: string;

@@ -44,6 +44,7 @@ export interface HandoffSummary {
   readonly id: string;
   readonly task_id: string;
   readonly trigger_verb: string;
+  readonly to_agent?: string;
   readonly created_at: string;
   readonly picked_up: boolean;
 }
@@ -56,6 +57,7 @@ export function summarizeHandoff(
     id: envelope.id,
     task_id: envelope.task_id,
     trigger_verb: envelope.trigger_verb,
+    ...(envelope.to_agent !== undefined ? { to_agent: envelope.to_agent } : {}),
     created_at: envelope.created_at,
     picked_up: pickedUp,
   };

@@ -84,6 +84,7 @@ async function seedHandoff(): Promise<void> {
     trigger_verb: "task:claim",
     created_at: FIXED_NOW,
     agent_id: "agent-test-suite",
+    to_agent: "codex",
     worktree_path: "/tmp/maestro-test-worktree",
     spec_path: ".maestro/specs/demo.md",
     reason: "needs human review of approach before continuing",
@@ -172,6 +173,7 @@ describe("token-budget contract: default emits only summary keys", () => {
     expect("spec_path" in item).toBe(false);
     expect("reason" in item).toBe(false);
     expect("picked_up" in item).toBe(true);
+    expect(item.to_agent).toBe("codex");
   });
 });
 
