@@ -87,6 +87,7 @@ function fakeVerdictStore(verdict: Verdict): VerdictStorePort {
     history: async () => [verdict],
     findByTreeSha: async (treeSha) =>
       verdict.subject?.tree_sha === treeSha ? [verdict] : [],
+    readLatestWithCorruption: async () => ({ verdict, corruptCount: 0 }),
   };
 }
 

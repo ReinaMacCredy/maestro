@@ -8,17 +8,35 @@ import {
 } from "../domain/agents.js";
 import { escapeRegex } from "@/shared/lib/regex.js";
 
-function buildBlockRegex(startMarker: string, endMarker: string): RegExp {
-  return new RegExp(`${escapeRegex(startMarker)}[\\s\\S]*?${escapeRegex(endMarker)}`);
+function buildBlockRegex(
+  startMarker: string,
+  endMarker: string,
+  global = false,
+): RegExp {
+  return new RegExp(
+    `${escapeRegex(startMarker)}[\\s\\S]*?${escapeRegex(endMarker)}`,
+    global ? "g" : "",
+  );
 }
 
 function buildReferenceRegex(line: string): RegExp {
   return new RegExp(`^${escapeRegex(line)}\\s*$`, "m");
 }
 
+// Non-global regexes are used for `test`/`match` (single-match probes that
+// must avoid `lastIndex` statefulness across calls). The `_G` variants carry
+// the `g` flag so `String.replace` rewrites EVERY managed block in the file —
+// without `g`, a duplicate block (e.g. from a merge-conflict resolution) would
+// leave stale content behind.
 const BLOCK_REGEX = buildBlockRegex(BLOCK_START_MARKER, BLOCK_END_MARKER);
+const BLOCK_REGEX_G = buildBlockRegex(BLOCK_START_MARKER, BLOCK_END_MARKER, true);
 const SETUP_BLOCK_REGEX = buildBlockRegex(SETUP_BLOCK_START_MARKER, SETUP_BLOCK_END_MARKER);
-const LEGACY_HEADING_REGEX = /\n## Cross-Agent Handoff \(maestro\)[\s\S]*?(?=\n## |\n$|$)/;
+const SETUP_BLOCK_REGEX_G = buildBlockRegex(
+  SETUP_BLOCK_START_MARKER,
+  SETUP_BLOCK_END_MARKER,
+  true,
+);
+const LEGACY_HEADING_REGEX = /\n## Cross-Agent Handoff \(maestro\)[\s\S]*?(?=\n## |\n$|$)/g;
 
 const REFERENCE_LINE = `@${REFERENCE_FILE}`;
 const SETUP_REFERENCE_LINE = `@${SETUP_REFERENCE_FILE}`;
@@ -93,13 +111,15 @@ export function injectBlock(content: string, block: string): string {
 
 export function replaceBlock(content: string, newBlock: string): string | null {
   if (!hasBlock(content)) return null;
-  return content.replace(BLOCK_REGEX, wrapBlock(newBlock));
+  // Use the global regex so every managed block is rewritten — protects
+  // against duplicate blocks left by merge-conflict resolution.
+  return content.replace(BLOCK_REGEX_G, wrapBlock(newBlock));
 }
 
 export function removeBlock(content: string): string | null {
   if (!hasBlock(content)) return null;
   return content
-    .replace(BLOCK_REGEX, "")
+    .replace(BLOCK_REGEX_G, "")
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd() + "\n";
 }
@@ -128,5 +148,5 @@ export function injectSetupBlock(content: string, block: string): string {
 
 export function replaceSetupBlock(content: string, newBlock: string): string | null {
   if (!hasSetupBlock(content)) return null;
-  return content.replace(SETUP_BLOCK_REGEX, wrapSetupBlock(newBlock));
+  return content.replace(SETUP_BLOCK_REGEX_G, wrapSetupBlock(newBlock));
 }

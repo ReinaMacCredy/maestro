@@ -118,7 +118,7 @@ async function verdictFreshnessCheck(deps: RunDoctorDeps): Promise<DoctorCheck> 
   if (!newest) {
     return {
       name: "verdict-freshness",
-      status: "fail",
+      status: "warn",
       message: `${tasks.length} task(s) exist but no verdicts have been written`,
       fix: "Run: maestro task verify <id>",
     };

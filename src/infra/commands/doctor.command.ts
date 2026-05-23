@@ -31,9 +31,8 @@ export function registerDoctorCommand(
         full: opts.full === true,
       });
 
-      const scaffoldFailed = checks.some(
-        (c) => c.name === "scaffold" && c.status === "fail",
-      );
+      const failedChecks = checks.filter((c) => c.status === "fail");
+      const scaffoldFailed = failedChecks.some((c) => c.name === "scaffold");
 
       const isJson = opts.json ?? program.opts().json;
       output(isJson, checks, (list) => {
@@ -54,15 +53,17 @@ export function registerDoctorCommand(
           "",
           scaffoldFailed
             ? "Scaffold check failed -- run `maestro setup` and re-run"
-            : "All required checks passed",
+            : failedChecks.length > 0
+              ? `${failedChecks.length} check(s) failed -- inspect output above`
+              : "All required checks passed",
         );
         return lines;
       });
 
-      // Exit code semantics: only scaffold failure gates the exit code.
-      // Other checks (verdict-freshness, build, tests) produce warnings but
-      // don't fail doctor. This keeps the fast form (what init.sh calls)
-      // sub-second and ensures doctor is a status check, not a gate.
-      if (scaffoldFailed) process.exit(1);
+      // Exit code semantics: any check with status "fail" gates the exit
+      // code. "warn" stays advisory. This keeps the JSON output and the
+      // exit code in agreement, so `init.sh` (which uses `set -e`) treats
+      // hard failures as hard and warnings as informational.
+      if (failedChecks.length > 0) process.exit(1);
     });
 }

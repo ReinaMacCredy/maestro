@@ -299,9 +299,18 @@ async function stepDropTemplates(
     await assertProjectLocalPathSafe(opts.dir, target);
 
     const existing = await readText(target);
+    const overwritePolicy = template.overwritePolicy ?? "force";
     if (existing !== undefined) {
-      // `--reset-templates` is the non-interactive force flag (CI / scripted
-      // use); otherwise fall back to the interactive confirm.
+      // `never`: written once; the file is user-owned from then on (e.g.
+      // root `init.sh`). `--reset-templates` does not override.
+      // `managed-block`: only the markers are harness-owned; user content
+      // outside them must survive. The managed-block step writes them.
+      if (overwritePolicy === "never" || overwritePolicy === "managed-block") {
+        paths.push({ path: target, action: "skip" });
+        continue;
+      }
+      // `force`: `--reset-templates` is the non-interactive force flag (CI /
+      // scripted use); otherwise fall back to the interactive confirm.
       const okToReplace =
         opts.resetTemplates === true ||
         (opts.confirmReplace !== undefined && (await opts.confirmReplace(target)));

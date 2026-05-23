@@ -295,6 +295,23 @@ describe("runSetup (project scope)", () => {
     );
   });
 
+  // Regression: FIX-2 -- `--reset-templates` was the force flag for the
+  // template step. Without an `overwritePolicy: "never"` guard on init.sh,
+  // user customizations were silently overwritten despite the spec promising
+  // "never overwrites init.sh". The customization here is intentionally
+  // distinctive so any overwrite is loud and obvious.
+  it("preserves user-customized init.sh even with --reset-templates", async () => {
+    const initPath = join(tmpDir, "init.sh");
+    const userScript = "#!/usr/bin/env bash\n# user-owned init\necho 'user logic here'\nexit 0\n";
+    await writeFile(initPath, userScript);
+
+    const result = await runSetup(project({ resetTemplates: true }));
+
+    expect(result.skipped).toContain(initPath);
+    expect(result.created).not.toContain(initPath);
+    expect(await readFile(initPath, "utf8")).toBe(userScript);
+  });
+
   it("seeds project-root AGENTS.md with the managed setup block on fresh setup", async () => {
     const result = await runSetup(project());
     const agentsPath = join(tmpDir, "AGENTS.md");
@@ -325,6 +342,49 @@ describe("runSetup (project scope)", () => {
     expect(content.indexOf("# My Project")).toBeLessThan(
       content.indexOf("<!-- maestro-setup:start -->"),
     );
+  });
+
+  // Regression: FIX-1 -- `--reset-templates` was the force flag for bootstrap
+  // templates, but the project-root pointer step routes through
+  // `injectSetupBlock`, which only swaps the managed block. The original bug
+  // landed when AGENTS.md was added to the template list without the
+  // `managed-block` policy guard. The bite-mark: with `resetTemplates: true`,
+  // user content BOTH before AND after the managed block must survive.
+  it("preserves user content surrounding the managed block in AGENTS.md under --reset-templates", async () => {
+    const agentsPath = join(tmpDir, "AGENTS.md");
+    // Seed: user has a pre-existing AGENTS.md with content above AND below a
+    // legacy managed setup block (simulating a re-setup after manual edits).
+    const userPrefix = "# My Project\n\nLong-standing user notes.\n\n";
+    const managedBlock = "<!-- maestro-setup:start -->\n## Maestro\n\nold pointer body.\n<!-- maestro-setup:end -->";
+    const userSuffix = "\n\n## My Custom Section\n\nMore content the user owns.\n";
+    await writeFile(agentsPath, userPrefix + managedBlock + userSuffix);
+
+    await runSetup(project({ resetTemplates: true }));
+
+    const content = await readFile(agentsPath, "utf8");
+    // Both user-owned regions survive.
+    expect(content).toContain("Long-standing user notes.");
+    expect(content).toContain("## My Custom Section");
+    expect(content).toContain("More content the user owns.");
+    // Managed block is still present (idempotency).
+    expect(content).toContain("<!-- maestro-setup:start -->");
+    expect(content).toContain("<!-- maestro-setup:end -->");
+  });
+
+  // Category sibling for FIX-1: CLAUDE.md uses the reference-line (not block)
+  // mechanism, but the same overwrite protection applies.
+  it("preserves user content in CLAUDE.md under --reset-templates", async () => {
+    const claudePath = join(tmpDir, "CLAUDE.md");
+    const userContent = "# My CLAUDE.md\n\n@my-other-doc.md\n\nUser notes here.\n";
+    await writeFile(claudePath, userContent);
+
+    await runSetup(project({ resetTemplates: true }));
+
+    const content = await readFile(claudePath, "utf8");
+    expect(content).toContain("# My CLAUDE.md");
+    expect(content).toContain("@my-other-doc.md");
+    expect(content).toContain("User notes here.");
+    expect(content).toContain("@AGENTS.md");
   });
 
   it("emits AGENTS.md with both the project-conventions template and the managed setup block on fresh setup", async () => {

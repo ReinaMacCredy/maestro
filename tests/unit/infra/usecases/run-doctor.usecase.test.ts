@@ -69,14 +69,18 @@ describe("runDoctor (fast form)", () => {
     expect(initCheck?.status).toBe("warn");
   });
 
-  it("verdict-freshness fails when tasks exist but no verdicts have ever been written", async () => {
+  it("verdict-freshness warns (not fails) when tasks exist but no verdicts have ever been written", async () => {
+    // "no verdicts yet" is a transient new-project state, not a hard failure;
+    // it should not cause the cold-start `init.sh` (which uses `set -e`) to
+    // bail. Hard failures are reserved for things like an unreadable task
+    // store.
     const checks = await runDoctor({
       ...baseDeps(cwd),
       taskStore: mockRepoTaskStore([makeTask()]),
     });
 
     const v = checks.find((c) => c.name === "verdict-freshness");
-    expect(v?.status).toBe("fail");
+    expect(v?.status).toBe("warn");
   });
 });
 

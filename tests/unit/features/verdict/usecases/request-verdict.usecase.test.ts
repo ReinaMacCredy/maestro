@@ -131,6 +131,10 @@ function fakeVerdictStore(): { store: VerdictStorePort; written: Verdict[] } {
     readVersion: async (_taskId, id) => written.find((v) => v.id === id),
     history: async () => [...written],
     findByTreeSha: async (treeSha) => written.filter((v) => v.subject?.tree_sha === treeSha),
+    readLatestWithCorruption: async () => ({
+      verdict: written[written.length - 1],
+      corruptCount: 0,
+    }),
   };
   return { store, written };
 }

@@ -25,7 +25,6 @@ export interface EnvironmentStatus {
   readonly initialized: boolean;
   readonly configSource: "global" | "project" | "none";
   readonly gitAvailable: boolean;
-  readonly legacyHandoffCount: number;
 }
 
 export interface ProjectVerifiedState {

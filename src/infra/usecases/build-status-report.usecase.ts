@@ -56,7 +56,7 @@ export async function buildStatusReport(
 ): Promise<StatusReport> {
   const maestroDir = join(deps.projectDir, MAESTRO_DIR);
   if (!(await dirExists(maestroDir))) {
-    throw new Error("not initialized -- run 'maestro init'");
+    throw new Error("not initialized -- run 'maestro setup'");
   }
 
   const now = Date.now();
@@ -164,18 +164,29 @@ function buildMissionGroups(
   }
 
   const groups: MissionGroup[] = [];
+  const consumedMissionIds = new Set<string>();
   for (const mission of allMissions) {
     if (!ACTIVE_MISSION_STATUS.has(mission.status)) continue;
     const tasks = (tasksByMissionId.get(mission.id) ?? []).map((t) =>
       enrichTask(t, verdictsByTaskId, latestTransitionByTaskId),
     );
+    consumedMissionIds.add(mission.id);
     groups.push({ mission, tasks });
   }
 
-  if (unscoped.length > 0) {
+  // Tasks whose mission_id points at a non-active mission (e.g. completed
+  // mission archived but task still open) or a missing mission would
+  // otherwise be silently dropped. Route them through the unscoped group so
+  // they remain visible to operators.
+  const orphaned: Task[] = [];
+  for (const [missionId, bucket] of tasksByMissionId) {
+    if (!consumedMissionIds.has(missionId)) orphaned.push(...bucket);
+  }
+  const otherTasks = [...unscoped, ...orphaned];
+  if (otherTasks.length > 0) {
     groups.push({
       mission: { id: "(unscoped)", title: "(unscoped)", synthetic: true },
-      tasks: unscoped.map((t) =>
+      tasks: otherTasks.map((t) =>
         enrichTask(t, verdictsByTaskId, latestTransitionByTaskId),
       ),
     });
@@ -216,12 +227,13 @@ function enrichTask(
 }
 
 function pickNextReady(allTasks: readonly Task[]): Task | undefined {
-  // Repo Task has no priority field. Substitute oldest-ready (smallest
-  // updated_at), so tasks that have been ready longest surface first.
+  // Repo Task has no priority field. Sort by `created_at` (immutable) so
+  // post-ready mutations (assignee swap, blocker delta) don't reshuffle the
+  // pick. `updated_at` would be wrong here — every #mutate touches it.
   return allTasks
     .filter((t) => t.state === "ready")
     .slice()
-    .sort((a, b) => a.updated_at.localeCompare(b.updated_at))[0];
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
 }
 
 async function countStaleHandoffs(

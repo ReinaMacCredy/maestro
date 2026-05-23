@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { type Services } from "@/services.js";
 import { buildStatusReport } from "@/infra/usecases/build-status-report.usecase.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import type { SetupCheckEntry } from "@/service/setup-check.usecase.js";
 import type {
   MissionGroup,
@@ -40,13 +41,18 @@ export function registerStatusCommand(
 
       let report: StatusReport;
       try {
+        // Walk up parents so `maestro status` works from any subdirectory of
+        // the project, matching `maestro doctor`. The cold-start `init.sh`
+        // script invokes doctor then status; both surfaces must agree on
+        // where the project root is.
+        const projectDir = resolveMaestroProjectRoot(process.cwd());
         report = await buildStatusReport({
           taskStore: services.taskStore,
           featureMissionStore: services.featureMissionStore,
           verdictStore: services.verdictStore,
           evidenceStore: services.evidenceStore,
           handoffEmitter: services.handoffEmitter,
-          projectDir: process.cwd(),
+          projectDir,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

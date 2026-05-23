@@ -1,7 +1,18 @@
+export type BootstrapOverwritePolicy =
+  // Default: under `--reset-templates` or interactive confirm, replace the file.
+  | "force"
+  // Once emitted, never touch the file again — even under `--reset-templates`.
+  | "never"
+  // The file's harness-owned region is only the managed block; the rest is
+  // user-owned. `stepDropTemplates` skips when the file exists; the managed
+  // block step rewrites just its markers via agent-block helpers.
+  | "managed-block";
+
 export interface BootstrapTemplateFile {
   readonly path: string;
   readonly content: string;
   readonly executable?: boolean;
+  readonly overwritePolicy?: BootstrapOverwritePolicy;
 }
 
 export const PROJECT_BOOTSTRAP_TEMPLATES: readonly BootstrapTemplateFile[] = [
@@ -490,6 +501,7 @@ For \`harness-improvement\` work types, additional checks apply:
   },
   {
     path: "AGENTS.md",
+    overwritePolicy: "managed-block",
     content: `# Project Conventions
 
 Repo-level conventions for agents working in this codebase. The harness pointer surface
@@ -547,6 +559,7 @@ require_proof_map_complete: false # Tighten at L8 when proof maps are required
   {
     path: "init.sh",
     executable: true,
+    overwritePolicy: "never",
     content: `#!/usr/bin/env bash
 # Project init -- emitted once by \`maestro setup\` and never overwritten.
 # Edit freely; Maestro will not touch this file again unless you delete it.

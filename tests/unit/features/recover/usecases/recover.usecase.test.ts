@@ -26,6 +26,9 @@ class FakeVerdictStore implements VerdictStorePort {
   async findByTreeSha(treeSha: string): Promise<readonly Verdict[]> {
     return this.rows.filter((v) => v.subject?.tree_sha === treeSha);
   }
+  async readLatestWithCorruption(taskId: string): Promise<{ verdict: Verdict | undefined; corruptCount: number }> {
+    return { verdict: await this.readLatest(taskId), corruptCount: 0 };
+  }
 }
 
 function passVerdict(taskId: string, treeSha: string, id = "vrd-pass-1"): Verdict {

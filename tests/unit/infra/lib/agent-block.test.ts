@@ -81,6 +81,23 @@ describe("replaceBlock", () => {
   it("returns null when no block exists", () => {
     expect(replaceBlock("No block here", "new")).toBeNull();
   });
+
+  // Regression: FIX-6 -- the non-global regex only replaced the first managed
+  // block, leaving stale duplicates (e.g. from a merge-conflict resolution)
+  // in place. A single-block fixture would still pass without the `g` flag;
+  // two blocks is the minimum input that exposes the bug.
+  it("rewrites ALL duplicate managed blocks (not just the first)", () => {
+    const STALE = "## Stale\n\nOld payload one.";
+    const STALE_WRAPPED = `<!-- maestro:start -->\n${STALE}\n<!-- maestro:end -->`;
+    const content = `# Config\n\n${STALE_WRAPPED}\n\n## Middle\n\n${STALE_WRAPPED}\n\n## End`;
+    const result = replaceBlock(content, "## Fresh\n\nNew payload.");
+    expect(result).not.toContain("Old payload one.");
+    // Both blocks rewritten -- the new payload should appear twice.
+    const matches = result?.match(/New payload\./g);
+    expect(matches?.length).toBe(2);
+    expect(result).toContain("## Middle");
+    expect(result).toContain("## End");
+  });
 });
 
 describe("removeBlock", () => {
@@ -101,6 +118,18 @@ describe("removeBlock", () => {
     const result = removeBlock(content);
     expect(result).toBe("# Config\n");
     expect(result).not.toContain("maestro");
+  });
+
+  // Regression: FIX-6 (category sibling of replaceBlock) -- removeBlock uses
+  // the same _G regex. Two managed blocks must both be stripped.
+  it("strips ALL duplicate managed blocks (not just the first)", () => {
+    const content = `# Config\n\n${WRAPPED}\n\n## Middle\n\n${WRAPPED}\n\n## End`;
+    const result = removeBlock(content);
+    expect(result).not.toContain("maestro:start");
+    expect(result).not.toContain("Pick up a handoff.");
+    expect(result).toContain("# Config");
+    expect(result).toContain("## Middle");
+    expect(result).toContain("## End");
   });
 });
 
@@ -185,6 +214,16 @@ describe("replaceSetupBlock", () => {
 
   it("returns null when only a legacy block exists", () => {
     expect(replaceSetupBlock(`# Config\n\n${WRAPPED}\n`, "new")).toBeNull();
+  });
+
+  // Regression: FIX-6 sibling -- the setup-block regex carries the same
+  // `g`-flag fix; two duplicate setup blocks must both be rewritten.
+  it("rewrites ALL duplicate setup blocks", () => {
+    const content = `# Config\n\n${SETUP_WRAPPED}\n\n## Middle\n\n${SETUP_WRAPPED}\n\n## End`;
+    const result = replaceSetupBlock(content, "## Fresh setup\n\nNew payload.");
+    expect(result).not.toContain("Project wired into the harness.");
+    const matches = result?.match(/New payload\./g);
+    expect(matches?.length).toBe(2);
   });
 });
 

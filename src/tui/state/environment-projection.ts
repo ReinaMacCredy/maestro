@@ -30,7 +30,6 @@ export async function buildMissionControlEnvironmentSummary(
       initialized: projectConfigExists || globalConfigExists,
       configSource,
       gitAvailable,
-      legacyHandoffCount: 0,
     },
     checks: [
       {

@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { parseNonNegativeInt, parsePositiveInt } from "@/shared/lib/cli-options.js";
 import { stringifyForOutput } from "@/shared/lib/output.js";
 import { summarizeHandoff } from "@/shared/lib/projection.js";
+import { compareEnvelopesByCreatedAt } from "@/features/mcp/server/tools/handoff-tools.js";
 import { buildCoreServices } from "../providers/build-services.js";
 import type { HandoffEnvelope } from "../repo/handoff-emitter.port.js";
 
@@ -21,6 +22,7 @@ interface HandoffListFlags {
   task?: string;
   trigger?: string;
   toAgent?: string;
+  includePickedUp?: boolean;
   json?: boolean;
   full?: boolean;
   all?: boolean;
@@ -37,11 +39,15 @@ export function registerHandoffCommands(
   handoff
     .command("list")
     .description(
-      "List handoff envelopes under .maestro/handoffs/ (paginated, summary by default)",
+      "List handoff envelopes under .maestro/handoffs/ (open-only by default; paginated, summary projection by default)",
     )
     .option("--task <id>", "filter by task id")
     .option("--trigger <verb>", "filter by trigger verb (task:claim, task:block, ...)")
     .option("--to-agent <name>", "filter by recipient tool name (strict exact-match)")
+    .option(
+      "--include-picked-up",
+      "include envelopes already marked picked up (default: false, matches MCP)",
+    )
     .option("--json", "Output as JSON")
     .option("--full", "Emit the full envelope shape instead of the summary projection")
     .option("--all", "Drop the default --limit 20 cap")
@@ -54,25 +60,46 @@ export function registerHandoffCommands(
       if (flags.task) envelopes = envelopes.filter((e) => e.task_id === flags.task);
       if (flags.trigger) envelopes = envelopes.filter((e) => e.trigger_verb === flags.trigger);
       if (flags.toAgent) envelopes = envelopes.filter((e) => e.to_agent === flags.toAgent);
-      const sorted = [...envelopes].sort((a, b) =>
-        a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
-      );
+
+      // Defensive sort matches the MCP comparator so CLI and MCP agree on
+      // ordering for legacy envelopes that lack `created_at`.
+      const sorted = [...envelopes].sort(compareEnvelopesByCreatedAt);
+
+      // Default to "open work only" so CLI matches MCP (`include_picked_up:
+      // false`). The pickup filter runs BEFORE pagination/total so `total`
+      // reflects the visible result set on both surfaces.
+      const includePickedUp = flags.includePickedUp === true;
+      const annotated: { envelope: HandoffEnvelope; pickedUp: boolean }[] = [];
+      for (const envelope of sorted) {
+        const pickup = await services.handoffEmitter.getPickup(envelope.id);
+        const pickedUp = pickup !== undefined;
+        if (!includePickedUp && pickedUp) continue;
+        annotated.push({ envelope, pickedUp });
+      }
 
       const offset = flags.offset ?? 0;
-      const total = sorted.length;
-      const limit = flags.all === true ? Math.max(total - offset, 0) : (flags.limit ?? 20);
-      const page = sorted.slice(offset, offset + Math.max(limit, 0));
+      const total = annotated.length;
+      const rawLimit = flags.all === true ? total - offset : (flags.limit ?? 20);
+      const limit = Math.max(rawLimit, 0);
+      const page = annotated.slice(offset, offset + limit);
+      const hasMore = offset + limit < total;
 
       if (flags.json === true || program.opts().json === true) {
         const items = flags.full === true
-          ? page
-          : await Promise.all(
-              page.map(async (env) => {
-                const pickup = await services.handoffEmitter.getPickup(env.id);
-                return summarizeHandoff(env, pickup !== undefined);
-              }),
-            );
-        console.log(stringifyForOutput({ items, total, limit, offset }));
+          ? page.map((row) => ({ envelope: row.envelope, picked_up: row.pickedUp }))
+          : page.map((row) => summarizeHandoff(row.envelope, row.pickedUp));
+        // Emit the legacy flat shape AND a nested `pagination` block so
+        // downstream consumers can use either path. The nested shape matches
+        // MCP `maestro_handoff_list` for cross-surface parity.
+        console.log(
+          stringifyForOutput({
+            items,
+            total,
+            limit,
+            offset,
+            pagination: { total, limit, offset, hasMore },
+          }),
+        );
         return;
       }
 
@@ -80,14 +107,18 @@ export function registerHandoffCommands(
         console.log("(no handoff envelopes)");
         return;
       }
-      for (const env of page) {
+      for (const row of page) {
+        const env = row.envelope;
         const tail = env.agent_id ? ` agent=${env.agent_id}` : "";
         const toAgentTail = env.to_agent ? ` to_agent=${env.to_agent}` : "";
         const reason = env.reason ? ` reason="${truncate(env.reason, 60)}"` : "";
         // Defensive: legacy envelopes on disk may lack trigger_verb or task_id.
         const trigger = typeof env.trigger_verb === "string" ? env.trigger_verb : "(unknown)";
         const taskId = env.task_id ?? "?";
-        console.log(`${env.id}  ${trigger.padEnd(13)} task=${taskId}${tail}${toAgentTail}${reason}`);
+        const pickupTail = row.pickedUp ? " (picked up)" : "";
+        console.log(
+          `${env.id}  ${trigger.padEnd(13)} task=${taskId}${tail}${toAgentTail}${reason}${pickupTail}`,
+        );
       }
     });
 

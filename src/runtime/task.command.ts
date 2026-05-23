@@ -84,7 +84,7 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
 
   const claimAction = async (
     id: string,
-    flags: { agent?: string; skipWorktree?: boolean },
+    flags: { agent?: string; skipWorktree?: boolean; tool?: string },
   ): Promise<void> => {
     try {
       const repoRoot = opts.resolveRepoRoot();
@@ -103,7 +103,15 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
           contractVersionStore,
           repoRoot,
         },
-        { id, agentId: flags.agent, skipWorktree: flags.skipWorktree === true },
+        {
+          id,
+          agentId: flags.agent,
+          skipWorktree: flags.skipWorktree === true,
+          // Default to "cli" so CLI-emitted handoffs carry a routable
+          // to_agent. Operators can override with --tool to claim on behalf
+          // of a specific agent (e.g. --tool codex).
+          tool: flags.tool ?? "cli",
+        },
       );
       const worktreeNote = claimed.worktree_path ? ` (worktree ${claimed.worktree_path})` : "";
       console.log(
@@ -120,6 +128,10 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     .description("Claim a task (draft -> claimed); auto-creates a worktree for heavy-mode specs")
     .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
     .option("--skip-worktree", "skip auto-worktree creation even for heavy-mode specs")
+    .option(
+      "--tool <name>",
+      "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
+    )
     .action(claimAction);
 
   program
@@ -127,9 +139,16 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     .description("Hot-path alias for `task claim`")
     .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
     .option("--skip-worktree", "skip auto-worktree creation even for heavy-mode specs")
+    .option(
+      "--tool <name>",
+      "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
+    )
     .action(claimAction);
 
-  const blockAction = async (id: string, flags: { reason?: string }): Promise<void> => {
+  const blockAction = async (
+    id: string,
+    flags: { reason?: string; tool?: string },
+  ): Promise<void> => {
     if (!flags.reason) {
       console.error("maestro task block: --reason is required");
       process.exitCode = 1;
@@ -146,7 +165,10 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
           observabilityStore: services.observabilityStore,
           handoffEmitter: services.handoffEmitter,
         },
-        { id, reason: flags.reason },
+        // Default to "cli" so block handoffs carry a routable to_agent;
+        // operators can override with --tool when blocking on behalf of
+        // another agent.
+        { id, reason: flags.reason, tool: flags.tool ?? "cli" },
       );
       console.log(`${blocked.id} blocked: ${flags.reason}`);
       await refreshNowMdFromServices(services);
@@ -159,12 +181,20 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     .command("block <id>")
     .description("Block a task with a reason (claimed | doing | verifying -> blocked)")
     .requiredOption("--reason <text>", "human-readable explanation of the blocker")
+    .option(
+      "--tool <name>",
+      "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
+    )
     .action(blockAction);
 
   program
     .command("block <id>")
     .description("Hot-path alias for `task block`")
     .requiredOption("--reason <text>", "human-readable explanation of the blocker")
+    .option(
+      "--tool <name>",
+      "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
+    )
     .action(blockAction);
 
   const abandonAction = async (id: string, flags: { reason?: string }): Promise<void> => {
@@ -351,8 +381,12 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
         tasks = await services.taskStore.list();
       }
       const offset = flags.offset ?? 0;
-      const limit = flags.all === true ? tasks.length - offset : (flags.limit ?? 20);
-      const page = tasks.slice(offset, offset + Math.max(limit, 0));
+      // Clamp limit to non-negative even when --all is paired with an offset
+      // larger than tasks.length. Otherwise the emitted `limit` field would be
+      // negative, breaking downstream pagination math.
+      const rawLimit = flags.all === true ? tasks.length - offset : (flags.limit ?? 20);
+      const limit = Math.max(rawLimit, 0);
+      const page = tasks.slice(offset, offset + limit);
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
         const items = flags.full === true

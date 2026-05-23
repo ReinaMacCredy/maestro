@@ -796,6 +796,13 @@ export function mockVerdictStore(
       }
       return out;
     },
+    readLatestWithCorruption: async (taskId) => {
+      const list = histories.get(taskId);
+      return {
+        verdict: list && list.length > 0 ? list[list.length - 1] : undefined,
+        corruptCount: 0,
+      };
+    },
     ...overrides,
   };
 }

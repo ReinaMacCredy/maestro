@@ -94,6 +94,10 @@ function makeDeps(opts: {
       readVersion: async () => undefined,
       history: async () => [],
       findByTreeSha: async () => [],
+      readLatestWithCorruption: async (taskId) => ({
+        verdict: verdicts[taskId],
+        corruptCount: 0,
+      }),
     },
     runStateStore: {
       read: async (taskId) => runStates[taskId],
