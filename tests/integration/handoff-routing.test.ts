@@ -141,7 +141,11 @@ describe("handoff-routing integration", () => {
     const result = await list({});
     expect(result.isError).toBeUndefined();
     const payload = parsePayload<{ items: { id: string; to_agent?: string }[] }>(result);
-    expect(payload.items.map((i) => i.id)).toEqual([codexId, legacyId]);
+    // Set membership, not ordered: production sorts by created_at, but the
+    // millisecond-precision tiebreak is fs.readdir order (non-deterministic
+    // when two emits collide in the same ms). Assert presence of both ids;
+    // ordering invariant only holds when timestamps differ.
+    expect(new Set(payload.items.map((i) => i.id))).toEqual(new Set([codexId, legacyId]));
 
     const legacy = payload.items.find((i) => i.id === legacyId);
     expect(legacy?.to_agent).toBeUndefined();
