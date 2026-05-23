@@ -191,3 +191,20 @@ describe("token-budget contract: piped --json output is minified", () => {
     expect(stdout).not.toContain('\n  "');
   });
 });
+
+describe("handoff text-mode renders to_agent", () => {
+  it("handoff list non-json mode includes to_agent= tail", async () => {
+    const { stdout, exitCode } = await spawn(["handoff", "list"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("to_agent=codex");
+  });
+
+  it("handoff show non-json mode includes to_agent: line", async () => {
+    const { stdout, exitCode } = await spawn(["handoff", "show", "hnd-aaaaaa-bbbbbb"]);
+    expect(exitCode).toBe(0);
+    // Exact spacing of `to_agent:     codex` depends on label-column width —
+    // use a permissive substring check rather than exact match.
+    expect(stdout).toContain("to_agent:");
+    expect(stdout).toContain("codex");
+  });
+});

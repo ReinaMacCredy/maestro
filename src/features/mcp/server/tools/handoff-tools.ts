@@ -40,7 +40,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     {
       title: "List handoff envelopes",
       description:
-        "List handoff envelopes at .maestro/handoffs/. Filters: task_id, trigger_verb, include_picked_up (default false = open work only). Paginated (default limit 20, max 100). view='summary' (default) returns id+task_id+trigger_verb+created_at+picked_up; view='full' returns the envelope and pickup metadata. Sorted by created_at ascending. Read-only.",
+        "List handoff envelopes at .maestro/handoffs/. Filters: task_id, trigger_verb, include_picked_up (default false = open work only). Paginated (default limit 20, max 100). view='summary' (default) returns id+task_id+trigger_verb+created_at+picked_up; view='full' returns the envelope and pickup metadata. Sorted by created_at ascending. Read-only. Optional to_agent filter (strict exact match; untargeted envelopes excluded when set).",
       inputSchema: HandoffListInput,
       annotations: {
         readOnlyHint: true,
@@ -60,6 +60,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
             (e: HandoffEnvelope) =>
               args.trigger_verb === undefined || e.trigger_verb === args.trigger_verb,
           )
+          .filter((e: HandoffEnvelope) => args.to_agent === undefined || e.to_agent === args.to_agent)
           .slice()
           .sort(compareEnvelopesByCreatedAt);
 
@@ -140,7 +141,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     {
       title: "Emit a handoff envelope",
       description:
-        "Write a handoff envelope to .maestro/handoffs/ so a follow-up agent can pick up the task. Used when an agent must hand off mid-stream without going through claim or block (e.g. ship/verify/abandon paths that do not yet emit on their own). The lifecycle verbs claim and block already emit automatically — do not re-emit them. Returns the materialized envelope including the generated id and created_at timestamp. Error codes: HANDOFF_EMIT_FAILED, INVALID_ARG.",
+        "Write a handoff envelope to .maestro/handoffs/ so a follow-up agent can pick up the task. Used when an agent must hand off mid-stream without going through claim or block (e.g. ship/verify/abandon paths that do not yet emit on their own). The lifecycle verbs claim and block already emit automatically — do not re-emit them. Returns the materialized envelope including the generated id and created_at timestamp. Error codes: HANDOFF_EMIT_FAILED, INVALID_ARG. Optional to_agent addresses the envelope to a specific receiver tool (e.g. 'codex'), enabling inbox-style discovery.",
       inputSchema: HandoffEmitShape,
       annotations: {
         readOnlyHint: false,
@@ -173,6 +174,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
             ...(args.worktree_path !== undefined ? { worktree_path: args.worktree_path } : {}),
             ...(args.spec_path !== undefined ? { spec_path: args.spec_path } : {}),
             ...(args.reason !== undefined ? { reason: args.reason } : {}),
+            ...(args.to_agent !== undefined ? { to_agent: args.to_agent } : {}),
           },
         );
         if (envelope === undefined) {

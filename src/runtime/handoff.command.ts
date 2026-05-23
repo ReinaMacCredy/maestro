@@ -20,6 +20,7 @@ function findOrCreateHandoffCommand(program: Command): Command {
 interface HandoffListFlags {
   task?: string;
   trigger?: string;
+  toAgent?: string;
   json?: boolean;
   full?: boolean;
   all?: boolean;
@@ -40,6 +41,7 @@ export function registerHandoffCommands(
     )
     .option("--task <id>", "filter by task id")
     .option("--trigger <verb>", "filter by trigger verb (task:claim, task:block, ...)")
+    .option("--to-agent <name>", "filter by recipient tool name (strict exact-match)")
     .option("--json", "Output as JSON")
     .option("--full", "Emit the full envelope shape instead of the summary projection")
     .option("--all", "Drop the default --limit 20 cap")
@@ -51,6 +53,7 @@ export function registerHandoffCommands(
       let envelopes = await services.handoffEmitter.list();
       if (flags.task) envelopes = envelopes.filter((e) => e.task_id === flags.task);
       if (flags.trigger) envelopes = envelopes.filter((e) => e.trigger_verb === flags.trigger);
+      if (flags.toAgent) envelopes = envelopes.filter((e) => e.to_agent === flags.toAgent);
       const sorted = [...envelopes].sort((a, b) =>
         a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
       );
@@ -79,11 +82,12 @@ export function registerHandoffCommands(
       }
       for (const env of page) {
         const tail = env.agent_id ? ` agent=${env.agent_id}` : "";
+        const toAgentTail = env.to_agent ? ` to_agent=${env.to_agent}` : "";
         const reason = env.reason ? ` reason="${truncate(env.reason, 60)}"` : "";
         // Defensive: legacy envelopes on disk may lack trigger_verb or task_id.
         const trigger = typeof env.trigger_verb === "string" ? env.trigger_verb : "(unknown)";
         const taskId = env.task_id ?? "?";
-        console.log(`${env.id}  ${trigger.padEnd(13)} task=${taskId}${tail}${reason}`);
+        console.log(`${env.id}  ${trigger.padEnd(13)} task=${taskId}${tail}${toAgentTail}${reason}`);
       }
     });
 
@@ -126,6 +130,7 @@ function printEnvelope(env: HandoffEnvelope): void {
   console.log(`trigger_verb: ${env.trigger_verb}`);
   console.log(`created_at:   ${env.created_at}`);
   if (env.agent_id) console.log(`agent_id:     ${env.agent_id}`);
+  if (env.to_agent) console.log(`to_agent:     ${env.to_agent}`);
   if (env.worktree_path) console.log(`worktree:     ${env.worktree_path}`);
   if (env.spec_path) console.log(`spec_path:    ${env.spec_path}`);
   if (env.reason) console.log(`reason:       ${env.reason}`);

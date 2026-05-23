@@ -396,6 +396,13 @@ export const HandoffListInput = z
   .object({
     task_id: taskId.optional(),
     trigger_verb: handoffTrigger.optional(),
+    to_agent: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Strict exact-match filter. Returns only envelopes whose to_agent equals this value. Legacy / untargeted envelopes (no to_agent field) are excluded when this filter is set. Drop the filter to see all envelopes.",
+      ),
     include_picked_up: z
       .boolean()
       .optional()
@@ -440,6 +447,13 @@ export const HandoffEmitShape = {
     .optional()
     .describe(
       "Required when trigger_verb is 'task:block'. Free-text reason recorded on the envelope.",
+    ),
+  to_agent: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Receiver's tool name (e.g. 'codex', 'claude-code'). Free-text; no format validation. When set, receivers can filter their inbox via handoff_list with to_agent. Optional; envelope is untargeted (available to any receiver) when unset.",
     ),
 } as const;
 
