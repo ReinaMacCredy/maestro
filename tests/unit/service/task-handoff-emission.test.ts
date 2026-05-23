@@ -179,4 +179,57 @@ describe("task lifecycle handoff emission (PR 35)", () => {
     );
     expect(claimed.state).toBe("claimed");
   });
+
+  it("claim with tool sets to_agent on the emitted envelope", async () => {
+    const taskStore = makeTaskStore([seedTask("draft")]);
+    const evidenceStore = makeEvidence();
+    const { emitter, emitted } = makeHandoffEmitter();
+    await taskClaim(
+      { taskStore, evidenceStore, handoffEmitter: emitter },
+      { id: "tsk-handoff", agentId: "agent-a", tool: "codex" },
+    );
+    expect(emitted.length).toBe(1);
+    expect(emitted[0]!.to_agent).toBe("codex");
+    expect(emitted[0]!.agent_id).toBe("agent-a");
+    expect(emitted[0]!.trigger_verb).toBe("task:claim");
+  });
+
+  it("claim without tool omits to_agent from the envelope", async () => {
+    const taskStore = makeTaskStore([seedTask("draft")]);
+    const evidenceStore = makeEvidence();
+    const { emitter, emitted } = makeHandoffEmitter();
+    await taskClaim(
+      { taskStore, evidenceStore, handoffEmitter: emitter },
+      { id: "tsk-handoff", agentId: "agent-a" },
+    );
+    expect(emitted[0]!.to_agent).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(emitted[0]!, "to_agent")).toBe(false);
+  });
+
+  it("block with tool sets to_agent on the emitted envelope", async () => {
+    const taskStore = makeTaskStore([seedTask("doing")]);
+    const evidenceStore = makeEvidence();
+    const { emitter, emitted } = makeHandoffEmitter();
+    await taskBlock(
+      { taskStore, evidenceStore, handoffEmitter: emitter },
+      { id: "tsk-handoff", reason: "missing-credentials", tool: "claude-code" },
+    );
+    expect(emitted[0]!.to_agent).toBe("claude-code");
+    expect(Object.prototype.hasOwnProperty.call(emitted[0]!, "agent_id")).toBe(false);
+    expect(emitted[0]!.trigger_verb).toBe("task:block");
+    expect(emitted[0]!.reason).toBe("missing-credentials");
+  });
+
+  it("block without tool omits to_agent from the envelope", async () => {
+    const taskStore = makeTaskStore([seedTask("doing")]);
+    const evidenceStore = makeEvidence();
+    const { emitter, emitted } = makeHandoffEmitter();
+    await taskBlock(
+      { taskStore, evidenceStore, handoffEmitter: emitter },
+      { id: "tsk-handoff", reason: "missing-credentials" },
+    );
+    expect(emitted[0]!.to_agent).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(emitted[0]!, "to_agent")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(emitted[0]!, "agent_id")).toBe(false);
+  });
 });

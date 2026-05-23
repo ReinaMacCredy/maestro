@@ -23,6 +23,8 @@ export interface TaskBlockDeps {
 export interface TaskBlockInput {
   readonly id: TaskId;
   readonly reason: string;
+  /** Caller's own tool name (e.g. 'codex', 'claude-code'); when set, propagates to the auto-emitted handoff envelope as to_agent. */
+  readonly tool?: string;
 }
 
 export async function taskBlock(deps: TaskBlockDeps, input: TaskBlockInput): Promise<Task> {
@@ -56,6 +58,7 @@ export async function taskBlock(deps: TaskBlockDeps, input: TaskBlockInput): Pro
       reason: input.reason,
       worktree_path: updated.worktree_path,
       spec_path: updated.spec_path,
+      to_agent: input.tool,
     },
   );
   if (deps.missionStore) {

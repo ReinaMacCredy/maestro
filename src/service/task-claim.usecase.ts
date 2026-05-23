@@ -36,6 +36,8 @@ export interface TaskClaimDeps {
 export interface TaskClaimInput {
   readonly id: TaskId;
   readonly agentId?: string;
+  /** Caller's own tool name (e.g. 'codex', 'claude-code'); when set, propagates to the auto-emitted handoff envelope as to_agent. */
+  readonly tool?: string;
   // When true, do not auto-create a worktree even if the spec is heavy-mode.
   readonly skipWorktree?: boolean;
 }
@@ -151,6 +153,7 @@ export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Pro
       agent_id: input.agentId,
       worktree_path: updated.worktree_path,
       spec_path: updated.spec_path,
+      to_agent: input.tool,
     },
   );
 

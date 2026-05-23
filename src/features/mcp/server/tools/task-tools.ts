@@ -138,7 +138,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "Claim a maestro task",
       description:
-        "Claim a draft task for this agent (draft -> claimed). Auto-creates a worktree for heavy-mode specs. Error codes: TASK_NOT_FOUND, TASK_CLAIM_FAILED.",
+        "Claim a draft task for this agent (draft -> claimed). Auto-creates a worktree for heavy-mode specs. Error codes: TASK_NOT_FOUND, TASK_CLAIM_FAILED. Optional tool argument populates to_agent on the auto-emitted handoff envelope for intra-tool continuity.",
       inputSchema: TaskClaimInput,
       annotations: {
         readOnlyHint: false,
@@ -151,6 +151,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       try {
         const services = deps.getServices();
         const agentId = args.agent_id ?? deps.sessionId;
+        const tool = args.tool;
         const task = await taskClaim(
           {
             taskStore: services.taskStore,
@@ -163,7 +164,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
             contractVersionStore: new FsContractVersionStoreAdapter(services.projectRoot),
             repoRoot: services.projectRoot,
           },
-          { id: args.id, agentId },
+          { id: args.id, agentId, tool },
         );
         await refreshNowMdFromServices(services);
         return toCallToolResult(ok({ task }));
@@ -212,7 +213,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "Block a maestro task",
       description:
-        "Mark a claimed/doing/verifying task as blocked with a mandatory reason (claimed|doing|verifying -> blocked). Block is a state transition on the task itself, not a cross-task edge graph. Error codes: TASK_NOT_FOUND, TASK_BLOCK_FAILED.",
+        "Mark a claimed/doing/verifying task as blocked with a mandatory reason (claimed|doing|verifying -> blocked). Block is a state transition on the task itself, not a cross-task edge graph. Error codes: TASK_NOT_FOUND, TASK_BLOCK_FAILED. Optional tool argument populates to_agent on the auto-emitted handoff envelope for intra-tool continuity.",
       inputSchema: TaskBlockInput,
       annotations: {
         readOnlyHint: false,
@@ -223,6 +224,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     },
     async (args): Promise<CallToolResult> => {
       try {
+        const tool = args.tool;
         const services = deps.getServices();
         const task = await taskBlock(
           {
@@ -232,7 +234,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
             observabilityStore: services.observabilityStore,
             handoffEmitter: services.handoffEmitter,
           },
-          { id: args.id, reason: args.reason },
+          { id: args.id, reason: args.reason, tool },
         );
         await refreshNowMdFromServices(services);
         return toCallToolResult(ok({ task }));

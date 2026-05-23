@@ -118,6 +118,13 @@ export const TaskClaimInput = z
       .min(1)
       .optional()
       .describe("Agent identifier recorded on the task and evidence row. Defaults to MCP session id when omitted."),
+    tool: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Caller's own tool name (e.g. 'codex', 'claude-code') from the agent's system prompt. When set, the auto-emitted handoff envelope's to_agent is populated for intra-tool continuity — the next session of your tool will find this envelope via its inbox. Optional; envelope stays untargeted when unset.",
+      ),
   })
   .strict();
 
@@ -142,6 +149,13 @@ export const TaskBlockInput = z
       .string()
       .min(1)
       .describe("Human-readable explanation of what is blocking this task."),
+    tool: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Caller's own tool name (e.g. 'codex', 'claude-code') from the agent's system prompt. When set, the auto-emitted handoff envelope's to_agent is populated for intra-tool continuity — the next session of your tool will find this envelope via its inbox. Optional; envelope stays untargeted when unset.",
+      ),
   })
   .strict();
 
