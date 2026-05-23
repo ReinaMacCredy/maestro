@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
-import { resolveJsonFlag } from "@/shared/lib/output.js";
+import { resolveJsonFlag, stringifyForOutput } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { loadSensitivePathsGlobs } from "@/features/policy/index.js";
 import { readCurrentContractWithBackfill } from "@/service/contract-helpers.js";
@@ -144,15 +144,11 @@ export function registerMergeAutoCommand(
 
       if (isJson) {
         process.stdout.write(
-          JSON.stringify(
-            {
-              eligible: result.eligible,
-              reasons: result.reasons,
-              merged,
-            },
-            null,
-            2,
-          ) + "\n",
+          stringifyForOutput({
+            eligible: result.eligible,
+            reasons: result.reasons,
+            merged,
+          }) + "\n",
         );
       } else {
         if (result.eligible) {

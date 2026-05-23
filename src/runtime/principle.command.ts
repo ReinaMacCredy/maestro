@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { stringifyForOutput } from "@/shared/lib/output.js";
 import { buildCoreServices } from "../providers/build-services.js";
 import {
   CorrectionNotFoundError,
@@ -55,7 +56,7 @@ export function registerPrincipleCommands(
         );
         const wantJson = flags.json === true || this.optsWithGlobals().json === true;
         if (wantJson) {
-          console.log(JSON.stringify(result, null, 2));
+          console.log(stringifyForOutput(result));
           return;
         }
         console.log(`${result.slug} -> ${result.path}`);

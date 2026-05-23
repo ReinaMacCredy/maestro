@@ -5,6 +5,7 @@ import { formatVersionOutputForArgv } from "@/shared/version-format.js";
 import { VERSION } from "@/shared/version.js";
 import { MaestroError } from "@/shared/errors.js";
 import { removeIfExists } from "@/shared/lib/fs.js";
+import { stringifyForOutput } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { assertNoDeprecatedVersionFlag } from "@/infra/lib/deprecated-version-flag.js";
 import { createServices, type Services } from "./services.js";
@@ -265,13 +266,7 @@ async function main(): Promise<void> {
     if (err instanceof MaestroError) {
       const isJson = process.argv.includes("--json");
       if (isJson) {
-        console.log(
-          JSON.stringify(
-            { error: err.message, hints: err.hints },
-            null,
-            2,
-          ),
-        );
+        console.log(stringifyForOutput({ error: err.message, hints: err.hints }));
       } else {
         console.error(`[!] ${err.message}`);
         for (const hint of err.hints) {

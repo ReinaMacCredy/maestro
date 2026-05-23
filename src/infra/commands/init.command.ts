@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { type Services } from "@/services.js";
 import { formatReport, runSetupCommand } from "@/runtime/setup.command.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
+import { stringifyForOutput } from "@/shared/lib/output.js";
 
 interface InitCommandDeps {
   readonly getServices: () => Pick<Services, "config">;
@@ -25,7 +26,7 @@ export function registerInitCommand(program: Command, deps: InitCommandDeps): vo
         });
         const isJson = opts.json === true || this.optsWithGlobals().json === true;
         if (isJson) {
-          console.log(JSON.stringify(report, null, 2));
+          console.log(stringifyForOutput(report));
         } else {
           for (const line of formatReport(report)) console.log(line);
         }

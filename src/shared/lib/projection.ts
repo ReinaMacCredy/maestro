@@ -1,6 +1,7 @@
 /** Token-budget projection helpers. See `docs/token-budget.md`. */
 
 import type { EvidenceRow, EvidenceSummary } from "@/features/evidence/domain/types.js";
+import type { HandoffEnvelope } from "@/repo/handoff-emitter.port.js";
 import type { Task } from "@/types/task.js";
 
 export interface TaskSummary {
@@ -36,5 +37,26 @@ export function summarizeEvidence(row: EvidenceRow): EvidenceSummary {
     witness_level: row.witness_level,
     created_at: row.created_at,
     ...(row.session_id !== undefined ? { session_id: row.session_id } : {}),
+  };
+}
+
+export interface HandoffSummary {
+  readonly id: string;
+  readonly task_id: string;
+  readonly trigger_verb: string;
+  readonly created_at: string;
+  readonly picked_up: boolean;
+}
+
+export function summarizeHandoff(
+  envelope: HandoffEnvelope,
+  pickedUp: boolean,
+): HandoffSummary {
+  return {
+    id: envelope.id,
+    task_id: envelope.task_id,
+    trigger_verb: envelope.trigger_verb,
+    created_at: envelope.created_at,
+    picked_up: pickedUp,
   };
 }

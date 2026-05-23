@@ -1,6 +1,6 @@
 import os from "node:os";
 import type { Command } from "commander";
-import { resolveJsonFlag, output } from "@/shared/lib/output.js";
+import { resolveJsonFlag, output, stringifyForOutput } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { type Services } from "@/services.js";
 import { recordEvidence as defaultRecordEvidence } from "@/features/evidence/index.js";
@@ -86,7 +86,7 @@ export function registerVerdictCommand(
         // Return the latest match (highest computedAt)
         const verdict = filtered[filtered.length - 1]!;
         if (isJson) {
-          console.log(JSON.stringify(verdict, null, 2));
+          console.log(stringifyForOutput(verdict));
         } else {
           const overrides = await loadVerdictOverrides(
             services.legacyEvidenceStore,
@@ -116,7 +116,7 @@ export function registerVerdictCommand(
       }
 
       if (isJson) {
-        console.log(JSON.stringify(verdict, null, 2));
+        console.log(stringifyForOutput(verdict));
       } else {
         const overrides = await loadVerdictOverrides(
           services.legacyEvidenceStore,
@@ -162,7 +162,7 @@ export function registerVerdictCommand(
       );
 
       if (isJson) {
-        console.log(JSON.stringify(verdict, null, 2));
+        console.log(stringifyForOutput(verdict));
       } else {
         printVerdict(verdict);
       }

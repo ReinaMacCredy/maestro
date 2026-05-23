@@ -7,6 +7,7 @@ import {
 } from "@/shared/domain/task/index.js";
 import { FsVerdictStoreAdapter } from "@/features/verdict/adapters/fs-verdict-store.adapter.js";
 import { parseNonNegativeInt, parsePositiveInt } from "../shared/lib/cli-options.js";
+import { stringifyForOutput } from "../shared/lib/output.js";
 import { taskFromSpec, SpecFileNotFoundError } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
 import { taskBlock } from "../service/task-block.usecase.js";
@@ -236,16 +237,12 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
         console.log(
-          JSON.stringify(
-            {
-              id: result.task.id,
-              state: result.task.state,
-              verdict: result.verdict,
-              violations: result.violations,
-            },
-            null,
-            2,
-          ),
+          stringifyForOutput({
+            id: result.task.id,
+            state: result.task.state,
+            verdict: result.verdict,
+            violations: result.violations,
+          }),
         );
       } else if (result.verdict === "PASS") {
         console.log(`${result.task.id} verified -> ready (PASS)`);
@@ -362,11 +359,7 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
           ? page
           : page.map(summarizeTask);
         console.log(
-          JSON.stringify(
-            { items, total: tasks.length, limit, offset },
-            null,
-            2,
-          ),
+          stringifyForOutput({ items, total: tasks.length, limit, offset }),
         );
         return;
       }
@@ -411,7 +404,7 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
       }
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
-        console.log(JSON.stringify({ task: t }, null, 2));
+        console.log(stringifyForOutput({ task: t }));
         return;
       }
       console.log(`${t.id} ${t.state} ${t.slug}`);

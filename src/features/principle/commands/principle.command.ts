@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { type Services } from "@/services.js";
-import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import { output, resolveJsonFlag, stringifyForOutput } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import type {
   Principle,
@@ -127,7 +127,7 @@ export function registerPrincipleCommand(
           name: principleById.get(row.principleId)?.name,
           lowSample: row.helpful + row.unhelpful < PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
         }));
-        console.log(JSON.stringify(payload, null, 2));
+        console.log(stringifyForOutput(payload));
         return;
       }
       output(false, rows, (r) => formatEffectivenessTable(r, principleById));

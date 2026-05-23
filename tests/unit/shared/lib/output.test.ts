@@ -3,11 +3,13 @@ import {
   formatAgentResults,
   output,
   resolveJsonFlag,
+  stringifyForOutput,
   warn,
 } from "@/shared/lib/output.js";
 
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
+const originalIsTTY = process.stdout.isTTY;
 
 function captureConsole(): {
   readonly logs: string[];
@@ -29,6 +31,7 @@ function captureConsole(): {
 afterEach(() => {
   console.log = originalConsoleLog;
   console.error = originalConsoleError;
+  (process.stdout as { isTTY?: boolean }).isTTY = originalIsTTY;
 });
 
 describe("output", () => {
@@ -56,10 +59,21 @@ describe("output", () => {
       return ["unused"];
     });
 
-    expect(captured.logs).toEqual([
-      JSON.stringify({ ok: true }, null, 2),
-    ]);
+    // Output is minified (non-TTY in test environment is the agent path).
+    expect(captured.logs).toEqual([JSON.stringify({ ok: true })]);
     expect(formatterCalls).toBe(0);
+  });
+});
+
+describe("stringifyForOutput", () => {
+  it("minifies when stdout is not a TTY (the agent/pipe path)", () => {
+    (process.stdout as { isTTY?: boolean }).isTTY = false;
+    expect(stringifyForOutput({ a: 1, b: 2 })).toBe('{"a":1,"b":2}');
+  });
+
+  it("pretty-prints when stdout is a TTY (the interactive human path)", () => {
+    (process.stdout as { isTTY?: boolean }).isTTY = true;
+    expect(stringifyForOutput({ a: 1 })).toBe('{\n  "a": 1\n}');
   });
 });
 

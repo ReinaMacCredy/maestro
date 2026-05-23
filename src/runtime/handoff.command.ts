@@ -1,4 +1,7 @@
 import { Command } from "commander";
+import { parseNonNegativeInt, parsePositiveInt } from "@/shared/lib/cli-options.js";
+import { stringifyForOutput } from "@/shared/lib/output.js";
+import { summarizeHandoff } from "@/shared/lib/projection.js";
 import { buildCoreServices } from "../providers/build-services.js";
 import type { HandoffEnvelope } from "../repo/handoff-emitter.port.js";
 
@@ -14,6 +17,16 @@ function findOrCreateHandoffCommand(program: Command): Command {
     .description("Inspect handoff envelopes emitted by task lifecycle verbs");
 }
 
+interface HandoffListFlags {
+  task?: string;
+  trigger?: string;
+  json?: boolean;
+  full?: boolean;
+  all?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 export function registerHandoffCommands(
   program: Command,
   opts: HandoffCommandOptions,
@@ -22,33 +35,55 @@ export function registerHandoffCommands(
 
   handoff
     .command("list")
-    .description("List handoff envelopes under .maestro/handoffs/")
+    .description(
+      "List handoff envelopes under .maestro/handoffs/ (paginated, summary by default)",
+    )
     .option("--task <id>", "filter by task id")
     .option("--trigger <verb>", "filter by trigger verb (task:claim, task:block, ...)")
     .option("--json", "Output as JSON")
-    .action(async (opts2: { task?: string; trigger?: string; json?: boolean }): Promise<void> => {
+    .option("--full", "Emit the full envelope shape instead of the summary projection")
+    .option("--all", "Drop the default --limit 20 cap")
+    .option("--limit <n>", "Limit the number of envelopes returned (default 20)", parsePositiveInt)
+    .option("--offset <n>", "Skip the first N envelopes (default 0)", parseNonNegativeInt)
+    .action(async (flags: HandoffListFlags): Promise<void> => {
       const repoRoot = opts.resolveRepoRoot();
       const services = buildCoreServices({ repoRoot });
       let envelopes = await services.handoffEmitter.list();
-      if (opts2.task) envelopes = envelopes.filter((e) => e.task_id === opts2.task);
-      if (opts2.trigger) envelopes = envelopes.filter((e) => e.trigger_verb === opts2.trigger);
+      if (flags.task) envelopes = envelopes.filter((e) => e.task_id === flags.task);
+      if (flags.trigger) envelopes = envelopes.filter((e) => e.trigger_verb === flags.trigger);
       const sorted = [...envelopes].sort((a, b) =>
         a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
       );
 
-      if (opts2.json === true || program.opts().json === true) {
-        console.log(JSON.stringify(sorted, null, 2));
+      const offset = flags.offset ?? 0;
+      const total = sorted.length;
+      const limit = flags.all === true ? Math.max(total - offset, 0) : (flags.limit ?? 20);
+      const page = sorted.slice(offset, offset + Math.max(limit, 0));
+
+      if (flags.json === true || program.opts().json === true) {
+        const items = flags.full === true
+          ? page
+          : await Promise.all(
+              page.map(async (env) => {
+                const pickup = await services.handoffEmitter.getPickup(env.id);
+                return summarizeHandoff(env, pickup !== undefined);
+              }),
+            );
+        console.log(stringifyForOutput({ items, total, limit, offset }));
         return;
       }
 
-      if (sorted.length === 0) {
+      if (page.length === 0) {
         console.log("(no handoff envelopes)");
         return;
       }
-      for (const env of sorted) {
+      for (const env of page) {
         const tail = env.agent_id ? ` agent=${env.agent_id}` : "";
         const reason = env.reason ? ` reason="${truncate(env.reason, 60)}"` : "";
-        console.log(`${env.id}  ${env.trigger_verb.padEnd(13)} task=${env.task_id}${tail}${reason}`);
+        // Defensive: legacy envelopes on disk may lack trigger_verb or task_id.
+        const trigger = typeof env.trigger_verb === "string" ? env.trigger_verb : "(unknown)";
+        const taskId = env.task_id ?? "?";
+        console.log(`${env.id}  ${trigger.padEnd(13)} task=${taskId}${tail}${reason}`);
       }
     });
 
@@ -63,7 +98,7 @@ export function registerHandoffCommands(
       const pickup = envelope ? await services.handoffEmitter.getPickup(id) : undefined;
 
       if (opts2.json === true || program.opts().json === true) {
-        console.log(JSON.stringify({ envelope, pickup }, null, 2));
+        console.log(stringifyForOutput({ envelope, pickup }));
         if (!envelope) process.exitCode = 1;
         return;
       }

@@ -4,6 +4,7 @@ import type {
   HandoffPickup,
 } from "@/repo/handoff-emitter.port.js";
 import { emitHandoff } from "@/service/emit-handoff.js";
+import { summarizeHandoff } from "@/shared/lib/projection.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import {
@@ -15,22 +16,18 @@ import {
 } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";
 
-interface HandoffSummary {
-  readonly id: string;
-  readonly task_id: string;
-  readonly trigger_verb: string;
-  readonly created_at: string;
-  readonly picked_up: boolean;
-}
-
-function summarizeHandoff(envelope: HandoffEnvelope, pickedUp: boolean): HandoffSummary {
-  return {
-    id: envelope.id,
-    task_id: envelope.task_id,
-    trigger_verb: envelope.trigger_verb,
-    created_at: envelope.created_at,
-    picked_up: pickedUp,
-  };
+/**
+ * Sort comparator for handoff envelopes. Defensive against malformed
+ * envelopes read off disk that lack `created_at` (legacy schema, partial
+ * write, hand-edit). Such records sort to the top rather than throwing.
+ */
+export function compareEnvelopesByCreatedAt(
+  a: HandoffEnvelope,
+  b: HandoffEnvelope,
+): number {
+  const ac = typeof a.created_at === "string" ? a.created_at : "";
+  const bc = typeof b.created_at === "string" ? b.created_at : "";
+  return ac.localeCompare(bc);
 }
 
 function generatePickupId(): string {
@@ -64,9 +61,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
               args.trigger_verb === undefined || e.trigger_verb === args.trigger_verb,
           )
           .slice()
-          .sort((a: HandoffEnvelope, b: HandoffEnvelope) =>
-            a.created_at.localeCompare(b.created_at),
-          );
+          .sort(compareEnvelopesByCreatedAt);
 
         const annotated: { envelope: HandoffEnvelope; pickup?: HandoffPickup }[] = [];
         for (const envelope of filtered) {
