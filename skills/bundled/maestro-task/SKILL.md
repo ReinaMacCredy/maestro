@@ -101,6 +101,33 @@ maestro ship <id> --pr-url https://github.com/owner/repo/pull/123
 
 `ship` is the manual `ready → shipped` flip.
 
+### 7. Split when scope grows
+
+If, mid-claim, the task turns out to be two or three smaller pieces, split it
+rather than overloading the verify loop:
+
+```bash
+maestro task split <parent-id> "Wire the API" "Wire the UI" "Add tests"
+maestro task split <parent-id> "first half" "second half" --parallel
+maestro task split <parent-id> "title" --agent <agent-id>      # assert claimant
+```
+
+- Parent must be `claimed` or `doing`. Children are created as `draft` with
+  slugs `<parent.slug>-1`, `<parent.slug>-2`, …, and inherit `mission_id`,
+  `spec_path`, and `worktree_path` from the parent.
+- Default chain is sequential: `child[i].blocked_by = [child[i-1]]`. Pass
+  `--parallel` to give every child an empty `blocked_by`.
+- Parent's `blocked_by` gains the new child ids, so the parent stays in flight
+  while you claim and ship each child individually. `task get <parent>` now
+  shows a `children:` section and an `external blocked_by:` section.
+- When abandoning a parent with active children, pass `--cascade` to abandon
+  the descendants post-order; without it, non-terminal children block the
+  abandon with `TASK_ABANDON_CASCADE_BLOCKED`.
+
+```bash
+maestro abandon <parent-id> --reason "scope dropped" --cascade
+```
+
 ---
 
 ## What `task claim` does for you
@@ -194,6 +221,8 @@ The MCP tool surface mirrors the CLI:
 | `maestro_task_create`               | `maestro task from-spec`             |
 | `maestro_task_claim`                | `maestro task claim`                 |
 | `maestro_task_block`, `maestro_task_unblock` | `maestro task block`, `maestro task abandon` (no native unblock; re-claim from blocked) |
+| `maestro_task_abandon`              | `maestro task abandon` — accepts `cascade: true` to recursively abandon non-terminal split-children |
+| `maestro_task_split`                | `maestro task split` — `parent_id`, `titles[]`, optional `parallel`, optional `agent_id` |
 | `maestro_task_complete`             | `maestro task ship`                  |
 | `maestro_evidence_record`, `maestro_evidence_list` | `maestro evidence record`, `maestro evidence list` |
 | `maestro_contract_show`, `maestro_contract_amend` | `maestro contract show`, `maestro contract amend` |
