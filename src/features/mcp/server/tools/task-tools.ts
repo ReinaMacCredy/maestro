@@ -5,13 +5,20 @@ import {
   taskShip,
   taskFromSpec,
 } from "@/service/index.js";
+import {
+  taskSplit,
+  TaskSplitInvalidStateError,
+  TaskSplitNotClaimantError,
+  EmptyChildInputsError,
+} from "@/service/task-split.usecase.js";
+import { TaskNotFoundError } from "@/repo/task-store.port.js";
 import { refreshNowMdFromServices } from "@/service/refresh-now-md.js";
 import {
   FsContractStoreAdapter,
   FsContractVersionStoreAdapter,
 } from "@/shared/domain/task/index.js";
 import { summarizeTask } from "@/shared/lib/projection.js";
-import type { Task } from "@/types/task.js";
+import type { Task, TaskId } from "@/types/task.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import {
@@ -21,6 +28,7 @@ import {
   TaskGetInput,
   TaskListInput,
   TaskShipInput,
+  TaskSplitInput,
 } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";
 
@@ -240,6 +248,56 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         return toCallToolResult(ok({ task }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_BLOCK_FAILED"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "maestro_task_split",
+    {
+      title: "Split a maestro task",
+      description:
+        "Bisect a claimed/doing parent into N child tasks (each child draft; parent's blocked_by gains the new child ids; children inherit mission_id, spec_path, worktree_path). Default chain is sequential (child[i] blocked_by [child[i-1]]); pass parallel=true for an empty blocked_by on every child. Pass agent_id to assert the parent is assigned to that agent before splitting. Error codes: TASK_NOT_FOUND, TASK_SPLIT_INVALID_STATE, TASK_SPLIT_NOT_CLAIMANT, TASK_SPLIT_FAILED.",
+      inputSchema: TaskSplitInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args): Promise<CallToolResult> => {
+      try {
+        const services = deps.getServices();
+        const children = await taskSplit(
+          {
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+            missionStore: services.missionStore,
+          },
+          {
+            id: args.parent_id as TaskId,
+            titles: args.titles,
+            ...(args.parallel === true ? { parallel: true } : {}),
+            ...(args.agent_id !== undefined ? { agentId: args.agent_id } : {}),
+          },
+        );
+        await refreshNowMdFromServices(services);
+        return toCallToolResult(ok({ children }));
+      } catch (err) {
+        if (err instanceof TaskNotFoundError) {
+          return toCallToolResult(fail("TASK_NOT_FOUND", err.message));
+        }
+        if (err instanceof TaskSplitInvalidStateError) {
+          return toCallToolResult(fail("TASK_SPLIT_INVALID_STATE", err.message));
+        }
+        if (err instanceof TaskSplitNotClaimantError) {
+          return toCallToolResult(fail("TASK_SPLIT_NOT_CLAIMANT", err.message));
+        }
+        if (err instanceof EmptyChildInputsError) {
+          return toCallToolResult(fail("TASK_SPLIT_FAILED", err.message));
+        }
+        return toCallToolResult(fromMaestroError(err, "TASK_SPLIT_FAILED"));
       }
     },
   );

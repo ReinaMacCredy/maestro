@@ -159,6 +159,32 @@ export const TaskBlockInput = z
   })
   .strict();
 
+// Task split: bisect a claimed/doing parent into child tasks. Each child is
+// created in draft with parent.slug-N slug and parent_id back-reference; the
+// parent's blocked_by gains the new child ids.
+export const TaskSplitInput = z
+  .object({
+    parent_id: taskId,
+    titles: z
+      .array(z.string().min(1))
+      .min(1)
+      .describe("One title per child task. At least one required."),
+    parallel: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, children have empty blocked_by (parallelizable). When false/omitted, children are chained sequentially: child[i] blocked_by [child[i-1]].",
+      ),
+    agent_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Asserts the parent is currently assigned to this agent. When omitted, no claimant check is run.",
+      ),
+  })
+  .strict();
+
 // task_from_spec creates a task in draft state from a product-spec markdown file.
 // Takes a file path (absolute or relative to repo root), not a spec ID.
 export const TaskFromSpecInput = z
