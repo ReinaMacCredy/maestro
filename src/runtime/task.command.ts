@@ -14,11 +14,17 @@ import { taskBlock } from "../service/task-block.usecase.js";
 import { taskAbandon } from "../service/task-abandon.usecase.js";
 import { taskVerify, TaskVerifyReasonRequiredError } from "../service/task-verify.usecase.js";
 import { taskShip } from "../service/task-ship.usecase.js";
+import {
+  taskSplit,
+  TaskSplitInvalidStateError,
+  TaskSplitNotClaimantError,
+  EmptyChildInputsError,
+} from "../service/task-split.usecase.js";
 import { MissionTerminalGuardError } from "../service/assert-mission-active.js";
 import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError, TASK_STATES, type TaskState } from "../types/task-state.js";
-import type { Task } from "../types/task.js";
+import type { Task, TaskId } from "../types/task.js";
 import { summarizeTask } from "../shared/lib/projection.js";
 
 export interface TaskCommandOptions {
@@ -36,7 +42,10 @@ function reportError(verb: string, err: unknown): void {
     err instanceof TaskNotFoundError ||
     err instanceof TaskTransitionError ||
     err instanceof TaskVerifyReasonRequiredError ||
-    err instanceof MissionTerminalGuardError
+    err instanceof MissionTerminalGuardError ||
+    err instanceof TaskSplitInvalidStateError ||
+    err instanceof TaskSplitNotClaimantError ||
+    err instanceof EmptyChildInputsError
   ) {
     console.error(`maestro ${verb}: ${(err as Error).message}`);
     process.exitCode = 1;
@@ -144,6 +153,45 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
       "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
     )
     .action(claimAction);
+
+  const splitAction = async (
+    parentId: string,
+    titles: string[],
+    flags: { parallel?: boolean; agent?: string },
+  ): Promise<void> => {
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildCoreServices({ repoRoot });
+      const children = await taskSplit(
+        {
+          taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
+          missionStore: services.missionStore,
+        },
+        {
+          id: parentId as TaskId,
+          titles,
+          ...(flags.parallel === true ? { parallel: true } : {}),
+          ...(flags.agent !== undefined ? { agentId: flags.agent } : {}),
+        },
+      );
+      for (const c of children) {
+        console.log(`${c.id} draft (${c.slug})`);
+      }
+      await refreshNowMdFromServices(services);
+    } catch (err) {
+      reportError("task split", err);
+    }
+  };
+
+  task
+    .command("split <parent-id> <titles...>")
+    .description(
+      "Split a claimed/doing parent into child tasks (each child draft, parent gains blocked_by refs)",
+    )
+    .option("--parallel", "create children with empty blocked_by (no sequential chain)")
+    .option("--agent <agent-id>", "asserts the parent is assigned to this agent before splitting")
+    .action(splitAction);
 
   const blockAction = async (
     id: string,
