@@ -484,14 +484,36 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
         process.exitCode = 1;
         return;
       }
+      // Partition blocked_by into children (split-children, identified by
+      // parent_id back-reference) and external (any other blocker, including
+      // unknown ids whose rows aren't in tasks.jsonl).
+      const allTasks = await services.taskStore.list();
+      const byId = new Map(allTasks.map((task) => [task.id, task] as const));
+      const children: Task[] = [];
+      const external: string[] = [];
+      for (const blockerId of t.blocked_by) {
+        const blocker = byId.get(blockerId);
+        if (blocker && blocker.parent_id === t.id) {
+          children.push(blocker);
+        } else {
+          external.push(blockerId);
+        }
+      }
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
-        console.log(stringifyForOutput({ task: t }));
+        console.log(
+          stringifyForOutput({
+            task: t,
+            children: children.map(summarizeTask),
+            external,
+          }),
+        );
         return;
       }
       console.log(`${t.id} ${t.state} ${t.slug}`);
       console.log(`  title:      ${t.title}`);
       if (t.mission_id) console.log(`  mission_id: ${t.mission_id}`);
+      if (t.parent_id) console.log(`  parent_id:  ${t.parent_id}`);
       if (t.spec_path) console.log(`  spec_path:  ${t.spec_path}`);
       if (t.assignee) console.log(`  assignee:   ${t.assignee}`);
       if (t.claimed_at) console.log(`  claimed_at: ${t.claimed_at}`);
@@ -500,6 +522,18 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
       if (t.abandon_reason) console.log(`  abandoned:  ${t.abandon_reason}`);
       console.log(`  created_at: ${t.created_at}`);
       console.log(`  updated_at: ${t.updated_at}`);
+      if (children.length > 0) {
+        console.log(`  children:`);
+        for (const c of children) {
+          console.log(`    ${c.id} ${c.state} ${c.slug}`);
+        }
+      }
+      if (external.length > 0) {
+        console.log(`  external blocked_by:`);
+        for (const e of external) {
+          console.log(`    ${e}`);
+        }
+      }
     } catch (err) {
       reportError("task get", err);
     }

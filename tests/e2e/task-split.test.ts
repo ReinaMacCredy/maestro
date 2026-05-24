@@ -142,4 +142,42 @@ describe("maestro task split", () => {
     expect(result.stderr).toContain("assigned to 'agent-A'");
     expect(result.stderr).toContain("not 'agent-B'");
   });
+
+  it("`task get` partitions blocked_by into children and external; surfaces parent_id on children", async () => {
+    const parentId = await setupClaimedTask(tmpDir);
+    const splitResult = await runCompiled(
+      ["task", "split", parentId, "alpha", "beta"],
+      tmpDir,
+    );
+    expect(splitResult.exitCode).toBe(0);
+    const childIds = splitResult.stdout
+      .split("\n")
+      .filter((l) => l.startsWith("tsk-"))
+      .map((l) => l.split(" ")[0]!);
+    expect(childIds).toHaveLength(2);
+
+    const parentGet = await runCompiled(
+      ["task", "get", parentId, "--json"],
+      tmpDir,
+    );
+    expect(parentGet.exitCode).toBe(0);
+    const parentBody = JSON.parse(parentGet.stdout) as {
+      task: { blocked_by: string[] };
+      children: { id: string; parent_id?: string }[];
+      external: string[];
+    };
+    expect(parentBody.children).toHaveLength(2);
+    expect(parentBody.external).toEqual([]);
+    for (const c of parentBody.children) {
+      expect(c.parent_id).toBe(parentId);
+      expect(childIds).toContain(c.id);
+    }
+
+    const childGet = await runCompiled(
+      ["task", "get", childIds[0]!],
+      tmpDir,
+    );
+    expect(childGet.exitCode).toBe(0);
+    expect(childGet.stdout).toContain(`parent_id:  ${parentId}`);
+  });
 });
