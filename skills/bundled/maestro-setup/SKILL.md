@@ -98,35 +98,28 @@ Record every evidence source used for `.maestro/setup-report.md`.
 
 ### 2. Detect Languages
 
-Detect languages from manifests first, then file extensions. Copy only matched
-frozen snapshots from `reference/styleguides/` to
-`.maestro/context/code_styleguides/`.
+Detect languages from manifests first, then file extensions. Always copy
+`general.md`. Copy only matched language guides from `reference/styleguides/`
+to `.maestro/context/code_styleguides/`.
 
 Use this map:
 
 | Guide | Signals |
 |---|---|
-| `angularjs.md` | AngularJS dependency, `angular.module`, Angular 1 style files |
-| `common-lisp.md` | `.lisp`, `.lsp`, `.asd` |
+| `general.md` | Always copied |
 | `cpp.md` | `.cc`, `.cpp`, `.cxx`, `.hh`, `.hpp`, `CMakeLists.txt` |
 | `csharp.md` | `.cs`, `.csproj`, `.sln` |
+| `dart.md` | `.dart`, `pubspec.yaml` |
 | `go.md` | `go.mod`, `.go` |
 | `html-css.md` | `.html`, `.css`, `.scss`, `.sass`, `.less` |
 | `javascript.md` | `.js`, `.jsx`, JavaScript package metadata |
-| `java.md` | `.java`, `pom.xml`, `build.gradle` |
-| `json.md` | `.json`, JSON schema files |
-| `markdown.md` | `.md`, `.mdx` |
-| `objective-c.md` | `.m`, `.mm`, `.h` with Objective-C patterns |
 | `python.md` | `.py`, `pyproject.toml`, `requirements.txt`, `setup.py` |
-| `r.md` | `.R`, `.r`, `DESCRIPTION` |
-| `shell.md` | `.sh`, `.bash`, `.zsh`, shell shebangs |
-| `swift.md` | `.swift`, `Package.swift`, Xcode Swift targets |
+| `rust.md` | `.rs`, `Cargo.toml`, `Cargo.lock` |
 | `typescript.md` | `.ts`, `.tsx`, `tsconfig.json` |
-| `vimscript.md` | `.vim`, `.vimrc`, Vim plugin metadata |
-| `xml.md` | `.xml`, `.xsd`, XML schemas |
 
-If Dart or Kotlin is detected, do not copy external guides in v1. Mention that
-external Dart/Kotlin references were detected but intentionally excluded.
+For languages without a bundled guide (Java, JSON, Markdown, Objective-C, R,
+Shell, Swift, VimScript, XML, Kotlin, AngularJS, Common Lisp, etc.), record
+the detection in the setup report and skip copying a guide.
 
 ### 3. Install CI Workflow (when applicable)
 

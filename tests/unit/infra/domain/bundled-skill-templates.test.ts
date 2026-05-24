@@ -181,45 +181,28 @@ Before non-trivial work:
     }
   });
 
-  it("ships maestro-setup Google styleguide snapshots with attribution", () => {
+  it("ships maestro-setup conductor styleguide templates", () => {
     const setup = BUNDLED_SKILL_TEMPLATES.find((template) => template.name === "maestro-setup");
     expect(setup).toBeDefined();
 
     const expectedGuides = [
-      "angularjs.md",
-      "common-lisp.md",
       "cpp.md",
       "csharp.md",
+      "dart.md",
+      "general.md",
       "go.md",
       "html-css.md",
       "javascript.md",
-      "java.md",
-      "json.md",
-      "markdown.md",
-      "objective-c.md",
       "python.md",
-      "r.md",
-      "shell.md",
-      "swift.md",
+      "rust.md",
       "typescript.md",
-      "vimscript.md",
-      "xml.md",
     ];
 
     for (const guide of expectedGuides) {
       const file = setup!.files.find((entry) => entry.path === `reference/styleguides/${guide}`);
       expect(file, `reference/styleguides/${guide}`).toBeDefined();
-      expect(file!.content).toContain("Snapshot date: 2026-04-24");
-      expect(file!.content).toContain("Creative Commons Attribution 3.0");
-      expect(file!.content).toContain("google.github.io");
+      expect(file!.content.length).toBeGreaterThan(0);
     }
-
-    const jsonGuide = setup!.files.find((entry) => entry.path === "reference/styleguides/json.md");
-    expect(jsonGuide?.content).toContain("code samples are Apache 2.0");
-
-    const index = setup!.files.find((entry) => entry.path === "reference/styleguides/INDEX.md");
-    expect(index?.content).toContain("excludes external Dart and Kotlin guides");
-    expect(index?.content).toContain("code samples under Apache 2.0");
   });
 
   it("ships maestro-setup CI workflow template as a reference asset", () => {
