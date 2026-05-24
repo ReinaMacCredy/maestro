@@ -11,7 +11,6 @@ For agent-facing usage, prefer the bundled skills under `skills/bundled/maestro-
 ```bash
 bun run build
 bun run check:boundaries
-bun run check:skills
 bun run check:bundled-skills
 bun run check:layers      # forward-only layer enforcement
 bun run test

@@ -93,7 +93,6 @@ maestro/
 ```bash
 bun run build
 bun run check:boundaries
-bun run check:skills
 bun run check:bundled-skills
 bun run check:layers
 bun run test

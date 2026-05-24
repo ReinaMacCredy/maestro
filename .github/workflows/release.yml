@@ -72,8 +72,6 @@ jobs:
         run: bun run check:boundaries
       - name: Check agent-facing templates
         run: bun run check:agent-spec
-      - name: Check built-in skills
-        run: bun run check:skills
       - name: Check bundled skills
         run: bun run check:bundled-skills
       - name: Run test suite
