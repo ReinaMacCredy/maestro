@@ -122,6 +122,8 @@ function evidenceDeps(overrides: DepsOverrides = {}) {
         },
         taskStore: {
           create: async () => { throw new Error("Not implemented"); },
+          createMany: async () => { throw new Error("Not implemented"); },
+          splitTask: async () => { throw new Error("splitTask not stubbed in this test"); },
           get: async () => undefined,
           update: async () => { throw new Error("Not implemented"); },
           list: async () => [],

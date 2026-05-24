@@ -694,6 +694,9 @@ export function mockRepoTaskStore(
     createMany: async () => {
       throw new Error("mockRepoTaskStore.createMany not implemented");
     },
+    splitTask: async (_input) => {
+      throw new Error("splitTask not stubbed in this test");
+    },
     get: async (id) => tasks.get(id),
     update: async (id, patch) => {
       const existing = tasks.get(id);

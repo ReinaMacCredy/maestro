@@ -7,12 +7,13 @@ export interface CreateTaskInput {
   readonly state: TaskState;
   readonly spec_path?: string;
   readonly mission_id?: string;
+  readonly parent_id?: TaskId;
   readonly blocked_by?: readonly string[];
   readonly id?: TaskId;
 }
 
 export type TaskPatch = Partial<
-  Omit<Task, "id" | "slug" | "created_at" | "updated_at">
+  Omit<Task, "id" | "slug" | "parent_id" | "created_at" | "updated_at">
 >;
 
 export interface TaskStorePort {
@@ -21,6 +22,11 @@ export interface TaskStorePort {
   // do. Decomposing a mission used to call create() per task, so a crash
   // mid-batch left half a mission on disk.
   createMany(inputs: readonly CreateTaskInput[]): Promise<readonly Task[]>;
+  splitTask(input: {
+    readonly parentId: TaskId;
+    readonly parentPatch: TaskPatch;
+    readonly childInputs: readonly CreateTaskInput[];
+  }): Promise<{ readonly parent: Task; readonly children: readonly Task[] }>;
   get(id: TaskId): Promise<Task | undefined>;
   update(id: TaskId, patch: TaskPatch): Promise<Task>;
   list(): Promise<readonly Task[]>;
@@ -43,5 +49,19 @@ export class DuplicateSlugError extends Error {
     super(`Task with slug ${slug} already exists`);
     this.name = "DuplicateSlugError";
     this.slug = slug;
+  }
+}
+
+export class InvalidTaskIdError extends Error {
+  constructor(public readonly id: string) {
+    super(`Invalid task id format: ${id}`);
+    this.name = "InvalidTaskIdError";
+  }
+}
+
+export class DuplicateTaskIdError extends Error {
+  constructor(public readonly id: string) {
+    super(`Task id already exists: ${id}`);
+    this.name = "DuplicateTaskIdError";
   }
 }
