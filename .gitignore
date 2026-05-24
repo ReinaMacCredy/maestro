@@ -38,7 +38,13 @@ feedback.jsonl
 # Runtime data
 .maestro/handoffs/
 .maestro/launches/
-.maestro/missions/
+# Ignore mission runtime state but keep the markdown sidecars
+# (`<slug>.md`) tracked — they're shareable design intent per
+# the maestro-mission skill. Negations only re-include when the
+# parent dir is not excluded, so glob the contents, not the dir.
+.maestro/missions/*
+!.maestro/missions/*.md
+!.maestro/missions/.gitkeep
 .maestro/tasks/local-history/
 .maestro/tasks/batches/
 # Derived dashboard refreshed on every task mutation; not authoritative state.

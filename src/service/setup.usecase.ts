@@ -94,12 +94,23 @@ export interface RunSetupOptions {
 
 const RUNTIME_GITIGNORE_COMMENT = "# Maestro runtime state";
 const RUNTIME_GITIGNORE_LINES = [
-  ".maestro/missions/",
+  // Ignore everything in .maestro/missions/ except the markdown sidecars
+  // (`<slug>.md` is shareable design intent; see the maestro-mission skill)
+  // and an optional .gitkeep so the directory survives in fresh clones.
+  // The order matters — negations only re-include when the parent dir itself
+  // is not excluded, so use the file glob `missions/*` and not `missions/`.
+  ".maestro/missions/*",
+  "!.maestro/missions/*.md",
+  "!.maestro/missions/.gitkeep",
   ".maestro/sessions/",
   ".maestro/tasks/local-history/",
   ".maestro/evidence/",
   ".maestro/runs/",
 ] as const;
+// Lines emitted by previous maestro versions that are now superseded.
+// `ensureRuntimeGitignore` strips these on every run so upgrades don't
+// leave a stale blanket pattern that defeats the new negations.
+const STALE_RUNTIME_GITIGNORE_LINES = [".maestro/missions/"] as const;
 const MANAGED_AGENT_SKILL_ROOTS = [
   [".claude", "skills"],
   [".codex", "skills"],
@@ -579,18 +590,30 @@ async function ensureRuntimeGitignore(
   await assertProjectLocalPathSafe(rootDir, gitignorePath);
 
   const existing = (await readText(gitignorePath)) ?? "";
-  const lines = new Set(existing.split(/\r?\n/));
-  const missingLines = RUNTIME_GITIGNORE_LINES.filter((line) => !lines.has(line));
-  if (missingLines.length === 0) {
+  const staleSet = new Set<string>(STALE_RUNTIME_GITIGNORE_LINES);
+  const filteredLines = existing.split(/\r?\n/).filter((line) => !staleSet.has(line));
+  const stripped = filteredLines.join("\n");
+  const removedStale = stripped !== existing;
+
+  const lineSet = new Set(filteredLines);
+  const missingLines = RUNTIME_GITIGNORE_LINES.filter((line) => !lineSet.has(line));
+  if (missingLines.length === 0 && !removedStale) {
     if (existing.length > 0) return { path: gitignorePath, action: "skip" };
     return undefined;
   }
 
   if (dryRun) return { path: gitignorePath, action: "would-create" };
 
-  const prefix = existing.length === 0 ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
-  const comment = lines.has(RUNTIME_GITIGNORE_COMMENT) ? "" : `${RUNTIME_GITIGNORE_COMMENT}\n`;
-  await writeText(gitignorePath, `${existing}${prefix}${comment}${missingLines.join("\n")}\n`);
+  const base = stripped;
+  const comment = lineSet.has(RUNTIME_GITIGNORE_COMMENT) ? "" : `${RUNTIME_GITIGNORE_COMMENT}\n`;
+  const newSection = missingLines.length === 0 ? "" : `${comment}${missingLines.join("\n")}\n`;
+  const prefix =
+    newSection.length === 0 || base.length === 0
+      ? ""
+      : base.endsWith("\n")
+        ? "\n"
+        : "\n\n";
+  await writeText(gitignorePath, `${base}${prefix}${newSection}`);
   return { path: gitignorePath, action: "create" };
 }
 

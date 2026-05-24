@@ -39,7 +39,8 @@ not an encyclopedia — read it as pointers and open the linked docs as needed.
 
 - \`.maestro/bootstrap/\` — committed bootstrap assets (\`init.sh\`, services, library, validation)
 - \`.maestro/skills/\` — project-local agent skills
-- \`.maestro/missions/\` / \`.maestro/sessions/\` — runtime state (handoff packets live globally)
+- \`.maestro/missions/\` — \`<slug>.md\` sidecars are tracked design intent; \`missions.jsonl\` and per-mission subdirs are runtime state
+- \`.maestro/sessions/\` — runtime state (handoff packets live globally)
 - \`.maestro/tasks/contracts/\` + \`.maestro/tasks/contract-templates/\` — versioned contracts and reusable drafts
 - \`skills/built-in/\` — shipped built-in fallback skills
 
@@ -220,7 +221,8 @@ Use this document for required tools, environment variables, and local setup not
 
 - \`.maestro/bootstrap/\` is the committed bootstrap layer
 - \`.maestro/skills/\` is the local runtime skill layer
-- \`.maestro/missions/\` and \`.maestro/sessions/\` are runtime state (handoff packets live globally at \`~/.maestro/handoff/\`)
+- \`.maestro/missions/\` holds tracked \`<slug>.md\` design notes alongside ignored runtime state (\`missions.jsonl\`, per-mission dirs)
+- \`.maestro/sessions/\` is runtime state (handoff packets live globally at \`~/.maestro/handoff/\`)
 
 ## Environment Variables
 

@@ -119,11 +119,34 @@ describe("runSetup (project scope)", () => {
     await runSetup(project());
 
     const gitignore = await readFile(join(tmpDir, ".gitignore"), "utf8");
+    const lines = new Set(gitignore.split(/\r?\n/));
     expect(gitignore).not.toContain(".maestro/launches/");
     expect(gitignore).not.toContain(".maestro/handoff/");
-    expect(gitignore).toContain(".maestro/missions/");
-    expect(gitignore).toContain(".maestro/sessions/");
-    expect(gitignore).toContain(".maestro/tasks/local-history/");
+    // Mission sidecars (`<slug>.md`) stay tracked; the rest of the dir is
+    // runtime state. The bare `.maestro/missions/` line is intentionally not
+    // emitted — it would mask the negations that re-include the sidecars.
+    expect(lines.has(".maestro/missions/")).toBe(false);
+    expect(lines.has(".maestro/missions/*")).toBe(true);
+    expect(lines.has("!.maestro/missions/*.md")).toBe(true);
+    expect(lines.has("!.maestro/missions/.gitkeep")).toBe(true);
+    expect(lines.has(".maestro/sessions/")).toBe(true);
+    expect(lines.has(".maestro/tasks/local-history/")).toBe(true);
+  });
+
+  it("strips a stale `.maestro/missions/` blanket line on upgrade", async () => {
+    await writeFile(
+      join(tmpDir, ".gitignore"),
+      "node_modules/\n\n# Maestro runtime state\n.maestro/missions/\n",
+    );
+
+    await runSetup(project());
+
+    const gitignore = await readFile(join(tmpDir, ".gitignore"), "utf8");
+    const lines = new Set(gitignore.split(/\r?\n/));
+    expect(lines.has(".maestro/missions/")).toBe(false);
+    expect(lines.has(".maestro/missions/*")).toBe(true);
+    expect(lines.has("!.maestro/missions/*.md")).toBe(true);
+    expect(gitignore).toContain("node_modules/");
   });
 
   it("rejects symlinked .maestro paths that escape the project root", async () => {
