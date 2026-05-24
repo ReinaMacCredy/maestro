@@ -7,17 +7,24 @@ import {
 } from "@/shared/domain/task/index.js";
 import { FsVerdictStoreAdapter } from "@/features/verdict/adapters/fs-verdict-store.adapter.js";
 import { parseNonNegativeInt, parsePositiveInt } from "../shared/lib/cli-options.js";
+import { stringifyForOutput } from "../shared/lib/output.js";
 import { taskFromSpec, SpecFileNotFoundError } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
 import { taskBlock } from "../service/task-block.usecase.js";
-import { taskAbandon } from "../service/task-abandon.usecase.js";
+import { taskAbandon, TaskSplitCascadeBlockedError } from "../service/task-abandon.usecase.js";
 import { taskVerify, TaskVerifyReasonRequiredError } from "../service/task-verify.usecase.js";
 import { taskShip } from "../service/task-ship.usecase.js";
+import {
+  taskSplit,
+  TaskSplitInvalidStateError,
+  TaskSplitNotClaimantError,
+  EmptyChildInputsError,
+} from "../service/task-split.usecase.js";
 import { MissionTerminalGuardError } from "../service/assert-mission-active.js";
 import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import { TaskNotFoundError } from "../repo/task-store.port.js";
 import { TaskTransitionError, TASK_STATES, type TaskState } from "../types/task-state.js";
-import type { Task } from "../types/task.js";
+import type { Task, TaskId } from "../types/task.js";
 import { summarizeTask } from "../shared/lib/projection.js";
 
 export interface TaskCommandOptions {
@@ -35,7 +42,11 @@ function reportError(verb: string, err: unknown): void {
     err instanceof TaskNotFoundError ||
     err instanceof TaskTransitionError ||
     err instanceof TaskVerifyReasonRequiredError ||
-    err instanceof MissionTerminalGuardError
+    err instanceof MissionTerminalGuardError ||
+    err instanceof TaskSplitInvalidStateError ||
+    err instanceof TaskSplitNotClaimantError ||
+    err instanceof EmptyChildInputsError ||
+    err instanceof TaskSplitCascadeBlockedError
   ) {
     console.error(`maestro ${verb}: ${(err as Error).message}`);
     process.exitCode = 1;
@@ -83,7 +94,7 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
 
   const claimAction = async (
     id: string,
-    flags: { agent?: string; skipWorktree?: boolean },
+    flags: { agent?: string; skipWorktree?: boolean; tool?: string },
   ): Promise<void> => {
     try {
       const repoRoot = opts.resolveRepoRoot();
@@ -102,7 +113,15 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
           contractVersionStore,
           repoRoot,
         },
-        { id, agentId: flags.agent, skipWorktree: flags.skipWorktree === true },
+        {
+          id,
+          agentId: flags.agent,
+          skipWorktree: flags.skipWorktree === true,
+          // Default to "cli" so CLI-emitted handoffs carry a routable
+          // to_agent. Operators can override with --tool to claim on behalf
+          // of a specific agent (e.g. --tool codex).
+          tool: flags.tool ?? "cli",
+        },
       );
       const worktreeNote = claimed.worktree_path ? ` (worktree ${claimed.worktree_path})` : "";
       console.log(
@@ -119,6 +138,10 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     .description("Claim a task (draft -> claimed); auto-creates a worktree for heavy-mode specs")
     .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
     .option("--skip-worktree", "skip auto-worktree creation even for heavy-mode specs")
+    .option(
+      "--tool <name>",
+      "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
+    )
     .action(claimAction);
 
   program
@@ -126,9 +149,55 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     .description("Hot-path alias for `task claim`")
     .option("--agent <agent-id>", "agent identifier recorded on the task and evidence row")
     .option("--skip-worktree", "skip auto-worktree creation even for heavy-mode specs")
+    .option(
+      "--tool <name>",
+      "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
+    )
     .action(claimAction);
 
-  const blockAction = async (id: string, flags: { reason?: string }): Promise<void> => {
+  const splitAction = async (
+    parentId: string,
+    titles: string[],
+    flags: { parallel?: boolean; agent?: string },
+  ): Promise<void> => {
+    try {
+      const repoRoot = opts.resolveRepoRoot();
+      const services = buildCoreServices({ repoRoot });
+      const children = await taskSplit(
+        {
+          taskStore: services.taskStore,
+          evidenceStore: services.evidenceStore,
+          missionStore: services.missionStore,
+        },
+        {
+          id: parentId as TaskId,
+          titles,
+          ...(flags.parallel === true ? { parallel: true } : {}),
+          ...(flags.agent !== undefined ? { agentId: flags.agent } : {}),
+        },
+      );
+      for (const c of children) {
+        console.log(`${c.id} draft (${c.slug})`);
+      }
+      await refreshNowMdFromServices(services);
+    } catch (err) {
+      reportError("task split", err);
+    }
+  };
+
+  task
+    .command("split <parent-id> <titles...>")
+    .description(
+      "Split a claimed/doing parent into child tasks (each child draft, parent gains blocked_by refs)",
+    )
+    .option("--parallel", "create children with empty blocked_by (no sequential chain)")
+    .option("--agent <agent-id>", "asserts the parent is assigned to this agent before splitting")
+    .action(splitAction);
+
+  const blockAction = async (
+    id: string,
+    flags: { reason?: string; tool?: string },
+  ): Promise<void> => {
     if (!flags.reason) {
       console.error("maestro task block: --reason is required");
       process.exitCode = 1;
@@ -145,7 +214,10 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
           observabilityStore: services.observabilityStore,
           handoffEmitter: services.handoffEmitter,
         },
-        { id, reason: flags.reason },
+        // Default to "cli" so block handoffs carry a routable to_agent;
+        // operators can override with --tool when blocking on behalf of
+        // another agent.
+        { id, reason: flags.reason, tool: flags.tool ?? "cli" },
       );
       console.log(`${blocked.id} blocked: ${flags.reason}`);
       await refreshNowMdFromServices(services);
@@ -158,15 +230,26 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     .command("block <id>")
     .description("Block a task with a reason (claimed | doing | verifying -> blocked)")
     .requiredOption("--reason <text>", "human-readable explanation of the blocker")
+    .option(
+      "--tool <name>",
+      "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
+    )
     .action(blockAction);
 
   program
     .command("block <id>")
     .description("Hot-path alias for `task block`")
     .requiredOption("--reason <text>", "human-readable explanation of the blocker")
+    .option(
+      "--tool <name>",
+      "caller tool name written as to_agent on the auto-emitted handoff (default: cli)",
+    )
     .action(blockAction);
 
-  const abandonAction = async (id: string, flags: { reason?: string }): Promise<void> => {
+  const abandonAction = async (
+    id: string,
+    flags: { reason?: string; cascade?: boolean },
+  ): Promise<void> => {
     if (!flags.reason) {
       console.error("maestro task abandon: --reason is required");
       process.exitCode = 1;
@@ -182,7 +265,11 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
           missionStore: services.missionStore,
           observabilityStore: services.observabilityStore,
         },
-        { id, reason: flags.reason },
+        {
+          id: id as TaskId,
+          reason: flags.reason,
+          ...(flags.cascade === true ? { cascade: true } : {}),
+        },
       );
       console.log(`${abandoned.id} abandoned: ${flags.reason}`);
       await refreshNowMdFromServices(services);
@@ -195,12 +282,20 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     .command("abandon <id>")
     .description("Abandon a task with a reason (any non-terminal -> abandoned)")
     .requiredOption("--reason <text>", "human-readable explanation of abandonment")
+    .option(
+      "--cascade",
+      "also abandon non-terminal split-children (post-order); without this flag, non-terminal descendants block the abandon",
+    )
     .action(abandonAction);
 
   program
     .command("abandon <id>")
     .description("Hot-path alias for `task abandon`")
     .requiredOption("--reason <text>", "human-readable explanation of abandonment")
+    .option(
+      "--cascade",
+      "also abandon non-terminal split-children (post-order); without this flag, non-terminal descendants block the abandon",
+    )
     .action(abandonAction);
 
   const verifyAction = async function (
@@ -236,16 +331,12 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
         console.log(
-          JSON.stringify(
-            {
-              id: result.task.id,
-              state: result.task.state,
-              verdict: result.verdict,
-              violations: result.violations,
-            },
-            null,
-            2,
-          ),
+          stringifyForOutput({
+            id: result.task.id,
+            state: result.task.state,
+            verdict: result.verdict,
+            violations: result.violations,
+          }),
         );
       } else if (result.verdict === "PASS") {
         console.log(`${result.task.id} verified -> ready (PASS)`);
@@ -354,19 +445,19 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
         tasks = await services.taskStore.list();
       }
       const offset = flags.offset ?? 0;
-      const limit = flags.all === true ? tasks.length - offset : (flags.limit ?? 20);
-      const page = tasks.slice(offset, offset + Math.max(limit, 0));
+      // Clamp limit to non-negative even when --all is paired with an offset
+      // larger than tasks.length. Otherwise the emitted `limit` field would be
+      // negative, breaking downstream pagination math.
+      const rawLimit = flags.all === true ? tasks.length - offset : (flags.limit ?? 20);
+      const limit = Math.max(rawLimit, 0);
+      const page = tasks.slice(offset, offset + limit);
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
         const items = flags.full === true
           ? page
           : page.map(summarizeTask);
         console.log(
-          JSON.stringify(
-            { items, total: tasks.length, limit, offset },
-            null,
-            2,
-          ),
+          stringifyForOutput({ items, total: tasks.length, limit, offset }),
         );
         return;
       }
@@ -409,14 +500,36 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
         process.exitCode = 1;
         return;
       }
+      // Partition blocked_by into children (split-children, identified by
+      // parent_id back-reference) and external (any other blocker, including
+      // unknown ids whose rows aren't in tasks.jsonl).
+      const allTasks = await services.taskStore.list();
+      const byId = new Map(allTasks.map((task) => [task.id, task] as const));
+      const children: Task[] = [];
+      const external: string[] = [];
+      for (const blockerId of t.blocked_by) {
+        const blocker = byId.get(blockerId);
+        if (blocker && blocker.parent_id === t.id) {
+          children.push(blocker);
+        } else {
+          external.push(blockerId);
+        }
+      }
       const wantJson = flags.json === true || this.optsWithGlobals().json === true;
       if (wantJson) {
-        console.log(JSON.stringify({ task: t }, null, 2));
+        console.log(
+          stringifyForOutput({
+            task: t,
+            children: children.map(summarizeTask),
+            external,
+          }),
+        );
         return;
       }
       console.log(`${t.id} ${t.state} ${t.slug}`);
       console.log(`  title:      ${t.title}`);
       if (t.mission_id) console.log(`  mission_id: ${t.mission_id}`);
+      if (t.parent_id) console.log(`  parent_id:  ${t.parent_id}`);
       if (t.spec_path) console.log(`  spec_path:  ${t.spec_path}`);
       if (t.assignee) console.log(`  assignee:   ${t.assignee}`);
       if (t.claimed_at) console.log(`  claimed_at: ${t.claimed_at}`);
@@ -425,6 +538,18 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
       if (t.abandon_reason) console.log(`  abandoned:  ${t.abandon_reason}`);
       console.log(`  created_at: ${t.created_at}`);
       console.log(`  updated_at: ${t.updated_at}`);
+      if (children.length > 0) {
+        console.log(`  children:`);
+        for (const c of children) {
+          console.log(`    ${c.id} ${c.state} ${c.slug}`);
+        }
+      }
+      if (external.length > 0) {
+        console.log(`  external blocked_by:`);
+        for (const e of external) {
+          console.log(`    ${e}`);
+        }
+      }
     } catch (err) {
       reportError("task get", err);
     }

@@ -17,6 +17,7 @@ export interface EmitHandoffInput {
   readonly worktree_path?: string;
   readonly spec_path?: string;
   readonly reason?: string;
+  readonly to_agent?: string;
 }
 
 function defaultIdFactory(): string {
@@ -37,6 +38,7 @@ export async function emitHandoff(
     ...(input.worktree_path !== undefined ? { worktree_path: input.worktree_path } : {}),
     ...(input.spec_path !== undefined ? { spec_path: input.spec_path } : {}),
     ...(input.reason !== undefined ? { reason: input.reason } : {}),
+    ...(input.to_agent !== undefined ? { to_agent: input.to_agent } : {}),
   };
   await deps.emitter.emit(envelope);
   return envelope;

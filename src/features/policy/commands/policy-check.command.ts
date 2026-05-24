@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
-import { resolveJsonFlag } from "@/shared/lib/output.js";
+import { resolveJsonFlag, stringifyForOutput } from "@/shared/lib/output.js";
 import { resolveDefaultBase, resolveHeadSha } from "@/shared/lib/git-base.js";
 import { matchesAnyGlob } from "@/shared/lib/glob-match.js";
 import { type Services } from "@/services.js";
@@ -158,7 +158,7 @@ export function registerPolicyCheckCommand(
       };
 
       if (isJson) {
-        console.log(JSON.stringify(result, null, 2));
+        console.log(stringifyForOutput(result));
       } else {
         printPolicyCheckResult(result);
       }

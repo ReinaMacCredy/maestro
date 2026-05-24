@@ -16,7 +16,12 @@ import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
 import { ANY_TASK_ID_PATTERN as TASK_ID_PATTERN } from "@/types/task.js";
 import { VERDICT_ID_PATTERN } from "../domain/verdict-id.js";
 import type { Verdict } from "../domain/types.js";
-import type { VerdictStorePort } from "../ports/storage.js";
+import type { ReadLatestWithCorruptionResult, VerdictStorePort } from "../ports/storage.js";
+
+interface TaskVerdictScan {
+  readonly verdicts: Verdict[];
+  readonly corruptCount: number;
+}
 
 const VERDICTS_DIR = "verdicts";
 
@@ -49,6 +54,16 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
     return verdicts.length > 0 ? verdicts[verdicts.length - 1] : undefined;
   }
 
+  async readLatestWithCorruption(taskId: string): Promise<ReadLatestWithCorruptionResult> {
+    assertSafeSegment(taskId, "task ID", TASK_ID_PATTERN, "tsk- followed by 6 hex characters");
+    const scan = await this.scanTaskVerdicts(this.taskDir(taskId));
+    const sorted = [...scan.verdicts].sort((a, b) => a.computedAt.localeCompare(b.computedAt));
+    return {
+      verdict: sorted.length > 0 ? sorted[sorted.length - 1] : undefined,
+      corruptCount: scan.corruptCount,
+    };
+  }
+
   async readVersion(taskId: string, verdictId: string): Promise<Verdict | undefined> {
     assertSafeSegment(taskId, "task ID", TASK_ID_PATTERN, "tsk- followed by 6 hex characters");
     assertSafeSegment(verdictId, "verdict ID", VERDICT_ID_PATTERN, "vrd- followed by a 13-digit timestamp and 6 hex characters");
@@ -60,8 +75,8 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
 
   async history(taskId: string): Promise<readonly Verdict[]> {
     assertSafeSegment(taskId, "task ID", TASK_ID_PATTERN, "tsk- followed by 6 hex characters");
-    const verdicts = await this.readTaskVerdicts(this.taskDir(taskId));
-    return verdicts.sort((a, b) => a.computedAt.localeCompare(b.computedAt));
+    const scan = await this.scanTaskVerdicts(this.taskDir(taskId));
+    return scan.verdicts.sort((a, b) => a.computedAt.localeCompare(b.computedAt));
   }
 
   async findByTreeSha(treeSha: string): Promise<readonly Verdict[]> {
@@ -77,11 +92,11 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
     const perTask = await Promise.all(
       taskDirs
         .filter((entry) => entry.isDirectory() && TASK_ID_PATTERN.test(entry.name))
-        .map((entry) => this.readTaskVerdicts(join(baseDir, entry.name))),
+        .map((entry) => this.scanTaskVerdicts(join(baseDir, entry.name))),
     );
 
     const matches: Verdict[] = [];
-    for (const verdicts of perTask) {
+    for (const { verdicts } of perTask) {
       for (const verdict of verdicts) {
         if (verdict.subject?.tree_sha === treeSha) matches.push(verdict);
       }
@@ -90,12 +105,17 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
     return matches.sort((a, b) => a.computedAt.localeCompare(b.computedAt));
   }
 
-  private async readTaskVerdicts(taskDir: string): Promise<Verdict[]> {
+  // Scans a task directory and returns parsed verdicts alongside the count
+  // of files that looked like verdict records (matched VERDICT_ID_PATTERN)
+  // but could not be parsed. Callers that need corruption visibility
+  // (status/doctor) read the `corruptCount`; callers that only need data
+  // (`history`, `findByTreeSha`) discard it.
+  private async scanTaskVerdicts(taskDir: string): Promise<TaskVerdictScan> {
     let entries;
     try {
       entries = await readdir(taskDir, { withFileTypes: true });
     } catch {
-      return [];
+      return { verdicts: [], corruptCount: 0 };
     }
 
     // One file per verdict; reads are I/O-independent.
@@ -115,7 +135,13 @@ export class FsVerdictStoreAdapter implements VerdictStorePort {
         }
       }),
     );
-    return settled.filter((v): v is Verdict => v !== undefined);
+    const verdicts: Verdict[] = [];
+    let corruptCount = 0;
+    for (const v of settled) {
+      if (v === undefined) corruptCount += 1;
+      else verdicts.push(v);
+    }
+    return { verdicts, corruptCount };
   }
 }
 

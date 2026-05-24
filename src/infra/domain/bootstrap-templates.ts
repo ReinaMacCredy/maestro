@@ -1,7 +1,18 @@
+export type BootstrapOverwritePolicy =
+  // Default: under `--reset-templates` or interactive confirm, replace the file.
+  | "force"
+  // Once emitted, never touch the file again — even under `--reset-templates`.
+  | "never"
+  // The file's harness-owned region is only the managed block; the rest is
+  // user-owned. `stepDropTemplates` skips when the file exists; the managed
+  // block step rewrites just its markers via agent-block helpers.
+  | "managed-block";
+
 export interface BootstrapTemplateFile {
   readonly path: string;
   readonly content: string;
   readonly executable?: boolean;
+  readonly overwritePolicy?: BootstrapOverwritePolicy;
 }
 
 export const PROJECT_BOOTSTRAP_TEMPLATES: readonly BootstrapTemplateFile[] = [
@@ -93,7 +104,7 @@ maestro intake --paths <paths> [--flag <flag>]        # pre-code risk classifier
 maestro task from-spec <path>                         # materialize a task from an authored spec
 maestro mission decompose <pln-id> --file -           # heavy-mode: batch-create child tasks
 maestro plan check --task <id> --plan-file <path>     # plan-time consistency check
-maestro doctor                                        # harness drift checks
+maestro doctor                                        # scaffold + init.sh + verdict freshness
 \`\`\`
 `,
   },
@@ -490,6 +501,7 @@ For \`harness-improvement\` work types, additional checks apply:
   },
   {
     path: "AGENTS.md",
+    overwritePolicy: "managed-block",
     content: `# Project Conventions
 
 Repo-level conventions for agents working in this codebase. The harness pointer surface
@@ -540,6 +552,32 @@ id: release-policy-default
 version: "1"
 require_signed_commits: false     # Tighten at L8 when signing is enforced repo-wide
 require_proof_map_complete: false # Tighten at L8 when proof maps are required
+`,
+  },
+  // Cold-start trigger at the repo root; distinct from `.maestro/bootstrap/init.sh`
+  // (project bootstrapper for dependency installs).
+  {
+    path: "init.sh",
+    executable: true,
+    overwritePolicy: "never",
+    content: `#!/usr/bin/env bash
+# Project init -- emitted once by \`maestro setup\` and never overwritten.
+# Edit freely; Maestro will not touch this file again unless you delete it.
+set -euo pipefail
+
+# Check maestro is available
+if ! command -v maestro &> /dev/null; then
+  echo "maestro not found in PATH." >&2
+  echo "Install maestro or ensure it's in your PATH." >&2
+  echo "If installed to a custom location, add it to PATH or set MAESTRO_BIN." >&2
+  exit 1
+fi
+
+# Health gate -- exits non-zero if .maestro/ scaffold is broken.
+maestro doctor
+
+# Cold-start view -- one-screen resume snapshot.
+maestro status
 `,
   },
 ];

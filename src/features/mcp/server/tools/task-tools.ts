@@ -4,23 +4,34 @@ import {
   taskBlock,
   taskShip,
   taskFromSpec,
+  taskAbandon,
+  TaskSplitCascadeBlockedError,
 } from "@/service/index.js";
+import {
+  taskSplit,
+  TaskSplitInvalidStateError,
+  TaskSplitNotClaimantError,
+  EmptyChildInputsError,
+} from "@/service/task-split.usecase.js";
+import { TaskNotFoundError } from "@/repo/task-store.port.js";
 import { refreshNowMdFromServices } from "@/service/refresh-now-md.js";
 import {
   FsContractStoreAdapter,
   FsContractVersionStoreAdapter,
 } from "@/shared/domain/task/index.js";
 import { summarizeTask } from "@/shared/lib/projection.js";
-import type { Task } from "@/types/task.js";
+import type { Task, TaskId } from "@/types/task.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import {
+  TaskAbandonInput,
   TaskBlockInput,
   TaskClaimInput,
   TaskFromSpecInput,
   TaskGetInput,
   TaskListInput,
   TaskShipInput,
+  TaskSplitInput,
 } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";
 
@@ -138,7 +149,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "Claim a maestro task",
       description:
-        "Claim a draft task for this agent (draft -> claimed). Auto-creates a worktree for heavy-mode specs. Error codes: TASK_NOT_FOUND, TASK_CLAIM_FAILED.",
+        "Claim a draft task for this agent (draft -> claimed). Auto-creates a worktree for heavy-mode specs. Error codes: TASK_NOT_FOUND, TASK_CLAIM_FAILED. Optional tool argument populates to_agent on the auto-emitted handoff envelope for intra-tool continuity.",
       inputSchema: TaskClaimInput,
       annotations: {
         readOnlyHint: false,
@@ -151,6 +162,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
       try {
         const services = deps.getServices();
         const agentId = args.agent_id ?? deps.sessionId;
+        const tool = args.tool;
         const task = await taskClaim(
           {
             taskStore: services.taskStore,
@@ -163,7 +175,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
             contractVersionStore: new FsContractVersionStoreAdapter(services.projectRoot),
             repoRoot: services.projectRoot,
           },
-          { id: args.id, agentId },
+          { id: args.id, agentId, tool },
         );
         await refreshNowMdFromServices(services);
         return toCallToolResult(ok({ task }));
@@ -212,7 +224,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     {
       title: "Block a maestro task",
       description:
-        "Mark a claimed/doing/verifying task as blocked with a mandatory reason (claimed|doing|verifying -> blocked). Block is a state transition on the task itself, not a cross-task edge graph. Error codes: TASK_NOT_FOUND, TASK_BLOCK_FAILED.",
+        "Mark a claimed/doing/verifying task as blocked with a mandatory reason (claimed|doing|verifying -> blocked). Block is a state transition on the task itself, not a cross-task edge graph. Error codes: TASK_NOT_FOUND, TASK_BLOCK_FAILED. Optional tool argument populates to_agent on the auto-emitted handoff envelope for intra-tool continuity.",
       inputSchema: TaskBlockInput,
       annotations: {
         readOnlyHint: false,
@@ -223,6 +235,7 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
     },
     async (args): Promise<CallToolResult> => {
       try {
+        const tool = args.tool;
         const services = deps.getServices();
         const task = await taskBlock(
           {
@@ -232,12 +245,110 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
             observabilityStore: services.observabilityStore,
             handoffEmitter: services.handoffEmitter,
           },
-          { id: args.id, reason: args.reason },
+          { id: args.id, reason: args.reason, tool },
         );
         await refreshNowMdFromServices(services);
         return toCallToolResult(ok({ task }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_BLOCK_FAILED"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "maestro_task_abandon",
+    {
+      title: "Abandon a maestro task",
+      description:
+        "Terminal-state transition (any non-terminal -> abandoned). Pass cascade=true to recursively abandon non-terminal split-children post-order before abandoning the target; otherwise non-terminal descendants block the call. Best-effort prune of blocked_by references in peer tasks (N writes, non-atomic). Error codes: TASK_NOT_FOUND, TASK_ABANDON_CASCADE_BLOCKED, TASK_ABANDON_FAILED.",
+      inputSchema: TaskAbandonInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args): Promise<CallToolResult> => {
+      try {
+        const services = deps.getServices();
+        const task = await taskAbandon(
+          {
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+            missionStore: services.missionStore,
+            observabilityStore: services.observabilityStore,
+          },
+          {
+            id: args.id as TaskId,
+            reason: args.reason,
+            ...(args.cascade === true ? { cascade: true } : {}),
+          },
+        );
+        await refreshNowMdFromServices(services);
+        return toCallToolResult(ok({ task }));
+      } catch (err) {
+        if (err instanceof TaskNotFoundError) {
+          return toCallToolResult(fail("TASK_NOT_FOUND", err.message));
+        }
+        if (err instanceof TaskSplitCascadeBlockedError) {
+          return toCallToolResult(
+            fail("TASK_ABANDON_CASCADE_BLOCKED", err.message, {
+              hints: ["Re-run with cascade=true to abandon descendants post-order."],
+            }),
+          );
+        }
+        return toCallToolResult(fromMaestroError(err, "TASK_ABANDON_FAILED"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "maestro_task_split",
+    {
+      title: "Split a maestro task",
+      description:
+        "Bisect a claimed/doing parent into N child tasks (each child draft; parent's blocked_by gains the new child ids; children inherit mission_id, spec_path, worktree_path). Default chain is sequential (child[i] blocked_by [child[i-1]]); pass parallel=true for an empty blocked_by on every child. Pass agent_id to assert the parent is assigned to that agent before splitting. Error codes: TASK_NOT_FOUND, TASK_SPLIT_INVALID_STATE, TASK_SPLIT_NOT_CLAIMANT, TASK_SPLIT_FAILED.",
+      inputSchema: TaskSplitInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args): Promise<CallToolResult> => {
+      try {
+        const services = deps.getServices();
+        const children = await taskSplit(
+          {
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+            missionStore: services.missionStore,
+          },
+          {
+            id: args.parent_id as TaskId,
+            titles: args.titles,
+            ...(args.parallel === true ? { parallel: true } : {}),
+            ...(args.agent_id !== undefined ? { agentId: args.agent_id } : {}),
+          },
+        );
+        await refreshNowMdFromServices(services);
+        return toCallToolResult(ok({ children }));
+      } catch (err) {
+        if (err instanceof TaskNotFoundError) {
+          return toCallToolResult(fail("TASK_NOT_FOUND", err.message));
+        }
+        if (err instanceof TaskSplitInvalidStateError) {
+          return toCallToolResult(fail("TASK_SPLIT_INVALID_STATE", err.message));
+        }
+        if (err instanceof TaskSplitNotClaimantError) {
+          return toCallToolResult(fail("TASK_SPLIT_NOT_CLAIMANT", err.message));
+        }
+        if (err instanceof EmptyChildInputsError) {
+          return toCallToolResult(fail("TASK_SPLIT_FAILED", err.message));
+        }
+        return toCallToolResult(fromMaestroError(err, "TASK_SPLIT_FAILED"));
       }
     },
   );

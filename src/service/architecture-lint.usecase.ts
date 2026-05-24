@@ -5,6 +5,7 @@ import type {
   ArchitectureRules,
   ArchitectureRulesPort,
 } from "../repo/architecture-rules.port.js";
+import { escapeRegex } from "@/shared/lib/regex.js";
 
 export interface LintViolation {
   readonly rule_id: string;
@@ -175,9 +176,5 @@ function lineOf(text: string, index: number): number {
     if (text.charCodeAt(i) === 10) line++;
   }
   return line;
-}
-
-function escapeRegex(input: string): string {
-  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 

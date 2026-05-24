@@ -14,6 +14,7 @@ export interface Task {
   readonly pr_url?: string;
   readonly merged_at?: string;
   readonly blocked_by: readonly string[];
+  readonly parent_id?: TaskId;
   readonly block_reason?: string;
   readonly abandon_reason?: string;
   // Set by task-claim when a heavy-mode spec triggers an auto-worktree.

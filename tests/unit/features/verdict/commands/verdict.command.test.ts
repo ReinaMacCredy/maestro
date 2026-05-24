@@ -88,6 +88,10 @@ function fakeVerdictStore(verdicts: Verdict[] = []): VerdictStorePort {
     history: async () => [...map.values()].sort((a, b) => a.computedAt.localeCompare(b.computedAt)),
     findByTreeSha: async (treeSha) =>
       [...map.values()].filter((v) => v.subject?.tree_sha === treeSha),
+    readLatestWithCorruption: async () => {
+      const all = [...map.values()].sort((a, b) => a.computedAt.localeCompare(b.computedAt));
+      return { verdict: all[all.length - 1], corruptCount: 0 };
+    },
   };
 }
 

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
+import { stringifyForOutput } from "@/shared/lib/output.js";
 import { buildCoreServices } from "../providers/build-services.js";
 import { refreshNowMdFromServices } from "../service/refresh-now-md.js";
 import {
@@ -223,7 +224,7 @@ export function registerMissionCommands(program: Command, opts: MissionCommandOp
         );
         const wantJson = flags.json === true || this.optsWithGlobals().json === true;
         if (wantJson) {
-          console.log(JSON.stringify(result, null, 2));
+          console.log(stringifyForOutput(result));
           return;
         }
         const { mission: m, tasks } = result;

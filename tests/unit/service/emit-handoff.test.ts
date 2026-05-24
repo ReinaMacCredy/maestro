@@ -66,6 +66,22 @@ describe("emitHandoff", () => {
     expect(emitted[0]).not.toHaveProperty("agent_id");
     expect(emitted[0]).not.toHaveProperty("worktree_path");
     expect(emitted[0]).not.toHaveProperty("spec_path");
+    expect(emitted[0]).not.toHaveProperty("to_agent");
     expect(emitted[0]!.reason).toBe("blocked-on-x");
+  });
+
+  it("forwards to_agent onto the envelope when supplied", async () => {
+    const { emitter, emitted } = makeEmitter();
+    const result = await emitHandoff(
+      { emitter },
+      {
+        task_id: "tsk-routed",
+        trigger_verb: "task:claim",
+        agent_id: "agent-a",
+        to_agent: "codex",
+      },
+    );
+    expect(result?.to_agent).toBe("codex");
+    expect(emitted[0]?.to_agent).toBe("codex");
   });
 });

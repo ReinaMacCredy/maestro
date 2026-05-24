@@ -353,6 +353,16 @@ export function slugInvalidShape(slug: string): MaestroError {
   );
 }
 
+export function slugTooLong(slug: string, max: number): MaestroError {
+  return new MaestroError(
+    `Slug exceeds ${max}-char cap: '${slug}' (${slug.length} chars)`,
+    [
+      `Shorten the slug so it fits within ${max} characters`,
+      "Derived child slugs from splitTask take the form '<parent-slug>-<N>'; trim the parent slug if children overflow",
+    ],
+  );
+}
+
 export function slugCollision(slug: string, ownerId: string): MaestroError {
   return new MaestroError(
     `Slug '${slug}' is already used by ${ownerId}`,

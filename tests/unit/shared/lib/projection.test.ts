@@ -1,8 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
 import type { EvidenceRow } from "@/features/evidence/domain/types.js";
+import type { HandoffEnvelope } from "@/repo/handoff-emitter.port.js";
 import type { Task } from "@/types/task.js";
-import { summarizeEvidence, summarizeTask } from "@/shared/lib/projection.js";
+import {
+  summarizeEvidence,
+  summarizeHandoff,
+  summarizeTask,
+} from "@/shared/lib/projection.js";
 
 function makeEvidence(): EvidenceRow<"command"> {
   return {
@@ -94,5 +99,35 @@ describe("summarizeEvidence", () => {
     const row = { ...makeEvidence(), session_id: undefined };
     const summary = summarizeEvidence(row);
     expect("session_id" in summary).toBe(false);
+  });
+});
+
+describe("summarizeHandoff", () => {
+  it("includes to_agent when present and preserves routing fields", () => {
+    const envelope: HandoffEnvelope = {
+      id: "hnd-aaaaaa-bbbbbb",
+      task_id: "tsk-aaaaaa-bbbbbb",
+      trigger_verb: "task:claim",
+      created_at: "2026-05-13T00:00:00Z",
+      to_agent: "codex",
+    };
+    const summary = summarizeHandoff(envelope, false);
+    expect(summary.to_agent).toBe("codex");
+    expect(summary.id).toBe("hnd-aaaaaa-bbbbbb");
+    expect(summary.task_id).toBe("tsk-aaaaaa-bbbbbb");
+    expect(summary.trigger_verb).toBe("task:claim");
+    expect(summary.created_at).toBe("2026-05-13T00:00:00Z");
+    expect(summary.picked_up).toBe(false);
+  });
+
+  it("omits to_agent when undefined", () => {
+    const envelope: HandoffEnvelope = {
+      id: "hnd-aaaaaa-bbbbbb",
+      task_id: "tsk-aaaaaa-bbbbbb",
+      trigger_verb: "task:claim",
+      created_at: "2026-05-13T00:00:00Z",
+    };
+    const summary = summarizeHandoff(envelope, false);
+    expect(summary).not.toHaveProperty("to_agent");
   });
 });

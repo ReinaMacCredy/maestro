@@ -5,7 +5,10 @@ import { output } from "@/shared/lib/output.js";
 import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 
 interface DoctorCommandDeps {
-  readonly getServices: () => Pick<Services, "git" | "config">;
+  readonly getServices: () => Pick<
+    Services,
+    "config" | "git" | "taskStore" | "verdictStore"
+  >;
 }
 
 export function registerDoctorCommand(
@@ -14,15 +17,22 @@ export function registerDoctorCommand(
 ): void {
   program
     .command("doctor")
-    .description("Verify maestro dependencies and configuration")
+    .description("Verify maestro health (3 fast dimensions; --full adds build + tests)")
     .option("--json", "Output as JSON")
+    .option("--full", "Also run build and tests (warn-only)")
     .action(async (opts): Promise<void> => {
       const services = deps.getServices();
-      const checks = await runDoctor(
-        services.git,
-        services.config,
-        resolveMaestroProjectRoot(process.cwd()),
-      );
+      const projectDir = resolveMaestroProjectRoot(process.cwd());
+      const checks = await runDoctor({
+        taskStore: services.taskStore,
+        verdictStore: services.verdictStore,
+        config: services.config,
+        projectDir,
+        full: opts.full === true,
+      });
+
+      const failedChecks = checks.filter((c) => c.status === "fail");
+      const scaffoldFailed = failedChecks.some((c) => c.name === "scaffold");
 
       const isJson = opts.json ?? program.opts().json;
       output(isJson, checks, (list) => {
@@ -33,24 +43,27 @@ export function registerDoctorCommand(
               ? "[ok]"
               : check.status === "warn"
                 ? "[--]"
-                : "[!!]";
+                : "[!]";
           lines.push(`${marker} ${check.name}: ${check.message}`);
           if (check.fix) {
             lines.push(`     Fix: ${check.fix}`);
           }
         }
-
-        const fails = list.filter((c) => c.status === "fail").length;
-        if (fails > 0) {
-          lines.push("", `${fails} issue(s) found`);
-        } else {
-          lines.push("", "All checks passed");
-        }
-
+        lines.push(
+          "",
+          scaffoldFailed
+            ? "Scaffold check failed -- run `maestro setup` and re-run"
+            : failedChecks.length > 0
+              ? `${failedChecks.length} check(s) failed -- inspect output above`
+              : "All required checks passed",
+        );
         return lines;
       });
 
-      const hasFails = checks.some((c) => c.status === "fail");
-      if (hasFails) process.exit(1);
+      // Exit code semantics: any check with status "fail" gates the exit
+      // code. "warn" stays advisory. This keeps the JSON output and the
+      // exit code in agreement, so `init.sh` (which uses `set -e`) treats
+      // hard failures as hard and warnings as informational.
+      if (failedChecks.length > 0) process.exit(1);
     });
 }

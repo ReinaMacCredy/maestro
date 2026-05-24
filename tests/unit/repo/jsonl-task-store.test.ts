@@ -3,7 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JsonlTaskStore } from "@/repo/jsonl-task-store.adapter.js";
-import { DuplicateSlugError, TaskNotFoundError } from "@/repo/task-store.port.js";
+import {
+  DuplicateSlugError,
+  DuplicateTaskIdError,
+  InvalidTaskIdError,
+  TaskNotFoundError,
+} from "@/repo/task-store.port.js";
 
 const FROZEN = new Date("2026-05-15T10:00:00.000Z");
 
@@ -98,6 +103,110 @@ describe("JsonlTaskStore", () => {
 
     const unknown = await store.listByMissionId("pln-missing");
     expect(unknown).toEqual([]);
+  });
+
+  it("round-trips a provided id", async () => {
+    const store = makeStore(root);
+    const created = await store.create({
+      id: "tsk-aaa-bbb",
+      slug: "with-id",
+      title: "With Id",
+      state: "draft",
+    });
+    expect(created.id).toBe("tsk-aaa-bbb");
+    const fetched = await store.get("tsk-aaa-bbb");
+    expect(fetched?.id).toBe("tsk-aaa-bbb");
+    expect(fetched?.slug).toBe("with-id");
+  });
+
+  it("rejects a provided id that doesn't match TASK_ID_PATTERN", async () => {
+    const store = makeStore(root);
+    let caught: unknown;
+    try {
+      await store.create({
+        id: "bad-id",
+        slug: "bad-id-slug",
+        title: "Bad",
+        state: "draft",
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(InvalidTaskIdError);
+  });
+
+  it("rejects a provided id that collides with an existing task", async () => {
+    const store = makeStore(root);
+    await store.create({
+      id: "tsk-dup-id",
+      slug: "first",
+      title: "First",
+      state: "draft",
+    });
+    let caught: unknown;
+    try {
+      await store.create({
+        id: "tsk-dup-id",
+        slug: "second",
+        title: "Second",
+        state: "draft",
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(DuplicateTaskIdError);
+  });
+
+  it("createMany rejects duplicate ids within the batch", async () => {
+    const store = makeStore(root);
+    let caught: unknown;
+    try {
+      await store.createMany([
+        { id: "tsk-x-x", slug: "a", title: "A", state: "draft" },
+        { id: "tsk-x-x", slug: "b", title: "B", state: "draft" },
+      ]);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(DuplicateTaskIdError);
+  });
+
+  it("round-trips parent_id through create()", async () => {
+    const store = makeStore(root);
+    const created = await store.create({
+      slug: "child",
+      title: "Child",
+      state: "draft",
+      parent_id: "tsk-parent-aaa",
+    });
+    expect(created.parent_id).toBe("tsk-parent-aaa");
+    const fetched = await store.get(created.id);
+    expect(fetched?.parent_id).toBe("tsk-parent-aaa");
+  });
+
+  it("round-trips parent_id through createMany()", async () => {
+    const store = makeStore(root);
+    const created = await store.createMany([
+      {
+        slug: "with-parent",
+        title: "With parent",
+        state: "draft",
+        parent_id: "tsk-parent-aaa",
+      },
+      {
+        slug: "without-parent",
+        title: "Without parent",
+        state: "draft",
+      },
+    ]);
+    expect(created.length).toBe(2);
+    expect(created[0]?.parent_id).toBe("tsk-parent-aaa");
+    expect(created[1]?.parent_id).toBeUndefined();
+    // Re-fetch via get() to confirm disk round-trip.
+    const fetched0 = await store.get(created[0]!.id);
+    const fetched1 = await store.get(created[1]!.id);
+    expect(fetched0?.parent_id).toBe("tsk-parent-aaa");
+    expect(fetched1?.parent_id).toBeUndefined();
   });
 
   it("serializes concurrent updates without losing writes", async () => {

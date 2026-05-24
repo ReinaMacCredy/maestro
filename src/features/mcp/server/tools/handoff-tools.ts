@@ -4,6 +4,7 @@ import type {
   HandoffPickup,
 } from "@/repo/handoff-emitter.port.js";
 import { emitHandoff } from "@/service/emit-handoff.js";
+import { summarizeHandoff } from "@/shared/lib/projection.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import {
@@ -15,22 +16,18 @@ import {
 } from "../schemas/inputs.js";
 import type { RegisterDeps } from "./types.js";
 
-interface HandoffSummary {
-  readonly id: string;
-  readonly task_id: string;
-  readonly trigger_verb: string;
-  readonly created_at: string;
-  readonly picked_up: boolean;
-}
-
-function summarizeHandoff(envelope: HandoffEnvelope, pickedUp: boolean): HandoffSummary {
-  return {
-    id: envelope.id,
-    task_id: envelope.task_id,
-    trigger_verb: envelope.trigger_verb,
-    created_at: envelope.created_at,
-    picked_up: pickedUp,
-  };
+/**
+ * Sort comparator for handoff envelopes. Defensive against malformed
+ * envelopes read off disk that lack `created_at` (legacy schema, partial
+ * write, hand-edit). Such records sort to the top rather than throwing.
+ */
+export function compareEnvelopesByCreatedAt(
+  a: HandoffEnvelope,
+  b: HandoffEnvelope,
+): number {
+  const ac = typeof a.created_at === "string" ? a.created_at : "";
+  const bc = typeof b.created_at === "string" ? b.created_at : "";
+  return ac.localeCompare(bc);
 }
 
 function generatePickupId(): string {
@@ -43,7 +40,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     {
       title: "List handoff envelopes",
       description:
-        "List handoff envelopes at .maestro/handoffs/. Filters: task_id, trigger_verb, include_picked_up (default false = open work only). Paginated (default limit 20, max 100). view='summary' (default) returns id+task_id+trigger_verb+created_at+picked_up; view='full' returns the envelope and pickup metadata. Sorted by created_at ascending. Read-only.",
+        "List handoff envelopes at .maestro/handoffs/. Filters: task_id, trigger_verb, include_picked_up (default false = open work only). Paginated (default limit 20, max 100). view='summary' (default) returns id+task_id+trigger_verb+created_at+picked_up; view='full' returns the envelope and pickup metadata. Sorted by created_at ascending. Read-only. Optional to_agent filter (strict exact match; untargeted envelopes excluded when set).",
       inputSchema: HandoffListInput,
       annotations: {
         readOnlyHint: true,
@@ -63,10 +60,9 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
             (e: HandoffEnvelope) =>
               args.trigger_verb === undefined || e.trigger_verb === args.trigger_verb,
           )
+          .filter((e: HandoffEnvelope) => args.to_agent === undefined || e.to_agent === args.to_agent)
           .slice()
-          .sort((a: HandoffEnvelope, b: HandoffEnvelope) =>
-            a.created_at.localeCompare(b.created_at),
-          );
+          .sort(compareEnvelopesByCreatedAt);
 
         const annotated: { envelope: HandoffEnvelope; pickup?: HandoffPickup }[] = [];
         for (const envelope of filtered) {
@@ -145,7 +141,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     {
       title: "Emit a handoff envelope",
       description:
-        "Write a handoff envelope to .maestro/handoffs/ so a follow-up agent can pick up the task. Used when an agent must hand off mid-stream without going through claim or block (e.g. ship/verify/abandon paths that do not yet emit on their own). The lifecycle verbs claim and block already emit automatically — do not re-emit them. Returns the materialized envelope including the generated id and created_at timestamp. Error codes: HANDOFF_EMIT_FAILED, INVALID_ARG.",
+        "Write a handoff envelope to .maestro/handoffs/ so a follow-up agent can pick up the task. Used when an agent must hand off mid-stream without going through claim or block (e.g. ship/verify/abandon paths that do not yet emit on their own). The lifecycle verbs claim and block already emit automatically — do not re-emit them. Returns the materialized envelope including the generated id and created_at timestamp. Error codes: HANDOFF_EMIT_FAILED, INVALID_ARG. Optional to_agent addresses the envelope to a specific receiver tool (e.g. 'codex'), enabling inbox-style discovery.",
       inputSchema: HandoffEmitShape,
       annotations: {
         readOnlyHint: false,
@@ -178,6 +174,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
             ...(args.worktree_path !== undefined ? { worktree_path: args.worktree_path } : {}),
             ...(args.spec_path !== undefined ? { spec_path: args.spec_path } : {}),
             ...(args.reason !== undefined ? { reason: args.reason } : {}),
+            ...(args.to_agent !== undefined ? { to_agent: args.to_agent } : {}),
           },
         );
         if (envelope === undefined) {
@@ -199,7 +196,7 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
     {
       title: "Mark a handoff envelope as picked up",
       description:
-        "Record that the calling agent has read this envelope and is taking the work, so concurrent agents do not duplicate. This is a bookkeeping mark; it does not claim the task — call maestro_task_claim separately. Writes a sidecar at .maestro/handoffs/<id>.picked_up.json using exclusive create; a second pickup attempt returns HANDOFF_ALREADY_PICKED_UP. Error codes: HANDOFF_NOT_FOUND, HANDOFF_ALREADY_PICKED_UP, HANDOFF_PICKUP_FAILED, HANDOFF_MALFORMED.",
+        "Record that the calling agent has read this envelope and is taking the work, so concurrent agents do not duplicate. This is a bookkeeping mark; it does not claim the task — call maestro_task_claim separately. Writes a sidecar at .maestro/handoffs/<id>.picked_up.json using exclusive create; a second pickup attempt returns HANDOFF_ALREADY_PICKED_UP. Error codes: HANDOFF_NOT_FOUND, HANDOFF_ALREADY_PICKED_UP, HANDOFF_PICKUP_FAILED, HANDOFF_MALFORMED. Returns a top-level warnings: string[] field when the envelope's to_agent differs from picked_up_by; the pickup still succeeds.",
       inputSchema: HandoffPickupInput,
       annotations: {
         readOnlyHint: false,
@@ -237,7 +234,15 @@ export function registerHandoffTools(server: McpServer, deps: RegisterDeps): voi
           ...(args.note !== undefined ? { note: args.note } : {}),
         };
         await emitter.markPickedUp(args.id, pickup);
-        return toCallToolResult(ok({ envelope, pickup }));
+        const warnings =
+          envelope.to_agent !== undefined && envelope.to_agent !== pickup.picked_up_by
+            ? [
+                `Envelope was addressed to '${envelope.to_agent}'; picked up by '${pickup.picked_up_by}'. Pickup recorded; verify this is the envelope you intended.`,
+              ]
+            : undefined;
+        return toCallToolResult(
+          ok(warnings !== undefined ? { envelope, pickup, warnings } : { envelope, pickup }),
+        );
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "HANDOFF_PICKUP_FAILED"));
       }

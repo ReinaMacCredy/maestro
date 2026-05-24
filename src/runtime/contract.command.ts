@@ -3,6 +3,7 @@ import { getCurrentContract } from "@/service/index.js";
 import { amendContractScope } from "@/service/contract-amend.usecase.js";
 import { readContractHistoryWithBackfill } from "@/service/contract-helpers.js";
 import { parsePositiveInt } from "@/shared/lib/cli-options.js";
+import { stringifyForOutput } from "@/shared/lib/output.js";
 import type { Contract } from "@/types/contract.js";
 import type { Services } from "@/services.js";
 
@@ -63,7 +64,7 @@ export function registerContractCommands(
           process.exitCode = 1;
           return;
         }
-        console.log(JSON.stringify({ contract: match }, null, 2));
+        console.log(stringifyForOutput({ contract: match }));
       } catch (err) {
         console.error(`maestro contract show: ${(err as Error).message}`);
         process.exitCode = 1;
@@ -89,7 +90,7 @@ export function registerContractCommands(
         const wantJson =
           flags.json === true || this.optsWithGlobals().json === true;
         if (wantJson) {
-          console.log(JSON.stringify({ taskId, versions }, null, 2));
+          console.log(stringifyForOutput({ taskId, versions }));
           return;
         }
         if (versions.length === 0) {
@@ -169,17 +170,13 @@ export function registerContractCommands(
         }
 
         console.log(
-          JSON.stringify(
-            {
-              amendmentId: outcome.amendmentId,
-              newVersion: outcome.newVersion,
-              ...(outcome.skippedAddPaths.length > 0
-                ? { skippedAddPaths: outcome.skippedAddPaths }
-                : {}),
-            },
-            null,
-            2,
-          ),
+          stringifyForOutput({
+            amendmentId: outcome.amendmentId,
+            newVersion: outcome.newVersion,
+            ...(outcome.skippedAddPaths.length > 0
+              ? { skippedAddPaths: outcome.skippedAddPaths }
+              : {}),
+          }),
         );
       } catch (err) {
         console.error(`maestro contract amend: ${(err as Error).message}`);

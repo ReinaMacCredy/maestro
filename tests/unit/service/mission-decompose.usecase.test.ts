@@ -101,6 +101,9 @@ function makeStores(): {
       for (const i of inputs) out.push(await taskStore.create(i));
       return out;
     },
+    async splitTask(_input) {
+      throw new Error("splitTask not stubbed in this test");
+    },
     async get(id) {
       return tasks.get(id);
     },

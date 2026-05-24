@@ -3,7 +3,7 @@ import type { Command } from "commander";
 import { MaestroError } from "@/shared/errors.js";
 import { readText } from "@/shared/lib/fs.js";
 import { parseYaml } from "@/shared/lib/yaml.js";
-import { resolveJsonFlag } from "@/shared/lib/output.js";
+import { resolveJsonFlag, stringifyForOutput } from "@/shared/lib/output.js";
 import { type Services } from "@/services.js";
 import { recordEvidence } from "@/features/evidence/index.js";
 import { deriveRiskClassFromDiff } from "@/features/risk/index.js";
@@ -144,7 +144,7 @@ Checks (exit code is always 0; agents react to findings):
       });
 
       if (isJson) {
-        console.log(JSON.stringify(result, null, 2));
+        console.log(stringifyForOutput(result));
       } else {
         printFindings(result);
       }

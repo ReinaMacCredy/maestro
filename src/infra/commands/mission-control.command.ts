@@ -4,7 +4,7 @@
  */
 import type { Command } from "commander";
 import { type Services } from "@/services.js";
-import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import { output, resolveJsonFlag, stringifyForOutput } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 // renderDashboard / renderPreviewFrame / runRenderCheck pull the OpenTUI +
 // React graph (~250-400ms cold start). --json mode never renders, so we
@@ -170,7 +170,7 @@ export function registerMissionControlCommand(
                 width: renderSize?.width,
                 height: renderSize?.height,
               });
-        console.log(JSON.stringify(result, null, 2));
+        console.log(stringifyForOutput(result));
         return;
       }
 

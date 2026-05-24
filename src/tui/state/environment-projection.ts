@@ -1,14 +1,14 @@
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
-import type { DoctorCheck, StatusReport } from "@/infra/domain/status-types.js";
+import type { DoctorCheck, EnvironmentStatus } from "@/infra/domain/status-types.js";
 import { listIgnoredProjectConfigKeys } from "@/tui/shared/ui-config.js";
 
 export async function buildMissionControlEnvironmentSummary(
   config: ConfigPort,
   git: GitPort,
   cwd: string,
-): Promise<{ status: StatusReport; checks: readonly DoctorCheck[] }> {
+): Promise<{ status: EnvironmentStatus; checks: readonly DoctorCheck[] }> {
   const [
     projectConfigExists,
     globalConfigExists,
@@ -19,7 +19,7 @@ export async function buildMissionControlEnvironmentSummary(
     git.isRepo(cwd),
   ]);
 
-  const configSource: StatusReport["configSource"] = projectConfigExists
+  const configSource: EnvironmentStatus["configSource"] = projectConfigExists
     ? "project"
     : globalConfigExists
       ? "global"
@@ -30,7 +30,6 @@ export async function buildMissionControlEnvironmentSummary(
       initialized: projectConfigExists || globalConfigExists,
       configSource,
       gitAvailable,
-      legacyHandoffCount: 0,
     },
     checks: [
       {

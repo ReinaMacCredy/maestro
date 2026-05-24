@@ -249,6 +249,35 @@ describe("MCP stdio flow", () => {
     expect(blockedTask.block_reason).toBe("waiting on infra");
   });
 
+  it("splits a claimed parent into children with parent_id back-references", async () => {
+    const c = client!;
+    const specPath = await writeSpec(tmpDir, "split-me", "Split Me");
+
+    const created = await c.call("maestro_task_from_spec", { spec_path: specPath });
+    const parentId = (created.body as { task: { id: string } }).task.id;
+    await c.call("maestro_task_claim", { id: parentId });
+
+    const split = await c.call("maestro_task_split", {
+      parent_id: parentId,
+      titles: ["child one", "child two"],
+      parallel: true,
+    });
+    const children = (split.body as { children: { id: string; parent_id: string; state: string; blocked_by: string[] }[] }).children;
+    expect(children).toHaveLength(2);
+    for (const child of children) {
+      expect(child.parent_id).toBe(parentId);
+      expect(child.state).toBe("draft");
+      expect(child.blocked_by).toEqual([]);
+    }
+
+    // Parent's blocked_by extended with the new child ids.
+    const parentGet = await c.call("maestro_task_get", { id: parentId });
+    const parentTask = (parentGet.body as { task: { blocked_by: string[] } }).task;
+    for (const child of children) {
+      expect(parentTask.blocked_by).toContain(child.id);
+    }
+  });
+
   it("ships a task seeded in ready state", async () => {
     const c = client!;
     // Seed a task directly in 'ready' state (state machine: ready -> shipped).

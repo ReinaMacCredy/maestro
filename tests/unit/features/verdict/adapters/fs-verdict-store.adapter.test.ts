@@ -143,6 +143,61 @@ describe("FsVerdictStoreAdapter", () => {
     });
   });
 
+  describe("readLatestWithCorruption", () => {
+    // Regression: FIX-12 -- the adapter swallows JSON.parse errors inside
+    // scanTaskVerdicts (each malformed file resolves to undefined). The
+    // corruption count is only observable through this method; if a future
+    // simplification drops the corrupt counter, this test fails on real disk.
+    it("returns corruptCount=1 when one verdict file is malformed JSON", async () => {
+      const real = makeVerdict({ taskId: "tsk-aaaaaa" });
+      await store.write("tsk-aaaaaa", real);
+      const taskDir = join(tmpDir, ".maestro", "verdicts", "tsk-aaaaaa");
+      await Bun.write(join(taskDir, `${generateVerdictId()}.json`), "{not valid json");
+
+      const result = await store.readLatestWithCorruption("tsk-aaaaaa");
+      expect(result.verdict?.id).toBe(real.id);
+      expect(result.corruptCount).toBe(1);
+    });
+
+    it("counts multiple malformed verdict files independently", async () => {
+      const real = makeVerdict({ taskId: "tsk-aaaaaa" });
+      await store.write("tsk-aaaaaa", real);
+      const taskDir = join(tmpDir, ".maestro", "verdicts", "tsk-aaaaaa");
+      await Bun.write(join(taskDir, `${generateVerdictId()}.json`), "{bad 1");
+      await Bun.write(join(taskDir, `${generateVerdictId()}.json`), "{bad 2");
+      await Bun.write(join(taskDir, `${generateVerdictId()}.json`), "{bad 3");
+
+      const result = await store.readLatestWithCorruption("tsk-aaaaaa");
+      expect(result.verdict?.id).toBe(real.id);
+      expect(result.corruptCount).toBe(3);
+    });
+
+    it("returns corruptCount=0 when all verdict files are valid", async () => {
+      const v = makeVerdict({ taskId: "tsk-aaaaaa" });
+      await store.write("tsk-aaaaaa", v);
+      const result = await store.readLatestWithCorruption("tsk-aaaaaa");
+      expect(result.corruptCount).toBe(0);
+    });
+
+    it("returns verdict=undefined, corruptCount=0 when the task has no verdicts at all", async () => {
+      const result = await store.readLatestWithCorruption("tsk-aaaaaa");
+      expect(result.verdict).toBeUndefined();
+      expect(result.corruptCount).toBe(0);
+    });
+
+    it("non-json stray files don't inflate the corrupt count", async () => {
+      const real = makeVerdict({ taskId: "tsk-aaaaaa" });
+      await store.write("tsk-aaaaaa", real);
+      const taskDir = join(tmpDir, ".maestro", "verdicts", "tsk-aaaaaa");
+      await Bun.write(join(taskDir, "README.md"), "not a verdict");
+      await Bun.write(join(taskDir, "stray.txt"), "garbage");
+
+      const result = await store.readLatestWithCorruption("tsk-aaaaaa");
+      expect(result.verdict?.id).toBe(real.id);
+      expect(result.corruptCount).toBe(0);
+    });
+  });
+
   describe("findByTreeSha", () => {
     it("returns an empty array when no verdicts directory exists", async () => {
       const result = await store.findByTreeSha("abc123");

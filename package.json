@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.102.0",
+  "version": "0.105.0",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
@@ -10,8 +10,6 @@
     "bump": "bun scripts/bump.ts",
     "auto-bump": "bun scripts/auto-bump.ts",
     "check:boundaries": "bun scripts/check-feature-boundaries.ts",
-    "check:skills": "bun scripts/sync-built-in-skills.ts --check",
-    "sync:skills": "bun scripts/sync-built-in-skills.ts",
     "check:bundled-skills": "bun scripts/sync-bundled-skills.ts --check",
     "sync:bundled-skills": "bun scripts/sync-bundled-skills.ts",
     "check:agent-spec": "bun scripts/check-agent-spec.ts",

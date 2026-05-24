@@ -90,6 +90,9 @@ function makeStores(): {
       for (const i of inputs) out.push(await this.create(i));
       return out;
     },
+    async splitTask(_input) {
+      throw new Error("splitTask not stubbed in this test");
+    },
     async get(id) {
       return tasks.get(id);
     },
@@ -534,6 +537,9 @@ describe("tryAdvanceMission", () => {
       },
       async createMany() {
         throw new Error("unused");
+      },
+      async splitTask() {
+        throw new Error("splitTask not stubbed in this test");
       },
       async get() {
         return undefined;

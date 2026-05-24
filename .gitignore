@@ -69,3 +69,6 @@ feedback.jsonl
 .maestro/contracts/
 # Phase 6 swarm run state — per-run tmpdir map, not durable
 .maestro/scenarios/
+
+# Local test/reference files
+harness-engineering-course.html

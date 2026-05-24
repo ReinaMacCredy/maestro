@@ -4,13 +4,22 @@
  */
 import { sanitizeTerminalText } from "@/shared/lib/sanitize.js";
 
+/**
+ * Stringify a JSON payload using the token-budget doctrine:
+ * minify when stdout is being piped (agent consumer), pretty-print
+ * only for interactive TTYs (human reading directly).
+ */
+export function stringifyForOutput(data: unknown): string {
+  return process.stdout.isTTY ? JSON.stringify(data, null, 2) : JSON.stringify(data);
+}
+
 export function output<T = unknown>(
   json: boolean,
   data: T,
   formatter: (d: T) => string[],
 ): void {
   if (json) {
-    console.log(JSON.stringify(data, null, 2));
+    console.log(stringifyForOutput(data));
   } else {
     for (const line of formatter(data)) {
       console.log(sanitizeTerminalText(line));

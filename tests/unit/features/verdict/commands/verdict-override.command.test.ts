@@ -51,6 +51,13 @@ function fakeVerdictStore(verdicts: Verdict[] = []): VerdictStorePort {
     readVersion: async (_taskId, id) => byId.get(id),
     history: async (taskId) => [...byId.values()].filter((v) => v.taskId === taskId),
     findByTreeSha: async () => [],
+    readLatestWithCorruption: async (taskId) => {
+      const found = [...byId.values()].filter((v) => v.taskId === taskId);
+      return {
+        verdict: found.length > 0 ? found[found.length - 1] : undefined,
+        corruptCount: 0,
+      };
+    },
   };
 }
 

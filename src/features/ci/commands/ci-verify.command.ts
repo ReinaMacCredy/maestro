@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { resolveJsonFlag } from "@/shared/lib/output.js";
+import { resolveJsonFlag, stringifyForOutput } from "@/shared/lib/output.js";
 import { type Services } from "@/services.js";
 import { exitCodeForDecision, printVerdict, requestVerdict } from "@/features/verdict/index.js";
 import { readCiEnv } from "../domain/ci-env.js";
@@ -84,7 +84,7 @@ export function registerCiVerifyCommand(
       );
 
       if (isJson) {
-        console.log(JSON.stringify(verdict, null, 2));
+        console.log(stringifyForOutput(verdict));
       } else {
         printVerdict(verdict);
       }

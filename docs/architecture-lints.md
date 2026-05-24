@@ -54,13 +54,12 @@ Per-line escape: `// lint-arch-allow: mission-control-readonly`.
 
 ### `no-hand-edit-generated` — error (diff-aware)
 
-Generated template files (`src/infra/domain/built-in-skill-templates.ts`,
-`src/infra/domain/bundled-skill-templates.ts`) are produced by the
-`sync:built-in-skills` and `sync:bundled-skills` scripts. Hand-edits are
-silently overwritten on the next sync.
+The generated template file (`src/infra/domain/bundled-skill-templates.ts`)
+is produced by the `sync:bundled-skills` script. Hand-edits are silently
+overwritten on the next sync.
 
-The rule fires when the diff includes one of the generated paths but no
-`skills/built-in/**` or `skills/bundled/**` source path was touched.
+The rule fires when the diff includes the generated path but no
+`skills/bundled/**` source path was touched.
 
 When no diff is supplied (e.g., `bun run lint:arch` without `--base`), the
 rule self-skips with a non-blocking `info` finding.
@@ -142,9 +141,9 @@ flag stylistic drift; CI does not fail on `info` findings, but they show up in
 
 ### `file-size-limit` — info
 
-Files in `src/**/*.{ts,tsx}` over 800 lines are flagged. Generated template
-files (`built-in-skill-templates.ts`, `bundled-skill-templates.ts`) are
-exempt. Per-line escape: `// lint-arch-allow: file-size-limit`.
+Files in `src/**/*.{ts,tsx}` over 800 lines are flagged. The generated
+template file (`bundled-skill-templates.ts`) is exempt. Per-line escape:
+`// lint-arch-allow: file-size-limit`.
 
 ### `no-bare-console-log` — info
 

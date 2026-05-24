@@ -45,8 +45,9 @@ maestro task from-spec <path>
 maestro task claim <id> [--agent <id>] [--skip-worktree]
 maestro task verify <id> [--json] [--verdict human|block] [--reason <text>]
 maestro task block <id> --reason <text>
-maestro task abandon <id> --reason <text>
+maestro task abandon <id> --reason <text> [--cascade]
 maestro task ship <id> [--pr-url <url>]
+maestro task split <parent-id> <titles...> [--parallel] [--agent <id>]
 ```
 
 Hot-path aliases: `maestro claim <id>`, `maestro verify <id>`, `maestro block <id>`, `maestro abandon <id>`, `maestro ship <id>`. The aliases accept the same flags as their `task` counterparts.
@@ -64,8 +65,9 @@ Transitions are hybrid (ADR-0004): the agent enters check states manually; the h
 - `task claim` flips `draft → claimed`. For heavy-mode specs it auto-creates a worktree under `<parent>/<repo>-<task_id>` and records the path on the task. `--skip-worktree` opts out. `--agent <id>` is recorded on the task and on the transition evidence row.
 - `task verify` runs the architecture lints. Default routing: `PASS → verifying → ready` (exit 0), `FAIL → stay at verifying` (exit 1). `--verdict human --reason <text>` stays at `verifying` (exit 2). `--verdict block --reason <text>` transitions to `blocked` (exit 3). `--json` emits `{id, state, verdict, violations}`.
 - `task block` carries a human-readable blocker on `claimed | doing | verifying → blocked`.
-- `task abandon` transitions any non-terminal state to `abandoned`.
+- `task abandon` transitions any non-terminal state to `abandoned`. `--cascade` recursively abandons non-terminal split-children post-order before abandoning the target; without the flag, non-terminal descendants block the call (`TASK_ABANDON_CASCADE_BLOCKED`). On success, peer tasks have the abandoned id pruned from their `blocked_by` lists (best-effort, N writes, non-atomic).
 - `task ship` is the manual `ready → shipped` flip with an optional PR URL.
+- `task split` bisects a `claimed | doing` parent into N child tasks. Each child is created `draft` with slug `<parent.slug>-<i>`, a `parent_id` back-reference, and inherits `mission_id`, `spec_path`, `worktree_path` from the parent. Default chain is sequential (`child[i].blocked_by = [child[i-1]]`); `--parallel` gives every child an empty `blocked_by`. `--agent <id>` asserts the parent is currently assigned to that agent. Parent's `blocked_by` gains the new child ids and `task get <parent>` partitions them into `children:` and `external blocked_by:` sections.
 
 Each transition emits an evidence row (ADR-0009) into `.maestro/evidence/<date>.jsonl`, a parallel observability row into `.maestro/runs/<task-id>/observability.jsonl`, and a handoff envelope into `.maestro/handoffs/<id>.json`.
 

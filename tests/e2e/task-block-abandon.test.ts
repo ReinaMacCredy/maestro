@@ -141,6 +141,66 @@ describe("maestro task block / abandon", () => {
     expect(pauseRow).toBeDefined();
   });
 
+  it("abandon refuses parents with non-terminal split-children unless --cascade", async () => {
+    const parentId = await setupClaimedTask(tmpDir);
+    await runCompiled(
+      ["task", "split", parentId, "alpha", "beta"],
+      tmpDir,
+    );
+
+    const blocked = await runCompiled(
+      ["task", "abandon", parentId, "--reason", "no cascade flag"],
+      tmpDir,
+    );
+    expect(blocked.exitCode).toBe(1);
+    expect(blocked.stderr).toContain("non-terminal descendant");
+    expect(blocked.stderr).toContain("--cascade");
+
+    const cascaded = await runCompiled(
+      ["task", "abandon", parentId, "--reason", "drop the line", "--cascade"],
+      tmpDir,
+    );
+    expect(cascaded.exitCode).toBe(0);
+
+    const tasksText = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
+    const rows = tasksText
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { id: string; state: string; abandon_reason?: string; parent_id?: string });
+    const parent = rows.find((r) => r.id === parentId)!;
+    expect(parent.state).toBe("abandoned");
+    const children = rows.filter((r) => r.parent_id === parentId);
+    expect(children).toHaveLength(2);
+    for (const child of children) {
+      expect(child.state).toBe("abandoned");
+      expect(child.abandon_reason).toBe("cascade from parent abandon");
+    }
+  });
+
+  it("abandoning a blocker prunes it from peer blocked_by lists", async () => {
+    const parentId = await setupClaimedTask(tmpDir);
+    await runCompiled(
+      ["task", "split", parentId, "alpha", "beta"],
+      tmpDir,
+    );
+
+    // Cascade abandon clears the children too; parent's blocked_by should be
+    // pruned to [] once the children become terminal.
+    await runCompiled(
+      ["task", "abandon", parentId, "--reason", "wipe", "--cascade"],
+      tmpDir,
+    );
+
+    const tasksText = await readFile(join(tmpDir, ".maestro/tasks/tasks.jsonl"), "utf8");
+    const rows = tasksText
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { id: string; state: string; blocked_by: string[]; parent_id?: string });
+    const parent = rows.find((r) => r.id === parentId)!;
+    expect(parent.state).toBe("abandoned");
+    expect(parent.blocked_by).toEqual([]);
+  });
+
   it("hot-path aliases block and abandon work at top level", async () => {
     const id = await setupClaimedTask(tmpDir);
     const blockRes = await runCompiled(["block", id, "--reason", "alias"], tmpDir);

@@ -35,12 +35,12 @@ agent's own work. This document codifies how we keep our footprint small.
 | Verb | Default shape | Recover full shape |
 |------|---------------|--------------------|
 | `task list --json` | Summary, default `--limit 20` | `--full --all` |
-| `task status --json` | Digest (no `tasksById`) | `--full` |
-| `task ready --json` | Summary (truncated `description`, truncated `hint.reason`, no `hint.matchedKeywords`) | `--full` |
-| `task stuck --json` | Summary | `--full` |
-| `mission list --json` | Summary, default `--limit 20` | `--full --all` |
 | `evidence list --json` | Summary, default `--limit 20` | `--full --all` |
+| `handoff list --json` | Summary, default `--limit 20` | `--full --all` |
 | `skills list --json` | Summary (no `body`) | `--full` |
+
+All `--json` output is minified when stdout is piped (the agent path) and
+pretty-printed only when stdout is an interactive TTY.
 
 Human-readable CLI output is already concise and unchanged.
 
@@ -92,20 +92,17 @@ the `body`.
 
 ## Regression guard
 
-```bash
-maestro inspect token-budget          # text table
-maestro inspect token-budget --json   # machine-readable
-```
+The token-shape contract is asserted by integration tests under
+`tests/integration/token-budget.test.ts`. Each agent-facing list verb is
+spawned in both its default and `--full` modes; the test asserts the
+default payload is smaller than `--full` and contains only the summary
+projection keys. Drift triggers a CI failure rather than relying on a
+human to read a probe table.
 
-The probe always exercises each agent-facing list verb in both its
-default and `--full` modes — there is no `--full` flag on the probe
-itself, both rows appear automatically. Run before/after a list-shape
-change and after any projection helper edit; surprise regressions
-show up immediately.
-
-The estimator is a heuristic (Anthropic publishes ~4 chars/token; JSON
-tokenizes at ~3.5). Use it for comparing the same shape before and
-after a change, not for absolute cost projections.
+The byte-to-token heuristic in `src/shared/lib/token-estimate.ts`
+(~4 chars/token prose, ~3.5 chars/token JSON) is available for
+comparing the same shape before and after a change, but it is not a
+substitute for the regression test.
 
 ## Further reading
 

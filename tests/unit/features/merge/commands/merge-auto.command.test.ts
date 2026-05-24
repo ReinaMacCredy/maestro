@@ -109,6 +109,7 @@ function fakeVerdictStore(verdict?: Verdict): VerdictStorePort {
     readVersion: async () => verdict,
     history: async () => (verdict ? [verdict] : []),
     findByTreeSha: async () => (verdict ? [verdict] : []),
+    readLatestWithCorruption: async () => ({ verdict, corruptCount: 0 }),
   };
 }
 

@@ -14,6 +14,9 @@ export interface MaestroConfig {
   };
   readonly defaultWorkflow?: string;
   readonly ui?: UiConfig;
+  readonly doctor?: {
+    readonly verdictStaleDays?: number;
+  };
 }
 
 export const DEFAULT_CONFIG: MaestroConfig = {

@@ -99,6 +99,23 @@ export class FsHandoffEmitter implements HandoffEmitterPort {
     return JSON.parse(raw) as HandoffPickup;
   }
 
+  async listPickups(): Promise<readonly HandoffPickup[]> {
+    if (!(await dirExists(this.#dir))) return [];
+    const entries = await readdir(this.#dir);
+    const files = entries.filter((e) => e.endsWith(PICKUP_SUFFIX));
+    const records: HandoffPickup[] = [];
+    for (const f of files) {
+      const raw = await readFile(join(this.#dir, f), "utf8");
+      try {
+        records.push(JSON.parse(raw) as HandoffPickup);
+      } catch {
+        // Skip malformed pickups so one corrupt file doesn't take down list().
+        console.warn(`handoff listPickups: skipping malformed pickup ${f}`);
+      }
+    }
+    return records;
+  }
+
   #filePath(id: string): string {
     return join(this.#dir, `${id}.json`);
   }

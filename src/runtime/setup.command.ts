@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { createInterface } from "node:readline/promises";
 import { setupCheck, type SetupCheckEntry } from "../service/setup-check.usecase.js";
 import { runSetup, type SetupReport } from "../service/setup.usecase.js";
+import { stringifyForOutput } from "@/shared/lib/output.js";
 import type { Services } from "@/services.js";
 
 export interface SetupCommandOptions {
@@ -133,7 +134,7 @@ export function registerSetupCommands(program: Command, opts: SetupCommandOption
       try {
         const report = await runSetupCommand(flags, opts);
         if (flags.json === true || this.optsWithGlobals().json === true) {
-          console.log(JSON.stringify(report, null, 2));
+          console.log(stringifyForOutput(report));
         } else {
           for (const line of formatReport(report)) console.log(line);
         }
@@ -154,7 +155,7 @@ export function registerSetupCommands(program: Command, opts: SetupCommandOption
         const report = await setupCheck({ repoRoot });
         const wantJson = flags.json === true || this.optsWithGlobals().json === true;
         if (wantJson) {
-          console.log(JSON.stringify({ ...report, project_root: repoRoot }, null, 2));
+          console.log(stringifyForOutput({ ...report, project_root: repoRoot }));
         } else {
           console.log(`project root: ${repoRoot}`);
           for (const entry of report.entries) console.log(formatEntry(entry));

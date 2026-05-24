@@ -1,11 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { ensureDir, writeText } from "@/shared/lib/fs.js";
+import { slugTooLong } from "@/shared/domain/task/domain/task-errors.js";
+import { SLUG_MAX_LENGTH } from "@/shared/domain/task/domain/task-slug.js";
 import type { Task, TaskId } from "../types/task.js";
-import { generateTaskId } from "../types/task.js";
+import { generateTaskId, TASK_ID_PATTERN } from "../types/task.js";
 import { isTaskState, type TaskState } from "../types/task-state.js";
 import {
   DuplicateSlugError,
+  DuplicateTaskIdError,
+  InvalidTaskIdError,
   TaskNotFoundError,
   type CreateTaskInput,
   type TaskPatch,
@@ -49,20 +53,34 @@ export class JsonlTaskStore implements TaskStorePort {
     this.#idFactory = options.idFactory ?? generateTaskId;
   }
 
+  #assertValidProvidedId(id: TaskId): void {
+    if (!TASK_ID_PATTERN.test(id)) {
+      throw new InvalidTaskIdError(id);
+    }
+  }
+
   async create(input: CreateTaskInput): Promise<Task> {
     return this.#mutate(async (tasks) => {
+      if (input.id !== undefined) {
+        this.#assertValidProvidedId(input.id);
+        if (tasks.some((t) => t.id === input.id)) {
+          throw new DuplicateTaskIdError(input.id);
+        }
+      }
       if (tasks.some((t) => t.slug === input.slug)) {
         throw new DuplicateSlugError(input.slug);
       }
       const now = this.#clock().toISOString();
       const task: Task = {
-        id: this.#idFactory(),
+        id: input.id ?? this.#idFactory(),
         slug: input.slug,
         title: input.title,
         state: input.state,
         spec_path: input.spec_path,
         mission_id: input.mission_id,
         blocked_by: input.blocked_by ?? [],
+        ...(input.parent_id !== undefined ? { parent_id: input.parent_id } : {}),
+        ...(input.worktree_path !== undefined ? { worktree_path: input.worktree_path } : {}),
         created_at: now,
         updated_at: now,
       };
@@ -75,8 +93,17 @@ export class JsonlTaskStore implements TaskStorePort {
     if (inputs.length === 0) return [];
     return this.#mutate(async (tasks): Promise<readonly Task[]> => {
       const inBatch = new Set<string>();
+      const inBatchIds = new Set<TaskId>();
       const existing = new Set(tasks.map((t) => t.slug));
+      const existingIds = new Set(tasks.map((t) => t.id));
       for (const input of inputs) {
+        if (input.id !== undefined) {
+          this.#assertValidProvidedId(input.id);
+          if (existingIds.has(input.id) || inBatchIds.has(input.id)) {
+            throw new DuplicateTaskIdError(input.id);
+          }
+          inBatchIds.add(input.id);
+        }
         if (inBatch.has(input.slug) || existing.has(input.slug)) {
           throw new DuplicateSlugError(input.slug);
         }
@@ -86,13 +113,15 @@ export class JsonlTaskStore implements TaskStorePort {
       const created: Task[] = [];
       for (const input of inputs) {
         const task: Task = {
-          id: this.#idFactory(),
+          id: input.id ?? this.#idFactory(),
           slug: input.slug,
           title: input.title,
           state: input.state,
           spec_path: input.spec_path,
           mission_id: input.mission_id,
           blocked_by: input.blocked_by ?? [],
+          ...(input.parent_id !== undefined ? { parent_id: input.parent_id } : {}),
+          ...(input.worktree_path !== undefined ? { worktree_path: input.worktree_path } : {}),
           created_at: now,
           updated_at: now,
         };
@@ -100,6 +129,62 @@ export class JsonlTaskStore implements TaskStorePort {
         created.push(task);
       }
       return created;
+    });
+  }
+
+  async splitTask(input: {
+    readonly parentId: TaskId;
+    readonly parentPatch: TaskPatch;
+    readonly childInputs: readonly CreateTaskInput[];
+  }): Promise<{ readonly parent: Task; readonly children: readonly Task[] }> {
+    if (input.childInputs.length === 0) {
+      throw new Error("splitTask requires at least one child");
+    }
+    return this.#mutate(async (tasks): Promise<{ readonly parent: Task; readonly children: readonly Task[] }> => {
+      const parentIdx = tasks.findIndex((t) => t.id === input.parentId);
+      if (parentIdx === -1) throw new TaskNotFoundError(input.parentId);
+
+      const inBatchSlugs = new Set<string>();
+      const inBatchIds = new Set<TaskId>();
+      const existingSlugs = new Set(tasks.map((t) => t.slug));
+      const existingIds = new Set(tasks.map((t) => t.id));
+      for (const ci of input.childInputs) {
+        if (ci.id !== undefined) {
+          this.#assertValidProvidedId(ci.id);
+          if (existingIds.has(ci.id) || inBatchIds.has(ci.id)) {
+            throw new DuplicateTaskIdError(ci.id);
+          }
+          inBatchIds.add(ci.id);
+        }
+        if (ci.slug.length > SLUG_MAX_LENGTH) {
+          throw slugTooLong(ci.slug, SLUG_MAX_LENGTH);
+        }
+        if (inBatchSlugs.has(ci.slug) || existingSlugs.has(ci.slug)) {
+          throw new DuplicateSlugError(ci.slug);
+        }
+        inBatchSlugs.add(ci.slug);
+      }
+
+      const now = this.#clock().toISOString();
+      const parent = tasks[parentIdx]!;
+      const updatedParent: Task = { ...parent, ...input.parentPatch, updated_at: now };
+      tasks[parentIdx] = updatedParent;
+
+      const children: Task[] = input.childInputs.map((ci) => ({
+        id: ci.id ?? this.#idFactory(),
+        slug: ci.slug,
+        title: ci.title,
+        state: ci.state,
+        ...(ci.spec_path !== undefined ? { spec_path: ci.spec_path } : {}),
+        ...(ci.mission_id !== undefined ? { mission_id: ci.mission_id } : {}),
+        ...(ci.worktree_path !== undefined ? { worktree_path: ci.worktree_path } : {}),
+        blocked_by: ci.blocked_by ?? [],
+        parent_id: input.parentId,
+        created_at: now,
+        updated_at: now,
+      }));
+      tasks.push(...children);
+      return { parent: updatedParent, children };
     });
   }
 

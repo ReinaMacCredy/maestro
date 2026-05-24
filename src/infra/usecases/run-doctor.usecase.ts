@@ -1,200 +1,194 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
-import { listIgnoredProjectConfigKeys } from "@/tui/shared/ui-config.js";
+import type { TaskStorePort } from "@/repo/task-store.port.js";
+import type { VerdictStorePort } from "@/features/verdict/ports/storage.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
-import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "./count-legacy-handoff-files.usecase.js";
+import { setupCheck, type SetupCheckEntry } from "@/service/setup-check.usecase.js";
+import { loadLatestVerdictsByTask } from "@/service/load-latest-verdicts.usecase.js";
+import { execArgv } from "@/shared/lib/shell.js";
 
-/**
- * Phase 1 strip: CASS and agent-transport checks were removed. The
- * conductor model does not spawn runtime agents or depend on CASS, so these
- * checks no longer map to anything the CLI can fix.
- */
-export async function runDoctor(
-  git: GitPort,
-  config: ConfigPort,
-  dir: string,
-  options: CountLegacyHandoffFilesOptions = {},
-): Promise<DoctorCheck[]> {
-  const [
-    gitAvailable,
-    projectConfig,
-    globalConfig,
-    configLayers,
-    legacyHandoffCount,
-    emptyFeatureDirs,
-    oversizedRootDocs,
-  ] = await Promise.all([
-    git.isRepo(dir),
-    config.exists("project", dir),
-    config.exists("global", dir),
-    config.loadLayers(dir),
-    countLegacyHandoffFiles(dir, options),
-    findEmptyFeatureDirs(dir),
-    findOversizedRootDocs(dir),
+export interface RunDoctorDeps {
+  readonly taskStore: TaskStorePort;
+  readonly verdictStore: VerdictStorePort;
+  readonly projectDir: string;
+  readonly full?: boolean;
+  readonly config?: ConfigPort;
+}
+
+const DAY_MS = 86_400_000;
+const DEFAULT_STALE_DAYS = 30;
+const SUBPROCESS_TIMEOUT_MS = 600_000;
+
+export async function runDoctor(deps: RunDoctorDeps): Promise<DoctorCheck[]> {
+  const checks: DoctorCheck[] = await Promise.all([
+    scaffoldCheck(deps.projectDir),
+    initScriptCheck(deps.projectDir),
+    verdictFreshnessCheck(deps),
   ]);
 
-  const doctorChecks: DoctorCheck[] = [
-    {
-      name: "git",
-      status: gitAvailable ? "ok" : "fail",
-      message: gitAvailable ? "Git repository detected" : "Not inside a git repository",
-      fix: gitAvailable ? undefined : "Run: git init",
-    },
-    {
-      name: "project-config",
-      status: projectConfig ? "ok" : "warn",
-      message: projectConfig ? "Project config found at .maestro/config.yaml" : "No project config found",
-      fix: projectConfig ? undefined : "Run: maestro init",
-    },
-    {
-      name: "global-config",
-      status: globalConfig ? "ok" : "warn",
-      message: globalConfig ? "Global config found at ~/.maestro/config.yaml" : "No global config found",
-      fix: globalConfig ? undefined : "Run: maestro init --global",
-    },
-  ];
-
-  for (const keyPath of listIgnoredProjectConfigKeys(configLayers.project)) {
-    doctorChecks.push({
-      name: `ignored-${keyPath.replaceAll(".", "-")}`,
-      status: "warn",
-      message: `${keyPath} is set in project config but only global config is used`,
-      fix: "Remove the project value or set it in ~/.maestro/config.yaml instead",
-    });
+  if (deps.full) {
+    checks.push(await subprocessCheck("build", ["bun", "run", "build"], deps.projectDir));
+    checks.push(await subprocessCheck("tests", ["bun", "test"], deps.projectDir));
   }
 
-  if (legacyHandoffCount > 0) {
-    doctorChecks.push({
-      name: "legacy-handoffs",
-      status: "warn",
-      message: `Found ${legacyHandoffCount} legacy launch artifact(s) under .maestro/launches/`,
-      fix: "Review or remove the old files manually. Maestro now writes handoff artifacts to .maestro/handoffs/.",
-    });
-  }
-
-  for (const featureDir of emptyFeatureDirs) {
-    doctorChecks.push({
-      name: `empty-feature-${featureDir}`,
-      status: "warn",
-      message: `src/features/${featureDir}/ has no .ts files; either populate or remove the directory`,
-      fix: `Implement the feature under src/features/${featureDir}/, or delete the directory if it was a stub`,
-    });
-  }
-
-  for (const doc of oversizedRootDocs) {
-    doctorChecks.push({
-      name: `oversized-root-doc-${doc.name.replaceAll(".", "-")}`,
-      status: "warn",
-      message: `${doc.name} (${doc.lineCount} lines) is at the repo root; planning docs of this size belong under docs/`,
-      fix: `Move ${doc.name} to docs/proposals/ (or delete if executed)`,
-    });
-  }
-
-  return doctorChecks;
+  return checks;
 }
 
-/**
- * Finds direct subdirectories of `<dir>/src/features` that contain zero `.ts`
- * files anywhere in their tree. These are stub directories that imply a
- * feature exists when none does.
- */
-async function findEmptyFeatureDirs(dir: string): Promise<string[]> {
-  const featuresRoot = join(dir, "src", "features");
-  let entries: string[];
-  try {
-    entries = await readdir(featuresRoot);
-  } catch {
-    return [];
+async function scaffoldCheck(projectDir: string): Promise<DoctorCheck> {
+  const report = await setupCheck({ repoRoot: projectDir });
+  const missing = report.entries.filter((e): e is SetupCheckEntry => e.status === "missing");
+  if (missing.length > 0) {
+    return {
+      name: "scaffold",
+      status: "fail",
+      message: `Scaffold incomplete (${missing.length} missing): ${missing.map((e) => e.path).join(", ")}`,
+      fix: "Run: maestro setup",
+    };
   }
-
-  const empty: string[] = [];
-  await Promise.all(
-    entries.map(async (entry): Promise<void> => {
-      const sub = join(featuresRoot, entry);
-      let entryStat;
-      try {
-        entryStat = await stat(sub);
-      } catch {
-        return;
-      }
-      if (!entryStat.isDirectory()) return;
-      if (await containsTsFile(sub)) return;
-      empty.push(entry);
-    }),
-  );
-  return empty.sort();
+  const warns = report.entries.filter((e) => e.status === "warn");
+  if (warns.length > 0) {
+    return {
+      name: "scaffold",
+      status: "warn",
+      message: `Scaffold has ${warns.length} warning(s): ${warns.map((e) => e.path).join(", ")}`,
+      fix: "Run: maestro setup",
+    };
+  }
+  return {
+    name: "scaffold",
+    status: "ok",
+    message: "Scaffold complete",
+  };
 }
 
-async function containsTsFile(dir: string): Promise<boolean> {
-  let entries;
+async function initScriptCheck(projectDir: string): Promise<DoctorCheck> {
+  const path = join(projectDir, "init.sh");
+  let mode: number;
   try {
-    entries = await readdir(dir, { withFileTypes: true });
+    const s = await stat(path);
+    mode = s.mode;
   } catch {
-    return false;
+    return {
+      name: "init-script",
+      status: "warn",
+      message: "init.sh not found at repo root",
+      fix: "Run: maestro setup",
+    };
   }
-  for (const entry of entries) {
-    if (entry.isFile() && (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx"))) {
-      return true;
+  // On win32 the execute bit has no meaning; presence is enough.
+  if (process.platform !== "win32" && (mode & 0o111) === 0) {
+    return {
+      name: "init-script",
+      status: "warn",
+      message: "init.sh exists but is not executable",
+      fix: "Run: chmod +x init.sh",
+    };
+  }
+  return {
+    name: "init-script",
+    status: "ok",
+    message: "init.sh present and executable",
+  };
+}
+
+async function verdictFreshnessCheck(deps: RunDoctorDeps): Promise<DoctorCheck> {
+  let tasks: Awaited<ReturnType<TaskStorePort["list"]>>;
+  try {
+    tasks = await deps.taskStore.list();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      name: "verdict-freshness",
+      status: "fail",
+      message: `Task store unreadable: ${message}`,
+      fix: "Inspect .maestro/tasks/tasks.jsonl and remove or repair malformed rows",
+    };
+  }
+  if (tasks.length === 0) {
+    return {
+      name: "verdict-freshness",
+      status: "ok",
+      message: "No tasks yet",
+    };
+  }
+
+  const { latest: newest } = await loadLatestVerdictsByTask(tasks, deps.verdictStore);
+
+  if (!newest) {
+    return {
+      name: "verdict-freshness",
+      status: "warn",
+      message: `${tasks.length} task(s) exist but no verdicts have been written`,
+      fix: "Run: maestro task verify <id>",
+    };
+  }
+
+  const staleDays = await resolveStaleDays(deps);
+  const computedAtMs = Date.parse(newest.computedAt);
+  if (Number.isNaN(computedAtMs)) {
+    return {
+      name: "verdict-freshness",
+      status: "warn",
+      message: `Latest verdict (${newest.taskId}) has malformed timestamp: ${newest.computedAt}`,
+      fix: "Run: maestro task verify <id>",
+    };
+  }
+  const ageMs = Date.now() - computedAtMs;
+  if (ageMs > staleDays * DAY_MS) {
+    return {
+      name: "verdict-freshness",
+      status: "warn",
+      message: `Latest verdict (${newest.taskId}) is older than ${staleDays} day(s)`,
+      fix: "Run: maestro task verify <id>",
+    };
+  }
+
+  return {
+    name: "verdict-freshness",
+    status: "ok",
+    message: `Latest verdict at ${newest.computedAt} (${newest.taskId})`,
+  };
+}
+
+async function resolveStaleDays(deps: RunDoctorDeps): Promise<number> {
+  const envValue = process.env.MAESTRO_VERDICT_STALE_DAYS;
+  if (envValue !== undefined && envValue !== "") {
+    const parsed = Number.parseInt(envValue, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (deps.config) {
+    try {
+      const layers = await deps.config.loadLayers(deps.projectDir);
+      const fromConfig = layers.effective?.doctor?.verdictStaleDays;
+      if (typeof fromConfig === "number" && fromConfig > 0) return fromConfig;
+    } catch {
+      // Config layer read failure falls through to the default.
     }
-    if (entry.isDirectory()) {
-      if (await containsTsFile(join(dir, entry.name))) return true;
-    }
   }
-  return false;
+  return DEFAULT_STALE_DAYS;
 }
 
-const ROOT_DOC_ALLOWLIST = new Set([
-  "README.md",
-  "AGENTS.md",
-  "CLAUDE.md",
-  "CHANGELOG.md",
-  "ROADMAP.md",
-  "CONTRIBUTING.md",
-  "SECURITY.md",
-  "LICENSE",
-  "LICENSE.md",
-]);
-
-const ROOT_DOC_LINE_LIMIT = 500;
-
-/**
- * Returns root-level *.md files exceeding ROOT_DOC_LINE_LIMIT that are not in
- * the allowlist of canonical project files. Catches planning/proposal docs
- * that should live under docs/.
- */
-async function findOversizedRootDocs(
-  dir: string,
-): Promise<{ name: string; lineCount: number }[]> {
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
+async function subprocessCheck(
+  name: "build" | "tests",
+  command: readonly string[],
+  cwd: string,
+): Promise<DoctorCheck> {
+  const { exitCode } = await execArgv([...command], {
+    cwd,
+    timeout: SUBPROCESS_TIMEOUT_MS,
+  });
+  if (exitCode === 0) {
+    return {
+      name,
+      status: "ok",
+      message: `${command.join(" ")} succeeded`,
+    };
   }
-
-  const candidates = entries.filter(
-    (e) => e.isFile() && e.name.endsWith(".md") && !ROOT_DOC_ALLOWLIST.has(e.name),
-  );
-
-  const results = await Promise.all(
-    candidates.map(async (entry): Promise<{ name: string; lineCount: number } | undefined> => {
-      try {
-        const text = await readFile(join(dir, entry.name), "utf8");
-        const lineCount = text.split("\n").length;
-        if (lineCount > ROOT_DOC_LINE_LIMIT) {
-          return { name: entry.name, lineCount };
-        }
-      } catch (err) {
-        // Surface read failures (permission errors, transient FS issues)
-        // instead of silently dropping the candidate from the doctor report.
-        const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`[doctor] skipped ${entry.name}: ${message}\n`);
-      }
-      return undefined;
-    }),
-  );
-
-  return results.filter((r): r is { name: string; lineCount: number } => r !== undefined);
+  return {
+    name,
+    status: "warn",
+    message: `${command.join(" ")} exited ${exitCode}`,
+    fix: `Run \`${command.join(" ")}\` manually to inspect the failure`,
+  };
 }

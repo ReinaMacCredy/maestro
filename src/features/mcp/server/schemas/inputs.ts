@@ -118,6 +118,13 @@ export const TaskClaimInput = z
       .min(1)
       .optional()
       .describe("Agent identifier recorded on the task and evidence row. Defaults to MCP session id when omitted."),
+    tool: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Caller's own tool name (e.g. 'codex', 'claude-code') from the agent's system prompt. When set, the auto-emitted handoff envelope's to_agent is populated for intra-tool continuity — the next session of your tool will find this envelope via its inbox. Optional; envelope stays untargeted when unset.",
+      ),
   })
   .strict();
 
@@ -142,6 +149,57 @@ export const TaskBlockInput = z
       .string()
       .min(1)
       .describe("Human-readable explanation of what is blocking this task."),
+    tool: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Caller's own tool name (e.g. 'codex', 'claude-code') from the agent's system prompt. When set, the auto-emitted handoff envelope's to_agent is populated for intra-tool continuity — the next session of your tool will find this envelope via its inbox. Optional; envelope stays untargeted when unset.",
+      ),
+  })
+  .strict();
+
+// Task abandon: terminal-state transition with optional cascade across
+// split-children (post-order recursive abandon of non-terminal descendants).
+export const TaskAbandonInput = z
+  .object({
+    id: taskId,
+    reason: z
+      .string()
+      .min(1)
+      .describe("Human-readable explanation of abandonment."),
+    cascade: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, recursively abandons non-terminal split-children post-order before abandoning the target. When false/omitted, non-terminal descendants block the abandon (TASK_ABANDON_CASCADE_BLOCKED).",
+      ),
+  })
+  .strict();
+
+// Task split: bisect a claimed/doing parent into child tasks. Each child is
+// created in draft with parent.slug-N slug and parent_id back-reference; the
+// parent's blocked_by gains the new child ids.
+export const TaskSplitInput = z
+  .object({
+    parent_id: taskId,
+    titles: z
+      .array(z.string().min(1))
+      .min(1)
+      .describe("One title per child task. At least one required."),
+    parallel: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, children have empty blocked_by (parallelizable). When false/omitted, children are chained sequentially: child[i] blocked_by [child[i-1]].",
+      ),
+    agent_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Asserts the parent is currently assigned to this agent. When omitted, no claimant check is run.",
+      ),
   })
   .strict();
 
@@ -396,6 +454,13 @@ export const HandoffListInput = z
   .object({
     task_id: taskId.optional(),
     trigger_verb: handoffTrigger.optional(),
+    to_agent: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Strict exact-match filter. Returns only envelopes whose to_agent equals this value. Legacy / untargeted envelopes (no to_agent field) are excluded when this filter is set. Drop the filter to see all envelopes.",
+      ),
     include_picked_up: z
       .boolean()
       .optional()
@@ -440,6 +505,13 @@ export const HandoffEmitShape = {
     .optional()
     .describe(
       "Required when trigger_verb is 'task:block'. Free-text reason recorded on the envelope.",
+    ),
+  to_agent: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Receiver's tool name (e.g. 'codex', 'claude-code'). Free-text; no format validation. When set, receivers can filter their inbox via handoff_list with to_agent. Optional; envelope is untargeted (available to any receiver) when unset.",
     ),
 } as const;
 

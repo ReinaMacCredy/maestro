@@ -1,7 +1,8 @@
 /** Token-budget projection helpers. See `docs/token-budget.md`. */
 
 import type { EvidenceRow, EvidenceSummary } from "@/features/evidence/domain/types.js";
-import type { Task } from "@/types/task.js";
+import type { HandoffEnvelope } from "@/repo/handoff-emitter.port.js";
+import type { Task, TaskId } from "@/types/task.js";
 
 export interface TaskSummary {
   readonly id: string;
@@ -10,6 +11,7 @@ export interface TaskSummary {
   readonly state: string;
   readonly mission_id?: string;
   readonly assignee?: string;
+  readonly parent_id?: TaskId;
   readonly blocked_by_count: number;
 }
 
@@ -21,6 +23,7 @@ export function summarizeTask(task: Task): TaskSummary {
     state: task.state,
     ...(task.mission_id !== undefined ? { mission_id: task.mission_id } : {}),
     ...(task.assignee !== undefined ? { assignee: task.assignee } : {}),
+    ...(task.parent_id !== undefined ? { parent_id: task.parent_id } : {}),
     blocked_by_count: task.blocked_by.length,
   };
 }
@@ -36,5 +39,28 @@ export function summarizeEvidence(row: EvidenceRow): EvidenceSummary {
     witness_level: row.witness_level,
     created_at: row.created_at,
     ...(row.session_id !== undefined ? { session_id: row.session_id } : {}),
+  };
+}
+
+export interface HandoffSummary {
+  readonly id: string;
+  readonly task_id: string;
+  readonly trigger_verb: string;
+  readonly to_agent?: string;
+  readonly created_at: string;
+  readonly picked_up: boolean;
+}
+
+export function summarizeHandoff(
+  envelope: HandoffEnvelope,
+  pickedUp: boolean,
+): HandoffSummary {
+  return {
+    id: envelope.id,
+    task_id: envelope.task_id,
+    trigger_verb: envelope.trigger_verb,
+    ...(envelope.to_agent !== undefined ? { to_agent: envelope.to_agent } : {}),
+    created_at: envelope.created_at,
+    picked_up: pickedUp,
   };
 }
