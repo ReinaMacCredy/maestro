@@ -8,6 +8,7 @@ export interface CreateTaskInput {
   readonly spec_path?: string;
   readonly mission_id?: string;
   readonly blocked_by?: readonly string[];
+  readonly id?: TaskId;
 }
 
 export type TaskPatch = Partial<

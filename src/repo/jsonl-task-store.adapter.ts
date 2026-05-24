@@ -56,7 +56,7 @@ export class JsonlTaskStore implements TaskStorePort {
       }
       const now = this.#clock().toISOString();
       const task: Task = {
-        id: this.#idFactory(),
+        id: input.id ?? this.#idFactory(),
         slug: input.slug,
         title: input.title,
         state: input.state,
@@ -86,7 +86,7 @@ export class JsonlTaskStore implements TaskStorePort {
       const created: Task[] = [];
       for (const input of inputs) {
         const task: Task = {
-          id: this.#idFactory(),
+          id: input.id ?? this.#idFactory(),
           slug: input.slug,
           title: input.title,
           state: input.state,

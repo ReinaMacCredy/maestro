@@ -2,7 +2,7 @@
 
 import type { EvidenceRow, EvidenceSummary } from "@/features/evidence/domain/types.js";
 import type { HandoffEnvelope } from "@/repo/handoff-emitter.port.js";
-import type { Task } from "@/types/task.js";
+import type { Task, TaskId } from "@/types/task.js";
 
 export interface TaskSummary {
   readonly id: string;
@@ -11,6 +11,7 @@ export interface TaskSummary {
   readonly state: string;
   readonly mission_id?: string;
   readonly assignee?: string;
+  readonly parent_id?: TaskId;
   readonly blocked_by_count: number;
 }
 
@@ -22,6 +23,7 @@ export function summarizeTask(task: Task): TaskSummary {
     state: task.state,
     ...(task.mission_id !== undefined ? { mission_id: task.mission_id } : {}),
     ...(task.assignee !== undefined ? { assignee: task.assignee } : {}),
+    ...(task.parent_id !== undefined ? { parent_id: task.parent_id } : {}),
     blocked_by_count: task.blocked_by.length,
   };
 }
