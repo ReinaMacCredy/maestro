@@ -9,6 +9,7 @@ import {
   InvalidTaskIdError,
   TaskNotFoundError,
 } from "@/repo/task-store.port.js";
+import { MaestroError } from "@/shared/errors.js";
 
 const FROZEN = new Date("2026-05-15T10:00:00.000Z");
 
@@ -44,8 +45,8 @@ describe("JsonlTaskStore.splitTask", () => {
       parentId: parent.id,
       parentPatch: { state: "blocked" },
       childInputs: [
-        { slug: "c1", title: "child 1", state: "ready" },
-        { slug: "c2", title: "child 2", state: "ready" },
+        { slug: "implement/c1", title: "child 1", state: "ready" },
+        { slug: "implement/c2", title: "child 2", state: "ready" },
       ],
     });
 
@@ -75,7 +76,7 @@ describe("JsonlTaskStore.splitTask", () => {
       await store.splitTask({
         parentId: "tsk-nope-nope",
         parentPatch: { state: "blocked" },
-        childInputs: [{ slug: "c1", title: "child 1", state: "ready" }],
+        childInputs: [{ slug: "implement/c1", title: "child 1", state: "ready" }],
       });
     } catch (e) {
       caught = e;
@@ -96,14 +97,14 @@ describe("JsonlTaskStore.splitTask", () => {
       title: "Parent",
       state: "draft",
     });
-    await store.create({ slug: "taken", title: "Taken", state: "draft" });
+    await store.create({ slug: "implement/taken", title: "Taken", state: "draft" });
 
     let caught: unknown;
     try {
       await store.splitTask({
         parentId: parent.id,
         parentPatch: { state: "blocked" },
-        childInputs: [{ slug: "taken", title: "Dup", state: "ready" }],
+        childInputs: [{ slug: "implement/taken", title: "Dup", state: "ready" }],
       });
     } catch (e) {
       caught = e;
@@ -113,7 +114,7 @@ describe("JsonlTaskStore.splitTask", () => {
     const persistedParent = await store.get(parent.id);
     expect(persistedParent?.state).toBe("draft");
     const all = await store.list();
-    expect(all.map((t) => t.slug).sort()).toEqual(["parent", "taken"]);
+    expect(all.map((t) => t.slug).sort()).toEqual(["implement/taken", "parent"]);
   });
 
   it("rolls back when two children share a slug in the same batch", async () => {
@@ -130,8 +131,8 @@ describe("JsonlTaskStore.splitTask", () => {
         parentId: parent.id,
         parentPatch: { state: "blocked" },
         childInputs: [
-          { slug: "dup", title: "First", state: "ready" },
-          { slug: "dup", title: "Second", state: "ready" },
+          { slug: "implement/dup", title: "First", state: "ready" },
+          { slug: "implement/dup", title: "Second", state: "ready" },
         ],
       });
     } catch (e) {
@@ -157,7 +158,7 @@ describe("JsonlTaskStore.splitTask", () => {
       parentId: parent.id,
       parentPatch: { state: "blocked" },
       childInputs: [
-        { id: "tsk-fixed-one", slug: "c1", title: "child 1", state: "ready" },
+        { id: "tsk-fixed-one", slug: "implement/c1", title: "child 1", state: "ready" },
       ],
     });
 
@@ -231,8 +232,8 @@ describe("JsonlTaskStore.splitTask", () => {
         parentId: parent.id,
         parentPatch: {},
         childInputs: [
-          { id: "tsk-dup-x", slug: "c1", title: "C1", state: "draft" },
-          { id: "tsk-dup-x", slug: "c2", title: "C2", state: "draft" },
+          { id: "tsk-dup-x", slug: "implement/c1", title: "C1", state: "draft" },
+          { id: "tsk-dup-x", slug: "implement/c2", title: "C2", state: "draft" },
         ],
       });
     } catch (e) {
@@ -242,6 +243,40 @@ describe("JsonlTaskStore.splitTask", () => {
     // Rollback: no children landed.
     const all = await store.list();
     expect(all.length).toBe(1);
+  });
+
+  it("rejects a child slug that exceeds SLUG_MAX_LENGTH", async () => {
+    // Parent at 58 chars: 10-char verb prefix + 48-char tail. The usecase
+    // appends '-N' to derive child slugs; for N >= 2 that's 60+ chars,
+    // which exceeds SLUG_MAX_LENGTH = 60.
+    const store = makeStore(root);
+    const parentSlug = "implement/a-very-long-tail-that-keeps-going-for-many-chars";
+    expect(parentSlug.length).toBe(58);
+    const parent = await store.create({
+      slug: parentSlug,
+      title: "Parent",
+      state: "draft",
+    });
+    const oversized = `${parentSlug}-10`; // 61 chars
+    expect(oversized.length).toBeGreaterThan(60);
+    let caught: unknown;
+    try {
+      await store.splitTask({
+        parentId: parent.id,
+        parentPatch: {},
+        childInputs: [
+          { slug: oversized, title: "Too long", state: "draft" },
+        ],
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(MaestroError);
+    expect((caught as Error).message).toMatch(/Slug exceeds .* cap/);
+    // Rollback: no child landed; parent unchanged.
+    const all = await store.list();
+    expect(all.length).toBe(1);
+    expect(all[0]?.slug).toBe(parentSlug);
   });
 
   it("preserves parent's own parent_id through splitTask (grandparent scenario)", async () => {
@@ -259,7 +294,7 @@ describe("JsonlTaskStore.splitTask", () => {
       parentId: parent.id,
       parentPatch: { state: "blocked" },
       childInputs: [
-        { slug: "c1", title: "C1", state: "draft" },
+        { slug: "implement/c1", title: "C1", state: "draft" },
       ],
     });
 

@@ -49,12 +49,18 @@ export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Pro
   assertTaskTransition(existing.state, "claimed");
   const claimed_at = (deps.clock ?? (() => new Date()))().toISOString();
 
-  // Heavy-mode auto-worktree (PR 34): if the spec frontmatter is mode=heavy
-  // and we have a worktree store, create the worktree before recording claim.
-  // Failures are swallowed onto the task (block_reason) so the claim still
-  // happens but the agent sees what went wrong.
+  // Heavy-mode auto-worktree (PR 34) + parent-worktree inheritance (task split):
+  // - If the task already carries a worktree_path (split child), reuse it.
+  // - Else if the spec is heavy-mode and a worktreeStore is wired, create
+  //   (or reuse) one. Failures are surfaced but don't block the claim.
+  // - skipWorktree=true overrides both branches AND clears any inherited
+  //   worktree_path so the agent gets a deterministic "no worktree" state.
   let worktreePath: string | undefined;
-  if (deps.worktreeStore && existing.spec_path && input.skipWorktree !== true) {
+  if (input.skipWorktree === true) {
+    // Honor explicit skip even for inherited paths.
+  } else if (existing.worktree_path !== undefined) {
+    worktreePath = existing.worktree_path;
+  } else if (deps.worktreeStore && existing.spec_path) {
     const heavy = await isHeavyModeSpec(existing.spec_path);
     if (heavy) {
       try {
@@ -82,7 +88,13 @@ export async function taskClaim(deps: TaskClaimDeps, input: TaskClaimInput): Pro
     state: "claimed",
     assignee: input.agentId,
     claimed_at,
-    ...(worktreePath ? { worktree_path: worktreePath } : {}),
+    // Explicitly clear when skipWorktree overrides an inherited path;
+    // otherwise only write the field when we actually have one.
+    ...(input.skipWorktree === true
+      ? { worktree_path: undefined }
+      : worktreePath !== undefined
+        ? { worktree_path: worktreePath }
+        : {}),
   });
   await emitTransitionEvidence(
     {

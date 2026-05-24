@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { ensureDir, writeText } from "@/shared/lib/fs.js";
+import { slugTooLong } from "@/shared/domain/task/domain/task-errors.js";
+import { SLUG_MAX_LENGTH } from "@/shared/domain/task/domain/task-slug.js";
 import type { Task, TaskId } from "../types/task.js";
 import { generateTaskId, TASK_ID_PATTERN } from "../types/task.js";
 import { isTaskState, type TaskState } from "../types/task-state.js";
@@ -78,6 +80,7 @@ export class JsonlTaskStore implements TaskStorePort {
         mission_id: input.mission_id,
         blocked_by: input.blocked_by ?? [],
         ...(input.parent_id !== undefined ? { parent_id: input.parent_id } : {}),
+        ...(input.worktree_path !== undefined ? { worktree_path: input.worktree_path } : {}),
         created_at: now,
         updated_at: now,
       };
@@ -118,6 +121,7 @@ export class JsonlTaskStore implements TaskStorePort {
           mission_id: input.mission_id,
           blocked_by: input.blocked_by ?? [],
           ...(input.parent_id !== undefined ? { parent_id: input.parent_id } : {}),
+          ...(input.worktree_path !== undefined ? { worktree_path: input.worktree_path } : {}),
           created_at: now,
           updated_at: now,
         };
@@ -152,6 +156,9 @@ export class JsonlTaskStore implements TaskStorePort {
           }
           inBatchIds.add(ci.id);
         }
+        if (ci.slug.length > SLUG_MAX_LENGTH) {
+          throw slugTooLong(ci.slug, SLUG_MAX_LENGTH);
+        }
         if (inBatchSlugs.has(ci.slug) || existingSlugs.has(ci.slug)) {
           throw new DuplicateSlugError(ci.slug);
         }
@@ -170,6 +177,7 @@ export class JsonlTaskStore implements TaskStorePort {
         state: ci.state,
         ...(ci.spec_path !== undefined ? { spec_path: ci.spec_path } : {}),
         ...(ci.mission_id !== undefined ? { mission_id: ci.mission_id } : {}),
+        ...(ci.worktree_path !== undefined ? { worktree_path: ci.worktree_path } : {}),
         blocked_by: ci.blocked_by ?? [],
         parent_id: input.parentId,
         created_at: now,

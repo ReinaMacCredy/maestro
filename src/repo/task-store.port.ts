@@ -8,6 +8,7 @@ export interface CreateTaskInput {
   readonly spec_path?: string;
   readonly mission_id?: string;
   readonly parent_id?: TaskId;
+  readonly worktree_path?: string;
   readonly blocked_by?: readonly string[];
   readonly id?: TaskId;
 }

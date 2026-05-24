@@ -262,4 +262,54 @@ describe("taskClaim worktree integration (PR 34)", () => {
     expect(claimed.state).toBe("claimed");
     expect(claimed.worktree_path).toBeUndefined();
   });
+
+  it("inherits parent worktree_path without calling worktreeStore.create", async () => {
+    // Split children pre-seed worktree_path from the parent. The claim path
+    // must reuse that value and never trigger a new git worktree.
+    const specPath = await writeSpec(root, "heavy");
+    const seeded: Task = { ...seedTask(specPath), worktree_path: "/tmp/wt/parent" };
+    const taskStore = makeTaskStore([seeded]);
+    const evidenceStore = makeEvidence();
+    const { store: worktreeStore, creates } = makeWorktreeStore();
+    const claimed = await taskClaim(
+      { taskStore, evidenceStore, worktreeStore },
+      { id: "tsk-claim" },
+    );
+    expect(creates.length).toBe(0);
+    expect(claimed.worktree_path).toBe("/tmp/wt/parent");
+    expect(claimed.state).toBe("claimed");
+  });
+
+  it("skipWorktree=true overrides inheritance", async () => {
+    // Operator explicitly opted out — clear the inherited path even though
+    // the parent had one.
+    const specPath = await writeSpec(root, "heavy");
+    const seeded: Task = { ...seedTask(specPath), worktree_path: "/tmp/wt/parent" };
+    const taskStore = makeTaskStore([seeded]);
+    const evidenceStore = makeEvidence();
+    const { store: worktreeStore, creates } = makeWorktreeStore();
+    const claimed = await taskClaim(
+      { taskStore, evidenceStore, worktreeStore },
+      { id: "tsk-claim", skipWorktree: true },
+    );
+    expect(creates.length).toBe(0);
+    expect(claimed.worktree_path).toBeUndefined();
+  });
+
+  it("preserves empty-string worktree_path without creating a new worktree", async () => {
+    // Empty string is a real (if pathological) value distinct from undefined.
+    // The branch chooser must use `!== undefined` so an explicit "" is
+    // preserved and worktreeStore.create is never called.
+    const specPath = await writeSpec(root, "heavy");
+    const seeded: Task = { ...seedTask(specPath), worktree_path: "" };
+    const taskStore = makeTaskStore([seeded]);
+    const evidenceStore = makeEvidence();
+    const { store: worktreeStore, creates } = makeWorktreeStore();
+    const claimed = await taskClaim(
+      { taskStore, evidenceStore, worktreeStore },
+      { id: "tsk-claim" },
+    );
+    expect(creates.length).toBe(0);
+    expect(claimed.worktree_path).toBe("");
+  });
 });

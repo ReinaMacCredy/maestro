@@ -22,7 +22,12 @@ export interface TryAdvanceMissionDeps {
 
 export interface TryAdvanceMissionInput {
   readonly mission_id?: string;
-  readonly trigger_task_verb: "task:claim" | "task:ship" | "task:abandon" | "task:block";
+  readonly trigger_task_verb:
+    | "task:claim"
+    | "task:ship"
+    | "task:abandon"
+    | "task:block"
+    | "task:split";
 }
 
 // Real chains top out at 2 (planned -> in-progress -> completed). 4 leaves
