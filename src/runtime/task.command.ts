@@ -11,7 +11,7 @@ import { stringifyForOutput } from "../shared/lib/output.js";
 import { taskFromSpec, SpecFileNotFoundError } from "../service/task-from-spec.usecase.js";
 import { taskClaim } from "../service/task-claim.usecase.js";
 import { taskBlock } from "../service/task-block.usecase.js";
-import { taskAbandon } from "../service/task-abandon.usecase.js";
+import { taskAbandon, TaskSplitCascadeBlockedError } from "../service/task-abandon.usecase.js";
 import { taskVerify, TaskVerifyReasonRequiredError } from "../service/task-verify.usecase.js";
 import { taskShip } from "../service/task-ship.usecase.js";
 import {
@@ -45,7 +45,8 @@ function reportError(verb: string, err: unknown): void {
     err instanceof MissionTerminalGuardError ||
     err instanceof TaskSplitInvalidStateError ||
     err instanceof TaskSplitNotClaimantError ||
-    err instanceof EmptyChildInputsError
+    err instanceof EmptyChildInputsError ||
+    err instanceof TaskSplitCascadeBlockedError
   ) {
     console.error(`maestro ${verb}: ${(err as Error).message}`);
     process.exitCode = 1;
@@ -245,7 +246,10 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     )
     .action(blockAction);
 
-  const abandonAction = async (id: string, flags: { reason?: string }): Promise<void> => {
+  const abandonAction = async (
+    id: string,
+    flags: { reason?: string; cascade?: boolean },
+  ): Promise<void> => {
     if (!flags.reason) {
       console.error("maestro task abandon: --reason is required");
       process.exitCode = 1;
@@ -261,7 +265,11 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
           missionStore: services.missionStore,
           observabilityStore: services.observabilityStore,
         },
-        { id, reason: flags.reason },
+        {
+          id: id as TaskId,
+          reason: flags.reason,
+          ...(flags.cascade === true ? { cascade: true } : {}),
+        },
       );
       console.log(`${abandoned.id} abandoned: ${flags.reason}`);
       await refreshNowMdFromServices(services);
@@ -274,12 +282,20 @@ export function registerTaskCommands(program: Command, opts: TaskCommandOptions)
     .command("abandon <id>")
     .description("Abandon a task with a reason (any non-terminal -> abandoned)")
     .requiredOption("--reason <text>", "human-readable explanation of abandonment")
+    .option(
+      "--cascade",
+      "also abandon non-terminal split-children (post-order); without this flag, non-terminal descendants block the abandon",
+    )
     .action(abandonAction);
 
   program
     .command("abandon <id>")
     .description("Hot-path alias for `task abandon`")
     .requiredOption("--reason <text>", "human-readable explanation of abandonment")
+    .option(
+      "--cascade",
+      "also abandon non-terminal split-children (post-order); without this flag, non-terminal descendants block the abandon",
+    )
     .action(abandonAction);
 
   const verifyAction = async function (

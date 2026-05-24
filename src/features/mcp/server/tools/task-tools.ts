@@ -4,6 +4,8 @@ import {
   taskBlock,
   taskShip,
   taskFromSpec,
+  taskAbandon,
+  TaskSplitCascadeBlockedError,
 } from "@/service/index.js";
 import {
   taskSplit,
@@ -22,6 +24,7 @@ import type { Task, TaskId } from "@/types/task.js";
 import { fail, fromMaestroError, ok, toCallToolResult, type CallToolResult } from "../errors.js";
 import { paginate } from "../pagination.js";
 import {
+  TaskAbandonInput,
   TaskBlockInput,
   TaskClaimInput,
   TaskFromSpecInput,
@@ -248,6 +251,54 @@ export function registerTaskTools(server: McpServer, deps: RegisterDeps): void {
         return toCallToolResult(ok({ task }));
       } catch (err) {
         return toCallToolResult(fromMaestroError(err, "TASK_BLOCK_FAILED"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "maestro_task_abandon",
+    {
+      title: "Abandon a maestro task",
+      description:
+        "Terminal-state transition (any non-terminal -> abandoned). Pass cascade=true to recursively abandon non-terminal split-children post-order before abandoning the target; otherwise non-terminal descendants block the call. Best-effort prune of blocked_by references in peer tasks (N writes, non-atomic). Error codes: TASK_NOT_FOUND, TASK_ABANDON_CASCADE_BLOCKED, TASK_ABANDON_FAILED.",
+      inputSchema: TaskAbandonInput,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (args): Promise<CallToolResult> => {
+      try {
+        const services = deps.getServices();
+        const task = await taskAbandon(
+          {
+            taskStore: services.taskStore,
+            evidenceStore: services.evidenceStore,
+            missionStore: services.missionStore,
+            observabilityStore: services.observabilityStore,
+          },
+          {
+            id: args.id as TaskId,
+            reason: args.reason,
+            ...(args.cascade === true ? { cascade: true } : {}),
+          },
+        );
+        await refreshNowMdFromServices(services);
+        return toCallToolResult(ok({ task }));
+      } catch (err) {
+        if (err instanceof TaskNotFoundError) {
+          return toCallToolResult(fail("TASK_NOT_FOUND", err.message));
+        }
+        if (err instanceof TaskSplitCascadeBlockedError) {
+          return toCallToolResult(
+            fail("TASK_ABANDON_CASCADE_BLOCKED", err.message, {
+              hints: ["Re-run with cascade=true to abandon descendants post-order."],
+            }),
+          );
+        }
+        return toCallToolResult(fromMaestroError(err, "TASK_ABANDON_FAILED"));
       }
     },
   );

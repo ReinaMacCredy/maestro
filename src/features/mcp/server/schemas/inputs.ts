@@ -159,6 +159,24 @@ export const TaskBlockInput = z
   })
   .strict();
 
+// Task abandon: terminal-state transition with optional cascade across
+// split-children (post-order recursive abandon of non-terminal descendants).
+export const TaskAbandonInput = z
+  .object({
+    id: taskId,
+    reason: z
+      .string()
+      .min(1)
+      .describe("Human-readable explanation of abandonment."),
+    cascade: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true, recursively abandons non-terminal split-children post-order before abandoning the target. When false/omitted, non-terminal descendants block the abandon (TASK_ABANDON_CASCADE_BLOCKED).",
+      ),
+  })
+  .strict();
+
 // Task split: bisect a claimed/doing parent into child tasks. Each child is
 // created in draft with parent.slug-N slug and parent_id back-reference; the
 // parent's blocked_by gains the new child ids.
