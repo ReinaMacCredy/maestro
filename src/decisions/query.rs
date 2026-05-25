@@ -22,7 +22,10 @@ pub fn decision_entries(decisions_dir: &Path) -> Result<Vec<DecisionEntry>> {
     {
         let entry = entry
             .with_context(|| format!("failed to read entry in {}", decisions_dir.display()))?;
-        if !entry.path().is_file() {
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+        if !file_type.is_file() || file_type.is_symlink() {
             continue;
         }
         let Some(file_name) = entry.file_name().to_str().map(str::to_string) else {
@@ -44,13 +47,13 @@ pub fn resolve_decision_path(decisions_dir: &Path, id: &str) -> Result<PathBuf> 
     validate_decision_lookup_id(id)?;
     if id.ends_with(".md") {
         let path = decisions_dir.join(id);
-        if path.is_file() {
+        if valid_decision_file(&path)? {
             return Ok(path);
         }
     }
 
     let direct = decisions_dir.join(format!("{id}.md"));
-    if direct.is_file() {
+    if valid_decision_file(&direct)? {
         return Ok(direct);
     }
 
@@ -67,11 +70,18 @@ pub fn resolve_decision_path(decisions_dir: &Path, id: &str) -> Result<PathBuf> 
     }
 }
 
+fn valid_decision_file(path: &Path) -> Result<bool> {
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return Ok(false);
+    };
+    Ok(metadata.is_file() && !metadata.file_type().is_symlink())
+}
+
 fn validate_decision_lookup_id(id: &str) -> Result<()> {
+    let mut components = Path::new(id).components();
     if id.is_empty()
-        || Path::new(id)
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
+        || !matches!(components.next(), Some(Component::Normal(_)))
+        || components.next().is_some()
     {
         bail!("invalid decision id: {id}");
     }

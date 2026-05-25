@@ -213,11 +213,52 @@ fn task_verify_ignores_bad_json_and_symlinked_run_dirs() {
         ),
     )
     .expect("invariant: events.jsonl should be writable");
+    let bad_run_dir = runs_dir.join("run-002");
+    fs::create_dir_all(&bad_run_dir).expect("invariant: bad run dir should be creatable");
+    fs::write(bad_run_dir.join("events.jsonl"), [0xff, b'\n'])
+        .expect("invariant: bad events should be writable");
     unix_fs::symlink(&runs_dir, runs_dir.join("loop"))
         .expect("invariant: symlink should be creatable on unix test host");
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);
     assert_success(&verify, &["task", "verify", "task-001"]);
+}
+
+#[test]
+fn task_verify_ignores_binary_proof_artifacts_when_text_proof_exists() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "documented operator handoff");
+    let proof_dir = task_dir(repo, "task-001").join("proof");
+    fs::create_dir_all(&proof_dir).expect("invariant: proof dir should be creatable");
+    fs::write(proof_dir.join("screenshot.png"), [0xff, 0xd8, 0xff])
+        .expect("invariant: binary proof should be writable");
+    fs::write(
+        proof_dir.join("handoff.txt"),
+        "claim: documented operator handoff\n",
+    )
+    .expect("invariant: text proof should be writable");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
+}
+
+#[test]
+fn task_verify_ignores_post_tool_use_messages_for_claim_matching() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    let run_dir = repo.join(".maestro/runs/run-001");
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        "{\"task_id\":\"task-001\",\"kind\":\"PostToolUse\",\"message\":\"implemented CSV export\"}\n",
+    )
+    .expect("invariant: events.jsonl should be writable");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("missing proof"));
 }
 
 #[test]

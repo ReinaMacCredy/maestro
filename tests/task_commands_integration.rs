@@ -1,6 +1,7 @@
 mod support;
 
 use std::fs;
+use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -339,6 +340,29 @@ fn task_lookup_rejects_path_traversal_ids() {
     let show = maestro(repo, &["task", "show", "../task-001"]);
     assert_failure(&show, &["task", "show", "../task-001"]);
     assert!(stderr(&show).contains("invalid task id"));
+}
+
+#[test]
+fn task_lookup_rejects_symlinked_task_dirs() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    assert_success(
+        &maestro(repo, &["task", "create", "First task"]),
+        &["task", "create", "First task"],
+    );
+    let task_path = task_yaml_path(repo, "task-001");
+    let original_dir = task_path
+        .parent()
+        .expect("invariant: task yaml should have parent")
+        .to_path_buf();
+    let external_dir = repo.join("external-task");
+    fs::rename(&original_dir, &external_dir).expect("invariant: task dir should be movable");
+    unix_fs::symlink(&external_dir, &original_dir)
+        .expect("invariant: symlinked task dir should be creatable");
+
+    let show = maestro(repo, &["task", "show", "task-001"]);
+    assert_failure(&show, &["task", "show", "task-001"]);
+    assert!(stderr(&show).contains("task not found"));
 }
 
 #[test]

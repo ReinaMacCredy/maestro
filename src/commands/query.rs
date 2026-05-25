@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::Read;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
@@ -85,11 +85,7 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
     let mut kinds = BTreeMap::<String, usize>::new();
 
     for path in &event_files {
-        let file =
-            fs::File::open(path).with_context(|| format!("failed to read {}", path.display()))?;
-        for (index, line) in BufReader::new(file).lines().enumerate() {
-            let line = line
-                .with_context(|| format!("failed to read {} line {}", path.display(), index + 1))?;
+        for line in event_lines(path)? {
             if line.trim().is_empty() {
                 continue;
             }
@@ -269,6 +265,19 @@ fn decision_title(path: &Path) -> Result<String> {
         .and_then(|heading| heading.split_once(": ").map(|(_, title)| title.to_string()))
         .unwrap_or_else(|| "<untitled>".to_string());
     Ok(title)
+}
+
+fn event_lines(path: &Path) -> Result<Vec<String>> {
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .with_context(|| format!("failed to read {}", path.display()))?
+        .read_to_end(&mut bytes)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    Ok(bytes
+        .split(|byte| *byte == b'\n')
+        .filter_map(|line| std::str::from_utf8(line).ok())
+        .map(str::to_string)
+        .collect())
 }
 
 fn event_kind(event: &Value) -> String {

@@ -1,6 +1,7 @@
 mod support;
 
 use std::fs;
+use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -183,6 +184,30 @@ fn decision_show_rejects_path_traversal_ids() {
         &["decision", "show", "../outside.md"],
     );
     assert!(stderr.contains("invalid decision id"));
+
+    let decisions_dir = temp_dir.path().join(".maestro/decisions");
+    let nested_dir = decisions_dir.join("nested");
+    fs::create_dir(&nested_dir).expect("invariant: nested decisions dir should be creatable");
+    fs::write(nested_dir.join("secret.md"), "secret\n")
+        .expect("invariant: nested decision file should be writable");
+    let nested_stderr = assert_failure(
+        maestro(&["decision", "show", "nested/secret.md"], temp_dir.path()),
+        &["decision", "show", "nested/secret.md"],
+    );
+    assert!(nested_stderr.contains("invalid decision id"));
+
+    fs::write(temp_dir.path().join("outside.md"), "secret\n")
+        .expect("invariant: outside file should be writable");
+    unix_fs::symlink(
+        temp_dir.path().join("outside.md"),
+        decisions_dir.join("decision-001-leak.md"),
+    )
+    .expect("invariant: decision symlink should be creatable");
+    let symlink_stderr = assert_failure(
+        maestro(&["decision", "show", "decision-001-leak"], temp_dir.path()),
+        &["decision", "show", "decision-001-leak"],
+    );
+    assert!(symlink_stderr.contains("not found"));
 }
 
 fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {

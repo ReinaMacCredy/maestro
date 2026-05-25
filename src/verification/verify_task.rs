@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::{BufRead, BufReader, ErrorKind};
+use std::io::{ErrorKind, Read};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -343,8 +343,11 @@ fn collect_task_artifact_text(
     }
 
     for path in text_files_under(&dir)? {
-        let text = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
+        let bytes =
+            fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
+        let Ok(text) = String::from_utf8(bytes) else {
+            continue;
+        };
         let claims = proof_text_claims(&text);
         evidence.push(EvidenceText {
             kind: dirname.to_string(),
@@ -367,13 +370,9 @@ fn collect_event_text(
     }
 
     for path in event_files_under(&runs_dir)? {
-        let file =
-            fs::File::open(&path).with_context(|| format!("failed to read {}", path.display()))?;
         let mut matched = Vec::new();
         let mut claims = Vec::new();
-        for (index, line) in BufReader::new(file).lines().enumerate() {
-            let line = line
-                .with_context(|| format!("failed to read {} line {}", path.display(), index + 1))?;
+        for line in event_lines(&path)? {
             if line.trim().is_empty() {
                 continue;
             }
@@ -400,7 +399,7 @@ fn collect_event_text(
 }
 
 fn is_proof_event(event: &Value) -> bool {
-    matches!(event_kind(event), Some("proof" | "Proof" | "PostToolUse"))
+    matches!(event_kind(event), Some("proof" | "Proof"))
 }
 
 fn event_kind(event: &Value) -> Option<&str> {
@@ -441,6 +440,19 @@ fn proof_text_claims(text: &str) -> Vec<String> {
 
 fn normalize_claim(claim: &str) -> String {
     claim.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn event_lines(path: &Path) -> Result<Vec<String>> {
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .with_context(|| format!("failed to read {}", path.display()))?
+        .read_to_end(&mut bytes)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    Ok(bytes
+        .split(|byte| *byte == b'\n')
+        .filter_map(|line| std::str::from_utf8(line).ok())
+        .map(str::to_string)
+        .collect())
 }
 
 fn text_files_under(dir: &Path) -> Result<Vec<PathBuf>> {

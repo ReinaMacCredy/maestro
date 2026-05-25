@@ -9,7 +9,7 @@ use crate::task::template::{load_task, TaskRecord, TaskSnapshot};
 pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
     validate_task_lookup_id(id)?;
     let direct = tasks_dir.join(id).join("task.yaml");
-    if direct.is_file() {
+    if valid_task_yaml_path(&direct)? {
         return Ok(direct);
     }
 
@@ -25,7 +25,7 @@ pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
         };
         if name.starts_with(&prefix) {
             let path = entry.path().join("task.yaml");
-            if path.is_file() {
+            if valid_task_yaml_path(&path)? {
                 matches.push(path);
             }
         }
@@ -37,6 +37,22 @@ pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
         1 => Ok(matches.remove(0)),
         _ => bail!("task id {id} is ambiguous"),
     }
+}
+
+fn valid_task_yaml_path(path: &Path) -> Result<bool> {
+    let Some(task_dir) = path.parent() else {
+        return Ok(false);
+    };
+    if fs::symlink_metadata(task_dir)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Ok(false);
+    }
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return Ok(false);
+    };
+    Ok(metadata.is_file() && !metadata.file_type().is_symlink())
 }
 
 fn validate_task_lookup_id(id: &str) -> Result<()> {

@@ -275,6 +275,10 @@ fn query_friction_ignores_bad_json_and_symlinked_run_dirs() {
         ),
     )
     .expect("invariant: events should be writable");
+    let bad_run_dir = runs_dir.join("run-002");
+    fs::create_dir_all(&bad_run_dir).expect("invariant: bad run dir should be creatable");
+    fs::write(bad_run_dir.join("events.jsonl"), [0xff, b'\n'])
+        .expect("invariant: bad events should be writable");
     unix_fs::symlink(&runs_dir, runs_dir.join("loop"))
         .expect("invariant: symlink should be creatable on unix test host");
 
