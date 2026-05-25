@@ -155,6 +155,18 @@ fn task_verify_fails_clearly_when_proof_is_missing_or_claims_do_not_match_events
 }
 
 #[test]
+fn task_verify_requires_exact_event_task_id_match() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    write_event(repo, "task-0010", "implemented CSV export");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("claim not backed by events/proof"));
+}
+
+#[test]
 fn query_proof_uses_persisted_verification_and_reports_stale_hashes() {
     let temp = setup_repo();
     let repo = temp.path();

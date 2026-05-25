@@ -304,6 +304,30 @@ fn show_uses_maestro_current_task_when_no_id_is_provided() {
 }
 
 #[test]
+fn task_id_prefix_lookup_rejects_ambiguous_matches() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    assert_success(
+        &maestro(repo, &["task", "create", "First task"]),
+        &["task", "create", "First task"],
+    );
+    let original = task_yaml_path(repo, "task-001");
+    let duplicate_dir = repo.join(".maestro/tasks/task-001-duplicate");
+    fs::create_dir(&duplicate_dir).expect("invariant: duplicate task dir should be creatable");
+    fs::copy(original, duplicate_dir.join("task.yaml"))
+        .expect("invariant: duplicate task yaml should be writable");
+
+    let show = maestro(repo, &["task", "show", "task-001"]);
+    assert!(
+        !show.status.success(),
+        "ambiguous task lookup unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&show.stdout),
+        String::from_utf8_lossy(&show.stderr)
+    );
+    assert!(String::from_utf8_lossy(&show.stderr).contains("ambiguous"));
+}
+
+#[test]
 fn list_supports_basic_output_and_requested_filters() {
     let temp = setup_repo();
     let repo = temp.path();

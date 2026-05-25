@@ -2,13 +2,13 @@
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{BufRead, BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::core::fs::read_to_string_if_exists;
@@ -16,6 +16,7 @@ use crate::core::git;
 use crate::core::paths::MaestroPaths;
 use crate::core::safe_write::write_string_atomic;
 use crate::core::schema::VERIFICATION_SCHEMA_VERSION;
+use crate::task::lookup::resolve_task_yaml_path;
 use crate::task::template::{
     load_task, save_task_with_snapshot, AcceptanceFile, StateHistoryEntry, TaskRecord,
     TaskSnapshot, TaskState, VerificationBinding,
@@ -347,11 +348,21 @@ fn collect_event_text(
     }
 
     for path in event_files_under(&runs_dir)? {
-        let raw = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
+        let file =
+            fs::File::open(&path).with_context(|| format!("failed to read {}", path.display()))?;
         let mut matched = Vec::new();
-        for line in raw.lines().filter(|line| line.contains(task_id)) {
-            matched.push(line.to_string());
+        for (index, line) in BufReader::new(file).lines().enumerate() {
+            let line = line
+                .with_context(|| format!("failed to read {} line {}", path.display(), index + 1))?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let event: Value = serde_json::from_str(&line).with_context(|| {
+                format!("failed to parse {} line {}", path.display(), index + 1)
+            })?;
+            if event.get("task_id").and_then(Value::as_str) == Some(task_id) {
+                matched.push(line);
+            }
         }
         if !matched.is_empty() {
             evidence.push(EvidenceText {
@@ -442,32 +453,6 @@ fn hash_file(path: &Path) -> Result<String> {
 fn hash_bytes(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
-    let direct = tasks_dir.join(id).join("task.yaml");
-    if direct.is_file() {
-        return Ok(direct);
-    }
-
-    let prefix = format!("{id}-");
-    for entry in fs::read_dir(tasks_dir)
-        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
-        let file_name = entry.file_name();
-        let Some(name) = file_name.to_str() else {
-            continue;
-        };
-        if name.starts_with(&prefix) {
-            let path = entry.path().join("task.yaml");
-            if path.is_file() {
-                return Ok(path);
-            }
-        }
-    }
-
-    bail!("task not found: {id}")
 }
 
 fn display_path(root: &Path, path: &Path) -> String {

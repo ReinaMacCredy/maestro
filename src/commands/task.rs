@@ -13,9 +13,10 @@ use crate::task::blockers::{add_blocker, has_unresolved_blockers, resolve_blocke
 use crate::task::display::{render_task, render_task_list};
 use crate::task::doctor::{check_blocker_graph, render_report};
 use crate::task::lifecycle::{transition, TransitionDetails};
+use crate::task::lookup::load_task_with_snapshot as load_task_artifacts_with_snapshot;
 use crate::task::template::{
     load_task, save_task_with_snapshot, write_task_artifacts, AcceptanceFile, BlockerKind,
-    BlockerRef, TaskRecord, TaskSnapshot, TaskState,
+    BlockerRef, TaskRecord, TaskState,
 };
 use crate::verification::verify_task::{verify_task, VerificationStatus};
 
@@ -367,40 +368,8 @@ fn load_all_tasks(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
 fn load_task_with_snapshot(
     paths: &MaestroPaths,
     id: &str,
-) -> Result<(TaskRecord, TaskSnapshot, PathBuf)> {
-    let task_path = resolve_task_yaml_path(&paths.tasks_dir(), id)?;
-    let task_dir = task_path
-        .parent()
-        .map(Path::to_path_buf)
-        .context("task path is missing parent directory")?;
-    let (task, snapshot) = load_task(&task_path)?;
-    Ok((task, snapshot, task_dir))
-}
-
-fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
-    let direct = tasks_dir.join(id).join("task.yaml");
-    if direct.is_file() {
-        return Ok(direct);
-    }
-
-    let prefix = format!("{id}-");
-    for entry in fs::read_dir(tasks_dir)
-        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
-        let file_name = entry.file_name();
-        let Some(name) = file_name.to_str() else {
-            continue;
-        };
-        if name.starts_with(&prefix) {
-            let path = entry.path().join("task.yaml");
-            if path.is_file() {
-                return Ok(path);
-            }
-        }
-    }
-
-    bail!("task not found: {id}")
+) -> Result<(TaskRecord, crate::task::template::TaskSnapshot, PathBuf)> {
+    load_task_artifacts_with_snapshot(&paths.tasks_dir(), id)
 }
 
 fn next_task_id(tasks_dir: &Path) -> Result<String> {

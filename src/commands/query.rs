@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{BufRead, BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
@@ -77,13 +77,15 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
     let mut kinds = BTreeMap::<String, usize>::new();
 
     for path in &event_files {
-        let raw = fs::read_to_string(path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        for (index, line) in raw.lines().enumerate() {
+        let file =
+            fs::File::open(path).with_context(|| format!("failed to read {}", path.display()))?;
+        for (index, line) in BufReader::new(file).lines().enumerate() {
+            let line = line
+                .with_context(|| format!("failed to read {} line {}", path.display(), index + 1))?;
             if line.trim().is_empty() {
                 continue;
             }
-            let event: Value = serde_json::from_str(line).with_context(|| {
+            let event: Value = serde_json::from_str(&line).with_context(|| {
                 format!("failed to parse {} line {}", path.display(), index + 1)
             })?;
             events += 1;
