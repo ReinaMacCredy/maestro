@@ -1,0 +1,158 @@
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::Path;
+
+use anyhow::{Context, Result};
+
+use crate::task::template::{load_task, BlockerKind, TaskRecord};
+
+/// Result of scanning task blocker references.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TaskDoctorReport {
+    pub tasks_scanned: usize,
+    pub errors: Vec<String>,
+}
+
+impl TaskDoctorReport {
+    /// Whether the scan found no task graph errors.
+    pub fn is_ok(&self) -> bool {
+        self.errors.is_empty()
+    }
+}
+
+/// Load all task records under `.maestro/tasks`.
+pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
+    if !tasks_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut tasks = Vec::new();
+    for entry in fs::read_dir(tasks_dir)
+        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
+        let task_path = entry.path().join("task.yaml");
+        if task_path.is_file() {
+            let (task, _) = load_task(&task_path)?;
+            tasks.push(task);
+        }
+    }
+    tasks.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(tasks)
+}
+
+/// Check unresolved task blocker references for missing nodes, self-blocks, and cycles.
+pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
+    let tasks = load_task_records(tasks_dir)?;
+    let by_id: HashMap<String, TaskRecord> = tasks
+        .iter()
+        .cloned()
+        .map(|task| (task.id.clone(), task))
+        .collect();
+    let mut edges: HashMap<String, Vec<String>> = HashMap::new();
+    let mut errors = Vec::new();
+
+    for task in &tasks {
+        for blocker in task
+            .blockers
+            .iter()
+            .filter(|blocker| blocker.resolved_at.is_none())
+        {
+            let Some(blocked_ref) = blocker.blocked_ref.as_ref() else {
+                continue;
+            };
+            if blocked_ref.kind != BlockerKind::Task {
+                continue;
+            }
+
+            if blocked_ref.id == task.id {
+                errors.push(format!(
+                    "{} has self-blocking blocker {}",
+                    task.id, blocker.id
+                ));
+            }
+            if !by_id.contains_key(&blocked_ref.id) {
+                errors.push(format!(
+                    "{} has blocker {} referencing missing task {}",
+                    task.id, blocker.id, blocked_ref.id
+                ));
+            }
+            edges
+                .entry(task.id.clone())
+                .or_default()
+                .push(blocked_ref.id.clone());
+        }
+    }
+
+    let mut reported_cycles = HashSet::new();
+    for task_id in edges.keys() {
+        let mut path = Vec::new();
+        visit_task_blockers(
+            task_id,
+            &edges,
+            &mut path,
+            &mut reported_cycles,
+            &mut errors,
+        );
+    }
+
+    errors.sort();
+    errors.dedup();
+    Ok(TaskDoctorReport {
+        tasks_scanned: tasks.len(),
+        errors,
+    })
+}
+
+/// Render a task doctor report for CLI output.
+pub fn render_report(report: &TaskDoctorReport) -> String {
+    if report.is_ok() {
+        return format!("task doctor: ok ({} tasks scanned)\n", report.tasks_scanned);
+    }
+
+    let mut out = String::new();
+    for error in &report.errors {
+        out.push_str(&format!("error: {error}\n"));
+    }
+    out.push_str(&format!(
+        "task doctor found {} error(s)\n",
+        report.errors.len()
+    ));
+    out
+}
+
+fn visit_task_blockers(
+    task_id: &str,
+    edges: &HashMap<String, Vec<String>>,
+    path: &mut Vec<String>,
+    reported_cycles: &mut HashSet<String>,
+    errors: &mut Vec<String>,
+) {
+    if let Some(position) = path.iter().position(|entry| entry == task_id) {
+        let mut cycle = path[position..].to_vec();
+        cycle.push(task_id.to_string());
+        let key = normalized_cycle_key(&cycle);
+        if reported_cycles.insert(key) {
+            errors.push(format!("blocker cycle detected: {}", cycle.join(" -> ")));
+        }
+        return;
+    }
+
+    path.push(task_id.to_string());
+    if let Some(blocked_by) = edges.get(task_id) {
+        for next in blocked_by {
+            visit_task_blockers(next, edges, path, reported_cycles, errors);
+        }
+    }
+    path.pop();
+}
+
+fn normalized_cycle_key(cycle: &[String]) -> String {
+    let mut nodes = cycle
+        .iter()
+        .take(cycle.len().saturating_sub(1))
+        .cloned()
+        .collect::<Vec<_>>();
+    nodes.sort();
+    nodes.join("|")
+}
