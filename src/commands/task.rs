@@ -21,7 +21,7 @@ use crate::task::template::{
 pub fn run(args: TaskArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
-    ensure_dir(&paths.tasks_dir())?;
+    ensure_dir(paths.tasks_dir())?;
     let actor = actor();
 
     match args.command {
