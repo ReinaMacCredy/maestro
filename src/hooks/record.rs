@@ -14,7 +14,7 @@ use crate::hooks::event::{
     is_accepted_event, normalized_event_type, run_dir_name, string_field, UNATTRIBUTED_SESSION,
 };
 
-pub fn record_stdin(paths: &MaestroPaths) -> Result<()> {
+pub(crate) fn record_stdin(paths: &MaestroPaths) -> Result<()> {
     let mut raw = String::new();
     io::stdin()
         .read_to_string(&mut raw)
@@ -22,7 +22,7 @@ pub fn record_stdin(paths: &MaestroPaths) -> Result<()> {
     record_payload(paths, &raw)
 }
 
-pub fn record_payload(paths: &MaestroPaths, raw: &str) -> Result<()> {
+fn record_payload(paths: &MaestroPaths, raw: &str) -> Result<()> {
     let payload: Value = serde_json::from_str(raw).context("failed to parse hook payload JSON")?;
     let Some(mut event) = normalize_event(&payload) else {
         return Ok(());

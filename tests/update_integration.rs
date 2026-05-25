@@ -100,6 +100,53 @@ fn simulated_download_failure_preserves_existing_binary_file() {
 }
 
 #[test]
+fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    let executable_path = temp_dir.path().join("bin").join("maestro");
+    fs::create_dir_all(
+        executable_path
+            .parent()
+            .expect("invariant: executable path should have a parent"),
+    )
+    .expect("invariant: executable parent should be creatable");
+    fs::write(&executable_path, "current binary\n")
+        .expect("invariant: current binary should be writable");
+    let skill = bundled_skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-task")
+        .expect("invariant: maestro-task should be bundled");
+    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    fs::create_dir_all(
+        skill_path
+            .parent()
+            .expect("invariant: skill path should have a parent"),
+    )
+    .expect("invariant: skill parent should be creatable");
+    fs::write(&skill_path, "edited bundled skill\n")
+        .expect("invariant: edited skill should be writable");
+
+    let error = run_update_with_seams(
+        &UpdateOptions {
+            paths: &paths,
+            executable_path: &executable_path,
+            backup_timestamp: "test",
+        },
+        &StagingFailingDownloader,
+        &NoopVerifier,
+        &NoopReplacer,
+    )
+    .expect_err("invariant: staging downloader should fail update");
+
+    assert!(error.to_string().contains("download failed after staging"));
+    assert_eq!(
+        fs::read_to_string(skill_path).expect("invariant: edited skill should remain readable"),
+        "edited bundled skill\n"
+    );
+    assert!(!paths.maestro_dir().join("update").exists());
+}
+
+#[test]
 fn simulated_replace_failure_preserves_existing_binary_file() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
@@ -210,6 +257,16 @@ struct FailingDownloader;
 impl UpdateDownloader for FailingDownloader {
     fn download(&self, _work_dir: &Path) -> Result<DownloadedBinary> {
         bail!("download failed")
+    }
+}
+
+struct StagingFailingDownloader;
+
+impl UpdateDownloader for StagingFailingDownloader {
+    fn download(&self, work_dir: &Path) -> Result<DownloadedBinary> {
+        fs::create_dir_all(work_dir)?;
+        fs::write(work_dir.join("partial"), "partial binary\n")?;
+        bail!("download failed after staging")
     }
 }
 

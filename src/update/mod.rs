@@ -183,14 +183,14 @@ pub fn run_update_with_seams(
     verifier: &dyn ChecksumVerifier,
     replacer: &dyn BinaryReplacer,
 ) -> Result<UpdateOutcome> {
+    let schema_mismatches = detect_schema_mismatches(options.paths)?;
+    let binary_status = update_binary(options, downloader, verifier, replacer)?;
     let extract_report = extract_bundled_skills(
         options.paths,
         ExtractMode::Update {
             backup_timestamp: options.backup_timestamp,
         },
     )?;
-    let schema_mismatches = detect_schema_mismatches(options.paths)?;
-    let binary_status = update_binary(options, downloader, verifier, replacer)?;
 
     Ok(UpdateOutcome {
         binary_status,
@@ -243,10 +243,14 @@ fn update_binary(
     replacer: &dyn BinaryReplacer,
 ) -> Result<BinaryStatus> {
     let work_dir = options.paths.maestro_dir().join("update");
-    let candidate = match downloader.download(&work_dir)? {
-        DownloadedBinary::Available(path) => path,
-        DownloadedBinary::Unavailable(reason) => {
+    let candidate = match downloader.download(&work_dir) {
+        Ok(DownloadedBinary::Available(path)) => path,
+        Ok(DownloadedBinary::Unavailable(reason)) => {
             return Ok(BinaryStatus::Skipped { reason });
+        }
+        Err(error) => {
+            cleanup_work_dir(&work_dir);
+            return Err(error);
         }
     };
 
@@ -265,6 +269,10 @@ fn cleanup_candidate(work_dir: &Path, candidate: &Path) {
         let _ = fs::remove_file(candidate);
         let _ = fs::remove_dir(work_dir);
     }
+}
+
+fn cleanup_work_dir(work_dir: &Path) {
+    let _ = fs::remove_dir_all(work_dir);
 }
 
 fn read_schema_version(path: &Path) -> Result<String> {
