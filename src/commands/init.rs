@@ -8,6 +8,7 @@ use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::core::safe_write::write_string_atomic;
 use crate::harness::schema::HarnessConfig;
 use crate::harness::templates::{backlog_yaml, features_yaml, harness_yml, HARNESS_MD};
+use crate::skills::extract::{extract_bundled_skills, ExtractMode};
 
 use super::InitArgs;
 
@@ -34,6 +35,7 @@ pub fn run(args: InitArgs) -> Result<()> {
     for file in plan.files {
         write_init_file(&paths, file, &args, backup_timestamp.as_deref())?;
     }
+    extract_bundled_skills(&paths, extract_mode(&args, backup_timestamp.as_deref())?)?;
 
     Ok(())
 }
@@ -117,4 +119,17 @@ fn write_init_file(
 
     write_string_atomic(&file.path, &file.contents)
         .with_context(|| format!("failed to write init file {}", file.path.display()))
+}
+
+fn extract_mode<'a>(args: &InitArgs, backup_timestamp: Option<&'a str>) -> Result<ExtractMode<'a>> {
+    if args.merge {
+        return Ok(ExtractMode::Merge);
+    }
+    if args.force {
+        let backup_timestamp =
+            backup_timestamp.context("force init must have a backup timestamp")?;
+        return Ok(ExtractMode::Force { backup_timestamp });
+    }
+
+    Ok(ExtractMode::Create)
 }

@@ -5,6 +5,13 @@ use std::process::Command;
 
 use support::TestTempDir;
 
+const BUNDLED_SKILLS: [&str; 4] = [
+    "maestro-task",
+    "maestro-setup",
+    "maestro-verify",
+    "maestro-design",
+];
+
 fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(args)
@@ -66,6 +73,19 @@ fn init_creates_minimal_artifact_tree() {
         .is_file());
     assert!(temp_dir.path().join(".maestro/decisions").is_dir());
     assert!(temp_dir.path().join(".maestro/skills").is_dir());
+    for skill in BUNDLED_SKILLS {
+        assert!(temp_dir
+            .path()
+            .join(".maestro/skills")
+            .join(skill)
+            .join("SKILL.md")
+            .is_file());
+    }
+    assert!(!temp_dir.path().join(".maestro/skill-index.yaml").exists());
+    assert!(!temp_dir
+        .path()
+        .join(".maestro/skills/skill-index.yaml")
+        .exists());
 
     let harness_yml = fs::read_to_string(temp_dir.path().join(".maestro/harness/harness.yml"))
         .expect("invariant: harness.yml should be readable");

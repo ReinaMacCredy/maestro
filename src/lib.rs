@@ -7,5 +7,6 @@ pub mod harness;
 pub mod hooks;
 pub mod install;
 pub mod shell;
+pub mod skills;
 pub mod task;
 pub mod verification;
