@@ -1,0 +1,16 @@
+[package]
+name = "maestro"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "maestro"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.5", features = ["derive"] }
+git2 = "0.20"
+serde_json = "1"
+similar = "2"
+thiserror = "2"
