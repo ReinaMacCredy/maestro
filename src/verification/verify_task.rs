@@ -21,6 +21,7 @@ use crate::task::template::{
     load_task, save_task_with_snapshot, AcceptanceFile, StateHistoryEntry, TaskRecord,
     TaskSnapshot, TaskState, VerificationBinding,
 };
+use crate::verification::events::event_files_under;
 use crate::verification::stale::{FreshnessInputs, StoredFreshness};
 
 /// Result status written to `verification.json`.
@@ -275,9 +276,15 @@ fn check_claims(claims: &[String], evidence: &[EvidenceText]) -> Vec<ClaimCheck>
     claims
         .iter()
         .map(|claim| {
+            let normalized_claim = normalize_claim(claim);
             let source = evidence
                 .iter()
-                .find(|source| source.text.contains(claim))
+                .find(|source| {
+                    source
+                        .claims
+                        .iter()
+                        .any(|candidate| normalize_claim(candidate) == normalized_claim)
+                })
                 .map(|source| source.path.display().to_string());
             ClaimCheck {
                 claim: claim.clone(),
@@ -310,6 +317,7 @@ struct EvidenceText {
     kind: String,
     path: PathBuf,
     text: String,
+    claims: Vec<String>,
 }
 
 fn collect_evidence(
@@ -337,10 +345,12 @@ fn collect_task_artifact_text(
     for path in text_files_under(&dir)? {
         let text = fs::read_to_string(&path)
             .with_context(|| format!("failed to read {}", path.display()))?;
+        let claims = proof_text_claims(&text);
         evidence.push(EvidenceText {
             kind: dirname.to_string(),
             path,
             text,
+            claims,
         });
     }
     Ok(())
@@ -360,6 +370,7 @@ fn collect_event_text(
         let file =
             fs::File::open(&path).with_context(|| format!("failed to read {}", path.display()))?;
         let mut matched = Vec::new();
+        let mut claims = Vec::new();
         for (index, line) in BufReader::new(file).lines().enumerate() {
             let line = line
                 .with_context(|| format!("failed to read {} line {}", path.display(), index + 1))?;
@@ -370,6 +381,7 @@ fn collect_event_text(
                 format!("failed to parse {} line {}", path.display(), index + 1)
             })?;
             if event.get("task_id").and_then(Value::as_str) == Some(task_id) {
+                claims.extend(event_claims(&event));
                 matched.push(line);
             }
         }
@@ -378,23 +390,48 @@ fn collect_event_text(
                 kind: "event".to_string(),
                 path,
                 text: matched.join("\n"),
+                claims,
             });
         }
     }
     Ok(())
 }
 
+fn event_claims(event: &Value) -> Vec<String> {
+    let mut claims = Vec::new();
+    if let Some(claim) = event.get("claim").and_then(Value::as_str) {
+        claims.push(claim.to_string());
+    }
+    if let Some(message) = event.get("message").and_then(Value::as_str) {
+        claims.push(message.to_string());
+    }
+    if let Some(values) = event.get("claims").and_then(Value::as_array) {
+        claims.extend(values.iter().filter_map(Value::as_str).map(str::to_string));
+    }
+    claims
+}
+
+fn proof_text_claims(text: &str) -> Vec<String> {
+    text.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            trimmed
+                .strip_prefix("claim:")
+                .or_else(|| trimmed.strip_prefix("Claim:"))
+                .map(str::trim)
+                .filter(|claim| !claim.is_empty())
+                .map(str::to_string)
+        })
+        .collect()
+}
+
+fn normalize_claim(claim: &str) -> String {
+    claim.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn text_files_under(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     collect_files(dir, &mut files)?;
-    files.sort();
-    Ok(files)
-}
-
-fn event_files_under(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    collect_files(dir, &mut files)?;
-    files.retain(|path| path.file_name().and_then(|name| name.to_str()) == Some("events.jsonl"));
     files.sort();
     Ok(files)
 }

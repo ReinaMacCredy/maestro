@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::{BufRead, BufReader, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::io::{BufRead, BufReader};
+use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
@@ -10,11 +10,13 @@ use crate::commands::{QueryArgs, QueryCommand};
 use crate::core::git;
 use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::core::schema::{BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION};
+use crate::decisions::query::{decision_entries, decision_id};
 use crate::feature::schema::FeatureRegistry;
 use crate::harness::schema::BacklogConfig;
 use crate::task::blockers::has_unresolved_blockers;
 use crate::task::doctor::load_task_entries;
 use crate::task::template::{TaskRecord, TaskState};
+use crate::verification::events::event_files_under;
 use crate::verification::proof_status::{proof_status, render_proof_status};
 use crate::verification::stale::stale_reasons;
 use crate::verification::verify_task::{
@@ -131,11 +133,14 @@ fn query_decisions(paths: &MaestroPaths) -> Result<()> {
     }
 
     println!("ID\tFILE\tTITLE");
-    for file_name in decisions {
-        let path = paths.decisions_dir().join(&file_name);
-        let title = decision_title(&path)?;
-        let id = file_name.trim_end_matches(".md");
-        println!("{id}\t{file_name}\t{title}");
+    for entry in decisions {
+        let title = decision_title(&entry.path)?;
+        println!(
+            "{}\t{}\t{}",
+            decision_id(&entry.file_name),
+            entry.file_name,
+            title
+        );
     }
     Ok(())
 }
@@ -255,31 +260,6 @@ fn task_state_label(state: &TaskState, blocked: bool) -> &'static str {
     }
 }
 
-fn decision_entries(decisions_dir: &Path) -> Result<Vec<String>> {
-    if !decisions_dir.is_dir() {
-        return Ok(Vec::new());
-    }
-
-    let mut entries = Vec::new();
-    for entry in fs::read_dir(decisions_dir)
-        .with_context(|| format!("failed to read {}", decisions_dir.display()))?
-    {
-        let entry = entry
-            .with_context(|| format!("failed to read entry in {}", decisions_dir.display()))?;
-        if !entry.path().is_file() {
-            continue;
-        }
-        let Some(file_name) = entry.file_name().to_str().map(str::to_string) else {
-            continue;
-        };
-        if file_name.starts_with("decision-") && file_name.ends_with(".md") {
-            entries.push(file_name);
-        }
-    }
-    entries.sort();
-    Ok(entries)
-}
-
 fn decision_title(path: &Path) -> Result<String> {
     let raw =
         fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
@@ -289,33 +269,6 @@ fn decision_title(path: &Path) -> Result<String> {
         .and_then(|heading| heading.split_once(": ").map(|(_, title)| title.to_string()))
         .unwrap_or_else(|| "<untitled>".to_string());
     Ok(title)
-}
-
-fn event_files_under(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    collect_files(dir, &mut files)?;
-    files.retain(|path| path.file_name().and_then(|name| name.to_str()) == Some("events.jsonl"));
-    files.sort();
-    Ok(files)
-}
-
-fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-    match fs::read_dir(dir) {
-        Ok(entries) => {
-            for entry in entries {
-                let entry = entry.with_context(|| format!("failed to list {}", dir.display()))?;
-                let path = entry.path();
-                if path.is_dir() {
-                    collect_files(&path, files)?;
-                } else if path.is_file() {
-                    files.push(path);
-                }
-            }
-            Ok(())
-        }
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("failed to read {}", dir.display())),
-    }
 }
 
 fn event_kind(event: &Value) -> String {

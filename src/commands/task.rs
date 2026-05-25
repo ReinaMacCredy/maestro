@@ -11,12 +11,12 @@ use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::core::safe_write::write_string_atomic;
 use crate::task::blockers::{add_blocker, has_unresolved_blockers, resolve_blocker};
 use crate::task::display::{render_task, render_task_list};
-use crate::task::doctor::{check_blocker_graph, render_report};
+use crate::task::doctor::{check_blocker_graph, load_task_records, render_report};
 use crate::task::lifecycle::{transition, TransitionDetails};
 use crate::task::lookup::load_task_with_snapshot as load_task_artifacts_with_snapshot;
 use crate::task::template::{
-    load_task, save_task_with_snapshot, write_task_artifacts, AcceptanceFile, BlockerKind,
-    BlockerRef, TaskRecord, TaskState,
+    save_task_with_snapshot, write_task_artifacts, AcceptanceFile, BlockerKind, BlockerRef,
+    TaskRecord, TaskState,
 };
 use crate::verification::verify_task::{verify_task, VerificationStatus};
 
@@ -347,22 +347,7 @@ fn lock_acceptance(path: PathBuf, task_id: &str, actor: &str, locked_at: &str) -
 }
 
 fn load_all_tasks(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
-    if !tasks_dir.is_dir() {
-        return Ok(Vec::new());
-    }
-
-    let mut tasks = Vec::new();
-    for entry in fs::read_dir(tasks_dir)
-        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
-        let task_path = entry.path().join("task.yaml");
-        if task_path.is_file() {
-            let (task, _) = load_task(&task_path)?;
-            tasks.push(task);
-        }
-    }
-    Ok(tasks)
+    load_task_records(tasks_dir)
 }
 
 fn load_task_with_snapshot(

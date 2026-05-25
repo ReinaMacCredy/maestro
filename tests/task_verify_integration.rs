@@ -167,6 +167,18 @@ fn task_verify_requires_exact_event_task_id_match() {
 }
 
 #[test]
+fn task_verify_requires_exact_claim_match() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    write_event(repo, "task-001", "not implemented CSV export");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("claim not backed by events/proof"));
+}
+
+#[test]
 fn query_proof_uses_persisted_verification_and_reports_stale_hashes() {
     let temp = setup_repo();
     let repo = temp.path();
@@ -207,7 +219,7 @@ fn task_local_proof_artifacts_can_satisfy_completion_claims() {
     fs::create_dir_all(&proof_dir).expect("invariant: proof dir should be creatable");
     fs::write(
         proof_dir.join("handoff.txt"),
-        "manual proof: documented operator handoff\n",
+        "claim: documented operator handoff\n",
     )
     .expect("invariant: proof file should be writable");
 
