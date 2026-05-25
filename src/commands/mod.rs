@@ -1,9 +1,16 @@
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+pub mod decision;
+pub mod doctor;
+pub mod feature;
 pub mod init;
 pub mod install;
+pub mod query;
+pub mod shell_init;
+pub mod task;
 pub mod uninstall;
+pub mod verify;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -252,13 +259,13 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Install(args) => install::run(args),
         RootCommand::Update => placeholder("update", ()),
         RootCommand::Uninstall(args) => uninstall::run(args),
-        RootCommand::Doctor => placeholder("doctor", ()),
-        RootCommand::ShellInit => placeholder("shell-init", ()),
-        RootCommand::Task(args) => placeholder("task", args),
-        RootCommand::Feature(args) => placeholder("feature", args),
-        RootCommand::Decision(args) => placeholder("decision", args),
+        RootCommand::Doctor => doctor::run(),
+        RootCommand::ShellInit => shell_init::run(),
+        RootCommand::Task(args) => task::run(args),
+        RootCommand::Feature(args) => feature::run(args),
+        RootCommand::Decision(args) => decision::run(args),
         RootCommand::Improve(args) => placeholder("improve", args),
-        RootCommand::Query(args) => placeholder("query", args),
+        RootCommand::Query(args) => query::run(args),
         RootCommand::Metrics(args) => placeholder("metrics", args),
         RootCommand::Mcp(args) => placeholder("mcp", args),
         RootCommand::Hook(args) => placeholder("hook", args),
