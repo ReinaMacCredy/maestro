@@ -187,6 +187,10 @@ fn doctor_fails_on_blocker_cycles() {
     let doctor = maestro(repo, &["doctor"]);
     assert_failure(&doctor, &["doctor"]);
     assert!(stderr(&doctor).contains("blocker cycle detected"));
+
+    let task_doctor = maestro(repo, &["task", "doctor"]);
+    assert_failure(&task_doctor, &["task", "doctor"]);
+    assert!(stderr(&task_doctor).contains("blocker cycle detected"));
 }
 
 #[test]
@@ -236,12 +240,45 @@ fn query_views_scan_current_artifacts_without_writing_cache_files() {
     assert_eq!(before, after);
     assert!(!repo.join(".maestro/cache").exists());
     assert!(!repo.join(".maestro/tmp").exists());
+
+    fs::write(
+        task_dir(repo, "task-001").join("acceptance.yaml"),
+        concat!(
+            "schema_version: maestro.acceptance.v1\n",
+            "task: task-001\n",
+            "checks:\n",
+            "- changed query matrix proof binding\n",
+            "locked_by: maestro\n",
+            "locked_at: now\n"
+        ),
+    )
+    .expect("invariant: acceptance should be writable for stale proof setup");
+    let before_stale = maestro_files(repo);
+    let stale_matrix = run_success(repo, &["query", "matrix"]);
+    assert!(stale_matrix.contains("stale"));
+    assert_eq!(before_stale, maestro_files(repo));
 }
 
 fn maestro_files(repo: &Path) -> BTreeSet<PathBuf> {
     let mut files = BTreeSet::new();
     collect_files(&repo.join(".maestro"), repo, &mut files);
     files
+}
+
+fn task_dir(repo: &Path, id: &str) -> PathBuf {
+    let prefix = format!("{id}-");
+    for entry in
+        fs::read_dir(repo.join(".maestro/tasks")).expect("invariant: tasks dir should be readable")
+    {
+        let entry = entry.expect("invariant: task entry should be readable");
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        if name.starts_with(&prefix) {
+            return entry.path();
+        }
+    }
+    panic!("invariant: task dir should exist for {id}");
 }
 
 fn collect_files(dir: &Path, repo: &Path, files: &mut BTreeSet<PathBuf>) {

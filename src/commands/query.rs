@@ -14,8 +14,7 @@ use crate::harness::schema::BacklogConfig;
 use crate::task::blockers::has_unresolved_blockers;
 use crate::task::doctor::load_task_records;
 use crate::task::template::{TaskRecord, TaskState};
-use crate::verification::proof_status::{proof_status, render_proof_status};
-use crate::verification::verify_task::{read_report, VerificationStatus};
+use crate::verification::proof_status::{proof_status, render_proof_status, ProofStatusKind};
 
 /// Execute `maestro query`.
 pub fn run(args: QueryArgs) -> Result<()> {
@@ -165,7 +164,7 @@ fn matrix_row(paths: &MaestroPaths, task: &TaskRecord) -> Result<MatrixRow> {
             .unwrap_or_else(|| "<none>".to_string()),
         id: task.id.clone(),
         state: task_state_label(&task.state, has_unresolved_blockers(task)),
-        proof: proof_label(&task_dir(paths, task)?)?,
+        proof: proof_label(paths, &task.id)?,
         title: task.title.clone(),
     })
 }
@@ -206,32 +205,12 @@ fn load_backlog(path: &Path) -> Result<BacklogConfig> {
     Ok(backlog)
 }
 
-fn task_dir(paths: &MaestroPaths, task: &TaskRecord) -> Result<PathBuf> {
-    let direct = paths.tasks_dir().join(task.directory_name());
-    if direct.join("task.yaml").is_file() {
-        return Ok(direct);
-    }
-    let prefix = format!("{}-", task.id);
-    for entry in fs::read_dir(paths.tasks_dir())
-        .with_context(|| format!("failed to read {}", paths.tasks_dir().display()))?
-    {
-        let entry =
-            entry.with_context(|| format!("failed to list {}", paths.tasks_dir().display()))?;
-        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
-            continue;
-        };
-        if name.starts_with(&prefix) && entry.path().join("task.yaml").is_file() {
-            return Ok(entry.path());
-        }
-    }
-    bail!("task directory not found for {}", task.id)
-}
-
-fn proof_label(task_dir: &Path) -> Result<&'static str> {
-    match read_report(task_dir)? {
-        Some(report) if report.status == VerificationStatus::Passed => Ok("accepted"),
-        Some(_) => Ok("failed"),
-        None => Ok("missing"),
+fn proof_label(paths: &MaestroPaths, task_id: &str) -> Result<&'static str> {
+    match proof_status(paths, task_id)?.kind {
+        ProofStatusKind::Accepted => Ok("accepted"),
+        ProofStatusKind::Failed => Ok("failed"),
+        ProofStatusKind::Missing => Ok("missing"),
+        ProofStatusKind::Stale => Ok("stale"),
     }
 }
 

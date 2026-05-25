@@ -11,6 +11,7 @@ use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::core::safe_write::write_string_atomic;
 use crate::task::blockers::{add_blocker, has_unresolved_blockers, resolve_blocker};
 use crate::task::display::{render_task, render_task_list};
+use crate::task::doctor::{check_blocker_graph, render_report};
 use crate::task::lifecycle::{transition, TransitionDetails};
 use crate::task::template::{
     load_task, save_task_with_snapshot, write_task_artifacts, AcceptanceFile, BlockerKind,
@@ -312,46 +313,17 @@ fn list_tasks(
 }
 
 fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {
-    let tasks = load_all_tasks(&paths.tasks_dir())?;
-    let by_id: HashMap<String, TaskRecord> = tasks
-        .iter()
-        .cloned()
-        .map(|task| (task.id.clone(), task))
-        .collect();
-    let mut errors = Vec::new();
-
-    for task in &tasks {
-        for blocker in task
-            .blockers
-            .iter()
-            .filter(|blocker| blocker.resolved_at.is_none())
-        {
-            if let Some(blocked_ref) = blocker.blocked_ref.as_ref() {
-                if blocked_ref.kind == BlockerKind::Task && blocked_ref.id == task.id {
-                    errors.push(format!(
-                        "{} has self-blocking blocker {}",
-                        task.id, blocker.id
-                    ));
-                }
-                if blocked_ref.kind == BlockerKind::Task && !by_id.contains_key(&blocked_ref.id) {
-                    errors.push(format!(
-                        "{} has blocker {} referencing missing task {}",
-                        task.id, blocker.id, blocked_ref.id
-                    ));
-                }
-            }
-        }
-    }
-
-    if errors.is_empty() {
-        println!("task doctor: ok ({} tasks scanned)", tasks.len());
+    let report = check_blocker_graph(&paths.tasks_dir())?;
+    let rendered = render_report(&report);
+    if report.is_ok() {
+        print!("{rendered}");
         return Ok(());
     }
 
-    for error in &errors {
-        eprintln!("error: {error}");
+    for line in rendered.lines() {
+        eprintln!("{line}");
     }
-    bail!("task doctor found {} error(s)", errors.len())
+    bail!("task doctor found {} error(s)", report.errors.len())
 }
 
 fn lock_acceptance(path: PathBuf, task_id: &str, actor: &str, locked_at: &str) -> Result<()> {
