@@ -61,6 +61,11 @@ fn valid_event_writes_schema_and_event_type_for_session() {
     assert_eq!(events[0]["schema_version"], "maestro.event.v1");
     assert_eq!(events[0]["event_type"], "SessionStart");
     assert_eq!(events[0]["session_id"], "session-123");
+    let timestamp = events[0]["ts"]
+        .as_str()
+        .expect("invariant: normalized hook event should include a timestamp");
+    assert!(timestamp.contains('T'));
+    assert!(timestamp.ends_with('Z'));
 }
 
 #[test]
