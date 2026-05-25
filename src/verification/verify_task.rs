@@ -156,13 +156,22 @@ pub fn read_report(task_dir: &Path) -> Result<Option<VerificationReport>> {
 
 /// Compute current proof freshness inputs for a loaded task.
 pub fn freshness_inputs(paths: &MaestroPaths, loaded: &LoadedTask) -> Result<FreshnessInputs> {
-    let acceptance = load_acceptance(&loaded.task_dir)?;
     let commit = git::head(paths.repo_root()).unwrap_or(None);
+    freshness_inputs_for_task(&loaded.task, &loaded.task_dir, commit)
+}
+
+/// Compute current proof freshness inputs for a task artifact directory.
+pub fn freshness_inputs_for_task(
+    task: &TaskRecord,
+    task_dir: &Path,
+    commit: Option<String>,
+) -> Result<FreshnessInputs> {
+    let acceptance = load_acceptance(task_dir)?;
 
     Ok(FreshnessInputs {
         commit,
-        task_contract_hash: task_contract_hash(&loaded.task),
-        acceptance_hash: hash_file(&loaded.task_dir.join("acceptance.yaml"))?,
+        task_contract_hash: task_contract_hash(task),
+        acceptance_hash: hash_file(&task_dir.join("acceptance.yaml"))?,
         checks_hash: checks_hash(&acceptance),
     })
 }

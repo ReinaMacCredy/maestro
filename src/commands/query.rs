@@ -7,14 +7,19 @@ use anyhow::{bail, Context, Result};
 use serde_json::Value;
 
 use crate::commands::{QueryArgs, QueryCommand};
+use crate::core::git;
 use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::core::schema::{BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION};
 use crate::feature::schema::FeatureRegistry;
 use crate::harness::schema::BacklogConfig;
 use crate::task::blockers::has_unresolved_blockers;
-use crate::task::doctor::load_task_records;
+use crate::task::doctor::load_task_entries;
 use crate::task::template::{TaskRecord, TaskState};
-use crate::verification::proof_status::{proof_status, render_proof_status, ProofStatusKind};
+use crate::verification::proof_status::{proof_status, render_proof_status};
+use crate::verification::stale::stale_reasons;
+use crate::verification::verify_task::{
+    freshness_inputs_for_task, read_report, VerificationStatus,
+};
 
 /// Execute `maestro query`.
 pub fn run(args: QueryArgs) -> Result<()> {
@@ -36,10 +41,11 @@ pub fn run(args: QueryArgs) -> Result<()> {
 
 fn query_matrix(paths: &MaestroPaths) -> Result<()> {
     let registry = load_feature_registry(paths)?;
-    let tasks = load_task_records(&paths.tasks_dir())?;
-    let mut task_rows = tasks
+    let current_commit = git::head(paths.repo_root()).unwrap_or(None);
+    let entries = load_task_entries(&paths.tasks_dir())?;
+    let mut task_rows = entries
         .iter()
-        .map(|task| matrix_row(paths, task))
+        .map(|entry| matrix_row(&entry.task, &entry.task_dir, current_commit.clone()))
         .collect::<Result<Vec<_>>>()?;
     task_rows.sort_by(|left, right| {
         left.feature_id
@@ -158,7 +164,11 @@ struct MatrixRow {
     title: String,
 }
 
-fn matrix_row(paths: &MaestroPaths, task: &TaskRecord) -> Result<MatrixRow> {
+fn matrix_row(
+    task: &TaskRecord,
+    task_dir: &Path,
+    current_commit: Option<String>,
+) -> Result<MatrixRow> {
     Ok(MatrixRow {
         feature_id: task
             .feature_id
@@ -166,7 +176,7 @@ fn matrix_row(paths: &MaestroPaths, task: &TaskRecord) -> Result<MatrixRow> {
             .unwrap_or_else(|| "<none>".to_string()),
         id: task.id.clone(),
         state: task_state_label(&task.state, has_unresolved_blockers(task)),
-        proof: proof_label(paths, &task.id)?,
+        proof: proof_label(task, task_dir, current_commit)?,
         title: task.title.clone(),
     })
 }
@@ -207,12 +217,24 @@ fn load_backlog(path: &Path) -> Result<BacklogConfig> {
     Ok(backlog)
 }
 
-fn proof_label(paths: &MaestroPaths, task_id: &str) -> Result<&'static str> {
-    match proof_status(paths, task_id)?.kind {
-        ProofStatusKind::Accepted => Ok("accepted"),
-        ProofStatusKind::Failed => Ok("failed"),
-        ProofStatusKind::Missing => Ok("missing"),
-        ProofStatusKind::Stale => Ok("stale"),
+fn proof_label(
+    task: &TaskRecord,
+    task_dir: &Path,
+    current_commit: Option<String>,
+) -> Result<&'static str> {
+    let Some(report) = read_report(task_dir)? else {
+        return Ok("missing");
+    };
+    match report.status {
+        VerificationStatus::Failed => Ok("failed"),
+        VerificationStatus::Passed => {
+            let current = freshness_inputs_for_task(task, task_dir, current_commit)?;
+            if stale_reasons(&current, &report.freshness).is_empty() {
+                Ok("accepted")
+            } else {
+                Ok("stale")
+            }
+        }
     }
 }
 

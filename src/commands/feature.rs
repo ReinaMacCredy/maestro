@@ -8,7 +8,7 @@ use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::core::safe_write::write_string_atomic;
 use crate::core::schema::FEATURE_SCHEMA_VERSION;
 use crate::core::slug::slugify_ascii;
-use crate::feature::query::count_tasks_for_feature;
+use crate::feature::query::{count_tasks_by_feature, count_tasks_for_feature};
 use crate::feature::schema::{FeatureRecord, FeatureRegistry, FeatureStatus};
 
 /// Execute `maestro feature`.
@@ -82,8 +82,12 @@ fn list_features(paths: &MaestroPaths) -> Result<()> {
         return Ok(());
     }
 
+    let counts_by_feature = count_tasks_by_feature(&paths.tasks_dir())?;
     for feature in &registry.features {
-        let counts = count_tasks_for_feature(&paths.tasks_dir(), &feature.id)?;
+        let counts = counts_by_feature
+            .get(&feature.id)
+            .cloned()
+            .unwrap_or_default();
         println!(
             "{}\t{}\ttasks={}\tverified={}\t{}",
             feature.id,

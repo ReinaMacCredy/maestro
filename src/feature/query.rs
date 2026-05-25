@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -23,7 +24,14 @@ struct TaskSummary {
 
 /// Count tasks by scanning `.maestro/tasks/**/task.yaml` on demand.
 pub fn count_tasks_for_feature(tasks_dir: &Path, feature_id: &str) -> Result<FeatureTaskCounts> {
-    let mut counts = FeatureTaskCounts::default();
+    Ok(count_tasks_by_feature(tasks_dir)?
+        .remove(feature_id)
+        .unwrap_or_default())
+}
+
+/// Count tasks for every feature by scanning `.maestro/tasks/**/task.yaml` once.
+pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, FeatureTaskCounts>> {
+    let mut counts = HashMap::new();
     if !tasks_dir.exists() {
         return Ok(counts);
     }
@@ -43,10 +51,11 @@ pub fn count_tasks_for_feature(tasks_dir: &Path, feature_id: &str) -> Result<Fea
         let task: TaskSummary = serde_yaml::from_str(&contents)
             .with_context(|| format!("failed to parse {}", task_path.display()))?;
 
-        if task.feature_id.as_deref() == Some(feature_id) {
-            counts.total += 1;
+        if let Some(feature_id) = task.feature_id {
+            let entry = counts.entry(feature_id).or_default();
+            entry.total += 1;
             if task.state == Some(TaskState::Verified) {
-                counts.verified += 1;
+                entry.verified += 1;
             }
         }
     }

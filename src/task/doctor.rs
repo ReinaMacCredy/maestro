@@ -13,6 +13,13 @@ pub struct TaskDoctorReport {
     pub errors: Vec<String>,
 }
 
+/// Task record plus its artifact directory.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TaskEntry {
+    pub task: TaskRecord,
+    pub task_dir: std::path::PathBuf,
+}
+
 impl TaskDoctorReport {
     /// Whether the scan found no task graph errors.
     pub fn is_ok(&self) -> bool {
@@ -22,11 +29,21 @@ impl TaskDoctorReport {
 
 /// Load all task records under `.maestro/tasks`.
 pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
+    let mut tasks = load_task_entries(tasks_dir)?
+        .into_iter()
+        .map(|entry| entry.task)
+        .collect::<Vec<_>>();
+    tasks.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(tasks)
+}
+
+/// Load all task records with their directories under `.maestro/tasks`.
+pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
     if !tasks_dir.is_dir() {
         return Ok(Vec::new());
     }
 
-    let mut tasks = Vec::new();
+    let mut entries = Vec::new();
     for entry in fs::read_dir(tasks_dir)
         .with_context(|| format!("failed to read {}", tasks_dir.display()))?
     {
@@ -34,11 +51,14 @@ pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
         let task_path = entry.path().join("task.yaml");
         if task_path.is_file() {
             let (task, _) = load_task(&task_path)?;
-            tasks.push(task);
+            entries.push(TaskEntry {
+                task,
+                task_dir: entry.path(),
+            });
         }
     }
-    tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(tasks)
+    entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
+    Ok(entries)
 }
 
 /// Check unresolved task blocker references for missing nodes, self-blocks, and cycles.
