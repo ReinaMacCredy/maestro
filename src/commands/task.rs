@@ -16,6 +16,7 @@ use crate::task::template::{
     load_task, save_task_with_snapshot, write_task_artifacts, AcceptanceFile, BlockerKind,
     BlockerRef, TaskRecord, TaskSnapshot, TaskState,
 };
+use crate::verification::verify_task::{verify_task, VerificationStatus};
 
 /// Execute `maestro task`.
 pub fn run(args: TaskArgs) -> Result<()> {
@@ -57,9 +58,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
                 ..TransitionDetails::default()
             },
         ),
-        TaskCommand::Verify { id } => {
-            bail!("task verify is not implemented in this phase slice: {id}");
-        }
+        TaskCommand::Verify { id } => verify_task_command(&paths, &id, &actor),
         TaskCommand::Block { id, reason, by } => block_task(&paths, &id, &reason, by, &actor),
         TaskCommand::Unblock { id, blocker } => unblock_task(&paths, &id, &blocker, &actor),
         TaskCommand::Reject { id, reason } => transition_task(
@@ -217,6 +216,27 @@ fn unblock_task(paths: &MaestroPaths, id: &str, blocker_id: &str, actor: &str) -
 
     println!("unblocked {} ({blocker_id})", task.id);
     Ok(())
+}
+
+fn verify_task_command(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
+    let report = verify_task(paths, id, actor)?;
+    match report.status {
+        VerificationStatus::Passed => {
+            println!(
+                "verification passed for {} ({} claim(s), {} proof source(s))",
+                report.task_id,
+                report.claims.len(),
+                report.proof_sources.len()
+            );
+            Ok(())
+        }
+        VerificationStatus::Failed => {
+            for failure in &report.failures {
+                eprintln!("verification failure: {failure}");
+            }
+            bail!("verification failed for {}", report.task_id)
+        }
+    }
 }
 
 fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {

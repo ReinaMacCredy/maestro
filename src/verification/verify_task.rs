@@ -1,1 +1,499 @@
 //! Task verification execution helpers.
+
+use std::collections::BTreeSet;
+use std::fs;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use sha2::{Digest, Sha256};
+
+use crate::core::fs::read_to_string_if_exists;
+use crate::core::git;
+use crate::core::paths::MaestroPaths;
+use crate::core::safe_write::write_string_atomic;
+use crate::core::schema::VERIFICATION_SCHEMA_VERSION;
+use crate::task::template::{
+    load_task, save_task_with_snapshot, AcceptanceFile, StateHistoryEntry, TaskRecord,
+    TaskSnapshot, TaskState, VerificationBinding,
+};
+use crate::verification::stale::{FreshnessInputs, StoredFreshness};
+
+/// Result status written to `verification.json`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VerificationStatus {
+    Passed,
+    Failed,
+}
+
+/// Per-claim evidence matching result.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClaimCheck {
+    pub claim: String,
+    pub matched: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+/// Proof source considered during verification.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProofSource {
+    pub kind: String,
+    pub path: String,
+    pub hash: String,
+}
+
+/// Verification artifact persisted in a task directory.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct VerificationReport {
+    pub schema_version: String,
+    pub task_id: String,
+    pub status: VerificationStatus,
+    pub verified_at: String,
+    #[serde(flatten)]
+    pub freshness: StoredFreshness,
+    pub claims: Vec<ClaimCheck>,
+    pub proof_sources: Vec<ProofSource>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failures: Vec<String>,
+}
+
+/// Paths and records for a loaded task.
+#[derive(Clone, Debug)]
+pub struct LoadedTask {
+    pub task: TaskRecord,
+    pub snapshot: TaskSnapshot,
+    pub task_dir: PathBuf,
+}
+
+/// Execute proof validation for a task and persist `verification.json`.
+pub fn verify_task(paths: &MaestroPaths, task_id: &str, actor: &str) -> Result<VerificationReport> {
+    let now = timestamp();
+    let mut loaded = load_task_by_id(paths, task_id)?;
+    let inputs = freshness_inputs(paths, &loaded)?;
+    let claims = completion_claims(&loaded.task);
+    let evidence = collect_evidence(paths, &loaded.task_dir, &loaded.task.id)?;
+    let claim_checks = check_claims(&claims, &evidence);
+    let failures = failures_for(&loaded.task, &claims, &claim_checks, &evidence);
+    let status = if failures.is_empty() {
+        VerificationStatus::Passed
+    } else {
+        VerificationStatus::Failed
+    };
+
+    let report = VerificationReport {
+        schema_version: VERIFICATION_SCHEMA_VERSION.to_string(),
+        task_id: loaded.task.id.clone(),
+        status,
+        verified_at: now.clone(),
+        freshness: StoredFreshness {
+            verified_commit: inputs.commit.clone(),
+            task_contract_hash: inputs.task_contract_hash,
+            acceptance_hash: inputs.acceptance_hash,
+            checks_hash: inputs.checks_hash,
+        },
+        claims: claim_checks,
+        proof_sources: evidence
+            .iter()
+            .map(|source| ProofSource {
+                kind: source.kind.clone(),
+                path: display_path(paths.repo_root(), &source.path),
+                hash: hash_bytes(source.text.as_bytes()),
+            })
+            .collect(),
+        failures,
+    };
+
+    write_report(&loaded.task_dir, &report)?;
+    apply_report_to_task(&mut loaded, &report, actor, &now)?;
+    Ok(report)
+}
+
+/// Load a task by id or id prefix directory name.
+pub fn load_task_by_id(paths: &MaestroPaths, task_id: &str) -> Result<LoadedTask> {
+    let task_path = resolve_task_yaml_path(&paths.tasks_dir(), task_id)?;
+    let task_dir = task_path
+        .parent()
+        .map(Path::to_path_buf)
+        .context("task path is missing parent directory")?;
+    let (task, snapshot) = load_task(&task_path)?;
+
+    Ok(LoadedTask {
+        task,
+        snapshot,
+        task_dir,
+    })
+}
+
+/// Return the path to the verification artifact for a loaded task.
+pub fn verification_path(task_dir: &Path) -> PathBuf {
+    task_dir.join("verification.json")
+}
+
+/// Read `verification.json` when it exists.
+pub fn read_report(task_dir: &Path) -> Result<Option<VerificationReport>> {
+    let path = verification_path(task_dir);
+    let Some(raw) = read_to_string_if_exists(&path)? else {
+        return Ok(None);
+    };
+    let report: VerificationReport = serde_json::from_str(&raw)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    if report.schema_version != VERIFICATION_SCHEMA_VERSION {
+        bail!(
+            "schema mismatch for {}: expected {}, found {}",
+            path.display(),
+            VERIFICATION_SCHEMA_VERSION,
+            report.schema_version
+        );
+    }
+    Ok(Some(report))
+}
+
+/// Compute current proof freshness inputs for a loaded task.
+pub fn freshness_inputs(paths: &MaestroPaths, loaded: &LoadedTask) -> Result<FreshnessInputs> {
+    let acceptance = load_acceptance(&loaded.task_dir)?;
+    let commit = git::head(paths.repo_root()).unwrap_or(None);
+
+    Ok(FreshnessInputs {
+        commit,
+        task_contract_hash: task_contract_hash(&loaded.task),
+        acceptance_hash: hash_file(&loaded.task_dir.join("acceptance.yaml"))?,
+        checks_hash: checks_hash(&acceptance),
+    })
+}
+
+fn apply_report_to_task(
+    loaded: &mut LoadedTask,
+    report: &VerificationReport,
+    actor: &str,
+    now: &str,
+) -> Result<()> {
+    match report.status {
+        VerificationStatus::Passed => {
+            loaded.task.state = TaskState::Verified;
+            loaded.task.verification = VerificationBinding {
+                verified_at: Some(report.verified_at.clone()),
+                verified_commit: report.freshness.verified_commit.clone(),
+                verified_by_run: report
+                    .proof_sources
+                    .iter()
+                    .find(|source| source.kind == "event")
+                    .map(|source| source.path.clone()),
+                task_contract_hash: Some(report.freshness.task_contract_hash.clone()),
+                acceptance_hash: Some(report.freshness.acceptance_hash.clone()),
+                checks_hash: Some(report.freshness.checks_hash.clone()),
+            };
+        }
+        VerificationStatus::Failed => {
+            if loaded.task.state == TaskState::Verified {
+                loaded.task.state = TaskState::NeedsVerification;
+            }
+        }
+    }
+
+    loaded.task.state_history.push(StateHistoryEntry {
+        state: loaded.task.state.clone(),
+        at: now.to_string(),
+        by: actor.to_string(),
+        to: None,
+        summary: Some(report_summary(report)),
+        claims: Vec::new(),
+        open_items: report.failures.clone(),
+    });
+    loaded.task.updated_at = now.to_string();
+    save_task_with_snapshot(&loaded.task, &loaded.snapshot)
+}
+
+fn report_summary(report: &VerificationReport) -> String {
+    match report.status {
+        VerificationStatus::Passed => format!(
+            "verification passed: {} claim(s), {} proof source(s)",
+            report.claims.len(),
+            report.proof_sources.len()
+        ),
+        VerificationStatus::Failed => {
+            let first = report
+                .failures
+                .first()
+                .map(String::as_str)
+                .unwrap_or("unknown verification failure");
+            format!("verification failed: {first}")
+        }
+    }
+}
+
+fn write_report(task_dir: &Path, report: &VerificationReport) -> Result<()> {
+    let path = verification_path(task_dir);
+    let raw = serde_json::to_string_pretty(report)?;
+    write_string_atomic(&path, &format!("{raw}\n"))
+        .with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn failures_for(
+    task: &TaskRecord,
+    claims: &[String],
+    claim_checks: &[ClaimCheck],
+    evidence: &[EvidenceText],
+) -> Vec<String> {
+    let mut failures = Vec::new();
+
+    if task.state != TaskState::NeedsVerification && task.state != TaskState::Verified {
+        failures.push(format!(
+            "task is {}, expected needs_verification",
+            state_name(&task.state)
+        ));
+    }
+    if claims.is_empty() {
+        failures.push("no completion claims found in task history".to_string());
+    }
+    if evidence.is_empty() {
+        failures.push("missing proof: no task events or proof artifacts found".to_string());
+    }
+
+    for check in claim_checks.iter().filter(|check| !check.matched) {
+        failures.push(format!("claim not backed by events/proof: {}", check.claim));
+    }
+
+    failures
+}
+
+fn check_claims(claims: &[String], evidence: &[EvidenceText]) -> Vec<ClaimCheck> {
+    claims
+        .iter()
+        .map(|claim| {
+            let source = evidence
+                .iter()
+                .find(|source| source.text.contains(claim))
+                .map(|source| source.path.display().to_string());
+            ClaimCheck {
+                claim: claim.clone(),
+                matched: source.is_some(),
+                source,
+            }
+        })
+        .collect()
+}
+
+fn completion_claims(task: &TaskRecord) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut claims = Vec::new();
+    for claim in task
+        .state_history
+        .iter()
+        .flat_map(|entry| entry.claims.iter())
+        .map(|claim| claim.trim())
+        .filter(|claim| !claim.is_empty())
+    {
+        if seen.insert(claim.to_string()) {
+            claims.push(claim.to_string());
+        }
+    }
+    claims
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct EvidenceText {
+    kind: String,
+    path: PathBuf,
+    text: String,
+}
+
+fn collect_evidence(
+    paths: &MaestroPaths,
+    task_dir: &Path,
+    task_id: &str,
+) -> Result<Vec<EvidenceText>> {
+    let mut evidence = Vec::new();
+    collect_task_artifact_text(task_dir, "evidence", &mut evidence)?;
+    collect_task_artifact_text(task_dir, "proof", &mut evidence)?;
+    collect_event_text(paths, task_id, &mut evidence)?;
+    Ok(evidence)
+}
+
+fn collect_task_artifact_text(
+    task_dir: &Path,
+    dirname: &str,
+    evidence: &mut Vec<EvidenceText>,
+) -> Result<()> {
+    let dir = task_dir.join(dirname);
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    for path in text_files_under(&dir)? {
+        let text = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        evidence.push(EvidenceText {
+            kind: dirname.to_string(),
+            path,
+            text,
+        });
+    }
+    Ok(())
+}
+
+fn collect_event_text(
+    paths: &MaestroPaths,
+    task_id: &str,
+    evidence: &mut Vec<EvidenceText>,
+) -> Result<()> {
+    let runs_dir = paths.runs_dir();
+    if !runs_dir.is_dir() {
+        return Ok(());
+    }
+
+    for path in event_files_under(&runs_dir)? {
+        let raw = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let mut matched = Vec::new();
+        for line in raw.lines().filter(|line| line.contains(task_id)) {
+            matched.push(line.to_string());
+        }
+        if !matched.is_empty() {
+            evidence.push(EvidenceText {
+                kind: "event".to_string(),
+                path,
+                text: matched.join("\n"),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn text_files_under(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    collect_files(dir, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+fn event_files_under(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    collect_files(dir, &mut files)?;
+    files.retain(|path| path.file_name().and_then(|name| name.to_str()) == Some("events.jsonl"));
+    files.sort();
+    Ok(files)
+}
+
+fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    match fs::read_dir(dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry.with_context(|| format!("failed to list {}", dir.display()))?;
+                let path = entry.path();
+                if path.is_dir() {
+                    collect_files(&path, files)?;
+                } else if path.is_file() {
+                    files.push(path);
+                }
+            }
+            Ok(())
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("failed to read {}", dir.display())),
+    }
+}
+
+fn load_acceptance(task_dir: &Path) -> Result<AcceptanceFile> {
+    let path = task_dir.join("acceptance.yaml");
+    let raw =
+        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    serde_yaml::from_str(&raw).with_context(|| format!("failed to parse {}", path.display()))
+}
+
+fn task_contract_hash(task: &TaskRecord) -> String {
+    let claims = completion_claims(task);
+    let contract = json!({
+        "schema_version": task.schema_version,
+        "id": task.id,
+        "slug": task.slug,
+        "feature_id": task.feature_id,
+        "title": task.title,
+        "task_type": task.task_type,
+        "lane": task.lane,
+        "risk": task.risk,
+        "raw_request": task.raw_request,
+        "input_type": task.input_type,
+        "affected_areas": task.affected_areas,
+        "open_questions": task.open_questions,
+        "acceptance_locked": task.acceptance_locked,
+        "claims": claims,
+    });
+    hash_bytes(contract.to_string().as_bytes())
+}
+
+fn checks_hash(acceptance: &AcceptanceFile) -> String {
+    hash_bytes(
+        serde_json::to_string(&acceptance.checks)
+            .expect("invariant: acceptance checks should serialize")
+            .as_bytes(),
+    )
+}
+
+fn hash_file(path: &Path) -> Result<String> {
+    let bytes = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
+    Ok(hash_bytes(&bytes))
+}
+
+fn hash_bytes(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
+    let direct = tasks_dir.join(id).join("task.yaml");
+    if direct.is_file() {
+        return Ok(direct);
+    }
+
+    let prefix = format!("{id}-");
+    for entry in fs::read_dir(tasks_dir)
+        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if name.starts_with(&prefix) {
+            let path = entry.path().join("task.yaml");
+            if path.is_file() {
+                return Ok(path);
+            }
+        }
+    }
+
+    bail!("task not found: {id}")
+}
+
+fn display_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+}
+
+fn state_name(state: &TaskState) -> &'static str {
+    match state {
+        TaskState::Draft => "draft",
+        TaskState::Exploring => "exploring",
+        TaskState::Ready => "ready",
+        TaskState::InProgress => "in_progress",
+        TaskState::NeedsVerification => "needs_verification",
+        TaskState::Verified => "verified",
+        TaskState::Rejected => "rejected",
+        TaskState::Abandoned => "abandoned",
+        TaskState::Superseded => "superseded",
+    }
+}
+
+fn timestamp() -> String {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos().to_string())
+        .unwrap_or_else(|_| "0".to_string())
+}
