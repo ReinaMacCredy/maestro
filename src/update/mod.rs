@@ -183,7 +183,6 @@ pub fn run_update_with_seams(
     verifier: &dyn ChecksumVerifier,
     replacer: &dyn BinaryReplacer,
 ) -> Result<UpdateOutcome> {
-    let binary_status = update_binary(options, downloader, verifier, replacer)?;
     let extract_report = extract_bundled_skills(
         options.paths,
         ExtractMode::Update {
@@ -191,6 +190,7 @@ pub fn run_update_with_seams(
         },
     )?;
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
+    let binary_status = update_binary(options, downloader, verifier, replacer)?;
 
     Ok(UpdateOutcome {
         binary_status,
@@ -250,12 +250,21 @@ fn update_binary(
         }
     };
 
-    verifier.verify(&candidate)?;
-    replacer.replace(options.executable_path, &candidate)?;
+    let result = verifier
+        .verify(&candidate)
+        .and_then(|()| replacer.replace(options.executable_path, &candidate))
+        .map(|()| BinaryStatus::Replaced {
+            path: options.executable_path.to_path_buf(),
+        });
+    cleanup_candidate(&work_dir, &candidate);
+    result
+}
 
-    Ok(BinaryStatus::Replaced {
-        path: options.executable_path.to_path_buf(),
-    })
+fn cleanup_candidate(work_dir: &Path, candidate: &Path) {
+    if candidate.starts_with(work_dir) {
+        let _ = fs::remove_file(candidate);
+        let _ = fs::remove_dir(work_dir);
+    }
 }
 
 fn read_schema_version(path: &Path) -> Result<String> {

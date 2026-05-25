@@ -157,3 +157,23 @@ fn shared_hook_events_are_accepted() {
         ]
     );
 }
+
+#[test]
+fn stop_evidence_failure_warns_without_failing_hook() {
+    let repo = init_repo();
+    let evidence_path = repo
+        .path()
+        .join(".maestro/runs/session-warning/run_evidence.yaml");
+    fs::create_dir_all(&evidence_path)
+        .expect("invariant: blocking evidence directory should be creatable");
+
+    let output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-warning","event_type":"Stop"}"#,
+    );
+
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("failed to write run evidence"));
+    let events = read_events(repo.path(), "session-warning");
+    assert_eq!(events[0]["event_type"], "Stop");
+}

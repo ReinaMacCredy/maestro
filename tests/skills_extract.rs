@@ -93,6 +93,30 @@ fn extract_bundled_skills_refuses_existing_bundled_file_by_default() {
 }
 
 #[test]
+fn extract_bundled_skills_create_preflights_before_writing() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    let existing = paths.skills_dir().join("maestro-setup").join("SKILL.md");
+    fs::create_dir_all(
+        existing
+            .parent()
+            .expect("invariant: bundled skill path should have a parent"),
+    )
+    .expect("invariant: bundled skill directory should be creatable");
+    fs::write(&existing, "custom setup\n").expect("invariant: skill should be writable");
+
+    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+        .expect_err("invariant: existing bundled skill should be rejected");
+
+    assert!(error.to_string().contains("already exists"));
+    assert!(!paths.skills_dir().join("maestro-task/SKILL.md").exists());
+    assert_eq!(
+        fs::read_to_string(existing).expect("invariant: existing skill should be readable"),
+        "custom setup\n"
+    );
+}
+
+#[test]
 fn extract_bundled_skills_merge_preserves_existing_bundled_file() {
     let temp_dir = TestTempDir::new("maestro-skills-test");
     let paths = MaestroPaths::new(temp_dir.path());

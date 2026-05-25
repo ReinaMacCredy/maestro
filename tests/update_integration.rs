@@ -96,6 +96,7 @@ fn simulated_download_failure_preserves_existing_binary_file() {
             .expect("invariant: current binary should still be readable"),
         "current binary\n"
     );
+    assert!(!paths.maestro_dir().join("update").exists());
 }
 
 #[test]
@@ -130,6 +131,7 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
             .expect("invariant: current binary should still be readable"),
         "current binary\n"
     );
+    assert!(!paths.maestro_dir().join("update").exists());
 }
 
 #[test]

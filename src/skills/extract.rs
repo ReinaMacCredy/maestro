@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
@@ -44,53 +45,128 @@ pub fn extract_bundled_skills(
 ) -> Result<ExtractReport> {
     ensure_dir(paths.skills_dir())?;
     let mut report = ExtractReport::default();
+    let actions = bundled_skills()
+        .iter()
+        .map(|skill| plan_skill(paths, skill, mode))
+        .collect::<Result<Vec<_>>>()?;
 
-    for skill in bundled_skills() {
-        extract_skill(paths, skill, mode, &mut report)?;
-    }
+    apply_actions(paths, &actions, &mut report)?;
 
     Ok(report)
 }
 
-fn extract_skill(
+#[derive(Debug)]
+struct SkillAction<'a> {
+    skill: &'a BundledSkill,
+    path: PathBuf,
+    existing: Option<String>,
+    backup_operation: Option<&'static str>,
+    backup_timestamp: Option<&'a str>,
+    write: bool,
+}
+
+#[derive(Debug)]
+struct AppliedWrite {
+    path: PathBuf,
+    previous: Option<String>,
+}
+
+fn plan_skill<'a>(
     paths: &MaestroPaths,
-    skill: &BundledSkill,
-    mode: ExtractMode<'_>,
+    skill: &'a BundledSkill,
+    mode: ExtractMode<'a>,
+) -> Result<SkillAction<'a>> {
+    let path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    let existing = if path.exists() {
+        Some(
+            fs::read_to_string(&path)
+                .with_context(|| format!("failed to read bundled skill {}", path.display()))?,
+        )
+    } else {
+        None
+    };
+
+    let (write, backup_operation, backup_timestamp) = match (&existing, mode) {
+        (None, _) => (true, None, None),
+        (Some(_), ExtractMode::Merge) => (false, None, None),
+        (Some(_), ExtractMode::Force { backup_timestamp }) => {
+            (true, Some("init"), Some(backup_timestamp))
+        }
+        (Some(existing), ExtractMode::Update { backup_timestamp }) => {
+            if existing == skill.contents {
+                (false, None, None)
+            } else {
+                (true, Some("update"), Some(backup_timestamp))
+            }
+        }
+        (Some(_), ExtractMode::Create) => {
+            bail!(
+                "{} already exists; use --merge to keep it or --force to overwrite with backup",
+                path.display()
+            );
+        }
+    };
+
+    Ok(SkillAction {
+        skill,
+        path,
+        existing,
+        backup_operation,
+        backup_timestamp,
+        write,
+    })
+}
+
+fn apply_actions(
+    paths: &MaestroPaths,
+    actions: &[SkillAction<'_>],
     report: &mut ExtractReport,
 ) -> Result<()> {
-    let path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    let mut written = Vec::new();
 
-    if path.exists() {
-        match mode {
-            ExtractMode::Merge => return Ok(()),
-            ExtractMode::Force { backup_timestamp } => {
-                let backup = backup_file_with_timestamp(paths, &path, "init", backup_timestamp)?;
-                report.backups.push(SkillBackup {
-                    skill_name: skill.name.to_string(),
-                    path: backup,
-                });
-            }
-            ExtractMode::Update { backup_timestamp } => {
-                let existing = std::fs::read_to_string(&path)
-                    .with_context(|| format!("failed to read bundled skill {}", path.display()))?;
-                if existing == skill.contents {
-                    return Ok(());
+    for action in actions {
+        if !action.write {
+            continue;
+        }
+        if let (Some(operation), Some(timestamp)) =
+            (action.backup_operation, action.backup_timestamp)
+        {
+            let backup = backup_file_with_timestamp(paths, &action.path, operation, timestamp)?;
+            report.backups.push(SkillBackup {
+                skill_name: action.skill.name.to_string(),
+                path: backup,
+            });
+        }
+        if let Err(error) = write_string_atomic(&action.path, action.skill.contents)
+            .with_context(|| format!("failed to write bundled skill {}", action.path.display()))
+        {
+            rollback_writes(&written)?;
+            return Err(error);
+        }
+        written.push(AppliedWrite {
+            path: action.path.clone(),
+            previous: action.existing.clone(),
+        });
+    }
+
+    Ok(())
+}
+
+fn rollback_writes(written: &[AppliedWrite]) -> Result<()> {
+    for write in written.iter().rev() {
+        match &write.previous {
+            Some(contents) => write_string_atomic(&write.path, contents)
+                .with_context(|| format!("failed to roll back {}", write.path.display()))?,
+            None => match fs::remove_file(&write.path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("failed to roll back {}", write.path.display()));
                 }
-                let backup = backup_file_with_timestamp(paths, &path, "update", backup_timestamp)?;
-                report.backups.push(SkillBackup {
-                    skill_name: skill.name.to_string(),
-                    path: backup,
-                });
-            }
-            ExtractMode::Create => {
-                bail!(
-                    "{} already exists; use --merge to keep it or --force to overwrite with backup",
-                    path.display()
-                );
-            }
+            },
         }
     }
 
-    write_string_atomic(&path, skill.contents)
-        .with_context(|| format!("failed to write bundled skill {}", path.display()))
+    Ok(())
 }

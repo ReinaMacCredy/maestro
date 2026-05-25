@@ -1,13 +1,14 @@
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
+use crate::core::git;
 use crate::core::hash::sha256_prefixed;
 use crate::core::paths::MaestroPaths;
 use crate::core::schema::EVENT_SCHEMA_VERSION;
+use crate::core::time::utc_now_timestamp;
 use crate::evidence::run_evidence;
 use crate::hooks::event::{
     is_accepted_event, normalized_event_type, run_dir_name, string_field, UNATTRIBUTED_SESSION,
@@ -23,16 +24,18 @@ pub fn record_stdin(paths: &MaestroPaths) -> Result<()> {
 
 pub fn record_payload(paths: &MaestroPaths, raw: &str) -> Result<()> {
     let payload: Value = serde_json::from_str(raw).context("failed to parse hook payload JSON")?;
-    let Some(event) = normalize_event(&payload) else {
+    let Some(mut event) = normalize_event(&payload) else {
         return Ok(());
     };
+    attach_commit_snapshot(paths, &mut event);
     append_event(paths, &event)?;
     if is_stop_event(&event) {
         let session_id = event
             .get("session_id")
             .and_then(Value::as_str)
             .unwrap_or(UNATTRIBUTED_SESSION);
-        let _ = run_evidence::write_for_session(paths, session_id);
+        run_evidence::write_for_session(paths, session_id)
+            .context("failed to write run evidence")?;
     }
     Ok(())
 }
@@ -70,6 +73,21 @@ fn normalize_event(payload: &Value) -> Option<Value> {
     }
 
     Some(Value::Object(event))
+}
+
+fn attach_commit_snapshot(paths: &MaestroPaths, event: &mut Value) {
+    if !matches!(
+        event.get("event_type").and_then(Value::as_str),
+        Some("SessionStart" | "Stop")
+    ) {
+        return;
+    }
+    let Ok(Some(head)) = git::head(paths.repo_root()) else {
+        return;
+    };
+    if let Some(object) = event.as_object_mut() {
+        object.insert("commit".to_string(), json!(head));
+    }
 }
 
 fn append_event(paths: &MaestroPaths, event: &Value) -> Result<()> {
@@ -131,33 +149,5 @@ fn hash_value(value: &Value) -> String {
 }
 
 fn timestamp() -> String {
-    let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) else {
-        return "1970-01-01T00:00:00.000000000Z".to_string();
-    };
-    format_unix_timestamp(duration.as_secs(), duration.subsec_nanos())
-}
-
-fn format_unix_timestamp(seconds: u64, nanos: u32) -> String {
-    let days = (seconds / 86_400) as i64;
-    let seconds_of_day = seconds % 86_400;
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-    let second = seconds_of_day % 60;
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{nanos:09}Z")
-}
-
-fn civil_from_days(days_since_epoch: i64) -> (i64, u32, u32) {
-    let z = days_since_epoch + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let day_of_era = z - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    let adjusted_year = year + i64::from(month <= 2);
-    (adjusted_year, month as u32, day as u32)
+    utc_now_timestamp()
 }

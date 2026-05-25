@@ -25,6 +25,12 @@ fn mirror_plan_writes_managed_content_for_claude() {
     assert!(plans.iter().any(|plan| {
         plan.relative_path == "CLAUDE.md" && plan.contents.contains("@.maestro/harness/HARNESS.md")
     }));
+    let gitignore_plan = plans
+        .iter()
+        .find(|plan| plan.relative_path == ".gitignore")
+        .expect("invariant: gitignore plan should exist");
+    assert!(gitignore_plan.contents.contains(".claude/skills"));
+    assert!(gitignore_plan.contents.contains(".codex/skills"));
     assert!(plans.iter().any(|plan| {
         plan.relative_path == ".claude/settings.local.json"
             && plan.contents.contains("\"_maestro_managed_keys\"")

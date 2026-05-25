@@ -39,7 +39,9 @@ fn print_outcome(outcome: &UpdateOutcome) {
     }
 
     if !outcome.schema_mismatches.is_empty() {
-        println!("schema mismatch detected; run `maestro migrate` before writing artifacts:");
+        println!(
+            "core harness/install schema mismatch detected; run `maestro migrate` before writing artifacts:"
+        );
         for mismatch in &outcome.schema_mismatches {
             println!(
                 "{} expected {} found {}",

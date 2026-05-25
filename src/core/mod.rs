@@ -10,3 +10,4 @@ pub mod paths;
 pub mod safe_write;
 pub mod schema;
 pub mod slug;
+pub mod time;
