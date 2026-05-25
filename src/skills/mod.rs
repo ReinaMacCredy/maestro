@@ -2,3 +2,4 @@
 
 pub mod bundled;
 pub mod extract;
+pub mod symlink;

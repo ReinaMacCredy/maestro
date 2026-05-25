@@ -18,6 +18,10 @@ use crate::core::safe_write::write_string_atomic;
 use crate::install::hooks::ManagedHookConfig;
 use crate::install::lock::{AgentInstall, FileOwnership, MirrorKind};
 use crate::install::InstallAgent;
+use crate::skills::symlink::{
+    create_skill_symlink, remove_skill_symlink_if_owned, skill_symlink_for_agent,
+    validate_skill_symlink_destination, SkillSymlink,
+};
 
 const JSON_PREVIOUS_VALUE_HASHES: &str = "_maestro_previous_value_hashes";
 
@@ -38,6 +42,7 @@ pub struct MirrorPlan {
 pub(crate) struct PreparedMirrors {
     pub(crate) install: AgentInstall,
     updates: Vec<MirrorUpdate>,
+    skill_symlink: SkillSymlink,
     backup_timestamp: String,
 }
 
@@ -126,10 +131,17 @@ pub(crate) fn prepare_mirrors(
             contents,
         });
     }
+    let skill_symlink = skill_symlink_for_agent(agent);
+    validate_skill_symlink_destination(paths, skill_symlink)?;
+    install.insert(
+        skill_symlink.relative_path,
+        FileOwnership::symlink(skill_symlink.target),
+    );
 
     Ok(PreparedMirrors {
         install,
         updates,
+        skill_symlink,
         backup_timestamp,
     })
 }
@@ -148,6 +160,10 @@ pub(crate) fn write_prepared_mirrors(
         if update.existing.as_deref() != Some(update.contents.as_str()) {
             written.push(update);
         }
+    }
+    if let Err(error) = create_skill_symlink(paths, prepared.skill_symlink) {
+        rollback_mirror_updates(&written)?;
+        return Err(error);
     }
 
     Ok(())
@@ -373,12 +389,12 @@ fn validate_install_ownership(agent: InstallAgent, install: &AgentInstall) -> Re
     for plan in mirror_plan(agent)? {
         allowed.insert(plan.relative_path.clone(), plan);
     }
-    let (symlink_path, symlink_target) = legacy_symlink_target(agent);
+    let skill_symlink = skill_symlink_for_agent(agent);
 
     for (relative_path, ownership) in &install.files {
-        if relative_path == symlink_path {
+        if relative_path == skill_symlink.relative_path {
             if ownership.kind != MirrorKind::Symlink
-                || ownership.target.as_deref() != Some(symlink_target)
+                || ownership.target.as_deref() != Some(skill_symlink.target)
             {
                 bail!(
                     "install lock entry is not an expected mirror for {}: {}",
@@ -424,27 +440,7 @@ fn remove_symlink_if_owned(path: &Path, ownership: &FileOwnership) -> Result<()>
     let Some(expected_target) = ownership.target.as_deref() else {
         return Ok(());
     };
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            let target = fs::read_link(path)
-                .with_context(|| format!("failed to read symlink {}", path.display()))?;
-            if target == Path::new(expected_target) {
-                fs::remove_file(path)
-                    .with_context(|| format!("failed to remove symlink {}", path.display()))?;
-            }
-            Ok(())
-        }
-        Ok(_) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("failed to inspect {}", path.display())),
-    }
-}
-
-fn legacy_symlink_target(agent: InstallAgent) -> (&'static str, &'static str) {
-    match agent {
-        InstallAgent::Claude => (".claude/skills", "../.maestro/skills"),
-        InstallAgent::Codex => (".codex/skills", "../.maestro/skills"),
-    }
+    remove_skill_symlink_if_owned(path, expected_target)
 }
 
 fn managed_mirror_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {

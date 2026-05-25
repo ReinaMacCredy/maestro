@@ -87,6 +87,54 @@ fn apply_mirrors_preserves_user_content_and_records_ownership() {
     ));
 }
 
+#[cfg(unix)]
+#[test]
+fn apply_mirrors_creates_skill_symlink_and_records_ownership() {
+    let temp_dir = TestTempDir::new("maestro-install-test");
+    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: git marker should be writable");
+    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
+
+    let install = apply_mirrors(
+        &paths,
+        InstallAgent::Claude,
+        "2026-05-25T10:00:00Z".to_string(),
+    )
+    .expect("invariant: mirrors should apply");
+
+    let target = fs::read_link(temp_dir.path().join(".claude/skills"))
+        .expect("invariant: Claude skills mirror should be a symlink");
+    assert_eq!(target, std::path::Path::new("../.maestro/skills"));
+    let ownership = install
+        .files
+        .get(".claude/skills")
+        .expect("invariant: skill symlink ownership should be recorded");
+    assert!(matches!(ownership.kind, MirrorKind::Symlink));
+    assert_eq!(ownership.target.as_deref(), Some("../.maestro/skills"));
+}
+
+#[cfg(unix)]
+#[test]
+fn apply_mirrors_refuses_existing_user_skill_tree() {
+    let temp_dir = TestTempDir::new("maestro-install-test");
+    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: git marker should be writable");
+    fs::create_dir_all(temp_dir.path().join(".codex/skills"))
+        .expect("invariant: user skill tree should be writable");
+    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
+
+    let error = apply_mirrors(
+        &paths,
+        InstallAgent::Codex,
+        "2026-05-25T10:00:00Z".to_string(),
+    )
+    .expect_err("existing user skill tree should make install fail");
+
+    assert!(error
+        .to_string()
+        .contains("refusing to overwrite existing .codex/skills"));
+    assert!(temp_dir.path().join(".codex/skills").is_dir());
+    assert!(!temp_dir.path().join("AGENTS.md").exists());
+}
+
 #[test]
 fn apply_mirrors_uses_one_backup_directory_per_operation_and_skips_noop_reapply() {
     let temp_dir = TestTempDir::new("maestro-install-test");
