@@ -24,7 +24,9 @@ pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
             continue;
         };
         if name.starts_with(&prefix) {
-            let path = entry.path().join("task.yaml");
+            let Some(path) = task_yaml_path_for_entry(&entry)? else {
+                continue;
+            };
             if valid_task_yaml_path(&path)? {
                 matches.push(path);
             }
@@ -39,7 +41,24 @@ pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
     }
 }
 
-fn valid_task_yaml_path(path: &Path) -> Result<bool> {
+/// Return a task entry's `task.yaml` path when the entry is a real directory.
+pub fn task_yaml_path_for_entry(entry: &fs::DirEntry) -> Result<Option<PathBuf>> {
+    let file_type = entry
+        .file_type()
+        .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+    if !file_type.is_dir() || file_type.is_symlink() {
+        return Ok(None);
+    }
+    let path = entry.path().join("task.yaml");
+    if valid_task_yaml_path(&path)? {
+        Ok(Some(path))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Return true only for a real `task.yaml` file inside a real task directory.
+pub fn valid_task_yaml_path(path: &Path) -> Result<bool> {
     let Some(task_dir) = path.parent() else {
         return Ok(false);
     };
@@ -56,10 +75,10 @@ fn valid_task_yaml_path(path: &Path) -> Result<bool> {
 }
 
 fn validate_task_lookup_id(id: &str) -> Result<()> {
+    let mut components = Path::new(id).components();
     if id.is_empty()
-        || Path::new(id)
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
+        || !matches!(components.next(), Some(Component::Normal(_)))
+        || components.next().is_some()
     {
         bail!("invalid task id: {id}");
     }

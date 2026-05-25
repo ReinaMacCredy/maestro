@@ -5,6 +5,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+use crate::task::lookup::task_yaml_path_for_entry;
 use crate::task::template::TaskState;
 
 /// Computed task counts for a feature.
@@ -41,10 +42,9 @@ pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, Featur
     {
         let entry =
             entry.with_context(|| format!("failed to read entry in {}", tasks_dir.display()))?;
-        let task_path = entry.path().join("task.yaml");
-        if !task_path.is_file() {
+        let Some(task_path) = task_yaml_path_for_entry(&entry)? else {
             continue;
-        }
+        };
 
         let contents = fs::read_to_string(&task_path)
             .with_context(|| format!("failed to read {}", task_path.display()))?;

@@ -340,6 +340,10 @@ fn task_lookup_rejects_path_traversal_ids() {
     let show = maestro(repo, &["task", "show", "../task-001"]);
     assert_failure(&show, &["task", "show", "../task-001"]);
     assert!(stderr(&show).contains("invalid task id"));
+
+    let nested_show = maestro(repo, &["task", "show", "task-001/sub"]);
+    assert_failure(&nested_show, &["task", "show", "task-001/sub"]);
+    assert!(stderr(&nested_show).contains("invalid task id"));
 }
 
 #[test]

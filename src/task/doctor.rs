@@ -4,6 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crate::task::lookup::task_yaml_path_for_entry;
 use crate::task::template::{load_task, BlockerKind, TaskRecord};
 
 /// Result of scanning task blocker references.
@@ -48,8 +49,7 @@ pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
         .with_context(|| format!("failed to read {}", tasks_dir.display()))?
     {
         let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
-        let task_path = entry.path().join("task.yaml");
-        if task_path.is_file() {
+        if let Some(task_path) = task_yaml_path_for_entry(&entry)? {
             let (task, _) = load_task(&task_path)?;
             entries.push(TaskEntry {
                 task,

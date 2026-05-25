@@ -287,6 +287,27 @@ fn query_friction_ignores_bad_json_and_symlinked_run_dirs() {
     assert!(friction.contains("corrections: 1"));
 }
 
+#[test]
+fn query_matrix_ignores_symlinked_task_dirs() {
+    let temp = setup_repo("maestro-query-symlinked-task");
+    let repo = temp.path();
+    let external_dir = repo.join("external-task");
+    fs::create_dir(&external_dir).expect("invariant: external task dir should be creatable");
+    fs::write(
+        external_dir.join("task.yaml"),
+        "schema_version: maestro.task.v1\nid: task-999\nslug: forged\nfeature_id: forged\nstate: verified\ntitle: Forged task\nacceptance_locked: true\nverification: {}\ncreated_at: now\nupdated_at: now\n",
+    )
+    .expect("invariant: forged task yaml should be writable");
+    fs::create_dir_all(repo.join(".maestro/tasks"))
+        .expect("invariant: tasks dir should be creatable");
+    unix_fs::symlink(&external_dir, repo.join(".maestro/tasks/task-999-forged"))
+        .expect("invariant: task symlink should be creatable");
+
+    let matrix = run_success(repo, &["query", "matrix"]);
+    assert!(!matrix.contains("task-999"));
+    assert!(!matrix.contains("forged"));
+}
+
 fn maestro_files(repo: &Path) -> BTreeSet<PathBuf> {
     let mut files = BTreeSet::new();
     collect_files(&repo.join(".maestro"), repo, &mut files);
