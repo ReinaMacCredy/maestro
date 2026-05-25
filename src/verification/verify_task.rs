@@ -380,7 +380,9 @@ fn collect_event_text(
             let event: Value = serde_json::from_str(&line).with_context(|| {
                 format!("failed to parse {} line {}", path.display(), index + 1)
             })?;
-            if event.get("task_id").and_then(Value::as_str) == Some(task_id) {
+            if event.get("task_id").and_then(Value::as_str) == Some(task_id)
+                && is_proof_event(&event)
+            {
                 claims.extend(event_claims(&event));
                 matched.push(line);
             }
@@ -395,6 +397,18 @@ fn collect_event_text(
         }
     }
     Ok(())
+}
+
+fn is_proof_event(event: &Value) -> bool {
+    matches!(event_kind(event), Some("proof" | "Proof" | "PostToolUse"))
+}
+
+fn event_kind(event: &Value) -> Option<&str> {
+    event
+        .get("kind")
+        .or_else(|| event.get("event"))
+        .or_else(|| event.get("type"))
+        .and_then(Value::as_str)
 }
 
 fn event_claims(event: &Value) -> Vec<String> {

@@ -179,6 +179,24 @@ fn task_verify_requires_exact_claim_match() {
 }
 
 #[test]
+fn task_verify_ignores_non_proof_events_for_claim_matching() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    let run_dir = repo.join(".maestro/runs/run-001");
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        "{\"task_id\":\"task-001\",\"kind\":\"UserPromptSubmit\",\"message\":\"implemented CSV export\"}\n",
+    )
+    .expect("invariant: events.jsonl should be writable");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("missing proof"));
+}
+
+#[test]
 fn query_proof_uses_persisted_verification_and_reports_stale_hashes() {
     let temp = setup_repo();
     let repo = temp.path();
