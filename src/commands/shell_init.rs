@@ -1,7 +1,9 @@
 use anyhow::Result;
 
+use crate::shell::{render_shell_init, Shell};
+
 /// Execute `maestro shell-init`.
 pub fn run() -> Result<()> {
-    println!("shell-init is not implemented in this phase slice");
+    print!("{}", render_shell_init(Shell::detect()));
     Ok(())
 }
