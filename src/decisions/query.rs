@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
@@ -41,6 +41,7 @@ pub fn decision_entries(decisions_dir: &Path) -> Result<Vec<DecisionEntry>> {
 
 /// Resolve a decision id or file name to a markdown path.
 pub fn resolve_decision_path(decisions_dir: &Path, id: &str) -> Result<PathBuf> {
+    validate_decision_lookup_id(id)?;
     if id.ends_with(".md") {
         let path = decisions_dir.join(id);
         if path.is_file() {
@@ -64,6 +65,17 @@ pub fn resolve_decision_path(decisions_dir: &Path, id: &str) -> Result<PathBuf> 
         1 => Ok(matches[0].path.clone()),
         _ => bail!("decision {id} is ambiguous"),
     }
+}
+
+fn validate_decision_lookup_id(id: &str) -> Result<()> {
+    if id.is_empty()
+        || Path::new(id)
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        bail!("invalid decision id: {id}");
+    }
+    Ok(())
 }
 
 /// Parse the sequence number from a decision file name.

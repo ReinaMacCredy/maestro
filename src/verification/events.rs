@@ -19,9 +19,15 @@ fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
             for entry in entries {
                 let entry = entry.with_context(|| format!("failed to list {}", dir.display()))?;
                 let path = entry.path();
-                if path.is_dir() {
+                let file_type = entry
+                    .file_type()
+                    .with_context(|| format!("failed to inspect {}", path.display()))?;
+                if file_type.is_symlink() {
+                    continue;
+                }
+                if file_type.is_dir() {
                     collect_files(&path, files)?;
-                } else if path.is_file() {
+                } else if file_type.is_file() {
                     files.push(path);
                 }
             }

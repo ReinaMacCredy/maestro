@@ -93,9 +93,9 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
             if line.trim().is_empty() {
                 continue;
             }
-            let event: Value = serde_json::from_str(&line).with_context(|| {
-                format!("failed to parse {} line {}", path.display(), index + 1)
-            })?;
+            let Ok(event) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
             events += 1;
             let kind = event_kind(&event);
             *kinds.entry(kind.clone()).or_default() += 1;

@@ -2,6 +2,7 @@ mod support;
 
 use std::collections::BTreeSet;
 use std::fs;
+use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -257,6 +258,29 @@ fn query_views_scan_current_artifacts_without_writing_cache_files() {
     let stale_matrix = run_success(repo, &["query", "matrix"]);
     assert!(stale_matrix.contains("stale"));
     assert_eq!(before_stale, maestro_files(repo));
+}
+
+#[test]
+fn query_friction_ignores_bad_json_and_symlinked_run_dirs() {
+    let temp = setup_repo("maestro-query-friction-bad-events");
+    let repo = temp.path();
+    let runs_dir = repo.join(".maestro/runs");
+    let run_dir = runs_dir.join("run-001");
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        concat!(
+            "{\"kind\":\"UserPromptSubmit\",\"message\":\"actually retry\"}\n",
+            "not json\n"
+        ),
+    )
+    .expect("invariant: events should be writable");
+    unix_fs::symlink(&runs_dir, runs_dir.join("loop"))
+        .expect("invariant: symlink should be creatable on unix test host");
+
+    let friction = run_success(repo, &["query", "friction"]);
+    assert!(friction.contains("events: 1"));
+    assert!(friction.contains("corrections: 1"));
 }
 
 fn maestro_files(repo: &Path) -> BTreeSet<PathBuf> {

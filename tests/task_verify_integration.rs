@@ -1,6 +1,7 @@
 mod support;
 
 use std::fs;
+use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -194,6 +195,29 @@ fn task_verify_ignores_non_proof_events_for_claim_matching() {
     let verify = maestro(repo, &["task", "verify", "task-001"]);
     assert_failure(&verify, &["task", "verify", "task-001"]);
     assert!(stderr(&verify).contains("missing proof"));
+}
+
+#[test]
+fn task_verify_ignores_bad_json_and_symlinked_run_dirs() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    let runs_dir = repo.join(".maestro/runs");
+    let run_dir = runs_dir.join("run-001");
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        concat!(
+            "not json\n",
+            "{\"task_id\":\"task-001\",\"kind\":\"proof\",\"message\":\"implemented CSV export\"}\n"
+        ),
+    )
+    .expect("invariant: events.jsonl should be writable");
+    unix_fs::symlink(&runs_dir, runs_dir.join("loop"))
+        .expect("invariant: symlink should be creatable on unix test host");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
 }
 
 #[test]

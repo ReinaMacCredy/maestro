@@ -32,6 +32,18 @@ fn stdout(output: std::process::Output, args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8")
 }
 
+fn assert_failure(output: std::process::Output, args: &[&str]) -> String {
+    assert!(
+        !output.status.success(),
+        "maestro {:?} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
+        args,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8")
+}
+
 #[test]
 fn feature_lifecycle_views_compute_task_counts_from_task_yaml() {
     let temp_dir = TestTempDir::new("maestro-feature-command-test");
@@ -155,6 +167,22 @@ fn decision_new_list_show_auto_increment_and_preserve_template() {
         ],
     );
     assert_eq!(show_output, decision_markdown(8, title));
+}
+
+#[test]
+fn decision_show_rejects_path_traversal_ids() {
+    let temp_dir = TestTempDir::new("maestro-decision-command-traversal-test");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let stderr = assert_failure(
+        maestro(&["decision", "show", "../outside.md"], temp_dir.path()),
+        &["decision", "show", "../outside.md"],
+    );
+    assert!(stderr.contains("invalid decision id"));
 }
 
 fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {

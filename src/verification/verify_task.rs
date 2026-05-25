@@ -377,9 +377,9 @@ fn collect_event_text(
             if line.trim().is_empty() {
                 continue;
             }
-            let event: Value = serde_json::from_str(&line).with_context(|| {
-                format!("failed to parse {} line {}", path.display(), index + 1)
-            })?;
+            let Ok(event) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
             if event.get("task_id").and_then(Value::as_str) == Some(task_id)
                 && is_proof_event(&event)
             {
@@ -456,9 +456,15 @@ fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
             for entry in entries {
                 let entry = entry.with_context(|| format!("failed to list {}", dir.display()))?;
                 let path = entry.path();
-                if path.is_dir() {
+                let file_type = entry
+                    .file_type()
+                    .with_context(|| format!("failed to inspect {}", path.display()))?;
+                if file_type.is_symlink() {
+                    continue;
+                }
+                if file_type.is_dir() {
                     collect_files(&path, files)?;
-                } else if path.is_file() {
+                } else if file_type.is_file() {
                     files.push(path);
                 }
             }
