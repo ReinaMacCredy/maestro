@@ -4,6 +4,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 pub mod decision;
 pub mod doctor;
 pub mod feature;
+pub mod hook;
 pub mod init;
 pub mod install;
 pub mod query;
@@ -268,7 +269,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Query(args) => query::run(args),
         RootCommand::Metrics(args) => placeholder("metrics", args),
         RootCommand::Mcp(args) => placeholder("mcp", args),
-        RootCommand::Hook(args) => placeholder("hook", args),
+        RootCommand::Hook(args) => hook::run(args),
         RootCommand::Migrate(args) => placeholder("migrate", args),
     }
 }

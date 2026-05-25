@@ -3,6 +3,7 @@ pub mod core;
 pub mod decisions;
 pub mod feature;
 pub mod harness;
+pub mod hooks;
 pub mod install;
 pub mod shell;
 pub mod task;
