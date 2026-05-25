@@ -57,6 +57,7 @@ pub fn extract_bundled_skills(
     paths: &MaestroPaths,
     mode: ExtractMode<'_>,
 ) -> Result<ExtractReport> {
+    managed_path(paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     ensure_dir(paths.skills_dir())?;
     let mut report = ExtractReport::default();
     let actions = bundled_skills()

@@ -1,6 +1,8 @@
 mod support;
 
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs as unix_fs;
 use std::process::Command;
 
 use support::TestTempDir;
@@ -204,4 +206,20 @@ fn init_refuses_existing_file_without_merge_or_force() {
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8");
     assert!(stderr.contains("already exists"));
+}
+
+#[cfg(unix)]
+#[test]
+fn init_rejects_symlinked_maestro_root() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    let external = TestTempDir::new("maestro-init-external");
+    unix_fs::symlink(external.path(), temp_dir.path().join(".maestro"))
+        .expect("invariant: symlinked maestro root should be creatable");
+
+    let output = maestro(&["init", "--yes"], temp_dir.path());
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+    assert!(!external.path().join("harness/harness.yml").exists());
 }

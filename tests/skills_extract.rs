@@ -88,6 +88,34 @@ fn extract_bundled_skills_rejects_symlinked_skill_tree() {
 
 #[cfg(unix)]
 #[test]
+fn extract_bundled_skills_rejects_symlinked_maestro_root() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let external = TestTempDir::new("maestro-skills-external");
+    let paths = MaestroPaths::new(temp_dir.path());
+    std::os::unix::fs::symlink(external.path(), paths.maestro_dir())
+        .expect("invariant: symlinked maestro dir should be creatable");
+
+    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+        .expect_err("invariant: symlinked maestro root should be rejected");
+
+    assert!(error.to_string().contains("symlink"));
+    assert!(!external
+        .path()
+        .join("skills/maestro-task/SKILL.md")
+        .exists());
+}
+
+#[test]
+fn bundled_skill_contents_include_activation_logging_instruction() {
+    for skill in bundled_skills() {
+        assert!(skill.contents.contains("skill_activation"));
+        assert!(skill.contents.contains(skill.name));
+        assert!(skill.contents.contains("maestro hook record"));
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn extract_bundled_skills_rejects_symlinked_skill_parent() {
     let temp_dir = TestTempDir::new("maestro-skills-test");
     let external = TestTempDir::new("maestro-skills-external");

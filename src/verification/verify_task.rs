@@ -458,6 +458,10 @@ fn phase4_tool_claims(event: &Value) -> Vec<String> {
     {
         claims.push(format!("{tool_name} {status} {tool_input_hash}"));
     }
+    if tool_name == Some("Bash") && status == Some("ok") && tool_input_hash.is_some() {
+        claims.push("tests pass".to_string());
+        claims.push("tests passed".to_string());
+    }
 
     claims
 }

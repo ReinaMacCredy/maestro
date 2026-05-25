@@ -187,12 +187,18 @@ pub fn run_update_with_seams(
 ) -> Result<UpdateOutcome> {
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
-    let extract_report = extract_bundled_skills(
+    let extract_report = match extract_bundled_skills(
         options.paths,
         ExtractMode::Update {
             backup_timestamp: options.backup_timestamp,
         },
-    )?;
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            cleanup_prepared_binary(&binary_candidate);
+            return Err(error);
+        }
+    };
     let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
         Ok(status) => status,
         Err(error) => {
@@ -302,6 +308,12 @@ fn cleanup_work_dir(work_dir: &Path) {
     let _ = fs::remove_dir_all(work_dir);
 }
 
+fn cleanup_prepared_binary(binary: &PreparedBinary) {
+    if let PreparedBinary::Candidate { work_dir, .. } = binary {
+        cleanup_work_dir(work_dir);
+    }
+}
+
 fn read_schema_version(path: &Path) -> Result<String> {
     let contents = fs::read_to_string(path)
         .with_context(|| format!("failed to read schema artifact {}", path.display()))?;
@@ -338,7 +350,7 @@ fn replace_binary_atomic(current: &Path, candidate: &Path) -> Result<()> {
             )
         });
     }
-    sync_parent_dir(current)?;
+    let _ = sync_parent_dir(current);
 
     Ok(())
 }

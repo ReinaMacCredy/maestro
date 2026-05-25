@@ -164,7 +164,7 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
 fn task_verify_accepts_phase4_post_tool_use_hook_event() {
     let temp = setup_repo();
     let repo = temp.path();
-    create_completed_task(repo, "Bash ok");
+    create_completed_task(repo, "tests pass");
     record_hook_event(
         repo,
         r#"{"session_id":"run-001","event_type":"PostToolUse","task_id":"task-001","tool_name":"Bash","status":"ok","tool_input":{"command":"cargo test"}}"#,

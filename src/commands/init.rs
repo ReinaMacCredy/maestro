@@ -4,6 +4,7 @@ use anyhow::{bail, Context, Result};
 
 use crate::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::core::fs::ensure_dir;
+use crate::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::core::safe_write::write_string_atomic;
 use crate::harness::schema::HarnessConfig;
@@ -16,6 +17,7 @@ use super::InitArgs;
 pub fn run(args: InitArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
+    managed_path(&paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     let plan = InitPlan::new(&paths)?;
 
     if args.dry_run {
