@@ -328,6 +328,20 @@ fn task_id_prefix_lookup_rejects_ambiguous_matches() {
 }
 
 #[test]
+fn task_lookup_rejects_path_traversal_ids() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    assert_success(
+        &maestro(repo, &["task", "create", "First task"]),
+        &["task", "create", "First task"],
+    );
+
+    let show = maestro(repo, &["task", "show", "../task-001"]);
+    assert_failure(&show, &["task", "show", "../task-001"]);
+    assert!(stderr(&show).contains("invalid task id"));
+}
+
+#[test]
 fn list_supports_basic_output_and_requested_filters() {
     let temp = setup_repo();
     let repo = temp.path();

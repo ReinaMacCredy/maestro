@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
@@ -7,6 +7,7 @@ use crate::task::template::{load_task, TaskRecord, TaskSnapshot};
 
 /// Resolve a task id or unique id-prefix to its `task.yaml` path.
 pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
+    validate_task_lookup_id(id)?;
     let direct = tasks_dir.join(id).join("task.yaml");
     if direct.is_file() {
         return Ok(direct);
@@ -36,6 +37,17 @@ pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
         1 => Ok(matches.remove(0)),
         _ => bail!("task id {id} is ambiguous"),
     }
+}
+
+fn validate_task_lookup_id(id: &str) -> Result<()> {
+    if id.is_empty()
+        || Path::new(id)
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        bail!("invalid task id: {id}");
+    }
+    Ok(())
 }
 
 /// Load a task by id or unique id-prefix with its optimistic save snapshot.
