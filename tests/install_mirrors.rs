@@ -9,6 +9,15 @@ use maestro::install::mirrors::{apply_mirrors, mirror_plan, remove_mirrors};
 use maestro::install::InstallAgent;
 use support::TestTempDir;
 
+const HOOK_EVENTS: [&str; 6] = [
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PermissionRequest",
+    "PostToolUse",
+    "Stop",
+];
+
 #[test]
 fn mirror_plan_writes_managed_content_for_claude() {
     let plans = mirror_plan(InstallAgent::Claude).expect("invariant: mirror plan should build");
@@ -21,6 +30,12 @@ fn mirror_plan_writes_managed_content_for_claude() {
             && plan.contents.contains("\"_maestro_managed_keys\"")
             && plan.contents.contains("\"hooks\"")
     }));
+    let hook_plan = plans
+        .iter()
+        .find(|plan| plan.relative_path == ".claude/settings.local.json")
+        .expect("invariant: Claude hook plan should exist");
+    assert_eq!(hook_plan.managed_keys, vec!["hooks"]);
+    assert_hook_shape(&hook_plan.contents, false);
 }
 
 #[test]
@@ -38,6 +53,12 @@ fn mirror_plan_writes_codex_hook_timeout_and_trust_related_files() {
             && plan.contents.contains("\"timeout\": 5")
             && plan.contents.contains("maestro hook record")
     }));
+    let hook_plan = plans
+        .iter()
+        .find(|plan| plan.relative_path == ".codex/hooks.json")
+        .expect("invariant: Codex hook plan should exist");
+    assert_eq!(hook_plan.managed_keys, vec!["hooks"]);
+    assert_hook_shape(&hook_plan.contents, true);
 }
 
 #[test]
@@ -199,4 +220,39 @@ fn install_lock_rejects_schema_mismatch() {
     let error = InstallLock::load(&lock_path).expect_err("schema mismatch should fail");
 
     assert!(error.to_string().contains("schema mismatch"));
+}
+
+fn assert_hook_shape(contents: &str, expect_timeout: bool) {
+    let value = serde_json::from_str::<serde_json::Value>(contents)
+        .expect("invariant: hook mirror should be valid JSON");
+    let hooks = value
+        .get("hooks")
+        .and_then(serde_json::Value::as_object)
+        .expect("invariant: hooks should be an object");
+
+    assert_eq!(hooks.len(), HOOK_EVENTS.len());
+    for event in HOOK_EVENTS {
+        let entry = hooks
+            .get(event)
+            .and_then(serde_json::Value::as_array)
+            .and_then(|entries| entries.first())
+            .expect("invariant: hook entry should exist");
+        assert_eq!(entry.get("matcher"), Some(&serde_json::json!("*")));
+        let command = entry
+            .get("hooks")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|commands| commands.first())
+            .expect("invariant: hook command should exist");
+
+        assert_eq!(command.get("type"), Some(&serde_json::json!("command")));
+        assert_eq!(
+            command.get("command"),
+            Some(&serde_json::json!("maestro hook record"))
+        );
+        if expect_timeout {
+            assert_eq!(command.get("timeout"), Some(&serde_json::json!(5)));
+        } else {
+            assert!(command.get("timeout").is_none());
+        }
+    }
 }

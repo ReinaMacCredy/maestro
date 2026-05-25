@@ -242,6 +242,57 @@ fn uninstall_restores_preexisting_json_hooks() {
 }
 
 #[test]
+fn uninstall_claude_removes_owned_hooks_and_preserves_user_json_keys() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::create_dir_all(temp_dir.path().join(".claude"))
+        .expect("invariant: claude config dir should be creatable");
+    fs::write(
+        temp_dir.path().join(".claude/settings.local.json"),
+        "{\n  \"user\": true\n}\n",
+    )
+    .expect("invariant: settings json should be writable");
+
+    let install = maestro(&["install", "--agent", "claude"], temp_dir.path());
+    assert!(install.status.success());
+    let uninstall = maestro(&["uninstall", "--agent", "claude"], temp_dir.path());
+
+    assert!(
+        uninstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+    let settings = fs::read_to_string(temp_dir.path().join(".claude/settings.local.json"))
+        .expect("invariant: settings json should be readable");
+    let parsed = serde_json::from_str::<serde_json::Value>(&settings)
+        .expect("invariant: settings json should parse");
+    assert_eq!(parsed.get("user"), Some(&serde_json::json!(true)));
+    assert!(parsed.get("hooks").is_none());
+    assert!(parsed.get("_maestro_managed_keys").is_none());
+}
+
+#[test]
+fn uninstall_without_lock_does_not_remove_hook_config() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::create_dir_all(temp_dir.path().join(".codex"))
+        .expect("invariant: codex config dir should be creatable");
+    let hooks_path = temp_dir.path().join(".codex/hooks.json");
+    let original_hooks = "{\n  \"_maestro_managed_keys\": [\"hooks\"],\n  \"hooks\": {\n    \"Stop\": []\n  },\n  \"user\": true\n}\n";
+    fs::write(&hooks_path, original_hooks).expect("invariant: hooks json should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(
+        uninstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+    let hooks = fs::read_to_string(hooks_path).expect("invariant: hooks json should be readable");
+    assert_eq!(hooks, original_hooks);
+}
+
+#[test]
 fn reinstall_preserves_json_restore_snapshot() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());

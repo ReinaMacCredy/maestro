@@ -1,3 +1,4 @@
+mod hooks;
 pub mod lock;
 pub mod mirrors;
 

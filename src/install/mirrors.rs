@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
 use crate::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
@@ -15,6 +15,7 @@ use crate::core::managed_blocks::{
 };
 use crate::core::paths::MaestroPaths;
 use crate::core::safe_write::write_string_atomic;
+use crate::install::hooks::ManagedHookConfig;
 use crate::install::lock::{AgentInstall, FileOwnership, MirrorKind};
 use crate::install::InstallAgent;
 
@@ -69,17 +70,9 @@ pub fn mirror_plan(agent: InstallAgent) -> Result<Vec<MirrorPlan>> {
     ];
 
     match agent {
-        InstallAgent::Claude => plans.push(json_keys(
-            ".claude/settings.local.json",
-            hook_json(false),
-            vec!["hooks".to_string()],
-        )?),
+        InstallAgent::Claude => plans.push(hook_config_plan(agent)?),
         InstallAgent::Codex => {
-            plans.push(json_keys(
-                ".codex/hooks.json",
-                hook_json(true),
-                vec!["hooks".to_string()],
-            )?);
+            plans.push(hook_config_plan(agent)?);
             plans.push(hash(
                 ".codex/config.toml",
                 codex_config_block(),
@@ -252,8 +245,8 @@ fn contents_for_existing(
             codex_config_block(),
         )),
         MirrorKind::JsonManagedKeys => {
-            let with_timeout = agent == InstallAgent::Codex;
-            let object = hook_json(with_timeout)
+            let object = ManagedHookConfig::for_agent(agent)
+                .contents
                 .as_object()
                 .cloned()
                 .context("managed JSON mirror must be an object")?;
@@ -545,6 +538,11 @@ fn json_keys(relative_path: &str, value: Value, managed_keys: Vec<String>) -> Re
     })
 }
 
+fn hook_config_plan(agent: InstallAgent) -> Result<MirrorPlan> {
+    let config = ManagedHookConfig::for_agent(agent);
+    json_keys(config.relative_path, config.contents, config.managed_keys)
+}
+
 fn claude_md_block() -> &'static str {
     "# Maestro Harness Protocol\n@.maestro/harness/HARNESS.md"
 }
@@ -559,31 +557,6 @@ fn gitignore_block() -> &'static str {
 
 fn codex_config_block() -> &'static str {
     "# Maestro MCP config is installed in a later phase when `maestro mcp serve` exists."
-}
-
-fn hook_json(with_timeout: bool) -> Value {
-    let events = [
-        "SessionStart",
-        "UserPromptSubmit",
-        "PreToolUse",
-        "PostToolUse",
-        "PermissionRequest",
-        "Stop",
-    ];
-    let mut hooks = Map::new();
-    for event in events {
-        let command = if with_timeout {
-            json!({"type": "command", "command": "maestro hook record", "timeout": 5})
-        } else {
-            json!({"type": "command", "command": "maestro hook record"})
-        };
-        hooks.insert(
-            event.to_string(),
-            json!([{"matcher": "*", "hooks": [command]}]),
-        );
-    }
-
-    json!({ "hooks": hooks })
 }
 
 fn previous_json_values(
