@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 
 use crate::core::paths::MaestroPaths;
 use crate::core::schema::EVENT_SCHEMA_VERSION;
+use crate::evidence::run_evidence;
 
 const UNATTRIBUTED_SESSION: &str = "unattributed";
 
@@ -24,7 +25,15 @@ pub fn record_payload(paths: &MaestroPaths, raw: &str) -> Result<()> {
     let Some(event) = normalize_event(&payload) else {
         return Ok(());
     };
-    append_event(paths, &event)
+    append_event(paths, &event)?;
+    if is_stop_event(&event) {
+        let session_id = event
+            .get("session_id")
+            .and_then(Value::as_str)
+            .unwrap_or(UNATTRIBUTED_SESSION);
+        let _ = run_evidence::write_for_session(paths, session_id);
+    }
+    Ok(())
 }
 
 fn normalize_event(payload: &Value) -> Option<Value> {
@@ -110,6 +119,10 @@ fn normalized_event_type(event_type: &str) -> &str {
         "SkillActivation" => "skill_activation",
         other => other,
     }
+}
+
+fn is_stop_event(event: &Value) -> bool {
+    event.get("event_type").and_then(Value::as_str) == Some("Stop")
 }
 
 fn copy_string(source: &Value, target: &mut Map<String, Value>, field: &str) {

@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod core;
 pub mod decisions;
+pub mod evidence;
 pub mod feature;
 pub mod harness;
 pub mod hooks;
