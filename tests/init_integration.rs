@@ -223,3 +223,50 @@ fn init_rejects_symlinked_maestro_root() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
     assert!(!external.path().join("harness/harness.yml").exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn init_rejects_symlinked_managed_subdirectory() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    let external = TestTempDir::new("maestro-init-external");
+    fs::create_dir_all(temp_dir.path().join(".maestro"))
+        .expect("invariant: maestro dir should be writable");
+    unix_fs::symlink(external.path(), temp_dir.path().join(".maestro/harness"))
+        .expect("invariant: symlinked harness dir should be creatable");
+
+    let output = maestro(&["init", "--yes"], temp_dir.path());
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+    assert!(!external.path().join("harness.yml").exists());
+}
+
+#[test]
+fn init_preflights_bundled_skill_conflicts_before_writing_harness() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    let skill = temp_dir
+        .path()
+        .join(".maestro/skills/maestro-task/SKILL.md");
+    fs::create_dir_all(
+        skill
+            .parent()
+            .expect("invariant: skill path should have a parent"),
+    )
+    .expect("invariant: skill parent should be writable");
+    fs::write(&skill, "custom skill\n").expect("invariant: skill should be writable");
+
+    let output = maestro(&["init", "--yes"], temp_dir.path());
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("already exists"));
+    assert!(!temp_dir
+        .path()
+        .join(".maestro/harness/harness.yml")
+        .exists());
+    assert_eq!(
+        fs::read_to_string(skill).expect("invariant: skill should remain readable"),
+        "custom skill\n"
+    );
+}

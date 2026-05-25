@@ -265,6 +265,7 @@ fn prepare_binary_update(
     let candidate = match downloader.download(&work_dir) {
         Ok(DownloadedBinary::Available(path)) => path,
         Ok(DownloadedBinary::Unavailable(reason)) => {
+            cleanup_work_dir(&work_dir);
             return Ok(PreparedBinary::Skipped { reason });
         }
         Err(error) => {

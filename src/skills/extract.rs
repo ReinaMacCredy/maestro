@@ -70,6 +70,16 @@ pub fn extract_bundled_skills(
     Ok(report)
 }
 
+/// Validate bundled skill extraction without writing files.
+pub fn validate_bundled_skills(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<()> {
+    managed_path(paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
+    bundled_skills()
+        .iter()
+        .map(|skill| plan_skill(paths, skill, mode))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(())
+}
+
 /// Roll back skill file writes recorded in an extraction report.
 pub fn rollback_bundled_skill_writes(report: &ExtractReport) -> Result<()> {
     for write in report.writes.iter().rev() {

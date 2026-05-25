@@ -6,6 +6,14 @@ use anyhow::{Context, Result};
 
 /// List all `.maestro/runs/**/events.jsonl` files.
 pub fn event_files_under(runs_dir: &Path) -> Result<Vec<PathBuf>> {
+    match fs::symlink_metadata(runs_dir) {
+        Ok(metadata) if metadata.file_type().is_symlink() => return Ok(Vec::new()),
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to inspect {}", runs_dir.display()));
+        }
+    }
     let mut files = Vec::new();
     collect_files(runs_dir, &mut files)?;
     files.retain(|path| path.file_name().and_then(|name| name.to_str()) == Some("events.jsonl"));

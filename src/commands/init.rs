@@ -9,7 +9,7 @@ use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::core::safe_write::write_string_atomic;
 use crate::harness::schema::HarnessConfig;
 use crate::harness::templates::{backlog_yaml, features_yaml, harness_yml, HARNESS_MD};
-use crate::skills::extract::{extract_bundled_skills, ExtractMode};
+use crate::skills::extract::{extract_bundled_skills, validate_bundled_skills, ExtractMode};
 
 use super::InitArgs;
 
@@ -19,14 +19,11 @@ pub fn run(args: InitArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
     managed_path(&paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     let plan = InitPlan::new(&paths)?;
+    validate_plan_paths(&paths, &plan)?;
 
     if args.dry_run {
         print_dry_run(&plan);
         return Ok(());
-    }
-
-    for directory in plan.directories {
-        ensure_dir(directory)?;
     }
 
     let backup_timestamp = if args.force {
@@ -34,11 +31,37 @@ pub fn run(args: InitArgs) -> Result<()> {
     } else {
         None
     };
+    let extract_mode = extract_mode(&args, backup_timestamp.as_deref())?;
+    validate_bundled_skills(&paths, extract_mode)?;
+
+    for directory in plan.directories {
+        ensure_dir(directory)?;
+    }
     for file in plan.files {
         write_init_file(&paths, file, &args, backup_timestamp.as_deref())?;
     }
-    extract_bundled_skills(&paths, extract_mode(&args, backup_timestamp.as_deref())?)?;
+    extract_bundled_skills(&paths, extract_mode)?;
 
+    Ok(())
+}
+
+fn validate_plan_paths(paths: &MaestroPaths, plan: &InitPlan) -> Result<()> {
+    for directory in &plan.directories {
+        validate_managed_path(paths, directory)?;
+    }
+    for file in &plan.files {
+        validate_managed_path(paths, &file.path)?;
+    }
+    Ok(())
+}
+
+fn validate_managed_path(paths: &MaestroPaths, path: &std::path::Path) -> Result<()> {
+    let relative = path
+        .strip_prefix(paths.repo_root())
+        .with_context(|| format!("managed path is outside repo: {}", path.display()))?
+        .to_str()
+        .with_context(|| format!("managed path is not UTF-8: {}", path.display()))?;
+    managed_path(paths, relative, SymlinkPolicy::RejectAllComponents)?;
     Ok(())
 }
 

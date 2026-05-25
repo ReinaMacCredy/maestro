@@ -65,6 +65,26 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
 }
 
 #[test]
+fn unavailable_update_cleans_stale_stage_directory() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+    fs::create_dir_all(paths.maestro_dir().join("update/nested"))
+        .expect("invariant: stale update dir should be writable");
+    fs::write(
+        paths.maestro_dir().join("update/nested/candidate"),
+        "stale\n",
+    )
+    .expect("invariant: stale update file should be writable");
+
+    let update = maestro(&["update"], temp_dir.path());
+
+    assert_success(&update);
+    assert!(!paths.maestro_dir().join("update").exists());
+}
+
+#[test]
 fn simulated_download_failure_preserves_existing_binary_file() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
