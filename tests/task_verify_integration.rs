@@ -1,9 +1,10 @@
 mod support;
 
 use std::fs;
+use std::io::Write;
 use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use serde_json::Value;
 use serde_yaml::Value as YamlValue;
@@ -112,6 +113,27 @@ fn write_event(repo: &Path, task_id: &str, message: &str) {
     .expect("invariant: events.jsonl should be writable");
 }
 
+fn record_hook_event(repo: &Path, payload: &str) {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["hook", "record"])
+        .current_dir(repo)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("invariant: compiled maestro binary should run hook record");
+    child
+        .stdin
+        .as_mut()
+        .expect("invariant: hook stdin should be piped")
+        .write_all(payload.as_bytes())
+        .expect("invariant: hook payload should be writable");
+    let output = child
+        .wait_with_output()
+        .expect("invariant: hook record should return output");
+    assert_success(&output, &["hook", "record"]);
+}
+
 #[test]
 fn task_verify_passes_with_event_proof_and_persists_verification_json() {
     let temp = setup_repo();
@@ -136,6 +158,21 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
         .as_str()
         .expect("invariant: proof source path should be present")
         .contains("events.jsonl"));
+}
+
+#[test]
+fn task_verify_accepts_phase4_post_tool_use_hook_event() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "Bash ok");
+    record_hook_event(
+        repo,
+        r#"{"session_id":"run-001","event_type":"PostToolUse","task_id":"task-001","tool_name":"Bash","status":"ok","tool_input":{"command":"cargo test"}}"#,
+    );
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
+    assert_eq!(verification_json(repo, "task-001")["status"], "passed");
 }
 
 #[test]

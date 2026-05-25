@@ -39,6 +39,7 @@ pub fn validate_skill_symlink_destination(
     paths: &MaestroPaths,
     symlink: SkillSymlink,
 ) -> Result<()> {
+    validate_canonical_skills_tree(paths)?;
     let path = managed_symlink_path(paths, symlink.relative_path)?;
     match inspect_destination(&path, symlink)? {
         DestinationState::Missing | DestinationState::ExpectedSymlink => Ok(()),
@@ -47,6 +48,7 @@ pub fn validate_skill_symlink_destination(
 
 /// Create the expected skill symlink, or no-op when it is already present.
 pub fn create_skill_symlink(paths: &MaestroPaths, symlink: SkillSymlink) -> Result<()> {
+    validate_canonical_skills_tree(paths)?;
     let path = managed_symlink_path(paths, symlink.relative_path)?;
     match inspect_destination(&path, symlink)? {
         DestinationState::ExpectedSymlink => return Ok(()),
@@ -110,6 +112,11 @@ fn inspect_destination(path: &Path, symlink: SkillSymlink) -> Result<Destination
 
 fn managed_symlink_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
     managed_path(paths, relative_path, SymlinkPolicy::RejectParentComponents)
+}
+
+fn validate_canonical_skills_tree(paths: &MaestroPaths) -> Result<()> {
+    managed_path(paths, ".maestro/skills", SymlinkPolicy::RejectAllComponents)?;
+    Ok(())
 }
 
 #[cfg(unix)]

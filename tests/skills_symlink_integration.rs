@@ -98,6 +98,23 @@ mod unix {
     }
 
     #[test]
+    fn install_refuses_symlinked_canonical_skills_tree() {
+        let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
+        let external = TestTempDir::new("maestro-skills-symlink-external");
+        init_repo(temp_dir.path());
+        fs::create_dir_all(temp_dir.path().join(".maestro"))
+            .expect("invariant: maestro dir should be creatable");
+        std::os::unix::fs::symlink(external.path(), temp_dir.path().join(".maestro/skills"))
+            .expect("invariant: symlinked canonical skills dir should be creatable");
+
+        let output = maestro(&["install", "--agent", "claude"], temp_dir.path());
+
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+        assert!(!temp_dir.path().join(".claude/skills").exists());
+    }
+
+    #[test]
     fn uninstall_removes_owned_expected_symlink() {
         let temp_dir = TestTempDir::new("maestro-skills-symlink-test");
         init_repo(temp_dir.path());

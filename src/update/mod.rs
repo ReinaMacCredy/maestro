@@ -15,7 +15,9 @@ use crate::core::schema::{
     BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
     INSTALL_LOCK_SCHEMA_VERSION,
 };
-use crate::skills::extract::{extract_bundled_skills, ExtractMode, SkillBackup};
+use crate::skills::extract::{
+    extract_bundled_skills, rollback_bundled_skill_writes, ExtractMode, SkillBackup,
+};
 
 static REPLACE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -184,13 +186,20 @@ pub fn run_update_with_seams(
     replacer: &dyn BinaryReplacer,
 ) -> Result<UpdateOutcome> {
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
-    let binary_status = update_binary(options, downloader, verifier, replacer)?;
+    let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
     let extract_report = extract_bundled_skills(
         options.paths,
         ExtractMode::Update {
             backup_timestamp: options.backup_timestamp,
         },
     )?;
+    let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
+        Ok(status) => status,
+        Err(error) => {
+            rollback_bundled_skill_writes(&extract_report)?;
+            return Err(error);
+        }
+    };
 
     Ok(UpdateOutcome {
         binary_status,
@@ -236,17 +245,21 @@ pub fn detect_schema_mismatches(paths: &MaestroPaths) -> Result<Vec<SchemaMismat
     Ok(mismatches)
 }
 
-fn update_binary(
+enum PreparedBinary {
+    Skipped { reason: String },
+    Candidate { path: PathBuf, work_dir: PathBuf },
+}
+
+fn prepare_binary_update(
     options: &UpdateOptions<'_>,
     downloader: &dyn UpdateDownloader,
     verifier: &dyn ChecksumVerifier,
-    replacer: &dyn BinaryReplacer,
-) -> Result<BinaryStatus> {
+) -> Result<PreparedBinary> {
     let work_dir = options.paths.maestro_dir().join("update");
     let candidate = match downloader.download(&work_dir) {
         Ok(DownloadedBinary::Available(path)) => path,
         Ok(DownloadedBinary::Unavailable(reason)) => {
-            return Ok(BinaryStatus::Skipped { reason });
+            return Ok(PreparedBinary::Skipped { reason });
         }
         Err(error) => {
             cleanup_work_dir(&work_dir);
@@ -254,20 +267,34 @@ fn update_binary(
         }
     };
 
-    let result = verifier
-        .verify(&candidate)
-        .and_then(|()| replacer.replace(options.executable_path, &candidate))
-        .map(|()| BinaryStatus::Replaced {
-            path: options.executable_path.to_path_buf(),
-        });
-    cleanup_candidate(&work_dir, &candidate);
-    result
+    if let Err(error) = verifier.verify(&candidate) {
+        cleanup_work_dir(&work_dir);
+        return Err(error);
+    }
+
+    Ok(PreparedBinary::Candidate {
+        path: candidate,
+        work_dir,
+    })
 }
 
-fn cleanup_candidate(work_dir: &Path, candidate: &Path) {
-    if candidate.starts_with(work_dir) {
-        let _ = fs::remove_file(candidate);
-        let _ = fs::remove_dir(work_dir);
+fn replace_prepared_binary(
+    options: &UpdateOptions<'_>,
+    replacer: &dyn BinaryReplacer,
+    binary: PreparedBinary,
+) -> Result<BinaryStatus> {
+    match binary {
+        PreparedBinary::Skipped { reason } => Ok(BinaryStatus::Skipped { reason }),
+        PreparedBinary::Candidate { path, work_dir } => {
+            let result =
+                replacer
+                    .replace(options.executable_path, &path)
+                    .map(|()| BinaryStatus::Replaced {
+                        path: options.executable_path.to_path_buf(),
+                    });
+            cleanup_work_dir(&work_dir);
+            result
+        }
     }
 }
 

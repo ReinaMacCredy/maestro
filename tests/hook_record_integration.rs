@@ -159,6 +159,21 @@ fn shared_hook_events_are_accepted() {
 }
 
 #[test]
+fn skill_activation_event_is_normalized() {
+    let repo = init_repo();
+    let output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-skill","event_type":"SkillActivation","skill_name":"maestro-task","activation_mode":"agent_selected"}"#,
+    );
+
+    assert!(output.status.success());
+    let events = read_events(repo.path(), "session-skill");
+    assert_eq!(events[0]["event_type"], "skill_activation");
+    assert_eq!(events[0]["skill_name"], "maestro-task");
+    assert_eq!(events[0]["activation_mode"], "agent_selected");
+}
+
+#[test]
 fn stop_evidence_failure_warns_without_failing_hook() {
     let repo = init_repo();
     let evidence_path = repo
@@ -176,4 +191,27 @@ fn stop_evidence_failure_warns_without_failing_hook() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("failed to write run evidence"));
     let events = read_events(repo.path(), "session-warning");
     assert_eq!(events[0]["event_type"], "Stop");
+}
+
+#[cfg(unix)]
+#[test]
+fn hook_record_refuses_symlinked_run_artifacts_without_failing_adapter() {
+    let repo = init_repo();
+    let external = TestTempDir::new("maestro-hook-external");
+    fs::create_dir_all(repo.path().join(".maestro"))
+        .expect("invariant: maestro dir should be creatable");
+    std::os::unix::fs::symlink(external.path(), repo.path().join(".maestro/runs"))
+        .expect("invariant: symlinked runs dir should be creatable");
+
+    let output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-symlink","event_type":"SessionStart"}"#,
+    );
+
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+    assert!(!external
+        .path()
+        .join("session-symlink/events.jsonl")
+        .exists());
 }

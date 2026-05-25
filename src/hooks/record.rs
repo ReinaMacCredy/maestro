@@ -6,6 +6,7 @@ use serde_json::{json, Map, Value};
 
 use crate::core::git;
 use crate::core::hash::sha256_prefixed;
+use crate::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::core::paths::MaestroPaths;
 use crate::core::schema::EVENT_SCHEMA_VERSION;
 use crate::core::time::utc_now_timestamp;
@@ -96,7 +97,11 @@ fn append_event(paths: &MaestroPaths, event: &Value) -> Result<()> {
         .and_then(Value::as_str)
         .map(run_dir_name)
         .unwrap_or_else(|| UNATTRIBUTED_SESSION.to_string());
-    let path = paths.runs_dir().join(session_id).join("events.jsonl");
+    let path = managed_path(
+        paths,
+        &format!(".maestro/runs/{session_id}/events.jsonl"),
+        SymlinkPolicy::RejectAllComponents,
+    )?;
     let mut file = match open_event_file(&path) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {

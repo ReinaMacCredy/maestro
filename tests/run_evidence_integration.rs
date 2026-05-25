@@ -84,7 +84,7 @@ fn stop_record_writes_run_evidence_with_tool_counts_and_duration() {
     assert_eq!(evidence["session_id"], "session-123");
     assert_eq!(evidence["agent"], "codex");
     assert_eq!(evidence["task_id"], "task-002");
-    assert_eq!(evidence["tools_used"]["Bash"], 2);
+    assert_eq!(evidence["tools_used"]["Bash"], 1);
     assert!(evidence["start_at"].as_str().is_some());
     assert!(evidence["end_at"].as_str().is_some());
     assert!(evidence["duration_seconds"].as_u64().is_some());
@@ -124,7 +124,7 @@ fn evidence_generation_tolerates_invalid_lines_and_missing_fields() {
     writeln!(file, "not json").expect("invariant: malformed fixture line should be writable");
     writeln!(
         file,
-        r#"{{"event_type":"PreToolUse","tool_name":"Read","ts":"not-a-timestamp"}}"#
+        r#"{{"event_type":"PostToolUse","tool_name":"Read","ts":"not-a-timestamp"}}"#
     )
     .expect("invariant: incomplete fixture line should be writable");
 

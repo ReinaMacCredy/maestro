@@ -5,6 +5,7 @@ use anyhow::{bail, Context, Result};
 
 use crate::core::backup::backup_file_with_timestamp;
 use crate::core::fs::ensure_dir;
+use crate::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::core::paths::MaestroPaths;
 use crate::core::safe_write::write_string_atomic;
 use crate::skills::bundled::{bundled_skills, BundledSkill};
@@ -27,6 +28,8 @@ pub enum ExtractMode<'a> {
 pub struct ExtractReport {
     /// Backups created before overwriting edited bundled skill files.
     pub backups: Vec<SkillBackup>,
+    /// Skill files written by this extraction.
+    pub writes: Vec<SkillWrite>,
 }
 
 /// A bundled skill backup created during extraction.
@@ -36,6 +39,17 @@ pub struct SkillBackup {
     pub skill_name: String,
     /// Backup file path.
     pub path: PathBuf,
+}
+
+/// A bundled skill file written during extraction.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SkillWrite {
+    /// Bundled skill name.
+    pub skill_name: String,
+    /// Skill file path.
+    pub path: PathBuf,
+    /// Previous file contents, if the file existed before extraction.
+    pub previous: Option<String>,
 }
 
 /// Extract all bundled skills into `.maestro/skills/`.
@@ -53,6 +67,26 @@ pub fn extract_bundled_skills(
     apply_actions(paths, &actions, &mut report)?;
 
     Ok(report)
+}
+
+/// Roll back skill file writes recorded in an extraction report.
+pub fn rollback_bundled_skill_writes(report: &ExtractReport) -> Result<()> {
+    for write in report.writes.iter().rev() {
+        match &write.previous {
+            Some(contents) => write_string_atomic(&write.path, contents)
+                .with_context(|| format!("failed to roll back {}", write.path.display()))?,
+            None => match fs::remove_file(&write.path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("failed to roll back {}", write.path.display()));
+                }
+            },
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -76,7 +110,8 @@ fn plan_skill<'a>(
     skill: &'a BundledSkill,
     mode: ExtractMode<'a>,
 ) -> Result<SkillAction<'a>> {
-    let path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    let relative_path = format!(".maestro/skills/{}/SKILL.md", skill.name);
+    let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
     let existing = if path.exists() {
         Some(
             fs::read_to_string(&path)
@@ -131,7 +166,14 @@ fn apply_actions(
         if let (Some(operation), Some(timestamp)) =
             (action.backup_operation, action.backup_timestamp)
         {
-            let backup = backup_file_with_timestamp(paths, &action.path, operation, timestamp)?;
+            let backup = match backup_file_with_timestamp(paths, &action.path, operation, timestamp)
+            {
+                Ok(backup) => backup,
+                Err(error) => {
+                    rollback_writes(&written)?;
+                    return Err(error);
+                }
+            };
             report.backups.push(SkillBackup {
                 skill_name: action.skill.name.to_string(),
                 path: backup,
@@ -144,6 +186,11 @@ fn apply_actions(
             return Err(error);
         }
         written.push(AppliedWrite {
+            path: action.path.clone(),
+            previous: action.existing.clone(),
+        });
+        report.writes.push(SkillWrite {
+            skill_name: action.skill.name.to_string(),
             path: action.path.clone(),
             previous: action.existing.clone(),
         });

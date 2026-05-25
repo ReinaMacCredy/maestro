@@ -69,6 +69,40 @@ fn extract_bundled_skills_preserves_user_added_skills() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn extract_bundled_skills_rejects_symlinked_skill_tree() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let external = TestTempDir::new("maestro-skills-external");
+    let paths = MaestroPaths::new(temp_dir.path());
+    fs::create_dir_all(paths.maestro_dir()).expect("invariant: maestro dir should be creatable");
+    std::os::unix::fs::symlink(external.path(), paths.skills_dir())
+        .expect("invariant: symlinked skills dir should be creatable");
+
+    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+        .expect_err("invariant: symlinked skills dir should be rejected");
+
+    assert!(error.to_string().contains("symlink"));
+    assert!(!external.path().join("maestro-task/SKILL.md").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn extract_bundled_skills_rejects_symlinked_skill_parent() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let external = TestTempDir::new("maestro-skills-external");
+    let paths = MaestroPaths::new(temp_dir.path());
+    fs::create_dir_all(paths.skills_dir()).expect("invariant: skills dir should be creatable");
+    std::os::unix::fs::symlink(external.path(), paths.skills_dir().join("maestro-task"))
+        .expect("invariant: symlinked skill dir should be creatable");
+
+    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+        .expect_err("invariant: symlinked skill parent should be rejected");
+
+    assert!(error.to_string().contains("symlink"));
+    assert!(!external.path().join("SKILL.md").exists());
+}
+
 #[test]
 fn extract_bundled_skills_refuses_existing_bundled_file_by_default() {
     let temp_dir = TestTempDir::new("maestro-skills-test");

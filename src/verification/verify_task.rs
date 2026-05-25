@@ -15,7 +15,7 @@ use crate::core::fs::read_to_string_if_exists;
 use crate::core::git;
 use crate::core::paths::MaestroPaths;
 use crate::core::safe_write::write_string_atomic;
-use crate::core::schema::VERIFICATION_SCHEMA_VERSION;
+use crate::core::schema::{EVENT_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION};
 use crate::task::lookup::resolve_task_yaml_path;
 use crate::task::template::{
     load_task, save_task_with_snapshot, AcceptanceFile, StateHistoryEntry, TaskRecord,
@@ -399,7 +399,7 @@ fn collect_event_text(
 }
 
 fn is_proof_event(event: &Value) -> bool {
-    matches!(event_kind(event), Some("proof" | "Proof"))
+    matches!(event_kind(event), Some("proof" | "Proof")) || is_phase4_tool_proof_event(event)
 }
 
 fn event_kind(event: &Value) -> Option<&str> {
@@ -421,6 +421,44 @@ fn event_claims(event: &Value) -> Vec<String> {
     if let Some(values) = event.get("claims").and_then(Value::as_array) {
         claims.extend(values.iter().filter_map(Value::as_str).map(str::to_string));
     }
+    if is_phase4_tool_proof_event(event) {
+        claims.extend(phase4_tool_claims(event));
+    }
+    claims
+}
+
+fn is_phase4_tool_proof_event(event: &Value) -> bool {
+    event.get("schema_version").and_then(Value::as_str) == Some(EVENT_SCHEMA_VERSION)
+        && event.get("event_type").and_then(Value::as_str) == Some("PostToolUse")
+}
+
+fn phase4_tool_claims(event: &Value) -> Vec<String> {
+    let mut claims = Vec::new();
+    let tool_name = event.get("tool_name").and_then(Value::as_str);
+    let status = event.get("status").and_then(Value::as_str);
+    let tool_input_hash = event.get("tool_input_hash").and_then(Value::as_str);
+
+    if let Some(tool_name) = tool_name {
+        claims.push(tool_name.to_string());
+    }
+    if let Some(status) = status {
+        claims.push(status.to_string());
+    }
+    if let Some(tool_input_hash) = tool_input_hash {
+        claims.push(tool_input_hash.to_string());
+    }
+    if let (Some(tool_name), Some(status)) = (tool_name, status) {
+        claims.push(format!("{tool_name} {status}"));
+    }
+    if let (Some(tool_name), Some(tool_input_hash)) = (tool_name, tool_input_hash) {
+        claims.push(format!("{tool_name} {tool_input_hash}"));
+    }
+    if let (Some(tool_name), Some(status), Some(tool_input_hash)) =
+        (tool_name, status, tool_input_hash)
+    {
+        claims.push(format!("{tool_name} {status} {tool_input_hash}"));
+    }
+
     claims
 }
 

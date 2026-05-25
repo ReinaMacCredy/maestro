@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::core::paths::MaestroPaths;
 use crate::core::safe_write::write_string_atomic;
 use crate::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
@@ -29,15 +30,29 @@ struct RunEvidence {
 
 /// Aggregate `.maestro/runs/<session_id>/events.jsonl` into `run_evidence.yaml`.
 pub fn write_for_session(paths: &MaestroPaths, session_id: &str) -> Result<()> {
-    let run_dir = paths.runs_dir().join(run_dir_name(session_id));
-    let events_path = run_dir.join("events.jsonl");
+    let run_dir_name = run_dir_name(session_id);
+    managed_path(
+        paths,
+        &format!(".maestro/runs/{run_dir_name}"),
+        SymlinkPolicy::RejectAllComponents,
+    )?;
+    let events_path = managed_path(
+        paths,
+        &format!(".maestro/runs/{run_dir_name}/events.jsonl"),
+        SymlinkPolicy::RejectAllComponents,
+    )?;
     let events = BufReader::new(
         File::open(&events_path)
             .with_context(|| format!("failed to read {}", events_path.display()))?,
     );
     let evidence = build_evidence(session_id, events);
     let yaml = serde_yaml::to_string(&evidence).context("failed to serialize run evidence")?;
-    write_string_atomic(run_dir.join("run_evidence.yaml"), &yaml)
+    let evidence_path = managed_path(
+        paths,
+        &format!(".maestro/runs/{run_dir_name}/run_evidence.yaml"),
+        SymlinkPolicy::RejectAllComponents,
+    )?;
+    write_string_atomic(evidence_path, &yaml)
 }
 
 fn build_evidence(session_id: &str, events: impl BufRead) -> RunEvidence {
@@ -61,8 +76,10 @@ fn build_evidence(session_id: &str, events: impl BufRead) -> RunEvidence {
         if task_id.is_none() {
             task_id = string_field(&event, "task_id");
         }
-        if let Some(tool_name) = string_field(&event, "tool_name") {
-            *tools_used.entry(tool_name).or_insert(0) += 1;
+        if string_field(&event, "event_type").as_deref() == Some("PostToolUse") {
+            if let Some(tool_name) = string_field(&event, "tool_name") {
+                *tools_used.entry(tool_name).or_insert(0) += 1;
+            }
         }
         if string_field(&event, "event_type").as_deref() == Some("UserPromptSubmit") {
             prompts += 1;

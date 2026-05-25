@@ -182,6 +182,53 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
 }
 
 #[test]
+fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    let executable_path = temp_dir.path().join("bin").join("maestro");
+    fs::create_dir_all(
+        executable_path
+            .parent()
+            .expect("invariant: executable path should have a parent"),
+    )
+    .expect("invariant: executable parent should be creatable");
+    fs::write(&executable_path, "current binary\n")
+        .expect("invariant: current binary should be writable");
+    let skill = bundled_skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-task")
+        .expect("invariant: maestro-task should be bundled");
+    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    fs::create_dir_all(
+        skill_path
+            .parent()
+            .expect("invariant: skill path should have a parent"),
+    )
+    .expect("invariant: skill parent should be creatable");
+    fs::write(&skill_path, "edited bundled skill\n")
+        .expect("invariant: edited skill should be writable");
+
+    let error = run_update_with_seams(
+        &UpdateOptions {
+            paths: &paths,
+            executable_path: &executable_path,
+            backup_timestamp: "test",
+        },
+        &CandidateDownloader,
+        &NoopVerifier,
+        &FailingReplacer,
+    )
+    .expect_err("invariant: failing replacer should fail update");
+
+    assert!(error.to_string().contains("replace failed"));
+    assert_eq!(
+        fs::read_to_string(skill_path).expect("invariant: edited skill should remain readable"),
+        "edited bundled skill\n"
+    );
+    assert!(!paths.maestro_dir().join("update").exists());
+}
+
+#[test]
 fn schema_mismatch_reports_migrate_and_does_not_mutate_harness_files() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
@@ -275,6 +322,8 @@ struct CandidateDownloader;
 impl UpdateDownloader for CandidateDownloader {
     fn download(&self, work_dir: &Path) -> Result<DownloadedBinary> {
         fs::create_dir_all(work_dir)?;
+        fs::create_dir_all(work_dir.join("scratch"))?;
+        fs::write(work_dir.join("scratch/metadata"), "metadata\n")?;
         let candidate = work_dir.join("candidate-maestro");
         fs::write(&candidate, "replacement binary\n")?;
 
