@@ -11,6 +11,7 @@ pub mod query;
 pub mod shell_init;
 pub mod task;
 pub mod uninstall;
+pub mod update;
 pub mod verify;
 
 #[derive(Debug, Parser)]
@@ -258,7 +259,7 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         RootCommand::Init(args) => init::run(args),
         RootCommand::Install(args) => install::run(args),
-        RootCommand::Update => placeholder("update", ()),
+        RootCommand::Update => update::run(),
         RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
