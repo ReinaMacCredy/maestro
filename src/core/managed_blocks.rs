@@ -127,7 +127,10 @@ fn join_after_block_removal(before: &str, after: &str) -> String {
         return after.to_string();
     }
     if after.is_empty() {
-        return before.to_string();
+        return before
+            .strip_suffix("\n\n")
+            .map(|trimmed| format!("{trimmed}\n"))
+            .unwrap_or_else(|| before.to_string());
     }
 
     let before_without_boundary = before.trim_end_matches('\n');

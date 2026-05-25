@@ -77,6 +77,15 @@ fn remove_managed_block_preserves_user_content() {
 }
 
 #[test]
+fn remove_managed_block_at_eof_preserves_single_user_newline() {
+    let existing = "before\n\n# >>> maestro >>>\nmanaged\n# <<< maestro <<<\n";
+
+    let output = remove_managed_block(existing, ManagedBlockFormat::HashComment);
+
+    assert_eq!(output, "before\n");
+}
+
+#[test]
 fn json_managed_keys_are_merged_and_manifested() {
     let mut managed = Map::new();
     managed.insert("hooks".to_string(), json!({"Stop": []}));

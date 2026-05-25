@@ -1,0 +1,187 @@
+mod support;
+
+use std::fs;
+use std::process::Command;
+
+use support::TestTempDir;
+
+fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in init tests")
+}
+
+fn init_git_marker(repo: &std::path::Path) {
+    fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+}
+
+#[test]
+fn init_dry_run_prints_tree_without_writing() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+
+    let output = maestro(&["init", "--dry-run"], temp_dir.path());
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
+    assert!(stdout.contains("maestro init would create:"));
+    assert!(stdout.contains(".maestro/harness/HARNESS.md"));
+    assert!(!temp_dir.path().join(".maestro").exists());
+}
+
+#[test]
+fn init_creates_minimal_artifact_tree() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    fs::write(
+        temp_dir.path().join("Cargo.toml"),
+        "[package]\nname = \"demo\"\n",
+    )
+    .expect("invariant: Cargo.toml should be writable");
+
+    let output = maestro(&["init", "--yes"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(temp_dir
+        .path()
+        .join(".maestro/harness/HARNESS.md")
+        .is_file());
+    assert!(temp_dir
+        .path()
+        .join(".maestro/harness/harness.yml")
+        .is_file());
+    assert!(temp_dir
+        .path()
+        .join(".maestro/harness/backlog.yaml")
+        .is_file());
+    assert!(temp_dir
+        .path()
+        .join(".maestro/features/features.yaml")
+        .is_file());
+    assert!(temp_dir.path().join(".maestro/decisions").is_dir());
+    assert!(temp_dir.path().join(".maestro/skills").is_dir());
+
+    let harness_yml = fs::read_to_string(temp_dir.path().join(".maestro/harness/harness.yml"))
+        .expect("invariant: harness.yml should be readable");
+    assert!(harness_yml.contains("schema_version: maestro.harness.v1"));
+    assert!(harness_yml.contains("kind: rust"));
+}
+
+#[test]
+fn init_merge_preserves_existing_files() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    let harness = temp_dir.path().join(".maestro/harness/HARNESS.md");
+    fs::create_dir_all(
+        harness
+            .parent()
+            .expect("invariant: harness path should have parent"),
+    )
+    .expect("invariant: harness directory should be creatable");
+    fs::write(&harness, "custom\n").expect("invariant: existing harness should be writable");
+
+    let output = maestro(&["init", "--merge"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(&harness).expect("invariant: harness should be readable"),
+        "custom\n"
+    );
+}
+
+#[test]
+fn init_force_overwrites_existing_file_with_backup() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    let harness = temp_dir.path().join(".maestro/harness/HARNESS.md");
+    fs::create_dir_all(
+        harness
+            .parent()
+            .expect("invariant: harness path should have parent"),
+    )
+    .expect("invariant: harness directory should be creatable");
+    fs::write(&harness, "custom\n").expect("invariant: existing harness should be writable");
+
+    let output = maestro(&["init", "--force"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rewritten = fs::read_to_string(&harness).expect("invariant: harness should be readable");
+    assert!(rewritten.contains("# Maestro Harness Protocol"));
+
+    let backups = fs::read_dir(temp_dir.path().join(".maestro/backups"))
+        .expect("invariant: backup root should exist")
+        .count();
+    assert!(backups > 0);
+}
+
+#[test]
+fn init_force_groups_multiple_backups_in_one_operation_directory() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    let harness = temp_dir.path().join(".maestro/harness/HARNESS.md");
+    let features = temp_dir.path().join(".maestro/features/features.yaml");
+    fs::create_dir_all(
+        harness
+            .parent()
+            .expect("invariant: harness path should have parent"),
+    )
+    .expect("invariant: harness directory should be creatable");
+    fs::create_dir_all(
+        features
+            .parent()
+            .expect("invariant: features path should have parent"),
+    )
+    .expect("invariant: features directory should be creatable");
+    fs::write(&harness, "custom harness\n").expect("invariant: harness should be writable");
+    fs::write(&features, "custom features\n").expect("invariant: features should be writable");
+
+    let output = maestro(&["init", "--force"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let backup_dirs = fs::read_dir(temp_dir.path().join(".maestro/backups"))
+        .expect("invariant: backup root should exist")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("invariant: backups should be readable");
+    assert_eq!(backup_dirs.len(), 1);
+    let backup_dir = backup_dirs[0].path();
+    assert!(backup_dir.join(".maestro/harness/HARNESS.md").is_file());
+    assert!(backup_dir.join(".maestro/features/features.yaml").is_file());
+}
+
+#[test]
+fn init_refuses_existing_file_without_merge_or_force() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    let harness = temp_dir.path().join(".maestro/harness/HARNESS.md");
+    fs::create_dir_all(
+        harness
+            .parent()
+            .expect("invariant: harness path should have parent"),
+    )
+    .expect("invariant: harness directory should be creatable");
+    fs::write(&harness, "custom\n").expect("invariant: existing harness should be writable");
+
+    let output = maestro(&["init"], temp_dir.path());
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8");
+    assert!(stderr.contains("already exists"));
+}

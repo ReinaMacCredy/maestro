@@ -49,9 +49,24 @@ impl MaestroPaths {
         self.maestro_dir().join("skills")
     }
 
+    /// Return the task artifact directory.
+    pub fn tasks_dir(&self) -> PathBuf {
+        self.maestro_dir().join("tasks")
+    }
+
+    /// Return the run artifact directory.
+    pub fn runs_dir(&self) -> PathBuf {
+        self.maestro_dir().join("runs")
+    }
+
     /// Return the backup artifact directory.
     pub fn backups_dir(&self) -> PathBuf {
         self.maestro_dir().join("backups")
+    }
+
+    /// Return the install lockfile path.
+    pub fn install_lock_file(&self) -> PathBuf {
+        self.maestro_dir().join("install-lock.yaml")
     }
 }
 

@@ -18,8 +18,13 @@ pub fn backup_file(
     source: impl AsRef<Path>,
     operation: &str,
 ) -> Result<PathBuf> {
-    let timestamp = backup_timestamp()?;
+    let timestamp = backup_operation_timestamp()?;
     backup_file_with_timestamp(paths, source, operation, &timestamp)
+}
+
+/// Return a backup timestamp suitable for grouping one logical operation.
+pub fn backup_operation_timestamp() -> Result<String> {
+    backup_timestamp()
 }
 
 /// Copy a file into a deterministic backup location for tests and planned operations.

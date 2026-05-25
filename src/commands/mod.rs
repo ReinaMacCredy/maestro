@@ -1,6 +1,10 @@
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+pub mod init;
+pub mod install;
+pub mod uninstall;
+
 #[derive(Debug, Parser)]
 #[command(
     name = "maestro",
@@ -244,10 +248,10 @@ pub struct MigrateArgs {
 
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        RootCommand::Init(args) => placeholder("init", args),
-        RootCommand::Install(args) => placeholder("install", args),
+        RootCommand::Init(args) => init::run(args),
+        RootCommand::Install(args) => install::run(args),
         RootCommand::Update => placeholder("update", ()),
-        RootCommand::Uninstall(args) => placeholder("uninstall", args),
+        RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => placeholder("doctor", ()),
         RootCommand::ShellInit => placeholder("shell-init", ()),
         RootCommand::Task(args) => placeholder("task", args),

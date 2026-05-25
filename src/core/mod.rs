@@ -7,3 +7,4 @@ pub mod managed_blocks;
 pub mod paths;
 pub mod safe_write;
 pub mod schema;
+pub mod slug;

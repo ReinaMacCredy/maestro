@@ -39,6 +39,13 @@ pub enum MaestroError {
         path: PathBuf,
     },
 
+    /// A managed mirror path contains a symlink component.
+    #[error("managed mirror path must not contain symlink components: {path}")]
+    ManagedPathContainsSymlink {
+        /// Symlink path that would affect mirror reads or writes.
+        path: PathBuf,
+    },
+
     /// A backup or install operation name is not safe as a path segment.
     #[error("operation name must be a non-empty slug using only ASCII letters, digits, '-' or '_': {operation}")]
     InvalidOperationName {
