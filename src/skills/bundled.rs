@@ -3,8 +3,6 @@
 pub struct BundledSkill {
     /// Directory name under `.maestro/skills/`.
     pub name: &'static str,
-    /// Human-readable skill description.
-    pub description: &'static str,
     /// Complete `SKILL.md` contents.
     pub contents: &'static str,
 }
@@ -68,22 +66,18 @@ plan that can be implemented and verified in small steps.
 const BUNDLED_SKILLS: [BundledSkill; 4] = [
     BundledSkill {
         name: "maestro-task",
-        description: "Feature and task workflow layer for operating the Maestro harness.",
         contents: MAESTRO_TASK,
     },
     BundledSkill {
         name: "maestro-setup",
-        description: "Initial setup and harness tuning protocol for a Maestro-enabled repository.",
         contents: MAESTRO_SETUP,
     },
     BundledSkill {
         name: "maestro-verify",
-        description: "Verification protocol for Maestro tasks and feature work.",
         contents: MAESTRO_VERIFY,
     },
     BundledSkill {
         name: "maestro-design",
-        description: "Spec authoring and design grilling protocol for Maestro work.",
         contents: MAESTRO_DESIGN,
     },
 ];

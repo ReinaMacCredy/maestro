@@ -8,7 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
-use crate::core::fs::{ensure_dir, ensure_parent_dir};
+use crate::core::fs::ensure_parent_dir;
+use crate::core::hash::hex_digest;
 use crate::core::paths::MaestroPaths;
 use crate::core::schema::{
     BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
@@ -242,8 +243,6 @@ fn update_binary(
     replacer: &dyn BinaryReplacer,
 ) -> Result<BinaryStatus> {
     let work_dir = options.paths.maestro_dir().join("update");
-    ensure_dir(&work_dir)?;
-
     let candidate = match downloader.download(&work_dir)? {
         DownloadedBinary::Available(path) => path,
         DownloadedBinary::Unavailable(reason) => {
@@ -298,16 +297,6 @@ fn replace_binary_atomic(current: &Path, candidate: &Path) -> Result<()> {
     sync_parent_dir(current)?;
 
     Ok(())
-}
-
-fn hex_digest(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-
-    for byte in bytes {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-
-    hex
 }
 
 fn copy_candidate_to_temp(

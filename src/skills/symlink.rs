@@ -1,9 +1,10 @@
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
 use crate::core::fs::ensure_parent_dir;
+use crate::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::core::paths::MaestroPaths;
 use crate::install::InstallAgent;
 
@@ -108,55 +109,7 @@ fn inspect_destination(path: &Path, symlink: SkillSymlink) -> Result<Destination
 }
 
 fn managed_symlink_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
-    let relative = Path::new(relative_path);
-    reject_unsafe_relative_path(relative)?;
-    reject_symlinked_parent_components(paths.repo_root(), relative)?;
-    Ok(paths.repo_root().join(relative))
-}
-
-fn reject_unsafe_relative_path(relative: &Path) -> Result<()> {
-    if relative.is_absolute()
-        || relative
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
-    {
-        bail!(
-            "skill symlink path must be repository-relative: {}",
-            relative.display()
-        );
-    }
-
-    Ok(())
-}
-
-fn reject_symlinked_parent_components(repo_root: &Path, relative: &Path) -> Result<()> {
-    let Some(parent) = relative.parent() else {
-        return Ok(());
-    };
-    if parent.as_os_str().is_empty() {
-        return Ok(());
-    }
-
-    let mut current = repo_root.to_path_buf();
-    for component in parent.components() {
-        current.push(component);
-        match fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                bail!(
-                    "skill symlink parent must not contain symlink components: {}",
-                    current.display()
-                );
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("failed to inspect {}", current.display()));
-            }
-        }
-    }
-
-    Ok(())
+    managed_path(paths, relative_path, SymlinkPolicy::RejectParentComponents)
 }
 
 #[cfg(unix)]

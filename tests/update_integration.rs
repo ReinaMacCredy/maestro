@@ -61,6 +61,7 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
         fs::read_to_string(backup).expect("invariant: backup should be readable"),
         "edited bundled skill\n"
     );
+    assert!(!paths.maestro_dir().join("update").exists());
 }
 
 #[test]
@@ -214,6 +215,7 @@ struct CandidateDownloader;
 
 impl UpdateDownloader for CandidateDownloader {
     fn download(&self, work_dir: &Path) -> Result<DownloadedBinary> {
+        fs::create_dir_all(work_dir)?;
         let candidate = work_dir.join("candidate-maestro");
         fs::write(&candidate, "replacement binary\n")?;
 

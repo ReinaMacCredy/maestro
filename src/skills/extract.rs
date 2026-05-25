@@ -73,14 +73,14 @@ fn extract_skill(
             ExtractMode::Update { backup_timestamp } => {
                 let existing = std::fs::read_to_string(&path)
                     .with_context(|| format!("failed to read bundled skill {}", path.display()))?;
-                if existing != skill.contents {
-                    let backup =
-                        backup_file_with_timestamp(paths, &path, "update", backup_timestamp)?;
-                    report.backups.push(SkillBackup {
-                        skill_name: skill.name.to_string(),
-                        path: backup,
-                    });
+                if existing == skill.contents {
+                    return Ok(());
                 }
+                let backup = backup_file_with_timestamp(paths, &path, "update", backup_timestamp)?;
+                report.backups.push(SkillBackup {
+                    skill_name: skill.name.to_string(),
+                    path: backup,
+                });
             }
             ExtractMode::Create => {
                 bail!(

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
-use std::fs;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -9,8 +10,7 @@ use crate::core::git;
 use crate::core::paths::MaestroPaths;
 use crate::core::safe_write::write_string_atomic;
 use crate::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
-
-const UNATTRIBUTED_SESSION: &str = "unattributed";
+use crate::hooks::event::{run_dir_name, string_field};
 
 #[derive(Debug, Serialize)]
 struct RunEvidence {
@@ -37,14 +37,16 @@ struct Timestamp {
 pub fn write_for_session(paths: &MaestroPaths, session_id: &str) -> Result<()> {
     let run_dir = paths.runs_dir().join(run_dir_name(session_id));
     let events_path = run_dir.join("events.jsonl");
-    let raw_events = fs::read_to_string(&events_path)
-        .with_context(|| format!("failed to read {}", events_path.display()))?;
-    let evidence = build_evidence(paths, session_id, &raw_events);
+    let events = BufReader::new(
+        File::open(&events_path)
+            .with_context(|| format!("failed to read {}", events_path.display()))?,
+    );
+    let evidence = build_evidence(paths, session_id, events);
     let yaml = serde_yaml::to_string(&evidence).context("failed to serialize run evidence")?;
     write_string_atomic(run_dir.join("run_evidence.yaml"), &yaml)
 }
 
-fn build_evidence(paths: &MaestroPaths, session_id: &str, raw_events: &str) -> RunEvidence {
+fn build_evidence(paths: &MaestroPaths, session_id: &str, events: impl BufRead) -> RunEvidence {
     let mut agent = None;
     let mut task_id = None;
     let mut start = None;
@@ -52,7 +54,11 @@ fn build_evidence(paths: &MaestroPaths, session_id: &str, raw_events: &str) -> R
     let mut tools_used = BTreeMap::new();
     let mut prompts = 0_u64;
 
-    for event in raw_events.lines().filter_map(parse_event_line) {
+    for event in events
+        .lines()
+        .map_while(|line| line.ok())
+        .filter_map(|line| parse_event_line(&line))
+    {
         if agent.is_none() {
             agent = string_field(&event, "agent");
         }
@@ -101,13 +107,6 @@ fn build_evidence(paths: &MaestroPaths, session_id: &str, raw_events: &str) -> R
 
 fn parse_event_line(line: &str) -> Option<Value> {
     serde_json::from_str(line).ok()
-}
-
-fn string_field(source: &Value, field: &str) -> Option<String> {
-    source
-        .get(field)
-        .and_then(Value::as_str)
-        .map(str::to_string)
 }
 
 fn parse_timestamp(value: &str) -> Option<Timestamp> {
@@ -198,19 +197,4 @@ fn days_in_month(year: i64, month: u32) -> Option<u32> {
 
 fn is_leap_year(year: i64) -> bool {
     (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
-}
-
-fn run_dir_name(session_id: &str) -> String {
-    let sanitized = session_id
-        .chars()
-        .map(|character| match character {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' => character,
-            _ => '_',
-        })
-        .collect::<String>();
-    if sanitized.is_empty() {
-        UNATTRIBUTED_SESSION.to_string()
-    } else {
-        sanitized
-    }
 }

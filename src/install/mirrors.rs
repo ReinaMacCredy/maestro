@@ -1,18 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use serde_json::{Map, Value};
-use sha2::{Digest, Sha256};
 
 use crate::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::core::diff::unified_diff;
-use crate::core::error::MaestroError;
 use crate::core::fs::{ensure_parent_dir, read_to_string_if_exists};
+use crate::core::hash::sha256_prefixed;
 use crate::core::managed_blocks::{
     remove_managed_block, upsert_managed_block, upsert_managed_json_keys, ManagedBlockFormat,
 };
+use crate::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::core::paths::MaestroPaths;
 use crate::core::safe_write::write_string_atomic;
 use crate::install::hooks::ManagedHookConfig;
@@ -36,6 +36,7 @@ pub struct MirrorPlan {
     pub contents: String,
     /// Managed JSON keys for JSON mirrors.
     pub managed_keys: Vec<String>,
+    managed_json: Option<Map<String, Value>>,
 }
 
 #[derive(Debug)]
@@ -120,7 +121,7 @@ pub(crate) fn prepare_mirrors(
         } else {
             BTreeMap::new()
         };
-        let contents = contents_for_existing(agent, &plan, existing.as_deref(), &previous_values)?;
+        let contents = contents_for_existing(&plan, existing.as_deref(), &previous_values)?;
         let ownership = ownership_for_plan(&plan, &contents, previous_values);
         install.insert(plan.relative_path.clone(), ownership);
 
@@ -238,7 +239,6 @@ fn ownership_for_plan(
 }
 
 fn contents_for_existing(
-    agent: InstallAgent,
     plan: &MirrorPlan,
     existing: Option<&str>,
     previous_values: &BTreeMap<String, Value>,
@@ -261,10 +261,9 @@ fn contents_for_existing(
             codex_config_block(),
         )),
         MirrorKind::JsonManagedKeys => {
-            let object = ManagedHookConfig::for_agent(agent)
-                .contents
-                .as_object()
-                .cloned()
+            let object = plan
+                .managed_json
+                .clone()
                 .context("managed JSON mirror must be an object")?;
             let contents = upsert_managed_json_keys(existing, object)?;
             add_previous_value_hashes(contents, previous_values)
@@ -444,63 +443,11 @@ fn remove_symlink_if_owned(path: &Path, ownership: &FileOwnership) -> Result<()>
 }
 
 fn managed_mirror_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
-    let relative = Path::new(relative_path);
-    reject_unsafe_relative_path(relative)?;
-    reject_symlinked_path_components(paths.repo_root(), relative)?;
-    Ok(paths.repo_root().join(relative))
+    managed_path(paths, relative_path, SymlinkPolicy::RejectAllComponents)
 }
 
 fn managed_symlink_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
-    let relative = Path::new(relative_path);
-    reject_unsafe_relative_path(relative)?;
-    reject_symlinked_parent_components(paths.repo_root(), relative)?;
-    Ok(paths.repo_root().join(relative))
-}
-
-fn reject_unsafe_relative_path(relative: &Path) -> Result<()> {
-    if relative.is_absolute()
-        || relative
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
-    {
-        return Err(MaestroError::OutsideRepository {
-            path: relative.to_path_buf(),
-        }
-        .into());
-    }
-
-    Ok(())
-}
-
-fn reject_symlinked_path_components(repo_root: &Path, relative: &Path) -> Result<()> {
-    let mut current = repo_root.to_path_buf();
-    for component in relative.components() {
-        current.push(component);
-        match fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(MaestroError::ManagedPathContainsSymlink { path: current }.into());
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("failed to inspect {}", current.display()));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn reject_symlinked_parent_components(repo_root: &Path, relative: &Path) -> Result<()> {
-    let Some(parent) = relative.parent() else {
-        return Ok(());
-    };
-    if parent.as_os_str().is_empty() {
-        return Ok(());
-    }
-
-    reject_symlinked_path_components(repo_root, parent)
+    managed_path(paths, relative_path, SymlinkPolicy::RejectParentComponents)
 }
 
 fn markdown(relative_path: &str, body: &str) -> MirrorPlan {
@@ -509,6 +456,7 @@ fn markdown(relative_path: &str, body: &str) -> MirrorPlan {
         kind: MirrorKind::MarkdownManagedBlock,
         contents: upsert_managed_block(None, ManagedBlockFormat::Markdown, body),
         managed_keys: Vec::new(),
+        managed_json: None,
     }
 }
 
@@ -518,6 +466,7 @@ fn hash(relative_path: &str, body: &str, kind: MirrorKind) -> MirrorPlan {
         kind,
         contents: upsert_managed_block(None, ManagedBlockFormat::HashComment, body),
         managed_keys: Vec::new(),
+        managed_json: None,
     }
 }
 
@@ -529,8 +478,9 @@ fn json_keys(relative_path: &str, value: Value, managed_keys: Vec<String>) -> Re
     Ok(MirrorPlan {
         relative_path: relative_path.to_string(),
         kind: MirrorKind::JsonManagedKeys,
-        contents: upsert_managed_json_keys(None, object)?,
+        contents: upsert_managed_json_keys(None, object.clone())?,
         managed_keys,
+        managed_json: Some(object),
     })
 }
 
@@ -661,12 +611,7 @@ fn validate_previous_value_hashes(
 
 fn json_value_fingerprint(value: &Value) -> Result<String> {
     let encoded = serde_json::to_string(value)?;
-    let digest = Sha256::digest(encoded.as_bytes());
-    let mut hex = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    Ok(format!("sha256:{hex}"))
+    Ok(sha256_prefixed(encoded.as_bytes()))
 }
 
 #[cfg(test)]

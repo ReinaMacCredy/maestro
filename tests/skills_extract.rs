@@ -150,3 +150,27 @@ fn extract_bundled_skills_force_backs_up_existing_bundled_file() {
         "custom task\n"
     );
 }
+
+#[test]
+fn extract_bundled_skills_update_skips_unchanged_bundled_files() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    extract_bundled_skills(&paths, ExtractMode::Create)
+        .expect("invariant: initial bundled extraction should succeed");
+    let backup_timestamp =
+        backup_operation_timestamp().expect("invariant: backup timestamp should be available");
+
+    let report = extract_bundled_skills(
+        &paths,
+        ExtractMode::Update {
+            backup_timestamp: &backup_timestamp,
+        },
+    )
+    .expect("invariant: update extraction should succeed");
+
+    assert!(report.backups.is_empty());
+    assert!(!paths
+        .backups_dir()
+        .join(format!("{backup_timestamp}-update"))
+        .exists());
+}

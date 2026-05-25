@@ -4,13 +4,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
-use sha2::{Digest, Sha256};
 
+use crate::core::hash::sha256_prefixed;
 use crate::core::paths::MaestroPaths;
 use crate::core::schema::EVENT_SCHEMA_VERSION;
 use crate::evidence::run_evidence;
-
-const UNATTRIBUTED_SESSION: &str = "unattributed";
+use crate::hooks::event::{
+    is_accepted_event, normalized_event_type, run_dir_name, string_field, UNATTRIBUTED_SESSION,
+};
 
 pub fn record_stdin(paths: &MaestroPaths) -> Result<()> {
     let mut raw = String::new();
@@ -78,18 +79,25 @@ fn append_event(paths: &MaestroPaths, event: &Value) -> Result<()> {
         .map(run_dir_name)
         .unwrap_or_else(|| UNATTRIBUTED_SESSION.to_string());
     let path = paths.runs_dir().join(session_id).join("events.jsonl");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create {}", parent.display()))?;
-    }
-
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .with_context(|| format!("failed to open {}", path.display()))?;
+    let mut file = match open_event_file(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
+            }
+            open_event_file(&path).with_context(|| format!("failed to open {}", path.display()))?
+        }
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to open {}", path.display()));
+        }
+    };
     let line = serde_json::to_string(event).context("failed to encode normalized hook event")?;
     writeln!(file, "{line}").with_context(|| format!("failed to append {}", path.display()))
+}
+
+fn open_event_file(path: &std::path::Path) -> io::Result<fs::File> {
+    OpenOptions::new().create(true).append(true).open(path)
 }
 
 fn event_type(payload: &Value) -> Option<String> {
@@ -98,27 +106,6 @@ fn event_type(payload: &Value) -> Option<String> {
         .or_else(|| string_field(payload, "kind"))
         .or_else(|| string_field(payload, "event"))
         .or_else(|| string_field(payload, "type"))
-}
-
-fn is_accepted_event(event_type: &str) -> bool {
-    matches!(
-        event_type,
-        "SessionStart"
-            | "UserPromptSubmit"
-            | "PreToolUse"
-            | "PermissionRequest"
-            | "PostToolUse"
-            | "Stop"
-            | "SkillActivation"
-            | "skill_activation"
-    )
-}
-
-fn normalized_event_type(event_type: &str) -> &str {
-    match event_type {
-        "SkillActivation" => "skill_activation",
-        other => other,
-    }
 }
 
 fn is_stop_event(event: &Value) -> bool {
@@ -137,37 +124,10 @@ fn copy_number(source: &Value, target: &mut Map<String, Value>, field: &str) {
     }
 }
 
-fn string_field(source: &Value, field: &str) -> Option<String> {
-    source
-        .get(field)
-        .and_then(Value::as_str)
-        .map(str::to_string)
-}
-
 fn hash_value(value: &Value) -> String {
     let bytes =
         serde_json::to_vec(value).expect("invariant: serde_json::Value should serialize to JSON");
-    let digest = Sha256::digest(bytes);
-    let mut hex = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    format!("sha256:{hex}")
-}
-
-fn run_dir_name(session_id: &str) -> String {
-    let sanitized = session_id
-        .chars()
-        .map(|character| match character {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' => character,
-            _ => '_',
-        })
-        .collect::<String>();
-    if sanitized.is_empty() {
-        UNATTRIBUTED_SESSION.to_string()
-    } else {
-        sanitized
-    }
+    sha256_prefixed(&bytes)
 }
 
 fn timestamp() -> String {
