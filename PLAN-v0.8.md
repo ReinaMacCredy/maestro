@@ -26,7 +26,7 @@ Implement `SPEC-v0.8.md` as a local-first Rust CLI. The finished V1 creates and 
 ## Phase Status
 
 - Phase 1 - Foundation: done
-- Phase 2 - Artifact protocol: todo
+- Phase 2 - Artifact protocol: done
 - Phase 3 - Core verbs: todo
 - Phase 4 - Hooks and skills: todo
 - Phase 5 - MCP, metrics, improver: todo
