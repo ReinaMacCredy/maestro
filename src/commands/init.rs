@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 
 use crate::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
+use crate::core::error::MaestroError;
 use crate::core::fs::ensure_dir;
 use crate::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::core::paths::{discover_repo_root, MaestroPaths};
@@ -15,7 +16,7 @@ use super::InitArgs;
 
 /// Execute `maestro init`.
 pub fn run(args: InitArgs) -> Result<()> {
-    let repo_root = discover_repo_root()?;
+    let repo_root = init_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
     managed_path(&paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     let plan = InitPlan::new(&paths)?;
@@ -43,6 +44,21 @@ pub fn run(args: InitArgs) -> Result<()> {
     extract_bundled_skills(&paths, extract_mode)?;
 
     Ok(())
+}
+
+fn init_repo_root() -> Result<PathBuf> {
+    match discover_repo_root() {
+        Ok(repo_root) => Ok(repo_root),
+        Err(error)
+            if matches!(
+                error.downcast_ref::<MaestroError>(),
+                Some(MaestroError::RepoRootNotFound { .. })
+            ) =>
+        {
+            std::env::current_dir().context("failed to read current working directory")
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn validate_plan_paths(paths: &MaestroPaths, plan: &InitPlan) -> Result<()> {

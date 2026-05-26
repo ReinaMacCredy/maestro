@@ -122,6 +122,32 @@ fn init_merge_preserves_existing_files() {
 }
 
 #[test]
+fn init_merge_accepts_yes_for_scripted_brownfield_runs() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+    let harness = temp_dir.path().join(".maestro/harness/HARNESS.md");
+    fs::create_dir_all(
+        harness
+            .parent()
+            .expect("invariant: harness path should have parent"),
+    )
+    .expect("invariant: harness directory should be creatable");
+    fs::write(&harness, "custom\n").expect("invariant: existing harness should be writable");
+
+    let output = maestro(&["init", "--merge", "--yes"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(&harness).expect("invariant: harness should be readable"),
+        "custom\n"
+    );
+}
+
+#[test]
 fn init_force_overwrites_existing_file_with_backup() {
     let temp_dir = TestTempDir::new("maestro-init-test");
     init_git_marker(temp_dir.path());
@@ -240,6 +266,27 @@ fn init_rejects_symlinked_managed_subdirectory() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
     assert!(!external.path().join("harness.yml").exists());
+}
+
+#[test]
+fn init_bootstraps_empty_directory_without_git_marker() {
+    let temp_dir = TestTempDir::new("maestro-init-empty-test");
+
+    let output = maestro(&["init", "--yes"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(temp_dir
+        .path()
+        .join(".maestro/harness/HARNESS.md")
+        .is_file());
+    assert!(temp_dir
+        .path()
+        .join(".maestro/features/features.yaml")
+        .is_file());
 }
 
 #[test]

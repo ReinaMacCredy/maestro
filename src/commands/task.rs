@@ -43,13 +43,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             TransitionDetails::default(),
         ),
         TaskCommand::Accept { id } => accept_task(&paths, &id, &actor),
-        TaskCommand::Claim { id } => transition_task(
-            &paths,
-            &id,
-            TaskState::InProgress,
-            &actor,
-            TransitionDetails::default(),
-        ),
+        TaskCommand::Claim { id } => claim_task(&paths, &id, &actor),
         TaskCommand::Complete { id, summary, claim } => transition_task(
             &paths,
             &id,
@@ -61,7 +55,13 @@ pub fn run(args: TaskArgs) -> Result<()> {
                 ..TransitionDetails::default()
             },
         ),
-        TaskCommand::Verify { id } => verify_task_command(&paths, &id, &actor),
+        TaskCommand::Verify { id } => {
+            let id = resolve_optional_task_id(&paths, id)?;
+            verify_task_command(&paths, &id, &actor)
+        }
+        TaskCommand::Update { id, summary, claim } => {
+            update_task(&paths, &id, summary, claim, &actor)
+        }
         TaskCommand::Block { id, reason, by } => block_task(&paths, &id, &reason, by, &actor),
         TaskCommand::Unblock { id, blocker } => unblock_task(&paths, &id, &blocker, &actor),
         TaskCommand::Reject { id, reason } => transition_task(
@@ -116,6 +116,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
                 interval,
             },
         ),
+        TaskCommand::Watch { id, interval } => watch_tasks(&paths, id, interval),
         TaskCommand::Doctor => doctor_tasks(&paths),
     }
 }
@@ -159,6 +160,39 @@ fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     lock_acceptance(task_dir.join("acceptance.yaml"), &task.id, actor, &now)?;
 
     println!("accepted {}", task.id);
+    Ok(())
+}
+
+fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
+    let now = timestamp();
+    let (mut task, snapshot, task_dir) = load_task_with_snapshot(paths, id)?;
+    if task.state == TaskState::Draft {
+        transition(
+            &mut task,
+            TaskState::Exploring,
+            actor,
+            &now,
+            TransitionDetails::default(),
+        )?;
+        task.acceptance_locked = true;
+        transition(
+            &mut task,
+            TaskState::Ready,
+            actor,
+            &now,
+            TransitionDetails::default(),
+        )?;
+        lock_acceptance(task_dir.join("acceptance.yaml"), &task.id, actor, &now)?;
+    }
+    transition(
+        &mut task,
+        TaskState::InProgress,
+        actor,
+        &now,
+        TransitionDetails::default(),
+    )?;
+    save_task_with_snapshot(&task, &snapshot)?;
+    println!("updated {} -> {}", task.id, state_name(&task.state));
     Ok(())
 }
 
@@ -254,6 +288,34 @@ fn verify_task_command(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()
     }
 }
 
+fn update_task(
+    paths: &MaestroPaths,
+    id: &str,
+    summary: Option<String>,
+    claims: Vec<String>,
+    actor: &str,
+) -> Result<()> {
+    if summary.is_none() && claims.is_empty() {
+        bail!("task update requires --summary or --claim");
+    }
+    let now = timestamp();
+    let (mut task, snapshot, _) = load_task_with_snapshot(paths, id)?;
+    task.state_history
+        .push(crate::task::template::StateHistoryEntry {
+            state: task.state.clone(),
+            at: now.clone(),
+            by: actor.to_string(),
+            to: None,
+            summary,
+            claims,
+            open_items: Vec::new(),
+        });
+    task.updated_at = now;
+    save_task_with_snapshot(&task, &snapshot)?;
+    println!("updated {}", task.id);
+    Ok(())
+}
+
 fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
     let task_id = match id {
         Some(id) => id,
@@ -263,6 +325,29 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
     let (task, _, _) = load_task_with_snapshot(paths, &task_id)?;
     print!("{}", render_task(&task));
     Ok(())
+}
+
+fn resolve_optional_task_id(paths: &MaestroPaths, id: Option<String>) -> Result<String> {
+    if let Some(id) = id {
+        return Ok(id);
+    }
+    if let Ok(id) = std::env::var("MAESTRO_CURRENT_TASK") {
+        if !id.trim().is_empty() {
+            return Ok(id);
+        }
+    }
+    let tasks = load_all_tasks(&paths.tasks_dir())?;
+    let open_tasks = tasks
+        .iter()
+        .filter(|task| task.state == TaskState::NeedsVerification)
+        .collect::<Vec<_>>();
+    if open_tasks.len() == 1 {
+        return Ok(open_tasks[0].id.clone());
+    }
+    if tasks.len() == 1 {
+        return Ok(tasks[0].id.clone());
+    }
+    bail!("task id is required or set MAESTRO_CURRENT_TASK");
 }
 
 struct TaskListFilters {
@@ -285,6 +370,16 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
     let tasks = filtered_tasks(paths, &filters)?;
     print!("{}", render_task_list(&tasks));
     Ok(())
+}
+
+fn watch_tasks(paths: &MaestroPaths, id: Option<String>, interval: Option<u64>) -> Result<()> {
+    task_list_watch::run(paths, interval.unwrap_or(2), || {
+        let mut tasks = load_all_tasks(&paths.tasks_dir())?;
+        if let Some(id) = id.as_deref() {
+            tasks.retain(|task| task.id == id);
+        }
+        Ok(tasks)
+    })
 }
 
 fn filtered_tasks(paths: &MaestroPaths, filters: &TaskListFilters) -> Result<Vec<TaskRecord>> {

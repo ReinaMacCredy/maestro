@@ -475,7 +475,8 @@ fn collect_event_text(
 }
 
 fn is_proof_event(event: &Value) -> bool {
-    matches!(event_kind(event), Some("proof" | "Proof")) || is_phase4_tool_proof_event(event)
+    matches!(event_kind(event), Some("proof" | "Proof" | "task_proof"))
+        || is_phase4_tool_proof_event(event)
 }
 
 fn event_kind(event: &Value) -> Option<&str> {

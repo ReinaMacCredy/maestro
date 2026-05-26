@@ -30,7 +30,13 @@ pub fn run(args: QueryArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
 
     match args.command {
-        QueryCommand::Proof { task_id } => {
+        QueryCommand::Proof {
+            task_id,
+            task_id_flag,
+        } => {
+            let task_id = task_id
+                .or(task_id_flag)
+                .context("task id is required for `maestro query proof`")?;
             let status = proof_status(&paths, &task_id)?;
             print!("{}", render_proof_status(&status));
             Ok(())

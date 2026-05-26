@@ -168,6 +168,24 @@ fn metrics_summary_reads_tasks_and_run_evidence_without_cache() {
 }
 
 #[test]
+fn metrics_summary_treats_numeric_task_timestamps_as_epoch_units() {
+    let temp = setup_repo("maestro-metrics-timestamp-units");
+    let repo = temp.path();
+
+    create_task(repo, "Nanosecond timestamp task");
+    mark_verified(
+        repo,
+        "task-001",
+        "billing",
+        "1700000000000000000",
+        "1700001380000000000",
+    );
+
+    let out = run_success(repo, &["metrics", "summary"]);
+    assert!(out.contains("Avg time-to-verify: 23 min"));
+}
+
+#[test]
 fn improve_detects_all_rule_based_backlog_proposals_and_applies_one() {
     let temp = setup_repo("maestro-improve-rules");
     let repo = temp.path();
@@ -346,6 +364,26 @@ fn mcp_serve_lists_tools_and_calls_metrics_summary_over_stdio() {
 }
 
 #[test]
+fn mcp_tool_aliases_list_available_tools() {
+    let temp = setup_repo("maestro-mcp-aliases");
+    let repo = temp.path();
+
+    for args in [["mcp", "tools"], ["mcp", "list"]] {
+        let output = run_success(repo, &args);
+        assert!(output.contains("maestro_metrics_summary"));
+        assert!(output.contains("maestro_task_list"));
+    }
+}
+
+#[test]
+fn mcp_stdio_alias_runs_server() {
+    let temp = setup_repo("maestro-mcp-stdio-alias");
+    let repo = temp.path();
+    run_success(repo, &["mcp", "stdin"]);
+    run_success(repo, &["mcp", "stdio"]);
+}
+
+#[test]
 fn mcp_serve_handles_json_rpc_batches_over_stdio_frames() {
     let temp = setup_repo("maestro-mcp-batch");
     let repo = temp.path();
@@ -421,6 +459,72 @@ fn mcp_serve_uses_content_length_framing() {
         .starts_with("Content-Length: "));
     let frames = parse_mcp_frames(&output.stdout);
     assert_eq!(frames[0]["id"], 1);
+}
+
+#[test]
+fn mcp_serve_accepts_newline_delimited_json_rpc() {
+    let temp = setup_repo("maestro-mcp-line-json");
+    let repo = temp.path();
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["mcp", "serve"])
+        .current_dir(repo)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("invariant: compiled maestro binary should run mcp serve");
+    child
+        .stdin
+        .as_mut()
+        .expect("invariant: mcp stdin should be piped")
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}\n")
+        .expect("invariant: MCP request should be writable");
+    drop(child.stdin.take());
+
+    let output = child
+        .wait_with_output()
+        .expect("invariant: mcp serve should return after stdin closes");
+    assert_success(&output, &["mcp", "serve"]);
+    let frames = parse_mcp_frames(&output.stdout);
+    assert!(frames[0]["result"]["tools"]
+        .as_array()
+        .expect("invariant: tools should be an array")
+        .iter()
+        .any(|tool| tool["name"] == "maestro_metrics_summary"));
+}
+
+#[test]
+fn mcp_serve_accepts_list_method_alias() {
+    let temp = setup_repo("maestro-mcp-list-method");
+    let repo = temp.path();
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["mcp", "serve"])
+        .current_dir(repo)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("invariant: compiled maestro binary should run mcp serve");
+    child
+        .stdin
+        .as_mut()
+        .expect("invariant: mcp stdin should be piped")
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"list\",\"params\":{}}\n")
+        .expect("invariant: MCP request should be writable");
+    drop(child.stdin.take());
+
+    let output = child
+        .wait_with_output()
+        .expect("invariant: mcp serve should return after stdin closes");
+    assert_success(&output, &["mcp", "serve"]);
+    let frames = parse_mcp_frames(&output.stdout);
+    assert!(frames[0]["result"]["tools"]
+        .as_array()
+        .expect("invariant: tools should be an array")
+        .iter()
+        .any(|tool| tool["name"] == "maestro_metrics_summary"));
 }
 
 #[test]

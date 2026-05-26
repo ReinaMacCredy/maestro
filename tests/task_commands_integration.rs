@@ -159,6 +159,27 @@ fn create_explore_accept_claim_complete_flow_updates_task_record() {
 }
 
 #[test]
+fn claim_from_draft_advances_to_in_progress() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Direct claim task"]),
+        &["task", "create", "Direct claim task"],
+    );
+    let claim = maestro(repo, &["task", "claim", "task-001"]);
+    assert_success(&claim, &["task", "claim", "task-001"]);
+
+    let task = task_yaml(repo, "task-001");
+    assert_eq!(task["state"], Value::String("in_progress".to_string()));
+    assert_eq!(task["acceptance_locked"], Value::Bool(true));
+    let history = task["state_history"]
+        .as_sequence()
+        .expect("invariant: state_history should be present");
+    assert_eq!(history.len(), 4);
+}
+
+#[test]
 fn blockers_terminal_transitions_and_claim_gate_behave_as_expected() {
     let temp = setup_repo();
     let repo = temp.path();
@@ -452,6 +473,29 @@ fn list_supports_basic_output_and_requested_filters() {
         &maestro(repo, &["task", "claim", "task-001"]),
         &["task", "claim", "task-001"],
     );
+    assert_success(
+        &maestro(
+            repo,
+            &[
+                "task",
+                "update",
+                "task-001",
+                "--summary",
+                "progress noted",
+                "--claim",
+                "partial implementation",
+            ],
+        ),
+        &[
+            "task",
+            "update",
+            "task-001",
+            "--summary",
+            "progress noted",
+            "--claim",
+            "partial implementation",
+        ],
+    );
     let watch = maestro(repo, &["task", "list", "--watch", "--interval", "0"]);
     assert_success(&watch, &["task", "list", "--watch", "--interval", "0"]);
     let watch_out = stdout(&watch);
@@ -461,6 +505,15 @@ fn list_supports_basic_output_and_requested_filters() {
     assert!(watch_out.contains("in-progress (maestro)"));
     assert!(watch_out.contains("! Task B"));
     assert!(watch_out.contains("blocked by task-001"));
+
+    let task_watch = maestro(repo, &["task", "watch", "task-001", "--interval", "0"]);
+    assert_success(
+        &task_watch,
+        &["task", "watch", "task-001", "--interval", "0"],
+    );
+    let task_watch_out = stdout(&task_watch);
+    assert!(task_watch_out.contains("~ Task A"));
+    assert!(!task_watch_out.contains("Task B"));
 
     let watch_feature = maestro(
         repo,
@@ -490,4 +543,11 @@ fn list_supports_basic_output_and_requested_filters() {
     assert!(watch_feature_out.contains("~ Task A"));
     assert!(watch_feature_out.contains("! Task B"));
     assert!(!watch_feature_out.contains("Task C"));
+
+    let snapshot = maestro(repo, &["watch", "snapshot"]);
+    assert_success(&snapshot, &["watch", "snapshot"]);
+    let snapshot_out = stdout(&snapshot);
+    assert!(snapshot_out.contains("scheduler: 1 agents active"));
+    assert!(snapshot_out.contains("~ Task A"));
+    assert!(snapshot_out.contains("! Task B"));
 }

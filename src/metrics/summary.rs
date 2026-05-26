@@ -284,13 +284,23 @@ fn verification_duration_seconds(
 
 fn parse_timestamp_seconds(value: &str) -> Option<u64> {
     if value.chars().all(|character| character.is_ascii_digit()) {
-        return value.parse().ok();
+        return parse_numeric_timestamp_seconds(value);
     }
     let parsed = parse_utc_timestamp(value)?;
     if parsed.nanos_since_epoch < 0 {
         return None;
     }
     Some((parsed.nanos_since_epoch / 1_000_000_000) as u64)
+}
+
+fn parse_numeric_timestamp_seconds(value: &str) -> Option<u64> {
+    let timestamp = value.parse::<u64>().ok()?;
+    match value.len() {
+        0..=10 => Some(timestamp),
+        11..=13 => Some(timestamp / 1_000),
+        14..=16 => Some(timestamp / 1_000_000),
+        _ => Some(timestamp / 1_000_000_000),
+    }
 }
 
 fn average(values: &[u64]) -> Option<u64> {

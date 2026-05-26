@@ -173,6 +173,134 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
 }
 
 #[test]
+fn top_level_verify_alias_verifies_task() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented alias verification");
+    write_event(repo, "task-001", "implemented alias verification");
+
+    let verify = maestro(repo, &["verify", "task-001"]);
+    assert_success(&verify, &["verify", "task-001"]);
+    assert_eq!(verification_json(repo, "task-001")["status"], "passed");
+}
+
+#[test]
+fn query_proof_accepts_task_id_flag() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented query flag proof");
+    write_event(repo, "task-001", "implemented query flag proof");
+    let verify = maestro(repo, &["verify", "task-001"]);
+    assert_success(&verify, &["verify", "task-001"]);
+
+    let proof = maestro(repo, &["query", "proof", "--task-id", "task-001"]);
+    assert_success(&proof, &["query", "proof", "--task-id", "task-001"]);
+    assert!(stdout(&proof).contains("proof task-001: accepted"));
+}
+
+#[test]
+fn event_create_writes_task_proof_for_verification() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented event create proof");
+
+    let create = maestro(
+        repo,
+        &[
+            "event",
+            "create",
+            "--task-id",
+            "task-001",
+            "--message",
+            "implemented event create proof",
+            "--run",
+            "manual-test",
+        ],
+    );
+    assert_success(&create, &["event", "create"]);
+    let verify = maestro(repo, &["verify", "task-001"]);
+    assert_success(&verify, &["verify", "task-001"]);
+    assert_eq!(verification_json(repo, "task-001")["status"], "passed");
+}
+
+#[test]
+fn event_create_payload_can_back_current_task_claims() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented payload proof");
+    let update = maestro(
+        repo,
+        &[
+            "task",
+            "update",
+            "task-001",
+            "--claim",
+            "recorded post-completion evidence",
+        ],
+    );
+    assert_success(
+        &update,
+        &["task", "update", "task-001", "--claim", "<claim>"],
+    );
+
+    let create = maestro(
+        repo,
+        &[
+            "event",
+            "create",
+            "--task-id",
+            "task-001",
+            "--payload",
+            "{\"proof\":\"ok\"}",
+            "--run",
+            "manual-test",
+        ],
+    );
+    assert_success(&create, &["event", "create", "--payload"]);
+    let verify = maestro(repo, &["verify", "task-001"]);
+    assert_success(&verify, &["verify", "task-001"]);
+    assert_eq!(verification_json(repo, "task-001")["status"], "passed");
+}
+
+#[test]
+fn event_create_and_verify_infer_single_current_task() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented inferred task proof");
+
+    let create = maestro(
+        repo,
+        &["event", "create", "--payload", "{\"proof\":\"ok\"}"],
+    );
+    assert_success(&create, &["event", "create", "--payload"]);
+    let verify = maestro(repo, &["verify"]);
+    assert_success(&verify, &["verify"]);
+    assert_eq!(verification_json(repo, "task-001")["status"], "passed");
+}
+
+#[test]
+fn task_verify_accepts_task_proof_event_alias() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented brownfield loop proof");
+    let run_dir = repo.join(".maestro/runs/run-001");
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        concat!(
+            "{\"event\":\"task_proof\",",
+            "\"task_id\":\"task-001\",",
+            "\"message\":\"implemented brownfield loop proof\"}\n"
+        ),
+    )
+    .expect("invariant: events.jsonl should be writable");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
+    assert_eq!(verification_json(repo, "task-001")["status"], "passed");
+}
+
+#[test]
 fn task_verify_accepts_phase4_post_tool_use_hook_event() {
     let temp = setup_repo();
     let repo = temp.path();

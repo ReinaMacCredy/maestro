@@ -1,8 +1,11 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 pub mod decision;
 pub mod doctor;
+pub mod event;
 pub mod feature;
 pub mod hook;
 pub mod improve;
@@ -17,6 +20,7 @@ pub mod task;
 pub mod uninstall;
 pub mod update;
 pub mod verify;
+pub mod watch;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -39,6 +43,7 @@ pub enum RootCommand {
     Doctor,
     ShellInit,
     Task(TaskArgs),
+    Event(EventArgs),
     Feature(FeatureArgs),
     Decision(DecisionArgs),
     Improve(ImproveArgs),
@@ -47,12 +52,15 @@ pub enum RootCommand {
     Mcp(McpArgs),
     Hook(HookArgs),
     Migrate(MigrateArgs),
+    Watch(WatchArgs),
+    Verify { id: Option<String> },
+    Identity,
 }
 
 #[derive(Debug, Args)]
 #[command(group(
     clap::ArgGroup::new("mode")
-        .args(["dry_run", "merge", "force", "yes"])
+        .args(["dry_run", "merge", "force"])
         .multiple(false)
 ))]
 pub struct InitArgs {
@@ -68,7 +76,7 @@ pub struct InitArgs {
 
 #[derive(Debug, Args)]
 pub struct AgentArgs {
-    #[arg(long, value_enum)]
+    #[arg(long, value_enum, default_value = "codex")]
     pub agent: Agent,
 }
 
@@ -115,7 +123,14 @@ pub enum TaskCommand {
         claim: String,
     },
     Verify {
+        id: Option<String>,
+    },
+    Update {
         id: String,
+        #[arg(long)]
+        summary: Option<String>,
+        #[arg(long)]
+        claim: Vec<String>,
     },
     Block {
         id: String,
@@ -165,7 +180,36 @@ pub enum TaskCommand {
         #[arg(long)]
         interval: Option<u64>,
     },
+    Watch {
+        id: Option<String>,
+        #[arg(long)]
+        interval: Option<u64>,
+    },
     Doctor,
+}
+
+#[derive(Debug, Args)]
+pub struct EventArgs {
+    #[command(subcommand)]
+    pub command: EventCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum EventCommand {
+    Create {
+        #[arg(long)]
+        task_id: Option<String>,
+        #[arg(long)]
+        message: Option<String>,
+        #[arg(long)]
+        payload: Option<String>,
+        #[arg(long)]
+        claim: Vec<String>,
+        #[arg(long, alias = "kind", default_value = "task_proof")]
+        event: String,
+        #[arg(long, default_value = "manual")]
+        run: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -222,7 +266,11 @@ pub enum QueryCommand {
     Friction,
     Decisions,
     Backlog,
-    Proof { task_id: String },
+    Proof {
+        task_id: Option<String>,
+        #[arg(long = "task-id")]
+        task_id_flag: Option<String>,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -244,7 +292,22 @@ pub struct McpArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum McpCommand {
+    #[command(alias = "stdio")]
     Serve,
+    Stdin,
+    Tools,
+    List,
+}
+
+#[derive(Debug, Args)]
+pub struct WatchArgs {
+    #[command(subcommand)]
+    pub command: WatchCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum WatchCommand {
+    Snapshot,
 }
 
 #[derive(Debug, Args)]
@@ -264,6 +327,8 @@ pub struct MigrateArgs {
     pub check: bool,
     #[arg(long)]
     pub force: bool,
+    #[arg(long)]
+    pub project: Option<PathBuf>,
 }
 
 pub fn run(cli: Cli) -> Result<()> {
@@ -275,6 +340,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
         RootCommand::Task(args) => task::run(args),
+        RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Decision(args) => decision::run(args),
         RootCommand::Improve(args) => improve::run(args),
@@ -283,5 +349,14 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Mcp(args) => mcp::run(args),
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::Migrate(args) => migrate::run(args),
+        RootCommand::Watch(args) => watch::run(args),
+        RootCommand::Verify { id } => task::run(TaskArgs {
+            command: TaskCommand::Verify { id },
+        }),
+        RootCommand::Identity => {
+            println!("maestro {}", env!("CARGO_PKG_VERSION"));
+            println!("binary: {}", std::env::args().next().unwrap_or_default());
+            Ok(())
+        }
     }
 }

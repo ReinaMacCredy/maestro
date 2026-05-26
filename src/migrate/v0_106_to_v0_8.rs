@@ -22,7 +22,7 @@ use crate::task::template::{
 pub struct MigrationChange {
     pub path: PathBuf,
     pub before: Option<Vec<u8>>,
-    pub after: Vec<u8>,
+    pub after: Option<Vec<u8>>,
     pub source: Option<PathBuf>,
 }
 
@@ -57,7 +57,11 @@ pub fn render_check(plan: &MigrationPlan) -> String {
             .as_deref()
             .map(String::from_utf8_lossy)
             .unwrap_or_default();
-        let after = String::from_utf8_lossy(&change.after);
+        let after = change
+            .after
+            .as_deref()
+            .map(String::from_utf8_lossy)
+            .unwrap_or_default();
         out.push_str(&unified_diff(&path, before.as_ref(), after.as_ref()));
     }
     out
@@ -80,9 +84,12 @@ pub fn apply(paths: &MaestroPaths, plan: &MigrationPlan, force: bool) -> Result<
         if change.path.is_file() && backed_up.insert(change.path.clone()) {
             backup_file_with_timestamp(paths, &change.path, "migrate", &timestamp)?;
         }
-        if let Err(error) = write_atomic(&change.path, &change.after)
-            .with_context(|| format!("failed to write {}", change.path.display()))
-        {
+        let write_result = match change.after.as_deref() {
+            Some(after) => write_atomic(&change.path, after)
+                .with_context(|| format!("failed to write {}", change.path.display())),
+            None => remove_migrated_file(&change.path),
+        };
+        if let Err(error) = write_result {
             rollback_applied(applied)?;
             return Err(error);
         }
@@ -92,6 +99,14 @@ pub fn apply(paths: &MaestroPaths, plan: &MigrationPlan, force: bool) -> Result<
         });
     }
     Ok(())
+}
+
+fn remove_migrated_file(path: &Path) -> Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("failed to remove {}", path.display())),
+    }
 }
 
 struct AppliedChange {
@@ -193,14 +208,52 @@ fn plan_archives(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
 }
 
 fn plan_features(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
+    let legacy_path = paths.maestro_dir().join("features.yaml");
+    if legacy_path.is_file() {
+        let raw = fs::read_to_string(&legacy_path)
+            .with_context(|| format!("failed to read {}", legacy_path.display()))?;
+        let after = normalize_features_yaml(&raw)?;
+        push_change(
+            plan,
+            paths,
+            paths.features_dir().join("features.yaml"),
+            after.into_bytes(),
+            Some(&legacy_path),
+        )?;
+        push_change(
+            plan,
+            paths,
+            paths
+                .maestro_dir()
+                .join("raw/archived/features/features.yaml"),
+            raw.into_bytes(),
+            Some(&legacy_path),
+        )?;
+        push_change(
+            plan,
+            paths,
+            paths.maestro_dir().join("archive/features/features.yaml"),
+            fs::read(&legacy_path)
+                .with_context(|| format!("failed to read {}", legacy_path.display()))?,
+            Some(&legacy_path),
+        )?;
+        push_delete(plan, paths, legacy_path, None)?;
+        return Ok(());
+    }
+
     let path = paths.features_dir().join("features.yaml");
     if !path.is_file() {
         return Ok(());
     }
     let raw =
         fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    let Ok(mut value) = serde_yaml::from_str::<serde_yaml::Value>(&raw) else {
-        return Ok(());
+    let after = normalize_features_yaml(&raw)?;
+    push_change(plan, paths, path, after.into_bytes(), None)
+}
+
+fn normalize_features_yaml(raw: &str) -> Result<String> {
+    let Ok(mut value) = serde_yaml::from_str::<serde_yaml::Value>(raw) else {
+        return Ok(raw.to_string());
     };
     if let Some(features) = value
         .get_mut("features")
@@ -209,11 +262,76 @@ fn plan_features(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
         for feature in features {
             if let Some(mapping) = feature.as_mapping_mut() {
                 mapping.remove(serde_yaml::Value::String("tasks".to_string()));
+                normalize_feature_mapping(mapping);
             }
         }
+    } else if let Some(mapping) = value.as_mapping_mut() {
+        let mut feature = serde_yaml::Mapping::new();
+        for (key, value) in mapping.iter() {
+            if key.as_str() != Some("schema_version") {
+                feature.insert(key.clone(), value.clone());
+            }
+        }
+        feature.remove(serde_yaml::Value::String("tasks".to_string()));
+        normalize_feature_mapping(&mut feature);
+        let mut registry = serde_yaml::Mapping::new();
+        registry.insert(
+            serde_yaml::Value::String("features".to_string()),
+            serde_yaml::Value::Sequence(vec![serde_yaml::Value::Mapping(feature)]),
+        );
+        value = serde_yaml::Value::Mapping(registry);
     }
-    let after = serde_yaml::to_string(&value)?;
-    push_change(plan, paths, path, after.into_bytes(), None)
+    if let Some(mapping) = value.as_mapping_mut() {
+        mapping.insert(
+            serde_yaml::Value::String("schema_version".to_string()),
+            serde_yaml::Value::String("maestro.feature.v1".to_string()),
+        );
+    }
+    Ok(serde_yaml::to_string(&value)?)
+}
+
+fn normalize_feature_mapping(mapping: &mut serde_yaml::Mapping) {
+    let title = mapping
+        .get(serde_yaml::Value::String("title".to_string()))
+        .cloned()
+        .or_else(|| {
+            mapping
+                .get(serde_yaml::Value::String("id".to_string()))
+                .cloned()
+        })
+        .unwrap_or_else(|| serde_yaml::Value::String("Migrated feature".to_string()));
+    mapping
+        .entry(serde_yaml::Value::String("title".to_string()))
+        .or_insert(title);
+    mapping
+        .entry(serde_yaml::Value::String("status".to_string()))
+        .or_insert_with(|| serde_yaml::Value::String("proposed".to_string()));
+    normalize_feature_status(mapping);
+    mapping
+        .entry(serde_yaml::Value::String("created_at".to_string()))
+        .or_insert_with(|| serde_yaml::Value::String("0".to_string()));
+    mapping
+        .entry(serde_yaml::Value::String("updated_at".to_string()))
+        .or_insert_with(|| serde_yaml::Value::String("0".to_string()));
+}
+
+fn normalize_feature_status(mapping: &mut serde_yaml::Mapping) {
+    let key = serde_yaml::Value::String("status".to_string());
+    let Some(status) = mapping.get_mut(&key) else {
+        return;
+    };
+    let Some(status_text) = status.as_str() else {
+        *status = serde_yaml::Value::String("proposed".to_string());
+        return;
+    };
+    let normalized = match status_text {
+        "proposed" | "in_progress" | "shipped" | "cancelled" => status_text,
+        "active" | "started" | "in-progress" | "in progress" => "in_progress",
+        "done" | "complete" | "completed" | "merged" => "shipped",
+        "canceled" => "cancelled",
+        _ => "proposed",
+    };
+    *status = serde_yaml::Value::String(normalized.to_string());
 }
 
 fn plan_decisions(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
@@ -363,7 +481,33 @@ fn push_change(
         plan.changes.push(MigrationChange {
             path,
             before,
-            after,
+            after: Some(after),
+            source: source.map(Path::to_path_buf),
+        });
+    }
+    Ok(())
+}
+
+fn push_delete(
+    plan: &mut MigrationPlan,
+    paths: &MaestroPaths,
+    path: PathBuf,
+    source: Option<&Path>,
+) -> Result<()> {
+    ensure_managed_target(paths, &path)?;
+    reject_symlinked_target(&path)?;
+    let before = match fs::read(&path) {
+        Ok(before) => Some(before),
+        Err(error) if error.kind() == ErrorKind::NotFound => None,
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {}", path.display()))
+        }
+    };
+    if before.is_some() {
+        plan.changes.push(MigrationChange {
+            path,
+            before,
+            after: None,
             source: source.map(Path::to_path_buf),
         });
     }

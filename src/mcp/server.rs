@@ -14,7 +14,7 @@ pub fn serve() -> Result<()> {
     let mut reader = BufReader::new(stdin.lock());
     let mut stdout = io::stdout();
 
-    while let Some(body) = read_frame(&mut reader)? {
+    while let Some(body) = read_message(&mut reader)? {
         let response = handle_request(&paths, &body);
         if let Some(response) = response {
             write_frame(&mut stdout, &response)?;
@@ -22,6 +22,24 @@ pub fn serve() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn read_message(reader: &mut impl BufRead) -> Result<Option<String>> {
+    let buffer = reader.fill_buf().context("failed to read MCP input")?;
+    if buffer.is_empty() {
+        return Ok(None);
+    }
+    if buffer.starts_with(b"Content-Length:") {
+        return read_frame(reader);
+    }
+    let mut line = String::new();
+    let bytes = reader
+        .read_line(&mut line)
+        .context("failed to read JSON-RPC line")?;
+    if bytes == 0 {
+        return Ok(None);
+    }
+    Ok(Some(line))
 }
 
 fn read_frame(reader: &mut impl BufRead) -> Result<Option<String>> {
@@ -129,7 +147,7 @@ fn handle_request_value(paths: &MaestroPaths, request: &Value) -> Option<Value> 
             })
         }),
         "notifications/initialized" => None,
-        "tools/list" => id.map(|id| {
+        "tools/list" | "list" => id.map(|id| {
             json!({
                 "jsonrpc": "2.0",
                 "id": id,

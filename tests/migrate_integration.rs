@@ -166,6 +166,29 @@ fn migrate_check_prints_diff_without_writing() {
 }
 
 #[test]
+fn migrate_check_accepts_project_path_without_changing_cwd() {
+    let temp = setup_old_repo();
+    let repo = temp.path();
+    let outside = TestTempDir::new("maestro-migrate-outside");
+
+    let output = maestro(outside.path(), &["migrate", "--check", "--project"]);
+    assert_failure(&output, &["migrate", "--check", "--project"]);
+
+    let output = maestro(
+        outside.path(),
+        &[
+            "migrate",
+            "--check",
+            "--project",
+            repo.to_str().expect("invariant: temp path should be UTF-8"),
+        ],
+    );
+    assert_success(&output, &["migrate", "--check", "--project", "<repo>"]);
+    assert!(stdout(&output).contains("migration check:"));
+    assert!(repo.join(".maestro/tasks/tasks.jsonl").exists());
+}
+
+#[test]
 fn migrate_apply_writes_v1_artifacts_and_backups_sources() {
     let temp = setup_old_repo();
     let repo = temp.path();
@@ -268,6 +291,89 @@ fn migrate_refuses_lock_file_without_force() {
 
     let forced = maestro(repo, &["migrate", "--force"]);
     assert_success(&forced, &["migrate", "--force"]);
+}
+
+#[test]
+fn migrate_normalizes_legacy_features_for_current_readers() {
+    let temp = setup_old_repo();
+    let repo = temp.path();
+    fs::write(
+        repo.join(".maestro/features/features.yaml"),
+        "features:\n  - id: legacy-feature\n    title: Legacy Feature\n    status: draft\n    tasks: [task-001]\n",
+    )
+    .expect("invariant: legacy features should be writable");
+
+    let output = maestro(repo, &["migrate"]);
+    assert_success(&output, &["migrate"]);
+    let features = fs::read_to_string(repo.join(".maestro/features/features.yaml"))
+        .expect("features readable");
+    assert!(features.contains("schema_version: maestro.feature.v1"));
+    assert!(features.contains("status: proposed"));
+    assert!(!features.contains("status: draft"));
+    assert!(features.contains("created_at: '0'") || features.contains("created_at: 0"));
+    assert!(!features.contains("tasks:"));
+
+    let snapshot = maestro(repo, &["watch", "snapshot"]);
+    assert_success(&snapshot, &["watch", "snapshot"]);
+    let init = maestro(repo, &["init", "--merge", "--yes"]);
+    assert_success(&init, &["init", "--merge", "--yes"]);
+    let snapshot = maestro(repo, &["watch", "snapshot"]);
+    assert_success(&snapshot, &["watch", "snapshot"]);
+}
+
+#[test]
+fn migrate_moves_root_legacy_features_into_v1_location() {
+    let temp = setup_old_repo();
+    let repo = temp.path();
+    fs::remove_file(repo.join(".maestro/features/features.yaml"))
+        .expect("invariant: nested features should be removable");
+    fs::write(
+        repo.join(".maestro/features.yaml"),
+        "features:\n  - id: root-feature\n    title: Root Feature\n    tasks: [task-001]\n",
+    )
+    .expect("invariant: root legacy features should be writable");
+
+    let output = maestro(repo, &["migrate"]);
+    assert_success(&output, &["migrate"]);
+    let features = fs::read_to_string(repo.join(".maestro/features/features.yaml"))
+        .expect("features readable");
+    assert!(features.contains("schema_version: maestro.feature.v1"));
+    assert!(features.contains("status: proposed"));
+    assert!(!features.contains("tasks:"));
+    assert!(repo
+        .join(".maestro/raw/archived/features/features.yaml")
+        .exists());
+    assert!(repo
+        .join(".maestro/archive/features/features.yaml")
+        .exists());
+    assert!(!repo.join(".maestro/features.yaml").exists());
+}
+
+#[test]
+fn migrate_wraps_single_legacy_feature_mapping_into_registry() {
+    let temp = setup_old_repo();
+    let repo = temp.path();
+    fs::remove_file(repo.join(".maestro/features/features.yaml"))
+        .expect("invariant: nested features should be removable");
+    fs::write(
+        repo.join(".maestro/features.yaml"),
+        "id: single-feature\ntitle: Single Feature\nstatus: draft\ntasks: [task-001]\n",
+    )
+    .expect("invariant: root legacy feature should be writable");
+
+    let output = maestro(repo, &["migrate"]);
+    assert_success(&output, &["migrate"]);
+    let features = fs::read_to_string(repo.join(".maestro/features/features.yaml"))
+        .expect("features readable");
+    assert!(features.contains("schema_version: maestro.feature.v1"));
+    assert!(features.contains("features:"));
+    assert!(features.contains("id: single-feature"));
+    assert!(features.contains("status: proposed"));
+    assert!(!features.contains("status: draft"));
+    assert!(!features.contains("tasks:"));
+
+    let snapshot = maestro(repo, &["watch", "snapshot"]);
+    assert_success(&snapshot, &["watch", "snapshot"]);
 }
 
 #[test]

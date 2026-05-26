@@ -43,6 +43,24 @@ fn install_claude_writes_managed_mirrors_and_lock() {
 }
 
 #[test]
+fn install_defaults_to_codex_when_agent_is_omitted() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let output = maestro(&["install"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let lock = fs::read_to_string(temp_dir.path().join(".maestro/install-lock.yaml"))
+        .expect("invariant: install lock should be readable");
+    assert!(lock.contains("codex:"));
+    assert!(temp_dir.path().join(".codex/config.toml").is_file());
+}
+
+#[test]
 fn failed_install_does_not_write_partial_mirrors() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());
