@@ -117,6 +117,11 @@ remains a compatibility re-export. New production references should prefer
 and interface roots are temporary allowances until those facades move in later
 phases.
 
+Shell integration lives under `src/interfaces/shell`, and `crate::shell` remains
+a compatibility re-export. New production references should prefer
+`crate::interfaces::shell`; keep `crate::shell` and `maestro::shell` usage to
+compatibility checks or transition work until the legacy path is removed.
+
 When adding a folder inside a domain or operations module:
 
 - Keep the parent `mod.rs` as the caller-facing facade.

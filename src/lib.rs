@@ -12,7 +12,6 @@ pub mod mcp;
 pub mod metrics;
 pub mod migrate;
 pub mod operations;
-pub mod shell;
 pub mod skills;
 pub mod task;
 pub mod tui;
@@ -21,3 +20,4 @@ pub mod verification;
 
 pub use foundation::core;
 pub use interfaces::cli as commands;
+pub use interfaces::shell;

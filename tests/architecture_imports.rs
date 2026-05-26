@@ -33,7 +33,6 @@ const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
 const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[
     ("src/interfaces/mod.rs", "crate::hooks"),
     ("src/interfaces/mod.rs", "crate::mcp"),
-    ("src/interfaces/mod.rs", "crate::shell"),
     ("src/interfaces/mod.rs", "crate::tui"),
 ];
 
@@ -65,7 +64,6 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
             "verification",
         ],
     ),
-    ("src/interfaces/cli/shell_init.rs", &["shell"]),
     (
         "src/interfaces/cli/task.rs",
         &["task", "tui", "verification"],
@@ -168,6 +166,21 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _ = std::any::type_name::<maestro::domain::proof::proof_status::ProofStatusKind>();
     let _ = std::any::type_name::<maestro::operations::metrics::summary::MetricsSummary>();
     let _ = std::any::type_name::<maestro::operations::update::InstallMethod>();
+    assert_eq!(
+        std::any::type_name::<maestro::interfaces::shell::Shell>(),
+        std::any::type_name::<maestro::shell::Shell>()
+    );
+    let legacy_render_shell_init: fn(maestro::shell::Shell) -> &'static str =
+        maestro::shell::render_shell_init;
+    let new_render_shell_init: fn(maestro::interfaces::shell::Shell) -> &'static str =
+        maestro::interfaces::shell::render_shell_init;
+    assert_eq!(
+        new_render_shell_init(maestro::interfaces::shell::Shell::Bash),
+        legacy_render_shell_init(maestro::shell::Shell::Bash)
+    );
+    let _legacy_detect_shell: fn() -> maestro::shell::Shell = maestro::shell::Shell::detect;
+    let _new_detect_shell: fn() -> maestro::interfaces::shell::Shell =
+        maestro::interfaces::shell::Shell::detect;
 }
 
 #[test]
@@ -187,8 +200,8 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
     assert_public_modules(
         Path::new("src/interfaces/mod.rs"),
-        &["cli"],
-        &["crate::hooks", "crate::mcp", "crate::shell", "crate::tui"],
+        &["cli", "shell"],
+        &["crate::hooks", "crate::mcp", "crate::tui"],
     );
     assert_reexports(
         Path::new("src/operations/mod.rs"),
@@ -203,16 +216,24 @@ fn transitional_public_surfaces_match_phase_policy() {
 
 fn lib_exposes_crate_root(lib: &str, root: &str) -> bool {
     let public_module = format!("pub mod {root};");
-    let foundation_reexport = format!("pub use foundation::{root};");
-    let interfaces_cli_reexport = format!("pub use interfaces::cli as {root};");
 
-    lib.lines().map(str::trim).any(|line| {
-        line == public_module
-            || line == foundation_reexport
-            || line == interfaces_cli_reexport
-            || line == format!("pub use crate::foundation::{root};")
-            || line == format!("pub use crate::interfaces::cli as {root};")
-    })
+    lib.lines()
+        .map(str::trim)
+        .any(|line| line == public_module || compatibility_reexport_exposes_root(line, root))
+}
+
+fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
+    match root {
+        "commands" => {
+            line == "pub use interfaces::cli as commands;"
+                || line == "pub use crate::interfaces::cli as commands;"
+        }
+        "core" => line == "pub use foundation::core;" || line == "pub use crate::foundation::core;",
+        "shell" => {
+            line == "pub use interfaces::shell;" || line == "pub use crate::interfaces::shell;"
+        }
+        _ => false,
+    }
 }
 
 #[test]
@@ -292,6 +313,43 @@ fn production_sources_prefer_foundation_core_imports() {
     assert!(
         violations.is_empty(),
         "production code should import Core through crate::foundation::core during the migration:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn production_sources_prefer_interfaces_shell_imports() {
+    let mut violations = Vec::new();
+
+    for root in PRODUCTION_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            let source = read_source_file(&file);
+            let code = code_for_path_scan(&source);
+            if code.contains("crate::shell::") {
+                violations.push(format!(
+                    "{} references legacy crate::shell:: path",
+                    file.display()
+                ));
+                continue;
+            }
+
+            for (line_number, import_statement) in crate_import_statements(&source) {
+                if contains_legacy_root_import(&import_statement, "shell")
+                    || contains_legacy_deep_import(&import_statement, "shell")
+                {
+                    violations.push(format!(
+                        "{}:{} imports legacy crate::shell path",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should import Shell through crate::interfaces::shell during the migration:\n{}",
         violations.join("\n")
     );
 }

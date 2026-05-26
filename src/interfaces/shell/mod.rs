@@ -1,4 +1,4 @@
-//! Shell integration helpers for Phase 3.
+//! Shell integration helpers.
 
 use std::path::Path;
 
