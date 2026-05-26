@@ -4,6 +4,8 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::{ErrorKind, Read};
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
@@ -11,11 +13,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+use crate::core::error::MaestroError;
 use crate::core::fs::read_to_string_if_exists;
 use crate::core::git;
+use crate::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::core::paths::MaestroPaths;
 use crate::core::safe_write::write_string_atomic;
 use crate::core::schema::{EVENT_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION};
+use crate::harness::schema::HarnessConfig;
 use crate::task::lookup::resolve_task_yaml_path;
 use crate::task::template::{
     load_task, save_task_with_snapshot, AcceptanceFile, StateHistoryEntry, TaskRecord,
@@ -49,6 +54,14 @@ pub struct ProofSource {
     pub hash: String,
 }
 
+/// One verification command result captured from `harness.yml.verify`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct VerificationCommand {
+    pub cmd: String,
+    pub exit_code: i32,
+    pub duration_ms: u128,
+}
+
 /// Verification artifact persisted in a task directory.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct VerificationReport {
@@ -59,6 +72,8 @@ pub struct VerificationReport {
     #[serde(flatten)]
     pub freshness: StoredFreshness,
     pub claims: Vec<ClaimCheck>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<VerificationCommand>,
     pub proof_sources: Vec<ProofSource>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub failures: Vec<String>,
@@ -77,10 +92,11 @@ pub fn verify_task(paths: &MaestroPaths, task_id: &str, actor: &str) -> Result<V
     let now = timestamp();
     let mut loaded = load_task_by_id(paths, task_id)?;
     let inputs = freshness_inputs(paths, &loaded)?;
+    let commands = run_verify_commands(paths)?;
     let claims = completion_claims(&loaded.task);
     let evidence = collect_evidence(paths, &loaded.task_dir, &loaded.task.id)?;
     let claim_checks = check_claims(&claims, &evidence);
-    let failures = failures_for(&loaded.task, &claims, &claim_checks, &evidence);
+    let failures = failures_for(&loaded.task, &claims, &claim_checks, &evidence, &commands);
     let status = if failures.is_empty() {
         VerificationStatus::Passed
     } else {
@@ -99,6 +115,7 @@ pub fn verify_task(paths: &MaestroPaths, task_id: &str, actor: &str) -> Result<V
             checks_hash: inputs.checks_hash,
         },
         claims: claim_checks,
+        commands,
         proof_sources: evidence
             .iter()
             .map(|source| ProofSource {
@@ -249,6 +266,7 @@ fn failures_for(
     claims: &[String],
     claim_checks: &[ClaimCheck],
     evidence: &[EvidenceText],
+    commands: &[VerificationCommand],
 ) -> Vec<String> {
     let mut failures = Vec::new();
 
@@ -268,8 +286,71 @@ fn failures_for(
     for check in claim_checks.iter().filter(|check| !check.matched) {
         failures.push(format!("claim not backed by events/proof: {}", check.claim));
     }
+    for command in commands.iter().filter(|command| command.exit_code != 0) {
+        failures.push(format!(
+            "verify command failed: {} (exit {})",
+            command.cmd, command.exit_code
+        ));
+    }
 
     failures
+}
+
+fn run_verify_commands(paths: &MaestroPaths) -> Result<Vec<VerificationCommand>> {
+    let commands = harness_verify_commands(paths)?;
+    let mut results = Vec::new();
+    for command in commands {
+        let started = Instant::now();
+        let status = shell_command(&command)
+            .current_dir(paths.repo_root())
+            .status()
+            .with_context(|| format!("failed to run verify command `{command}`"))?;
+        results.push(VerificationCommand {
+            cmd: command,
+            exit_code: status.code().unwrap_or(1),
+            duration_ms: started.elapsed().as_millis(),
+        });
+    }
+    Ok(results)
+}
+
+fn harness_verify_commands(paths: &MaestroPaths) -> Result<Vec<String>> {
+    let path = match managed_path(
+        paths,
+        ".maestro/harness/harness.yml",
+        SymlinkPolicy::RejectAllComponents,
+    ) {
+        Ok(path) => path,
+        Err(error)
+            if matches!(
+                error.downcast_ref::<MaestroError>(),
+                Some(MaestroError::ManagedPathContainsSymlink { .. })
+            ) =>
+        {
+            return Ok(Vec::new());
+        }
+        Err(error) => return Err(error),
+    };
+    let Some(raw) = read_to_string_if_exists(&path)? else {
+        return Ok(Vec::new());
+    };
+    let config: HarnessConfig = serde_yaml::from_str(&raw)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    Ok(config.stack.verify)
+}
+
+#[cfg(unix)]
+fn shell_command(command: &str) -> Command {
+    let mut shell = Command::new("sh");
+    shell.arg("-c").arg(command);
+    shell
+}
+
+#[cfg(windows)]
+fn shell_command(command: &str) -> Command {
+    let mut shell = Command::new("cmd");
+    shell.arg("/C").arg(command);
+    shell
 }
 
 fn check_claims(claims: &[String], evidence: &[EvidenceText]) -> Vec<ClaimCheck> {

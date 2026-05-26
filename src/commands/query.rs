@@ -13,6 +13,7 @@ use crate::core::schema::{BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION};
 use crate::decisions::query::{decision_entries, decision_id};
 use crate::feature::schema::FeatureRegistry;
 use crate::harness::schema::BacklogConfig;
+use crate::metrics::friction::{event_kind, event_text, looks_like_correction};
 use crate::task::blockers::has_unresolved_blockers;
 use crate::task::doctor::load_task_entries;
 use crate::task::template::{TaskRecord, TaskState};
@@ -278,30 +279,4 @@ fn event_lines(path: &Path) -> Result<Vec<String>> {
         .filter_map(|line| std::str::from_utf8(line).ok())
         .map(str::to_string)
         .collect())
-}
-
-fn event_kind(event: &Value) -> String {
-    string_field(event, "kind")
-        .or_else(|| string_field(event, "event"))
-        .or_else(|| string_field(event, "type"))
-        .unwrap_or_else(|| "<unknown>".to_string())
-}
-
-fn event_text(event: &Value) -> Option<String> {
-    string_field(event, "message")
-        .or_else(|| string_field(event, "prompt"))
-        .or_else(|| string_field(event, "text"))
-}
-
-fn string_field(event: &Value, field: &str) -> Option<String> {
-    event.get(field).and_then(Value::as_str).map(str::to_string)
-}
-
-fn looks_like_correction(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    lower.contains("actually")
-        || lower.contains("wait")
-        || lower.contains(" no ")
-        || lower.starts_with("no ")
-        || lower == "no"
 }

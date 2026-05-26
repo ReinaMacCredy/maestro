@@ -5,8 +5,11 @@ pub mod decision;
 pub mod doctor;
 pub mod feature;
 pub mod hook;
+pub mod improve;
 pub mod init;
 pub mod install;
+pub mod mcp;
+pub mod metrics;
 pub mod query;
 pub mod shell_init;
 pub mod task;
@@ -269,10 +272,10 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Task(args) => task::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Decision(args) => decision::run(args),
-        RootCommand::Improve(args) => placeholder("improve", args),
+        RootCommand::Improve(args) => improve::run(args),
         RootCommand::Query(args) => query::run(args),
-        RootCommand::Metrics(args) => placeholder("metrics", args),
-        RootCommand::Mcp(args) => placeholder("mcp", args),
+        RootCommand::Metrics(args) => metrics::run(args),
+        RootCommand::Mcp(args) => mcp::run(args),
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::Migrate(args) => placeholder("migrate", args),
     }

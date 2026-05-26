@@ -47,13 +47,28 @@ pub struct BacklogConfig {
     pub items: Vec<BacklogItem>,
 }
 
-/// Placeholder type for future harness improver proposals.
+/// Harness improvement proposal tracked in `.maestro/harness/backlog.yaml`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BacklogItem {
     /// Stable proposal id.
     pub id: String,
+    /// Detection source, usually a task id, session id, or aggregate bucket.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
+    /// Rule category that produced the proposal.
+    #[serde(default, rename = "type", skip_serializing_if = "String::is_empty")]
+    pub item_type: String,
     /// Human-readable proposal title.
     pub title: String,
+    /// Proposal priority.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub priority: String,
+    /// Proposal status, for example `proposed` or `applied`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub status: String,
+    /// Evidence snippets supporting the proposal.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<String>,
 }
 
 impl HarnessConfig {
