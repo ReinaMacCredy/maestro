@@ -9,6 +9,7 @@ pub mod improver;
 pub mod install;
 pub mod mcp;
 pub mod metrics;
+pub mod migrate;
 pub mod shell;
 pub mod skills;
 pub mod task;

@@ -10,6 +10,7 @@ pub mod init;
 pub mod install;
 pub mod mcp;
 pub mod metrics;
+pub mod migrate;
 pub mod query;
 pub mod shell_init;
 pub mod task;
@@ -261,6 +262,8 @@ pub enum HookCommand {
 pub struct MigrateArgs {
     #[arg(long)]
     pub check: bool,
+    #[arg(long)]
+    pub force: bool,
 }
 
 pub fn run(cli: Cli) -> Result<()> {
@@ -279,11 +282,6 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Metrics(args) => metrics::run(args),
         RootCommand::Mcp(args) => mcp::run(args),
         RootCommand::Hook(args) => hook::run(args),
-        RootCommand::Migrate(args) => placeholder("migrate", args),
+        RootCommand::Migrate(args) => migrate::run(args),
     }
-}
-
-fn placeholder(command: &str, args: impl std::fmt::Debug) -> Result<()> {
-    println!("{command} is not implemented in this phase: {args:?}");
-    Ok(())
 }
