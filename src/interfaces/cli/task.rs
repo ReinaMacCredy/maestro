@@ -4,6 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
+use crate::domain::proof;
 use crate::domain::task;
 use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
@@ -11,7 +12,6 @@ use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::{TaskArgs, TaskCommand};
 use crate::interfaces::tui::task_list_watch;
-use crate::verification::verify_task::{verify_task, VerificationStatus};
 
 /// Execute `maestro task`.
 pub fn run(args: TaskArgs) -> Result<()> {
@@ -183,22 +183,20 @@ fn unblock_task(paths: &MaestroPaths, id: &str, blocker_id: &str, actor: &str) -
 }
 
 fn verify_task_command(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
-    let report = verify_task(paths, id, actor)?;
-    match report.status {
-        VerificationStatus::Passed => {
+    let verification = proof::verify_task(paths, id, actor)?;
+    match verification.status {
+        proof::TaskVerificationStatus::Passed => {
             println!(
                 "verification passed for {} ({} claim(s), {} proof source(s))",
-                report.task_id,
-                report.claims.len(),
-                report.proof_sources.len()
+                verification.task_id, verification.claim_count, verification.proof_source_count
             );
             Ok(())
         }
-        VerificationStatus::Failed => {
-            for failure in &report.failures {
+        proof::TaskVerificationStatus::Failed => {
+            for failure in &verification.failures {
                 eprintln!("verification failure: {failure}");
             }
-            bail!("verification failed for {}", report.task_id)
+            bail!("verification failed for {}", verification.task_id)
         }
     }
 }

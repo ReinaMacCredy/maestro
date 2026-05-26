@@ -7,12 +7,12 @@ use serde_json::Value;
 
 use crate::domain::decisions::query::decision_entries;
 use crate::domain::harness::{BacklogItem, HarnessConfig};
+use crate::domain::proof;
 use crate::domain::task::{self, TaskEntry};
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::metrics::friction::{event_kind, event_text, looks_like_correction};
 use crate::metrics::summary::task_verification_durations;
-use crate::verification::events::managed_event_files;
 
 /// Detect rule-based harness improvement proposals without LLM calls.
 pub fn detect(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
@@ -27,7 +27,7 @@ pub fn detect(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
 
 fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
     let mut corrections_by_session = BTreeMap::<String, Vec<String>>::new();
-    for path in managed_event_files(paths)? {
+    for path in proof::managed_event_files(paths)? {
         let session = path
             .parent()
             .and_then(Path::file_name)

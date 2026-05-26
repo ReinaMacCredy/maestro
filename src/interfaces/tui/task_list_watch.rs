@@ -6,14 +6,12 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
+use crate::domain::proof;
 use crate::domain::task;
 use crate::feature::schema::FeatureRegistry;
+use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
-use crate::verification::stale::stale_reasons;
-use crate::verification::verify_task::{
-    freshness_inputs_for_task, read_report, VerificationStatus,
-};
 
 /// Run the polling task status screen.
 pub fn run<F>(paths: &MaestroPaths, interval_seconds: u64, load_tasks: F) -> Result<()>
@@ -150,30 +148,27 @@ fn latest_report_failed(paths: &MaestroPaths, task: &task::TaskRecord) -> Result
     let Some(task_dir) = task_dir(paths, task) else {
         return Ok(false);
     };
-    Ok(read_report(&task_dir)?
-        .map(|report| report.status == VerificationStatus::Failed)
-        .unwrap_or(false))
+    proof::latest_proof_failed_for_task(&task_dir)
 }
 
 fn verified_substatus(paths: &MaestroPaths, task: &task::TaskRecord) -> Result<String> {
     let Some(task_dir) = task_dir(paths, task) else {
         return Ok("verified".to_string());
     };
-    let Some(report) = read_report(&task_dir)? else {
-        return Ok("verified".to_string());
-    };
-    if report.status == VerificationStatus::Failed {
-        return Ok("verified / failed".to_string());
-    }
-    let current = freshness_inputs_for_task(
+    let kind = proof::proof_status_kind_for_task(
+        paths,
         task,
         &task_dir,
-        crate::foundation::core::git::head(paths.repo_root()).unwrap_or(None),
+        git::head(paths.repo_root()).unwrap_or(None),
     )?;
-    if stale_reasons(&current, &report.freshness).is_empty() {
-        Ok("verified".to_string())
-    } else {
-        Ok("verified / stale (HEAD changed after proof)".to_string())
+    match kind {
+        proof::ProofStatusKind::Missing | proof::ProofStatusKind::Accepted => {
+            Ok("verified".to_string())
+        }
+        proof::ProofStatusKind::Failed => Ok("verified / failed".to_string()),
+        proof::ProofStatusKind::Stale => {
+            Ok("verified / stale (HEAD changed after proof)".to_string())
+        }
     }
 }
 

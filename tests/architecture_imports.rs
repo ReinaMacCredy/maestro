@@ -45,9 +45,9 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/migrate.rs", &["migrate"]),
     (
         "src/interfaces/cli/query.rs",
-        &["decisions", "feature", "harness", "metrics", "verification"],
+        &["decisions", "feature", "harness", "metrics"],
     ),
-    ("src/interfaces/cli/task.rs", &["verification"]),
+    ("src/interfaces/cli/task.rs", &[]),
     ("src/interfaces/cli/uninstall.rs", &["install"]),
     ("src/interfaces/cli/update.rs", &["update"]),
     ("src/interfaces/cli/watch.rs", &[]),
@@ -59,10 +59,8 @@ const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
 const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
     &[("src/interfaces/hooks/record.rs", &["evidence"])];
 
-const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[(
-    "src/interfaces/tui/task_list_watch.rs",
-    &["feature", "verification"],
-)];
+const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
+    &[("src/interfaces/tui/task_list_watch.rs", &["feature"])];
 
 const DOMAIN_FACADES: &[&str] = &[
     "decisions",
@@ -202,8 +200,38 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _legacy_valid_task_yaml_path =
         |path: &Path| maestro::task::lookup::valid_task_yaml_path(path);
     let _ = std::any::type_name::<maestro::verification::proof_status::ProofStatusKind>();
+    let _legacy_proof_status_fields =
+        |status: &maestro::verification::proof_status::ProofStatus| {
+            let _report: &Option<maestro::verification::verify_task::VerificationReport> =
+                &status.report;
+            let _stale_reasons: &Vec<maestro::verification::stale::StaleReason> =
+                &status.stale_reasons;
+            let _task_id: &String = &status.task_id;
+            let _path: &String = &status.verification_path;
+            let _kind: &maestro::verification::proof_status::ProofStatusKind = &status.kind;
+        };
+    let _legacy_proof_status: fn(
+        &maestro::foundation::core::paths::MaestroPaths,
+        &str,
+    ) -> anyhow::Result<
+        maestro::verification::proof_status::ProofStatus,
+    > = maestro::verification::proof_status::proof_status;
+    let _legacy_render_proof_status: fn(
+        &maestro::verification::proof_status::ProofStatus,
+    ) -> String = maestro::verification::proof_status::render_proof_status;
+    let _legacy_loaded_task_fields = |loaded: &maestro::verification::verify_task::LoadedTask| {
+        let _task: &maestro::domain::task::TaskRecord = &loaded.task;
+        let _task_dir: &PathBuf = &loaded.task_dir;
+    };
+    let _legacy_verify_task: fn(
+        &maestro::foundation::core::paths::MaestroPaths,
+        &str,
+        &str,
+    ) -> anyhow::Result<
+        maestro::verification::verify_task::VerificationReport,
+    > = maestro::verification::verify_task::verify_task;
     let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
-    let _ = std::any::type_name::<maestro::domain::proof::proof_status::ProofStatusKind>();
+    let _ = std::any::type_name::<maestro::domain::proof::ProofStatusKind>();
     let _ = std::any::type_name::<maestro::operations::metrics::summary::MetricsSummary>();
     let _ = std::any::type_name::<maestro::operations::update::InstallMethod>();
     assert_eq!(
@@ -323,6 +351,155 @@ fn task_domain_facade_does_not_publish_leaf_modules() {
 }
 
 #[test]
+fn proof_domain_facade_does_not_publish_leaf_modules() {
+    let proof_facade = read_source_file(Path::new("src/domain/proof/mod.rs"));
+    let proof_root_facade = proof_facade
+        .split("pub(crate) mod compatibility")
+        .next()
+        .expect("invariant: split always yields root facade prefix");
+    assert_eq!(
+        public_reexport_item_names(proof_root_facade),
+        BTreeSet::from([
+            "ProofStatus".to_string(),
+            "ProofStatusKind".to_string(),
+            "ProofStatusSource".to_string(),
+            "ProofStaleReason".to_string(),
+            "TaskVerification".to_string(),
+            "TaskVerificationStatus".to_string(),
+            "latest_proof_failed_for_task".to_string(),
+            "managed_event_files".to_string(),
+            "proof_status".to_string(),
+            "proof_status_for_task".to_string(),
+            "proof_status_kind_for_task".to_string(),
+            "render_proof_status".to_string(),
+            "verify_task".to_string(),
+        ]),
+        "src/domain/proof/mod.rs should expose only the deliberate Proof facade surface"
+    );
+    for leaf in ["events", "proof_status", "stale", "verify_task"] {
+        assert!(
+            !proof_facade.contains(&format!("pub mod {leaf};")),
+            "src/domain/proof/mod.rs should expose Proof through root facade exports, not pub mod {leaf}"
+        );
+    }
+
+    let verification_shim = read_source_file(Path::new("src/verification/mod.rs"));
+    for leaf in ["events", "proof_status", "stale", "verify_task"] {
+        assert!(
+            verification_shim.contains(&format!("pub mod {leaf}")),
+            "legacy crate::verification shim should preserve compatibility module {leaf}"
+        );
+    }
+    let legacy_proof_status_module = verification_shim
+        .split("pub mod proof_status {")
+        .nth(1)
+        .and_then(|body| body.split("\npub mod stale {").next())
+        .expect("legacy crate::verification shim should contain proof_status before stale");
+    for duplicated_domain_logic in [
+        "read_report",
+        "freshness_inputs",
+        "stale_reasons(",
+        "VerificationStatus::",
+        "format_claims",
+        "format_sources",
+    ] {
+        assert!(
+            !legacy_proof_status_module.contains(duplicated_domain_logic),
+            "legacy crate::verification proof_status shim should adapt domain::proof compatibility helpers, not duplicate Proof logic: {duplicated_domain_logic}"
+        );
+    }
+    assert!(
+        !verification_shim.contains("mod events;")
+            && !verification_shim.contains("mod proof_status;")
+            && !verification_shim.contains("mod stale;")
+            && !verification_shim.contains("mod verify_task;"),
+        "legacy crate::verification shim should not own Proof implementation files"
+    );
+}
+
+#[test]
+fn production_sources_do_not_use_legacy_verification_imports() {
+    let mut violations = Vec::new();
+
+    for root in PRODUCTION_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            if file == Path::new("src/verification/mod.rs") {
+                continue;
+            }
+
+            let source = read_source_file(&file);
+            let code = code_for_path_scan(&source);
+            if code.contains("crate::verification::") {
+                violations.push(format!(
+                    "{} references legacy crate::verification:: path",
+                    file.display()
+                ));
+                continue;
+            }
+
+            for (line_number, import_statement) in crate_import_statements(&source) {
+                if contains_legacy_root_import(&import_statement, "verification")
+                    || contains_legacy_deep_import(&import_statement, "verification")
+                {
+                    violations.push(format!(
+                        "{}:{} imports legacy crate::verification path",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should use domain::proof instead of legacy crate::verification:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn non_proof_sources_do_not_reach_into_proof_domain_leaf_modules() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src")) {
+        if file.starts_with(Path::new("src/domain/proof"))
+            || file == Path::new("src/verification/mod.rs")
+        {
+            continue;
+        }
+
+        let source = read_source_file(&file);
+        let non_import_source = source_without_import_statements(&source);
+        let code = code_for_path_scan(&non_import_source);
+        if let Some(segment) = namespaced_deep_import_segment(&code, "domain", "proof") {
+            violations.push(format!(
+                "{} references domain::proof::{segment}",
+                file.display()
+            ));
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if let Some(segment) =
+                namespaced_deep_import_segment(&import_statement, "domain", "proof")
+            {
+                violations.push(format!(
+                    "{}:{} imports domain::proof::{segment}",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "non-Proof code must use the domain::proof root facade instead of Proof leaf modules:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn non_task_sources_do_not_reach_into_task_domain_leaf_modules() {
     let mut violations = Vec::new();
 
@@ -365,8 +542,8 @@ fn non_task_sources_do_not_reach_into_task_domain_leaf_modules() {
 fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/domain/mod.rs"),
-        &["decisions", "feature", "harness", "skills", "task"],
-        &["crate::install", "crate::verification as proof"],
+        &["decisions", "feature", "harness", "proof", "skills", "task"],
+        &["crate::install"],
     );
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
     assert_public_modules(
@@ -942,6 +1119,43 @@ fn public_reexports(source: &str) -> Vec<String> {
     }
 
     reexports
+}
+
+fn public_reexport_item_names(source: &str) -> BTreeSet<String> {
+    public_reexports(source)
+        .into_iter()
+        .flat_map(|statement| public_reexport_item_names_from_statement(&statement))
+        .collect()
+}
+
+fn public_reexport_item_names_from_statement(statement: &str) -> Vec<String> {
+    let statement = statement
+        .trim()
+        .trim_start_matches("pub use ")
+        .trim_end_matches(';')
+        .trim();
+    if let Some((_, grouped)) = statement.split_once("::{") {
+        return grouped
+            .trim_end_matches('}')
+            .split(',')
+            .filter_map(public_reexport_leaf_name)
+            .collect();
+    }
+    public_reexport_leaf_name(statement)
+        .into_iter()
+        .collect::<Vec<_>>()
+}
+
+fn public_reexport_leaf_name(item: &str) -> Option<String> {
+    let item = item.trim();
+    if item.is_empty() {
+        return None;
+    }
+    let item = item
+        .split_once(" as ")
+        .map(|(_, alias)| alias)
+        .unwrap_or(item);
+    item.rsplit("::").next().map(str::to_string)
 }
 
 fn public_modules(source: &str) -> BTreeSet<String> {

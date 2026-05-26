@@ -584,6 +584,30 @@ fn query_proof_uses_persisted_verification_and_reports_stale_hashes() {
 }
 
 #[test]
+fn query_proof_reports_stale_hashes_for_failed_verification() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+
+    fs::write(
+        task_dir(repo, "task-001").join("acceptance.yaml"),
+        "schema_version: maestro.acceptance.v1\ntask: task-001\nchecks:\n- new check\nlocked_by: maestro\nlocked_at: now\n",
+    )
+    .expect("invariant: acceptance.yaml should be writable");
+
+    let stale = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&stale, &["query", "proof", "task-001"]);
+    let stale_out = stdout(&stale);
+    assert!(stale_out.contains("proof task-001: failed"));
+    assert!(stale_out.contains("stale_reasons:"));
+    assert!(stale_out.contains("acceptance_hash"));
+    assert!(stale_out.contains("checks_hash"));
+    assert!(stale_out.contains("missing proof"));
+}
+
+#[test]
 fn task_local_proof_artifacts_can_satisfy_completion_claims() {
     let temp = setup_repo();
     let repo = temp.path();

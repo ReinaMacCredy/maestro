@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+use super::events::managed_event_files;
+use super::stale::{FreshnessInputs, StoredFreshness};
+use crate::domain::harness::HarnessConfig;
 use crate::domain::task::{self, AcceptanceFile, TaskRecord, TaskState, VerificationBinding};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
@@ -21,9 +24,23 @@ use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{EVENT_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION};
-use crate::harness::schema::HarnessConfig;
-use crate::verification::events::managed_event_files;
-use crate::verification::stale::{FreshnessInputs, StoredFreshness};
+
+/// High-level result returned by the Proof facade after task verification.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TaskVerification {
+    pub task_id: String,
+    pub status: TaskVerificationStatus,
+    pub claim_count: usize,
+    pub proof_source_count: usize,
+    pub failures: Vec<String>,
+}
+
+/// High-level pass/fail status returned by the Proof facade.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TaskVerificationStatus {
+    Passed,
+    Failed,
+}
 
 /// Result status written to `verification.json`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -83,8 +100,18 @@ pub struct LoadedTask {
     handle: task::TaskHandle,
 }
 
+/// Execute proof validation for a task and return a facade-level result.
+pub fn verify_task(paths: &MaestroPaths, task_id: &str, actor: &str) -> Result<TaskVerification> {
+    let report = verify_task_report(paths, task_id, actor)?;
+    Ok(TaskVerification::from_report(&report))
+}
+
 /// Execute proof validation for a task and persist `verification.json`.
-pub fn verify_task(paths: &MaestroPaths, task_id: &str, actor: &str) -> Result<VerificationReport> {
+pub fn verify_task_report(
+    paths: &MaestroPaths,
+    task_id: &str,
+    actor: &str,
+) -> Result<VerificationReport> {
     let now = timestamp();
     let mut loaded = load_task_by_id(paths, task_id)?;
     let inputs = freshness_inputs(paths, &loaded)?;
@@ -126,6 +153,21 @@ pub fn verify_task(paths: &MaestroPaths, task_id: &str, actor: &str) -> Result<V
     write_report(&loaded.task_dir, &report)?;
     apply_report_to_task(&mut loaded, &report, actor, &now)?;
     Ok(report)
+}
+
+impl TaskVerification {
+    fn from_report(report: &VerificationReport) -> Self {
+        Self {
+            task_id: report.task_id.clone(),
+            status: match report.status {
+                VerificationStatus::Passed => TaskVerificationStatus::Passed,
+                VerificationStatus::Failed => TaskVerificationStatus::Failed,
+            },
+            claim_count: report.claims.len(),
+            proof_source_count: report.proof_sources.len(),
+            failures: report.failures.clone(),
+        }
+    }
 }
 
 /// Load a task by id or id prefix directory name.
