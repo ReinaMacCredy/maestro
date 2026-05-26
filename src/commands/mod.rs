@@ -25,7 +25,7 @@ pub mod watch;
 #[derive(Debug, Parser)]
 #[command(
     name = "maestro",
-    version,
+    version = env!("MAESTRO_BUILD_VERSION"),
     about = "Local-first agent harness CLI",
     arg_required_else_help = true
 )]
@@ -38,7 +38,7 @@ pub struct Cli {
 pub enum RootCommand {
     Init(InitArgs),
     Install(AgentArgs),
-    Update,
+    Update(UpdateArgs),
     Uninstall(AgentArgs),
     Doctor,
     ShellInit,
@@ -78,6 +78,16 @@ pub struct InitArgs {
 pub struct AgentArgs {
     #[arg(long, value_enum, default_value = "codex")]
     pub agent: Agent,
+}
+
+#[derive(Debug, Args)]
+pub struct UpdateArgs {
+    #[arg(long)]
+    pub check: bool,
+    #[arg(long)]
+    pub verbose: bool,
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -335,7 +345,7 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         RootCommand::Init(args) => init::run(args),
         RootCommand::Install(args) => install::run(args),
-        RootCommand::Update => update::run(),
+        RootCommand::Update(args) => update::run(args),
         RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
