@@ -29,7 +29,7 @@ Implement `SPEC-v0.8.md` as a local-first Rust CLI. The finished V1 creates and 
 - Phase 2 - Artifact protocol: done
 - Phase 3 - Core verbs: done
 - Phase 4 - Hooks and skills: done
-- Phase 5 - MCP, metrics, improver: todo
+- Phase 5 - MCP, metrics, improver: done
 - Phase 6 - TUI and migration: todo
 
 ## Subsystem Coverage Matrix
