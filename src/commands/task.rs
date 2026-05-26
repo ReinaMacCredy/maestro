@@ -18,6 +18,7 @@ use crate::task::template::{
     save_task_with_snapshot, write_task_artifacts, AcceptanceFile, BlockerKind, BlockerRef,
     TaskRecord, TaskState,
 };
+use crate::tui::task_list_watch;
 use crate::verification::verify_task::{verify_task, VerificationStatus};
 
 /// Execute `maestro task`.
@@ -102,7 +103,19 @@ pub fn run(args: TaskArgs) -> Result<()> {
             feature,
             ready,
             watch,
-        } => list_tasks(&paths, blocked, blocked_by, blocks, feature, ready, watch),
+            interval,
+        } => list_tasks(
+            &paths,
+            TaskListFilters {
+                blocked,
+                blocked_by,
+                blocks,
+                feature,
+                ready,
+                watch,
+                interval,
+            },
+        ),
         TaskCommand::Doctor => doctor_tasks(&paths),
     }
 }
@@ -252,15 +265,27 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn list_tasks(
-    paths: &MaestroPaths,
+struct TaskListFilters {
     blocked: bool,
     blocked_by: Option<String>,
     blocks: Option<String>,
     feature: Option<String>,
     ready: bool,
     watch: bool,
-) -> Result<()> {
+    interval: Option<u64>,
+}
+
+fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
+    let tasks = filtered_tasks(paths, &filters)?;
+    if filters.watch {
+        return task_list_watch::run(paths, tasks, filters.interval.unwrap_or(2));
+    }
+
+    print!("{}", render_task_list(&tasks));
+    Ok(())
+}
+
+fn filtered_tasks(paths: &MaestroPaths, filters: &TaskListFilters) -> Result<Vec<TaskRecord>> {
     let mut tasks = load_all_tasks(&paths.tasks_dir())?;
     let task_map: HashMap<String, TaskRecord> = tasks
         .iter()
@@ -268,30 +293,30 @@ fn list_tasks(
         .map(|task| (task.id.clone(), task))
         .collect();
 
-    if blocked {
+    if filters.blocked {
         tasks.retain(has_unresolved_blockers);
     }
-    if let Some(feature) = feature {
-        tasks.retain(|task| task.feature_id.as_deref() == Some(feature.as_str()));
+    if let Some(feature) = filters.feature.as_deref() {
+        tasks.retain(|task| task.feature_id.as_deref() == Some(feature));
     }
-    if ready {
+    if filters.ready {
         tasks.retain(|task| task.state == TaskState::Ready && !has_unresolved_blockers(task));
     }
-    if let Some(blocked_by_id) = blocked_by {
+    if let Some(blocked_by_id) = filters.blocked_by.as_deref() {
         tasks.retain(|task| {
             task.blockers.iter().any(|blocker| {
                 blocker.resolved_at.is_none()
                     && blocker
                         .blocked_ref
                         .as_ref()
-                        .map(|r| r.id.as_str() == blocked_by_id.as_str())
+                        .map(|r| r.id.as_str() == blocked_by_id)
                         .unwrap_or(false)
             })
         });
     }
-    if let Some(task_id) = blocks {
+    if let Some(task_id) = filters.blocks.as_deref() {
         let blocking_ids = task_map
-            .get(&task_id)
+            .get(task_id)
             .map(|task| {
                 task.blockers
                     .iter()
@@ -306,11 +331,7 @@ fn list_tasks(
     }
 
     tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    print!("{}", render_task_list(&tasks));
-    if watch {
-        println!("watch mode is not implemented in this phase slice; rendered one snapshot");
-    }
-    Ok(())
+    Ok(tasks)
 }
 
 fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {

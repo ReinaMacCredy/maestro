@@ -12,5 +12,6 @@ pub mod metrics;
 pub mod shell;
 pub mod skills;
 pub mod task;
+pub mod tui;
 pub mod update;
 pub mod verification;

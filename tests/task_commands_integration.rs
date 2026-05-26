@@ -447,4 +447,18 @@ fn list_supports_basic_output_and_requested_filters() {
     assert!(feature_out.contains("task-001"));
     assert!(feature_out.contains("task-002"));
     assert!(!feature_out.contains("task-003"));
+
+    assert_success(
+        &maestro(repo, &["task", "claim", "task-001"]),
+        &["task", "claim", "task-001"],
+    );
+    let watch = maestro(repo, &["task", "list", "--watch", "--interval", "0"]);
+    assert_success(&watch, &["task", "list", "--watch", "--interval", "0"]);
+    let watch_out = stdout(&watch);
+    assert!(watch_out.contains("scheduler: 1 agents active"));
+    assert!(watch_out.contains("billing-csv"));
+    assert!(watch_out.contains("~ Task A"));
+    assert!(watch_out.contains("in-progress (maestro)"));
+    assert!(watch_out.contains("! Task B"));
+    assert!(watch_out.contains("blocked by task-001"));
 }

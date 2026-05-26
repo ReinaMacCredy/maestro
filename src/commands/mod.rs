@@ -161,6 +161,8 @@ pub enum TaskCommand {
         ready: bool,
         #[arg(long)]
         watch: bool,
+        #[arg(long)]
+        interval: Option<u64>,
     },
     Doctor,
 }
