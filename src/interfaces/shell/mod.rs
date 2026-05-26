@@ -51,38 +51,5 @@ pub fn render_shell_init(shell: Shell) -> &'static str {
     }
 }
 
-const POSIX_INIT: &str = r#"# Maestro shell integration for bash/zsh.
-maestro() {
-  local __maestro_status
-
-  command maestro "$@"
-  __maestro_status=$?
-
-  if [ "$__maestro_status" -eq 0 ]; then
-    if [ "$1" = "task" ] && [ "$2" = "claim" ] && [ -n "${3-}" ]; then
-      export MAESTRO_CURRENT_TASK="$3"
-    elif [ "$1" = "task" ] && [ "$2" = "complete" ] && [ -n "${3-}" ]; then
-      unset MAESTRO_CURRENT_TASK
-    fi
-  fi
-
-  return "$__maestro_status"
-}
-"#;
-
-const FISH_INIT: &str = r#"# Maestro shell integration for fish.
-function maestro
-    command maestro $argv
-    set -l __maestro_status $status
-
-    if test $__maestro_status -eq 0
-        if test (count $argv) -ge 3; and test "$argv[1]" = "task"; and test "$argv[2]" = "claim"
-            set -gx MAESTRO_CURRENT_TASK "$argv[3]"
-        else if test (count $argv) -ge 3; and test "$argv[1]" = "task"; and test "$argv[2]" = "complete"
-            set -e MAESTRO_CURRENT_TASK
-        end
-    end
-
-    return $__maestro_status
-end
-"#;
+const POSIX_INIT: &str = include_str!("../../../resources/shell/posix.sh");
+const FISH_INIT: &str = include_str!("../../../resources/shell/fish.fish");

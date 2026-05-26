@@ -15,6 +15,25 @@ const BUNDLED_SKILL_NAMES: [&str; 4] = [
     "maestro-design",
 ];
 
+const BUNDLED_SKILL_RESOURCES: [(&str, &str); 4] = [
+    (
+        "maestro-task",
+        include_str!("../resources/skills/bundled/maestro-task/SKILL.md"),
+    ),
+    (
+        "maestro-setup",
+        include_str!("../resources/skills/bundled/maestro-setup/SKILL.md"),
+    ),
+    (
+        "maestro-verify",
+        include_str!("../resources/skills/bundled/maestro-verify/SKILL.md"),
+    ),
+    (
+        "maestro-design",
+        include_str!("../resources/skills/bundled/maestro-design/SKILL.md"),
+    ),
+];
+
 #[test]
 fn bundled_skill_list_is_exactly_the_four_v1_skills() {
     let names = bundled_skills()
@@ -23,6 +42,17 @@ fn bundled_skill_list_is_exactly_the_four_v1_skills() {
         .collect::<Vec<_>>();
 
     assert_eq!(names, BUNDLED_SKILL_NAMES);
+}
+
+#[test]
+fn bundled_skill_contents_match_embedded_resources() {
+    for skill in bundled_skills() {
+        let resource = BUNDLED_SKILL_RESOURCES
+            .iter()
+            .find_map(|(name, contents)| (*name == skill.name).then_some(*contents))
+            .expect("invariant: every bundled skill has a resource fixture");
+        assert_eq!(skill.contents, resource);
+    }
 }
 
 #[test]

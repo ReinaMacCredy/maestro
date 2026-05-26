@@ -7,77 +7,13 @@ pub struct BundledSkill {
     pub contents: &'static str,
 }
 
-const MAESTRO_TASK: &str = r#"---
-name: maestro-task
-description: Feature and task workflow layer for operating the Maestro harness.
----
-
-# Maestro Task
-
-Use this skill when creating, claiming, updating, blocking, or completing Maestro tasks.
-
-Start by reading `.maestro/harness/HARNESS.md`, then inspect the relevant task and feature
-artifacts before changing state. Prefer Maestro CLI verbs for durable updates, preserve evidence,
-and keep task status transitions explicit.
-
-On activation, log the skill activation by piping a compact JSON payload to
-`maestro hook record` with `event_type` set to `skill_activation`, `skill_name` set to
-`maestro-task`, and `activation_mode` set to `agent_selected`.
-"#;
-
-const MAESTRO_SETUP: &str = r#"---
-name: maestro-setup
-description: Initial setup and harness tuning protocol for a Maestro-enabled repository.
----
-
-# Maestro Setup
-
-Use this skill after `maestro init` to tune the repository harness.
-
-Inspect the repo structure, build and test commands, existing agent instructions, and current
-workflow constraints. Update harness guidance only from verified repository evidence, and keep
-setup changes small enough for future agents to trust and maintain.
-
-On activation, log the skill activation by piping a compact JSON payload to
-`maestro hook record` with `event_type` set to `skill_activation`, `skill_name` set to
-`maestro-setup`, and `activation_mode` set to `agent_selected`.
-"#;
-
-const MAESTRO_VERIFY: &str = r#"---
-name: maestro-verify
-description: Verification protocol for Maestro tasks and feature work.
----
-
-# Maestro Verify
-
-Use this skill when proving a task or feature is complete.
-
-Identify the smallest checks that can falsify the change, run them from the repository root, and
-record exact commands and outcomes. If verification cannot run, state the blocker and the remaining
-risk instead of marking the work complete.
-
-On activation, log the skill activation by piping a compact JSON payload to
-`maestro hook record` with `event_type` set to `skill_activation`, `skill_name` set to
-`maestro-verify`, and `activation_mode` set to `agent_selected`.
-"#;
-
-const MAESTRO_DESIGN: &str = r#"---
-name: maestro-design
-description: Spec authoring and design grilling protocol for Maestro work.
----
-
-# Maestro Design
-
-Use this skill when turning a rough idea into a Maestro-ready spec or task plan.
-
-Clarify the user-visible outcome, constraints, non-goals, acceptance checks, and rollout risks.
-Prefer concrete examples and repository evidence over generic architecture language, then hand off a
-plan that can be implemented and verified in small steps.
-
-On activation, log the skill activation by piping a compact JSON payload to
-`maestro hook record` with `event_type` set to `skill_activation`, `skill_name` set to
-`maestro-design`, and `activation_mode` set to `agent_selected`.
-"#;
+const MAESTRO_TASK: &str = include_str!("../../../resources/skills/bundled/maestro-task/SKILL.md");
+const MAESTRO_SETUP: &str =
+    include_str!("../../../resources/skills/bundled/maestro-setup/SKILL.md");
+const MAESTRO_VERIFY: &str =
+    include_str!("../../../resources/skills/bundled/maestro-verify/SKILL.md");
+const MAESTRO_DESIGN: &str =
+    include_str!("../../../resources/skills/bundled/maestro-design/SKILL.md");
 
 const BUNDLED_SKILLS: [BundledSkill; 4] = [
     BundledSkill {
