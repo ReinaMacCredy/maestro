@@ -408,6 +408,11 @@ Harness Backlog owns:
 - refresh behavior for rule-generated proposals.
 - read models for Metrics, Query, MCP, and TUI consumers.
 
+Current code path: `src/domain/harness/backlog.rs` owns backlog load, save,
+proposal merge, schema validation, and applied-status mutation. Improver
+detection remains in `src/improver/detect.rs`, and `src/improver/propose.rs`
+routes detected proposals through the Harness Backlog contract.
+
 Improve may propose or refresh backlog items through the Harness Backlog
 contract. It must not silently apply Harness protocol or config changes. Any
 operation that turns a backlog proposal into a Harness artifact mutation must

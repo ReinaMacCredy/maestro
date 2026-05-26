@@ -1,0 +1,160 @@
+mod support;
+
+use std::fs;
+
+use maestro::core::paths::MaestroPaths;
+use maestro::domain::harness::backlog;
+use maestro::domain::harness::schema::{BacklogConfig, BacklogItem};
+use support::TestTempDir;
+
+fn paths_for(temp: &TestTempDir) -> MaestroPaths {
+    let paths = MaestroPaths::new(temp.path());
+    fs::create_dir_all(paths.harness_dir()).expect("invariant: harness dir should be creatable");
+    paths
+}
+
+fn proposal(source: &str, item_type: &str, title: &str) -> BacklogItem {
+    BacklogItem {
+        id: String::new(),
+        source: source.to_string(),
+        item_type: item_type.to_string(),
+        title: title.to_string(),
+        priority: "medium".to_string(),
+        status: "proposed".to_string(),
+        evidence: vec![format!("{source} evidence")],
+    }
+}
+
+#[test]
+fn refresh_assigns_stable_ids_and_deduplicates_by_key() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+
+    let backlog = backlog::refresh(
+        &paths,
+        vec![
+            proposal("source-b", "missing_skill", "Add skill B"),
+            proposal("source-a", "missing_skill", "Add skill A"),
+            proposal("source-a", "missing_skill", "Add skill A"),
+        ],
+    )
+    .expect("invariant: backlog refresh should succeed");
+
+    assert_eq!(backlog.items.len(), 2);
+    assert_eq!(backlog.items[0].id, "hb-001");
+    assert_eq!(backlog.items[0].source, "source-a");
+    assert_eq!(backlog.items[1].id, "hb-002");
+    assert_eq!(backlog.items[1].source, "source-b");
+
+    let refreshed = backlog::refresh(
+        &paths,
+        vec![
+            proposal("source-b", "missing_skill", "Add skill B"),
+            proposal("source-a", "missing_skill", "Add skill A"),
+        ],
+    )
+    .expect("invariant: duplicate refresh should succeed");
+
+    assert_eq!(refreshed.items, backlog.items);
+}
+
+#[test]
+fn refresh_preserves_existing_ids_and_uses_next_number() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    let mut existing = BacklogConfig::empty();
+    let mut existing_item = proposal("existing", "recurring_blocker", "Fix existing blocker");
+    existing_item.id = "hb-007".to_string();
+    existing.items.push(existing_item);
+    backlog::save(&paths, &existing).expect("invariant: existing backlog should save");
+
+    let refreshed = backlog::refresh(
+        &paths,
+        vec![proposal("new", "recurring_blocker", "Fix new blocker")],
+    )
+    .expect("invariant: backlog refresh should succeed");
+
+    assert_eq!(refreshed.items[0].id, "hb-007");
+    assert_eq!(refreshed.items[1].id, "hb-008");
+}
+
+#[test]
+fn mark_applied_changes_only_the_selected_item_status() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    let mut backlog = backlog::refresh(
+        &paths,
+        vec![
+            proposal("one", "missing_skill", "Add skill one"),
+            proposal("two", "missing_skill", "Add skill two"),
+        ],
+    )
+    .expect("invariant: backlog refresh should succeed");
+
+    let applied = backlog::mark_applied(&mut backlog, "hb-001")
+        .expect("invariant: selected backlog item should exist");
+    backlog::save(&paths, &backlog).expect("invariant: updated backlog should save");
+    let reloaded = backlog::load(&paths).expect("invariant: backlog should reload");
+
+    assert_eq!(applied.status, "applied");
+    assert_eq!(reloaded.items[0].status, "applied");
+    assert_eq!(reloaded.items[1].status, "proposed");
+}
+
+#[test]
+fn refresh_does_not_apply_harness_config_changes() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    let harness_yml = paths.harness_dir().join("harness.yml");
+    fs::write(
+        &harness_yml,
+        "schema_version: maestro.harness.v1\nsentinel: keep\n",
+    )
+    .expect("invariant: harness config should be writable");
+    let before = fs::read_to_string(&harness_yml).expect("invariant: harness config should read");
+
+    backlog::refresh(
+        &paths,
+        vec![proposal("source", "missing_skill", "Add skill")],
+    )
+    .expect("invariant: backlog refresh should succeed");
+
+    assert_eq!(
+        fs::read_to_string(&harness_yml).expect("invariant: harness config should read"),
+        before
+    );
+}
+
+#[test]
+fn load_rejects_backlog_schema_mismatch() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    fs::write(
+        paths.harness_dir().join("backlog.yaml"),
+        "schema_version: maestro.backlog.v0\nitems: []\n",
+    )
+    .expect("invariant: backlog should be writable");
+
+    let error = backlog::load(&paths).expect_err("invariant: schema mismatch should fail");
+
+    assert!(error.to_string().contains("schema mismatch"));
+}
+
+#[cfg(unix)]
+#[test]
+fn refresh_rejects_symlinked_backlog_paths() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let external = TestTempDir::new("maestro-harness-backlog-external");
+    let paths = MaestroPaths::new(temp.path());
+    fs::create_dir_all(paths.maestro_dir()).expect("invariant: maestro dir should be creatable");
+    std::os::unix::fs::symlink(external.path(), paths.harness_dir())
+        .expect("invariant: symlinked harness dir should be creatable");
+
+    let error = backlog::refresh(
+        &paths,
+        vec![proposal("source", "missing_skill", "Add skill")],
+    )
+    .expect_err("invariant: symlinked backlog path should fail");
+
+    assert!(error.to_string().contains("symlink"));
+}
