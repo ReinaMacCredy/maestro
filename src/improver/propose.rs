@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::domain::harness::backlog;
-use crate::domain::harness::schema::{BacklogConfig, BacklogItem};
+use crate::domain::harness::{BacklogConfig, BacklogItem};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::improver::detect;
 

@@ -87,6 +87,18 @@ const DOMAIN_FACADES: &[&str] = &[
 
 const OPERATION_FACADES: &[&str] = &["improver", "metrics", "migrate", "update"];
 
+const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
+    (
+        "src/domain/harness/templates.rs",
+        &["resources/harness/HARNESS.md"],
+    ),
+    (
+        "src/domain/skills/bundled.rs",
+        &["resources/skills/bundled/"],
+    ),
+    ("src/interfaces/shell/mod.rs", &["resources/shell/"]),
+];
+
 #[test]
 fn target_module_roots_exist_and_legacy_roots_remain() {
     let lib = read_source_file(Path::new("src/lib.rs"));
@@ -599,6 +611,71 @@ fn non_interface_sources_do_not_depend_on_interfaces_hooks() {
     assert!(
         violations.is_empty(),
         "non-interface code should keep using crate::hooks until Run exposes a non-interface facade:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn resource_embeds_stay_in_owning_modules() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src")) {
+        let source = read_source_file(&file);
+        for (line_number, line) in source.lines().enumerate() {
+            if !line.contains("include_str!") || !line.contains("resources/") {
+                continue;
+            }
+            if resource_embed_is_allowed(&file, line) {
+                continue;
+            }
+
+            violations.push(format!(
+                "{}:{} embeds a resource outside its owning module",
+                file.display(),
+                line_number + 1
+            ));
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "resource files should be embedded only by their owning modules:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn bundled_skill_resources_are_skill_directories_without_evals() {
+    let root = Path::new("resources/skills/bundled");
+    let mut violations = Vec::new();
+
+    for entry in sorted_dir_entries(root) {
+        if !entry.is_dir() {
+            violations.push(format!(
+                "{} is not a bundled skill directory",
+                entry.display()
+            ));
+            continue;
+        }
+        if !entry.join("SKILL.md").is_file() {
+            violations.push(format!("{} is missing SKILL.md", entry.display()));
+        }
+        for path in paths_under(&entry) {
+            if path
+                .components()
+                .any(|component| component.as_os_str().to_string_lossy() == "evals")
+            {
+                violations.push(format!(
+                    "{} contains development-only evals content",
+                    path.display()
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "bundled skill resources must be installable skill directories:\n{}",
         violations.join("\n")
     );
 }
@@ -1440,4 +1517,45 @@ fn module_name_from_root(root: &str) -> &str {
 fn read_source_file(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+fn resource_embed_is_allowed(file: &Path, line: &str) -> bool {
+    RESOURCE_EMBED_ALLOWLIST
+        .iter()
+        .any(|(allowed_file, allowed_fragments)| {
+            file == Path::new(allowed_file)
+                && allowed_fragments
+                    .iter()
+                    .any(|fragment| line.contains(fragment))
+        })
+}
+
+fn sorted_dir_entries(root: &Path) -> Vec<PathBuf> {
+    let mut entries = fs::read_dir(root)
+        .unwrap_or_else(|error| panic!("failed to scan {}: {error}", root.display()))
+        .map(|entry| {
+            entry
+                .unwrap_or_else(|error| {
+                    panic!("failed to read entry under {}: {error}", root.display())
+                })
+                .path()
+        })
+        .collect::<Vec<_>>();
+    entries.sort();
+    entries
+}
+
+fn paths_under(root: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    collect_paths(root, &mut paths);
+    paths
+}
+
+fn collect_paths(path: &Path, paths: &mut Vec<PathBuf>) {
+    paths.push(path.to_path_buf());
+    if path.is_dir() {
+        for entry in sorted_dir_entries(path) {
+            collect_paths(&entry, paths);
+        }
+    }
 }

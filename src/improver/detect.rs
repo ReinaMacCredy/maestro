@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use serde_json::Value;
 
 use crate::domain::decisions::query::decision_entries;
-use crate::domain::harness::schema::{BacklogItem, HarnessConfig};
+use crate::domain::harness::{BacklogItem, HarnessConfig};
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::metrics::friction::{event_kind, event_text, looks_like_correction};
