@@ -118,6 +118,35 @@ fn update_accepts_check_verbose_and_force_flags_without_writing() {
 }
 
 #[test]
+fn update_reports_manager_commands_for_brew_and_cargo_installs() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+
+    let brew = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["update", "--check"])
+        .current_dir(temp_dir.path())
+        .env("MAESTRO_INSTALL_METHOD", "brew")
+        .output()
+        .expect("invariant: maestro update should run");
+    assert_success(&brew);
+    let stdout = String::from_utf8_lossy(&brew.stdout);
+    assert!(stdout.contains("Update unavailable for this install"));
+    assert!(stdout.contains("brew upgrade maestro"));
+
+    let cargo = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["update", "--check"])
+        .current_dir(temp_dir.path())
+        .env("MAESTRO_INSTALL_METHOD", "cargo")
+        .output()
+        .expect("invariant: maestro update should run");
+    assert_success(&cargo);
+    let stdout = String::from_utf8_lossy(&cargo.stdout);
+    assert!(stdout.contains("Update unavailable for this install"));
+    assert!(stdout.contains("cargo install --locked --force maestro"));
+}
+
+#[test]
 fn simulated_download_failure_preserves_existing_binary_file() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
@@ -386,6 +415,7 @@ exit 18
     let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("update")
         .current_dir(temp_dir.path())
+        .env("MAESTRO_INSTALL_METHOD", "curl")
         .env(
             "PATH",
             format!("{}:{}", fakebin.display(), path.to_string_lossy()),
@@ -401,6 +431,63 @@ exit 18
         !stderr.contains("Error:"),
         "friendly update errors should not be followed by anyhow stderr: {stderr}"
     );
+}
+
+#[test]
+fn auto_check_reports_available_update_once_per_day_for_curl_installs() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+    let fakebin = temp_dir.path().join("fakebin");
+    fs::create_dir_all(&fakebin).expect("invariant: fakebin should be creatable");
+    let fake_curl = fakebin.join("curl");
+    let asset_name = format!(
+        "maestro-{}-{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
+    fs::write(
+        &fake_curl,
+        format!(
+            r#"#!/bin/sh
+printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{asset_name}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
+"#
+        ),
+    )
+    .expect("invariant: fake curl should be writable");
+    #[cfg(unix)]
+    fs::set_permissions(&fake_curl, fs::Permissions::from_mode(0o755))
+        .expect("invariant: fake curl should be executable");
+
+    let path = env::var_os("PATH").expect("invariant: PATH should be set");
+    let first = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .arg("doctor")
+        .current_dir(temp_dir.path())
+        .env("MAESTRO_INSTALL_METHOD", "curl")
+        .env(
+            "PATH",
+            format!("{}:{}", fakebin.display(), path.to_string_lossy()),
+        )
+        .output()
+        .expect("invariant: maestro doctor should run");
+    assert_success(&first);
+    let stdout = String::from_utf8_lossy(&first.stdout);
+    assert!(stdout.contains("Update available: 9.9.9-gfuture"));
+    assert!(stdout.contains("Run `maestro update` to install."));
+
+    let second = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .arg("doctor")
+        .current_dir(temp_dir.path())
+        .env("MAESTRO_INSTALL_METHOD", "curl")
+        .env(
+            "PATH",
+            format!("{}:{}", fakebin.display(), path.to_string_lossy()),
+        )
+        .output()
+        .expect("invariant: maestro doctor should run");
+    assert_success(&second);
+    let stdout = String::from_utf8_lossy(&second.stdout);
+    assert!(!stdout.contains("Update available: 9.9.9-gfuture"));
 }
 
 #[cfg(unix)]

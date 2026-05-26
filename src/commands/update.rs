@@ -1,4 +1,7 @@
 use std::env;
+use std::fs;
+use std::io::IsTerminal;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 
@@ -6,9 +9,11 @@ use crate::commands::UpdateArgs;
 use crate::core::backup::backup_operation_timestamp;
 use crate::core::paths::{discover_repo_root, MaestroPaths};
 use crate::update::{
-    run_update, BinaryStatus, ReleaseInfo, UpdateFailure, UpdateFailurePhase, UpdateOptions,
-    UpdateOutcome,
+    detect_install_method, run_update, BinaryStatus, InstallMethod, ReleaseInfo, UpdateFailure,
+    UpdateFailurePhase, UpdateOptions, UpdateOutcome,
 };
+
+const AUTO_CHECK_INTERVAL_SECONDS: u64 = 24 * 60 * 60;
 
 /// Marker error for update failures that already rendered user-facing output.
 #[derive(Debug)]
@@ -28,7 +33,8 @@ pub fn run(args: UpdateArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
     let executable_path = env::current_exe()?;
     let backup_timestamp = backup_operation_timestamp()?;
-    println!("Checking for updates...");
+    let colors = Colors::detect();
+    println!("{}", colors.info("Checking for updates..."));
 
     let outcome = match run_update(&UpdateOptions {
         paths: &paths,
@@ -42,9 +48,12 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         Ok(outcome) => outcome,
         Err(error) => {
             if let Some(failure) = error.downcast_ref::<UpdateFailure>() {
-                print!("{}", render_failure(failure));
+                print!("{}", render_failure(failure, colors));
             } else {
-                println!("Update failed: {}", sentence(error.to_string()));
+                println!(
+                    "{}",
+                    colors.error(&format!("Update failed: {}", sentence(error.to_string())))
+                );
                 println!();
                 println!("Your current Maestro install was not changed.");
             }
@@ -52,12 +61,61 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         }
     };
 
-    print!("{}", render_outcome(&outcome, args.verbose));
+    print!("{}", render_outcome(&outcome, args.verbose, colors));
 
     Ok(())
 }
 
-fn render_outcome(outcome: &UpdateOutcome, verbose: bool) -> String {
+/// Run a passive once-per-day update check. It only prints when an update is available.
+pub fn run_auto_check() -> Result<()> {
+    if env::var("MAESTRO_AUTO_UPDATE")
+        .map(|value| value == "0" || value.eq_ignore_ascii_case("false"))
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
+    let executable_path = env::current_exe()?;
+    if detect_install_method(&executable_path) != InstallMethod::Curl {
+        return Ok(());
+    }
+
+    let repo_root = match discover_repo_root() {
+        Ok(repo_root) => repo_root,
+        Err(_) => return Ok(()),
+    };
+    let paths = MaestroPaths::new(repo_root);
+    let now = current_unix_seconds()?;
+    if !auto_check_due(&paths, now)? {
+        return Ok(());
+    }
+    record_auto_check(&paths, now)?;
+
+    let outcome = run_update(&UpdateOptions {
+        paths: &paths,
+        executable_path: &executable_path,
+        backup_timestamp: "",
+        current_version: env!("MAESTRO_BUILD_VERSION"),
+        check_only: true,
+        force: false,
+        verbose: false,
+    })?;
+
+    if let BinaryStatus::UpdateAvailable { release, .. } = outcome.binary_status {
+        let colors = Colors::detect();
+        println!(
+            "{}",
+            colors.info(&format!(
+                "Update available: {}. Run `maestro update` to install.",
+                release_summary_short(&release)
+            ))
+        );
+    }
+
+    Ok(())
+}
+
+fn render_outcome(outcome: &UpdateOutcome, verbose: bool, colors: Colors) -> String {
     let mut out = String::new();
     match &outcome.binary_status {
         BinaryStatus::UpdateAvailable {
@@ -66,32 +124,36 @@ fn render_outcome(outcome: &UpdateOutcome, verbose: bool) -> String {
         } => {
             out.push_str(&format!(
                 "Update available: {}\n",
-                release_summary_short(release)
+                colors.info(&release_summary_short(release))
             ));
             out.push_str(&format!("Current version: {current_version}\n"));
         }
         BinaryStatus::UpToDate { release } => {
-            out.push_str(&format!(
-                "✓ Maestro is already up to date ({})\n",
+            out.push_str(&colors.success(&format!(
+                "✓ Maestro is already up to date ({})",
                 release.version
-            ));
+            )));
+            out.push('\n');
         }
         BinaryStatus::Skipped { reason } => {
-            out.push_str(&format!("Update unavailable for this build: {reason}.\n"));
+            out.push_str(&format!("Update unavailable {reason}.\n"));
         }
         BinaryStatus::Replaced { release, .. } => {
             if let Some(release) = release {
-                out.push_str(&format!("Updating to version {}...\n", release.version));
+                out.push_str(&colors.info(&format!("Updating to version {}...", release.version)));
+                out.push('\n');
                 out.push_str(&download_complete_line(release));
             }
             out.push_str("Installing update...\n");
             if let Some(release) = release {
-                out.push_str(&format!(
-                    "✓ Maestro updated to version {}\n",
+                out.push_str(&colors.success(&format!(
+                    "✓ Maestro updated to version {}",
                     release_summary(release)
-                ));
+                )));
+                out.push('\n');
             } else {
-                out.push_str("✓ Maestro updated\n");
+                out.push_str(&colors.success("✓ Maestro updated"));
+                out.push('\n');
             }
         }
     }
@@ -130,10 +192,11 @@ fn render_outcome(outcome: &UpdateOutcome, verbose: bool) -> String {
     out
 }
 
-fn render_failure(failure: &UpdateFailure) -> String {
+fn render_failure(failure: &UpdateFailure, colors: Colors) -> String {
     let mut out = String::new();
     if let Some(release) = &failure.release {
-        out.push_str(&format!("Updating to version {}...\n", release.version));
+        out.push_str(&colors.info(&format!("Updating to version {}...", release.version)));
+        out.push('\n');
         match failure.phase {
             UpdateFailurePhase::Download => {
                 out.push_str(&download_progress_line(
@@ -148,7 +211,8 @@ fn render_failure(failure: &UpdateFailure) -> String {
             }
         }
     }
-    out.push_str(&format!("Update failed: {}\n", sentence(&failure.message)));
+    out.push_str(&colors.error(&format!("Update failed: {}", sentence(&failure.message))));
+    out.push('\n');
     out.push('\n');
     if failure.restored {
         out.push_str("Your current Maestro install was restored.\n");
@@ -156,6 +220,80 @@ fn render_failure(failure: &UpdateFailure) -> String {
         out.push_str("Your current Maestro install was not changed.\n");
     }
     out
+}
+
+#[derive(Clone, Copy)]
+struct Colors {
+    enabled: bool,
+}
+
+impl Colors {
+    fn detect() -> Self {
+        let enabled = match env::var("MAESTRO_COLOR") {
+            Ok(value) if value.eq_ignore_ascii_case("always") => true,
+            Ok(value) if value.eq_ignore_ascii_case("never") => false,
+            _ => std::io::stdout().is_terminal() && env::var_os("NO_COLOR").is_none(),
+        };
+        Self { enabled }
+    }
+
+    #[cfg(test)]
+    fn plain() -> Self {
+        Self { enabled: false }
+    }
+
+    #[cfg(test)]
+    fn always() -> Self {
+        Self { enabled: true }
+    }
+
+    fn info(&self, text: &str) -> String {
+        self.paint("94", text)
+    }
+
+    fn success(&self, text: &str) -> String {
+        self.paint("32", text)
+    }
+
+    fn error(&self, text: &str) -> String {
+        self.paint("31", text)
+    }
+
+    fn paint(&self, code: &str, text: &str) -> String {
+        if self.enabled {
+            format!("\x1b[{code}m{text}\x1b[0m")
+        } else {
+            text.to_string()
+        }
+    }
+}
+
+fn auto_check_due(paths: &MaestroPaths, now: u64) -> Result<bool> {
+    let path = auto_check_stamp_path(paths);
+    let Some(contents) = fs::read_to_string(&path).ok() else {
+        return Ok(true);
+    };
+    let Some(last_check) = contents.trim().parse::<u64>().ok() else {
+        return Ok(true);
+    };
+    Ok(now.saturating_sub(last_check) >= AUTO_CHECK_INTERVAL_SECONDS)
+}
+
+fn record_auto_check(paths: &MaestroPaths, now: u64) -> Result<()> {
+    let path = auto_check_stamp_path(paths);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, now.to_string())?;
+    Ok(())
+}
+
+fn auto_check_stamp_path(paths: &MaestroPaths) -> std::path::PathBuf {
+    paths.maestro_dir().join("update-check")
+}
+
+fn current_unix_seconds() -> Result<u64> {
+    Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
 
 fn download_complete_line(release: &ReleaseInfo) -> String {
@@ -228,7 +366,10 @@ fn sentence(message: impl AsRef<str>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_failure, render_outcome, ReleaseInfo};
+    use super::{
+        auto_check_due, record_auto_check, render_failure, render_outcome, Colors, ReleaseInfo,
+    };
+    use crate::core::paths::MaestroPaths;
     use crate::update::{BinaryStatus, UpdateFailure, UpdateOutcome};
 
     #[test]
@@ -247,7 +388,7 @@ mod tests {
         };
 
         assert_eq!(
-            render_outcome(&outcome, false),
+            render_outcome(&outcome, false, Colors::plain()),
             "✓ Maestro is already up to date (0.0.1779772576-g751b94)\n"
         );
     }
@@ -269,7 +410,7 @@ mod tests {
         };
 
         assert_eq!(
-            render_outcome(&outcome, false),
+            render_outcome(&outcome, false, Colors::plain()),
             concat!(
                 "Updating to version 0.0.1779772576-g751b94...\n",
                 "Downloading update (25.35 MB/25.35 MB)\n",
@@ -295,7 +436,7 @@ mod tests {
         };
 
         assert_eq!(
-            render_outcome(&outcome, false),
+            render_outcome(&outcome, false, Colors::plain()),
             "✓ Maestro is already up to date (0.0.1779772576-g751b94)\n"
         );
     }
@@ -317,7 +458,7 @@ mod tests {
         };
 
         assert_eq!(
-            render_outcome(&outcome, false),
+            render_outcome(&outcome, false, Colors::plain()),
             concat!(
                 "Update available: 0.0.1779772576-g751b94 (released 1h ago)\n",
                 "Current version: 0.0.1779700000-gabc123\n",
@@ -340,7 +481,7 @@ mod tests {
         );
 
         assert_eq!(
-            render_failure(&failure),
+            render_failure(&failure, Colors::plain()),
             concat!(
                 "Updating to version 0.0.1779772576-g751b94...\n",
                 "Downloading update (8.14 MB/25.35 MB)\n",
@@ -365,7 +506,7 @@ mod tests {
         );
 
         assert_eq!(
-            render_failure(&failure),
+            render_failure(&failure, Colors::plain()),
             concat!(
                 "Updating to version 0.0.1779772576-g751b94...\n",
                 "Downloading update (25.35 MB/25.35 MB)\n",
@@ -375,5 +516,48 @@ mod tests {
                 "Your current Maestro install was restored.\n",
             )
         );
+    }
+
+    #[test]
+    fn colors_success_and_progress_lines_when_enabled() {
+        let outcome = UpdateOutcome {
+            binary_status: BinaryStatus::Replaced {
+                path: std::path::PathBuf::from("/tmp/maestro"),
+                release: Some(ReleaseInfo {
+                    version: "0.0.1779772576-g751b94".to_string(),
+                    released_at: None,
+                    relative_age: None,
+                    size_bytes: Some(25_350_000),
+                }),
+            },
+            skill_backups: Vec::new(),
+            schema_mismatches: Vec::new(),
+        };
+
+        assert_eq!(
+            render_outcome(&outcome, false, Colors::always()),
+            concat!(
+                "\u{1b}[94mUpdating to version 0.0.1779772576-g751b94...\u{1b}[0m\n",
+                "Downloading update (25.35 MB/25.35 MB)\n",
+                "Installing update...\n",
+                "\u{1b}[32m✓ Maestro updated to version 0.0.1779772576-g751b94\u{1b}[0m\n",
+            )
+        );
+    }
+
+    #[test]
+    fn auto_check_stamp_enforces_24_hour_interval() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("maestro-auto-check-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let paths = MaestroPaths::new(&temp_dir);
+
+        assert!(auto_check_due(&paths, 100).expect("invariant: fresh stamp should be due"));
+        record_auto_check(&paths, 100).expect("invariant: stamp should write");
+        assert!(!auto_check_due(&paths, 100 + 60).expect("invariant: recent stamp should skip"));
+        assert!(auto_check_due(&paths, 100 + 24 * 60 * 60)
+            .expect("invariant: day-old stamp should be due"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

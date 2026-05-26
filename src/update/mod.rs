@@ -22,6 +22,7 @@ use crate::skills::extract::{
 };
 
 static REPLACE_COUNTER: AtomicU64 = AtomicU64::new(0);
+const DEFAULT_RELEASE_REPO: &str = "ReinaMacCredy/maestro";
 
 /// Options for one `maestro update` operation.
 #[derive(Debug)]
@@ -124,6 +125,19 @@ pub struct UpdateRequest {
     pub force: bool,
     /// Whether the caller requested verbose diagnostics.
     pub verbose: bool,
+}
+
+/// How the running Maestro binary appears to be installed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InstallMethod {
+    /// A self-managed GitHub release binary, usually installed by curl.
+    Curl,
+    /// A Homebrew-managed binary.
+    Homebrew,
+    /// A Cargo-managed binary under a Cargo bin directory.
+    Cargo,
+    /// A local development binary from a Cargo target directory.
+    LocalDevelopment,
 }
 
 /// Update failure phase for user-facing rollback messages.
@@ -244,6 +258,28 @@ impl UpdateDownloader for OfflineDownloader {
     }
 }
 
+/// Downloader used for install methods Maestro should not mutate directly.
+#[derive(Debug)]
+pub struct UnavailableDownloader {
+    reason: &'static str,
+}
+
+impl UnavailableDownloader {
+    fn new(reason: &'static str) -> Self {
+        Self { reason }
+    }
+}
+
+impl UpdateDownloader for UnavailableDownloader {
+    fn check(&self, _request: &UpdateRequest) -> Result<UpdateCheck> {
+        Ok(UpdateCheck::Unavailable(self.reason.to_string()))
+    }
+
+    fn download(&self, _request: &UpdateRequest) -> Result<DownloadedBinary> {
+        Ok(DownloadedBinary::Unavailable(self.reason.to_string()))
+    }
+}
+
 /// Optional SHA-256 verifier for future release assets.
 #[derive(Debug, Default)]
 pub struct Sha256Verifier {
@@ -312,13 +348,50 @@ impl BinaryReplacer for AtomicBinaryReplacer {
 
 /// Run update with the default offline-safe seams.
 pub fn run_update(options: &UpdateOptions<'_>) -> Result<UpdateOutcome> {
-    let downloader = GitHubCurlDownloader::for_repo_root(options.paths.repo_root());
-    run_update_with_seams(
-        options,
-        &downloader,
-        &Sha256Verifier::disabled(),
-        &AtomicBinaryReplacer,
-    )
+    match detect_install_method(options.executable_path) {
+        InstallMethod::Curl => {
+            let downloader = GitHubCurlDownloader::new();
+            run_update_with_seams(
+                options,
+                &downloader,
+                &Sha256Verifier::disabled(),
+                &AtomicBinaryReplacer,
+            )
+        }
+        InstallMethod::Homebrew => {
+            let downloader = UnavailableDownloader::new(
+                "for this install: installed with Homebrew. Run `brew upgrade maestro`",
+            );
+            run_update_with_seams(
+                options,
+                &downloader,
+                &Sha256Verifier::disabled(),
+                &AtomicBinaryReplacer,
+            )
+        }
+        InstallMethod::Cargo => {
+            let downloader = UnavailableDownloader::new(
+                "for this install: installed with Cargo. Run `cargo install --locked --force maestro`",
+            );
+            run_update_with_seams(
+                options,
+                &downloader,
+                &Sha256Verifier::disabled(),
+                &AtomicBinaryReplacer,
+            )
+        }
+        InstallMethod::LocalDevelopment => {
+            let downloader = UnavailableDownloader::new(
+                "for this build: running from a local development binary",
+            );
+            run_update_with_seams(
+                options,
+                &downloader,
+                &Sha256Verifier::disabled(),
+                &AtomicBinaryReplacer,
+            )
+        }
+    }
 }
 
 /// `curl`-backed GitHub Releases downloader.
@@ -330,10 +403,10 @@ pub struct GitHubCurlDownloader {
 }
 
 impl GitHubCurlDownloader {
-    /// Build the default downloader from environment overrides or git origin.
-    pub fn for_repo_root(repo_root: &Path) -> Self {
+    /// Build the default downloader from environment overrides.
+    pub fn new() -> Self {
         Self {
-            release_repo: release_repo(repo_root),
+            release_repo: Some(release_repo()),
             api_base_url: std::env::var("MAESTRO_RELEASE_API_BASE_URL")
                 .unwrap_or_else(|_| "https://api.github.com".to_string()),
             asset_name: std::env::var("MAESTRO_RELEASE_ASSET").ok(),
@@ -376,6 +449,37 @@ impl GitHubCurlDownloader {
             size_bytes: asset.map(|asset| asset.size),
         }
     }
+}
+
+impl Default for GitHubCurlDownloader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Detect how the current binary is managed.
+pub fn detect_install_method(executable_path: &Path) -> InstallMethod {
+    if let Ok(value) = std::env::var("MAESTRO_INSTALL_METHOD") {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "curl" | "github" | "self" => return InstallMethod::Curl,
+            "brew" | "homebrew" => return InstallMethod::Homebrew,
+            "cargo" => return InstallMethod::Cargo,
+            "local" | "dev" | "development" => return InstallMethod::LocalDevelopment,
+            _ => {}
+        }
+    }
+
+    let path = executable_path.to_string_lossy();
+    if path.contains("/target/debug/") || path.contains("/target/release/") {
+        return InstallMethod::LocalDevelopment;
+    }
+    if path.contains("/.cargo/bin/") {
+        return InstallMethod::Cargo;
+    }
+    if path.contains("/Cellar/maestro/") || path.contains("/Homebrew/") {
+        return InstallMethod::Homebrew;
+    }
+    InstallMethod::Curl
 }
 
 impl UpdateDownloader for GitHubCurlDownloader {
@@ -788,37 +892,13 @@ impl GithubAsset {
     }
 }
 
-fn release_repo(repo_root: &Path) -> Option<String> {
+fn release_repo() -> String {
     if let Ok(repo) = std::env::var("MAESTRO_RELEASE_REPO") {
         if !repo.trim().is_empty() {
-            return Some(repo);
+            return repo;
         }
     }
-
-    let repo = git2::Repository::discover(repo_root).ok()?;
-    let remote = repo.find_remote("origin").ok()?;
-    parse_github_repo(remote.url()?)
-}
-
-fn parse_github_repo(remote_url: &str) -> Option<String> {
-    let trimmed = remote_url.trim().trim_end_matches(".git");
-    if let Some(path) = trimmed.strip_prefix("https://github.com/") {
-        return normalize_repo_path(path);
-    }
-    if let Some(path) = trimmed.strip_prefix("git@github.com:") {
-        return normalize_repo_path(path);
-    }
-    None
-}
-
-fn normalize_repo_path(path: &str) -> Option<String> {
-    let mut parts = path.split('/');
-    let owner = parts.next()?.trim();
-    let repo = parts.next()?.trim();
-    if owner.is_empty() || repo.is_empty() || parts.next().is_some() {
-        return None;
-    }
-    Some(format!("{owner}/{repo}"))
+    DEFAULT_RELEASE_REPO.to_string()
 }
 
 fn curl_bytes(url: &str, output: Option<&Path>) -> Result<Vec<u8>> {
@@ -982,21 +1062,30 @@ fn days_from_civil(year: i32, month: u32, day: u32) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_github_repo, parse_rfc3339_utc, release_versions_match, select_platform_asset,
-        GithubAsset,
+        detect_install_method, parse_rfc3339_utc, release_versions_match, select_platform_asset,
+        GithubAsset, InstallMethod,
     };
 
     #[test]
-    fn parses_github_remote_urls() {
+    fn detects_common_install_methods_from_path() {
         assert_eq!(
-            parse_github_repo("https://github.com/ReinaMacCredy/maestro.git"),
-            Some("ReinaMacCredy/maestro".to_string())
+            detect_install_method(std::path::Path::new("/repo/target/debug/maestro")),
+            InstallMethod::LocalDevelopment
         );
         assert_eq!(
-            parse_github_repo("git@github.com:ReinaMacCredy/maestro.git"),
-            Some("ReinaMacCredy/maestro".to_string())
+            detect_install_method(std::path::Path::new("/Users/me/.cargo/bin/maestro")),
+            InstallMethod::Cargo
         );
-        assert_eq!(parse_github_repo("https://example.com/repo.git"), None);
+        assert_eq!(
+            detect_install_method(std::path::Path::new(
+                "/opt/homebrew/Cellar/maestro/1779772576/bin/maestro"
+            )),
+            InstallMethod::Homebrew
+        );
+        assert_eq!(
+            detect_install_method(std::path::Path::new("/usr/local/bin/maestro")),
+            InstallMethod::Curl
+        );
     }
 
     #[test]
