@@ -124,7 +124,7 @@ fn handle_request_value(paths: &MaestroPaths, request: &Value) -> Option<Value> 
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "maestro", "version": env!("CARGO_PKG_VERSION")}
+                    "serverInfo": {"name": "maestro", "version": env!("MAESTRO_BUILD_VERSION")}
                 }
             })
         }),
