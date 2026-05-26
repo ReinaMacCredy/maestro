@@ -30,10 +30,8 @@ const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
     "verification",
 ];
 
-const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[
-    ("src/interfaces/mod.rs", "crate::hooks"),
-    ("src/interfaces/mod.rs", "crate::tui"),
-];
+const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] =
+    &[("src/interfaces/mod.rs", "crate::tui")];
 
 const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
 const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
@@ -45,7 +43,6 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ),
     ("src/interfaces/cli/event.rs", &["task"]),
     ("src/interfaces/cli/feature.rs", &["feature"]),
-    ("src/interfaces/cli/hook.rs", &["hooks"]),
     ("src/interfaces/cli/improve.rs", &["harness", "improver"]),
     ("src/interfaces/cli/init.rs", &["harness", "skills"]),
     ("src/interfaces/cli/install.rs", &["install"]),
@@ -73,6 +70,9 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
 
 const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
     &[("src/interfaces/mcp/tools.rs", &["metrics", "task"])];
+
+const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
+    &[("src/interfaces/hooks/record.rs", &["evidence"])];
 
 const DOMAIN_FACADES: &[&str] = &[
     "decisions",
@@ -193,6 +193,17 @@ fn selected_compatibility_smoke_paths_resolve() {
         maestro::interfaces::mcp::tools::tool_definitions;
     let _legacy_mcp_serve: fn() -> anyhow::Result<()> = maestro::mcp::server::serve;
     let _new_mcp_serve: fn() -> anyhow::Result<()> = maestro::interfaces::mcp::server::serve;
+
+    assert_eq!(
+        maestro::interfaces::hooks::event::SHARED_HOOK_EVENTS,
+        maestro::hooks::event::SHARED_HOOK_EVENTS
+    );
+    let legacy_run_dir_name: fn(&str) -> String = maestro::hooks::event::run_dir_name;
+    let new_run_dir_name: fn(&str) -> String = maestro::interfaces::hooks::event::run_dir_name;
+    assert_eq!(
+        new_run_dir_name("agent/session"),
+        legacy_run_dir_name("agent/session")
+    );
 }
 
 #[test]
@@ -212,8 +223,8 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
     assert_public_modules(
         Path::new("src/interfaces/mod.rs"),
-        &["cli", "mcp", "shell"],
-        &["crate::hooks", "crate::tui"],
+        &["cli", "hooks", "mcp", "shell"],
+        &["crate::tui"],
     );
     assert_reexports(
         Path::new("src/operations/mod.rs"),
@@ -245,6 +256,9 @@ fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
             line == "pub use interfaces::shell;" || line == "pub use crate::interfaces::shell;"
         }
         "mcp" => line == "pub use interfaces::mcp;" || line == "pub use crate::interfaces::mcp;",
+        "hooks" => {
+            line == "pub use interfaces::hooks;" || line == "pub use crate::interfaces::hooks;"
+        }
         _ => false,
     }
 }
@@ -404,6 +418,113 @@ fn production_sources_prefer_interfaces_mcp_imports() {
     );
 }
 
+#[test]
+fn interface_sources_prefer_interfaces_hooks_imports() {
+    let mut violations = Vec::new();
+
+    for root in INTERFACE_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            let source = read_source_file(&file);
+            let code = source_without_pub_mod_statements(&code_for_path_scan(&source));
+            if code.contains("crate::hooks::") {
+                violations.push(format!(
+                    "{} references legacy crate::hooks:: path",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_bare_path_reference(&code, "hooks") {
+                violations.push(format!(
+                    "{} references legacy hooks root through a bare root path",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_relative_path(&code, "hooks") {
+                violations.push(format!(
+                    "{} references legacy hooks root through a relative path",
+                    file.display()
+                ));
+                continue;
+            }
+
+            for (line_number, import_statement) in crate_import_statements(&source) {
+                if contains_legacy_root_import(&import_statement, "hooks")
+                    || contains_legacy_deep_import(&import_statement, "hooks")
+                {
+                    violations.push(format!(
+                        "{}:{} imports legacy crate::hooks path",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "interface code should import Hooks through crate::interfaces::hooks during the migration:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn non_interface_sources_do_not_depend_on_interfaces_hooks() {
+    let mut violations = Vec::new();
+
+    for root in PRODUCTION_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            if file.starts_with(Path::new("src/interfaces")) {
+                continue;
+            }
+
+            let source = read_source_file(&file);
+            let code = source_without_allowed_interfaces_hooks_reexport(
+                &file,
+                &code_for_path_scan(&source),
+            );
+            if contains_crate_interfaces_hooks_reference(&code) {
+                violations.push(format!(
+                    "{} references crate::interfaces::hooks directly",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_bare_interfaces_hooks_reference(&code) {
+                violations.push(format!(
+                    "{} references interfaces::hooks through a bare root path",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_relative_path(&code, "interfaces::hooks") {
+                violations.push(format!(
+                    "{} references interfaces::hooks through a relative path",
+                    file.display()
+                ));
+                continue;
+            }
+
+            for (line_number, import_statement) in crate_import_statements(&source) {
+                if contains_crate_interfaces_hooks_reference(&import_statement) {
+                    violations.push(format!(
+                        "{}:{} imports crate::interfaces::hooks directly",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "non-interface code should keep using crate::hooks until Run exposes a non-interface facade:\n{}",
+        violations.join("\n")
+    );
+}
+
 fn protected_interface_import(line: &str) -> Option<String> {
     if is_relative_import_statement(line) && contains_relative_deep_reference(line) {
         return Some("relative deep path under src/interfaces".to_string());
@@ -459,6 +580,7 @@ fn transitional_interface_legacy_roots(file: &Path) -> Option<&'static [&'static
     CLI_TRANSITIONAL_LEGACY_IMPORTS
         .iter()
         .chain(MCP_TRANSITIONAL_LEGACY_IMPORTS.iter())
+        .chain(HOOKS_TRANSITIONAL_LEGACY_IMPORTS.iter())
         .find_map(|(allowed_file, roots)| (file == Path::new(allowed_file)).then_some(*roots))
 }
 
@@ -592,14 +714,72 @@ fn contains_relative_path(source: &str, root: &str) -> bool {
     if source.contains(&format!("self::{root}::")) {
         return true;
     }
+    if source.contains(&format!("self::{{{root}")) {
+        return true;
+    }
 
     source.match_indices("super::").any(|(index, _)| {
         let mut tail = &source[index..];
         while let Some(rest) = tail.strip_prefix("super::") {
             tail = rest;
         }
-        tail.starts_with(&format!("{root}::"))
+        tail.starts_with(&format!("{root}::")) || tail.starts_with(&format!("{{{root}"))
     })
+}
+
+fn contains_crate_interfaces_hooks_reference(source: &str) -> bool {
+    let compact = compact_import_statement(source);
+    compact.contains("crate::interfaces::hooks")
+        || compact.contains("crate::interfaces::{hooks")
+        || compact.contains("crate::{interfaces::hooks")
+        || compact.contains("crate::{interfaces::{hooks")
+}
+
+fn contains_bare_interfaces_hooks_reference(source: &str) -> bool {
+    contains_bare_path_reference(source, "interfaces::hooks")
+        || contains_bare_grouped_path_reference(source, "interfaces", "hooks")
+}
+
+fn contains_bare_path_reference(source: &str, path: &str) -> bool {
+    source.match_indices(path).any(|(index, _)| {
+        let previous = source[..index].chars().next_back();
+        let next = source[index + path.len()..].chars().next();
+
+        is_bare_path_prefix_boundary(previous) && is_bare_path_suffix_boundary(next)
+    })
+}
+
+fn contains_bare_grouped_path_reference(source: &str, namespace: &str, root: &str) -> bool {
+    let needle = format!("{namespace}::{{");
+    source.match_indices(&needle).any(|(index, _)| {
+        let previous = source[..index].chars().next_back();
+        if !is_bare_path_prefix_boundary(previous) {
+            return false;
+        }
+
+        let grouped = &source[index + needle.len()..];
+        contains_grouped_root_reference_segment(&compact_import_statement(grouped), root)
+    })
+}
+
+fn is_bare_path_prefix_boundary(character: Option<char>) -> bool {
+    match character {
+        None => true,
+        Some(':') => false,
+        Some(character) => !is_path_identifier_character(character),
+    }
+}
+
+fn is_bare_path_suffix_boundary(character: Option<char>) -> bool {
+    match character {
+        None => true,
+        Some(':') => true,
+        Some(character) => !is_path_identifier_character(character),
+    }
+}
+
+fn is_path_identifier_character(character: char) -> bool {
+    character.is_ascii_alphanumeric() || character == '_'
 }
 
 fn code_for_path_scan(source: &str) -> String {
@@ -794,6 +974,10 @@ fn contains_grouped_root_segment(grouped: &str, root: &str) -> bool {
         || grouped.contains(&format!("{root}}}"))
 }
 
+fn contains_grouped_root_reference_segment(grouped: &str, root: &str) -> bool {
+    contains_grouped_root_segment(grouped, root) || grouped.contains(&format!("{root}::"))
+}
+
 fn compact_import_statement(line: &str) -> String {
     line.chars()
         .filter(|character| !character.is_whitespace())
@@ -954,6 +1138,18 @@ fn source_without_pub_mod_statements(source: &str) -> String {
         .join("\n")
 }
 
+fn source_without_allowed_interfaces_hooks_reexport(file: &Path, source: &str) -> String {
+    source
+        .lines()
+        .filter(|line| {
+            file != Path::new("src/lib.rs")
+                || (!import_line_reexports_root_only(line, "interfaces::hooks")
+                    && !import_line_reexports_root_only(line, "crate::interfaces::hooks"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn is_allowed_compatibility_reexport(file: &Path, line: &str) -> bool {
     INTERFACE_COMPATIBILITY_REEXPORTS
         .iter()
@@ -1069,7 +1265,65 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
         ),
         None
     );
-    assert!(is_allowed_compatibility_reexport(
+    assert!(contains_relative_path(
+        "use super::super::hooks::event::run_dir_name;",
+        "hooks"
+    ));
+    assert!(contains_relative_path(
+        "use super::super::interfaces::hooks::event::run_dir_name;",
+        "interfaces::hooks"
+    ));
+    assert!(contains_relative_path(
+        "use super::{interfaces::hooks::event::run_dir_name};",
+        "interfaces::hooks"
+    ));
+    assert!(contains_relative_path(
+        "use self::{interfaces::hooks::{self}};",
+        "interfaces::hooks"
+    ));
+    assert!(contains_bare_path_reference(
+        "use hooks::event::run_dir_name;",
+        "hooks"
+    ));
+    assert!(contains_bare_path_reference(
+        "fn run() { hooks::event::run_dir_name(\"agent/session\"); }",
+        "hooks"
+    ));
+    assert!(!contains_bare_path_reference(
+        "use crate::interfaces::hooks::event::run_dir_name;",
+        "hooks"
+    ));
+    assert!(contains_bare_interfaces_hooks_reference(
+        "use interfaces::hooks;"
+    ));
+    assert!(contains_bare_interfaces_hooks_reference(
+        "use interfaces::{hooks::{self}};"
+    ));
+    assert!(contains_bare_interfaces_hooks_reference(
+        "fn run() { interfaces::hooks::event::run_dir_name(\"agent/session\"); }"
+    ));
+    assert!(!contains_bare_interfaces_hooks_reference(
+        "pub use crate::interfaces::hooks;"
+    ));
+    assert!(contains_root_import(
+        "use crate::interfaces::hooks;",
+        "crate::interfaces::hooks"
+    ));
+    assert!(contains_crate_interfaces_hooks_reference(
+        "use crate::interfaces::hooks::{self};"
+    ));
+    assert!(contains_crate_interfaces_hooks_reference(
+        "use crate::interfaces::{hooks::{self}};"
+    ));
+    assert_eq!(
+        namespaced_deep_import_segment(
+            "use crate::interfaces::hooks::event::run_dir_name;",
+            "interfaces",
+            "hooks"
+        ),
+        Some("event")
+    );
+    assert!(!is_allowed_compatibility_reexport(
         Path::new("src/interfaces/mod.rs"),
         "pub use crate::hooks;"
     ));

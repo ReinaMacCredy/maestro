@@ -129,6 +129,12 @@ compatibility checks or transition work until the legacy path is removed.
 Current MCP tool imports into legacy source-read roots are temporary,
 file-specific allowances until those domain read facades move in later phases.
 
+Hook command adapter code lives under `src/interfaces/hooks`, and `crate::hooks`
+remains a compatibility re-export. New interface-layer references should prefer
+`crate::interfaces::hooks`. Non-interface callers that still need run-event
+helpers may keep using `crate::hooks` until the later Run aggregate extraction
+moves those helpers behind a non-interface facade.
+
 When adding a folder inside a domain or operations module:
 
 - Keep the parent `mod.rs` as the caller-facing facade.

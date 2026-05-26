@@ -4,7 +4,6 @@ pub mod evidence;
 pub mod feature;
 pub mod foundation;
 pub mod harness;
-pub mod hooks;
 pub mod improver;
 pub mod install;
 pub mod interfaces;
@@ -19,5 +18,6 @@ pub mod verification;
 
 pub use foundation::core;
 pub use interfaces::cli as commands;
+pub use interfaces::hooks;
 pub use interfaces::mcp;
 pub use interfaces::shell;

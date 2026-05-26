@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use git2::{Repository, Signature};
 use maestro::hooks::event::run_dir_name;
 use serde_json::Value;
 use support::TestTempDir;
@@ -36,6 +37,81 @@ fn init_repo() -> TestTempDir {
     temp_dir
 }
 
+fn init_repo_with_head() -> (TestTempDir, String) {
+    let temp_dir = TestTempDir::new("maestro-hook-record-git-test");
+    let repository =
+        Repository::init(temp_dir.path()).expect("invariant: git repository should initialize");
+    fs::write(temp_dir.path().join("README.md"), "fixture\n")
+        .expect("invariant: fixture file should be writable");
+
+    let mut index = repository
+        .index()
+        .expect("invariant: git index should be readable");
+    index
+        .add_path(Path::new("README.md"))
+        .expect("invariant: fixture file should be addable");
+    index.write().expect("invariant: git index should write");
+    let tree_id = index
+        .write_tree()
+        .expect("invariant: git tree should write");
+    let tree = repository
+        .find_tree(tree_id)
+        .expect("invariant: git tree should be readable");
+    let signature = Signature::now("Maestro Test", "maestro@example.invalid")
+        .expect("invariant: git signature should be constructible");
+    let commit = repository
+        .commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "initial fixture",
+            &tree,
+            &[],
+        )
+        .expect("invariant: git commit should write")
+        .to_string();
+
+    (temp_dir, commit)
+}
+
+fn commit_change(repo: &Path) -> String {
+    let repository = Repository::open(repo).expect("invariant: git repository should open");
+    fs::write(repo.join("CHANGELOG.md"), "second fixture\n")
+        .expect("invariant: second fixture file should be writable");
+
+    let mut index = repository
+        .index()
+        .expect("invariant: git index should be readable");
+    index
+        .add_path(Path::new("CHANGELOG.md"))
+        .expect("invariant: second fixture file should be addable");
+    index.write().expect("invariant: git index should write");
+    let tree_id = index
+        .write_tree()
+        .expect("invariant: git tree should write");
+    let tree = repository
+        .find_tree(tree_id)
+        .expect("invariant: git tree should be readable");
+    let parent = repository
+        .head()
+        .and_then(|head| head.peel_to_commit())
+        .expect("invariant: git HEAD commit should be readable");
+    let signature = Signature::now("Maestro Test", "maestro@example.invalid")
+        .expect("invariant: git signature should be constructible");
+
+    repository
+        .commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "second fixture",
+            &tree,
+            &[&parent],
+        )
+        .expect("invariant: second git commit should write")
+        .to_string()
+}
+
 fn read_events(repo: &Path, session: &str) -> Vec<Value> {
     let path = repo
         .join(".maestro")
@@ -46,6 +122,39 @@ fn read_events(repo: &Path, session: &str) -> Vec<Value> {
     raw.lines()
         .map(|line| serde_json::from_str(line).expect("invariant: event line should be valid JSON"))
         .collect()
+}
+
+#[test]
+fn start_and_stop_events_capture_current_commit() {
+    let (repo, start_commit) = init_repo_with_head();
+    let start_output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-git","event_type":"SessionStart"}"#,
+    );
+    assert!(
+        start_output.status.success(),
+        "hook record failed for SessionStart\nstderr:\n{}",
+        String::from_utf8_lossy(&start_output.stderr)
+    );
+
+    let stop_commit = commit_change(repo.path());
+    assert_ne!(start_commit, stop_commit);
+    let stop_output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-git","event_type":"Stop"}"#,
+    );
+    assert!(
+        stop_output.status.success(),
+        "hook record failed for Stop\nstderr:\n{}",
+        String::from_utf8_lossy(&stop_output.stderr)
+    );
+
+    let events = read_events(repo.path(), "session-git");
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["event_type"], "SessionStart");
+    assert_eq!(events[0]["commit"], start_commit);
+    assert_eq!(events[1]["event_type"], "Stop");
+    assert_eq!(events[1]["commit"], stop_commit);
 }
 
 #[test]

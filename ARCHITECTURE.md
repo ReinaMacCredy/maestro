@@ -670,12 +670,12 @@ session id is written to:
 
 Current run behavior is split across several modules:
 
-- `src/hooks/event.rs`: accepted hook event names, event aliases, string-field
-  extraction, unattributed session handling, and collision-resistant run
-  directory encoding.
-- `src/hooks/record.rs`: stdin payload parsing, event normalization, commit
-  snapshots for `SessionStart` and `Stop`, managed append to `events.jsonl`,
-  and triggering run evidence generation on `Stop`.
+- `src/interfaces/hooks/event.rs`: accepted hook event names, event aliases,
+  string-field extraction, unattributed session handling, and
+  collision-resistant run directory encoding.
+- `src/interfaces/hooks/record.rs`: stdin payload parsing, event normalization,
+  commit snapshots for `SessionStart` and `Stop`, managed append to
+  `events.jsonl`, and triggering run evidence generation on `Stop`.
 - `src/evidence/run_evidence.rs`: aggregation of `events.jsonl` into
   `run_evidence.yaml`.
 - `src/verification/events.rs`: managed discovery of `events.jsonl` files for
@@ -696,7 +696,9 @@ migration behavior, and tests in the same change.
 The rough edge is that Run is not yet one deep module. Event normalization,
 event appending, run evidence derivation, proof event discovery, and metrics run
 evidence loading are split across Hooks, Evidence, Verification, and Metrics.
-That makes it easy for readers to confuse hook adapters, run storage, proof
+The hook adapter now lives under `interfaces/hooks`, while the legacy
+`crate::hooks` and `maestro::hooks` paths remain compatibility re-exports. That
+still makes it easy for readers to confuse hook adapters, run storage, proof
 input, and metrics projection.
 
 #### Target State
@@ -1204,11 +1206,14 @@ Current module groups:
 - **CLI adapter**: `interfaces/cli` owns argument parsing and command routing,
   but several command files still coordinate domain details directly.
 - **Artifact/domain modules**: `harness`, `task`, `feature`, `decisions`,
-  `verification`, `hooks`, `evidence`, `install`, `skills`, `improver`,
-  `metrics`, `migrate`, and `update` own or coordinate repo-local artifacts.
-- **Interface adapters**: `interfaces/shell`, `interfaces/mcp`, and `tui`
-  expose alternate operator interfaces over the same local substrate. Legacy
-  `shell` and `mcp` are only compatibility roots during the migration.
+  `verification`, `evidence`, `install`, `skills`, `improver`, `metrics`,
+  `migrate`, and `update` own or coordinate repo-local artifacts.
+- **Interface adapters**: `interfaces/hooks`, `interfaces/shell`,
+  `interfaces/mcp`, and `tui` expose alternate operator interfaces over the
+  same local substrate. Legacy `hooks`, `shell`, and `mcp` are only
+  compatibility roots during the migration. Current non-interface users of
+  hook event helpers may keep using `hooks` until the later Run aggregate move
+  provides a non-interface facade.
 
 The rough edge is that adapter modules and domain modules are not always cleanly
 separated. For example, the Task section already records command-layer task
@@ -1231,8 +1236,10 @@ The target source map should make each module's ownership contract explicit:
   must not own task lifecycle mutation.
 - `decisions`: owns decision artifacts, decision schema, and decision queries.
   It must not own blocker, proof, or task lifecycle behavior.
-- `hooks`: owns hook payload normalization and event recording adapters. It must
-  not own Proof semantics or Task lifecycle rules.
+- `interfaces/hooks`: owns hook payload normalization and event recording
+  adapters for this transition phase. Non-interface users should not depend on
+  `interfaces/hooks` directly; shared run-event helpers should move behind the
+  future Run facade. It must not own Proof semantics or Task lifecycle rules.
 - `evidence`: owns run evidence derivation from recorded events. It must not own
   hook ingestion or Proof verdicts.
 - `verification`: owns Proof execution, freshness checks, claim matching,
@@ -1399,6 +1406,7 @@ src/
     tui/                   # current tui/*
       task_list_watch.rs
     hooks/                 # hook command adapter only
+      event.rs
       record.rs
     shell/                 # shell integration output
       mod.rs
@@ -2219,7 +2227,7 @@ should eventually sit behind the owning domain module.
 | `task` | Has lifecycle, blockers, lookup, display, doctor, and artifact structs, but command and proof code still mutate task details directly. | Deep Task aggregate. | Task mutation should be concentrated behind Task operations, especially acceptance locking, id allocation, blocker id allocation, state-history writes, and verification binding updates. |
 | `feature` | Schema and rollup reads live in `feature`, but command code creates records and changes status directly. | Deep Feature aggregate. | Registry load/save, creation, duplicate checks, status transitions, and render-ready read models should sit behind Feature. |
 | `decisions` | File naming, template, and lookup are in `decisions`, while command code owns creation sequencing and writing. | Deep Decision aggregate. | Decision id allocation, creation, and future structured metadata should move behind Decision. |
-| `hooks` and `evidence` | Hook adapter normalizes/appends events; evidence derives run evidence. | Run aggregate plus hook adapter. | Run rules are split across hook and evidence modules. Hook process behavior should be separated from Run artifact ownership. |
+| `interfaces/hooks` and `evidence` | Hook adapter normalizes/appends events; evidence derives run evidence. Legacy `hooks` remains a compatibility root. | Run aggregate plus hook adapter. | Run rules are split across hook and evidence modules. Hook process behavior should be separated from Run artifact ownership. |
 | `verification` | Proof owns report/freshness/claim logic, but also mutates Task state and binding. | Deep Proof aggregate coordinated by `operations/task_verify` for Task outcome application. | Proof-to-Task write behavior needs a stable transaction protocol. |
 | `install` and `skills` | Install owns mirrors/locks and calls skill symlink helpers. Skills owns extraction and symlink mechanics. | Install owns wiring; Skills owns content/extraction. | Keep the split sharp so Install does not own bundled skill content and Skills does not own install policy. |
 | `migrate` | Strong migration plan/apply module, with some direct target artifact construction. | Explicit migration operation that preserves target-domain contracts. | Lower-level writes should remain migration-only exceptions or move to target-domain writers. |
@@ -2272,7 +2280,7 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 | --- | --- | --- | --- |
 | P0 | Task aggregate boundary | `src/interfaces/cli/task.rs`, `src/task/template.rs`, `src/task/lifecycle.rs`, `src/task/blockers.rs`, `src/task/doctor.rs` | The CLI adapter still owns task id allocation, acceptance locking, blocker id allocation, and several state-history writes. |
 | P0 | Proof result to Task lifecycle | `src/verification/verify_task.rs`, `src/task/template.rs`, `src/task/lifecycle.rs` | Proof writes `verification.json` and also mutates Task state, verification binding, `updated_at`, and state history directly. |
-| P1 | Run aggregate boundary | `src/hooks/record.rs`, `src/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/verification/events.rs`, `src/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
+| P1 | Run aggregate boundary | `src/interfaces/hooks/record.rs`, `src/interfaces/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/verification/events.rs`, `src/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
 | P1 | Feature aggregate boundary | `src/interfaces/cli/feature.rs`, `src/feature/schema.rs`, `src/feature/query.rs` | Feature schema and rollups live in `feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
 | P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
 | P1 | Install and Skills ownership | `src/install/*`, `src/skills/symlink.rs`, `src/skills/extract.rs` | Install owns mirrors and locks while Skills owns skill file mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |

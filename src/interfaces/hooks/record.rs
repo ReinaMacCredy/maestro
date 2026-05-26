@@ -13,7 +13,7 @@ use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::EVENT_SCHEMA_VERSION;
 use crate::foundation::core::time::utc_now_timestamp;
-use crate::hooks::event::{
+use crate::interfaces::hooks::event::{
     is_accepted_event, normalized_event_type, run_dir_name, string_field, UNATTRIBUTED_SESSION,
 };
 
