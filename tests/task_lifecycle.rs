@@ -1,6 +1,8 @@
-use maestro::task::blockers::{add_blocker, has_unresolved_blockers, resolve_blocker};
-use maestro::task::lifecycle::{transition, TransitionDetails};
-use maestro::task::template::{BlockerKind, TaskRecord, TaskState};
+use maestro::domain::task::{
+    has_unresolved_blockers, BlockerKind, TaskRecord, TaskState, TransitionDetails,
+};
+use maestro::task::blockers::{add_blocker, resolve_blocker};
+use maestro::task::lifecycle::transition;
 
 #[test]
 fn forward_transitions_append_state_history_and_set_claimant() {

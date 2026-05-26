@@ -17,6 +17,7 @@ pub mod migrate;
 pub mod query;
 pub mod shell_init;
 pub mod task;
+mod task_id;
 pub mod uninstall;
 pub mod update;
 pub mod verify;

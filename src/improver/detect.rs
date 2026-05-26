@@ -7,11 +7,11 @@ use serde_json::Value;
 
 use crate::domain::decisions::query::decision_entries;
 use crate::domain::harness::{BacklogItem, HarnessConfig};
+use crate::domain::task::{self, TaskEntry};
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::metrics::friction::{event_kind, event_text, looks_like_correction};
 use crate::metrics::summary::task_verification_durations;
-use crate::task::doctor::{load_task_entries, TaskEntry};
 use crate::verification::events::managed_event_files;
 
 /// Detect rule-based harness improvement proposals without LLM calls.
@@ -73,7 +73,7 @@ fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogIte
 fn detect_missing_checks(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
     let harness_commands = harness_verify_commands(paths)?;
     let mut proposals = Vec::new();
-    for entry in load_task_entries(&paths.tasks_dir())? {
+    for entry in task::load_task_entries(&paths.tasks_dir())? {
         let path = entry.task_dir.join("verification.json");
         let Ok(raw) = fs::read_to_string(&path) else {
             continue;
@@ -118,7 +118,7 @@ fn command_value(value: &Value) -> Option<&str> {
 
 fn detect_recurring_blockers(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
     let mut by_reason = BTreeMap::<String, BTreeSet<String>>::new();
-    for entry in load_task_entries(&paths.tasks_dir())? {
+    for entry in task::load_task_entries(&paths.tasks_dir())? {
         for blocker in &entry.task.blockers {
             let key = normalize_topic(&blocker.reason);
             if !key.is_empty() {
@@ -150,7 +150,7 @@ fn detect_recurring_blockers(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
 }
 
 fn detect_missing_skills(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
-    let entries = load_task_entries(&paths.tasks_dir())?;
+    let entries = task::load_task_entries(&paths.tasks_dir())?;
     let durations = task_verification_durations(paths)?;
     let all_durations = durations.values().copied().collect::<Vec<_>>();
     let Some(overall_median) = median(&all_durations) else {
@@ -203,7 +203,7 @@ fn detect_rediscovered_decisions(paths: &MaestroPaths) -> Result<Vec<BacklogItem
         .collect::<Vec<_>>();
     let mut by_topic = BTreeMap::<String, BTreeSet<String>>::new();
 
-    for entry in load_task_entries(&paths.tasks_dir())? {
+    for entry in task::load_task_entries(&paths.tasks_dir())? {
         let path = entry.task_dir.join("task.md");
         let Ok(markdown) = fs::read_to_string(&path) else {
             continue;

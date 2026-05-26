@@ -7,6 +7,7 @@ use anyhow::{bail, Context, Result};
 use serde_json::Value;
 
 use crate::decisions::query::{decision_entries, decision_id};
+use crate::domain::task;
 use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
@@ -14,9 +15,6 @@ use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VER
 use crate::harness::schema::BacklogConfig;
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::metrics::friction::{event_kind, event_text, looks_like_correction};
-use crate::task::blockers::has_unresolved_blockers;
-use crate::task::doctor::load_task_entries;
-use crate::task::template::{TaskRecord, TaskState};
 use crate::verification::events::managed_event_files;
 use crate::verification::proof_status::{proof_status, render_proof_status};
 use crate::verification::stale::stale_reasons;
@@ -51,7 +49,7 @@ pub fn run(args: QueryArgs) -> Result<()> {
 fn query_matrix(paths: &MaestroPaths) -> Result<()> {
     let registry = load_feature_registry(paths)?;
     let current_commit = git::head(paths.repo_root()).unwrap_or(None);
-    let entries = load_task_entries(&paths.tasks_dir())?;
+    let entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut task_rows = entries
         .iter()
         .map(|entry| matrix_row(&entry.task, &entry.task_dir, current_commit.clone()))
@@ -173,7 +171,7 @@ struct MatrixRow {
 }
 
 fn matrix_row(
-    task: &TaskRecord,
+    task: &task::TaskRecord,
     task_dir: &Path,
     current_commit: Option<String>,
 ) -> Result<MatrixRow> {
@@ -183,7 +181,7 @@ fn matrix_row(
             .clone()
             .unwrap_or_else(|| "<none>".to_string()),
         id: task.id.clone(),
-        state: task_state_label(&task.state, has_unresolved_blockers(task)),
+        state: task_state_label(&task.state, task::has_unresolved_blockers(task)),
         proof: proof_label(task, task_dir, current_commit)?,
         title: task.title.clone(),
     })
@@ -226,7 +224,7 @@ fn load_backlog(path: &Path) -> Result<BacklogConfig> {
 }
 
 fn proof_label(
-    task: &TaskRecord,
+    task: &task::TaskRecord,
     task_dir: &Path,
     current_commit: Option<String>,
 ) -> Result<&'static str> {
@@ -246,20 +244,20 @@ fn proof_label(
     }
 }
 
-fn task_state_label(state: &TaskState, blocked: bool) -> &'static str {
+fn task_state_label(state: &task::TaskState, blocked: bool) -> &'static str {
     if blocked {
         return "blocked";
     }
     match state {
-        TaskState::Draft => "draft",
-        TaskState::Exploring => "exploring",
-        TaskState::Ready => "ready",
-        TaskState::InProgress => "in_progress",
-        TaskState::NeedsVerification => "needs_verification",
-        TaskState::Verified => "verified",
-        TaskState::Rejected => "rejected",
-        TaskState::Abandoned => "abandoned",
-        TaskState::Superseded => "superseded",
+        task::TaskState::Draft => "draft",
+        task::TaskState::Exploring => "exploring",
+        task::TaskState::Ready => "ready",
+        task::TaskState::InProgress => "in_progress",
+        task::TaskState::NeedsVerification => "needs_verification",
+        task::TaskState::Verified => "verified",
+        task::TaskState::Rejected => "rejected",
+        task::TaskState::Abandoned => "abandoned",
+        task::TaskState::Superseded => "superseded",
     }
 }
 

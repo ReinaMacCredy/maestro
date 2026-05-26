@@ -6,13 +6,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+use crate::domain::task::{self, TaskState, VerificationBinding};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
 use crate::foundation::core::time::parse_utc_timestamp;
-use crate::task::doctor::load_task_entries;
-use crate::task::template::{TaskState, VerificationBinding};
 
 /// Computed metrics rendered by `maestro metrics summary`.
 #[derive(Clone, Debug, PartialEq)]
@@ -47,7 +46,7 @@ pub struct RunEvidenceRecord {
 
 /// Build metrics by reading current task and run artifacts on demand.
 pub fn summarize(paths: &MaestroPaths) -> Result<MetricsSummary> {
-    let tasks = load_task_entries(&paths.tasks_dir())?;
+    let tasks = task::load_task_entries(&paths.tasks_dir())?;
     let evidence = load_run_evidence(paths)?;
     let mut task_counts = BTreeMap::<String, usize>::new();
     let mut verify_durations = Vec::new();
@@ -180,7 +179,7 @@ pub fn render_summary(summary: &MetricsSummary) -> String {
 /// Return per-task verification durations, grouped by task id.
 pub fn task_verification_durations(paths: &MaestroPaths) -> Result<BTreeMap<String, u64>> {
     let mut durations = BTreeMap::new();
-    for entry in load_task_entries(&paths.tasks_dir())? {
+    for entry in task::load_task_entries(&paths.tasks_dir())? {
         if let Some(seconds) =
             verification_duration_seconds(&entry.task.created_at, &entry.task.verification)
         {

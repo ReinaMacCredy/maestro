@@ -6,6 +6,9 @@ use std::path::{Component, Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
+use crate::domain::task::{
+    AcceptanceFile, StateHistoryEntry, TaskRecord, TaskState, VerificationBinding,
+};
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::diff::unified_diff;
 use crate::foundation::core::fs::ensure_dir;
@@ -13,9 +16,6 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_atomic;
 use crate::foundation::core::schema::{ACCEPTANCE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
 use crate::foundation::core::slug::slugify_ascii;
-use crate::task::template::{
-    AcceptanceFile, StateHistoryEntry, TaskRecord, TaskState, VerificationBinding,
-};
 
 /// One planned migration write.
 #[derive(Clone, Debug, Eq, PartialEq)]

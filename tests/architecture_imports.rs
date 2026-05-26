@@ -36,11 +36,7 @@ const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
 const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
 const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/decision.rs", &["decisions"]),
-    (
-        "src/interfaces/cli/doctor.rs",
-        &["feature", "harness", "task"],
-    ),
-    ("src/interfaces/cli/event.rs", &["task"]),
+    ("src/interfaces/cli/doctor.rs", &["feature", "harness"]),
     ("src/interfaces/cli/feature.rs", &["feature"]),
     ("src/interfaces/cli/improve.rs", &["harness", "improver"]),
     ("src/interfaces/cli/init.rs", &["harness", "skills"]),
@@ -49,30 +45,23 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/migrate.rs", &["migrate"]),
     (
         "src/interfaces/cli/query.rs",
-        &[
-            "decisions",
-            "feature",
-            "harness",
-            "metrics",
-            "task",
-            "verification",
-        ],
+        &["decisions", "feature", "harness", "metrics", "verification"],
     ),
-    ("src/interfaces/cli/task.rs", &["task", "verification"]),
+    ("src/interfaces/cli/task.rs", &["verification"]),
     ("src/interfaces/cli/uninstall.rs", &["install"]),
     ("src/interfaces/cli/update.rs", &["update"]),
-    ("src/interfaces/cli/watch.rs", &["task"]),
+    ("src/interfaces/cli/watch.rs", &[]),
 ];
 
 const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
-    &[("src/interfaces/mcp/tools.rs", &["metrics", "task"])];
+    &[("src/interfaces/mcp/tools.rs", &["metrics"])];
 
 const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
     &[("src/interfaces/hooks/record.rs", &["evidence"])];
 
 const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[(
     "src/interfaces/tui/task_list_watch.rs",
-    &["feature", "task", "verification"],
+    &["feature", "verification"],
 )];
 
 const DOMAIN_FACADES: &[&str] = &[
@@ -191,8 +180,29 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _ = std::any::type_name::<maestro::commands::Cli>();
     let _ = std::any::type_name::<maestro::interfaces::cli::Cli>();
     let _ = std::any::type_name::<maestro::task::template::TaskRecord>();
+    let _legacy_load_task = |path: &Path| maestro::task::template::load_task(path);
+    let _legacy_load_task_with_snapshot =
+        |tasks_dir: &Path, id: &str| maestro::task::lookup::load_task_with_snapshot(tasks_dir, id);
+    let _legacy_render_task: fn(&maestro::task::template::TaskRecord) -> String =
+        maestro::task::display::render_task;
+    let _legacy_render_task_list: fn(&[maestro::task::template::TaskRecord]) -> String =
+        maestro::task::display::render_task_list;
+    let _legacy_load_task_records =
+        |tasks_dir: &Path| maestro::task::doctor::load_task_records(tasks_dir);
+    let _legacy_load_task_entries =
+        |tasks_dir: &Path| maestro::task::doctor::load_task_entries(tasks_dir);
+    let _legacy_check_blocker_graph =
+        |tasks_dir: &Path| maestro::task::doctor::check_blocker_graph(tasks_dir);
+    let _legacy_render_task_doctor_report: fn(&maestro::task::doctor::TaskDoctorReport) -> String =
+        maestro::task::doctor::render_report;
+    let _legacy_resolve_task_yaml_path =
+        |tasks_dir: &Path, id: &str| maestro::task::lookup::resolve_task_yaml_path(tasks_dir, id);
+    let _legacy_task_yaml_path_for_entry =
+        |entry: &std::fs::DirEntry| maestro::task::lookup::task_yaml_path_for_entry(entry);
+    let _legacy_valid_task_yaml_path =
+        |path: &Path| maestro::task::lookup::valid_task_yaml_path(path);
     let _ = std::any::type_name::<maestro::verification::proof_status::ProofStatusKind>();
-    let _ = std::any::type_name::<maestro::domain::task::template::TaskRecord>();
+    let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
     let _ = std::any::type_name::<maestro::domain::proof::proof_status::ProofStatusKind>();
     let _ = std::any::type_name::<maestro::operations::metrics::summary::MetricsSummary>();
     let _ = std::any::type_name::<maestro::operations::update::InstallMethod>();
@@ -218,7 +228,7 @@ fn selected_compatibility_smoke_paths_resolve() {
     ) -> anyhow::Result<String> = maestro::tui::task_list_watch::render_snapshot;
     let _new_task_watch_render: fn(
         &maestro::foundation::core::paths::MaestroPaths,
-        &[maestro::task::template::TaskRecord],
+        &[maestro::domain::task::TaskRecord],
     ) -> anyhow::Result<String> = maestro::interfaces::tui::task_list_watch::render_snapshot;
 
     assert_eq!(
@@ -245,15 +255,118 @@ fn selected_compatibility_smoke_paths_resolve() {
 }
 
 #[test]
+fn task_domain_facade_does_not_publish_leaf_modules() {
+    let task_facade = read_source_file(Path::new("src/domain/task/mod.rs"));
+    for leaf in [
+        "blockers",
+        "display",
+        "doctor",
+        "lifecycle",
+        "lookup",
+        "template",
+    ] {
+        assert!(
+            !task_facade.contains(&format!("pub mod {leaf};")),
+            "src/domain/task/mod.rs should expose Task through root facade exports, not pub mod {leaf}"
+        );
+    }
+    for persistence_type in ["TaskSnapshot", "StateHistoryEntry"] {
+        assert!(
+            !public_reexports(&task_facade)
+                .iter()
+                .any(|line| line.contains(persistence_type)),
+            "src/domain/task/mod.rs should not re-export persistence-only type {persistence_type}"
+        );
+    }
+    assert!(
+        !task_facade.contains("pub fn apply_verification_outcome_with_snapshot"),
+        "src/domain/task/mod.rs should not expose snapshot-shaped persistence functions"
+    );
+    for verification_write_surface in [
+        "pub struct TaskHandle",
+        "pub fn load_task_for_update",
+        "pub fn apply_verification_outcome(",
+        "pub fn apply_verification_outcome_to_handle",
+        "pub enum VerificationOutcome",
+        "pub struct VerificationPassed",
+    ] {
+        assert!(
+            !task_facade.contains(verification_write_surface),
+            "src/domain/task/mod.rs should not expose verification write surface {verification_write_surface}"
+        );
+    }
+    for line in public_reexports(&task_facade) {
+        for verification_write_surface in [
+            "TaskHandle",
+            "VerificationOutcome",
+            "VerificationPassed",
+            "apply_verification_outcome",
+            "apply_verification_outcome_to_handle",
+            "load_task_for_update",
+        ] {
+            assert!(
+                !line.contains(verification_write_surface),
+                "src/domain/task/mod.rs should not publicly re-export verification write surface {verification_write_surface}: {line}"
+            );
+        }
+    }
+
+    let legacy_shim = read_source_file(Path::new("src/task/mod.rs"));
+    assert!(
+        !legacy_shim.contains("pub use crate::domain::task::*"),
+        "legacy crate::task shim should explicitly re-export the compatibility surface"
+    );
+    assert!(
+        !legacy_shim.contains("pub fn append_history"),
+        "legacy crate::task shim should not grow lifecycle helpers outside the old leaf surface"
+    );
+}
+
+#[test]
+fn non_task_sources_do_not_reach_into_task_domain_leaf_modules() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src")) {
+        if file.starts_with(Path::new("src/domain/task")) || file == Path::new("src/task/mod.rs") {
+            continue;
+        }
+
+        let source = read_source_file(&file);
+        let non_import_source = source_without_import_statements(&source);
+        let code = code_for_path_scan(&non_import_source);
+        if let Some(segment) = namespaced_deep_import_segment(&code, "domain", "task") {
+            violations.push(format!(
+                "{} references domain::task::{segment}",
+                file.display()
+            ));
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if let Some(segment) =
+                namespaced_deep_import_segment(&import_statement, "domain", "task")
+            {
+                violations.push(format!(
+                    "{}:{} imports domain::task::{segment}",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "non-Task code must use the domain::task root facade instead of Task leaf modules:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/domain/mod.rs"),
-        &["decisions", "feature", "harness", "skills"],
-        &[
-            "crate::install",
-            "crate::task",
-            "crate::verification as proof",
-        ],
+        &["decisions", "feature", "harness", "skills", "task"],
+        &["crate::install", "crate::verification as proof"],
     );
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
     assert_public_modules(
@@ -797,6 +910,38 @@ fn crate_reexports(source: &str) -> BTreeSet<String> {
                 .map(str::to_string)
         })
         .collect()
+}
+
+fn public_reexports(source: &str) -> Vec<String> {
+    let mut reexports = Vec::new();
+    let mut current: Option<String> = None;
+
+    for line in source.lines().map(str::trim) {
+        if let Some(statement) = current.as_mut() {
+            statement.push(' ');
+            statement.push_str(line);
+            if line.ends_with(';') {
+                reexports.push(current.take().expect("invariant: re-export exists"));
+            }
+            continue;
+        }
+
+        if !line.starts_with("pub use ") {
+            continue;
+        }
+
+        if line.ends_with(';') {
+            reexports.push(line.to_string());
+        } else {
+            current = Some(line.to_string());
+        }
+    }
+
+    if let Some(statement) = current {
+        reexports.push(statement);
+    }
+
+    reexports
 }
 
 fn public_modules(source: &str) -> BTreeSet<String> {

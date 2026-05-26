@@ -1,12 +1,12 @@
 use anyhow::{bail, Context, Result};
 
+use crate::domain::task;
 use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::schema::{
     BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
 };
 use crate::harness::schema::{BacklogConfig, HarnessConfig};
-use crate::task::doctor::check_blocker_graph;
 
 /// Execute `maestro doctor`.
 pub fn run() -> Result<()> {
@@ -59,7 +59,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     check_backlog(paths, &mut checks, &mut errors);
     check_decisions(paths, &mut checks, &mut errors);
 
-    let task_report = check_blocker_graph(&paths.tasks_dir())?;
+    let task_report = task::check_blocker_graph(&paths.tasks_dir())?;
     if task_report.is_ok() {
         checks.push(DoctorCheck {
             name: "task-blockers",

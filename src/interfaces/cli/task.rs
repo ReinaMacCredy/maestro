@@ -1,24 +1,16 @@
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
+use crate::domain::task;
+use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
-use crate::foundation::core::safe_write::write_string_atomic;
+use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::{TaskArgs, TaskCommand};
 use crate::interfaces::tui::task_list_watch;
-use crate::task::blockers::{add_blocker, has_unresolved_blockers, resolve_blocker};
-use crate::task::display::{render_task, render_task_list};
-use crate::task::doctor::{check_blocker_graph, load_task_records, render_report};
-use crate::task::lifecycle::{transition, TransitionDetails};
-use crate::task::lookup::load_task_with_snapshot as load_task_artifacts_with_snapshot;
-use crate::task::template::{
-    save_task_with_snapshot, write_task_artifacts, AcceptanceFile, BlockerKind, BlockerRef,
-    TaskRecord, TaskState,
-};
 use crate::verification::verify_task::{verify_task, VerificationStatus};
 
 /// Execute `maestro task`.
@@ -56,7 +48,11 @@ pub fn run(args: TaskArgs) -> Result<()> {
             },
         ),
         TaskCommand::Verify { id } => {
-            let id = resolve_optional_task_id(&paths, id)?;
+            let id = resolve_optional_task_id(
+                &paths,
+                id,
+                "task id is required or set MAESTRO_CURRENT_TASK",
+            )?;
             verify_task_command(&paths, &id, &actor)
         }
         TaskCommand::Update { id, summary, claim } => {
@@ -128,36 +124,16 @@ fn create_task(
     lane: Option<String>,
     risk: Option<String>,
 ) -> Result<()> {
-    let id = next_task_id(&paths.tasks_dir())?;
     let now = timestamp();
-    let mut task = TaskRecord::draft(&id, title, &now);
-    task.feature_id = feature;
-    if let Some(lane) = lane {
-        task.lane = Some(lane);
-    }
-    if let Some(risk) = risk {
-        task.risk = Some(risk);
-    }
-    let acceptance = AcceptanceFile::new(&id, Vec::new());
-    write_task_artifacts(&paths.tasks_dir(), &task, &acceptance)?;
+    let task = task::create_task(&paths.tasks_dir(), title, feature, lane, risk, &now)?;
 
-    println!("created {id}");
+    println!("created {}", task.id);
     Ok(())
 }
 
 fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let now = timestamp();
-    let (mut task, snapshot, task_dir) = load_task_with_snapshot(paths, id)?;
-    task.acceptance_locked = true;
-    transition(
-        &mut task,
-        TaskState::Ready,
-        actor,
-        &now,
-        TransitionDetails::default(),
-    )?;
-    save_task_with_snapshot(&task, &snapshot)?;
-    lock_acceptance(task_dir.join("acceptance.yaml"), &task.id, actor, &now)?;
+    let task = task::accept_task(&paths.tasks_dir(), id, actor, &now)?;
 
     println!("accepted {}", task.id);
     Ok(())
@@ -165,33 +141,7 @@ fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
 
 fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let now = timestamp();
-    let (mut task, snapshot, task_dir) = load_task_with_snapshot(paths, id)?;
-    if task.state == TaskState::Draft {
-        transition(
-            &mut task,
-            TaskState::Exploring,
-            actor,
-            &now,
-            TransitionDetails::default(),
-        )?;
-        task.acceptance_locked = true;
-        transition(
-            &mut task,
-            TaskState::Ready,
-            actor,
-            &now,
-            TransitionDetails::default(),
-        )?;
-        lock_acceptance(task_dir.join("acceptance.yaml"), &task.id, actor, &now)?;
-    }
-    transition(
-        &mut task,
-        TaskState::InProgress,
-        actor,
-        &now,
-        TransitionDetails::default(),
-    )?;
-    save_task_with_snapshot(&task, &snapshot)?;
+    let task = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
     println!("updated {} -> {}", task.id, state_name(&task.state));
     Ok(())
 }
@@ -204,9 +154,7 @@ fn transition_task(
     details: TransitionDetails,
 ) -> Result<()> {
     let now = timestamp();
-    let (mut task, snapshot, _) = load_task_with_snapshot(paths, id)?;
-    transition(&mut task, to, actor, &now, details)?;
-    save_task_with_snapshot(&task, &snapshot)?;
+    let task = task::transition_task(&paths.tasks_dir(), id, to, actor, &now, details)?;
     println!("updated {} -> {}", task.id, state_name(&task.state));
     Ok(())
 }
@@ -219,29 +167,8 @@ fn block_task(
     actor: &str,
 ) -> Result<()> {
     let now = timestamp();
-    let (mut task, snapshot, _) = load_task_with_snapshot(paths, id)?;
-    let blocker_id = next_blocker_id(&task);
-    let (kind, blocked_ref, title) = blocker_descriptor(by);
-    add_blocker(
-        &mut task,
-        blocker_id.clone(),
-        kind,
-        blocked_ref,
-        title,
-        reason.to_string(),
-        now.clone(),
-    );
-    task.state_history
-        .push(crate::task::template::StateHistoryEntry {
-            state: task.state.clone(),
-            at: now.clone(),
-            by: actor.to_string(),
-            to: None,
-            summary: Some(format!("blocker added: {blocker_id}")),
-            claims: Vec::new(),
-            open_items: Vec::new(),
-        });
-    save_task_with_snapshot(&task, &snapshot)?;
+    let target = blocker_target(by);
+    let (task, blocker_id) = task::block_task(&paths.tasks_dir(), id, reason, target, actor, &now)?;
 
     println!("blocked {} ({blocker_id})", task.id);
     Ok(())
@@ -249,19 +176,7 @@ fn block_task(
 
 fn unblock_task(paths: &MaestroPaths, id: &str, blocker_id: &str, actor: &str) -> Result<()> {
     let now = timestamp();
-    let (mut task, snapshot, _) = load_task_with_snapshot(paths, id)?;
-    resolve_blocker(&mut task, blocker_id, now.clone())?;
-    task.state_history
-        .push(crate::task::template::StateHistoryEntry {
-            state: task.state.clone(),
-            at: now,
-            by: actor.to_string(),
-            to: None,
-            summary: Some(format!("blocker resolved: {blocker_id}")),
-            claims: Vec::new(),
-            open_items: Vec::new(),
-        });
-    save_task_with_snapshot(&task, &snapshot)?;
+    let task = task::unblock_task(&paths.tasks_dir(), id, blocker_id, actor, &now)?;
 
     println!("unblocked {} ({blocker_id})", task.id);
     Ok(())
@@ -299,19 +214,17 @@ fn update_task(
         bail!("task update requires --summary or --claim");
     }
     let now = timestamp();
-    let (mut task, snapshot, _) = load_task_with_snapshot(paths, id)?;
-    task.state_history
-        .push(crate::task::template::StateHistoryEntry {
-            state: task.state.clone(),
-            at: now.clone(),
-            by: actor.to_string(),
-            to: None,
+    let task = task::update_task_history(
+        &paths.tasks_dir(),
+        id,
+        actor,
+        &now,
+        TransitionDetails {
             summary,
             claims,
-            open_items: Vec::new(),
-        });
-    task.updated_at = now;
-    save_task_with_snapshot(&task, &snapshot)?;
+            ..TransitionDetails::default()
+        },
+    )?;
     println!("updated {}", task.id);
     Ok(())
 }
@@ -322,32 +235,9 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
         None => std::env::var("MAESTRO_CURRENT_TASK")
             .context("task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`")?,
     };
-    let (task, _, _) = load_task_with_snapshot(paths, &task_id)?;
-    print!("{}", render_task(&task));
+    let task = task::load_task_record(&paths.tasks_dir(), &task_id)?;
+    print!("{}", task::render_task(&task));
     Ok(())
-}
-
-fn resolve_optional_task_id(paths: &MaestroPaths, id: Option<String>) -> Result<String> {
-    if let Some(id) = id {
-        return Ok(id);
-    }
-    if let Ok(id) = std::env::var("MAESTRO_CURRENT_TASK") {
-        if !id.trim().is_empty() {
-            return Ok(id);
-        }
-    }
-    let tasks = load_all_tasks(&paths.tasks_dir())?;
-    let open_tasks = tasks
-        .iter()
-        .filter(|task| task.state == TaskState::NeedsVerification)
-        .collect::<Vec<_>>();
-    if open_tasks.len() == 1 {
-        return Ok(open_tasks[0].id.clone());
-    }
-    if tasks.len() == 1 {
-        return Ok(tasks[0].id.clone());
-    }
-    bail!("task id is required or set MAESTRO_CURRENT_TASK");
 }
 
 struct TaskListFilters {
@@ -368,7 +258,7 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
     }
 
     let tasks = filtered_tasks(paths, &filters)?;
-    print!("{}", render_task_list(&tasks));
+    print!("{}", task::render_task_list(&tasks));
     Ok(())
 }
 
@@ -391,13 +281,13 @@ fn filtered_tasks(paths: &MaestroPaths, filters: &TaskListFilters) -> Result<Vec
         .collect();
 
     if filters.blocked {
-        tasks.retain(has_unresolved_blockers);
+        tasks.retain(task::has_unresolved_blockers);
     }
     if let Some(feature) = filters.feature.as_deref() {
         tasks.retain(|task| task.feature_id.as_deref() == Some(feature));
     }
     if filters.ready {
-        tasks.retain(|task| task.state == TaskState::Ready && !has_unresolved_blockers(task));
+        tasks.retain(|task| task.state == TaskState::Ready && !task::has_unresolved_blockers(task));
     }
     if let Some(blocked_by_id) = filters.blocked_by.as_deref() {
         tasks.retain(|task| {
@@ -432,8 +322,8 @@ fn filtered_tasks(paths: &MaestroPaths, filters: &TaskListFilters) -> Result<Vec
 }
 
 fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {
-    let report = check_blocker_graph(&paths.tasks_dir())?;
-    let rendered = render_report(&report);
+    let report = task::check_blocker_graph(&paths.tasks_dir())?;
+    let rendered = task::render_report(&report);
     if report.is_ok() {
         print!("{rendered}");
         return Ok(());
@@ -445,89 +335,16 @@ fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {
     bail!("task doctor found {} error(s)", report.errors.len())
 }
 
-fn lock_acceptance(path: PathBuf, task_id: &str, actor: &str, locked_at: &str) -> Result<()> {
-    let acceptance = if path.exists() {
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        serde_yaml::from_str::<AcceptanceFile>(&content)
-            .with_context(|| format!("failed to parse {}", path.display()))?
-    } else {
-        AcceptanceFile::new(task_id, Vec::new())
-    };
-
-    let locked = AcceptanceFile {
-        locked_by: Some(actor.to_string()),
-        locked_at: Some(locked_at.to_string()),
-        ..acceptance
-    };
-    write_string_atomic(&path, &serde_yaml::to_string(&locked)?)
-        .with_context(|| format!("failed to write {}", path.display()))
-}
-
 fn load_all_tasks(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
-    load_task_records(tasks_dir)
+    task::load_task_records(tasks_dir)
 }
 
-fn load_task_with_snapshot(
-    paths: &MaestroPaths,
-    id: &str,
-) -> Result<(TaskRecord, crate::task::template::TaskSnapshot, PathBuf)> {
-    load_task_artifacts_with_snapshot(&paths.tasks_dir(), id)
-}
-
-fn next_task_id(tasks_dir: &Path) -> Result<String> {
-    let mut max = 0_u32;
-    if tasks_dir.is_dir() {
-        for entry in fs::read_dir(tasks_dir)
-            .with_context(|| format!("failed to read {}", tasks_dir.display()))?
-        {
-            let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
-            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
-                continue;
-            };
-            if let Some(num) = name
-                .strip_prefix("task-")
-                .and_then(|rest| rest.split('-').next())
-                .and_then(|value| value.parse::<u32>().ok())
-            {
-                max = max.max(num);
-            }
-        }
-    }
-    Ok(format!("task-{:03}", max + 1))
-}
-
-fn next_blocker_id(task: &TaskRecord) -> String {
-    let max = task
-        .blockers
-        .iter()
-        .filter_map(|blocker| blocker.id.strip_prefix("blk-"))
-        .filter_map(|id| id.parse::<u32>().ok())
-        .max()
-        .unwrap_or(0);
-    format!("blk-{:03}", max + 1)
-}
-
-fn blocker_descriptor(by: Option<String>) -> (BlockerKind, Option<BlockerRef>, String) {
+fn blocker_target(by: Option<String>) -> BlockerTarget {
     match by {
-        Some(by) if by.starts_with("task-") => (
-            BlockerKind::Task,
-            Some(BlockerRef {
-                kind: BlockerKind::Task,
-                id: by.clone(),
-            }),
-            format!("Blocked by {by}"),
-        ),
-        Some(by) if by.starts_with("decision-") => (
-            BlockerKind::Decision,
-            Some(BlockerRef {
-                kind: BlockerKind::Decision,
-                id: by.clone(),
-            }),
-            format!("Blocked by {by}"),
-        ),
-        Some(by) => (BlockerKind::External, None, format!("Blocked by {by}")),
-        None => (BlockerKind::Human, None, "Manual block".to_string()),
+        Some(by) if by.starts_with("task-") => BlockerTarget::Task(by),
+        Some(by) if by.starts_with("decision-") => BlockerTarget::Decision(by),
+        Some(by) => BlockerTarget::External(by),
+        None => BlockerTarget::Human,
     }
 }
 

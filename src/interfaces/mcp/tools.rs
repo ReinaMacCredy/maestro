@@ -4,13 +4,9 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
+use crate::domain::task;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::metrics::summary::{render_summary, summarize};
-use crate::task::blockers::has_unresolved_blockers;
-use crate::task::display::render_task_list;
-use crate::task::doctor::load_task_records;
-use crate::task::lookup::load_task_with_snapshot;
-use crate::task::template::TaskState;
 
 /// MCP tool metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -72,7 +68,7 @@ fn tool(name: &'static str, description: &'static str, input_schema: Value) -> T
 fn status(paths: &MaestroPaths) -> Result<String> {
     let summary = summarize(paths)?;
     let mut claimed = BTreeMap::<String, Vec<String>>::new();
-    for task in load_task_records(&paths.tasks_dir())? {
+    for task in task::load_task_records(&paths.tasks_dir())? {
         if let Some(agent) = task.claimed_by {
             claimed.entry(agent).or_default().push(task.id);
         }
@@ -101,13 +97,15 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     let blocks = string_arg(arguments, "blocks");
     let feature_id = string_arg(arguments, "feature_id");
     let claimed_by = string_arg(arguments, "claimed_by");
-    let mut tasks = load_task_records(&paths.tasks_dir())?;
+    let mut tasks = task::load_task_records(&paths.tasks_dir())?;
 
     if ready {
-        tasks.retain(|task| task.state == TaskState::Ready && !has_unresolved_blockers(task));
+        tasks.retain(|task| {
+            task.state == task::TaskState::Ready && !task::has_unresolved_blockers(task)
+        });
     }
     if blocked {
-        tasks.retain(has_unresolved_blockers);
+        tasks.retain(task::has_unresolved_blockers);
     }
     if let Some(feature_id) = feature_id.as_deref() {
         tasks.retain(|task| task.feature_id.as_deref() == Some(feature_id));
@@ -128,7 +126,7 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         });
     }
     if let Some(blocks) = blocks.as_deref() {
-        let (task, _, _) = load_task_with_snapshot(&paths.tasks_dir(), blocks)?;
+        let task = task::load_task_record(&paths.tasks_dir(), blocks)?;
         let blocking = task
             .blockers
             .iter()
@@ -140,7 +138,7 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     }
 
     tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(render_task_list(&tasks))
+    Ok(task::render_task_list(&tasks))
 }
 
 fn task_complete(arguments: &Value) -> Result<String> {

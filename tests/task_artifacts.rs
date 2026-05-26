@@ -1,9 +1,7 @@
 mod support;
 
-use maestro::task::template::{
-    load_task, save_task_with_snapshot, write_task_artifacts, AcceptanceFile, ProofState,
-    TaskRecord, VerificationBinding,
-};
+use maestro::domain::task::{AcceptanceFile, ProofState, TaskRecord, VerificationBinding};
+use maestro::task::template::{load_task, save_task_with_snapshot, write_task_artifacts};
 use support::TestTempDir;
 
 #[test]

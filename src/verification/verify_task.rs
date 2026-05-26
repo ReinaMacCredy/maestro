@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+use crate::domain::task::{self, AcceptanceFile, TaskRecord, TaskState, VerificationBinding};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::git;
@@ -21,11 +22,6 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{EVENT_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION};
 use crate::harness::schema::HarnessConfig;
-use crate::task::lookup::resolve_task_yaml_path;
-use crate::task::template::{
-    load_task, save_task_with_snapshot, AcceptanceFile, StateHistoryEntry, TaskRecord,
-    TaskSnapshot, TaskState, VerificationBinding,
-};
 use crate::verification::events::managed_event_files;
 use crate::verification::stale::{FreshnessInputs, StoredFreshness};
 
@@ -83,8 +79,8 @@ pub struct VerificationReport {
 #[derive(Clone, Debug)]
 pub struct LoadedTask {
     pub task: TaskRecord,
-    pub snapshot: TaskSnapshot,
     pub task_dir: PathBuf,
+    handle: task::TaskHandle,
 }
 
 /// Execute proof validation for a task and persist `verification.json`.
@@ -134,17 +130,12 @@ pub fn verify_task(paths: &MaestroPaths, task_id: &str, actor: &str) -> Result<V
 
 /// Load a task by id or id prefix directory name.
 pub fn load_task_by_id(paths: &MaestroPaths, task_id: &str) -> Result<LoadedTask> {
-    let task_path = resolve_task_yaml_path(&paths.tasks_dir(), task_id)?;
-    let task_dir = task_path
-        .parent()
-        .map(Path::to_path_buf)
-        .context("task path is missing parent directory")?;
-    let (task, snapshot) = load_task(&task_path)?;
+    let handle = task::load_task_for_update(&paths.tasks_dir(), task_id)?;
 
     Ok(LoadedTask {
-        task,
-        snapshot,
-        task_dir,
+        task: handle.task().clone(),
+        task_dir: handle.task_dir().to_path_buf(),
+        handle,
     })
 }
 
@@ -200,10 +191,9 @@ fn apply_report_to_task(
     actor: &str,
     now: &str,
 ) -> Result<()> {
-    match report.status {
-        VerificationStatus::Passed => {
-            loaded.task.state = TaskState::Verified;
-            loaded.task.verification = VerificationBinding {
+    let outcome = match report.status {
+        VerificationStatus::Passed => task::VerificationOutcome::Passed(task::VerificationPassed {
+            binding: VerificationBinding {
                 verified_at: Some(report.verified_at.clone()),
                 verified_commit: report.freshness.verified_commit.clone(),
                 verified_by_run: report
@@ -214,26 +204,18 @@ fn apply_report_to_task(
                 task_contract_hash: Some(report.freshness.task_contract_hash.clone()),
                 acceptance_hash: Some(report.freshness.acceptance_hash.clone()),
                 checks_hash: Some(report.freshness.checks_hash.clone()),
-            };
-        }
-        VerificationStatus::Failed => {
-            if loaded.task.state == TaskState::Verified {
-                loaded.task.state = TaskState::NeedsVerification;
-            }
-        }
-    }
+            },
+            summary: report_summary(report),
+        }),
+        VerificationStatus::Failed => task::VerificationOutcome::Failed {
+            summary: report_summary(report),
+            failures: report.failures.clone(),
+        },
+    };
 
-    loaded.task.state_history.push(StateHistoryEntry {
-        state: loaded.task.state.clone(),
-        at: now.to_string(),
-        by: actor.to_string(),
-        to: None,
-        summary: Some(report_summary(report)),
-        claims: Vec::new(),
-        open_items: report.failures.clone(),
-    });
-    loaded.task.updated_at = now.to_string();
-    save_task_with_snapshot(&loaded.task, &loaded.snapshot)
+    task::apply_verification_outcome_to_handle(&mut loaded.handle, outcome, actor, now)?;
+    loaded.task = loaded.handle.task().clone();
+    Ok(())
 }
 
 fn report_summary(report: &VerificationReport) -> String {

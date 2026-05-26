@@ -1,12 +1,9 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
-use anyhow::{Context, Result};
-use serde::Deserialize;
+use anyhow::Result;
 
-use crate::task::lookup::task_yaml_path_for_entry;
-use crate::task::template::TaskState;
+use crate::domain::task;
 
 /// Computed task counts for a feature.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -15,12 +12,6 @@ pub struct FeatureTaskCounts {
     pub total: usize,
     /// Number of verified tasks that reference the feature.
     pub verified: usize,
-}
-
-#[derive(Debug, Deserialize)]
-struct TaskSummary {
-    feature_id: Option<String>,
-    state: Option<TaskState>,
 }
 
 /// Count tasks by scanning `.maestro/tasks/**/task.yaml` on demand.
@@ -32,29 +23,16 @@ pub fn count_tasks_for_feature(tasks_dir: &Path, feature_id: &str) -> Result<Fea
 
 /// Count tasks for every feature by scanning `.maestro/tasks/**/task.yaml` once.
 pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, FeatureTaskCounts>> {
-    let mut counts = HashMap::new();
+    let mut counts: HashMap<String, FeatureTaskCounts> = HashMap::new();
     if !tasks_dir.exists() {
         return Ok(counts);
     }
 
-    for entry in fs::read_dir(tasks_dir)
-        .with_context(|| format!("failed to read tasks dir {}", tasks_dir.display()))?
-    {
-        let entry =
-            entry.with_context(|| format!("failed to read entry in {}", tasks_dir.display()))?;
-        let Some(task_path) = task_yaml_path_for_entry(&entry)? else {
-            continue;
-        };
-
-        let contents = fs::read_to_string(&task_path)
-            .with_context(|| format!("failed to read {}", task_path.display()))?;
-        let task: TaskSummary = serde_yaml::from_str(&contents)
-            .with_context(|| format!("failed to parse {}", task_path.display()))?;
-
-        if let Some(feature_id) = task.feature_id {
+    for projection in task::load_feature_task_projections(tasks_dir)? {
+        if let Some(feature_id) = projection.feature_id {
             let entry = counts.entry(feature_id).or_default();
             entry.total += 1;
-            if task.state == Some(TaskState::Verified) {
+            if projection.state == Some(task::TaskState::Verified) {
                 entry.verified += 1;
             }
         }

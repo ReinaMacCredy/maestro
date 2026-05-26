@@ -6,11 +6,10 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
+use crate::domain::task;
 use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
-use crate::task::blockers::has_unresolved_blockers;
-use crate::task::template::{TaskRecord, TaskState};
 use crate::verification::stale::stale_reasons;
 use crate::verification::verify_task::{
     freshness_inputs_for_task, read_report, VerificationStatus,
@@ -19,7 +18,7 @@ use crate::verification::verify_task::{
 /// Run the polling task status screen.
 pub fn run<F>(paths: &MaestroPaths, interval_seconds: u64, load_tasks: F) -> Result<()>
 where
-    F: Fn() -> Result<Vec<TaskRecord>>,
+    F: Fn() -> Result<Vec<task::TaskRecord>>,
 {
     let interval = normalized_interval(interval_seconds);
     if !io::stdout().is_terminal() {
@@ -39,10 +38,10 @@ where
 }
 
 /// Render one sandcastle-style task status snapshot.
-pub fn render_snapshot(paths: &MaestroPaths, tasks: &[TaskRecord]) -> Result<String> {
+pub fn render_snapshot(paths: &MaestroPaths, tasks: &[task::TaskRecord]) -> Result<String> {
     let features = load_feature_titles(paths)?;
     let active_agents = active_agents(tasks);
-    let mut groups = BTreeMap::<String, Vec<&TaskRecord>>::new();
+    let mut groups = BTreeMap::<String, Vec<&task::TaskRecord>>::new();
     for task in tasks {
         let group = task
             .feature_id
@@ -93,28 +92,28 @@ fn load_feature_titles(paths: &MaestroPaths) -> Result<BTreeMap<String, String>>
         .collect())
 }
 
-fn active_agents(tasks: &[TaskRecord]) -> BTreeSet<String> {
+fn active_agents(tasks: &[task::TaskRecord]) -> BTreeSet<String> {
     tasks
         .iter()
-        .filter(|task| task.state == TaskState::InProgress)
+        .filter(|task| task.state == task::TaskState::InProgress)
         .filter_map(|task| task.claimed_by.clone())
         .collect()
 }
 
-fn task_icon(task: &TaskRecord) -> &'static str {
-    if has_unresolved_blockers(task) {
+fn task_icon(task: &task::TaskRecord) -> &'static str {
+    if task::has_unresolved_blockers(task) {
         return "!";
     }
     match task.state {
-        TaskState::InProgress => "~",
-        TaskState::NeedsVerification => "?",
-        TaskState::Verified => "+",
-        TaskState::Draft | TaskState::Exploring | TaskState::Ready => ".",
-        TaskState::Rejected | TaskState::Abandoned | TaskState::Superseded => "x",
+        task::TaskState::InProgress => "~",
+        task::TaskState::NeedsVerification => "?",
+        task::TaskState::Verified => "+",
+        task::TaskState::Draft | task::TaskState::Exploring | task::TaskState::Ready => ".",
+        task::TaskState::Rejected | task::TaskState::Abandoned | task::TaskState::Superseded => "x",
     }
 }
 
-fn task_substatus(paths: &MaestroPaths, task: &TaskRecord) -> Result<String> {
+fn task_substatus(paths: &MaestroPaths, task: &task::TaskRecord) -> Result<String> {
     if let Some(blocker) = task
         .blockers
         .iter()
@@ -127,13 +126,13 @@ fn task_substatus(paths: &MaestroPaths, task: &TaskRecord) -> Result<String> {
             .unwrap_or(blocker.title.as_str());
         return Ok(format!("blocked by {blocker_label}"));
     }
-    if task.state == TaskState::InProgress {
+    if task.state == task::TaskState::InProgress {
         return Ok(format!(
             "in-progress ({})",
             task.claimed_by.as_deref().unwrap_or("unclaimed")
         ));
     }
-    if task.state == TaskState::NeedsVerification {
+    if task.state == task::TaskState::NeedsVerification {
         let latest_failed = latest_report_failed(paths, task)?;
         return Ok(if latest_failed {
             "needs_verification (last verify failed)".to_string()
@@ -141,13 +140,13 @@ fn task_substatus(paths: &MaestroPaths, task: &TaskRecord) -> Result<String> {
             "needs_verification".to_string()
         });
     }
-    if task.state == TaskState::Verified {
+    if task.state == task::TaskState::Verified {
         return verified_substatus(paths, task);
     }
     Ok(state_label(&task.state).to_string())
 }
 
-fn latest_report_failed(paths: &MaestroPaths, task: &TaskRecord) -> Result<bool> {
+fn latest_report_failed(paths: &MaestroPaths, task: &task::TaskRecord) -> Result<bool> {
     let Some(task_dir) = task_dir(paths, task) else {
         return Ok(false);
     };
@@ -156,7 +155,7 @@ fn latest_report_failed(paths: &MaestroPaths, task: &TaskRecord) -> Result<bool>
         .unwrap_or(false))
 }
 
-fn verified_substatus(paths: &MaestroPaths, task: &TaskRecord) -> Result<String> {
+fn verified_substatus(paths: &MaestroPaths, task: &task::TaskRecord) -> Result<String> {
     let Some(task_dir) = task_dir(paths, task) else {
         return Ok("verified".to_string());
     };
@@ -178,7 +177,7 @@ fn verified_substatus(paths: &MaestroPaths, task: &TaskRecord) -> Result<String>
     }
 }
 
-fn task_dir(paths: &MaestroPaths, task: &TaskRecord) -> Option<std::path::PathBuf> {
+fn task_dir(paths: &MaestroPaths, task: &task::TaskRecord) -> Option<std::path::PathBuf> {
     let dir = paths.tasks_dir().join(task.directory_name());
     if dir.is_dir() {
         Some(dir)
@@ -187,17 +186,17 @@ fn task_dir(paths: &MaestroPaths, task: &TaskRecord) -> Option<std::path::PathBu
     }
 }
 
-fn state_label(state: &TaskState) -> &'static str {
+fn state_label(state: &task::TaskState) -> &'static str {
     match state {
-        TaskState::Draft => "draft",
-        TaskState::Exploring => "exploring",
-        TaskState::Ready => "ready",
-        TaskState::InProgress => "in_progress",
-        TaskState::NeedsVerification => "needs_verification",
-        TaskState::Verified => "verified",
-        TaskState::Rejected => "rejected",
-        TaskState::Abandoned => "abandoned",
-        TaskState::Superseded => "superseded",
+        task::TaskState::Draft => "draft",
+        task::TaskState::Exploring => "exploring",
+        task::TaskState::Ready => "ready",
+        task::TaskState::InProgress => "in_progress",
+        task::TaskState::NeedsVerification => "needs_verification",
+        task::TaskState::Verified => "verified",
+        task::TaskState::Rejected => "rejected",
+        task::TaskState::Abandoned => "abandoned",
+        task::TaskState::Superseded => "superseded",
     }
 }
 

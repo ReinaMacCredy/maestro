@@ -4,8 +4,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::task::lookup::task_yaml_path_for_entry;
-use crate::task::template::{load_task, BlockerKind, TaskRecord};
+use crate::domain::task::lookup::task_yaml_path_for_entry;
+use crate::domain::task::template::{load_task, BlockerKind, TaskRecord};
 
 /// Result of scanning task blocker references.
 #[derive(Clone, Debug, Eq, PartialEq)]

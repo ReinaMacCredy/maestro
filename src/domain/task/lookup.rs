@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-use crate::task::template::{load_task, TaskRecord, TaskSnapshot};
+use crate::domain::task::template::{load_task, TaskRecord, TaskSnapshot};
 
 /// Resolve a task id or unique id-prefix to its `task.yaml` path.
 pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {

@@ -5,13 +5,12 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
+use crate::domain::task;
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::time::utc_now_timestamp;
+use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::{EventArgs, EventCommand};
-use crate::task::doctor::load_task_records;
-use crate::task::lookup::load_task_with_snapshot;
-use crate::task::template::TaskState;
 
 /// Execute `maestro event`.
 pub fn run(args: EventArgs) -> Result<()> {
@@ -37,7 +36,11 @@ fn create_event(
 ) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
-    let task_id = resolve_optional_task_id(&paths, task_id)?;
+    let task_id = resolve_optional_task_id(
+        &paths,
+        task_id,
+        "--task-id is required or set MAESTRO_CURRENT_TASK",
+    )?;
     let run_dir = paths.runs_dir().join(run);
     ensure_dir(&run_dir)?;
     let path = run_dir.join("events.jsonl");
@@ -70,7 +73,7 @@ fn create_event(
 }
 
 fn task_claims(paths: &MaestroPaths, task_id: &str) -> Vec<String> {
-    let Ok((task, _, _)) = load_task_with_snapshot(&paths.tasks_dir(), task_id) else {
+    let Ok(task) = task::load_task_record(&paths.tasks_dir(), task_id) else {
         return Vec::new();
     };
     task.state_history
@@ -80,29 +83,6 @@ fn task_claims(paths: &MaestroPaths, task_id: &str) -> Vec<String> {
         .filter(|claim| !claim.is_empty())
         .map(str::to_string)
         .collect()
-}
-
-fn resolve_optional_task_id(paths: &MaestroPaths, task_id: Option<String>) -> Result<String> {
-    if let Some(task_id) = task_id {
-        return Ok(task_id);
-    }
-    if let Ok(task_id) = std::env::var("MAESTRO_CURRENT_TASK") {
-        if !task_id.trim().is_empty() {
-            return Ok(task_id);
-        }
-    }
-    let tasks = load_task_records(&paths.tasks_dir())?;
-    let open_tasks = tasks
-        .iter()
-        .filter(|task| task.state == TaskState::NeedsVerification)
-        .collect::<Vec<_>>();
-    if open_tasks.len() == 1 {
-        return Ok(open_tasks[0].id.clone());
-    }
-    if tasks.len() == 1 {
-        return Ok(tasks[0].id.clone());
-    }
-    anyhow::bail!("--task-id is required or set MAESTRO_CURRENT_TASK");
 }
 
 fn dedupe_claims(claims: Vec<String>) -> Vec<String> {

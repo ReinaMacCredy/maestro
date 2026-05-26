@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 
-use crate::task::blockers::has_unresolved_blockers;
-use crate::task::template::{StateHistoryEntry, TaskRecord, TaskState};
+use crate::domain::task::blockers::has_unresolved_blockers;
+use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
 
 /// Transition a task forward or terminally, appending state history.
 pub fn transition(
@@ -29,6 +29,20 @@ pub fn transition(
     task.updated_at = at.to_string();
 
     Ok(())
+}
+
+/// Append a non-transition state-history entry and update the task timestamp.
+pub fn append_history(task: &mut TaskRecord, by: &str, at: &str, details: TransitionDetails) {
+    task.state_history.push(StateHistoryEntry {
+        state: task.state.clone(),
+        at: at.to_string(),
+        by: by.to_string(),
+        to: details.to,
+        summary: details.summary,
+        claims: details.claims,
+        open_items: details.open_items,
+    });
+    task.updated_at = at.to_string();
 }
 
 /// Optional metadata for state-history entries.

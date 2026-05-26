@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 
-use crate::task::template::{Blocker, BlockerKind, BlockerRef, BlockerSource, TaskRecord};
+use crate::domain::task::template::{Blocker, BlockerKind, BlockerRef, BlockerSource, TaskRecord};
 
 /// Add an unresolved blocker to a task.
 pub fn add_blocker(

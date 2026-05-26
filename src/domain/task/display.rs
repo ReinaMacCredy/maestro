@@ -1,5 +1,5 @@
-use crate::task::blockers::has_unresolved_blockers;
-use crate::task::template::{TaskRecord, TaskState};
+use crate::domain::task::blockers::has_unresolved_blockers;
+use crate::domain::task::template::{TaskRecord, TaskState};
 
 /// Render one task for `maestro task show`.
 pub fn render_task(task: &TaskRecord) -> String {
