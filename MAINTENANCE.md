@@ -122,6 +122,13 @@ a compatibility re-export. New production references should prefer
 `crate::interfaces::shell`; keep `crate::shell` and `maestro::shell` usage to
 compatibility checks or transition work until the legacy path is removed.
 
+MCP integration lives under `src/interfaces/mcp`, and `crate::mcp` remains a
+compatibility re-export. New production references should prefer
+`crate::interfaces::mcp`; keep `crate::mcp` and `maestro::mcp` usage to
+compatibility checks or transition work until the legacy path is removed.
+Current MCP tool imports into legacy source-read roots are temporary,
+file-specific allowances until those domain read facades move in later phases.
+
 When adding a folder inside a domain or operations module:
 
 - Keep the parent `mod.rs` as the caller-facing facade.

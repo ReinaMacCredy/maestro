@@ -8,7 +8,6 @@ pub mod hooks;
 pub mod improver;
 pub mod install;
 pub mod interfaces;
-pub mod mcp;
 pub mod metrics;
 pub mod migrate;
 pub mod operations;
@@ -20,4 +19,5 @@ pub mod verification;
 
 pub use foundation::core;
 pub use interfaces::cli as commands;
+pub use interfaces::mcp;
 pub use interfaces::shell;

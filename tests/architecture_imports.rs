@@ -32,7 +32,6 @@ const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
 
 const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[
     ("src/interfaces/mod.rs", "crate::hooks"),
-    ("src/interfaces/mod.rs", "crate::mcp"),
     ("src/interfaces/mod.rs", "crate::tui"),
 ];
 
@@ -50,7 +49,6 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/improve.rs", &["harness", "improver"]),
     ("src/interfaces/cli/init.rs", &["harness", "skills"]),
     ("src/interfaces/cli/install.rs", &["install"]),
-    ("src/interfaces/cli/mcp.rs", &["mcp"]),
     ("src/interfaces/cli/metrics.rs", &["metrics"]),
     ("src/interfaces/cli/migrate.rs", &["migrate"]),
     (
@@ -72,6 +70,9 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/update.rs", &["update"]),
     ("src/interfaces/cli/watch.rs", &["task", "tui"]),
 ];
+
+const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
+    &[("src/interfaces/mcp/tools.rs", &["metrics", "task"])];
 
 const DOMAIN_FACADES: &[&str] = &[
     "decisions",
@@ -181,6 +182,17 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _legacy_detect_shell: fn() -> maestro::shell::Shell = maestro::shell::Shell::detect;
     let _new_detect_shell: fn() -> maestro::interfaces::shell::Shell =
         maestro::interfaces::shell::Shell::detect;
+
+    assert_eq!(
+        std::any::type_name::<maestro::interfaces::mcp::tools::ToolDefinition>(),
+        std::any::type_name::<maestro::mcp::tools::ToolDefinition>()
+    );
+    let _legacy_tool_definitions: fn() -> Vec<maestro::mcp::tools::ToolDefinition> =
+        maestro::mcp::tools::tool_definitions;
+    let _new_tool_definitions: fn() -> Vec<maestro::interfaces::mcp::tools::ToolDefinition> =
+        maestro::interfaces::mcp::tools::tool_definitions;
+    let _legacy_mcp_serve: fn() -> anyhow::Result<()> = maestro::mcp::server::serve;
+    let _new_mcp_serve: fn() -> anyhow::Result<()> = maestro::interfaces::mcp::server::serve;
 }
 
 #[test]
@@ -200,8 +212,8 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
     assert_public_modules(
         Path::new("src/interfaces/mod.rs"),
-        &["cli", "shell"],
-        &["crate::hooks", "crate::mcp", "crate::tui"],
+        &["cli", "mcp", "shell"],
+        &["crate::hooks", "crate::tui"],
     );
     assert_reexports(
         Path::new("src/operations/mod.rs"),
@@ -232,6 +244,7 @@ fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
         "shell" => {
             line == "pub use interfaces::shell;" || line == "pub use crate::interfaces::shell;"
         }
+        "mcp" => line == "pub use interfaces::mcp;" || line == "pub use crate::interfaces::mcp;",
         _ => false,
     }
 }
@@ -275,7 +288,7 @@ fn moved_interface_sources_respect_facade_and_transition_policy() {
 
     assert!(
         violations.is_empty(),
-        "interface code must call facades directly except explicit CLI transitional allowances:\n{}",
+        "interface code must call facades directly except explicit transitional allowances:\n{}",
         violations.join("\n")
     );
 }
@@ -354,6 +367,43 @@ fn production_sources_prefer_interfaces_shell_imports() {
     );
 }
 
+#[test]
+fn production_sources_prefer_interfaces_mcp_imports() {
+    let mut violations = Vec::new();
+
+    for root in PRODUCTION_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            let source = read_source_file(&file);
+            let code = code_for_path_scan(&source);
+            if code.contains("crate::mcp::") {
+                violations.push(format!(
+                    "{} references legacy crate::mcp:: path",
+                    file.display()
+                ));
+                continue;
+            }
+
+            for (line_number, import_statement) in crate_import_statements(&source) {
+                if contains_legacy_root_import(&import_statement, "mcp")
+                    || contains_legacy_deep_import(&import_statement, "mcp")
+                {
+                    violations.push(format!(
+                        "{}:{} imports legacy crate::mcp path",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should import MCP through crate::interfaces::mcp during the migration:\n{}",
+        violations.join("\n")
+    );
+}
+
 fn protected_interface_import(line: &str) -> Option<String> {
     if is_relative_import_statement(line) && contains_relative_deep_reference(line) {
         return Some("relative deep path under src/interfaces".to_string());
@@ -390,7 +440,7 @@ fn protected_interface_import(line: &str) -> Option<String> {
 }
 
 fn is_allowed_transitional_interface_import(file: &Path, line: &str) -> bool {
-    cli_transitional_legacy_roots(file).is_some_and(|roots| {
+    transitional_interface_legacy_roots(file).is_some_and(|roots| {
         roots.iter().any(|root| {
             contains_legacy_root_import(line, root) || contains_legacy_deep_import(line, root)
         })
@@ -398,16 +448,17 @@ fn is_allowed_transitional_interface_import(file: &Path, line: &str) -> bool {
 }
 
 fn is_allowed_transitional_interface_path_reference(file: &Path, path: &str) -> bool {
-    cli_transitional_legacy_roots(file).is_some_and(|roots| {
+    transitional_interface_legacy_roots(file).is_some_and(|roots| {
         roots
             .iter()
             .any(|root| path == format!("legacy crate::{root}::"))
     })
 }
 
-fn cli_transitional_legacy_roots(file: &Path) -> Option<&'static [&'static str]> {
+fn transitional_interface_legacy_roots(file: &Path) -> Option<&'static [&'static str]> {
     CLI_TRANSITIONAL_LEGACY_IMPORTS
         .iter()
+        .chain(MCP_TRANSITIONAL_LEGACY_IMPORTS.iter())
         .find_map(|(allowed_file, roots)| (file == Path::new(allowed_file)).then_some(*roots))
 }
 

@@ -1178,12 +1178,18 @@ root remains as a compatibility re-export while callers migrate to
 `commands` crate root remains as a compatibility re-export while callers
 migrate to `interfaces::cli`. Because most domain facades are still
 transitional aliases, `tests/architecture_imports.rs` explicitly allows current
-CLI adapter imports into legacy domain/operation/interface roots until the
-owning modules move in later phases.
+adapter imports into legacy domain/operation/interface roots until the owning
+modules move in later phases. Those allowances must stay file-specific and
+shrink as each owning facade becomes real.
 
 `interfaces/shell` now holds shell integration rendering. The legacy `shell`
 crate root remains as a compatibility re-export while callers migrate to
 `interfaces::shell`.
+
+`interfaces/mcp` now holds MCP transport and tool exposure. The legacy `mcp`
+crate root remains as a compatibility re-export while callers migrate to
+`interfaces::mcp`. Its temporary legacy imports are limited to the source-read
+facades still pending later domain moves.
 
 The current source tree already has useful domain-oriented modules, but the
 seams are uneven. Some modules are deep enough to own a meaningful contract;
@@ -1200,9 +1206,9 @@ Current module groups:
 - **Artifact/domain modules**: `harness`, `task`, `feature`, `decisions`,
   `verification`, `hooks`, `evidence`, `install`, `skills`, `improver`,
   `metrics`, `migrate`, and `update` own or coordinate repo-local artifacts.
-- **Interface adapters**: `interfaces/shell`, `mcp`, and `tui` expose alternate
-  operator interfaces over the same local substrate. Legacy `shell` is only a
-  compatibility root during the migration.
+- **Interface adapters**: `interfaces/shell`, `interfaces/mcp`, and `tui`
+  expose alternate operator interfaces over the same local substrate. Legacy
+  `shell` and `mcp` are only compatibility roots during the migration.
 
 The rough edge is that adapter modules and domain modules are not always cleanly
 separated. For example, the Task section already records command-layer task
@@ -1251,8 +1257,9 @@ The target source map should make each module's ownership contract explicit:
 - `update`: target home is `operations/update`; it owns binary update checks
   and repo-local drift detection. It must not silently rewrite user-owned
   Harness, Task, Feature, Decision, or Install artifacts.
-- `mcp`: owns MCP transport and tool exposure. It should call the same
-  operations and domain interfaces as CLI commands.
+- `interfaces/mcp`: owns MCP transport and tool exposure. The legacy `mcp`
+  root is only a compatibility re-export. It should call the same operations
+  and domain interfaces as CLI commands.
 - `interfaces/shell`: owns shell integration output. The legacy `shell` root is
   only a compatibility re-export. It should not own install or Harness mutation
   policy.
@@ -1386,7 +1393,7 @@ src/
       mcp.rs
       shell_init.rs
       verify.rs
-    mcp/                   # current mcp/*
+    mcp/
       server.rs
       tools.rs
     tui/                   # current tui/*
@@ -2270,7 +2277,7 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 | P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
 | P1 | Install and Skills ownership | `src/install/*`, `src/skills/symlink.rs`, `src/skills/extract.rs` | Install owns mirrors and locks while Skills owns skill file mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
 | P2 | Migration target writers | `src/migrate/v0_106_to_v0_8.rs`, target domain modules | Migration intentionally writes many target artifacts directly. That is acceptable as an explicit migration exception, but it can drift from target domain write rules. |
-| P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/mcp/tools.rs`, `src/tui/*`, `src/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
+| P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/interfaces/mcp/tools.rs`, `src/tui/*`, `src/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
 
 ### Target State
 

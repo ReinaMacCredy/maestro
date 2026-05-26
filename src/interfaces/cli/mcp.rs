@@ -1,8 +1,8 @@
 use anyhow::Result;
 
 use crate::interfaces::cli::{McpArgs, McpCommand};
-use crate::mcp::server;
-use crate::mcp::tools::tool_definitions;
+use crate::interfaces::mcp::server;
+use crate::interfaces::mcp::tools::tool_definitions;
 
 /// Execute `maestro mcp`.
 pub fn run(args: McpArgs) -> Result<()> {

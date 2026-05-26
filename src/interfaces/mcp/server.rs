@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
-use crate::mcp::tools::{call_tool, tool_definitions};
+use crate::interfaces::mcp::tools::{call_tool, tool_definitions};
 
 /// Run the stdio MCP JSON-RPC server.
 pub fn serve() -> Result<()> {
