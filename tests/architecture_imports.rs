@@ -134,6 +134,22 @@ fn selected_compatibility_smoke_paths_resolve() {
         std::any::type_name::<maestro::foundation::core::managed_blocks::ManagedBlockFormat>(),
         std::any::type_name::<maestro::core::managed_blocks::ManagedBlockFormat>()
     );
+    assert_eq!(
+        std::any::type_name::<maestro::domain::harness::schema::HarnessConfig>(),
+        std::any::type_name::<maestro::harness::schema::HarnessConfig>()
+    );
+    assert_eq!(
+        std::any::type_name::<maestro::domain::feature::schema::FeatureRecord>(),
+        std::any::type_name::<maestro::feature::schema::FeatureRecord>()
+    );
+    assert_eq!(
+        std::any::type_name::<maestro::domain::skills::bundled::BundledSkill>(),
+        std::any::type_name::<maestro::skills::bundled::BundledSkill>()
+    );
+    let _legacy_decision_file_name: fn(u32, &str) -> String =
+        maestro::decisions::template::decision_file_name;
+    let _new_decision_file_name: fn(u32, &str) -> String =
+        maestro::domain::decisions::template::decision_file_name;
 
     let _legacy_ensure_dir = |path: &Path| maestro::core::fs::ensure_dir(path);
     let _new_ensure_dir = |path: &Path| maestro::foundation::core::fs::ensure_dir(path);
@@ -218,14 +234,11 @@ fn selected_compatibility_smoke_paths_resolve() {
 
 #[test]
 fn transitional_public_surfaces_match_phase_policy() {
-    assert_reexports(
+    assert_public_modules(
         Path::new("src/domain/mod.rs"),
+        &["decisions", "feature", "harness", "skills"],
         &[
-            "crate::decisions",
-            "crate::feature",
-            "crate::harness",
             "crate::install",
-            "crate::skills",
             "crate::task",
             "crate::verification as proof",
         ],
@@ -270,6 +283,16 @@ fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
             line == "pub use interfaces::hooks;" || line == "pub use crate::interfaces::hooks;"
         }
         "tui" => line == "pub use interfaces::tui;" || line == "pub use crate::interfaces::tui;",
+        "decisions" => {
+            line == "pub use domain::decisions;" || line == "pub use crate::domain::decisions;"
+        }
+        "feature" => {
+            line == "pub use domain::feature;" || line == "pub use crate::domain::feature;"
+        }
+        "harness" => {
+            line == "pub use domain::harness;" || line == "pub use crate::domain::harness;"
+        }
+        "skills" => line == "pub use domain::skills;" || line == "pub use crate::domain::skills;",
         _ => false,
     }
 }

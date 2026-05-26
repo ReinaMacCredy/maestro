@@ -1,7 +1,7 @@
 use anyhow::Result;
 
+use crate::domain::harness::schema::{BacklogConfig, HarnessConfig};
 use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
-use crate::harness::schema::{BacklogConfig, HarnessConfig};
 
 /// `HARNESS.md` content installed by `maestro init`.
 pub const HARNESS_MD: &str = r#"# Maestro Harness Protocol

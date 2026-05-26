@@ -3,12 +3,12 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 
+use crate::domain::skills::bundled::{bundled_skills, BundledSkill};
 use crate::foundation::core::backup::backup_file_with_timestamp;
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::skills::bundled::{bundled_skills, BundledSkill};
 
 /// Existing-file policy for bundled skill extraction.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
