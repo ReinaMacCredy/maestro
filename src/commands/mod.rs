@@ -21,7 +21,7 @@ pub mod verify;
 #[derive(Debug, Parser)]
 #[command(
     name = "maestro",
-    version,
+    version = env!("MAESTRO_BUILD_VERSION"),
     about = "Local-first agent harness CLI",
     arg_required_else_help = true
 )]

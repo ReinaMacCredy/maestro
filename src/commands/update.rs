@@ -10,6 +10,18 @@ use crate::update::{
     UpdateOutcome,
 };
 
+/// Marker error for update failures that already rendered user-facing output.
+#[derive(Debug)]
+pub struct ReportedError;
+
+impl std::fmt::Display for ReportedError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("update failed")
+    }
+}
+
+impl std::error::Error for ReportedError {}
+
 /// Execute `maestro update`.
 pub fn run(args: UpdateArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
@@ -22,7 +34,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         paths: &paths,
         executable_path: &executable_path,
         backup_timestamp: &backup_timestamp,
-        current_version: env!("CARGO_PKG_VERSION"),
+        current_version: env!("MAESTRO_BUILD_VERSION"),
         check_only: args.check,
         force: args.force,
         verbose: args.verbose,
@@ -36,7 +48,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
                 println!();
                 println!("Your current Maestro install was not changed.");
             }
-            return Err(error);
+            return Err(ReportedError.into());
         }
     };
 
@@ -61,7 +73,7 @@ fn render_outcome(outcome: &UpdateOutcome, verbose: bool) -> String {
         BinaryStatus::UpToDate { release } => {
             out.push_str(&format!(
                 "✓ Maestro is already up to date ({})\n",
-                release_summary(release)
+                release.version
             ));
         }
         BinaryStatus::Skipped { reason } => {
@@ -220,7 +232,7 @@ mod tests {
     use crate::update::{BinaryStatus, UpdateFailure, UpdateOutcome};
 
     #[test]
-    fn renders_no_update_with_release_timestamp_and_age() {
+    fn renders_no_update_as_version_only() {
         let outcome = UpdateOutcome {
             binary_status: BinaryStatus::UpToDate {
                 release: ReleaseInfo {
@@ -236,7 +248,7 @@ mod tests {
 
         assert_eq!(
             render_outcome(&outcome, false),
-            "✓ Maestro is already up to date (0.0.1779772576-g751b94 (released 2026-05-26T05:16:16.000Z, 1h ago))\n"
+            "✓ Maestro is already up to date (0.0.1779772576-g751b94)\n"
         );
     }
 

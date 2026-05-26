@@ -1,10 +1,10 @@
 mod support;
 
-use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{env, fs};
 
 use anyhow::{bail, Result};
 use maestro::core::paths::MaestroPaths;
@@ -237,7 +237,9 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
     )
     .expect_err("invariant: failing replacer should fail update");
 
-    assert!(error.to_string().contains("replace failed"));
+    assert!(error
+        .to_string()
+        .contains("could not replace the current binary"));
     assert_eq!(
         fs::read_to_string(executable_path)
             .expect("invariant: current binary should still be readable"),
@@ -289,7 +291,9 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
     )
     .expect_err("invariant: failing replacer should fail update");
 
-    assert!(error.to_string().contains("replace failed"));
+    assert!(error
+        .to_string()
+        .contains("could not replace the current binary"));
     assert_eq!(
         fs::read_to_string(skill_path).expect("invariant: edited skill should remain readable"),
         "edited bundled skill\n"
@@ -339,6 +343,66 @@ fn schema_mismatch_reports_migrate_and_does_not_mutate_harness_files() {
     );
 }
 
+#[test]
+fn cli_download_failure_omits_duplicate_anyhow_error_tail() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_remote(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+
+    let fakebin = temp_dir.path().join("fakebin");
+    fs::create_dir_all(&fakebin).expect("invariant: fakebin should be creatable");
+    let fake_curl = fakebin.join("curl");
+    let asset_name = format!(
+        "maestro-{}-{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
+    fs::write(
+        &fake_curl,
+        format!(
+            r#"#!/bin/sh
+out=""
+want_output=""
+for arg in "$@"; do
+  if [ -n "$want_output" ]; then out="$arg"; want_output=""; continue; fi
+  if [ "$arg" = "--output" ]; then want_output=1; fi
+done
+if [ -z "$out" ]; then
+  printf '{{"tag_name":"v0.0.1779772576-g751b94","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{asset_name}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
+  exit 0
+fi
+printf partial > "$out"
+echo "curl: (18) transfer closed with outstanding read data remaining" >&2
+exit 18
+"#
+        ),
+    )
+    .expect("invariant: fake curl should be writable");
+    #[cfg(unix)]
+    fs::set_permissions(&fake_curl, fs::Permissions::from_mode(0o755))
+        .expect("invariant: fake curl should be executable");
+
+    let path = env::var_os("PATH").expect("invariant: PATH should be set");
+    let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .arg("update")
+        .current_dir(temp_dir.path())
+        .env(
+            "PATH",
+            format!("{}:{}", fakebin.display(), path.to_string_lossy()),
+        )
+        .output()
+        .expect("invariant: maestro update should run");
+
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stdout.contains("Update failed: download interrupted."));
+    assert!(
+        !stderr.contains("Error:"),
+        "friendly update errors should not be followed by anyhow stderr: {stderr}"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn atomic_replacer_preserves_current_binary_permissions() {
@@ -378,6 +442,28 @@ fn atomic_replacer_preserves_current_binary_permissions() {
 
 fn init_git_marker(repo: &Path) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+}
+
+fn init_git_remote(repo: &Path) {
+    assert_success(
+        &Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(repo)
+            .output()
+            .expect("invariant: git init should run"),
+    );
+    assert_success(
+        &Command::new("git")
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/ReinaMacCredy/maestro.git",
+            ])
+            .current_dir(repo)
+            .output()
+            .expect("invariant: git remote add should run"),
+    )
 }
 
 fn update_backup_for(paths: &MaestroPaths, skill_name: &str) -> PathBuf {

@@ -478,9 +478,14 @@ pub fn run_update_with_seams(
     let prepared_release = prepared_release(&binary_candidate);
     let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
         Ok(status) => status,
-        Err(error) => {
+        Err(_error) => {
             rollback_bundled_skill_writes(&extract_report)?;
-            return Err(UpdateFailure::install(prepared_release, error.to_string(), true).into());
+            return Err(UpdateFailure::install(
+                prepared_release,
+                "could not replace the current binary",
+                true,
+            )
+            .into());
         }
     };
 
@@ -847,13 +852,8 @@ fn curl_download(url: &str, output: &Path) -> Result<()> {
     curl_bytes(url, Some(output)).map(|_| ())
 }
 
-fn download_error_message(error: anyhow::Error) -> String {
-    let message = error.to_string();
-    if message.trim().is_empty() {
-        "download interrupted".to_string()
-    } else {
-        message
-    }
+fn download_error_message(_error: anyhow::Error) -> String {
+    "download interrupted".to_string()
 }
 
 fn select_platform_asset(assets: &[GithubAsset]) -> Option<&GithubAsset> {
