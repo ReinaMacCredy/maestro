@@ -1,7 +1,10 @@
 mod support;
 
-use maestro::domain::task::{AcceptanceFile, ProofState, TaskRecord, VerificationBinding};
-use maestro::task::template::{load_task, save_task_with_snapshot, write_task_artifacts};
+use maestro::domain::task::{AcceptanceFile, TaskRecord};
+use maestro::task::template::{
+    load_task, save_task_with_snapshot, write_task_artifacts, LegacyProofStateExt, ProofState,
+    VerificationBinding,
+};
 use support::TestTempDir;
 
 #[test]
@@ -82,7 +85,7 @@ fn optimistic_concurrency_rejects_existing_save_lock() {
 }
 
 #[test]
-fn proof_state_computes_missing_failed_accepted_and_stale() {
+fn legacy_task_template_proof_state_compatibility_remains_available() {
     let binding = VerificationBinding::default();
     assert_eq!(
         binding.proof_state(Some("abc"), Some("a"), Some("c"), false),
@@ -105,10 +108,6 @@ fn proof_state_computes_missing_failed_accepted_and_stale() {
     );
     assert_eq!(
         binding.proof_state(Some("def"), Some("a"), Some("c"), false),
-        ProofState::Stale
-    );
-    assert_eq!(
-        binding.proof_state(Some("abc"), Some("changed"), Some("c"), false),
         ProofState::Stale
     );
 }

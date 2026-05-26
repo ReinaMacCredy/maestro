@@ -22,11 +22,11 @@ pub use doctor::{
     TaskEntry,
 };
 pub use lifecycle::TransitionDetails;
-pub(crate) use template::StateHistoryEntry;
 pub use template::{
-    AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ProofState, TaskRecord,
-    TaskState, VerificationBinding,
+    AcceptanceFile, AppliedVerificationReceipt, Blocker, BlockerKind, BlockerRef, BlockerSource,
+    TaskRecord, TaskState, VerificationBinding,
 };
+pub(crate) use template::{StateHistoryEntry, TaskSaveError};
 
 /// Minimal Task projection for feature rollups.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -285,30 +285,35 @@ fn apply_verification_outcome(
     applied_at: &str,
 ) {
     match outcome {
-        VerificationOutcome::Passed(binding) => {
+        VerificationOutcome::Passed(passed) => {
             task.state = TaskState::Verified;
-            task.verification = binding.binding;
+            task.verification = passed.binding;
+            task.verification.applied_report = Some(passed.receipt);
             lifecycle::append_history(
                 task,
                 actor,
                 applied_at,
                 TransitionDetails {
-                    summary: Some(binding.summary),
+                    summary: Some(passed.summary),
                     ..TransitionDetails::default()
                 },
             );
         }
-        VerificationOutcome::Failed { summary, failures } => {
+        VerificationOutcome::Failed(failed) => {
             if task.state == TaskState::Verified {
                 task.state = TaskState::NeedsVerification;
             }
+            task.verification = VerificationBinding {
+                applied_report: Some(failed.receipt),
+                ..VerificationBinding::default()
+            };
             lifecycle::append_history(
                 task,
                 actor,
                 applied_at,
                 TransitionDetails {
-                    summary: Some(summary),
-                    open_items: failures,
+                    summary: Some(failed.summary),
+                    open_items: failed.failures,
                     ..TransitionDetails::default()
                 },
             );
@@ -316,32 +321,43 @@ fn apply_verification_outcome(
     }
 }
 
-/// Apply and save a verification outcome through Task-owned optimistic concurrency.
-pub(crate) fn apply_verification_outcome_to_handle(
+/// Apply and save a verification outcome after a caller-owned pre-save step.
+pub(crate) fn apply_verification_outcome_to_handle_after<F, C>(
     handle: &mut TaskHandle,
     outcome: VerificationOutcome,
     actor: &str,
     applied_at: &str,
-) -> Result<()> {
+    before_save: F,
+) -> Result<()>
+where
+    F: FnOnce() -> Result<C>,
+    C: template::SaveTaskHook,
+{
     apply_verification_outcome(&mut handle.task, outcome, actor, applied_at);
-    template::save_task_with_snapshot(&handle.task, &handle.snapshot)
+    template::save_task_with_snapshot_after(&handle.task, &handle.snapshot, before_save)
 }
 
 /// Verification outcome request accepted by the Task aggregate.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum VerificationOutcome {
     Passed(VerificationPassed),
-    Failed {
-        summary: String,
-        failures: Vec<String>,
-    },
+    Failed(VerificationFailed),
 }
 
 /// Verification binding data accepted by the Task aggregate after proof succeeds.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct VerificationPassed {
     pub(crate) binding: VerificationBinding,
+    pub(crate) receipt: AppliedVerificationReceipt,
     pub(crate) summary: String,
+}
+
+/// Failed verification data accepted by the Task aggregate.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct VerificationFailed {
+    pub(crate) receipt: AppliedVerificationReceipt,
+    pub(crate) summary: String,
+    pub(crate) failures: Vec<String>,
 }
 
 fn lock_acceptance(path: PathBuf, task_id: &str, actor: &str, locked_at: &str) -> Result<()> {
@@ -422,8 +438,8 @@ fn blocker_descriptor(target: BlockerTarget) -> (BlockerKind, Option<BlockerRef>
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_verification_outcome, TaskRecord, TaskState, VerificationBinding,
-        VerificationOutcome, VerificationPassed,
+        apply_verification_outcome, AppliedVerificationReceipt, TaskRecord, TaskState,
+        VerificationBinding, VerificationOutcome, VerificationPassed,
     };
 
     #[test]
@@ -441,6 +457,12 @@ mod tests {
                     task_contract_hash: Some("task-hash".to_string()),
                     acceptance_hash: Some("acceptance-hash".to_string()),
                     checks_hash: Some("checks-hash".to_string()),
+                    ..VerificationBinding::default()
+                },
+                receipt: AppliedVerificationReceipt {
+                    task_snapshot_updated_at: "t0".to_string(),
+                    verified_at: "t1".to_string(),
+                    attempt_id: Some("attempt-1".to_string()),
                 },
                 summary: "verification passed: 1 claim(s), 1 proof source(s)".to_string(),
             }),
@@ -451,6 +473,14 @@ mod tests {
         assert_eq!(task.state, TaskState::Verified);
         assert_eq!(task.verification.verified_at.as_deref(), Some("t1"));
         assert_eq!(task.verification.verified_commit.as_deref(), Some("abc123"));
+        assert_eq!(
+            task.verification.applied_report,
+            Some(AppliedVerificationReceipt {
+                task_snapshot_updated_at: "t0".to_string(),
+                verified_at: "t1".to_string(),
+                attempt_id: Some("attempt-1".to_string())
+            })
+        );
         let latest = task
             .state_history
             .last()
@@ -471,15 +501,22 @@ mod tests {
 
         apply_verification_outcome(
             &mut task,
-            VerificationOutcome::Failed {
+            VerificationOutcome::Failed(super::VerificationFailed {
+                receipt: AppliedVerificationReceipt {
+                    task_snapshot_updated_at: "t0".to_string(),
+                    verified_at: "t1".to_string(),
+                    attempt_id: Some("attempt-1".to_string()),
+                },
                 summary: "verification failed: missing evidence".to_string(),
                 failures: vec!["missing evidence".to_string()],
-            },
+            }),
             "codex",
             "t1",
         );
 
         assert_eq!(task.state, TaskState::NeedsVerification);
+        assert_eq!(task.verification.verified_at, None);
+        assert_eq!(task.verification.verified_commit, None);
         let latest = task
             .state_history
             .last()
@@ -490,5 +527,13 @@ mod tests {
             Some("verification failed: missing evidence")
         );
         assert_eq!(latest.open_items, vec!["missing evidence"]);
+        assert_eq!(
+            task.verification.applied_report,
+            Some(AppliedVerificationReceipt {
+                task_snapshot_updated_at: "t0".to_string(),
+                verified_at: "t1".to_string(),
+                attempt_id: Some("attempt-1".to_string())
+            })
+        );
     }
 }

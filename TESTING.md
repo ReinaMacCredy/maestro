@@ -82,7 +82,7 @@ has callers or user data safety impact.
 | Feature | `tests/feature_decision_artifacts.rs`, `tests/feature_decision_commands_integration.rs` | Query, Doctor, TUI, and MCP tests when feature read models or output change. |
 | Decision | `tests/feature_decision_artifacts.rs`, `tests/feature_decision_commands_integration.rs` | Query, docs, schema-constant, and migration tests when decision layout or metadata changes. |
 | Run | `tests/hook_record_integration.rs`, `tests/run_evidence_integration.rs` | `tests/task_verify_integration.rs` and `tests/metrics_improve_integration.rs` when event proof, concurrency, evidence regeneration, or metrics reads change. |
-| Proof | `tests/task_verify_integration.rs` | Task, Query, TUI, MCP, and Run tests when verification status, freshness, report writing, or binding behavior changes. Include Proof-to-Task transaction tests for stale snapshots and partial failure. |
+| Proof | `tests/task_verify_integration.rs` | Task, Query, TUI, MCP, and Run tests when verification status, freshness, report writing, unapplied reports, or binding behavior changes. Include Proof-to-Task transaction tests for stale snapshots and partial failure. |
 | Install | `tests/install_mirrors.rs`, `tests/install_uninstall_integration.rs`, `tests/skills_symlink_integration.rs` | Harness, Skills, and safety tests when managed blocks, hooks, locks, symlinks, transaction state, or recovery behavior change. |
 | Skills | `tests/skills_extract.rs`, `tests/skills_symlink_integration.rs` | Install and Update tests when extraction rollback, recursive skill resources, executable metadata, or installed skill wiring changes. |
 | Migration | `tests/migrate_integration.rs` | Target domain loader or contract tests for every artifact Migration writes; direct-write exceptions need explicit fixture coverage. |
@@ -118,6 +118,9 @@ If adding or changing a module facade, verify that approved import paths still
 work and deep implementation imports do not leak into adapters or unrelated
 modules. Once a facade policy is accepted for a module, add or update a
 lightweight architecture/import test for that module.
+When a move splits legacy compatibility roots from target `domain::*` facades,
+pin both surfaces separately: legacy roots keep old public imports, while target
+facades expose only the approved contract.
 
 If changing a module's public contract, run that module's contract tests plus
 adapter and runtime-flow tests for every caller.
@@ -131,12 +134,20 @@ both modules and at least one runtime-flow or operation test that exercises the
 edge.
 
 If changing current Task verification surfaces such as
-`src/verification/verify_task.rs`, the task verify command path, future
-`operations/task_verify`, Proof report writing, or Task verification binding
-behavior, run `tests/task_verify_integration.rs`, Task lifecycle tests, and
-focused tests for stale Task snapshots, report-write failure, Task-apply
-failure, and failed verification moving a previously verified Task only through
-Task-owned lifecycle logic.
+`src/domain/proof/verify_task.rs`, the legacy `src/verification` shim, the task
+verify command path, `operations/task_verify`, Proof report writing, or Task
+verification binding behavior, run `tests/task_verify_integration.rs`, Task
+lifecycle tests, and focused tests for stale Task snapshots, report-write
+failure, typed Task-apply failure leaving a readable unapplied report, failed
+verification moving a previously verified Task only through Task-owned
+lifecycle logic, concurrent verifies not overwriting the canonical applied
+report with a stale attempt, Harness verify commands not replacing
+`acceptance.yaml` with a symlink, symlinked `verification.attempts/` read/write
+rejection, symlinked canonical `verification.json` rejection, latest-attempt
+marker maintenance, rollback-safe canonical report promotion when the final
+Task write fails, interrupted canonical-promotion recovery through the restore
+journal, and Proof status deriving applied/unapplied state from the Task-owned
+applied-report receipt instead of state-history text.
 
 If changing Run append, event read models, or run evidence generation, run hook
 and run evidence tests plus focused tests for concurrent same-session appends,

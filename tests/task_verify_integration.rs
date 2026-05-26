@@ -109,10 +109,27 @@ fn task_yaml(repo: &Path, id: &str) -> YamlValue {
     serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse")
 }
 
+fn write_task_yaml(repo: &Path, id: &str, task: &YamlValue) {
+    fs::write(
+        task_dir(repo, id).join("task.yaml"),
+        serde_yaml::to_string(task).expect("invariant: task.yaml should serialize"),
+    )
+    .expect("invariant: task.yaml should be writable");
+}
+
 fn verification_json(repo: &Path, id: &str) -> Value {
     let raw = fs::read_to_string(task_dir(repo, id).join("verification.json"))
         .expect("invariant: verification.json should be readable");
     serde_json::from_str(&raw).expect("invariant: verification.json should parse")
+}
+
+fn write_verification_json(repo: &Path, id: &str, verification: &Value) {
+    fs::write(
+        task_dir(repo, id).join("verification.json"),
+        serde_json::to_string_pretty(verification)
+            .expect("invariant: verification JSON should serialize"),
+    )
+    .expect("invariant: verification.json should be writable");
 }
 
 fn write_event(repo: &Path, task_id: &str, message: &str) {
@@ -123,6 +140,23 @@ fn write_event(repo: &Path, task_id: &str, message: &str) {
         format!("{{\"task_id\":\"{task_id}\",\"kind\":\"proof\",\"message\":\"{message}\"}}\n"),
     )
     .expect("invariant: events.jsonl should be writable");
+}
+
+fn write_harness_verify_command(repo: &Path, command: &str) {
+    let harness_dir = repo.join(".maestro/harness");
+    fs::create_dir_all(&harness_dir).expect("invariant: harness dir should be creatable");
+    fs::write(
+        harness_dir.join("harness.yml"),
+        format!(
+            "schema_version: maestro.harness.v1\nstack:\n  kind: generic\n  detected_by: []\n  verify:\n  - '{}'\n",
+            command.replace('\'', "''")
+        ),
+    )
+    .expect("invariant: harness.yml should be writable");
+}
+
+fn shell_quote(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "'\\''"))
 }
 
 fn record_hook_event(repo: &Path, payload: &str) {
@@ -152,6 +186,7 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
     let repo = temp.path();
     create_completed_task(repo, "implemented CSV export");
     write_event(repo, "task-001", "implemented CSV export");
+    let task_before_verify = task_yaml(repo, "task-001");
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);
     assert_success(&verify, &["task", "verify", "task-001"]);
@@ -165,11 +200,522 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
     let verification = verification_json(repo, "task-001");
     assert_eq!(verification["schema_version"], "maestro.verification.v1");
     assert_eq!(verification["status"], "passed");
+    assert_eq!(
+        verification["task_snapshot"]["updated_at"],
+        serde_json::json!(task_before_verify["updated_at"]
+            .as_str()
+            .expect("invariant: task updated_at should be present"))
+    );
+    assert_eq!(
+        task["verification"]["applied_report"]["task_snapshot_updated_at"],
+        YamlValue::String(
+            task_before_verify["updated_at"]
+                .as_str()
+                .expect("invariant: task updated_at should be present")
+                .to_string()
+        )
+    );
+    assert_eq!(
+        task["verification"]["applied_report"]["verified_at"],
+        YamlValue::String(
+            verification["verified_at"]
+                .as_str()
+                .expect("invariant: verification verified_at should be present")
+                .to_string()
+        )
+    );
     assert_eq!(verification["claims"][0]["matched"], true);
+    let latest_attempt = fs::read_to_string(
+        task_dir(repo, "task-001")
+            .join("verification.attempts")
+            .join("latest.json"),
+    )
+    .expect("invariant: latest attempt marker should be readable");
+    let latest_attempt: Value =
+        serde_json::from_str(&latest_attempt).expect("invariant: latest attempt should parse");
+    assert_eq!(latest_attempt["attempt_id"], verification["attempt_id"]);
     assert!(verification["proof_sources"][0]["path"]
         .as_str()
         .expect("invariant: proof source path should be present")
         .contains("events.jsonl"));
+}
+
+#[test]
+fn task_verify_report_write_failure_leaves_task_unchanged() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented transaction report write");
+    write_event(repo, "task-001", "implemented transaction report write");
+    let before = task_yaml(repo, "task-001");
+    fs::create_dir(task_dir(repo, "task-001").join("verification.json"))
+        .expect("invariant: blocking verification path should be creatable");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("verification.json"));
+    assert_eq!(task_yaml(repo, "task-001"), before);
+}
+
+#[test]
+fn task_verify_passed_apply_failure_leaves_report_unapplied() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented transaction apply");
+    write_event(repo, "task-001", "implemented transaction apply");
+    fs::write(
+        task_dir(repo, "task-001").join("task.yaml.lock"),
+        "locked\n",
+    )
+    .expect("invariant: task lock should be writable");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    let err = stderr(&verify);
+    assert!(err.contains("verification report was written but task outcome was not applied"));
+    assert!(err.contains("task is locked"));
+    assert!(!task_dir(repo, "task-001")
+        .join("verification.json")
+        .exists());
+    let task = task_yaml(repo, "task-001");
+    assert_eq!(
+        task["state"],
+        YamlValue::String("needs_verification".to_string())
+    );
+    assert!(task["verification"]["verified_at"].as_str().is_none());
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    let proof_out = stdout(&proof);
+    assert!(proof_out.contains("proof task-001: unapplied"));
+    assert!(proof_out.contains("verification report was not applied"));
+}
+
+#[test]
+fn task_verify_failed_apply_failure_leaves_report_unapplied() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented failed transaction apply");
+    let before = task_yaml(repo, "task-001");
+    fs::write(
+        task_dir(repo, "task-001").join("task.yaml.lock"),
+        "locked\n",
+    )
+    .expect("invariant: task lock should be writable");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    let err = stderr(&verify);
+    assert!(err.contains("verification failure: missing proof"));
+    assert!(err.contains("verification report was written but task outcome was not applied"));
+    assert!(err.contains("task is locked"));
+    assert!(!task_dir(repo, "task-001")
+        .join("verification.json")
+        .exists());
+    assert_eq!(task_yaml(repo, "task-001"), before);
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    let proof_out = stdout(&proof);
+    assert!(proof_out.contains("proof task-001: unapplied"));
+    assert!(proof_out.contains("verification report was not applied"));
+}
+
+#[test]
+fn task_verify_stale_snapshot_writes_unapplied_report_without_marking_verified() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented stale snapshot handling");
+    write_event(repo, "task-001", "implemented stale snapshot handling");
+    write_harness_verify_command(
+        repo,
+        &format!(
+            "{} task update task-001 --summary concurrent-change",
+            env!("CARGO_BIN_EXE_maestro")
+        ),
+    );
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    let err = stderr(&verify);
+    assert!(err.contains("verification report was written but task outcome was not applied"));
+    assert!(err.contains("task was modified"));
+    assert!(!task_dir(repo, "task-001")
+        .join("verification.json")
+        .exists());
+    let task = task_yaml(repo, "task-001");
+    assert_eq!(
+        task["state"],
+        YamlValue::String("needs_verification".to_string())
+    );
+    assert!(task["verification"]["verified_at"].as_str().is_none());
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    assert!(stdout(&proof).contains("proof task-001: unapplied"));
+}
+
+#[test]
+fn concurrent_verify_does_not_overwrite_applied_canonical_report_with_stale_attempt() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented concurrent verification");
+    write_event(repo, "task-001", "implemented concurrent verification");
+    let harness_path = repo.join(".maestro/harness/harness.yml");
+    write_harness_verify_command(
+        repo,
+        &format!(
+            "rm -f {} && {} task verify task-001",
+            shell_quote(&harness_path),
+            shell_quote(Path::new(env!("CARGO_BIN_EXE_maestro")))
+        ),
+    );
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("task was modified"));
+    let task = task_yaml(repo, "task-001");
+    assert_eq!(task["state"], YamlValue::String("verified".to_string()));
+    let verification = verification_json(repo, "task-001");
+    assert_eq!(verification["status"], "passed");
+    assert_eq!(
+        task["verification"]["applied_report"]["verified_at"].as_str(),
+        verification["verified_at"].as_str()
+    );
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    let proof_out = stdout(&proof);
+    assert!(proof_out.contains("proof task-001: accepted"));
+    assert!(!proof_out.contains("unapplied"));
+}
+
+#[test]
+fn failed_verification_demotes_previously_verified_task_through_task_verify() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented verified regression");
+    write_event(repo, "task-001", "implemented verified regression");
+    let first = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&first, &["task", "verify", "task-001"]);
+    assert_eq!(
+        task_yaml(repo, "task-001")["state"],
+        YamlValue::String("verified".to_string())
+    );
+    let update = maestro(
+        repo,
+        &[
+            "task",
+            "update",
+            "task-001",
+            "--claim",
+            "new unproved regression claim",
+        ],
+    );
+    assert_success(&update, &["task", "update", "task-001", "--claim"]);
+
+    let second = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&second, &["task", "verify", "task-001"]);
+    assert!(stderr(&second).contains("claim not backed by events/proof"));
+    assert_eq!(
+        task_yaml(repo, "task-001")["state"],
+        YamlValue::String("needs_verification".to_string())
+    );
+    let task_after_failed_verify = task_yaml(repo, "task-001");
+    assert!(task_after_failed_verify["verification"]["verified_at"]
+        .as_str()
+        .is_none());
+    assert!(task_after_failed_verify["verification"]["verified_commit"]
+        .as_str()
+        .is_none());
+    assert_eq!(verification_json(repo, "task-001")["status"], "failed");
+    let mut task = task_after_failed_verify;
+    let history = task["state_history"]
+        .as_sequence_mut()
+        .expect("invariant: state_history should be editable");
+    let latest = history
+        .last_mut()
+        .expect("invariant: failed verification should append history");
+    latest["summary"] = YamlValue::String("unrelated history summary".to_string());
+    latest["open_items"] = YamlValue::Sequence(Vec::new());
+    write_task_yaml(repo, "task-001", &task);
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    assert!(stdout(&proof).contains("proof task-001: failed"));
+}
+
+#[test]
+fn legacy_failed_verification_without_receipt_still_reports_failed() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented legacy failed report");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    let mut verification = verification_json(repo, "task-001");
+    verification
+        .as_object_mut()
+        .expect("invariant: verification should be an object")
+        .remove("task_snapshot");
+    write_verification_json(repo, "task-001", &verification);
+    let mut task = task_yaml(repo, "task-001");
+    task["verification"]
+        .as_mapping_mut()
+        .expect("invariant: verification binding should be a map")
+        .remove(YamlValue::String("applied_report".to_string()));
+    write_task_yaml(repo, "task-001", &task);
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    assert!(stdout(&proof).contains("proof task-001: failed"));
+}
+
+#[test]
+fn legacy_passed_verification_without_receipt_still_reports_accepted() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented legacy passed report");
+    write_event(repo, "task-001", "implemented legacy passed report");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
+    let mut verification = verification_json(repo, "task-001");
+    verification
+        .as_object_mut()
+        .expect("invariant: verification should be an object")
+        .remove("task_snapshot");
+    write_verification_json(repo, "task-001", &verification);
+    let mut task = task_yaml(repo, "task-001");
+    task["verification"]
+        .as_mapping_mut()
+        .expect("invariant: verification binding should be a map")
+        .remove(YamlValue::String("applied_report".to_string()));
+    write_task_yaml(repo, "task-001", &task);
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    assert!(stdout(&proof).contains("proof task-001: accepted"));
+}
+
+#[test]
+fn task_verify_resamples_acceptance_after_harness_verify_command() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented acceptance resampling");
+    write_event(repo, "task-001", "implemented acceptance resampling");
+    let acceptance_path = task_dir(repo, "task-001").join("acceptance.yaml");
+    write_harness_verify_command(
+        repo,
+        &format!(
+            "printf \"schema_version: maestro.acceptance.v1\\ntask: task-001\\nchecks: [command mutated acceptance]\\nlocked_by: maestro\\nlocked_at: command\\n\" > {}",
+            shell_quote(&acceptance_path)
+        ),
+    );
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
+
+    let task = task_yaml(repo, "task-001");
+    let verification = verification_json(repo, "task-001");
+    assert_eq!(verification["status"], "passed");
+    assert_eq!(
+        task["verification"]["acceptance_hash"].as_str(),
+        verification["acceptance_hash"].as_str()
+    );
+    assert_eq!(
+        task["verification"]["checks_hash"].as_str(),
+        verification["checks_hash"].as_str()
+    );
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    assert!(stdout(&proof).contains("proof task-001: accepted"));
+}
+
+#[test]
+fn task_verify_rejects_acceptance_symlink_created_by_harness_verify_command() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented acceptance symlink protection");
+    write_event(
+        repo,
+        "task-001",
+        "implemented acceptance symlink protection",
+    );
+    let acceptance_path = task_dir(repo, "task-001").join("acceptance.yaml");
+    let external_acceptance = repo.join("external-acceptance.yaml");
+    fs::write(
+        &external_acceptance,
+        "schema_version: maestro.acceptance.v1\ntask: task-001\nchecks: [external]\n",
+    )
+    .expect("invariant: external acceptance should be writable");
+    write_harness_verify_command(
+        repo,
+        &format!(
+            "rm -f {} && ln -s {} {}",
+            shell_quote(&acceptance_path),
+            shell_quote(&external_acceptance),
+            shell_quote(&acceptance_path)
+        ),
+    );
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    let err = stderr(&verify);
+    assert!(err.contains("acceptance"));
+    assert!(err.contains("symlink"));
+    assert!(!task_dir(repo, "task-001")
+        .join("verification.json")
+        .exists());
+}
+
+#[test]
+fn task_verify_rejects_symlinked_verification_attempts_dir() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented attempts symlink protection");
+    write_event(repo, "task-001", "implemented attempts symlink protection");
+    let external_attempts = repo.join("external-attempts");
+    fs::create_dir(&external_attempts).expect("invariant: external attempts dir should exist");
+    unix_fs::symlink(
+        &external_attempts,
+        task_dir(repo, "task-001").join("verification.attempts"),
+    )
+    .expect("invariant: attempts symlink should be creatable on unix test host");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    let err = stderr(&verify);
+    assert!(err.contains("verification attempts"));
+    assert!(err.contains("symlink"));
+    assert!(!task_dir(repo, "task-001")
+        .join("verification.json")
+        .exists());
+    assert_eq!(
+        fs::read_dir(external_attempts)
+            .expect("invariant: external attempts dir should be readable")
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn query_proof_rejects_symlinked_verification_attempts_dir() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented attempts read protection");
+    let external_attempts = repo.join("external-attempts");
+    fs::create_dir(&external_attempts).expect("invariant: external attempts dir should exist");
+    unix_fs::symlink(
+        &external_attempts,
+        task_dir(repo, "task-001").join("verification.attempts"),
+    )
+    .expect("invariant: attempts symlink should be creatable on unix test host");
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+
+    assert_failure(&proof, &["query", "proof", "task-001"]);
+    let err = stderr(&proof);
+    assert!(err.contains("verification attempts"));
+    assert!(err.contains("symlink"));
+}
+
+#[test]
+fn task_verify_rejects_symlinked_canonical_verification_report() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented canonical report symlink protection");
+    write_event(
+        repo,
+        "task-001",
+        "implemented canonical report symlink protection",
+    );
+    let external_report = repo.join("external-verification.json");
+    fs::write(&external_report, "{}\n").expect("invariant: external report should be writable");
+    unix_fs::symlink(
+        &external_report,
+        task_dir(repo, "task-001").join("verification.json"),
+    )
+    .expect("invariant: canonical report symlink should be creatable on unix test host");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    let err = stderr(&verify);
+    assert!(err.contains("verification report"));
+    assert!(err.contains("symlink"));
+    assert_eq!(
+        fs::read_to_string(external_report).expect("invariant: external report should be readable"),
+        "{}\n"
+    );
+}
+
+#[test]
+fn query_proof_rejects_symlinked_canonical_verification_report() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented canonical report read protection");
+    let external_report = repo.join("external-verification.json");
+    fs::write(&external_report, "{}\n").expect("invariant: external report should be writable");
+    unix_fs::symlink(
+        &external_report,
+        task_dir(repo, "task-001").join("verification.json"),
+    )
+    .expect("invariant: canonical report symlink should be creatable on unix test host");
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+
+    assert_failure(&proof, &["query", "proof", "task-001"]);
+    let err = stderr(&proof);
+    assert!(err.contains("verification report"));
+    assert!(err.contains("symlink"));
+}
+
+#[test]
+fn query_proof_reports_failed_when_acceptance_disappears_after_failed_verify() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented failed proof status stability");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("missing proof"));
+    fs::remove_file(task_dir(repo, "task-001").join("acceptance.yaml"))
+        .expect("invariant: acceptance should be removable");
+
+    let proof = maestro(repo, &["query", "proof", "task-001"]);
+
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    assert!(stdout(&proof).contains("proof task-001: failed"));
+}
+
+#[test]
+fn legacy_proof_status_errors_when_passed_report_loses_acceptance() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented legacy passed freshness error");
+    write_event(
+        repo,
+        "task-001",
+        "implemented legacy passed freshness error",
+    );
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_success(&verify, &["task", "verify", "task-001"]);
+    fs::remove_file(task_dir(repo, "task-001").join("acceptance.yaml"))
+        .expect("invariant: acceptance should be removable");
+    let paths = maestro::foundation::core::paths::MaestroPaths::new(repo.to_path_buf());
+
+    let status = maestro::verification::proof_status::proof_status(&paths, "task-001");
+
+    assert!(status.is_err());
 }
 
 #[test]

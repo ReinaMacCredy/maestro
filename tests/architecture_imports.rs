@@ -366,13 +366,12 @@ fn proof_domain_facade_does_not_publish_leaf_modules() {
             "ProofStaleReason".to_string(),
             "TaskVerification".to_string(),
             "TaskVerificationStatus".to_string(),
-            "latest_proof_failed_for_task".to_string(),
             "managed_event_files".to_string(),
+            "needs_verification_proof_status_kind_for_task".to_string(),
             "proof_status".to_string(),
             "proof_status_for_task".to_string(),
             "proof_status_kind_for_task".to_string(),
             "render_proof_status".to_string(),
-            "verify_task".to_string(),
         ]),
         "src/domain/proof/mod.rs should expose only the deliberate Proof facade surface"
     );

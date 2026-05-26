@@ -7,10 +7,15 @@ mod verify_task;
 
 pub use events::managed_event_files;
 pub use proof_status::{
-    latest_proof_failed_for_task, proof_status, proof_status_for_task, proof_status_kind_for_task,
-    render_proof_status, ProofStaleReason, ProofStatus, ProofStatusKind, ProofStatusSource,
+    needs_verification_proof_status_kind_for_task, proof_status, proof_status_for_task,
+    proof_status_kind_for_task, render_proof_status, ProofStaleReason, ProofStatus,
+    ProofStatusKind, ProofStatusSource,
 };
-pub use verify_task::{verify_task, TaskVerification, TaskVerificationStatus};
+pub(crate) use verify_task::{
+    evaluate_and_write_task_report_attempt, replace_task_report_preserving_previous,
+    verification_outcome_for_report, VerificationReport,
+};
+pub use verify_task::{TaskVerification, TaskVerificationStatus};
 
 pub(crate) mod compatibility {
     pub use super::events::{event_files_under, managed_event_files};
@@ -22,7 +27,7 @@ pub(crate) mod compatibility {
     };
     pub use super::verify_task::{
         freshness_inputs, freshness_inputs_for_task, load_task_by_id, read_report,
-        verification_path, verify_task_report, ClaimCheck, LoadedTask, ProofSource,
-        VerificationCommand, VerificationReport, VerificationStatus,
+        verification_path, ClaimCheck, LoadedTask, ProofSource, VerificationCommand,
+        VerificationReport, VerificationStatus,
     };
 }

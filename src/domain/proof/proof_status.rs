@@ -1,13 +1,15 @@
 //! Verification proof status helpers.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
 use super::stale::{stale_reasons, StaleReason};
 use super::verify_task::{
-    freshness_inputs, freshness_inputs_for_task, load_task_by_id, read_report, verification_path,
-    LoadedTask, VerificationReport, VerificationStatus,
+    applied_receipt_for_report, freshness_inputs_for_task, latest_attempt_report, load_task_by_id,
+    passed_binding_matches_report, read_managed_report_file_if_exists,
+    recover_canonical_report_for_task, verification_path, LoadedTask, VerificationReport,
+    VerificationStatus,
 };
 use crate::domain::task;
 use crate::foundation::core::git;
@@ -20,6 +22,7 @@ pub enum ProofStatusKind {
     Failed,
     Accepted,
     Stale,
+    Unapplied,
 }
 
 /// One proof source included in a user-facing status read model.
@@ -74,16 +77,37 @@ pub fn proof_status(paths: &MaestroPaths, task_id: &str) -> Result<ProofStatus> 
 }
 
 /// Load only the persisted proof classification for an already loaded task.
+///
+/// The paths argument is retained to keep this facade symmetric with the full
+/// read-model helper; kind-only classification does not need repo-local paths.
 pub fn proof_status_kind_for_task(
     _paths: &MaestroPaths,
     task: &task::TaskRecord,
     task_dir: &Path,
     current_commit: Option<String>,
 ) -> Result<ProofStatusKind> {
-    let Some(report) = read_report(task_dir)? else {
+    let Some(selected) = read_report_for_task(task, task_dir)? else {
         return Ok(ProofStatusKind::Missing);
     };
-    proof_status_kind_for_report(task, task_dir, current_commit, &report)
+    Ok(classify_report(
+        task,
+        task_dir,
+        current_commit,
+        &selected.report,
+        FailedStalePolicy::Skip,
+    )?
+    .kind)
+}
+
+/// Load only the persisted proof classification needed by needs-verification UI rows.
+pub fn needs_verification_proof_status_kind_for_task(
+    task: &task::TaskRecord,
+    task_dir: &Path,
+) -> Result<ProofStatusKind> {
+    let Some(selected) = read_report_for_task(task, task_dir)? else {
+        return Ok(ProofStatusKind::Missing);
+    };
+    Ok(classify_without_freshness(task, &selected.report))
 }
 
 /// Load persisted proof for an already loaded task and derive its status.
@@ -93,14 +117,13 @@ pub fn proof_status_for_task(
     task_dir: &Path,
     current_commit: Option<String>,
 ) -> Result<ProofStatus> {
-    let report = read_report(task_dir)?;
-    let path = display_verification_path(paths, task_dir);
+    let selected = read_report_for_task(task, task_dir)?;
 
-    let Some(report) = report else {
+    let Some(selected) = selected else {
         return Ok(ProofStatus {
             task_id: task.id.clone(),
             kind: ProofStatusKind::Missing,
-            verification_path: path,
+            verification_path: display_verification_path(paths, &verification_path(task_dir)),
             verified_at: None,
             verified_commit: None,
             matched_claims: 0,
@@ -111,24 +134,26 @@ pub fn proof_status_for_task(
         });
     };
 
-    let stale = full_status_stale_reasons(task, task_dir, current_commit, &report)?;
-    let kind = proof_status_kind_from_report(&report, &stale);
-    let stale = stale.into_iter().map(ProofStaleReason::from).collect();
+    let classification = classify_report(
+        task,
+        task_dir,
+        current_commit,
+        &selected.report,
+        FailedStalePolicy::BestEffort,
+    )?;
+    let stale = classification
+        .stale
+        .into_iter()
+        .map(ProofStaleReason::from)
+        .collect();
 
     Ok(status_from_report(
         task.id.clone(),
-        kind,
-        path,
-        report,
+        classification.kind,
+        display_verification_path(paths, &selected.path),
+        selected.report,
         stale,
     ))
-}
-
-/// Return whether the latest persisted proof report failed without computing freshness.
-pub fn latest_proof_failed_for_task(task_dir: &Path) -> Result<bool> {
-    Ok(read_report(task_dir)?
-        .map(|report| report.status == VerificationStatus::Failed)
-        .unwrap_or(false))
 }
 
 /// Render proof status for CLI output.
@@ -163,6 +188,9 @@ pub fn render_proof_status(status: &ProofStatus) -> String {
             ));
         }
     }
+    if status.kind == ProofStatusKind::Unapplied {
+        out.push_str("reason: verification report was not applied to task.yaml\n");
+    }
     if !status.failures.is_empty() {
         out.push_str("failures:\n");
         for failure in &status.failures {
@@ -180,6 +208,7 @@ impl ProofStatusKind {
             ProofStatusKind::Failed => "failed",
             ProofStatusKind::Accepted => "accepted",
             ProofStatusKind::Stale => "stale",
+            ProofStatusKind::Unapplied => "unapplied",
         }
     }
 }
@@ -239,29 +268,36 @@ fn legacy_proof_status_for_loaded(
     paths: &MaestroPaths,
     loaded: LoadedTask,
 ) -> Result<LegacyProofStatus> {
-    let report = read_report(&loaded.task_dir)?;
-    let path = display_verification_path(paths, &loaded.task_dir);
+    let selected = read_report_for_task(&loaded.task, &loaded.task_dir)?;
 
-    let Some(report) = report else {
+    let Some(selected) = selected else {
         return Ok(LegacyProofStatus {
             task_id: loaded.task.id,
             kind: ProofStatusKind::Missing,
-            verification_path: path,
+            verification_path: display_verification_path(
+                paths,
+                &verification_path(&loaded.task_dir),
+            ),
             report: None,
             stale_reasons: Vec::new(),
         });
     };
 
-    let current = freshness_inputs(paths, &loaded)?;
-    let stale = stale_reasons(&current, &report.freshness);
-    let kind = proof_status_kind_from_report(&report, &stale);
+    let report = selected.report;
+    let classification = classify_report(
+        &loaded.task,
+        &loaded.task_dir,
+        git::head(paths.repo_root()).unwrap_or(None),
+        &report,
+        FailedStalePolicy::BestEffort,
+    )?;
 
     Ok(LegacyProofStatus {
         task_id: loaded.task.id,
-        kind,
-        verification_path: path,
+        kind: classification.kind,
+        verification_path: display_verification_path(paths, &selected.path),
         report: Some(report),
-        stale_reasons: stale,
+        stale_reasons: classification.stale,
     })
 }
 
@@ -295,14 +331,67 @@ fn legacy_status_as_read_model(status: &LegacyProofStatus) -> ProofStatus {
     )
 }
 
-fn proof_status_kind_for_report(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FailedStalePolicy {
+    Skip,
+    BestEffort,
+}
+
+struct ProofClassification {
+    kind: ProofStatusKind,
+    stale: Vec<StaleReason>,
+}
+
+fn classify_report(
     task: &task::TaskRecord,
     task_dir: &Path,
     current_commit: Option<String>,
     report: &VerificationReport,
-) -> Result<ProofStatusKind> {
+    failed_stale_policy: FailedStalePolicy,
+) -> Result<ProofClassification> {
+    let report_reflected = report_reflected_in_task(task, report);
+    if !report_reflected {
+        return Ok(ProofClassification {
+            kind: ProofStatusKind::Unapplied,
+            stale: Vec::new(),
+        });
+    }
+    if report.status == VerificationStatus::Failed {
+        let stale = match failed_stale_policy {
+            FailedStalePolicy::Skip => Vec::new(),
+            FailedStalePolicy::BestEffort => {
+                full_status_stale_reasons(task, task_dir, current_commit, report)
+                    .unwrap_or_default()
+            }
+        };
+        return Ok(ProofClassification {
+            kind: ProofStatusKind::Failed,
+            stale,
+        });
+    }
+
     let stale = full_status_stale_reasons(task, task_dir, current_commit, report)?;
-    Ok(proof_status_kind_from_report(report, &stale))
+    Ok(ProofClassification {
+        kind: if stale.is_empty() {
+            ProofStatusKind::Accepted
+        } else {
+            ProofStatusKind::Stale
+        },
+        stale,
+    })
+}
+
+fn classify_without_freshness(
+    task: &task::TaskRecord,
+    report: &VerificationReport,
+) -> ProofStatusKind {
+    if !report_reflected_in_task(task, report) {
+        return ProofStatusKind::Unapplied;
+    }
+    match report.status {
+        VerificationStatus::Failed => ProofStatusKind::Failed,
+        VerificationStatus::Passed => ProofStatusKind::Accepted,
+    }
 }
 
 fn full_status_stale_reasons(
@@ -315,22 +404,50 @@ fn full_status_stale_reasons(
     Ok(stale_reasons(&current, &report.freshness))
 }
 
-fn proof_status_kind_from_report(
-    report: &VerificationReport,
-    stale_reasons: &[StaleReason],
-) -> ProofStatusKind {
+fn report_reflected_in_task(task: &task::TaskRecord, report: &VerificationReport) -> bool {
+    if let Some(receipt) = applied_receipt_for_report(report) {
+        return task.verification.applied_report.as_ref() == Some(&receipt)
+            && (report.status == VerificationStatus::Failed
+                || passed_binding_matches_report(&task.verification, report));
+    }
     match report.status {
-        VerificationStatus::Failed => ProofStatusKind::Failed,
-        VerificationStatus::Passed if stale_reasons.is_empty() => ProofStatusKind::Accepted,
-        VerificationStatus::Passed => ProofStatusKind::Stale,
+        VerificationStatus::Passed => passed_binding_matches_report(&task.verification, report),
+        VerificationStatus::Failed => true,
     }
 }
 
-fn display_verification_path(paths: &MaestroPaths, task_dir: &Path) -> String {
-    let verification_file = verification_path(task_dir);
+struct SelectedReport {
+    report: VerificationReport,
+    path: PathBuf,
+}
+
+fn read_report_for_task(
+    task: &task::TaskRecord,
+    task_dir: &Path,
+) -> Result<Option<SelectedReport>> {
+    recover_canonical_report_for_task(task, task_dir, report_reflected_in_task)?;
+    let canonical_path = verification_path(task_dir);
+    match read_managed_report_file_if_exists(&canonical_path)? {
+        Some(report) if report_reflected_in_task(task, &report) => Ok(Some(SelectedReport {
+            report,
+            path: canonical_path,
+        })),
+        canonical => {
+            if let Some((report, path)) = latest_attempt_report(task_dir)? {
+                return Ok(Some(SelectedReport { report, path }));
+            }
+            Ok(canonical.map(|report| SelectedReport {
+                report,
+                path: canonical_path,
+            }))
+        }
+    }
+}
+
+fn display_verification_path(paths: &MaestroPaths, verification_file: &Path) -> String {
     verification_file
         .strip_prefix(paths.repo_root())
-        .unwrap_or(&verification_file)
+        .unwrap_or(verification_file)
         .display()
         .to_string()
 }

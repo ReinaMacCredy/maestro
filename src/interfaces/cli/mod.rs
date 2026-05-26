@@ -361,13 +361,15 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::Migrate(args) => migrate::run(args),
         RootCommand::Watch(args) => watch::run(args),
-        RootCommand::Verify { id } => task::run(TaskArgs {
-            command: TaskCommand::Verify { id },
-        }),
+        RootCommand::Verify { id } => verify::run(id),
         RootCommand::Identity => {
             println!("maestro {}", env!("CARGO_PKG_VERSION"));
             println!("binary: {}", std::env::args().next().unwrap_or_default());
             Ok(())
         }
     }
+}
+
+pub(super) fn actor() -> String {
+    std::env::var("MAESTRO_ACTOR").unwrap_or_else(|_| "maestro".to_string())
 }

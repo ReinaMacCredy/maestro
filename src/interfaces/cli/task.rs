@@ -4,12 +4,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
-use crate::domain::proof;
 use crate::domain::task;
 use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
+use crate::interfaces::cli::verify;
 use crate::interfaces::cli::{TaskArgs, TaskCommand};
 use crate::interfaces::tui::task_list_watch;
 
@@ -18,7 +18,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
     ensure_dir(paths.tasks_dir())?;
-    let actor = actor();
+    let actor = super::actor();
 
     match args.command {
         TaskCommand::Create {
@@ -53,7 +53,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
                 id,
                 "task id is required or set MAESTRO_CURRENT_TASK",
             )?;
-            verify_task_command(&paths, &id, &actor)
+            verify::run_for_task(&paths, &id, &actor)
         }
         TaskCommand::Update { id, summary, claim } => {
             update_task(&paths, &id, summary, claim, &actor)
@@ -180,25 +180,6 @@ fn unblock_task(paths: &MaestroPaths, id: &str, blocker_id: &str, actor: &str) -
 
     println!("unblocked {} ({blocker_id})", task.id);
     Ok(())
-}
-
-fn verify_task_command(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
-    let verification = proof::verify_task(paths, id, actor)?;
-    match verification.status {
-        proof::TaskVerificationStatus::Passed => {
-            println!(
-                "verification passed for {} ({} claim(s), {} proof source(s))",
-                verification.task_id, verification.claim_count, verification.proof_source_count
-            );
-            Ok(())
-        }
-        proof::TaskVerificationStatus::Failed => {
-            for failure in &verification.failures {
-                eprintln!("verification failure: {failure}");
-            }
-            bail!("verification failed for {}", verification.task_id)
-        }
-    }
 }
 
 fn update_task(
@@ -358,10 +339,6 @@ fn state_name(state: &TaskState) -> &'static str {
         TaskState::Abandoned => "abandoned",
         TaskState::Superseded => "superseded",
     }
-}
-
-fn actor() -> String {
-    std::env::var("MAESTRO_ACTOR").unwrap_or_else(|_| "maestro".to_string())
 }
 
 fn timestamp() -> String {

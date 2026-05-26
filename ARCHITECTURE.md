@@ -435,7 +435,8 @@ task id and slug. The aggregate includes:
 - `task.md`: human-readable task companion.
 - `acceptance.yaml`: acceptance criteria using `maestro.acceptance.v1`.
 - Task-local proof and evidence directories when present.
-- `verification.json` when Proof has run for the task.
+- `verification.attempts/` and `verification.json` when Proof has run for the
+  task.
 
 The task record contains the durable lifecycle data: id, slug, optional feature
 id, lane, risk, state, acceptance lock, claimant fields, blockers, state
@@ -455,21 +456,28 @@ The task lifecycle states are:
 
 Current task behavior is split across several modules:
 
-- `src/task/template.rs` defines task, acceptance, blocker, state-history, and
-  verification-binding data structures, plus artifact read/write helpers.
-- `src/task/lifecycle.rs` owns core transition validation and state-history
+- `src/domain/task/template.rs` defines task, acceptance, blocker,
+  state-history, and verification-binding data structures, plus artifact
+  read/write helpers. `src/task/mod.rs` preserves the legacy compatibility
+  surface.
+- `src/domain/task/lifecycle.rs` owns core transition validation and state-history
   appends for normal transitions.
-- `src/task/blockers.rs` owns blocker add, resolve, and unresolved-blocker
+- `src/domain/task/blockers.rs` owns blocker add, resolve, and unresolved-blocker
   checks.
-- `src/task/lookup.rs`, `src/task/display.rs`, and `src/task/doctor.rs` own
-  lookup, rendering, and blocker-graph validation.
+- `src/domain/task/lookup.rs`, `src/domain/task/display.rs`, and
+  `src/domain/task/doctor.rs` own lookup, rendering, and blocker-graph
+  validation.
 - `src/interfaces/cli/task.rs` routes CLI verbs, but also still owns some aggregate
   details such as acceptance locking, next task id selection, blocker id
   selection, blocker descriptor construction, and command-specific state-history
   entries.
-- `src/verification/verify_task.rs` owns Proof execution and writes
-  `verification.json`, while also mutating the task's verification binding and
-  verified lifecycle state.
+- `src/operations/task_verify/` coordinates task verification for CLI flows:
+  it loads the Task snapshot, asks Proof to write a receipt-keyed attempt under
+  `verification.attempts/`, and asks Task to promote `verification.json` and
+  apply the outcome through optimistic concurrency.
+- `src/verification/` remains a legacy compatibility shim over Proof. Legacy
+  compatibility keeps its historical direct-apply behavior, but CLI task
+  verification no longer routes through that shim.
 
 The rough edge is that task invariants are not all behind one Task aggregate
 interface. Some of them live in task modules, some in command code, and some in
@@ -683,8 +691,8 @@ Current run behavior is split across several modules:
   `events.jsonl`, and triggering run evidence generation on `Stop`.
 - `src/evidence/run_evidence.rs`: aggregation of `events.jsonl` into
   `run_evidence.yaml`.
-- `src/verification/events.rs`: managed discovery of `events.jsonl` files for
-  Proof.
+- `src/domain/proof/events.rs`: managed discovery of `events.jsonl` files for
+  Proof. `src/verification/` preserves the legacy compatibility surface.
 - `src/metrics/summary.rs`: managed discovery and loading of
   `run_evidence.yaml` files for Metrics.
 
@@ -780,11 +788,16 @@ or release policy.
 
 Proof currently persists task-local verification reports at:
 
+- `.maestro/tasks/<task-dir>/verification.attempts/<receipt>.json`
+- `.maestro/tasks/<task-dir>/verification.attempts/latest.json`
 - `.maestro/tasks/<task-dir>/verification.json`
+- `.maestro/tasks/<task-dir>/verification.json.restore` while canonical report
+  promotion is in progress.
 
 The report uses `maestro.verification.v1` and includes:
 
 - task id
+- Task snapshot identity used for the verification attempt
 - pass/fail status
 - verified timestamp
 - freshness inputs
@@ -795,19 +808,29 @@ The report uses `maestro.verification.v1` and includes:
 
 Current proof behavior is split across:
 
-- `src/verification/verify_task.rs`: task loading, freshness input calculation,
+- `src/domain/proof/verify_task.rs`: task loading, freshness input calculation,
   verify command execution from `harness.yml`, completion-claim extraction,
   proof/evidence collection, claim matching, failure generation,
-  `verification.json` writing, and direct task mutation after verification.
-- `src/verification/stale.rs`: freshness comparison and stale reason
+  receipt-keyed attempt writing, canonical `verification.json` promotion, and
+  legacy direct-apply compatibility.
+- `src/domain/proof/stale.rs`: freshness comparison and stale reason
   generation.
-- `src/verification/proof_status.rs`: persisted proof loading, freshness status
-  derivation, and user-facing proof status rendering.
-- `src/verification/events.rs`: managed discovery of Run `events.jsonl` files
+- `src/domain/proof/proof_status.rs`: persisted proof loading, freshness
+  status derivation, unapplied-report detection, and user-facing proof status
+  rendering.
+- `src/domain/proof/events.rs`: managed discovery of Run `events.jsonl` files
   for proof evidence.
-- `src/interfaces/cli/task.rs`: CLI adapter for `maestro task verify` and the root
-  `maestro verify` alias.
+- `src/operations/task_verify/`: transaction-like Proof-to-Task coordination
+  for `maestro task verify` and the root `maestro verify` alias.
+- `src/interfaces/cli/task.rs` and `src/interfaces/cli/verify.rs`: CLI
+  adapters for verification commands.
 - `src/interfaces/cli/query.rs`: proof status and matrix read paths.
+
+`domain::proof::verify_task` is intentionally not a public facade export in
+the target shape because Task verification is a multi-domain operation. Legacy
+report-returning compatibility remains at `crate::verification::verify_task`.
+This is the compatibility rule for moved public paths: legacy roots preserve
+old imports while new `domain::*` facades expose the target contract only.
 
 Proof reads several other concepts:
 
@@ -816,12 +839,10 @@ Proof reads several other concepts:
   binding fields.
 - Run provides event evidence through managed `events.jsonl` files.
 
-The rough edge is that Proof currently mutates Task directly. When verification
-passes, it sets the task state to `verified`, writes verification binding
-fields, and appends task state history. When verification fails for an already
-verified task, it can move the task back to `needs_verification`. Those effects
-are correct product behavior, but the target architecture should route them
-through Task's aggregate interface.
+The rough edge is now legacy-only: `crate::verification` still preserves its
+historical direct-apply behavior for compatibility. Current CLI verification
+routes through `operations/task_verify`, so Proof writes reports and Task owns
+the lifecycle and binding mutation.
 
 #### Target State
 
@@ -829,7 +850,9 @@ Proof should be a deep aggregate module for verification and proof status.
 
 **Owns**
 
-- `verification.json` schema and read/write behavior.
+- `verification.attempts/` report attempts, latest-attempt marker, bounded
+  attempt retention, canonical `verification.json` schema, read behavior, and
+  write behavior.
 - verify command execution from Harness configuration.
 - proof freshness inputs and stale reason calculation.
 - task completion claim extraction for verification.
@@ -837,7 +860,7 @@ Proof should be a deep aggregate module for verification and proof status.
   events.
 - exact claim matching semantics.
 - pass/fail failure generation.
-- proof status derivation: missing, failed, accepted, stale.
+- proof status derivation: missing, failed, accepted, stale, unapplied.
 - user-facing proof status rendering or a render-ready proof read model.
 
 **Depends On**
@@ -853,8 +876,8 @@ Proof should be a deep aggregate module for verification and proof status.
 
 - task lifecycle rules outside the explicit verification-result request it sends
   to Task.
-- task artifact layout beyond the task-local proof inputs and
-  `verification.json` it owns.
+- task artifact layout beyond the task-local proof inputs and verification
+  reports it owns.
 - run event recording or run evidence generation.
 - metrics summaries or improver proposals.
 - install policy, hook installation, CI policy, or release policy.
@@ -863,10 +886,11 @@ Proof should be a deep aggregate module for verification and proof status.
 **Tests**
 
 - verification passes with matching task claims and proof/event evidence.
-- verification writes `maestro.verification.v1` `verification.json`.
+- verification writes `maestro.verification.v1` attempt reports and promotes
+  `verification.json` only through the Task Verify transaction.
 - verification records freshness hashes for task contract, acceptance, checks,
   and commit.
-- proof status reports missing, failed, accepted, and stale states.
+- proof status reports missing, failed, accepted, stale, and unapplied states.
 - stale proof detection reacts to acceptance, checks, task contract, and commit
   changes.
 - verify commands from Harness run and failures fail verification.
@@ -887,26 +911,40 @@ The protocol:
    timestamp, or content-hash data for Task to detect stale writes.
 2. Proof evaluates verification against that snapshot, Harness verify config,
    task-local proof/evidence, Run evidence, acceptance checks, and Git state.
-3. Proof writes or prepares a `verification.json` report that records the Task
-   snapshot identity and proof freshness inputs.
+3. Proof writes a receipt-keyed attempt report under `verification.attempts/`
+   before any Task mutation, updates the managed latest-attempt marker, and
+   prunes old attempts to keep status reads bounded. The report records the
+   Task snapshot identity and proof freshness inputs.
 4. Task applies the Proof outcome only if the Task snapshot is still current.
-   Task owns the lifecycle transition, verification binding, `updated_at`, and
-   state-history entries.
-5. If Proof report writing fails, Task is not mutated.
-6. If Task application fails because the Task changed, the report remains
-   Proof-owned but must be reported as stale, unapplied, or conflict-state by
-   the proof read model. The command should not present the task as verified.
-7. If Task application succeeds, the Task binding should refer to the committed
-   report identity or freshness data so readers can detect missing or stale
-   reports later.
+   While holding the Task optimistic-concurrency lock, the operation promotes
+   the attempt to canonical `verification.json`, then Task owns the lifecycle
+   transition, verification binding, `updated_at`, and state-history entries.
+5. If attempt writing fails, Task is not mutated.
+6. If canonical promotion succeeds but the final `task.yaml` save fails, the
+   previous canonical `verification.json` is restored through an explicit
+   rollback path backed by a durable restore journal. Rollback failure must be
+   surfaced instead of hidden, and later proof-status reads repair an
+   interrupted promotion when the canonical report is not reflected by Task.
+7. If Task application fails because the Task changed or was locked, the attempt
+   remains Proof-owned and is reported as unapplied by the proof read model when
+   it is not reflected in the current Task state. The command should not present
+   the task as verified. The operation reports typed unapplied reasons for at
+   least stale Task snapshots, Task locks, and other apply failures.
+8. If Task application succeeds, the Task binding should refer to the committed
+   report identity and freshness data so readers can detect missing, stale, or
+   unapplied reports later. The Task-owned verification binding stores an
+   optional applied-report receipt keyed by the report's Task snapshot
+   `updated_at`, `verified_at`, and attempt id; Proof status uses that receipt
+   instead of reading Task state-history internals.
 
 Required tests:
 
 - Task changes while verification is running cause a stale/conflict outcome, not
   a blind Task lifecycle update.
-- report write failure leaves Task unchanged.
+- attempt report write failure leaves Task unchanged.
 - Task apply failure leaves the report readable but not accepted as a current
   Task verification binding.
+- canonical report promotion is rollback-safe when the final Task save fails.
 - previously verified tasks move back to `needs_verification` only through the
   Task-owned lifecycle operation.
 
@@ -1258,9 +1296,10 @@ The target source map should make each module's ownership contract explicit:
   future Run facade. It must not own Proof semantics or Task lifecycle rules.
 - `evidence`: owns run evidence derivation from recorded events. It must not own
   hook ingestion or Proof verdicts.
-- `verification`: owns Proof execution, freshness checks, claim matching,
-  verification reports, and proof status. It should request Task verification
-  binding updates through Task's interface.
+- `domain/proof`: owns Proof execution, freshness checks, claim matching,
+  verification reports, and proof status. CLI Task verification reaches it
+  through `operations/task_verify`, while `verification` remains a legacy
+  compatibility shim.
 - `install`: owns install plans, mirrors, hook installation, uninstall behavior,
   and install locks. It is the explicit domain-owned exception for install
   orchestration because wiring and ownership policy are the Install aggregate.
@@ -1719,7 +1758,7 @@ structured defaults still live in Rust serializers.
 | Install mirror blocks | `src/install/mirrors.rs`, `src/install/hooks.rs` | Short managed blocks and hook JSON generated by Install. |
 | Shell init snippets | `resources/shell/posix.sh`, `resources/shell/fish.fish`, embedded by `src/interfaces/shell/mod.rs` | Bash/zsh/fish shell snippets returned by `maestro shell-init`. |
 | Decision Markdown template | `src/domain/decisions/template.rs` | Small generated decision file body. |
-| Task Markdown template | `src/task/template.rs` | Small generated task body pointing to `acceptance.yaml`. |
+| Task Markdown template | `src/domain/task/template.rs` | Small generated task body pointing to `acceptance.yaml`. |
 
 Target state: long human-authored text should live in editable resource files,
 while Rust owns validation, assembly, serialization, and install/update policy.
@@ -2022,13 +2061,23 @@ Current runtime flow summary:
     state-history entries.
 
 - **`maestro task verify` and root `maestro verify`**
-  - The root verify command delegates to the task verify command.
-  - The task verify command resolves the task id and calls Proof.
-  - Proof reads Task, Harness verify commands, task-local proof/evidence
-    directories, and Run events.
-  - Proof writes `verification.json`.
-  - Rough edge: Proof currently mutates Task state, verification binding, and
-    state history directly instead of requesting that update through Task.
+  - The root verify command and task verify subcommand resolve the task id and
+    call `operations/task_verify`.
+  - The operation loads a Task snapshot, asks Proof to evaluate Harness verify
+    commands, task-local proof/evidence directories, and Run events, then writes
+    a receipt-keyed attempt report under a symlink-rejecting
+    `verification.attempts/` directory.
+  - The canonical `verification.json` is promoted only while the Task
+    optimistic-concurrency lock is held and the original Task snapshot is still
+    current. The promotion is rollback-safe relative to the final `task.yaml`
+    write. Task then stores the applied-report receipt in `task.yaml`.
+  - If Task application loses the snapshot race or the Task is locked, the
+    attempt remains readable as an unapplied report but must not overwrite a
+    canonical report already reflected by `task.yaml`.
+  - CLI rendering maps typed unapplied reasons to human output.
+  - Legacy `crate::verification::verify_task::verify_task` preserves its
+    historical report-returning compatibility path; current CLI verification
+    does not route through that shim.
 
 - **`maestro hook record`**
   - The hook adapter reads stdin and records a warning instead of failing the
@@ -2242,11 +2291,11 @@ should eventually sit behind the owning domain module.
 | `commands` | Routes CLI input and also performs some domain mutation directly. | Thin adapter over operations and domain contracts. | Command files still own details such as task acceptance locking, feature registry writes, decision sequencing, and flow-specific file choreography. |
 | `core` | Shared paths, safe writes, managed blocks, schema constants, backup, diff, git, slug, time. | Domain-neutral foundation only. | Must stay disciplined so domain-specific rules do not accumulate in foundation helpers. |
 | `harness` | Owns templates and schema, while init/update/install/proof also reference Harness files. | Canonical Harness artifacts and contracts only. | Dependent modules must continue to rely on path/schema/reference/mutation contracts rather than template content. |
-| `task` | Has lifecycle, blockers, lookup, display, doctor, and artifact structs, but command and proof code still mutate task details directly. | Deep Task aggregate. | Task mutation should be concentrated behind Task operations, especially acceptance locking, id allocation, blocker id allocation, state-history writes, and verification binding updates. |
+| `task` | Has lifecycle, blockers, lookup, display, doctor, and artifact structs, but command code still mutates some task details directly. | Deep Task aggregate. | Task mutation should be concentrated behind Task operations, especially acceptance locking, id allocation, blocker id allocation, state-history writes, and verification binding updates. |
 | `feature` | Schema and rollup reads live in `feature`, but command code creates records and changes status directly. | Deep Feature aggregate. | Registry load/save, creation, duplicate checks, status transitions, and render-ready read models should sit behind Feature. |
 | `decisions` | File naming, template, and lookup are in `decisions`, while command code owns creation sequencing and writing. | Deep Decision aggregate. | Decision id allocation, creation, and future structured metadata should move behind Decision. |
 | `interfaces/hooks` and `evidence` | Hook adapter normalizes/appends events; evidence derives run evidence. Legacy `hooks` remains a compatibility root. | Run aggregate plus hook adapter. | Run rules are split across hook and evidence modules. Hook process behavior should be separated from Run artifact ownership. |
-| `verification` | Proof owns report/freshness/claim logic, but also mutates Task state and binding. | Deep Proof aggregate coordinated by `operations/task_verify` for Task outcome application. | Proof-to-Task write behavior needs a stable transaction protocol. |
+| `verification` | Proof owns report/freshness/claim logic and CLI verification is coordinated by `operations/task_verify`; legacy `verification` remains a compatibility shim. | Deep Proof aggregate coordinated by `operations/task_verify` for Task outcome application. | Keep production callers on the operation boundary and keep proof status accurate for applied, stale, failed, and unapplied reports. |
 | `install` and `skills` | Install owns mirrors/locks and calls skill symlink helpers. Skills owns extraction and symlink mechanics. | Install owns wiring; Skills owns content/extraction. | Keep the split sharp so Install does not own bundled skill content and Skills does not own install policy. |
 | `migrate` | Strong migration plan/apply module, with some direct target artifact construction. | Explicit migration operation that preserves target-domain contracts. | Lower-level writes should remain migration-only exceptions or move to target-domain writers. |
 | `update` | Binary update, bundled skill refresh, rollback, auto-check, schema mismatch reporting. | Update owns binary/skill refresh and reports drift. | Update must not silently become migration or Harness rewrite logic. |
@@ -2296,9 +2345,9 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 
 | Priority | Seam | Files | Current friction |
 | --- | --- | --- | --- |
-| P0 | Task aggregate boundary | `src/interfaces/cli/task.rs`, `src/task/template.rs`, `src/task/lifecycle.rs`, `src/task/blockers.rs`, `src/task/doctor.rs` | The CLI adapter still owns task id allocation, acceptance locking, blocker id allocation, and several state-history writes. |
-| P0 | Proof result to Task lifecycle | `src/verification/verify_task.rs`, `src/task/template.rs`, `src/task/lifecycle.rs` | Proof writes `verification.json` and also mutates Task state, verification binding, `updated_at`, and state history directly. |
-| P1 | Run aggregate boundary | `src/interfaces/hooks/record.rs`, `src/interfaces/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/verification/events.rs`, `src/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
+| P0 | Task aggregate boundary | `src/interfaces/cli/task.rs`, `src/domain/task/template.rs`, `src/domain/task/lifecycle.rs`, `src/domain/task/blockers.rs`, `src/domain/task/doctor.rs` | The CLI adapter still owns task id allocation, acceptance locking, blocker id allocation, and several state-history writes. |
+| P0 | Proof result to Task lifecycle | `src/domain/proof/verify_task.rs`, `src/operations/task_verify/`, `src/domain/task/mod.rs` | CLI verification now uses `operations/task_verify` for Proof report writing and Task-owned outcome application. The remaining friction is compatibility and read-model discipline: legacy `crate::verification` must not become the production boundary, and proof status must distinguish applied reports from unapplied written reports. |
+| P1 | Run aggregate boundary | `src/interfaces/hooks/record.rs`, `src/interfaces/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/domain/proof/events.rs`, `src/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
 | P1 | Feature aggregate boundary | `src/interfaces/cli/feature.rs`, `src/feature/schema.rs`, `src/feature/query.rs` | Feature schema and rollups live in `feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
 | P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
 | P1 | Install and Skills ownership | `src/install/*`, `src/skills/symlink.rs`, `src/skills/extract.rs` | Install owns mirrors and locks while Skills owns skill file mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
@@ -2341,12 +2390,12 @@ the highest fan-out surfaces for task status, verification truth, and evidence.
 | Install | The module that wires Maestro into agent environments through mirrors, hook configs, skill links, ownership records, rollback, and uninstall. |
 | Install lock | `.maestro/install-lock.yaml`, the ownership record that tells Install and Uninstall which files or blocks Maestro owns for each agent. |
 | Migration | An explicit, tested conversion from older on-disk Maestro layouts to the current layout. Migration may perform direct target writes only as a controlled exception. |
-| Proof | The verification aggregate: command execution, evidence collection, claim matching, freshness, proof status, and `verification.json`. |
+| Proof | The verification aggregate: command execution, evidence collection, claim matching, freshness, proof status, attempt reports, and canonical `verification.json`. |
 | Proof source | Evidence used by Proof to justify verification, such as task-local evidence/proof files or Run event evidence. |
 | Run | A recorded agent/session execution, including normalized events in `.maestro/runs/<session>/events.jsonl` and derived `run_evidence.yaml`. |
 | Task | The task aggregate: `task.yaml`, `task.md`, `acceptance.yaml`, lifecycle, blockers, state history, artifact layout, and verification binding. |
 | Verification binding | Task-owned fields that remember the latest successful proof details, including verified commit, run source, and freshness hashes. |
-| Verification report | The Proof-owned `verification.json` file stored inside a task directory after `maestro task verify`. |
+| Verification report | A Proof-owned task-local report. Attempts are stored under `verification.attempts/`; `verification.json` is the canonical report reflected by Task when application succeeds. |
 
 ### Architecture Terms
 

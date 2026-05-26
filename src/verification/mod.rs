@@ -62,9 +62,22 @@ pub mod stale {
 }
 
 pub mod verify_task {
+    use anyhow::Result;
+
+    use crate::foundation::core::paths::MaestroPaths;
+
     pub use crate::domain::proof::compatibility::{
         freshness_inputs, freshness_inputs_for_task, load_task_by_id, read_report,
-        verification_path, verify_task_report as verify_task, ClaimCheck, LoadedTask, ProofSource,
-        VerificationCommand, VerificationReport, VerificationStatus,
+        verification_path, ClaimCheck, LoadedTask, ProofSource, VerificationCommand,
+        VerificationReport, VerificationStatus,
     };
+
+    /// Legacy report-returning verification entrypoint.
+    pub fn verify_task(
+        paths: &MaestroPaths,
+        task_id: &str,
+        actor: &str,
+    ) -> Result<VerificationReport> {
+        crate::operations::verify_task_report(paths, task_id, actor)
+    }
 }

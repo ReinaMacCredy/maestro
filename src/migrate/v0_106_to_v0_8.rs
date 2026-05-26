@@ -824,6 +824,7 @@ fn apply_verdict(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
         task_contract_hash: verdict.task_contract_hash,
         acceptance_hash: verdict.acceptance_hash,
         checks_hash: verdict.checks_hash,
+        ..VerificationBinding::default()
     };
     Ok(())
 }

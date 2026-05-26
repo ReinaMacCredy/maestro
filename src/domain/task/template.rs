@@ -1,3 +1,5 @@
+use std::error::Error;
+use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -135,6 +137,17 @@ pub struct VerificationBinding {
     pub acceptance_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checks_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub applied_report: Option<AppliedVerificationReceipt>,
+}
+
+/// Task-owned receipt for the verification report last applied to this task.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AppliedVerificationReceipt {
+    pub task_snapshot_updated_at: String,
+    pub verified_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt_id: Option<String>,
 }
 
 /// Acceptance criteria stored in `acceptance.yaml`.
@@ -149,15 +162,6 @@ pub struct AcceptanceFile {
     pub locked_at: Option<String>,
 }
 
-/// Derived proof state.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ProofState {
-    Missing,
-    Failed,
-    Accepted,
-    Stale,
-}
-
 /// Optimistic-concurrency snapshot for a loaded task.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TaskSnapshot {
@@ -167,6 +171,13 @@ pub struct TaskSnapshot {
 
 struct TaskSaveLock {
     path: PathBuf,
+}
+
+/// Typed optimistic-save failure from Task-owned persistence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum TaskSaveError {
+    Modified,
+    Locked,
 }
 
 impl TaskRecord {
@@ -225,31 +236,6 @@ impl AcceptanceFile {
     }
 }
 
-impl VerificationBinding {
-    /// Compute proof state from binding plus current expected hashes.
-    pub fn proof_state(
-        &self,
-        current_commit: Option<&str>,
-        current_acceptance_hash: Option<&str>,
-        current_checks_hash: Option<&str>,
-        latest_failed: bool,
-    ) -> ProofState {
-        if latest_failed {
-            return ProofState::Failed;
-        }
-        let Some(verified_commit) = self.verified_commit.as_deref() else {
-            return ProofState::Missing;
-        };
-        if Some(verified_commit) != current_commit
-            || self.acceptance_hash.as_deref() != current_acceptance_hash
-            || self.checks_hash.as_deref() != current_checks_hash
-        {
-            return ProofState::Stale;
-        }
-        ProofState::Accepted
-    }
-}
-
 /// Write task.yaml, task.md, and acceptance.yaml for a task.
 pub fn write_task_artifacts(
     tasks_dir: &Path,
@@ -287,13 +273,58 @@ pub fn load_task(path: &Path) -> Result<(TaskRecord, TaskSnapshot)> {
 
 /// Save a task only if `updated_at` still matches the loaded snapshot.
 pub fn save_task_with_snapshot(task: &TaskRecord, snapshot: &TaskSnapshot) -> Result<()> {
+    save_task_with_snapshot_after(task, snapshot, || Ok(NoopSaveTaskHook))
+}
+
+/// Save a task under its optimistic-concurrency lock after a caller-owned pre-save step.
+pub(crate) fn save_task_with_snapshot_after<F, C>(
+    task: &TaskRecord,
+    snapshot: &TaskSnapshot,
+    before_save: F,
+) -> Result<()>
+where
+    F: FnOnce() -> Result<C>,
+    C: SaveTaskHook,
+{
     let _lock = TaskSaveLock::acquire(&snapshot.path)?;
     let (current, _) = load_task(&snapshot.path)?;
     if current.updated_at != snapshot.updated_at {
-        anyhow::bail!("task was modified, please retry");
+        return Err(TaskSaveError::Modified.into());
     }
-    write_string_atomic(&snapshot.path, &serde_yaml::to_string(task)?)
-        .with_context(|| format!("failed to write {}", snapshot.path.display()))
+    let serialized = serde_yaml::to_string(task)?;
+    let mut hook = before_save()?;
+    let write_result = write_string_atomic(&snapshot.path, &serialized)
+        .with_context(|| format!("failed to write {}", snapshot.path.display()));
+    match write_result {
+        Ok(()) => {
+            hook.commit();
+            Ok(())
+        }
+        Err(write_error) => {
+            if let Err(rollback_error) = hook.rollback() {
+                return Err(write_error).context(format!(
+                    "failed to roll back caller-owned pre-save step: {rollback_error}"
+                ));
+            }
+            Err(write_error)
+        }
+    }
+}
+
+pub(crate) trait SaveTaskHook {
+    fn commit(self);
+
+    fn rollback(&mut self) -> Result<()>;
+}
+
+struct NoopSaveTaskHook;
+
+impl SaveTaskHook for NoopSaveTaskHook {
+    fn commit(self) {}
+
+    fn rollback(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl TaskSaveLock {
@@ -306,13 +337,24 @@ impl TaskSaveLock {
         {
             Ok(_) => Ok(Self { path: lock_path }),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                anyhow::bail!("task is locked, please retry")
+                Err(TaskSaveError::Locked.into())
             }
             Err(error) => Err(error)
                 .with_context(|| format!("failed to create task lock {}", lock_path.display())),
         }
     }
 }
+
+impl fmt::Display for TaskSaveError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TaskSaveError::Modified => formatter.write_str("task was modified, please retry"),
+            TaskSaveError::Locked => formatter.write_str("task is locked, please retry"),
+        }
+    }
+}
+
+impl Error for TaskSaveError {}
 
 impl Drop for TaskSaveLock {
     fn drop(&mut self) {
