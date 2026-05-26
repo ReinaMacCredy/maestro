@@ -135,6 +135,14 @@ remains a compatibility re-export. New interface-layer references should prefer
 helpers may keep using `crate::hooks` until the later Run aggregate extraction
 moves those helpers behind a non-interface facade.
 
+TUI/watch rendering lives under `src/interfaces/tui`, and `crate::tui` remains
+a compatibility re-export. New production references should prefer
+`crate::interfaces::tui`; keep `crate::tui` and `maestro::tui` usage to
+compatibility checks or transition work until the legacy path is removed.
+Current TUI imports into legacy Task, Feature, and Proof source-read roots are
+temporary, file-specific allowances until those read facades move in later
+phases.
+
 When adding a folder inside a domain or operations module:
 
 - Keep the parent `mod.rs` as the caller-facing facade.

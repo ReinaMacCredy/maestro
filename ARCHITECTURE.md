@@ -1193,6 +1193,17 @@ crate root remains as a compatibility re-export while callers migrate to
 `interfaces::mcp`. Its temporary legacy imports are limited to the source-read
 facades still pending later domain moves.
 
+`interfaces/hooks` now holds hook process adapter code. The legacy `hooks`
+crate root remains as a compatibility re-export while callers migrate to
+`interfaces::hooks` where they are interface-layer code. Non-interface callers
+that still need shared run-event helpers may keep the legacy root until the Run
+aggregate exposes a non-interface facade.
+
+`interfaces/tui` now holds TUI/watch rendering. The legacy `tui` crate root
+remains as a compatibility re-export while callers migrate to
+`interfaces::tui`. Its temporary legacy imports are limited to source-read
+facades still pending later domain moves.
+
 The current source tree already has useful domain-oriented modules, but the
 seams are uneven. Some modules are deep enough to own a meaningful contract;
 others are adapters or orchestration modules that still know too much about
@@ -1209,11 +1220,11 @@ Current module groups:
   `verification`, `evidence`, `install`, `skills`, `improver`, `metrics`,
   `migrate`, and `update` own or coordinate repo-local artifacts.
 - **Interface adapters**: `interfaces/hooks`, `interfaces/shell`,
-  `interfaces/mcp`, and `tui` expose alternate operator interfaces over the
-  same local substrate. Legacy `hooks`, `shell`, and `mcp` are only
-  compatibility roots during the migration. Current non-interface users of
-  hook event helpers may keep using `hooks` until the later Run aggregate move
-  provides a non-interface facade.
+  `interfaces/mcp`, and `interfaces/tui` expose alternate operator interfaces
+  over the same local substrate. Legacy `hooks`, `shell`, `mcp`, and `tui` are
+  only compatibility roots during the migration. Current non-interface users
+  of hook event helpers may keep using `hooks` until the later Run aggregate
+  move provides a non-interface facade.
 
 The rough edge is that adapter modules and domain modules are not always cleanly
 separated. For example, the Task section already records command-layer task
@@ -1270,7 +1281,8 @@ The target source map should make each module's ownership contract explicit:
 - `interfaces/shell`: owns shell integration output. The legacy `shell` root is
   only a compatibility re-export. It should not own install or Harness mutation
   policy.
-- `tui`: owns terminal presentation and interaction loops. It should call Task,
+- `interfaces/tui`: owns terminal presentation and interaction loops. The
+  legacy `tui` root is only a compatibility re-export. It should call Task,
   Metrics, and Proof interfaces instead of reimplementing their rules.
 
 ### Target Folder Architecture
