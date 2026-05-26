@@ -168,7 +168,6 @@ fn simulated_download_failure_preserves_existing_binary_file() {
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
-            verbose: false,
         },
         &FailingDownloader,
         &NoopVerifier,
@@ -220,7 +219,6 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
-            verbose: false,
         },
         &StagingFailingDownloader,
         &NoopVerifier,
@@ -258,7 +256,6 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
-            verbose: false,
         },
         &CandidateDownloader,
         &NoopVerifier,
@@ -312,7 +309,6 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
-            verbose: false,
         },
         &CandidateDownloader,
         &NoopVerifier,
@@ -378,16 +374,8 @@ fn cli_download_failure_omits_duplicate_anyhow_error_tail() {
     init_git_remote(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
-    let fakebin = temp_dir.path().join("fakebin");
-    fs::create_dir_all(&fakebin).expect("invariant: fakebin should be creatable");
-    let fake_curl = fakebin.join("curl");
-    let asset_name = format!(
-        "maestro-{}-{}",
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    );
-    fs::write(
-        &fake_curl,
+    let path = fake_curl_path_env(
+        &temp_dir,
         format!(
             r#"#!/bin/sh
 out=""
@@ -397,29 +385,21 @@ for arg in "$@"; do
   if [ "$arg" = "--output" ]; then want_output=1; fi
 done
 if [ -z "$out" ]; then
-  printf '{{"tag_name":"v0.0.1779772576-g751b94","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{asset_name}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
+  printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
   exit 0
 fi
 printf partial > "$out"
 echo "curl: (18) transfer closed with outstanding read data remaining" >&2
 exit 18
-"#
+"#,
+            platform_asset_name()
         ),
-    )
-    .expect("invariant: fake curl should be writable");
-    #[cfg(unix)]
-    fs::set_permissions(&fake_curl, fs::Permissions::from_mode(0o755))
-        .expect("invariant: fake curl should be executable");
-
-    let path = env::var_os("PATH").expect("invariant: PATH should be set");
+    );
     let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("update")
         .current_dir(temp_dir.path())
         .env("MAESTRO_INSTALL_METHOD", "curl")
-        .env(
-            "PATH",
-            format!("{}:{}", fakebin.display(), path.to_string_lossy()),
-        )
+        .env("PATH", path)
         .output()
         .expect("invariant: maestro update should run");
 
@@ -438,36 +418,22 @@ fn auto_check_reports_available_update_once_per_day_for_curl_installs() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
-    let fakebin = temp_dir.path().join("fakebin");
-    fs::create_dir_all(&fakebin).expect("invariant: fakebin should be creatable");
-    let fake_curl = fakebin.join("curl");
-    let asset_name = format!(
-        "maestro-{}-{}",
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    );
-    fs::write(
-        &fake_curl,
+
+    let path = fake_curl_path_env(
+        &temp_dir,
         format!(
             r#"#!/bin/sh
-printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{asset_name}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
-"#
+printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
+"#,
+            platform_asset_name()
         ),
-    )
-    .expect("invariant: fake curl should be writable");
-    #[cfg(unix)]
-    fs::set_permissions(&fake_curl, fs::Permissions::from_mode(0o755))
-        .expect("invariant: fake curl should be executable");
+    );
 
-    let path = env::var_os("PATH").expect("invariant: PATH should be set");
     let first = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("doctor")
         .current_dir(temp_dir.path())
         .env("MAESTRO_INSTALL_METHOD", "curl")
-        .env(
-            "PATH",
-            format!("{}:{}", fakebin.display(), path.to_string_lossy()),
-        )
+        .env("PATH", &path)
         .output()
         .expect("invariant: maestro doctor should run");
     assert_success(&first);
@@ -479,15 +445,41 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
         .arg("doctor")
         .current_dir(temp_dir.path())
         .env("MAESTRO_INSTALL_METHOD", "curl")
-        .env(
-            "PATH",
-            format!("{}:{}", fakebin.display(), path.to_string_lossy()),
-        )
+        .env("PATH", path)
         .output()
         .expect("invariant: maestro doctor should run");
     assert_success(&second);
     let stdout = String::from_utf8_lossy(&second.stdout);
     assert!(!stdout.contains("Update available: 9.9.9-gfuture"));
+}
+
+#[test]
+fn auto_check_does_not_write_or_print_after_init_dry_run() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    let path = fake_curl_path_env(
+        &temp_dir,
+        format!(
+            r#"#!/bin/sh
+printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
+"#,
+            platform_asset_name()
+        ),
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["init", "--dry-run"])
+        .current_dir(temp_dir.path())
+        .env("MAESTRO_INSTALL_METHOD", "curl")
+        .env("PATH", path)
+        .output()
+        .expect("invariant: maestro init should run");
+
+    assert_success(&output);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("maestro init would create:"));
+    assert!(!stdout.contains("Update available:"));
+    assert!(!temp_dir.path().join(".maestro").exists());
 }
 
 #[cfg(unix)]
@@ -551,6 +543,27 @@ fn init_git_remote(repo: &Path) {
             .output()
             .expect("invariant: git remote add should run"),
     )
+}
+
+fn platform_asset_name() -> String {
+    format!(
+        "maestro-{}-{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
+}
+
+fn fake_curl_path_env(temp_dir: &TestTempDir, script: impl AsRef<str>) -> String {
+    let fakebin = temp_dir.path().join("fakebin");
+    fs::create_dir_all(&fakebin).expect("invariant: fakebin should be creatable");
+    let fake_curl = fakebin.join("curl");
+    fs::write(&fake_curl, script.as_ref()).expect("invariant: fake curl should be writable");
+    #[cfg(unix)]
+    fs::set_permissions(&fake_curl, fs::Permissions::from_mode(0o755))
+        .expect("invariant: fake curl should be executable");
+
+    let path = env::var_os("PATH").expect("invariant: PATH should be set");
+    format!("{}:{}", fakebin.display(), path.to_string_lossy())
 }
 
 fn update_backup_for(paths: &MaestroPaths, skill_name: &str) -> PathBuf {

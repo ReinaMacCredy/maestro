@@ -19,7 +19,8 @@ fn main() {
 fn should_auto_check_after(command: &maestro::commands::RootCommand) -> bool {
     !matches!(
         command,
-        maestro::commands::RootCommand::Update(_)
+        maestro::commands::RootCommand::Init(_)
+            | maestro::commands::RootCommand::Update(_)
             | maestro::commands::RootCommand::Mcp(_)
             | maestro::commands::RootCommand::Hook(_)
             | maestro::commands::RootCommand::ShellInit

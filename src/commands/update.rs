@@ -1,5 +1,4 @@
 use std::env;
-use std::fs;
 use std::io::IsTerminal;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -7,7 +6,9 @@ use anyhow::Result;
 
 use crate::commands::UpdateArgs;
 use crate::core::backup::backup_operation_timestamp;
+use crate::core::fs::read_to_string_if_exists;
 use crate::core::paths::{discover_repo_root, MaestroPaths};
+use crate::core::safe_write::write_string_atomic;
 use crate::update::{
     detect_install_method, run_update, BinaryStatus, InstallMethod, ReleaseInfo, UpdateFailure,
     UpdateFailurePhase, UpdateOptions, UpdateOutcome,
@@ -43,7 +44,6 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         current_version: env!("MAESTRO_BUILD_VERSION"),
         check_only: args.check,
         force: args.force,
-        verbose: args.verbose,
     }) {
         Ok(outcome) => outcome,
         Err(error) => {
@@ -89,7 +89,6 @@ pub fn run_auto_check() -> Result<()> {
     if !auto_check_due(&paths, now)? {
         return Ok(());
     }
-    record_auto_check(&paths, now)?;
 
     let outcome = run_update(&UpdateOptions {
         paths: &paths,
@@ -98,8 +97,8 @@ pub fn run_auto_check() -> Result<()> {
         current_version: env!("MAESTRO_BUILD_VERSION"),
         check_only: true,
         force: false,
-        verbose: false,
     })?;
+    record_auto_check(&paths, now)?;
 
     if let BinaryStatus::UpdateAvailable { release, .. } = outcome.binary_status {
         let colors = Colors::detect();
@@ -270,7 +269,7 @@ impl Colors {
 
 fn auto_check_due(paths: &MaestroPaths, now: u64) -> Result<bool> {
     let path = auto_check_stamp_path(paths);
-    let Some(contents) = fs::read_to_string(&path).ok() else {
+    let Some(contents) = read_to_string_if_exists(&path)? else {
         return Ok(true);
     };
     let Some(last_check) = contents.trim().parse::<u64>().ok() else {
@@ -281,10 +280,7 @@ fn auto_check_due(paths: &MaestroPaths, now: u64) -> Result<bool> {
 
 fn record_auto_check(paths: &MaestroPaths, now: u64) -> Result<()> {
     let path = auto_check_stamp_path(paths);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(path, now.to_string())?;
+    write_string_atomic(path, &now.to_string())?;
     Ok(())
 }
 

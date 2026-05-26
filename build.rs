@@ -1,10 +1,8 @@
-use std::process::Command;
-
 fn main() {
     println!("cargo:rerun-if-env-changed=MAESTRO_BUILD_VERSION");
     println!("cargo:rerun-if-env-changed=MAESTRO_BUILD_COMMIT");
     println!("cargo:rerun-if-changed=VERSION");
-    println!("cargo:rerun-if-changed=.git/HEAD");
+    println!("cargo:rerun-if-changed=VERSION_COMMIT");
 
     let version = std::env::var("MAESTRO_BUILD_VERSION")
         .ok()
@@ -22,25 +20,13 @@ fn build_version() -> String {
     let short_hash = std::env::var("MAESTRO_BUILD_COMMIT")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(git_short_hash);
+        .unwrap_or_else(|| include_str!("VERSION_COMMIT").trim().to_string());
+    assert!(
+        !short_hash.is_empty()
+            && short_hash
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() || byte == b'g'),
+        "VERSION_COMMIT must contain only the release commit suffix"
+    );
     format!("0.0.{number}-g{}", short_hash.trim_start_matches('g'))
-}
-
-fn git_short_hash() -> String {
-    let output = Command::new("git")
-        .args(["rev-parse", "--short=7", "HEAD"])
-        .output()
-        .expect("failed to run git for Maestro build version");
-    assert!(
-        output.status.success(),
-        "failed to read git commit for Maestro build version"
-    );
-    let value = String::from_utf8(output.stdout)
-        .expect("git commit for Maestro build version was not UTF-8");
-    let value = value.trim();
-    assert!(
-        !value.is_empty(),
-        "git commit for Maestro build version was empty"
-    );
-    value.to_string()
 }

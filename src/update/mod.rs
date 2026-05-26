@@ -17,6 +17,7 @@ use crate::core::schema::{
     BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
     INSTALL_LOCK_SCHEMA_VERSION,
 };
+use crate::core::time::parse_utc_timestamp;
 use crate::skills::extract::{
     extract_bundled_skills, rollback_bundled_skill_writes, ExtractMode, SkillBackup,
 };
@@ -39,8 +40,6 @@ pub struct UpdateOptions<'a> {
     pub check_only: bool,
     /// Reinstall even when the remote reports this version as current.
     pub force: bool,
-    /// Request extra diagnostic output from future downloader implementations.
-    pub verbose: bool,
 }
 
 /// Result of a complete update operation.
@@ -78,12 +77,43 @@ pub enum BinaryStatus {
     /// The currently installed binary already matches the newest release.
     UpToDate { release: ReleaseInfo },
     /// No binary was available from the downloader seam.
-    Skipped { reason: String },
+    Skipped { reason: UpdateUnavailable },
     /// The executable path was atomically replaced.
     Replaced {
         path: PathBuf,
         release: Option<ReleaseInfo>,
     },
+}
+
+/// Reason a binary update is unavailable.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UpdateUnavailable {
+    /// This binary is not managed by Maestro's self-updater.
+    LocalDevelopment,
+    /// This binary should be upgraded through Homebrew.
+    Homebrew,
+    /// This binary should be upgraded through Cargo.
+    Cargo,
+    /// The latest release has no asset matching this platform.
+    NoPlatformAsset { hint: String },
+}
+
+impl fmt::Display for UpdateUnavailable {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LocalDevelopment => {
+                formatter.write_str("for this build: running from a local development binary")
+            }
+            Self::Homebrew => formatter
+                .write_str("for this install: installed with Homebrew. Run `brew upgrade maestro`"),
+            Self::Cargo => formatter.write_str(
+                "for this install: installed with Cargo. Run `cargo install --locked --force maestro`",
+            ),
+            Self::NoPlatformAsset { hint } => {
+                write!(formatter, "because no GitHub release asset matches {hint}")
+            }
+        }
+    }
 }
 
 /// Download result from the binary update seam.
@@ -97,7 +127,7 @@ pub enum DownloadedBinary {
     /// The latest release already matches the current binary.
     UpToDate(ReleaseInfo),
     /// No binary work should be performed in this run.
-    Unavailable(String),
+    Unavailable(UpdateUnavailable),
 }
 
 /// Read-only update check result.
@@ -111,7 +141,7 @@ pub enum UpdateCheck {
     /// The current binary already matches the newest release.
     UpToDate(ReleaseInfo),
     /// No release lookup is available for this build.
-    Unavailable(String),
+    Unavailable(UpdateUnavailable),
 }
 
 /// Request passed to release lookup/download implementations.
@@ -123,8 +153,8 @@ pub struct UpdateRequest {
     pub current_version: String,
     /// Reinstall even when versions match.
     pub force: bool,
-    /// Whether the caller requested verbose diagnostics.
-    pub verbose: bool,
+    /// Whether this operation is only checking update availability.
+    pub check_only: bool,
 }
 
 /// How the running Maestro binary appears to be installed.
@@ -226,7 +256,7 @@ pub trait UpdateDownloader {
     fn check(&self, request: &UpdateRequest) -> Result<UpdateCheck> {
         let _ = request;
         Ok(UpdateCheck::Unavailable(
-            "running from a local development binary".to_string(),
+            UpdateUnavailable::LocalDevelopment,
         ))
     }
 
@@ -253,7 +283,7 @@ pub struct OfflineDownloader;
 impl UpdateDownloader for OfflineDownloader {
     fn download(&self, _request: &UpdateRequest) -> Result<DownloadedBinary> {
         Ok(DownloadedBinary::Unavailable(
-            "running from a local development binary".to_string(),
+            UpdateUnavailable::LocalDevelopment,
         ))
     }
 }
@@ -261,22 +291,22 @@ impl UpdateDownloader for OfflineDownloader {
 /// Downloader used for install methods Maestro should not mutate directly.
 #[derive(Debug)]
 pub struct UnavailableDownloader {
-    reason: &'static str,
+    reason: UpdateUnavailable,
 }
 
 impl UnavailableDownloader {
-    fn new(reason: &'static str) -> Self {
+    fn new(reason: UpdateUnavailable) -> Self {
         Self { reason }
     }
 }
 
 impl UpdateDownloader for UnavailableDownloader {
     fn check(&self, _request: &UpdateRequest) -> Result<UpdateCheck> {
-        Ok(UpdateCheck::Unavailable(self.reason.to_string()))
+        Ok(UpdateCheck::Unavailable(self.reason.clone()))
     }
 
     fn download(&self, _request: &UpdateRequest) -> Result<DownloadedBinary> {
-        Ok(DownloadedBinary::Unavailable(self.reason.to_string()))
+        Ok(DownloadedBinary::Unavailable(self.reason.clone()))
     }
 }
 
@@ -359,9 +389,7 @@ pub fn run_update(options: &UpdateOptions<'_>) -> Result<UpdateOutcome> {
             )
         }
         InstallMethod::Homebrew => {
-            let downloader = UnavailableDownloader::new(
-                "for this install: installed with Homebrew. Run `brew upgrade maestro`",
-            );
+            let downloader = UnavailableDownloader::new(UpdateUnavailable::Homebrew);
             run_update_with_seams(
                 options,
                 &downloader,
@@ -370,9 +398,7 @@ pub fn run_update(options: &UpdateOptions<'_>) -> Result<UpdateOutcome> {
             )
         }
         InstallMethod::Cargo => {
-            let downloader = UnavailableDownloader::new(
-                "for this install: installed with Cargo. Run `cargo install --locked --force maestro`",
-            );
+            let downloader = UnavailableDownloader::new(UpdateUnavailable::Cargo);
             run_update_with_seams(
                 options,
                 &downloader,
@@ -381,9 +407,7 @@ pub fn run_update(options: &UpdateOptions<'_>) -> Result<UpdateOutcome> {
             )
         }
         InstallMethod::LocalDevelopment => {
-            let downloader = UnavailableDownloader::new(
-                "for this build: running from a local development binary",
-            );
+            let downloader = UnavailableDownloader::new(UpdateUnavailable::LocalDevelopment);
             run_update_with_seams(
                 options,
                 &downloader,
@@ -421,11 +445,11 @@ impl GitHubCurlDownloader {
         ))
     }
 
-    fn latest_release(&self) -> Result<Option<GithubRelease>> {
+    fn latest_release(&self, check_only: bool) -> Result<Option<GithubRelease>> {
         let Some(url) = self.release_url() else {
             return Ok(None);
         };
-        let response = curl_bytes(&url, None)?;
+        let response = curl_bytes(&url, None, check_only)?;
         let release: GithubRelease = serde_json::from_slice(&response)
             .with_context(|| format!("failed to parse GitHub release response from {url}"))?;
         Ok(Some(release))
@@ -484,9 +508,9 @@ pub fn detect_install_method(executable_path: &Path) -> InstallMethod {
 
 impl UpdateDownloader for GitHubCurlDownloader {
     fn check(&self, request: &UpdateRequest) -> Result<UpdateCheck> {
-        let Some(release) = self.latest_release()? else {
+        let Some(release) = self.latest_release(request.check_only)? else {
             return Ok(UpdateCheck::Unavailable(
-                "running from a local development binary".to_string(),
+                UpdateUnavailable::LocalDevelopment,
             ));
         };
         let asset = self.selected_asset(&release);
@@ -496,10 +520,11 @@ impl UpdateDownloader for GitHubCurlDownloader {
             return Ok(UpdateCheck::UpToDate(release_info));
         }
         if asset.is_none() {
-            return Ok(UpdateCheck::Unavailable(format!(
-                "no GitHub release asset matches {}",
-                platform_asset_hint()
-            )));
+            return Ok(UpdateCheck::Unavailable(
+                UpdateUnavailable::NoPlatformAsset {
+                    hint: platform_asset_hint(),
+                },
+            ));
         }
         Ok(UpdateCheck::Available {
             release: release_info,
@@ -508,9 +533,9 @@ impl UpdateDownloader for GitHubCurlDownloader {
     }
 
     fn download(&self, request: &UpdateRequest) -> Result<DownloadedBinary> {
-        let Some(release) = self.latest_release()? else {
+        let Some(release) = self.latest_release(request.check_only)? else {
             return Ok(DownloadedBinary::Unavailable(
-                "running from a local development binary".to_string(),
+                UpdateUnavailable::LocalDevelopment,
             ));
         };
         let asset = self.selected_asset(&release).ok_or_else(|| {
@@ -530,13 +555,13 @@ impl UpdateDownloader for GitHubCurlDownloader {
         fs::create_dir_all(&request.work_dir)
             .with_context(|| format!("failed to create {}", request.work_dir.display()))?;
         let candidate = request.work_dir.join("maestro-update-candidate");
-        if let Err(error) = curl_download(&asset.browser_download_url, &candidate) {
+        if curl_download(&asset.browser_download_url, &candidate).is_err() {
             let downloaded = fs::metadata(&candidate).ok().map(|metadata| metadata.len());
             return Err(UpdateFailure::download(
                 Some(release_info),
                 downloaded,
                 Some(asset.size),
-                download_error_message(error),
+                "download interrupted",
             )
             .into());
         }
@@ -558,14 +583,14 @@ pub fn run_update_with_seams(
     verifier: &dyn ChecksumVerifier,
     replacer: &dyn BinaryReplacer,
 ) -> Result<UpdateOutcome> {
-    let schema_mismatches = detect_schema_mismatches(options.paths)?;
     if options.check_only {
         return Ok(UpdateOutcome {
             binary_status: check_binary_update(options, downloader)?,
             skill_backups: Vec::new(),
-            schema_mismatches,
+            schema_mismatches: Vec::new(),
         });
     }
+    let schema_mismatches = detect_schema_mismatches(options.paths)?;
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
     let extract_report = match extract_bundled_skills(
         options.paths,
@@ -605,7 +630,7 @@ fn update_request(options: &UpdateOptions<'_>) -> UpdateRequest {
         work_dir: options.paths.maestro_dir().join("update"),
         current_version: options.current_version.to_string(),
         force: options.force,
-        verbose: options.verbose,
+        check_only: options.check_only,
     }
 }
 
@@ -668,7 +693,7 @@ enum PreparedBinary {
         release: ReleaseInfo,
     },
     Skipped {
-        reason: String,
+        reason: UpdateUnavailable,
     },
     Candidate {
         path: PathBuf,
@@ -901,7 +926,7 @@ fn release_repo() -> String {
     DEFAULT_RELEASE_REPO.to_string()
 }
 
-fn curl_bytes(url: &str, output: Option<&Path>) -> Result<Vec<u8>> {
+fn curl_bytes(url: &str, output: Option<&Path>, fast_timeout: bool) -> Result<Vec<u8>> {
     let mut command = Command::new("curl");
     command.args([
         "--fail",
@@ -913,6 +938,11 @@ fn curl_bytes(url: &str, output: Option<&Path>) -> Result<Vec<u8>> {
         "--header",
         "User-Agent: maestro",
     ]);
+    if fast_timeout {
+        command.args(["--connect-timeout", "3", "--max-time", "8"]);
+    } else {
+        command.args(["--connect-timeout", "15", "--max-time", "600"]);
+    }
     if let Some(output) = output {
         command.arg("--output");
         command.arg(output);
@@ -929,33 +959,34 @@ fn curl_bytes(url: &str, output: Option<&Path>) -> Result<Vec<u8>> {
 }
 
 fn curl_download(url: &str, output: &Path) -> Result<()> {
-    curl_bytes(url, Some(output)).map(|_| ())
-}
-
-fn download_error_message(_error: anyhow::Error) -> String {
-    "download interrupted".to_string()
+    curl_bytes(url, Some(output), false).map(|_| ())
 }
 
 fn select_platform_asset(assets: &[GithubAsset]) -> Option<&GithubAsset> {
     let os_aliases = os_aliases();
     let arch_aliases = arch_aliases();
-    assets
-        .iter()
-        .filter(|asset| asset.name.to_ascii_lowercase().contains("maestro"))
-        .filter(|asset| !is_checksum_asset(&asset.name))
-        .find(|asset| {
-            let name = asset.name.to_ascii_lowercase();
-            os_aliases.iter().any(|alias| name.contains(alias.as_str()))
-                && arch_aliases
-                    .iter()
-                    .any(|alias| name.contains(alias.as_str()))
-        })
-        .or_else(|| {
-            assets
-                .iter()
-                .filter(|asset| !is_checksum_asset(&asset.name))
-                .find(|asset| asset.name == "maestro")
-        })
+    let mut fallback = None;
+
+    for asset in assets {
+        if is_checksum_asset(&asset.name) {
+            continue;
+        }
+        if asset.name == "maestro" && fallback.is_none() {
+            fallback = Some(asset);
+        }
+
+        let name = asset.name.to_ascii_lowercase();
+        if !name.contains("maestro") {
+            continue;
+        }
+        if os_aliases.iter().any(|alias| name.contains(*alias))
+            && arch_aliases.iter().any(|alias| name.contains(*alias))
+        {
+            return Some(asset);
+        }
+    }
+
+    fallback
 }
 
 fn is_checksum_asset(name: &str) -> bool {
@@ -974,25 +1005,21 @@ fn platform_asset_hint() -> String {
     )
 }
 
-fn os_aliases() -> Vec<String> {
+fn os_aliases() -> &'static [&'static str] {
     match std::env::consts::OS {
-        "macos" => vec![
-            "macos".to_string(),
-            "darwin".to_string(),
-            "apple".to_string(),
-        ],
-        "linux" => vec!["linux".to_string()],
-        "windows" => vec!["windows".to_string(), "win".to_string()],
-        other => vec![other.to_string()],
+        "macos" => &["macos", "darwin", "apple"],
+        "linux" => &["linux"],
+        "windows" => &["windows", "win"],
+        _ => &[],
     }
 }
 
-fn arch_aliases() -> Vec<String> {
+fn arch_aliases() -> &'static [&'static str] {
     match std::env::consts::ARCH {
-        "x86_64" => vec!["x86_64".to_string(), "amd64".to_string()],
-        "aarch64" => vec!["aarch64".to_string(), "arm64".to_string()],
-        "arm" => vec!["arm".to_string()],
-        other => vec![other.to_string()],
+        "x86_64" => &["x86_64", "amd64"],
+        "aarch64" => &["aarch64", "arm64"],
+        "arm" => &["arm"],
+        _ => &[],
     }
 }
 
@@ -1005,7 +1032,7 @@ fn release_versions_match(release_version: &str, current_version: &str) -> bool 
 }
 
 fn relative_age_from_rfc3339(value: &str) -> Option<String> {
-    let released = parse_rfc3339_utc(value)?;
+    let released = (parse_utc_timestamp(value)?.nanos_since_epoch / 1_000_000_000) as i64;
     let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs() as i64;
     let elapsed = now.saturating_sub(released);
     if elapsed < 60 {
@@ -1020,50 +1047,11 @@ fn relative_age_from_rfc3339(value: &str) -> Option<String> {
     Some(format!("{}d ago", elapsed / 86_400))
 }
 
-fn parse_rfc3339_utc(value: &str) -> Option<i64> {
-    let value = value.strip_suffix('Z')?;
-    let (date, time) = value.split_once('T')?;
-    let mut date_parts = date.split('-');
-    let year = date_parts.next()?.parse::<i32>().ok()?;
-    let month = date_parts.next()?.parse::<u32>().ok()?;
-    let day = date_parts.next()?.parse::<u32>().ok()?;
-    if date_parts.next().is_some() {
-        return None;
-    }
-    let time = time.split('.').next().unwrap_or(time);
-    let mut time_parts = time.split(':');
-    let hour = time_parts.next()?.parse::<u32>().ok()?;
-    let minute = time_parts.next()?.parse::<u32>().ok()?;
-    let second = time_parts.next()?.parse::<u32>().ok()?;
-    if time_parts.next().is_some() {
-        return None;
-    }
-    Some(
-        days_from_civil(year, month, day)? * 86_400
-            + hour as i64 * 3_600
-            + minute as i64 * 60
-            + second as i64,
-    )
-}
-
-fn days_from_civil(year: i32, month: u32, day: u32) -> Option<i64> {
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return None;
-    }
-    let year = year - i32::from(month <= 2);
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let yoe = year - era * 400;
-    let month = month as i32;
-    let doy = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day as i32 - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    Some((era * 146_097 + doe - 719_468) as i64)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        detect_install_method, parse_rfc3339_utc, release_versions_match, select_platform_asset,
-        GithubAsset, InstallMethod,
+        detect_install_method, release_versions_match, select_platform_asset, GithubAsset,
+        InstallMethod,
     };
 
     #[test]
@@ -1109,8 +1097,7 @@ mod tests {
 
     #[test]
     fn parses_release_timestamp_and_version_match() {
-        assert_eq!(parse_rfc3339_utc("1970-01-01T00:00:00Z"), Some(0));
-        assert_eq!(parse_rfc3339_utc("1970-01-01T00:00:01.000Z"), Some(1));
+        assert!(super::relative_age_from_rfc3339("1970-01-01T00:00:00Z").is_some());
         assert!(release_versions_match("v0.1.0", "0.1.0"));
     }
 
