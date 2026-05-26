@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::commands::{McpArgs, McpCommand};
+use crate::interfaces::cli::{McpArgs, McpCommand};
 use crate::mcp::server;
 use crate::mcp::tools::tool_definitions;
 

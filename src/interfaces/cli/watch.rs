@@ -1,7 +1,7 @@
 use anyhow::Result;
 
-use crate::commands::{WatchArgs, WatchCommand};
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::interfaces::cli::{WatchArgs, WatchCommand};
 use crate::task::doctor::load_task_records;
 use crate::tui::task_list_watch;
 

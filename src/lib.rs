@@ -1,4 +1,3 @@
-pub mod commands;
 pub mod decisions;
 pub mod domain;
 pub mod evidence;
@@ -21,3 +20,4 @@ pub mod update;
 pub mod verification;
 
 pub use foundation::core;
+pub use interfaces::cli as commands;

@@ -1,8 +1,8 @@
 use anyhow::Result;
 
-use crate::commands::{HookArgs, HookCommand};
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::hooks::record;
+use crate::interfaces::cli::{HookArgs, HookCommand};
 
 pub fn run(args: HookArgs) -> Result<()> {
     match args.command {

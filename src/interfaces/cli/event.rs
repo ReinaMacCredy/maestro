@@ -5,10 +5,10 @@ use std::io::Write;
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
-use crate::commands::{EventArgs, EventCommand};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::time::utc_now_timestamp;
+use crate::interfaces::cli::{EventArgs, EventCommand};
 use crate::task::doctor::load_task_records;
 use crate::task::lookup::load_task_with_snapshot;
 use crate::task::template::TaskState;

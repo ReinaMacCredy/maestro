@@ -1,9 +1,6 @@
-//! Transitional interface module root for external entrypoints.
-//!
-//! These are compatibility aliases over the current flat modules. Later phases
-//! move implementations under this folder while preserving the legacy paths.
+//! Interface module root for external entrypoints.
 
-pub use crate::commands as cli;
+pub mod cli;
 pub use crate::hooks;
 pub use crate::mcp;
 pub use crate::shell;

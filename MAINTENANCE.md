@@ -111,6 +111,12 @@ New production imports should prefer `crate::foundation::core`; keep
 `crate::core` and `maestro::core` usage to compatibility checks or transition
 work until the legacy path is removed.
 
+CLI adapter files live under `src/interfaces/cli`, and `crate::commands`
+remains a compatibility re-export. New production references should prefer
+`crate::interfaces::cli`; current CLI imports into legacy domain, operation,
+and interface roots are temporary allowances until those facades move in later
+phases.
+
 When adding a folder inside a domain or operations module:
 
 - Keep the parent `mod.rs` as the caller-facing facade.

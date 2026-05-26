@@ -1,7 +1,7 @@
 use anyhow::Result;
 
-use crate::commands::{MetricsArgs, MetricsCommand};
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::interfaces::cli::{MetricsArgs, MetricsCommand};
 use crate::metrics::summary::{render_summary, summarize};
 
 /// Execute `maestro metrics`.

@@ -5,10 +5,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
-use crate::commands::{TaskArgs, TaskCommand};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::safe_write::write_string_atomic;
+use crate::interfaces::cli::{TaskArgs, TaskCommand};
 use crate::task::blockers::{add_blocker, has_unresolved_blockers, resolve_blocker};
 use crate::task::display::{render_task, render_task_list};
 use crate::task::doctor::{check_blocker_graph, load_task_records, render_report};

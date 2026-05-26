@@ -4,11 +4,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 
-use crate::commands::UpdateArgs;
 use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::safe_write::write_string_atomic;
+use crate::interfaces::cli::UpdateArgs;
 use crate::update::{
     detect_install_method, run_update, BinaryStatus, InstallMethod, ReleaseInfo, UpdateFailure,
     UpdateFailurePhase, UpdateOptions, UpdateOutcome,

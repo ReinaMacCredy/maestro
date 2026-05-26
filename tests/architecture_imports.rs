@@ -31,7 +31,6 @@ const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
 ];
 
 const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[
-    ("src/interfaces/mod.rs", "crate::commands"),
     ("src/interfaces/mod.rs", "crate::hooks"),
     ("src/interfaces/mod.rs", "crate::mcp"),
     ("src/interfaces/mod.rs", "crate::shell"),
@@ -40,6 +39,41 @@ const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[
 
 const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
 const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
+const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
+    ("src/interfaces/cli/decision.rs", &["decisions"]),
+    (
+        "src/interfaces/cli/doctor.rs",
+        &["feature", "harness", "task"],
+    ),
+    ("src/interfaces/cli/event.rs", &["task"]),
+    ("src/interfaces/cli/feature.rs", &["feature"]),
+    ("src/interfaces/cli/hook.rs", &["hooks"]),
+    ("src/interfaces/cli/improve.rs", &["harness", "improver"]),
+    ("src/interfaces/cli/init.rs", &["harness", "skills"]),
+    ("src/interfaces/cli/install.rs", &["install"]),
+    ("src/interfaces/cli/mcp.rs", &["mcp"]),
+    ("src/interfaces/cli/metrics.rs", &["metrics"]),
+    ("src/interfaces/cli/migrate.rs", &["migrate"]),
+    (
+        "src/interfaces/cli/query.rs",
+        &[
+            "decisions",
+            "feature",
+            "harness",
+            "metrics",
+            "task",
+            "verification",
+        ],
+    ),
+    ("src/interfaces/cli/shell_init.rs", &["shell"]),
+    (
+        "src/interfaces/cli/task.rs",
+        &["task", "tui", "verification"],
+    ),
+    ("src/interfaces/cli/uninstall.rs", &["install"]),
+    ("src/interfaces/cli/update.rs", &["update"]),
+    ("src/interfaces/cli/watch.rs", &["task", "tui"]),
+];
 
 const DOMAIN_FACADES: &[&str] = &[
     "decisions",
@@ -151,15 +185,10 @@ fn transitional_public_surfaces_match_phase_policy() {
         ],
     );
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
-    assert_reexports(
+    assert_public_modules(
         Path::new("src/interfaces/mod.rs"),
-        &[
-            "crate::commands as cli",
-            "crate::hooks",
-            "crate::mcp",
-            "crate::shell",
-            "crate::tui",
-        ],
+        &["cli"],
+        &["crate::hooks", "crate::mcp", "crate::shell", "crate::tui"],
     );
     assert_reexports(
         Path::new("src/operations/mod.rs"),
@@ -174,17 +203,20 @@ fn transitional_public_surfaces_match_phase_policy() {
 
 fn lib_exposes_crate_root(lib: &str, root: &str) -> bool {
     let public_module = format!("pub mod {root};");
-    let public_reexport = format!("pub use foundation::{root};");
+    let foundation_reexport = format!("pub use foundation::{root};");
+    let interfaces_cli_reexport = format!("pub use interfaces::cli as {root};");
 
     lib.lines().map(str::trim).any(|line| {
         line == public_module
-            || line == public_reexport
+            || line == foundation_reexport
+            || line == interfaces_cli_reexport
             || line == format!("pub use crate::foundation::{root};")
+            || line == format!("pub use crate::interfaces::cli as {root};")
     })
 }
 
 #[test]
-fn moved_interface_sources_do_not_import_protected_domain_internals() {
+fn moved_interface_sources_respect_facade_and_transition_policy() {
     let mut violations = Vec::new();
 
     for root in INTERFACE_SCAN_ROOTS {
@@ -192,6 +224,10 @@ fn moved_interface_sources_do_not_import_protected_domain_internals() {
             let source = read_source_file(&file);
             let non_import_source = source_without_import_statements(&source);
             if let Some(path) = protected_interface_path_reference(&non_import_source) {
+                if is_allowed_transitional_interface_path_reference(&file, &path) {
+                    continue;
+                }
+
                 violations.push(format!(
                     "{} references protected implementation path {path}",
                     file.display()
@@ -199,7 +235,9 @@ fn moved_interface_sources_do_not_import_protected_domain_internals() {
             }
 
             for (line_number, import_statement) in crate_import_statements(&source) {
-                if is_allowed_compatibility_reexport(&file, &import_statement) {
+                if is_allowed_compatibility_reexport(&file, &import_statement)
+                    || is_allowed_transitional_interface_import(&file, &import_statement)
+                {
                     continue;
                 }
 
@@ -216,7 +254,7 @@ fn moved_interface_sources_do_not_import_protected_domain_internals() {
 
     assert!(
         violations.is_empty(),
-        "interface code must call domain/operation facades directly and avoid legacy/deep imports or facade aliases:\n{}",
+        "interface code must call facades directly except explicit CLI transitional allowances:\n{}",
         violations.join("\n")
     );
 }
@@ -259,8 +297,8 @@ fn production_sources_prefer_foundation_core_imports() {
 }
 
 fn protected_interface_import(line: &str) -> Option<String> {
-    if is_relative_import_statement(line) {
-        return Some("relative import under src/interfaces".to_string());
+    if is_relative_import_statement(line) && contains_relative_deep_reference(line) {
+        return Some("relative deep path under src/interfaces".to_string());
     }
 
     for facade in DOMAIN_FACADES {
@@ -291,6 +329,28 @@ fn protected_interface_import(line: &str) -> Option<String> {
     }
 
     None
+}
+
+fn is_allowed_transitional_interface_import(file: &Path, line: &str) -> bool {
+    cli_transitional_legacy_roots(file).is_some_and(|roots| {
+        roots.iter().any(|root| {
+            contains_legacy_root_import(line, root) || contains_legacy_deep_import(line, root)
+        })
+    })
+}
+
+fn is_allowed_transitional_interface_path_reference(file: &Path, path: &str) -> bool {
+    cli_transitional_legacy_roots(file).is_some_and(|roots| {
+        roots
+            .iter()
+            .any(|root| path == format!("legacy crate::{root}::"))
+    })
+}
+
+fn cli_transitional_legacy_roots(file: &Path) -> Option<&'static [&'static str]> {
+    CLI_TRANSITIONAL_LEGACY_IMPORTS
+        .iter()
+        .find_map(|(allowed_file, roots)| (file == Path::new(allowed_file)).then_some(*roots))
 }
 
 fn assert_reexports(path: &Path, expected_roots: &[&str]) {
@@ -384,6 +444,7 @@ fn assert_no_public_module_items(path: &Path, source: &str) {
 
 fn protected_interface_path_reference(source: &str) -> Option<String> {
     let source = code_for_path_scan(source);
+    let source = source_without_pub_mod_statements(&source);
 
     if contains_relative_deep_reference(&source) {
         return Some("relative deep path under src/interfaces".to_string());
@@ -402,7 +463,7 @@ fn protected_interface_path_reference(source: &str) -> Option<String> {
     }
 
     for legacy_root in LEGACY_COMPATIBILITY_ROOTS {
-        if contains_legacy_deep_import(&source, legacy_root) {
+        if contains_legacy_deep_path_reference(&source, legacy_root) {
             return Some(format!("legacy crate::{legacy_root}::"));
         }
     }
@@ -567,6 +628,10 @@ fn contains_legacy_deep_import(line: &str, legacy_root: &str) -> bool {
         || line.contains(&format!("{{{legacy_root}::"))
         || line.contains(&format!(" {legacy_root}::"))
         || line.contains(&format!(",{legacy_root}::"))
+}
+
+fn contains_legacy_deep_path_reference(source: &str, legacy_root: &str) -> bool {
+    source.contains(&format!("crate::{legacy_root}::"))
 }
 
 fn contains_namespaced_root_alias(line: &str, namespace: &str, facade: &str) -> bool {
@@ -772,6 +837,14 @@ fn source_without_import_statements(source: &str) -> String {
     output
 }
 
+fn source_without_pub_mod_statements(source: &str) -> String {
+    source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("pub mod "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn is_allowed_compatibility_reexport(file: &Path, line: &str) -> bool {
     INTERFACE_COMPATIBILITY_REEXPORTS
         .iter()
@@ -830,8 +903,9 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
     );
     assert_eq!(
         protected_interface_import("use super::super::task::template::TaskRecord;"),
-        Some("relative import under src/interfaces".to_string())
+        Some("relative deep path under src/interfaces".to_string())
     );
+    assert_eq!(protected_interface_import("use super::{render};"), None);
     assert_eq!(
         protected_interface_path_reference(
             "fn render() { crate::domain::task::template::render_task_body(); }"
@@ -859,6 +933,14 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
         Some("operations::metrics::summary".to_string())
     );
     assert_eq!(
+        protected_interface_path_reference("fn run() { feature::run(args); }"),
+        None
+    );
+    assert_eq!(
+        protected_interface_path_reference("fn run() { crate::feature::query::load(); }"),
+        Some("legacy crate::feature::".to_string())
+    );
+    assert_eq!(
         protected_interface_path_reference(
             "fn render() { super::super::super::super::task::template::render_task_body(); }"
         ),
@@ -880,7 +962,7 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
     );
     assert!(is_allowed_compatibility_reexport(
         Path::new("src/interfaces/mod.rs"),
-        "pub use crate::commands as cli;"
+        "pub use crate::hooks;"
     ));
 }
 

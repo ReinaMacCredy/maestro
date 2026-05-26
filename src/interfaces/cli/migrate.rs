@@ -1,7 +1,7 @@
 use anyhow::Result;
 
-use crate::commands::MigrateArgs;
 use crate::foundation::core::paths::{discover_repo_root, discover_repo_root_from, MaestroPaths};
+use crate::interfaces::cli::MigrateArgs;
 use crate::migrate::v0_106_to_v0_8;
 
 /// Execute `maestro migrate`.

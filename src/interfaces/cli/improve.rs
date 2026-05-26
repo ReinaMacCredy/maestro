@@ -1,9 +1,9 @@
 use anyhow::Result;
 
-use crate::commands::{ImproveArgs, ImproveCommand};
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::harness::schema::{BacklogConfig, BacklogItem};
 use crate::improver::propose;
+use crate::interfaces::cli::{ImproveArgs, ImproveCommand};
 
 /// Execute `maestro improve`.
 pub fn run(args: ImproveArgs) -> Result<()> {

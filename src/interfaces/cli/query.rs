@@ -6,13 +6,13 @@ use std::path::Path;
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 
-use crate::commands::{QueryArgs, QueryCommand};
 use crate::decisions::query::{decision_entries, decision_id};
 use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION};
 use crate::harness::schema::BacklogConfig;
+use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::metrics::friction::{event_kind, event_text, looks_like_correction};
 use crate::task::blockers::has_unresolved_blockers;
 use crate::task::doctor::load_task_entries;

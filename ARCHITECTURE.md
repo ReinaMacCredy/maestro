@@ -458,7 +458,7 @@ Current task behavior is split across several modules:
   checks.
 - `src/task/lookup.rs`, `src/task/display.rs`, and `src/task/doctor.rs` own
   lookup, rendering, and blocker-graph validation.
-- `src/commands/task.rs` routes CLI verbs, but also still owns some aggregate
+- `src/interfaces/cli/task.rs` routes CLI verbs, but also still owns some aggregate
   details such as acceptance locking, next task id selection, blocker id
   selection, blocker descriptor construction, and command-specific state-history
   entries.
@@ -530,7 +530,7 @@ The current lifecycle statuses are:
 - `shipped`
 - `cancelled`
 
-The rough edge is that `src/commands/feature.rs` currently owns more than CLI
+The rough edge is that `src/interfaces/cli/feature.rs` currently owns more than CLI
 adapter work. It loads and saves the registry, creates feature records, changes
 feature status, formats status labels, and computes rollups for display. Those
 rules belong behind the Feature aggregate interface.
@@ -590,7 +590,7 @@ Current decision behavior is split across:
 - `src/decisions/template.rs`: decision file names and Markdown template.
 - `src/decisions/query.rs`: decision file discovery, id resolution, sequence
   number parsing, and path traversal/symlink avoidance.
-- `src/commands/decision.rs`: CLI routing, decision creation, list, show, next
+- `src/interfaces/cli/decision.rs`: CLI routing, decision creation, list, show, next
   decision number calculation, and output.
 
 The current Markdown template contains:
@@ -798,9 +798,9 @@ Current proof behavior is split across:
   derivation, and user-facing proof status rendering.
 - `src/verification/events.rs`: managed discovery of Run `events.jsonl` files
   for proof evidence.
-- `src/commands/task.rs`: CLI adapter for `maestro task verify` and the root
+- `src/interfaces/cli/task.rs`: CLI adapter for `maestro task verify` and the root
   `maestro verify` alias.
-- `src/commands/query.rs`: proof status and matrix read paths.
+- `src/interfaces/cli/query.rs`: proof status and matrix read paths.
 
 Proof reads several other concepts:
 
@@ -931,9 +931,9 @@ Current install behavior is split across:
 - `src/install/hooks.rs`: agent-specific hook JSON for Claude and Codex.
 - `src/skills/symlink.rs`: expected agent skill symlinks, destination
   validation, symlink creation, and owned symlink removal.
-- `src/commands/install.rs`: CLI adapter for install, lock persistence before
+- `src/interfaces/cli/install.rs`: CLI adapter for install, lock persistence before
   mirror writes, mirror rollback on failure, and Codex hook approval reminder.
-- `src/commands/uninstall.rs`: CLI adapter for uninstall and shared-file
+- `src/interfaces/cli/uninstall.rs`: CLI adapter for uninstall and shared-file
   preservation when multiple agents own the same path.
 
 Install currently creates or updates these kinds of files:
@@ -1066,7 +1066,7 @@ Current migration behavior includes:
 - converting old `ADR-*` files into current decision file names.
 - converting old verify policy and workflow defaults into `harness.yml`.
 
-The CLI adapter in `src/commands/migrate.rs` selects the repo, builds the plan,
+The CLI adapter in `src/interfaces/cli/migrate.rs` selects the repo, builds the plan,
 prints the check output, or applies the plan.
 
 The rough edge is that Migration currently builds some target artifacts
@@ -1174,6 +1174,13 @@ The public crate surface currently exposes these top-level source modules from
 root remains as a compatibility re-export while callers migrate to
 `foundation::core`.
 
+`interfaces/cli` now holds the CLI adapter implementation. The legacy
+`commands` crate root remains as a compatibility re-export while callers
+migrate to `interfaces::cli`. Because most domain facades are still
+transitional aliases, `tests/architecture_imports.rs` explicitly allows current
+CLI adapter imports into legacy domain/operation/interface roots until the
+owning modules move in later phases.
+
 The current source tree already has useful domain-oriented modules, but the
 seams are uneven. Some modules are deep enough to own a meaningful contract;
 others are adapters or orchestration modules that still know too much about
@@ -1184,8 +1191,8 @@ Current module groups:
 - **Foundation**: `foundation/core` owns shared infrastructure such as paths,
   safe writes, schema constants, hashing, diffs, backups, git helpers, slugging,
   and time.
-- **CLI adapter**: `commands` owns argument parsing and command routing, but
-  several command files still coordinate domain details directly.
+- **CLI adapter**: `interfaces/cli` owns argument parsing and command routing,
+  but several command files still coordinate domain details directly.
 - **Artifact/domain modules**: `harness`, `task`, `feature`, `decisions`,
   `verification`, `hooks`, `evidence`, `install`, `skills`, `improver`,
   `metrics`, `migrate`, and `update` own or coordinate repo-local artifacts.
@@ -1357,7 +1364,7 @@ src/
   lib.rs                   # public crate module surface
 
   interfaces/
-    cli/                   # current commands/*
+    cli/                   # moved from legacy commands/*
       init.rs
       task.rs
       feature.rs
@@ -1966,12 +1973,12 @@ Current runtime flow summary:
     Skill content.
 
 - **Task lifecycle verbs**
-  - `commands/task.rs` discovers the repo root, ensures `.maestro/tasks`, and
+  - `interfaces/cli/task.rs` discovers the repo root, ensures `.maestro/tasks`, and
     routes task subcommands.
   - Normal transitions call `task::lifecycle::transition`.
   - Blocker verbs call `task::blockers`.
   - Task creation calls task artifact writers.
-  - Rough edge: `commands/task.rs` still owns some aggregate details such as
+  - Rough edge: `interfaces/cli/task.rs` still owns some aggregate details such as
     acceptance locking, task id allocation, blocker id allocation, and some
     state-history entries.
 
@@ -2111,7 +2118,7 @@ Current test types:
     `tests/core_managed_blocks.rs`, `tests/core_paths_fs.rs`,
     `tests/core_schema_error.rs`, `tests/core_backup_diff_git.rs`,
     `tests/harness_templates.rs`, `tests/skills_extract.rs`, and module-local
-    tests in `src/update/mod.rs`, `src/commands/update.rs`,
+    tests in `src/update/mod.rs`, `src/interfaces/cli/update.rs`,
     `src/tui/task_list_watch.rs`, and `src/install/mirrors.rs`.
 
 - **Command integration tests**
@@ -2250,14 +2257,14 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 
 | Priority | Seam | Files | Current friction |
 | --- | --- | --- | --- |
-| P0 | Task aggregate boundary | `src/commands/task.rs`, `src/task/template.rs`, `src/task/lifecycle.rs`, `src/task/blockers.rs`, `src/task/doctor.rs` | The CLI adapter still owns task id allocation, acceptance locking, blocker id allocation, and several state-history writes. |
+| P0 | Task aggregate boundary | `src/interfaces/cli/task.rs`, `src/task/template.rs`, `src/task/lifecycle.rs`, `src/task/blockers.rs`, `src/task/doctor.rs` | The CLI adapter still owns task id allocation, acceptance locking, blocker id allocation, and several state-history writes. |
 | P0 | Proof result to Task lifecycle | `src/verification/verify_task.rs`, `src/task/template.rs`, `src/task/lifecycle.rs` | Proof writes `verification.json` and also mutates Task state, verification binding, `updated_at`, and state history directly. |
 | P1 | Run aggregate boundary | `src/hooks/record.rs`, `src/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/verification/events.rs`, `src/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
-| P1 | Feature aggregate boundary | `src/commands/feature.rs`, `src/feature/schema.rs`, `src/feature/query.rs` | Feature schema and rollups live in `feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
-| P1 | Decision aggregate boundary | `src/commands/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
+| P1 | Feature aggregate boundary | `src/interfaces/cli/feature.rs`, `src/feature/schema.rs`, `src/feature/query.rs` | Feature schema and rollups live in `feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
+| P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
 | P1 | Install and Skills ownership | `src/install/*`, `src/skills/symlink.rs`, `src/skills/extract.rs` | Install owns mirrors and locks while Skills owns skill file mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
 | P2 | Migration target writers | `src/migrate/v0_106_to_v0_8.rs`, target domain modules | Migration intentionally writes many target artifacts directly. That is acceptable as an explicit migration exception, but it can drift from target domain write rules. |
-| P2 | Projection and read-model access | `src/commands/query.rs`, `src/mcp/tools.rs`, `src/tui/*`, `src/metrics/summary.rs`, `src/commands/watch.rs`, `src/commands/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
+| P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/mcp/tools.rs`, `src/tui/*`, `src/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
 
 ### Target State
 
