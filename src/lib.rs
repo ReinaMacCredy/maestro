@@ -12,7 +12,6 @@ pub mod migrate;
 pub mod operations;
 pub mod skills;
 pub mod task;
-pub mod tui;
 pub mod update;
 pub mod verification;
 
@@ -21,3 +20,4 @@ pub use interfaces::cli as commands;
 pub use interfaces::hooks;
 pub use interfaces::mcp;
 pub use interfaces::shell;
+pub use interfaces::tui;

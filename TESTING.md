@@ -89,7 +89,7 @@ has callers or user data safety impact.
 | Update | `tests/update_integration.rs`, module-local tests in `src/update/mod.rs` and `src/interfaces/cli/update.rs` | Skills extraction tests, Harness non-mutation tests, and schema/migration tests when update touches bundled skills, compatibility checks, or schema drift reporting. |
 | Metrics, Improve, MCP | `tests/metrics_improve_integration.rs` | Task, Run, Proof, Feature, and Harness Backlog contract tests when source read models or backlog proposal refresh changes. |
 | Shell | `tests/shell_init_integration.rs` | Install tests if shell output starts depending on install state. |
-| TUI and Watch | Module-local tests in `src/tui/task_list_watch.rs` plus command/read-model tests for the source data | Task, Feature, Proof, and Run tests when displayed fields or freshness logic change. |
+| TUI and Watch | Module-local tests in `src/interfaces/tui/task_list_watch.rs` plus command/read-model tests for the source data | Task, Feature, Proof, and Run tests when displayed fields or freshness logic change. |
 | CLI surface | `tests/cli_help.rs` and the command-specific integration test | The owning domain contract tests when CLI behavior encodes domain rules. |
 | Architecture/import boundaries | `tests/architecture_imports.rs` | Any moved module, compatibility alias removal, facade-protected import rule, or source-layout refactor. |
 | Template and resource content | Owning module tests for Harness, Skills, Shell, Decision, Task, or Install | At least one command integration test that writes or renders the resource. |

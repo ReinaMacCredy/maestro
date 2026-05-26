@@ -4,4 +4,4 @@ pub mod cli;
 pub mod hooks;
 pub mod mcp;
 pub mod shell;
-pub use crate::tui;
+pub mod tui;

@@ -30,8 +30,7 @@ const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
     "verification",
 ];
 
-const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] =
-    &[("src/interfaces/mod.rs", "crate::tui")];
+const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[];
 
 const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
 const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
@@ -59,13 +58,10 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
             "verification",
         ],
     ),
-    (
-        "src/interfaces/cli/task.rs",
-        &["task", "tui", "verification"],
-    ),
+    ("src/interfaces/cli/task.rs", &["task", "verification"]),
     ("src/interfaces/cli/uninstall.rs", &["install"]),
     ("src/interfaces/cli/update.rs", &["update"]),
-    ("src/interfaces/cli/watch.rs", &["task", "tui"]),
+    ("src/interfaces/cli/watch.rs", &["task"]),
 ];
 
 const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
@@ -73,6 +69,11 @@ const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
 
 const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
     &[("src/interfaces/hooks/record.rs", &["evidence"])];
+
+const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[(
+    "src/interfaces/tui/task_list_watch.rs",
+    &["feature", "task", "verification"],
+)];
 
 const DOMAIN_FACADES: &[&str] = &[
     "decisions",
@@ -183,6 +184,15 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _new_detect_shell: fn() -> maestro::interfaces::shell::Shell =
         maestro::interfaces::shell::Shell::detect;
 
+    let _legacy_task_watch_render: fn(
+        &maestro::foundation::core::paths::MaestroPaths,
+        &[maestro::task::template::TaskRecord],
+    ) -> anyhow::Result<String> = maestro::tui::task_list_watch::render_snapshot;
+    let _new_task_watch_render: fn(
+        &maestro::foundation::core::paths::MaestroPaths,
+        &[maestro::task::template::TaskRecord],
+    ) -> anyhow::Result<String> = maestro::interfaces::tui::task_list_watch::render_snapshot;
+
     assert_eq!(
         std::any::type_name::<maestro::interfaces::mcp::tools::ToolDefinition>(),
         std::any::type_name::<maestro::mcp::tools::ToolDefinition>()
@@ -223,8 +233,8 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
     assert_public_modules(
         Path::new("src/interfaces/mod.rs"),
-        &["cli", "hooks", "mcp", "shell"],
-        &["crate::tui"],
+        &["cli", "hooks", "mcp", "shell", "tui"],
+        &[],
     );
     assert_reexports(
         Path::new("src/operations/mod.rs"),
@@ -259,6 +269,7 @@ fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
         "hooks" => {
             line == "pub use interfaces::hooks;" || line == "pub use crate::interfaces::hooks;"
         }
+        "tui" => line == "pub use interfaces::tui;" || line == "pub use crate::interfaces::tui;",
         _ => false,
     }
 }
@@ -414,6 +425,50 @@ fn production_sources_prefer_interfaces_mcp_imports() {
     assert!(
         violations.is_empty(),
         "production code should import MCP through crate::interfaces::mcp during the migration:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn production_sources_prefer_interfaces_tui_imports() {
+    let mut violations = Vec::new();
+
+    for root in PRODUCTION_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            let source = read_source_file(&file);
+            let code = source_without_pub_mod_statements(&code_for_path_scan(&source));
+            if code.contains("crate::tui::") {
+                violations.push(format!(
+                    "{} references legacy crate::tui:: path",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_bare_path_reference(&code, "tui") {
+                violations.push(format!(
+                    "{} references legacy tui root through a bare root path",
+                    file.display()
+                ));
+                continue;
+            }
+
+            for (line_number, import_statement) in crate_import_statements(&source) {
+                if contains_legacy_root_import(&import_statement, "tui")
+                    || contains_legacy_deep_import(&import_statement, "tui")
+                {
+                    violations.push(format!(
+                        "{}:{} imports legacy crate::tui path",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should import TUI through crate::interfaces::tui during the migration:\n{}",
         violations.join("\n")
     );
 }
@@ -581,6 +636,7 @@ fn transitional_interface_legacy_roots(file: &Path) -> Option<&'static [&'static
         .iter()
         .chain(MCP_TRANSITIONAL_LEGACY_IMPORTS.iter())
         .chain(HOOKS_TRANSITIONAL_LEGACY_IMPORTS.iter())
+        .chain(TUI_TRANSITIONAL_LEGACY_IMPORTS.iter())
         .find_map(|(allowed_file, roots)| (file == Path::new(allowed_file)).then_some(*roots))
 }
 

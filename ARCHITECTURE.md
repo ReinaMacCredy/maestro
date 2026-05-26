@@ -2140,7 +2140,7 @@ Current test types:
     `tests/core_schema_error.rs`, `tests/core_backup_diff_git.rs`,
     `tests/harness_templates.rs`, `tests/skills_extract.rs`, and module-local
     tests in `src/update/mod.rs`, `src/interfaces/cli/update.rs`,
-    `src/tui/task_list_watch.rs`, and `src/install/mirrors.rs`.
+    `src/interfaces/tui/task_list_watch.rs`, and `src/install/mirrors.rs`.
 
 - **Command integration tests**
   - Run the compiled `maestro` binary and check real repo-local file effects.
@@ -2285,7 +2285,7 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 | P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
 | P1 | Install and Skills ownership | `src/install/*`, `src/skills/symlink.rs`, `src/skills/extract.rs` | Install owns mirrors and locks while Skills owns skill file mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
 | P2 | Migration target writers | `src/migrate/v0_106_to_v0_8.rs`, target domain modules | Migration intentionally writes many target artifacts directly. That is acceptable as an explicit migration exception, but it can drift from target domain write rules. |
-| P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/interfaces/mcp/tools.rs`, `src/tui/*`, `src/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
+| P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/interfaces/mcp/tools.rs`, `src/interfaces/tui/*`, `src/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
 
 ### Target State
 

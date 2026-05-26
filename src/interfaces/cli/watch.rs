@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::interfaces::cli::{WatchArgs, WatchCommand};
+use crate::interfaces::tui::task_list_watch;
 use crate::task::doctor::load_task_records;
-use crate::tui::task_list_watch;
 
 /// Execute `maestro watch`.
 pub fn run(args: WatchArgs) -> Result<()> {
