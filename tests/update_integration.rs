@@ -9,7 +9,7 @@ use maestro::core::paths::MaestroPaths;
 use maestro::skills::bundled::bundled_skills;
 use maestro::update::{
     run_update_with_seams, BinaryReplacer, ChecksumVerifier, DownloadedBinary, ReleaseInfo,
-    UpdateDownloader, UpdateOptions,
+    UpdateDownloader, UpdateOptions, UpdateRequest,
 };
 use support::TestTempDir;
 
@@ -86,6 +86,36 @@ fn unavailable_update_cleans_stale_stage_directory() {
 }
 
 #[test]
+fn update_accepts_check_verbose_and_force_flags_without_writing() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+    fs::create_dir_all(paths.maestro_dir().join("update/nested"))
+        .expect("invariant: stale update dir should be writable");
+    fs::write(
+        paths.maestro_dir().join("update/nested/candidate"),
+        "stale\n",
+    )
+    .expect("invariant: stale update file should be writable");
+
+    let update = maestro(
+        &["update", "--check", "--verbose", "--force"],
+        temp_dir.path(),
+    );
+
+    assert_success(&update);
+    let stdout = String::from_utf8_lossy(&update.stdout);
+    assert!(stdout.contains("Checking for updates..."));
+    assert!(stdout
+        .contains("Update unavailable for this build: running from a local development binary."));
+    assert!(
+        paths.maestro_dir().join("update/nested/candidate").exists(),
+        "--check must not clean or write update staging artifacts"
+    );
+}
+
+#[test]
 fn simulated_download_failure_preserves_existing_binary_file() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
@@ -104,6 +134,10 @@ fn simulated_download_failure_preserves_existing_binary_file() {
             paths: &paths,
             executable_path: &executable_path,
             backup_timestamp: "test",
+            current_version: "0.0.1779700000-gabc123",
+            check_only: false,
+            force: false,
+            verbose: false,
         },
         &FailingDownloader,
         &NoopVerifier,
@@ -152,6 +186,10 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
             paths: &paths,
             executable_path: &executable_path,
             backup_timestamp: "test",
+            current_version: "0.0.1779700000-gabc123",
+            check_only: false,
+            force: false,
+            verbose: false,
         },
         &StagingFailingDownloader,
         &NoopVerifier,
@@ -186,6 +224,10 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
             paths: &paths,
             executable_path: &executable_path,
             backup_timestamp: "test",
+            current_version: "0.0.1779700000-gabc123",
+            check_only: false,
+            force: false,
+            verbose: false,
         },
         &CandidateDownloader,
         &NoopVerifier,
@@ -234,6 +276,10 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
             paths: &paths,
             executable_path: &executable_path,
             backup_timestamp: "test",
+            current_version: "0.0.1779700000-gabc123",
+            check_only: false,
+            force: false,
+            verbose: false,
         },
         &CandidateDownloader,
         &NoopVerifier,
@@ -323,7 +369,7 @@ fn update_backup_for(paths: &MaestroPaths, skill_name: &str) -> PathBuf {
 struct FailingDownloader;
 
 impl UpdateDownloader for FailingDownloader {
-    fn download(&self, _work_dir: &Path) -> Result<DownloadedBinary> {
+    fn download(&self, _request: &UpdateRequest) -> Result<DownloadedBinary> {
         bail!("download failed")
     }
 }
@@ -331,7 +377,8 @@ impl UpdateDownloader for FailingDownloader {
 struct StagingFailingDownloader;
 
 impl UpdateDownloader for StagingFailingDownloader {
-    fn download(&self, work_dir: &Path) -> Result<DownloadedBinary> {
+    fn download(&self, request: &UpdateRequest) -> Result<DownloadedBinary> {
+        let work_dir = &request.work_dir;
         fs::create_dir_all(work_dir)?;
         fs::write(work_dir.join("partial"), "partial binary\n")?;
         bail!("download failed after staging")
@@ -341,7 +388,8 @@ impl UpdateDownloader for StagingFailingDownloader {
 struct CandidateDownloader;
 
 impl UpdateDownloader for CandidateDownloader {
-    fn download(&self, work_dir: &Path) -> Result<DownloadedBinary> {
+    fn download(&self, request: &UpdateRequest) -> Result<DownloadedBinary> {
+        let work_dir = &request.work_dir;
         fs::create_dir_all(work_dir)?;
         fs::create_dir_all(work_dir.join("scratch"))?;
         fs::write(work_dir.join("scratch/metadata"), "metadata\n")?;

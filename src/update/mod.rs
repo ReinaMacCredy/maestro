@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -30,6 +31,14 @@ pub struct UpdateOptions<'a> {
     pub executable_path: &'a Path,
     /// Backup timestamp shared by skill extraction for this update operation.
     pub backup_timestamp: &'a str,
+    /// Current binary version string.
+    pub current_version: &'a str,
+    /// Only check release status; do not download, replace, or refresh artifacts.
+    pub check_only: bool,
+    /// Reinstall even when the remote reports this version as current.
+    pub force: bool,
+    /// Request extra diagnostic output from future downloader implementations.
+    pub verbose: bool,
 }
 
 /// Result of a complete update operation.
@@ -59,6 +68,11 @@ pub struct ReleaseInfo {
 /// Binary update result.
 #[derive(Debug, Eq, PartialEq)]
 pub enum BinaryStatus {
+    /// A newer release is available, but this run did not install it.
+    UpdateAvailable {
+        release: ReleaseInfo,
+        current_version: String,
+    },
     /// The currently installed binary already matches the newest release.
     UpToDate { release: ReleaseInfo },
     /// No binary was available from the downloader seam.
@@ -84,6 +98,102 @@ pub enum DownloadedBinary {
     Unavailable(String),
 }
 
+/// Read-only update check result.
+#[derive(Debug, Eq, PartialEq)]
+pub enum UpdateCheck {
+    /// A newer release is available.
+    Available {
+        release: ReleaseInfo,
+        current_version: String,
+    },
+    /// The current binary already matches the newest release.
+    UpToDate(ReleaseInfo),
+    /// No release lookup is available for this build.
+    Unavailable(String),
+}
+
+/// Request passed to release lookup/download implementations.
+#[derive(Debug)]
+pub struct UpdateRequest {
+    /// Stage directory for downloaded update assets.
+    pub work_dir: PathBuf,
+    /// Current binary version string.
+    pub current_version: String,
+    /// Reinstall even when versions match.
+    pub force: bool,
+    /// Whether the caller requested verbose diagnostics.
+    pub verbose: bool,
+}
+
+/// Update failure phase for user-facing rollback messages.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UpdateFailurePhase {
+    /// Release asset download failed.
+    Download,
+    /// Binary install/swap failed.
+    Install,
+}
+
+/// Error with enough context to render the update transcript consistently.
+#[derive(Debug, Eq, PartialEq)]
+pub struct UpdateFailure {
+    /// Failed phase.
+    pub phase: UpdateFailurePhase,
+    /// Release being installed, when known.
+    pub release: Option<ReleaseInfo>,
+    /// Downloaded byte count when a partial download failed.
+    pub downloaded_bytes: Option<u64>,
+    /// Total expected bytes when a partial download failed.
+    pub total_bytes: Option<u64>,
+    /// Short user-facing failure cause.
+    pub message: String,
+    /// Whether rollback restored previously changed files.
+    pub restored: bool,
+}
+
+impl UpdateFailure {
+    /// Build a download failure for future GitHub/curl downloaders.
+    pub fn download(
+        release: Option<ReleaseInfo>,
+        downloaded_bytes: Option<u64>,
+        total_bytes: Option<u64>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            phase: UpdateFailurePhase::Download,
+            release,
+            downloaded_bytes,
+            total_bytes,
+            message: message.into(),
+            restored: false,
+        }
+    }
+
+    /// Build an install/swap failure after rollback has been attempted.
+    pub fn install(
+        release: Option<ReleaseInfo>,
+        message: impl Into<String>,
+        restored: bool,
+    ) -> Self {
+        Self {
+            phase: UpdateFailurePhase::Install,
+            release,
+            downloaded_bytes: None,
+            total_bytes: None,
+            message: message.into(),
+            restored,
+        }
+    }
+}
+
+impl fmt::Display for UpdateFailure {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for UpdateFailure {}
+
 /// One schema mismatch found on disk.
 #[derive(Debug, Eq, PartialEq)]
 pub struct SchemaMismatch {
@@ -97,8 +207,16 @@ pub struct SchemaMismatch {
 
 /// Seam for fetching a binary candidate.
 pub trait UpdateDownloader {
+    /// Check whether an update is available without downloading it.
+    fn check(&self, request: &UpdateRequest) -> Result<UpdateCheck> {
+        let _ = request;
+        Ok(UpdateCheck::Unavailable(
+            "running from a local development binary".to_string(),
+        ))
+    }
+
     /// Fetch a binary candidate into `work_dir`.
-    fn download(&self, work_dir: &Path) -> Result<DownloadedBinary>;
+    fn download(&self, request: &UpdateRequest) -> Result<DownloadedBinary>;
 }
 
 /// Seam for verifying a downloaded binary candidate.
@@ -118,9 +236,9 @@ pub trait BinaryReplacer {
 pub struct OfflineDownloader;
 
 impl UpdateDownloader for OfflineDownloader {
-    fn download(&self, _work_dir: &Path) -> Result<DownloadedBinary> {
+    fn download(&self, _request: &UpdateRequest) -> Result<DownloadedBinary> {
         Ok(DownloadedBinary::Unavailable(
-            "release download seam is not configured in this build".to_string(),
+            "running from a local development binary".to_string(),
         ))
     }
 }
@@ -209,6 +327,13 @@ pub fn run_update_with_seams(
     replacer: &dyn BinaryReplacer,
 ) -> Result<UpdateOutcome> {
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
+    if options.check_only {
+        return Ok(UpdateOutcome {
+            binary_status: check_binary_update(options, downloader)?,
+            skill_backups: Vec::new(),
+            schema_mismatches,
+        });
+    }
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
     let extract_report = match extract_bundled_skills(
         options.paths,
@@ -222,11 +347,12 @@ pub fn run_update_with_seams(
             return Err(error);
         }
     };
+    let prepared_release = prepared_release(&binary_candidate);
     let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
         Ok(status) => status,
         Err(error) => {
             rollback_bundled_skill_writes(&extract_report)?;
-            return Err(error);
+            return Err(UpdateFailure::install(prepared_release, error.to_string(), true).into());
         }
     };
 
@@ -235,6 +361,32 @@ pub fn run_update_with_seams(
         skill_backups: extract_report.backups,
         schema_mismatches,
     })
+}
+
+fn update_request(options: &UpdateOptions<'_>) -> UpdateRequest {
+    UpdateRequest {
+        work_dir: options.paths.maestro_dir().join("update"),
+        current_version: options.current_version.to_string(),
+        force: options.force,
+        verbose: options.verbose,
+    }
+}
+
+fn check_binary_update(
+    options: &UpdateOptions<'_>,
+    downloader: &dyn UpdateDownloader,
+) -> Result<BinaryStatus> {
+    match downloader.check(&update_request(options))? {
+        UpdateCheck::Available {
+            release,
+            current_version,
+        } => Ok(BinaryStatus::UpdateAvailable {
+            release,
+            current_version,
+        }),
+        UpdateCheck::UpToDate(release) => Ok(BinaryStatus::UpToDate { release }),
+        UpdateCheck::Unavailable(reason) => Ok(BinaryStatus::Skipped { reason }),
+    }
 }
 
 /// Detect known repo-local schema mismatches without mutating artifacts.
@@ -293,8 +445,9 @@ fn prepare_binary_update(
     downloader: &dyn UpdateDownloader,
     verifier: &dyn ChecksumVerifier,
 ) -> Result<PreparedBinary> {
-    let work_dir = options.paths.maestro_dir().join("update");
-    let candidate = match downloader.download(&work_dir) {
+    let request = update_request(options);
+    let work_dir = request.work_dir.clone();
+    let candidate = match downloader.download(&request) {
         Ok(DownloadedBinary::Available { path, release }) => (path, release),
         Ok(DownloadedBinary::UpToDate(release)) => {
             cleanup_work_dir(&work_dir);
@@ -355,6 +508,14 @@ fn cleanup_work_dir(work_dir: &Path) {
 fn cleanup_prepared_binary(binary: &PreparedBinary) {
     if let PreparedBinary::Candidate { work_dir, .. } = binary {
         cleanup_work_dir(work_dir);
+    }
+}
+
+fn prepared_release(binary: &PreparedBinary) -> Option<ReleaseInfo> {
+    match binary {
+        PreparedBinary::UpToDate { release } => Some(release.clone()),
+        PreparedBinary::Skipped { .. } => None,
+        PreparedBinary::Candidate { release, .. } => release.clone(),
     }
 }
 

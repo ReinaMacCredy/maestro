@@ -34,7 +34,7 @@ pub struct Cli {
 pub enum RootCommand {
     Init(InitArgs),
     Install(AgentArgs),
-    Update,
+    Update(UpdateArgs),
     Uninstall(AgentArgs),
     Doctor,
     ShellInit,
@@ -70,6 +70,16 @@ pub struct InitArgs {
 pub struct AgentArgs {
     #[arg(long, value_enum)]
     pub agent: Agent,
+}
+
+#[derive(Debug, Args)]
+pub struct UpdateArgs {
+    #[arg(long)]
+    pub check: bool,
+    #[arg(long)]
+    pub verbose: bool,
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -270,7 +280,7 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         RootCommand::Init(args) => init::run(args),
         RootCommand::Install(args) => install::run(args),
-        RootCommand::Update => update::run(),
+        RootCommand::Update(args) => update::run(args),
         RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
