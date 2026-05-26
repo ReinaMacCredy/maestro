@@ -1,17 +1,16 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use serde_json::json;
 
 use crate::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::core::diff::unified_diff;
 use crate::core::fs::ensure_dir;
 use crate::core::paths::MaestroPaths;
-use crate::core::safe_write::write_string_atomic;
+use crate::core::safe_write::write_atomic;
 use crate::core::schema::{ACCEPTANCE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
 use crate::core::slug::slugify_ascii;
 use crate::task::template::{
@@ -22,8 +21,8 @@ use crate::task::template::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MigrationChange {
     pub path: PathBuf,
-    pub before: Option<String>,
-    pub after: String,
+    pub before: Option<Vec<u8>>,
+    pub after: Vec<u8>,
     pub source: Option<PathBuf>,
 }
 
@@ -35,6 +34,7 @@ pub struct MigrationPlan {
 
 /// Build a read-only migration plan.
 pub fn plan(paths: &MaestroPaths) -> Result<MigrationPlan> {
+    reject_symlinked_migration_roots(paths)?;
     let mut plan = MigrationPlan::default();
     plan_tasks(paths, &mut plan)?;
     plan_archives(paths, &mut plan)?;
@@ -52,11 +52,13 @@ pub fn render_check(plan: &MigrationPlan) -> String {
     let mut out = format!("migration check: {} change(s)\n", plan.changes.len());
     for change in &plan.changes {
         let path = change.path.display().to_string();
-        out.push_str(&unified_diff(
-            &path,
-            change.before.as_deref().unwrap_or_default(),
-            &change.after,
-        ));
+        let before = change
+            .before
+            .as_deref()
+            .map(String::from_utf8_lossy)
+            .unwrap_or_default();
+        let after = String::from_utf8_lossy(&change.after);
+        out.push_str(&unified_diff(&path, before.as_ref(), after.as_ref()));
     }
     out
 }
@@ -68,6 +70,7 @@ pub fn apply(paths: &MaestroPaths, plan: &MigrationPlan, force: bool) -> Result<
     }
     let timestamp = backup_operation_timestamp()?;
     let mut backed_up = BTreeSet::<PathBuf>::new();
+    let mut applied = Vec::<AppliedChange>::new();
     for change in &plan.changes {
         if let Some(source) = change.source.as_ref().filter(|source| source.is_file()) {
             if backed_up.insert(source.clone()) {
@@ -77,8 +80,40 @@ pub fn apply(paths: &MaestroPaths, plan: &MigrationPlan, force: bool) -> Result<
         if change.path.is_file() && backed_up.insert(change.path.clone()) {
             backup_file_with_timestamp(paths, &change.path, "migrate", &timestamp)?;
         }
-        write_string_atomic(&change.path, &change.after)
-            .with_context(|| format!("failed to write {}", change.path.display()))?;
+        if let Err(error) = write_atomic(&change.path, &change.after)
+            .with_context(|| format!("failed to write {}", change.path.display()))
+        {
+            rollback_applied(applied)?;
+            return Err(error);
+        }
+        applied.push(AppliedChange {
+            path: change.path.clone(),
+            before: change.before.clone(),
+        });
+    }
+    Ok(())
+}
+
+struct AppliedChange {
+    path: PathBuf,
+    before: Option<Vec<u8>>,
+}
+
+fn rollback_applied(applied: Vec<AppliedChange>) -> Result<()> {
+    for change in applied.into_iter().rev() {
+        match change.before {
+            Some(before) => write_atomic(&change.path, &before)
+                .with_context(|| format!("failed to restore {}", change.path.display()))?,
+            None => match fs::remove_file(&change.path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("failed to remove migrated file {}", change.path.display())
+                    });
+                }
+            },
+        }
     }
     Ok(())
 }
@@ -91,7 +126,7 @@ fn plan_tasks(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
         for line in raw.lines().filter(|line| !line.trim().is_empty()) {
             let old: OldTask = serde_json::from_str(line)
                 .with_context(|| format!("failed to parse task JSONL in {}", path.display()))?;
-            let task = old.into_task();
+            let task = old.into_task(paths)?;
             let task_dir = tasks_dir.join(task.directory_name());
             let acceptance = AcceptanceFile {
                 schema_version: ACCEPTANCE_SCHEMA_VERSION.to_string(),
@@ -102,20 +137,23 @@ fn plan_tasks(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
             };
             push_change(
                 plan,
+                paths,
                 task_dir.join("task.yaml"),
-                serde_yaml::to_string(&task)?,
+                serde_yaml::to_string(&task)?.into_bytes(),
                 Some(&path),
             )?;
             push_change(
                 plan,
+                paths,
                 task_dir.join("acceptance.yaml"),
-                serde_yaml::to_string(&acceptance)?,
+                serde_yaml::to_string(&acceptance)?.into_bytes(),
                 Some(&path),
             )?;
             push_change(
                 plan,
+                paths,
                 task_dir.join("task.md"),
-                migrated_task_markdown(&task),
+                migrated_task_markdown(&task).into_bytes(),
                 Some(&path),
             )?;
         }
@@ -123,7 +161,7 @@ fn plan_tasks(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
             .maestro_dir()
             .join("raw/archived/tasks")
             .join(path.file_name().unwrap_or_default());
-        push_change(plan, archive, raw, Some(&path))?;
+        push_change(plan, paths, archive, raw.into_bytes(), Some(&path))?;
     }
     Ok(())
 }
@@ -132,25 +170,24 @@ fn plan_archives(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
     for dir in ["missions", "verdicts", "handoffs", "plans", "intake"] {
         let source_dir = paths.maestro_dir().join(dir);
         for path in files_under(&source_dir)? {
-            let raw = fs::read_to_string(&path)
-                .with_context(|| format!("failed to read {}", path.display()))?;
+            let raw =
+                fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
             let relative = path.strip_prefix(&source_dir).unwrap_or(&path);
             let target = paths
                 .maestro_dir()
                 .join("raw/archived")
                 .join(dir)
                 .join(relative);
-            push_change(plan, target, raw, Some(&path))?;
+            push_change(plan, paths, target, raw, Some(&path))?;
         }
     }
 
     let evidence_dir = paths.maestro_dir().join("evidence");
     for path in files_under(&evidence_dir)? {
-        let raw = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
+        let raw = fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
         let relative = path.strip_prefix(&evidence_dir).unwrap_or(&path);
         let target = paths.runs_dir().join("migrated").join(relative);
-        push_change(plan, target, raw, Some(&path))?;
+        push_change(plan, paths, target, raw, Some(&path))?;
     }
     Ok(())
 }
@@ -176,7 +213,7 @@ fn plan_features(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
         }
     }
     let after = serde_yaml::to_string(&value)?;
-    push_change(plan, path, after, None)
+    push_change(plan, paths, path, after.into_bytes(), None)
 }
 
 fn plan_decisions(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
@@ -197,7 +234,7 @@ fn plan_decisions(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> 
             .find_map(|line| line.strip_prefix("# "))
             .unwrap_or(file_name.trim_end_matches(".md"));
         let target = dir.join(format!("decision-{number:03}-{}.md", slugify_ascii(title)));
-        push_change(plan, target, raw, Some(&path))?;
+        push_change(plan, paths, target, raw.into_bytes(), Some(&path))?;
     }
     Ok(())
 }
@@ -227,23 +264,79 @@ fn plan_harness_verify(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result
             );
         }
     }
-    if verify.is_empty() {
+    let workflows = workflow_defaults(paths)?;
+    if verify.is_empty() && workflows.is_none() {
         return Ok(());
     }
-    let after = serde_yaml::to_string(&json!({
-        "schema_version": "maestro.harness.v1",
-        "stack": {
-            "kind": "generic",
-            "detected_by": [],
-            "verify": verify,
-        }
-    }))?;
-    push_change(plan, paths.harness_dir().join("harness.yml"), after, None)
+    let mut stack = serde_yaml::Mapping::new();
+    stack.insert(
+        serde_yaml::Value::String("kind".to_string()),
+        serde_yaml::Value::String("generic".to_string()),
+    );
+    stack.insert(
+        serde_yaml::Value::String("detected_by".to_string()),
+        serde_yaml::Value::Sequence(Vec::new()),
+    );
+    stack.insert(
+        serde_yaml::Value::String("verify".to_string()),
+        serde_yaml::to_value(verify)?,
+    );
+    let mut after = serde_yaml::Mapping::new();
+    after.insert(
+        serde_yaml::Value::String("schema_version".to_string()),
+        serde_yaml::Value::String("maestro.harness.v1".to_string()),
+    );
+    after.insert(
+        serde_yaml::Value::String("stack".to_string()),
+        serde_yaml::Value::Mapping(stack),
+    );
+    if let Some(workflows) = workflows {
+        after.insert(serde_yaml::Value::String("workflow".to_string()), workflows);
+    }
+    let after = serde_yaml::to_string(&serde_yaml::Value::Mapping(after))?;
+    push_change(
+        plan,
+        paths,
+        paths.harness_dir().join("harness.yml"),
+        after.into_bytes(),
+        None,
+    )
+}
+
+fn workflow_defaults(paths: &MaestroPaths) -> Result<Option<serde_yaml::Value>> {
+    let workflows_dir = paths.maestro_dir().join("workflows");
+    let workflow_files = files_with_extension(&workflows_dir, "yaml")?;
+    if workflow_files.is_empty() {
+        return Ok(None);
+    }
+
+    let mut defaults = serde_yaml::Mapping::new();
+    for path in workflow_files {
+        let raw = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let value: serde_yaml::Value = serde_yaml::from_str(&raw)
+            .with_context(|| format!("failed to parse {}", path.display()))?;
+        let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        defaults.insert(serde_yaml::Value::String(stem.to_string()), value);
+    }
+
+    let mut workflow = serde_yaml::Mapping::new();
+    workflow.insert(
+        serde_yaml::Value::String("default".to_string()),
+        serde_yaml::Value::Mapping(defaults),
+    );
+    Ok(Some(serde_yaml::Value::Mapping(workflow)))
 }
 
 fn reject_concurrent_writer(paths: &MaestroPaths) -> Result<()> {
-    for path in files_under(&paths.maestro_dir())? {
-        if path.extension().and_then(|extension| extension.to_str()) == Some("lock") {
+    for path in [
+        paths.maestro_dir().join("writer.lock"),
+        paths.maestro_dir().join("migrate.lock"),
+        paths.maestro_dir().join("v0.106.lock"),
+    ] {
+        if path.exists() {
             bail!("v0.106.1 writer evidence found: {}", path.display());
         }
     }
@@ -252,24 +345,100 @@ fn reject_concurrent_writer(paths: &MaestroPaths) -> Result<()> {
 
 fn push_change(
     plan: &mut MigrationPlan,
+    paths: &MaestroPaths,
     path: PathBuf,
-    after: String,
+    after: Vec<u8>,
     source: Option<&Path>,
 ) -> Result<()> {
-    let before = match fs::read_to_string(&path) {
+    ensure_managed_target(paths, &path)?;
+    reject_symlinked_target(&path)?;
+    let before = match fs::read(&path) {
         Ok(before) => Some(before),
         Err(error) if error.kind() == ErrorKind::NotFound => None,
         Err(error) => {
             return Err(error).with_context(|| format!("failed to read {}", path.display()))
         }
     };
-    if before.as_deref() != Some(after.as_str()) {
+    if before.as_deref() != Some(after.as_slice()) {
         plan.changes.push(MigrationChange {
             path,
             before,
             after,
             source: source.map(Path::to_path_buf),
         });
+    }
+    Ok(())
+}
+
+fn reject_symlinked_migration_roots(paths: &MaestroPaths) -> Result<()> {
+    for path in [
+        paths.maestro_dir(),
+        paths.tasks_dir(),
+        paths.features_dir(),
+        paths.decisions_dir(),
+        paths.harness_dir(),
+        paths.runs_dir(),
+        paths.maestro_dir().join("raw"),
+        paths.maestro_dir().join("missions"),
+        paths.maestro_dir().join("verdicts"),
+        paths.maestro_dir().join("handoffs"),
+        paths.maestro_dir().join("plans"),
+        paths.maestro_dir().join("intake"),
+        paths.maestro_dir().join("evidence"),
+        paths.maestro_dir().join("policies"),
+        paths.maestro_dir().join("workflows"),
+    ] {
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                bail!("migration path contains symlink: {}", path.display());
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("failed to inspect {}", path.display()));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn ensure_managed_target(paths: &MaestroPaths, path: &Path) -> Result<()> {
+    if !path.starts_with(paths.maestro_dir()) {
+        bail!("migration target escapes .maestro: {}", path.display());
+    }
+    for component in path
+        .strip_prefix(paths.maestro_dir())
+        .unwrap_or(path)
+        .components()
+    {
+        match component {
+            Component::Normal(_) => {}
+            Component::CurDir
+            | Component::ParentDir
+            | Component::RootDir
+            | Component::Prefix(_) => {
+                bail!("migration target escapes .maestro: {}", path.display());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn reject_symlinked_target(path: &Path) -> Result<()> {
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component.as_os_str());
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                bail!("migration target contains symlink: {}", current.display());
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to inspect {}", current.display()));
+            }
+        }
     }
     Ok(())
 }
@@ -342,11 +511,12 @@ struct OldTask {
 }
 
 impl OldTask {
-    fn into_task(self) -> TaskRecord {
+    fn into_task(self, paths: &MaestroPaths) -> Result<TaskRecord> {
+        validate_old_task_id(&self.id)?;
         let created_at = self.created_at.unwrap_or_else(|| "0".to_string());
         let updated_at = self.updated_at.unwrap_or_else(|| created_at.clone());
         let state = parse_state(self.state.as_deref());
-        TaskRecord {
+        let mut task = TaskRecord {
             schema_version: TASK_SCHEMA_VERSION.to_string(),
             slug: slugify_ascii(&self.title),
             id: self.id,
@@ -382,8 +552,136 @@ impl OldTask {
             verification: VerificationBinding::default(),
             created_at,
             updated_at,
-        }
+        };
+        apply_intake(paths, &mut task)?;
+        apply_handoff(paths, &mut task)?;
+        apply_verdict(paths, &mut task)?;
+        Ok(task)
     }
+}
+
+fn validate_old_task_id(id: &str) -> Result<()> {
+    let mut components = Path::new(id).components();
+    let Some(Component::Normal(component)) = components.next() else {
+        bail!("invalid migrated task id: {id}");
+    };
+    if components.next().is_some() || component.is_empty() || component.to_str() != Some(id) {
+        bail!("invalid migrated task id: {id}");
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct OldIntake {
+    #[serde(default)]
+    raw_request: Option<String>,
+    #[serde(default)]
+    request: Option<String>,
+    #[serde(default)]
+    input_type: Option<String>,
+    #[serde(default)]
+    affected_areas: Vec<String>,
+    #[serde(default)]
+    open_questions: Vec<String>,
+}
+
+fn apply_intake(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
+    let path = paths
+        .maestro_dir()
+        .join("intake")
+        .join(format!("{}.yaml", task.id));
+    if !path.is_file() {
+        return Ok(());
+    }
+    let raw =
+        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    let intake: OldIntake = serde_yaml::from_str(&raw)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    task.raw_request = intake.raw_request.or(intake.request);
+    task.input_type = intake.input_type;
+    task.affected_areas = intake.affected_areas;
+    task.open_questions = intake.open_questions;
+    Ok(())
+}
+
+fn apply_handoff(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
+    let path = paths
+        .maestro_dir()
+        .join("handoffs")
+        .join(format!("{}.md", task.id));
+    if !path.is_file() {
+        return Ok(());
+    }
+    let raw =
+        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    let title = raw
+        .lines()
+        .find_map(|line| line.strip_prefix("# "))
+        .unwrap_or("handoff");
+    task.state_history.push(StateHistoryEntry {
+        state: task.state.clone(),
+        at: task.updated_at.clone(),
+        by: "migrate".to_string(),
+        to: None,
+        summary: Some(format!("migrated handoff: {title}")),
+        claims: Vec::new(),
+        open_items: Vec::new(),
+    });
+    Ok(())
+}
+
+#[derive(Default, Deserialize)]
+struct OldVerdict {
+    #[serde(default)]
+    verdict: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    verified_at: Option<String>,
+    #[serde(default)]
+    verified_commit: Option<String>,
+    #[serde(default)]
+    commit: Option<String>,
+    #[serde(default)]
+    verified_by_run: Option<String>,
+    #[serde(default)]
+    run_id: Option<String>,
+    #[serde(default)]
+    task_contract_hash: Option<String>,
+    #[serde(default)]
+    acceptance_hash: Option<String>,
+    #[serde(default)]
+    checks_hash: Option<String>,
+}
+
+fn apply_verdict(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
+    let path = paths
+        .maestro_dir()
+        .join("verdicts")
+        .join(format!("{}.json", task.id));
+    if !path.is_file() {
+        return Ok(());
+    }
+    let raw =
+        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    let verdict: OldVerdict = serde_json::from_str(&raw).unwrap_or_default();
+    let status = verdict
+        .verdict
+        .as_deref()
+        .or(verdict.status.as_deref())
+        .unwrap_or("");
+    if !matches!(status, "pass" | "passed" | "verified" | "ok") {
+        return Ok(());
+    }
+    task.verification = VerificationBinding {
+        verified_at: verdict.verified_at,
+        verified_commit: verdict.verified_commit.or(verdict.commit),
+        verified_by_run: verdict.verified_by_run.or(verdict.run_id),
+        task_contract_hash: verdict.task_contract_hash,
+        acceptance_hash: verdict.acceptance_hash,
+        checks_hash: verdict.checks_hash,
+    };
+    Ok(())
 }
 
 fn parse_state(state: Option<&str>) -> TaskState {

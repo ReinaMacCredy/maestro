@@ -276,11 +276,13 @@ struct TaskListFilters {
 }
 
 fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
-    let tasks = filtered_tasks(paths, &filters)?;
     if filters.watch {
-        return task_list_watch::run(paths, tasks, filters.interval.unwrap_or(2));
+        return task_list_watch::run(paths, filters.interval.unwrap_or(2), || {
+            filtered_tasks(paths, &filters)
+        });
     }
 
+    let tasks = filtered_tasks(paths, &filters)?;
     print!("{}", render_task_list(&tasks));
     Ok(())
 }

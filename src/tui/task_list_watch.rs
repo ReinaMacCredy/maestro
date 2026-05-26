@@ -10,7 +10,6 @@ use crate::core::paths::MaestroPaths;
 use crate::core::schema::FEATURE_SCHEMA_VERSION;
 use crate::feature::schema::FeatureRegistry;
 use crate::task::blockers::has_unresolved_blockers;
-use crate::task::doctor::load_task_records;
 use crate::task::template::{TaskRecord, TaskState};
 use crate::verification::stale::stale_reasons;
 use crate::verification::verify_task::{
@@ -18,19 +17,19 @@ use crate::verification::verify_task::{
 };
 
 /// Run the polling task status screen.
-pub fn run(
-    paths: &MaestroPaths,
-    initial_tasks: Vec<TaskRecord>,
-    interval_seconds: u64,
-) -> Result<()> {
-    let interval = interval_seconds.max(1);
+pub fn run<F>(paths: &MaestroPaths, interval_seconds: u64, load_tasks: F) -> Result<()>
+where
+    F: Fn() -> Result<Vec<TaskRecord>>,
+{
+    let interval = normalized_interval(interval_seconds);
     if !io::stdout().is_terminal() {
+        let initial_tasks = load_tasks()?;
         print!("{}", render_snapshot(paths, &initial_tasks)?);
         return Ok(());
     }
 
     loop {
-        let tasks = load_task_records(&paths.tasks_dir())?;
+        let tasks = load_tasks()?;
         print!("\x1b[2J\x1b[H{}", render_snapshot(paths, &tasks)?);
         io::stdout()
             .flush()
@@ -199,5 +198,21 @@ fn state_label(state: &TaskState) -> &'static str {
         TaskState::Rejected => "rejected",
         TaskState::Abandoned => "abandoned",
         TaskState::Superseded => "superseded",
+    }
+}
+
+fn normalized_interval(seconds: u64) -> u64 {
+    seconds.max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalized_interval;
+
+    #[test]
+    fn interval_clamps_below_one_second() {
+        assert_eq!(normalized_interval(0), 1);
+        assert_eq!(normalized_interval(1), 1);
+        assert_eq!(normalized_interval(2), 2);
     }
 }

@@ -461,4 +461,33 @@ fn list_supports_basic_output_and_requested_filters() {
     assert!(watch_out.contains("in-progress (maestro)"));
     assert!(watch_out.contains("! Task B"));
     assert!(watch_out.contains("blocked by task-001"));
+
+    let watch_feature = maestro(
+        repo,
+        &[
+            "task",
+            "list",
+            "--watch",
+            "--feature",
+            "billing-csv",
+            "--interval",
+            "0",
+        ],
+    );
+    assert_success(
+        &watch_feature,
+        &[
+            "task",
+            "list",
+            "--watch",
+            "--feature",
+            "billing-csv",
+            "--interval",
+            "0",
+        ],
+    );
+    let watch_feature_out = stdout(&watch_feature);
+    assert!(watch_feature_out.contains("~ Task A"));
+    assert!(watch_feature_out.contains("! Task B"));
+    assert!(!watch_feature_out.contains("Task C"));
 }
