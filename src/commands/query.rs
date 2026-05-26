@@ -16,7 +16,7 @@ use crate::harness::schema::BacklogConfig;
 use crate::task::blockers::has_unresolved_blockers;
 use crate::task::doctor::load_task_entries;
 use crate::task::template::{TaskRecord, TaskState};
-use crate::verification::events::event_files_under;
+use crate::verification::events::managed_event_files;
 use crate::verification::proof_status::{proof_status, render_proof_status};
 use crate::verification::stale::stale_reasons;
 use crate::verification::verify_task::{
@@ -78,7 +78,7 @@ fn query_matrix(paths: &MaestroPaths) -> Result<()> {
 }
 
 fn query_friction(paths: &MaestroPaths) -> Result<()> {
-    let event_files = event_files_under(&paths.runs_dir())?;
+    let event_files = managed_event_files(paths)?;
     let mut events = 0_usize;
     let mut user_prompts = 0_usize;
     let mut corrections = 0_usize;

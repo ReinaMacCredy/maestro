@@ -104,7 +104,10 @@ pub enum TaskCommand {
         id: String,
         #[arg(long)]
         summary: String,
-        #[arg(long)]
+        #[arg(
+            long,
+            help = "Completion claim; hook-backed tool proof uses '<tool> <tool_input_hash>'"
+        )]
         claim: String,
     },
     Verify {

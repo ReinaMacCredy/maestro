@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use maestro::hooks::event::run_dir_name;
 use serde_json::Value;
 use support::TestTempDir;
 
@@ -78,6 +79,61 @@ fn missing_session_id_writes_unattributed_run() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "UserPromptSubmit");
     assert!(events[0].get("session_id").is_none());
+}
+
+#[test]
+fn unsafe_session_ids_do_not_collide_after_sanitization() {
+    let repo = init_repo();
+    let first = run_dir_name("alpha/beta");
+    let second = run_dir_name("alpha?beta");
+    let literal_encoded = run_dir_name("alpha%2Fbeta");
+
+    assert_ne!(first, second);
+    assert_ne!(first, literal_encoded);
+    assert!(maestro_record(
+        repo.path(),
+        r#"{"session_id":"alpha/beta","event_type":"UserPromptSubmit"}"#,
+    )
+    .status
+    .success());
+    assert!(maestro_record(
+        repo.path(),
+        r#"{"session_id":"alpha?beta","event_type":"UserPromptSubmit"}"#,
+    )
+    .status
+    .success());
+    assert!(maestro_record(
+        repo.path(),
+        r#"{"session_id":"alpha%2Fbeta","event_type":"UserPromptSubmit"}"#,
+    )
+    .status
+    .success());
+
+    assert_eq!(read_events(repo.path(), &first).len(), 1);
+    assert_eq!(read_events(repo.path(), &second).len(), 1);
+    assert_eq!(read_events(repo.path(), &literal_encoded).len(), 1);
+}
+
+#[test]
+fn literal_unattributed_session_does_not_share_missing_session_bucket() {
+    let repo = init_repo();
+    let literal = run_dir_name("unattributed");
+
+    assert_ne!(literal, "unattributed");
+    assert!(
+        maestro_record(repo.path(), r#"{"event_type":"UserPromptSubmit"}"#)
+            .status
+            .success()
+    );
+    assert!(maestro_record(
+        repo.path(),
+        r#"{"session_id":"unattributed","event_type":"UserPromptSubmit"}"#,
+    )
+    .status
+    .success());
+
+    assert_eq!(read_events(repo.path(), "unattributed").len(), 1);
+    assert_eq!(read_events(repo.path(), &literal).len(), 1);
 }
 
 #[test]

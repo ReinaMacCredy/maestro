@@ -35,18 +35,30 @@ pub fn string_field(source: &Value, field: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Sanitize a session id for use as a run directory name.
+/// Encode a session id for use as a collision-resistant run directory name.
 pub fn run_dir_name(session_id: &str) -> String {
-    let sanitized = session_id
-        .chars()
-        .map(|character| match character {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' => character,
-            _ => '_',
-        })
-        .collect::<String>();
-    if sanitized.is_empty() {
-        UNATTRIBUTED_SESSION.to_string()
-    } else {
-        sanitized
+    if session_id.is_empty() {
+        return UNATTRIBUTED_SESSION.to_string();
     }
+
+    let mut encoded = String::with_capacity(session_id.len());
+    for byte in session_id.bytes() {
+        if is_literal_run_dir_byte(byte) {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    if encoded == UNATTRIBUTED_SESSION {
+        "%75nattributed".to_string()
+    } else {
+        encoded
+    }
+}
+
+fn is_literal_run_dir_byte(byte: u8) -> bool {
+    matches!(
+        byte,
+        b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.'
+    )
 }

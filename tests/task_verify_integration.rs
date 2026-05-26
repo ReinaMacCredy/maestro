@@ -8,6 +8,7 @@ use std::process::{Command, Stdio};
 
 use serde_json::Value;
 use serde_yaml::Value as YamlValue;
+use sha2::{Digest, Sha256};
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
@@ -51,6 +52,17 @@ fn setup_repo() -> TestTempDir {
     fs::create_dir_all(temp.path().join(".maestro"))
         .expect("invariant: .maestro directory should be creatable");
     temp
+}
+
+fn sha256_prefixed_json(raw: &str) -> String {
+    let value: Value = serde_json::from_str(raw).expect("invariant: test JSON should parse");
+    let bytes = serde_json::to_vec(&value).expect("invariant: test JSON should serialize");
+    let digest = Sha256::digest(&bytes);
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        hex.push_str(&format!("{byte:02x}"));
+    }
+    format!("sha256:{hex}")
 }
 
 fn create_completed_task(repo: &Path, claim: &str) {
@@ -164,7 +176,9 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
 fn task_verify_accepts_phase4_post_tool_use_hook_event() {
     let temp = setup_repo();
     let repo = temp.path();
-    create_completed_task(repo, "Bash ok");
+    let tool_input_hash = sha256_prefixed_json(r#"{"command":"cargo test"}"#);
+    let claim = format!("Bash {tool_input_hash}");
+    create_completed_task(repo, &claim);
     record_hook_event(
         repo,
         r#"{"session_id":"run-001","event_type":"PostToolUse","task_id":"task-001","tool_name":"Bash","status":"ok","tool_input":{"command":"cargo test"}}"#,
@@ -173,6 +187,54 @@ fn task_verify_accepts_phase4_post_tool_use_hook_event() {
     let verify = maestro(repo, &["task", "verify", "task-001"]);
     assert_success(&verify, &["task", "verify", "task-001"]);
     assert_eq!(verification_json(repo, "task-001")["status"], "passed");
+}
+
+#[test]
+fn task_verify_does_not_accept_generic_phase4_tool_success_claim() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "Bash ok");
+    record_hook_event(
+        repo,
+        r#"{"session_id":"run-001","event_type":"PostToolUse","task_id":"task-001","tool_name":"Bash","status":"ok","tool_input":{"command":"cargo test"}}"#,
+    );
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("claim not backed by events/proof"));
+}
+
+#[test]
+fn task_verify_does_not_accept_hash_only_phase4_tool_claim() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    let tool_input_hash = sha256_prefixed_json(r#"{"command":"cargo test"}"#);
+    create_completed_task(repo, &tool_input_hash);
+    record_hook_event(
+        repo,
+        r#"{"session_id":"run-001","event_type":"PostToolUse","task_id":"task-001","tool_name":"Bash","status":"ok","tool_input":{"command":"cargo test"}}"#,
+    );
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("claim not backed by events/proof"));
+}
+
+#[test]
+fn task_verify_does_not_accept_failed_phase4_tool_event() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    let tool_input_hash = sha256_prefixed_json(r#"{"command":"cargo test"}"#);
+    let claim = format!("Bash {tool_input_hash}");
+    create_completed_task(repo, &claim);
+    record_hook_event(
+        repo,
+        r#"{"session_id":"run-001","event_type":"PostToolUse","task_id":"task-001","tool_name":"Bash","status":"error","tool_input":{"command":"cargo test"}}"#,
+    );
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("missing proof"));
 }
 
 #[test]
@@ -293,6 +355,30 @@ fn task_verify_ignores_symlinked_runs_root() {
     let runs_dir = repo.join(".maestro/runs");
     unix_fs::symlink(external.path(), &runs_dir)
         .expect("invariant: symlinked runs root should be creatable");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    assert!(stderr(&verify).contains("missing proof"));
+}
+
+#[cfg(unix)]
+#[test]
+fn task_verify_ignores_events_when_maestro_root_is_symlinked() {
+    let temp = TestTempDir::new("maestro-task-verify-symlinked-root");
+    let repo = temp.path();
+    fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+    let external = TestTempDir::new("maestro-task-verify-external-root");
+    unix_fs::symlink(external.path(), repo.join(".maestro"))
+        .expect("invariant: symlinked .maestro root should be creatable");
+    create_completed_task(repo, "implemented CSV export");
+    let external_run = external.path().join("runs/run-001");
+    fs::create_dir_all(&external_run).expect("invariant: external run dir should be creatable");
+    fs::write(
+        external_run.join("events.jsonl"),
+        "{\"task_id\":\"task-001\",\"kind\":\"proof\",\"message\":\"implemented CSV export\"}\n",
+    )
+    .expect("invariant: external events should be writable");
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);
 

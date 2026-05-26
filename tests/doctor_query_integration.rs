@@ -287,6 +287,28 @@ fn query_friction_ignores_bad_json_and_symlinked_run_dirs() {
     assert!(friction.contains("corrections: 1"));
 }
 
+#[cfg(unix)]
+#[test]
+fn query_friction_ignores_events_when_maestro_root_is_symlinked() {
+    let temp = TestTempDir::new("maestro-query-symlinked-root");
+    let repo = temp.path();
+    fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+    let external = TestTempDir::new("maestro-query-external-root");
+    let external_run = external.path().join("runs/run-001");
+    fs::create_dir_all(&external_run).expect("invariant: external run dir should be creatable");
+    fs::write(
+        external_run.join("events.jsonl"),
+        "{\"kind\":\"UserPromptSubmit\",\"message\":\"actually retry\"}\n",
+    )
+    .expect("invariant: external event should be writable");
+    unix_fs::symlink(external.path(), repo.join(".maestro"))
+        .expect("invariant: symlinked .maestro root should be creatable");
+
+    let friction = run_success(repo, &["query", "friction"]);
+
+    assert!(friction.contains("friction: no events found"));
+}
+
 #[test]
 fn query_matrix_ignores_symlinked_task_dirs() {
     let temp = setup_repo("maestro-query-symlinked-task");
