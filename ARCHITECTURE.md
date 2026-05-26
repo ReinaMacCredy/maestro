@@ -1170,6 +1170,10 @@ The public crate surface currently exposes these top-level source modules from
   - `update`
   - `verification`
 
+`foundation/core` now holds the Core implementation. The legacy `core` crate
+root remains as a compatibility re-export while callers migrate to
+`foundation::core`.
+
 The current source tree already has useful domain-oriented modules, but the
 seams are uneven. Some modules are deep enough to own a meaningful contract;
 others are adapters or orchestration modules that still know too much about
@@ -1177,8 +1181,9 @@ artifact details owned by another module.
 
 Current module groups:
 
-- **Foundation**: `core` owns shared infrastructure such as paths, safe writes,
-  schema constants, hashing, diffs, backups, git helpers, slugging, and time.
+- **Foundation**: `foundation/core` owns shared infrastructure such as paths,
+  safe writes, schema constants, hashing, diffs, backups, git helpers, slugging,
+  and time.
 - **CLI adapter**: `commands` owns argument parsing and command routing, but
   several command files still coordinate domain details directly.
 - **Artifact/domain modules**: `harness`, `task`, `feature`, `decisions`,

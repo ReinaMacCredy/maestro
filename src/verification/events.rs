@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::core::error::MaestroError;
-use crate::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::core::paths::MaestroPaths;
+use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::paths::MaestroPaths;
 
 /// List all managed `.maestro/runs/**/events.jsonl` files.
 pub fn managed_event_files(paths: &MaestroPaths) -> Result<Vec<PathBuf>> {

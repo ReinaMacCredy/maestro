@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::schema::{BACKLOG_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION};
+use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION};
 
 /// Supported V1 project stack families.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

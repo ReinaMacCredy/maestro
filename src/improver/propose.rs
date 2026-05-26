@@ -4,10 +4,10 @@ use std::io::ErrorKind;
 
 use anyhow::{bail, Context, Result};
 
-use crate::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::core::paths::MaestroPaths;
-use crate::core::safe_write::write_string_atomic;
-use crate::core::schema::BACKLOG_SCHEMA_VERSION;
+use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::schema::BACKLOG_SCHEMA_VERSION;
 use crate::harness::schema::{BacklogConfig, BacklogItem};
 use crate::improver::detect;
 

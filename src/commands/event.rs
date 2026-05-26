@@ -6,9 +6,9 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use crate::commands::{EventArgs, EventCommand};
-use crate::core::fs::ensure_dir;
-use crate::core::paths::{discover_repo_root, MaestroPaths};
-use crate::core::time::utc_now_timestamp;
+use crate::foundation::core::fs::ensure_dir;
+use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::time::utc_now_timestamp;
 use crate::task::doctor::load_task_records;
 use crate::task::lookup::load_task_with_snapshot;
 use crate::task::template::TaskState;

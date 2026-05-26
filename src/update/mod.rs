@@ -10,14 +10,14 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use crate::core::fs::ensure_parent_dir;
-use crate::core::hash::hex_digest;
-use crate::core::paths::MaestroPaths;
-use crate::core::schema::{
+use crate::foundation::core::fs::ensure_parent_dir;
+use crate::foundation::core::hash::hex_digest;
+use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::schema::{
     BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
     INSTALL_LOCK_SCHEMA_VERSION,
 };
-use crate::core::time::parse_utc_timestamp;
+use crate::foundation::core::time::parse_utc_timestamp;
 use crate::skills::extract::{
     extract_bundled_skills, rollback_bundled_skill_writes, ExtractMode, SkillBackup,
 };

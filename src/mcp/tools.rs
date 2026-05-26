@@ -4,7 +4,7 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
-use crate::core::paths::MaestroPaths;
+use crate::foundation::core::paths::MaestroPaths;
 use crate::metrics::summary::{render_summary, summarize};
 use crate::task::blockers::has_unresolved_blockers;
 use crate::task::display::render_task_list;

@@ -3,8 +3,8 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::core::error::MaestroError;
-use crate::core::paths::MaestroPaths;
+use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::paths::MaestroPaths;
 
 /// Return a managed repo-local path after validating path traversal and symlink components.
 pub fn managed_path(

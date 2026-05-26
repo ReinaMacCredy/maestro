@@ -6,13 +6,13 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
-use crate::core::git;
-use crate::core::hash::sha256_prefixed;
-use crate::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::core::paths::MaestroPaths;
-use crate::core::schema::EVENT_SCHEMA_VERSION;
-use crate::core::time::utc_now_timestamp;
 use crate::evidence::run_evidence;
+use crate::foundation::core::git;
+use crate::foundation::core::hash::sha256_prefixed;
+use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::schema::EVENT_SCHEMA_VERSION;
+use crate::foundation::core::time::utc_now_timestamp;
 use crate::hooks::event::{
     is_accepted_event, normalized_event_type, run_dir_name, string_field, UNATTRIBUTED_SESSION,
 };

@@ -5,16 +5,16 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde_json::{Map, Value};
 
-use crate::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
-use crate::core::diff::unified_diff;
-use crate::core::fs::{ensure_parent_dir, read_to_string_if_exists};
-use crate::core::hash::sha256_prefixed;
-use crate::core::managed_blocks::{
+use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
+use crate::foundation::core::diff::unified_diff;
+use crate::foundation::core::fs::{ensure_parent_dir, read_to_string_if_exists};
+use crate::foundation::core::hash::sha256_prefixed;
+use crate::foundation::core::managed_blocks::{
     remove_managed_block, upsert_managed_block, upsert_managed_json_keys, ManagedBlockFormat,
 };
-use crate::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::core::paths::MaestroPaths;
-use crate::core::safe_write::write_string_atomic;
+use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::safe_write::write_string_atomic;
 use crate::install::hooks::ManagedHookConfig;
 use crate::install::lock::{AgentInstall, FileOwnership, MirrorKind};
 use crate::install::InstallAgent;

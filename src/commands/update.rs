@@ -5,10 +5,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 
 use crate::commands::UpdateArgs;
-use crate::core::backup::backup_operation_timestamp;
-use crate::core::fs::read_to_string_if_exists;
-use crate::core::paths::{discover_repo_root, MaestroPaths};
-use crate::core::safe_write::write_string_atomic;
+use crate::foundation::core::backup::backup_operation_timestamp;
+use crate::foundation::core::fs::read_to_string_if_exists;
+use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::safe_write::write_string_atomic;
 use crate::update::{
     detect_install_method, run_update, BinaryStatus, InstallMethod, ReleaseInfo, UpdateFailure,
     UpdateFailurePhase, UpdateOptions, UpdateOutcome,
@@ -365,7 +365,7 @@ mod tests {
     use super::{
         auto_check_due, record_auto_check, render_failure, render_outcome, Colors, ReleaseInfo,
     };
-    use crate::core::paths::MaestroPaths;
+    use crate::foundation::core::paths::MaestroPaths;
     use crate::update::{BinaryStatus, UpdateFailure, UpdateOutcome};
 
     #[test]

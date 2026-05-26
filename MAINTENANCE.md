@@ -105,6 +105,12 @@ grow duplicate behavior or speculative public APIs. When a module actually
 moves, update the facade and `tests/architecture_imports.rs` in the same slice
 before removing the old path.
 
+Current migration state: Core implementation files live under
+`src/foundation/core`, and `crate::core` remains a compatibility re-export.
+New production imports should prefer `crate::foundation::core`; keep
+`crate::core` and `maestro::core` usage to compatibility checks or transition
+work until the legacy path is removed.
+
 When adding a folder inside a domain or operations module:
 
 - Keep the parent `mod.rs` as the caller-facing facade.

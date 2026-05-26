@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::core::fs::ensure_dir;
-use crate::core::safe_write::write_string_atomic;
-use crate::core::schema::{ACCEPTANCE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
-use crate::core::slug::slugify_ascii;
+use crate::foundation::core::fs::ensure_dir;
+use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::schema::{ACCEPTANCE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
+use crate::foundation::core::slug::slugify_ascii;
 
 /// V1 task lifecycle states.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

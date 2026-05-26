@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::commands::{ImproveArgs, ImproveCommand};
-use crate::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::harness::schema::{BacklogConfig, BacklogItem};
 use crate::improver::propose;
 

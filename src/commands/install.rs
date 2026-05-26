@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 use crate::commands::{Agent, AgentArgs};
-use crate::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::install::lock::{remove_lock_file, InstallLock};
 use crate::install::mirrors::{prepare_mirrors, write_prepared_mirrors};
 use crate::install::InstallAgent;

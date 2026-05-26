@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-use maestro::core::managed_blocks::{
+use maestro::foundation::core::managed_blocks::{
     remove_managed_block, remove_managed_json_keys, upsert_managed_block, upsert_managed_json_keys,
     ManagedBlockFormat,
 };

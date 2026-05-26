@@ -13,13 +13,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::core::error::MaestroError;
-use crate::core::fs::read_to_string_if_exists;
-use crate::core::git;
-use crate::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::core::paths::MaestroPaths;
-use crate::core::safe_write::write_string_atomic;
-use crate::core::schema::{EVENT_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION};
+use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::fs::read_to_string_if_exists;
+use crate::foundation::core::git;
+use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::schema::{EVENT_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION};
 use crate::harness::schema::HarnessConfig;
 use crate::task::lookup::resolve_task_yaml_path;
 use crate::task::template::{

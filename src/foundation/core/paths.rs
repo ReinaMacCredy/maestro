@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::core::error::MaestroError;
+use crate::foundation::core::error::MaestroError;
 
 /// Repository-local Maestro path helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -3,13 +3,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{bail, Context, Result};
 
 use crate::commands::{FeatureArgs, FeatureCommand};
-use crate::core::fs::read_to_string_if_exists;
-use crate::core::paths::{discover_repo_root, MaestroPaths};
-use crate::core::safe_write::write_string_atomic;
-use crate::core::schema::FEATURE_SCHEMA_VERSION;
-use crate::core::slug::slugify_ascii;
 use crate::feature::query::{count_tasks_by_feature, count_tasks_for_feature};
 use crate::feature::schema::{FeatureRecord, FeatureRegistry, FeatureStatus};
+use crate::foundation::core::fs::read_to_string_if_exists;
+use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
+use crate::foundation::core::slug::slugify_ascii;
 
 /// Execute `maestro feature`.
 pub fn run(args: FeatureArgs) -> Result<()> {

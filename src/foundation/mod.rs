@@ -1,3 +1,3 @@
-//! Transitional foundation module root for domain-neutral infrastructure.
+//! Foundation module root for domain-neutral infrastructure.
 
-pub use crate::core;
+pub mod core;

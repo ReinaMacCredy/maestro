@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-use crate::core::fs::ensure_parent_dir;
-use crate::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::core::paths::MaestroPaths;
+use crate::foundation::core::fs::ensure_parent_dir;
+use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::paths::MaestroPaths;
 use crate::install::InstallAgent;
 
 /// Relative target used by agent skill mirrors.

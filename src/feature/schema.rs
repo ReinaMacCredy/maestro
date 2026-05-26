@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::schema::FEATURE_SCHEMA_VERSION;
+use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
 
 /// `.maestro/features/features.yaml` registry.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

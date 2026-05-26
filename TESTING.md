@@ -76,7 +76,7 @@ has callers or user data safety impact.
 
 | Surface | Primary tests | Broaden to |
 | --- | --- | --- |
-| Core | `tests/core_paths_fs.rs`, `tests/core_schema_error.rs`, `tests/core_managed_blocks.rs`, `tests/core_backup_diff_git.rs` | Any module whose safety policy uses the changed Core helper. |
+| Foundation/Core | `tests/core_paths_fs.rs`, `tests/core_schema_error.rs`, `tests/core_managed_blocks.rs`, `tests/core_backup_diff_git.rs` | Any module whose safety policy uses the changed Core helper. |
 | Harness | `tests/harness_templates.rs`, `tests/init_integration.rs` | Harness Backlog tests, `tests/install_mirrors.rs`, `tests/update_integration.rs`, and Proof tests when Harness verification config changes or explicit Harness apply behavior changes. |
 | Task | `tests/task_lifecycle.rs`, `tests/task_artifacts.rs`, `tests/task_commands_integration.rs` | `tests/task_verify_integration.rs`, Query, TUI, MCP, and Metrics tests when task state, verification binding, or layout changes. |
 | Feature | `tests/feature_decision_artifacts.rs`, `tests/feature_decision_commands_integration.rs` | Query, Doctor, TUI, and MCP tests when feature read models or output change. |

@@ -1,8 +1,8 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use maestro::core::error::MaestroError;
-use maestro::core::schema::{
+use maestro::foundation::core::error::MaestroError;
+use maestro::foundation::core::schema::{
     ACCEPTANCE_SCHEMA_VERSION, ALL_SCHEMA_VERSIONS, BACKLOG_SCHEMA_VERSION,
     DECISION_SCHEMA_VERSION, EVENT_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
     INSTALL_LOCK_SCHEMA_VERSION, RUN_EVIDENCE_SCHEMA_VERSION, RUN_SCHEMA_VERSION,

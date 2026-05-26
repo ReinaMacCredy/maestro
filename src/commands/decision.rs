@@ -3,13 +3,13 @@ use std::fs;
 use anyhow::{Context, Result};
 
 use crate::commands::{DecisionArgs, DecisionCommand};
-use crate::core::fs::ensure_dir;
-use crate::core::paths::{discover_repo_root, MaestroPaths};
-use crate::core::safe_write::write_string_atomic;
 use crate::decisions::query::{
     decision_entries, decision_id, parse_decision_number, resolve_decision_path,
 };
 use crate::decisions::template::{decision_file_name, decision_markdown};
+use crate::foundation::core::fs::ensure_dir;
+use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::safe_write::write_string_atomic;
 
 /// Execute `maestro decision`.
 pub fn run(args: DecisionArgs) -> Result<()> {

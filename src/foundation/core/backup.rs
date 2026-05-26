@@ -6,9 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
-use crate::core::error::MaestroError;
-use crate::core::fs::ensure_parent_dir;
-use crate::core::paths::MaestroPaths;
+use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::fs::ensure_parent_dir;
+use crate::foundation::core::paths::MaestroPaths;
 
 static BACKUP_COUNTER: AtomicU64 = AtomicU64::new(0);
 

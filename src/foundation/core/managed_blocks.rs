@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 
-use crate::core::error::MaestroError;
+use crate::foundation::core::error::MaestroError;
 
 const JSON_MANAGED_KEYS: &str = "_maestro_managed_keys";
 

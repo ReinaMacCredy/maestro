@@ -6,10 +6,10 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::core::error::MaestroError;
-use crate::core::fs::read_to_string_if_exists;
-use crate::core::safe_write::write_string_atomic;
-use crate::core::schema::INSTALL_LOCK_SCHEMA_VERSION;
+use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::fs::read_to_string_if_exists;
+use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::schema::INSTALL_LOCK_SCHEMA_VERSION;
 use crate::install::InstallAgent;
 
 /// `.maestro/install-lock.yaml`.

@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::core::schema::FEATURE_SCHEMA_VERSION;
+use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
 use crate::harness::schema::{BacklogConfig, HarnessConfig};
 
 /// `HARNESS.md` content installed by `maestro init`.

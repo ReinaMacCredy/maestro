@@ -3,11 +3,11 @@ mod support;
 use std::fs;
 
 use git2::{Repository, Signature};
-use maestro::core::backup::backup_file_with_timestamp;
-use maestro::core::diff::unified_diff;
-use maestro::core::error::MaestroError;
-use maestro::core::git::{dirty, head, snapshot};
-use maestro::core::paths::MaestroPaths;
+use maestro::foundation::core::backup::backup_file_with_timestamp;
+use maestro::foundation::core::diff::unified_diff;
+use maestro::foundation::core::error::MaestroError;
+use maestro::foundation::core::git::{dirty, head, snapshot};
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 #[test]

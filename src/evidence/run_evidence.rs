@@ -6,11 +6,11 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::core::paths::MaestroPaths;
-use crate::core::safe_write::write_string_atomic;
-use crate::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
-use crate::core::time::{parse_utc_timestamp, ParsedTimestamp};
+use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
+use crate::foundation::core::time::{parse_utc_timestamp, ParsedTimestamp};
 use crate::hooks::event::{run_dir_name, string_field};
 
 #[derive(Debug, Serialize)]

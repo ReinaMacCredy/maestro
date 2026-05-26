@@ -6,11 +6,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use crate::core::error::MaestroError;
-use crate::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::core::paths::MaestroPaths;
-use crate::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
-use crate::core::time::parse_utc_timestamp;
+use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
+use crate::foundation::core::time::parse_utc_timestamp;
 use crate::task::doctor::load_task_entries;
 use crate::task::template::{TaskState, VerificationBinding};
 

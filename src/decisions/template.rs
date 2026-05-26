@@ -1,4 +1,4 @@
-use crate::core::slug::slugify_ascii;
+use crate::foundation::core::slug::slugify_ascii;
 
 /// Render the canonical decision file name for a sequence number and title.
 pub fn decision_file_name(number: u32, title: &str) -> String {

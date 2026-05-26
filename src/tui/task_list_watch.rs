@@ -6,9 +6,9 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
-use crate::core::paths::MaestroPaths;
-use crate::core::schema::FEATURE_SCHEMA_VERSION;
 use crate::feature::schema::FeatureRegistry;
+use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
 use crate::task::blockers::has_unresolved_blockers;
 use crate::task::template::{TaskRecord, TaskState};
 use crate::verification::stale::stale_reasons;
@@ -169,7 +169,7 @@ fn verified_substatus(paths: &MaestroPaths, task: &TaskRecord) -> Result<String>
     let current = freshness_inputs_for_task(
         task,
         &task_dir,
-        crate::core::git::head(paths.repo_root()).unwrap_or(None),
+        crate::foundation::core::git::head(paths.repo_root()).unwrap_or(None),
     )?;
     if stale_reasons(&current, &report.freshness).is_empty() {
         Ok("verified".to_string())

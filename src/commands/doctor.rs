@@ -1,8 +1,10 @@
 use anyhow::{bail, Context, Result};
 
-use crate::core::paths::{discover_repo_root, MaestroPaths};
-use crate::core::schema::{BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION};
 use crate::feature::schema::FeatureRegistry;
+use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::schema::{
+    BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
+};
 use crate::harness::schema::{BacklogConfig, HarnessConfig};
 use crate::task::doctor::check_blocker_graph;
 

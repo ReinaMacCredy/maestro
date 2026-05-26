@@ -39,6 +39,7 @@ const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[
 ];
 
 const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
+const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
 
 const DOMAIN_FACADES: &[&str] = &[
     "decisions",
@@ -71,7 +72,7 @@ fn target_module_roots_exist_and_legacy_roots_remain() {
 
     for legacy_root in LEGACY_COMPATIBILITY_ROOTS {
         assert!(
-            lib.contains(&format!("pub mod {legacy_root};")),
+            lib_exposes_crate_root(&lib, legacy_root),
             "legacy crate::{legacy_root} must remain during the compatibility migration"
         );
     }
@@ -83,6 +84,47 @@ fn selected_compatibility_smoke_paths_resolve() {
         maestro::foundation::core::schema::TASK_SCHEMA_VERSION,
         maestro::core::schema::TASK_SCHEMA_VERSION
     );
+    assert_eq!(
+        std::any::type_name::<maestro::foundation::core::paths::MaestroPaths>(),
+        std::any::type_name::<maestro::core::paths::MaestroPaths>()
+    );
+    assert_eq!(
+        std::any::type_name::<maestro::foundation::core::error::MaestroError>(),
+        std::any::type_name::<maestro::core::error::MaestroError>()
+    );
+    assert_eq!(
+        std::any::type_name::<maestro::foundation::core::git::GitSnapshot>(),
+        std::any::type_name::<maestro::core::git::GitSnapshot>()
+    );
+    assert_eq!(
+        std::any::type_name::<maestro::foundation::core::managed_blocks::ManagedBlockFormat>(),
+        std::any::type_name::<maestro::core::managed_blocks::ManagedBlockFormat>()
+    );
+
+    let _legacy_ensure_dir = |path: &Path| maestro::core::fs::ensure_dir(path);
+    let _new_ensure_dir = |path: &Path| maestro::foundation::core::fs::ensure_dir(path);
+    let _legacy_write_string_atomic = |path: &Path, contents: &str| {
+        maestro::core::safe_write::write_string_atomic(path, contents)
+    };
+    let _new_write_string_atomic = |path: &Path, contents: &str| {
+        maestro::foundation::core::safe_write::write_string_atomic(path, contents)
+    };
+    let _legacy_head = |path: &Path| maestro::core::git::head(path);
+    let _new_head = |path: &Path| maestro::foundation::core::git::head(path);
+    let _legacy_backup_file = |paths: &maestro::core::paths::MaestroPaths,
+                               source: &Path,
+                               operation: &str,
+                               timestamp: &str| {
+        maestro::core::backup::backup_file_with_timestamp(paths, source, operation, timestamp)
+    };
+    let _new_backup_file = |paths: &maestro::foundation::core::paths::MaestroPaths,
+                            source: &Path,
+                            operation: &str,
+                            timestamp: &str| {
+        maestro::foundation::core::backup::backup_file_with_timestamp(
+            paths, source, operation, timestamp,
+        )
+    };
 
     let _ = std::any::type_name::<maestro::commands::Cli>();
     let _ = std::any::type_name::<maestro::interfaces::cli::Cli>();
@@ -95,7 +137,7 @@ fn selected_compatibility_smoke_paths_resolve() {
 }
 
 #[test]
-fn transitional_reexport_sets_match_phase_one_policy() {
+fn transitional_public_surfaces_match_phase_policy() {
     assert_reexports(
         Path::new("src/domain/mod.rs"),
         &[
@@ -108,7 +150,7 @@ fn transitional_reexport_sets_match_phase_one_policy() {
             "crate::verification as proof",
         ],
     );
-    assert_reexports(Path::new("src/foundation/mod.rs"), &["crate::core"]);
+    assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
     assert_reexports(
         Path::new("src/interfaces/mod.rs"),
         &[
@@ -128,6 +170,17 @@ fn transitional_reexport_sets_match_phase_one_policy() {
             "crate::update",
         ],
     );
+}
+
+fn lib_exposes_crate_root(lib: &str, root: &str) -> bool {
+    let public_module = format!("pub mod {root};");
+    let public_reexport = format!("pub use foundation::{root};");
+
+    lib.lines().map(str::trim).any(|line| {
+        line == public_module
+            || line == public_reexport
+            || line == format!("pub use crate::foundation::{root};")
+    })
 }
 
 #[test]
@@ -164,6 +217,43 @@ fn moved_interface_sources_do_not_import_protected_domain_internals() {
     assert!(
         violations.is_empty(),
         "interface code must call domain/operation facades directly and avoid legacy/deep imports or facade aliases:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn production_sources_prefer_foundation_core_imports() {
+    let mut violations = Vec::new();
+
+    for root in PRODUCTION_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            let source = read_source_file(&file);
+            let code = code_for_path_scan(&source);
+            if code.contains("crate::core::") {
+                violations.push(format!(
+                    "{} references legacy crate::core:: path",
+                    file.display()
+                ));
+                continue;
+            }
+
+            for (line_number, import_statement) in crate_import_statements(&source) {
+                if contains_legacy_root_import(&import_statement, "core")
+                    || contains_legacy_deep_import(&import_statement, "core")
+                {
+                    violations.push(format!(
+                        "{}:{} imports legacy crate::core path",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should import Core through crate::foundation::core during the migration:\n{}",
         violations.join("\n")
     );
 }
@@ -214,11 +304,40 @@ fn assert_reexports(path: &Path, expected_roots: &[&str]) {
     assert_eq!(
         actual,
         expected,
-        "{} must expose exactly the Phase 1 transitional re-export set",
+        "{} must expose exactly the current transitional re-export set",
         path.display()
     );
 
     assert_no_public_module_items(path, &source);
+}
+
+fn assert_public_modules(path: &Path, expected_modules: &[&str], expected_reexports: &[&str]) {
+    let source = read_source_file(path);
+    let actual = public_modules(&source);
+    let expected = expected_modules
+        .iter()
+        .map(|module| module.to_string())
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        actual,
+        expected,
+        "{} must expose exactly the expected public modules",
+        path.display()
+    );
+
+    let actual_reexports = crate_reexports(&source);
+    let expected_reexports = expected_reexports
+        .iter()
+        .map(|root| root.to_string())
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        actual_reexports,
+        expected_reexports,
+        "{} must expose exactly the expected public re-exports",
+        path.display()
+    );
 }
 
 fn crate_reexports(source: &str) -> BTreeSet<String> {
@@ -228,6 +347,18 @@ fn crate_reexports(source: &str) -> BTreeSet<String> {
             let line = line.trim();
             line.strip_prefix("pub use ")
                 .and_then(|root| root.strip_suffix(';'))
+                .map(str::to_string)
+        })
+        .collect()
+}
+
+fn public_modules(source: &str) -> BTreeSet<String> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            line.strip_prefix("pub mod ")
+                .and_then(|module| module.strip_suffix(';'))
                 .map(str::to_string)
         })
         .collect()
@@ -246,7 +377,7 @@ fn assert_no_public_module_items(path: &Path, source: &str) {
 
     assert!(
         !has_public_module,
-        "{} must expose only Phase 1 transitional re-exports",
+        "{} must expose only the current transitional re-exports",
         path.display()
     );
 }

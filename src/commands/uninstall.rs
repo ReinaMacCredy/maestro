@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 
 use crate::commands::AgentArgs;
-use crate::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::install::lock::{remove_lock_file, InstallLock};
 use crate::install::mirrors::remove_mirrors;
 use crate::install::InstallAgent;

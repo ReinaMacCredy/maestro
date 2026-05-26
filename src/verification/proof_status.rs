@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 
-use crate::core::paths::MaestroPaths;
+use crate::foundation::core::paths::MaestroPaths;
 use crate::verification::stale::{stale_reasons, StaleReason};
 use crate::verification::verify_task::{
     freshness_inputs, load_task_by_id, read_report, verification_path, ClaimCheck, ProofSource,

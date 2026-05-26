@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
-use crate::core::fs::ensure_parent_dir;
+use crate::foundation::core::fs::ensure_parent_dir;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 

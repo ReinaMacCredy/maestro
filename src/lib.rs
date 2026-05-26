@@ -1,5 +1,4 @@
 pub mod commands;
-pub mod core;
 pub mod decisions;
 pub mod domain;
 pub mod evidence;
@@ -20,3 +19,5 @@ pub mod task;
 pub mod tui;
 pub mod update;
 pub mod verification;
+
+pub use foundation::core;
