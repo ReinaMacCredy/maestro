@@ -2,11 +2,12 @@ use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process;
+use std::process::{self, Command};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::core::fs::ensure_parent_dir;
@@ -311,12 +312,139 @@ impl BinaryReplacer for AtomicBinaryReplacer {
 
 /// Run update with the default offline-safe seams.
 pub fn run_update(options: &UpdateOptions<'_>) -> Result<UpdateOutcome> {
+    let downloader = GitHubCurlDownloader::for_repo_root(options.paths.repo_root());
     run_update_with_seams(
         options,
-        &OfflineDownloader,
+        &downloader,
         &Sha256Verifier::disabled(),
         &AtomicBinaryReplacer,
     )
+}
+
+/// `curl`-backed GitHub Releases downloader.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitHubCurlDownloader {
+    release_repo: Option<String>,
+    api_base_url: String,
+    asset_name: Option<String>,
+}
+
+impl GitHubCurlDownloader {
+    /// Build the default downloader from environment overrides or git origin.
+    pub fn for_repo_root(repo_root: &Path) -> Self {
+        Self {
+            release_repo: release_repo(repo_root),
+            api_base_url: std::env::var("MAESTRO_RELEASE_API_BASE_URL")
+                .unwrap_or_else(|_| "https://api.github.com".to_string()),
+            asset_name: std::env::var("MAESTRO_RELEASE_ASSET").ok(),
+        }
+    }
+
+    fn release_url(&self) -> Option<String> {
+        let repo = self.release_repo.as_ref()?;
+        Some(format!(
+            "{}/repos/{repo}/releases/latest",
+            self.api_base_url.trim_end_matches('/')
+        ))
+    }
+
+    fn latest_release(&self) -> Result<Option<GithubRelease>> {
+        let Some(url) = self.release_url() else {
+            return Ok(None);
+        };
+        let response = curl_bytes(&url, None)?;
+        let release: GithubRelease = serde_json::from_slice(&response)
+            .with_context(|| format!("failed to parse GitHub release response from {url}"))?;
+        Ok(Some(release))
+    }
+
+    fn selected_asset<'a>(&self, release: &'a GithubRelease) -> Option<&'a GithubAsset> {
+        if let Some(asset_name) = self.asset_name.as_deref() {
+            return release.assets.iter().find(|asset| asset.name == asset_name);
+        }
+        select_platform_asset(&release.assets)
+    }
+
+    fn release_info(&self, release: &GithubRelease, asset: Option<&GithubAsset>) -> ReleaseInfo {
+        ReleaseInfo {
+            version: normalized_release_version(&release.tag_name),
+            released_at: release.published_at.clone(),
+            relative_age: release
+                .published_at
+                .as_deref()
+                .and_then(relative_age_from_rfc3339),
+            size_bytes: asset.map(|asset| asset.size),
+        }
+    }
+}
+
+impl UpdateDownloader for GitHubCurlDownloader {
+    fn check(&self, request: &UpdateRequest) -> Result<UpdateCheck> {
+        let Some(release) = self.latest_release()? else {
+            return Ok(UpdateCheck::Unavailable(
+                "running from a local development binary".to_string(),
+            ));
+        };
+        let asset = self.selected_asset(&release);
+        let release_info = self.release_info(&release, asset);
+        if release_versions_match(&release_info.version, &request.current_version) && !request.force
+        {
+            return Ok(UpdateCheck::UpToDate(release_info));
+        }
+        if asset.is_none() {
+            return Ok(UpdateCheck::Unavailable(format!(
+                "no GitHub release asset matches {}",
+                platform_asset_hint()
+            )));
+        }
+        Ok(UpdateCheck::Available {
+            release: release_info,
+            current_version: request.current_version.clone(),
+        })
+    }
+
+    fn download(&self, request: &UpdateRequest) -> Result<DownloadedBinary> {
+        let Some(release) = self.latest_release()? else {
+            return Ok(DownloadedBinary::Unavailable(
+                "running from a local development binary".to_string(),
+            ));
+        };
+        let asset = self.selected_asset(&release).ok_or_else(|| {
+            UpdateFailure::download(
+                Some(self.release_info(&release, None)),
+                None,
+                None,
+                format!("no GitHub release asset matches {}", platform_asset_hint()),
+            )
+        })?;
+        let release_info = self.release_info(&release, Some(asset));
+        if release_versions_match(&release_info.version, &request.current_version) && !request.force
+        {
+            return Ok(DownloadedBinary::UpToDate(release_info));
+        }
+
+        fs::create_dir_all(&request.work_dir)
+            .with_context(|| format!("failed to create {}", request.work_dir.display()))?;
+        let candidate = request.work_dir.join("maestro-update-candidate");
+        if let Err(error) = curl_download(&asset.browser_download_url, &candidate) {
+            let downloaded = fs::metadata(&candidate).ok().map(|metadata| metadata.len());
+            return Err(UpdateFailure::download(
+                Some(release_info),
+                downloaded,
+                Some(asset.size),
+                download_error_message(error),
+            )
+            .into());
+        }
+        if let Some(digest) = asset.sha256_digest() {
+            Sha256Verifier::new(digest).verify(&candidate)?;
+        }
+
+        Ok(DownloadedBinary::Available {
+            path: candidate,
+            release: Some(release_info),
+        })
+    }
 }
 
 /// Run update with explicit seams for tests and future release wiring.
@@ -536,11 +664,18 @@ fn read_schema_version(path: &Path) -> Result<String> {
 fn replace_binary_atomic(current: &Path, candidate: &Path) -> Result<()> {
     ensure_parent_dir(current)?;
 
-    let metadata = fs::metadata(candidate)
-        .with_context(|| format!("failed to inspect update candidate {}", candidate.display()))?;
+    let permissions = fs::metadata(current)
+        .or_else(|_| fs::metadata(candidate))
+        .with_context(|| {
+            format!(
+                "failed to inspect update replacement permissions for {}",
+                candidate.display()
+            )
+        })?
+        .permissions();
     let temp_path = temp_sibling_path(current)?;
 
-    if let Err(error) = copy_candidate_to_temp(candidate, &temp_path, metadata.permissions()) {
+    if let Err(error) = copy_candidate_to_temp(candidate, &temp_path, permissions) {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
@@ -621,4 +756,281 @@ fn sync_parent_dir(path: &Path) -> Result<()> {
     File::open(parent)
         .and_then(|directory| directory.sync_all())
         .with_context(|| format!("failed to sync parent directory {}", parent.display()))
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    #[serde(default)]
+    published_at: Option<String>,
+    #[serde(default)]
+    assets: Vec<GithubAsset>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubAsset {
+    name: String,
+    browser_download_url: String,
+    #[serde(default)]
+    size: u64,
+    #[serde(default)]
+    digest: Option<String>,
+}
+
+impl GithubAsset {
+    fn sha256_digest(&self) -> Option<&str> {
+        self.digest.as_deref()?.strip_prefix("sha256:")
+    }
+}
+
+fn release_repo(repo_root: &Path) -> Option<String> {
+    if let Ok(repo) = std::env::var("MAESTRO_RELEASE_REPO") {
+        if !repo.trim().is_empty() {
+            return Some(repo);
+        }
+    }
+
+    let repo = git2::Repository::discover(repo_root).ok()?;
+    let remote = repo.find_remote("origin").ok()?;
+    parse_github_repo(remote.url()?)
+}
+
+fn parse_github_repo(remote_url: &str) -> Option<String> {
+    let trimmed = remote_url.trim().trim_end_matches(".git");
+    if let Some(path) = trimmed.strip_prefix("https://github.com/") {
+        return normalize_repo_path(path);
+    }
+    if let Some(path) = trimmed.strip_prefix("git@github.com:") {
+        return normalize_repo_path(path);
+    }
+    None
+}
+
+fn normalize_repo_path(path: &str) -> Option<String> {
+    let mut parts = path.split('/');
+    let owner = parts.next()?.trim();
+    let repo = parts.next()?.trim();
+    if owner.is_empty() || repo.is_empty() || parts.next().is_some() {
+        return None;
+    }
+    Some(format!("{owner}/{repo}"))
+}
+
+fn curl_bytes(url: &str, output: Option<&Path>) -> Result<Vec<u8>> {
+    let mut command = Command::new("curl");
+    command.args([
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--header",
+        "Accept: application/vnd.github+json",
+        "--header",
+        "User-Agent: maestro",
+    ]);
+    if let Some(output) = output {
+        command.arg("--output");
+        command.arg(output);
+    }
+    command.arg(url);
+
+    let output = command
+        .output()
+        .with_context(|| "failed to run curl for GitHub release update")?;
+    if !output.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
+    }
+    Ok(output.stdout)
+}
+
+fn curl_download(url: &str, output: &Path) -> Result<()> {
+    curl_bytes(url, Some(output)).map(|_| ())
+}
+
+fn download_error_message(error: anyhow::Error) -> String {
+    let message = error.to_string();
+    if message.trim().is_empty() {
+        "download interrupted".to_string()
+    } else {
+        message
+    }
+}
+
+fn select_platform_asset(assets: &[GithubAsset]) -> Option<&GithubAsset> {
+    let os_aliases = os_aliases();
+    let arch_aliases = arch_aliases();
+    assets
+        .iter()
+        .filter(|asset| asset.name.to_ascii_lowercase().contains("maestro"))
+        .filter(|asset| !is_checksum_asset(&asset.name))
+        .find(|asset| {
+            let name = asset.name.to_ascii_lowercase();
+            os_aliases.iter().any(|alias| name.contains(alias.as_str()))
+                && arch_aliases
+                    .iter()
+                    .any(|alias| name.contains(alias.as_str()))
+        })
+        .or_else(|| {
+            assets
+                .iter()
+                .filter(|asset| !is_checksum_asset(&asset.name))
+                .find(|asset| asset.name == "maestro")
+        })
+}
+
+fn is_checksum_asset(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.ends_with(".sha256")
+        || name.ends_with(".sha256sum")
+        || name.ends_with(".sig")
+        || name.ends_with(".asc")
+}
+
+fn platform_asset_hint() -> String {
+    format!(
+        "maestro {} {}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
+}
+
+fn os_aliases() -> Vec<String> {
+    match std::env::consts::OS {
+        "macos" => vec![
+            "macos".to_string(),
+            "darwin".to_string(),
+            "apple".to_string(),
+        ],
+        "linux" => vec!["linux".to_string()],
+        "windows" => vec!["windows".to_string(), "win".to_string()],
+        other => vec![other.to_string()],
+    }
+}
+
+fn arch_aliases() -> Vec<String> {
+    match std::env::consts::ARCH {
+        "x86_64" => vec!["x86_64".to_string(), "amd64".to_string()],
+        "aarch64" => vec!["aarch64".to_string(), "arm64".to_string()],
+        "arm" => vec!["arm".to_string()],
+        other => vec![other.to_string()],
+    }
+}
+
+fn normalized_release_version(tag_name: &str) -> String {
+    tag_name.strip_prefix('v').unwrap_or(tag_name).to_string()
+}
+
+fn release_versions_match(release_version: &str, current_version: &str) -> bool {
+    normalized_release_version(release_version) == normalized_release_version(current_version)
+}
+
+fn relative_age_from_rfc3339(value: &str) -> Option<String> {
+    let released = parse_rfc3339_utc(value)?;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs() as i64;
+    let elapsed = now.saturating_sub(released);
+    if elapsed < 60 {
+        return Some("less than 1m ago".to_string());
+    }
+    if elapsed < 3_600 {
+        return Some(format!("{}m ago", elapsed / 60));
+    }
+    if elapsed < 86_400 {
+        return Some(format!("{}h ago", elapsed / 3_600));
+    }
+    Some(format!("{}d ago", elapsed / 86_400))
+}
+
+fn parse_rfc3339_utc(value: &str) -> Option<i64> {
+    let value = value.strip_suffix('Z')?;
+    let (date, time) = value.split_once('T')?;
+    let mut date_parts = date.split('-');
+    let year = date_parts.next()?.parse::<i32>().ok()?;
+    let month = date_parts.next()?.parse::<u32>().ok()?;
+    let day = date_parts.next()?.parse::<u32>().ok()?;
+    if date_parts.next().is_some() {
+        return None;
+    }
+    let time = time.split('.').next().unwrap_or(time);
+    let mut time_parts = time.split(':');
+    let hour = time_parts.next()?.parse::<u32>().ok()?;
+    let minute = time_parts.next()?.parse::<u32>().ok()?;
+    let second = time_parts.next()?.parse::<u32>().ok()?;
+    if time_parts.next().is_some() {
+        return None;
+    }
+    Some(
+        days_from_civil(year, month, day)? * 86_400
+            + hour as i64 * 3_600
+            + minute as i64 * 60
+            + second as i64,
+    )
+}
+
+fn days_from_civil(year: i32, month: u32, day: u32) -> Option<i64> {
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let year = year - i32::from(month <= 2);
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let yoe = year - era * 400;
+    let month = month as i32;
+    let doy = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day as i32 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some((era * 146_097 + doe - 719_468) as i64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        parse_github_repo, parse_rfc3339_utc, release_versions_match, select_platform_asset,
+        GithubAsset,
+    };
+
+    #[test]
+    fn parses_github_remote_urls() {
+        assert_eq!(
+            parse_github_repo("https://github.com/ReinaMacCredy/maestro.git"),
+            Some("ReinaMacCredy/maestro".to_string())
+        );
+        assert_eq!(
+            parse_github_repo("git@github.com:ReinaMacCredy/maestro.git"),
+            Some("ReinaMacCredy/maestro".to_string())
+        );
+        assert_eq!(parse_github_repo("https://example.com/repo.git"), None);
+    }
+
+    #[test]
+    fn selects_current_platform_maestro_asset() {
+        let platform_asset = format!(
+            "maestro-{}-{}",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        );
+        let assets = vec![
+            asset("maestro-linux-amd64.sha256"),
+            asset("maestro-windows-amd64.exe"),
+            asset(&platform_asset),
+        ];
+
+        assert_eq!(
+            select_platform_asset(&assets).map(|asset| asset.name.as_str()),
+            Some(platform_asset.as_str())
+        );
+    }
+
+    #[test]
+    fn parses_release_timestamp_and_version_match() {
+        assert_eq!(parse_rfc3339_utc("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(parse_rfc3339_utc("1970-01-01T00:00:01.000Z"), Some(1));
+        assert!(release_versions_match("v0.1.0", "0.1.0"));
+    }
+
+    fn asset(name: &str) -> GithubAsset {
+        GithubAsset {
+            name: name.to_string(),
+            browser_download_url: format!("https://example.test/{name}"),
+            size: 123,
+            digest: None,
+        }
+    }
 }

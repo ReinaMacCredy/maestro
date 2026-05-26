@@ -1,6 +1,8 @@
 mod support;
 
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -8,8 +10,8 @@ use anyhow::{bail, Result};
 use maestro::core::paths::MaestroPaths;
 use maestro::skills::bundled::bundled_skills;
 use maestro::update::{
-    run_update_with_seams, BinaryReplacer, ChecksumVerifier, DownloadedBinary, ReleaseInfo,
-    UpdateDownloader, UpdateOptions, UpdateRequest,
+    run_update_with_seams, AtomicBinaryReplacer, BinaryReplacer, ChecksumVerifier,
+    DownloadedBinary, ReleaseInfo, UpdateDownloader, UpdateOptions, UpdateRequest,
 };
 use support::TestTempDir;
 
@@ -335,6 +337,43 @@ fn schema_mismatch_reports_migrate_and_does_not_mutate_harness_files() {
         fs::read_to_string(&features_yaml).expect("invariant: features should be readable"),
         before_features
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn atomic_replacer_preserves_current_binary_permissions() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    let executable_path = temp_dir.path().join("bin").join("maestro");
+    let candidate_path = temp_dir.path().join("candidate-maestro");
+    fs::create_dir_all(
+        executable_path
+            .parent()
+            .expect("invariant: executable path should have a parent"),
+    )
+    .expect("invariant: executable parent should be creatable");
+    fs::write(&executable_path, "current binary\n")
+        .expect("invariant: current binary should be writable");
+    fs::set_permissions(&executable_path, fs::Permissions::from_mode(0o755))
+        .expect("invariant: current binary permissions should be writable");
+    fs::write(&candidate_path, "replacement binary\n")
+        .expect("invariant: candidate binary should be writable");
+    fs::set_permissions(&candidate_path, fs::Permissions::from_mode(0o600))
+        .expect("invariant: candidate permissions should be writable");
+
+    AtomicBinaryReplacer
+        .replace(&executable_path, &candidate_path)
+        .expect("invariant: replacement should succeed");
+
+    assert_eq!(
+        fs::read_to_string(&executable_path).expect("invariant: binary should be readable"),
+        "replacement binary\n"
+    );
+    let mode = fs::metadata(&executable_path)
+        .expect("invariant: binary metadata should be readable")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o755);
 }
 
 fn init_git_marker(repo: &Path) {
