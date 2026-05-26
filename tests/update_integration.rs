@@ -8,8 +8,8 @@ use anyhow::{bail, Result};
 use maestro::core::paths::MaestroPaths;
 use maestro::skills::bundled::bundled_skills;
 use maestro::update::{
-    run_update_with_seams, BinaryReplacer, ChecksumVerifier, DownloadedBinary, UpdateDownloader,
-    UpdateOptions,
+    run_update_with_seams, BinaryReplacer, ChecksumVerifier, DownloadedBinary, ReleaseInfo,
+    UpdateDownloader, UpdateOptions,
 };
 use support::TestTempDir;
 
@@ -49,7 +49,8 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
-    assert!(stdout.contains("binary update skipped"));
+    assert!(stdout.contains("Checking for updates..."));
+    assert!(stdout.contains("Update unavailable for this build"));
     assert!(stdout.contains("edited skills backed up"));
     assert_eq!(
         fs::read_to_string(&skill_path).expect("invariant: skill should be readable"),
@@ -347,7 +348,19 @@ impl UpdateDownloader for CandidateDownloader {
         let candidate = work_dir.join("candidate-maestro");
         fs::write(&candidate, "replacement binary\n")?;
 
-        Ok(DownloadedBinary::Available(candidate))
+        Ok(DownloadedBinary::Available {
+            path: candidate,
+            release: Some(test_release()),
+        })
+    }
+}
+
+fn test_release() -> ReleaseInfo {
+    ReleaseInfo {
+        version: "0.0.1779772576-g751b94".to_string(),
+        released_at: Some("2026-05-26T05:16:16.000Z".to_string()),
+        relative_age: Some("1h ago".to_string()),
+        size_bytes: Some(25_350_000),
     }
 }
 

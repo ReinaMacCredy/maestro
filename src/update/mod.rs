@@ -43,20 +43,43 @@ pub struct UpdateOutcome {
     pub schema_mismatches: Vec<SchemaMismatch>,
 }
 
+/// Human-facing release metadata for update status output.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReleaseInfo {
+    /// Release version string.
+    pub version: String,
+    /// Release timestamp, when known.
+    pub released_at: Option<String>,
+    /// Human-readable age, when known.
+    pub relative_age: Option<String>,
+    /// Download size in bytes, when known.
+    pub size_bytes: Option<u64>,
+}
+
 /// Binary update result.
 #[derive(Debug, Eq, PartialEq)]
 pub enum BinaryStatus {
+    /// The currently installed binary already matches the newest release.
+    UpToDate { release: ReleaseInfo },
     /// No binary was available from the downloader seam.
     Skipped { reason: String },
     /// The executable path was atomically replaced.
-    Replaced { path: PathBuf },
+    Replaced {
+        path: PathBuf,
+        release: Option<ReleaseInfo>,
+    },
 }
 
 /// Download result from the binary update seam.
 #[derive(Debug, Eq, PartialEq)]
 pub enum DownloadedBinary {
     /// Downloaded binary candidate path.
-    Available(PathBuf),
+    Available {
+        path: PathBuf,
+        release: Option<ReleaseInfo>,
+    },
+    /// The latest release already matches the current binary.
+    UpToDate(ReleaseInfo),
     /// No binary work should be performed in this run.
     Unavailable(String),
 }
@@ -252,8 +275,17 @@ pub fn detect_schema_mismatches(paths: &MaestroPaths) -> Result<Vec<SchemaMismat
 }
 
 enum PreparedBinary {
-    Skipped { reason: String },
-    Candidate { path: PathBuf, work_dir: PathBuf },
+    UpToDate {
+        release: ReleaseInfo,
+    },
+    Skipped {
+        reason: String,
+    },
+    Candidate {
+        path: PathBuf,
+        work_dir: PathBuf,
+        release: Option<ReleaseInfo>,
+    },
 }
 
 fn prepare_binary_update(
@@ -263,7 +295,11 @@ fn prepare_binary_update(
 ) -> Result<PreparedBinary> {
     let work_dir = options.paths.maestro_dir().join("update");
     let candidate = match downloader.download(&work_dir) {
-        Ok(DownloadedBinary::Available(path)) => path,
+        Ok(DownloadedBinary::Available { path, release }) => (path, release),
+        Ok(DownloadedBinary::UpToDate(release)) => {
+            cleanup_work_dir(&work_dir);
+            return Ok(PreparedBinary::UpToDate { release });
+        }
         Ok(DownloadedBinary::Unavailable(reason)) => {
             cleanup_work_dir(&work_dir);
             return Ok(PreparedBinary::Skipped { reason });
@@ -274,14 +310,15 @@ fn prepare_binary_update(
         }
     };
 
-    if let Err(error) = verifier.verify(&candidate) {
+    if let Err(error) = verifier.verify(&candidate.0) {
         cleanup_work_dir(&work_dir);
         return Err(error);
     }
 
     Ok(PreparedBinary::Candidate {
-        path: candidate,
+        path: candidate.0,
         work_dir,
+        release: candidate.1,
     })
 }
 
@@ -291,13 +328,19 @@ fn replace_prepared_binary(
     binary: PreparedBinary,
 ) -> Result<BinaryStatus> {
     match binary {
+        PreparedBinary::UpToDate { release } => Ok(BinaryStatus::UpToDate { release }),
         PreparedBinary::Skipped { reason } => Ok(BinaryStatus::Skipped { reason }),
-        PreparedBinary::Candidate { path, work_dir } => {
+        PreparedBinary::Candidate {
+            path,
+            work_dir,
+            release,
+        } => {
             let result =
                 replacer
                     .replace(options.executable_path, &path)
                     .map(|()| BinaryStatus::Replaced {
                         path: options.executable_path.to_path_buf(),
+                        release,
                     });
             cleanup_work_dir(&work_dir);
             result
