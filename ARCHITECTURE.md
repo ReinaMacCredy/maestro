@@ -498,6 +498,10 @@ The Task aggregate should own:
 - blocker add, resolve, id allocation, and graph-local task blocker semantics.
 - verification binding updates requested by Proof.
 
+The verification outcome apply surface is a Task contract for
+`operations/task_verify`. Proof may produce typed outcome data, but it must not
+call Task mutation paths directly.
+
 The CLI command layer should become an adapter over this aggregate. It should
 parse command arguments, call Task operations, and render output. It should not
 manually coordinate acceptance files, blocker ids, state-history entries, or
@@ -736,10 +740,12 @@ Run should be a deep aggregate module for sessions and run artifacts.
 
 - `core` for managed paths, safe writes, schema constants, git snapshots, and
   timestamps.
-- `task` only by storing or exposing task id references from events.
+- no Task code dependency is needed to preserve `task_id` values from events;
+  Run treats task ids as opaque strings in event and evidence read models.
 
 **Must Not Own**
 
+- imports of the Task aggregate or calls to Task operations.
 - task lifecycle transitions or task verification binding.
 - Proof verdicts, claim matching, or stale-proof rules.
 - Metrics summaries or improver proposals.
@@ -768,6 +774,8 @@ Run should be a deep aggregate module for sessions and run artifacts.
   diagnostics when useful.
 - Proof and Metrics can read Run artifacts without owning Run normalization or
   write policy.
+- architecture/import tests prevent Run from importing Task while allowing
+  `task_id` strings to remain part of Run read models.
 
 Run append and evidence generation should have a concrete concurrency contract:
 
@@ -871,17 +879,19 @@ Proof should be a deep aggregate module for verification and proof status.
 - `core` for paths, safe writes, schema constants, hashes, git head, managed
   paths, and timestamps.
 - `harness` for verify command configuration.
-- `task` for task read data, acceptance data, task-local proof artifacts, and a
-  Task-owned verification binding update operation.
-- `run` for managed event evidence discovery and event schema.
+- `task` for task read data, acceptance data, task-local proof artifacts, and
+  typed verification outcome DTOs that `operations/task_verify` applies.
+- `run` for managed event evidence read models and event schema.
 
 **Must Not Own**
 
+- calls to Task mutation or verification-apply paths.
 - task lifecycle rules outside the explicit verification-result request it sends
   to Task.
 - task artifact layout beyond the task-local proof inputs and verification
   reports it owns.
 - run event recording or run evidence generation.
+- unmanaged Run path readers.
 - metrics summaries or improver proposals.
 - install policy, hook installation, CI policy, or release policy.
 - feature or decision lifecycle behavior.
@@ -902,6 +912,8 @@ Proof should be a deep aggregate module for verification and proof status.
 - phase-specific tool proof events must match exact claims and task ids.
 - Proof can request Task verification binding updates without duplicating Task
   lifecycle rules.
+- architecture/import tests prevent Proof from applying Task outcomes directly
+  or bypassing Run read models.
 
 #### Proof-To-Task Outcome Transaction
 
@@ -1409,10 +1421,10 @@ Allowed contract edges:
 | From | To | Allowed interaction | Must not do |
 | --- | --- | --- | --- |
 | `domain/feature` | `domain/task` | Read Task read models for derived task rollups. | Mutate Task lifecycle or store duplicated task counts. |
-| `domain/run` | `domain/task` | Store or expose task id references found in events. | Mutate Task lifecycle or verification binding. |
+| `domain/run` | `domain/task` | Store or expose opaque task id references found in events. | Import Task or mutate Task lifecycle or verification binding. |
 | `domain/proof` | `domain/harness` | Read Harness verification configuration. | Mutate Harness templates or schema. |
-| `domain/proof` | `domain/task` | Read task data and request a typed verification outcome application. | Mutate Task files, lifecycle, state history, or binding directly. |
-| `domain/proof` | `domain/run` | Read managed Run event/evidence read models as proof sources. | Record Run events or own Run evidence generation. |
+| `domain/proof` | `domain/task` | Read task data and produce typed verification outcome DTOs for `operations/task_verify`. | Call Task mutation or verification-apply paths directly. |
+| `domain/proof` | `domain/run` | Read managed Run event/evidence read models as proof sources. | Call unmanaged Run path readers, record Run events, or own Run evidence generation. |
 | `domain/install` | `domain/harness` | Reference canonical Harness paths and managed mirror targets. | Copy or reinterpret Harness protocol content. |
 | `domain/install` | `domain/run` | Generate hook config compatible with Run's recordable event contract. | Own Run event normalization, append behavior, or evidence generation. |
 | `domain/install` | `domain/skills` | Use skill extraction/link contracts and record ownership. | Own bundled skill content. |
@@ -2132,7 +2144,8 @@ Runtime flows should become thin orchestration paths over the domain contracts:
 - `task verify` is owned by `operations/task_verify`. The operation resolves
   the Task snapshot, asks Proof to evaluate, and asks Task to apply the typed
   outcome through the transaction protocol. Proof may request Task verification
-  binding updates, but Task owns the lifecycle mutation.
+  binding updates, but Task owns the lifecycle mutation and Proof does not call
+  Task apply paths directly.
 - Hook adapters feed payloads into Run. Run owns normalized events and run
   evidence.
 - Metrics, Query, TUI, and MCP should read through domain read models instead

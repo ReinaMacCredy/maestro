@@ -91,7 +91,7 @@ has callers or user data safety impact.
 | Shell | `tests/shell_init_integration.rs` | Install tests if shell output starts depending on install state. |
 | TUI and Watch | Module-local tests in `src/interfaces/tui/task_list_watch.rs` plus command/read-model tests for the source data | Task, Feature, Proof, and Run tests when displayed fields or freshness logic change. |
 | CLI surface | `tests/cli_help.rs` and the command-specific integration test | The owning domain contract tests when CLI behavior encodes domain rules. |
-| Architecture/import boundaries | `tests/architecture_imports.rs` | Any moved module, compatibility alias removal, facade-protected import rule, or source-layout refactor. |
+| Architecture/import boundaries | `tests/architecture_imports.rs` | Any moved module, compatibility alias removal, facade-protected import rule, source-layout refactor, or Task/Proof/Run contract-edge change. |
 | Template and resource content | Owning module tests for Harness, Skills, Shell, Decision, Task, or Install | At least one command integration test that writes or renders the resource. |
 | End-to-end demos | `tests/phase3_core_verbs_e2e.rs`, `tests/v1_demo.rs` | Use after broad architecture, schema, or workflow changes. |
 
@@ -132,6 +132,12 @@ migration, install, or update tests.
 If changing an allowed contract edge between modules, run contract tests for
 both modules and at least one runtime-flow or operation test that exercises the
 edge.
+
+If changing the Task, Proof, or Run boundary, update and run
+`tests/architecture_imports.rs`. The guardrails should keep Task verification
+application behind `operations/task_verify`, keep Proof on Run read-model
+symbols instead of unmanaged path readers, and keep Run from importing Task
+while still allowing Run event/read models to expose opaque `task_id` strings.
 
 If changing current Task verification surfaces such as
 `src/domain/proof/verify_task.rs`, the legacy `src/verification` shim, the task

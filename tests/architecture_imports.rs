@@ -493,6 +493,165 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
 }
 
 #[test]
+fn proof_domain_does_not_apply_or_mutate_task_directly() {
+    let mut violations = Vec::new();
+    let allowed_task_symbols = BTreeSet::from([
+        "AcceptanceFile".to_string(),
+        "AppliedVerificationReceipt".to_string(),
+        "TaskRecord".to_string(),
+        "TaskState".to_string(),
+        "VerificationBinding".to_string(),
+        "VerificationFailed".to_string(),
+        "VerificationOutcome".to_string(),
+        "VerificationPassed".to_string(),
+        "load_task_for_update".to_string(),
+    ]);
+
+    for file in rust_files_under(Path::new("src/domain/proof")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        let code = code_for_path_scan(&source);
+        for reference in module_path_references(&code, "task::") {
+            let root = reference
+                .split("::")
+                .next()
+                .expect("invariant: module reference should have a root symbol");
+            let allowed_task_save_hook = reference == "template::SaveTaskHook";
+            if !allowed_task_symbols.contains(root) && !allowed_task_save_hook {
+                violations.push(format!(
+                    "{} references Task symbol task::{reference} outside the approved read/DTO set",
+                    file.display()
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Proof must return read data or DTOs and leave Task mutation to operations/task_verify:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn task_verification_application_stays_behind_task_verify_operation() {
+    let mut violations = Vec::new();
+    let allowed_files = [
+        Path::new("src/domain/task/mod.rs"),
+        Path::new("src/operations/task_verify/mod.rs"),
+    ];
+
+    for file in rust_files_under(Path::new("src")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        let code = code_for_path_scan(&source);
+        for symbol in [
+            "apply_verification_outcome(",
+            "apply_verification_outcome_to_handle_after",
+        ] {
+            if !code.contains(symbol) || allowed_files.contains(&file.as_path()) {
+                continue;
+            }
+            violations.push(format!(
+                "{} references Task verification application path {symbol}",
+                file.display()
+            ));
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Task verification outcomes should be applied only inside Task or operations/task_verify:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn proof_domain_reads_run_through_run_read_models() {
+    let mut violations = Vec::new();
+    let allowed_run_read_symbols = BTreeSet::from([
+        "RunEvent".to_string(),
+        "RunEventLog".to_string(),
+        "RunEventRecord".to_string(),
+        "RunEvidenceLoad".to_string(),
+        "RunEvidenceRecord".to_string(),
+        "load_run_evidence".to_string(),
+        "managed_event_logs".to_string(),
+        "visit_managed_events".to_string(),
+    ]);
+
+    for file in rust_files_under(Path::new("src/domain/proof")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        let code = code_for_path_scan(&source);
+
+        if let Some(segment) = namespaced_deep_import_segment(&code, "domain", "run") {
+            violations.push(format!(
+                "{} reaches into domain::run::{segment}",
+                file.display()
+            ));
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if let Some(segment) =
+                namespaced_deep_import_segment(&import_statement, "domain", "run")
+            {
+                violations.push(format!(
+                    "{}:{} imports domain::run::{segment}",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+
+        for symbol in module_symbol_references(&code, "run::") {
+            if !allowed_run_read_symbols.contains(&symbol) {
+                violations.push(format!(
+                    "{} references Run symbol run::{symbol} outside the approved read model set",
+                    file.display()
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Proof should consume Run through managed Run read models, not unmanaged Run path readers:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn run_domain_may_expose_task_ids_but_must_not_import_task() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src/domain/run")) {
+        let source = source_without_test_modules(&read_source_file(&file));
+        let code = code_for_path_scan(&source);
+
+        if code.contains("crate::task") || code.contains("crate::domain::task") {
+            violations.push(format!("{} references the Task aggregate", file.display()));
+        }
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if contains_legacy_root_import(&import_statement, "task")
+                || contains_legacy_deep_import(&import_statement, "task")
+                || contains_root_import(&import_statement, "crate::domain::task")
+                || namespaced_deep_import_segment(&import_statement, "domain", "task").is_some()
+            {
+                violations.push(format!(
+                    "{}:{} imports the Task aggregate",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Run may store or expose task_id values from events, but must not mutate or import Task:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn non_interface_sources_use_run_domain_instead_of_legacy_hooks() {
     let mut violations = Vec::new();
 
@@ -1775,12 +1934,95 @@ fn source_without_import_statements(source: &str) -> String {
     output
 }
 
+fn source_without_test_modules(source: &str) -> String {
+    let lines = source.lines().collect::<Vec<_>>();
+    let mut output = String::new();
+    let mut index = 0;
+
+    while index < lines.len() {
+        if lines[index].trim_start().starts_with("#[cfg(test)]") {
+            let mut candidate = index + 1;
+            while candidate < lines.len() && lines[candidate].trim().is_empty() {
+                candidate += 1;
+            }
+            if candidate < lines.len() && lines[candidate].trim_start().starts_with("mod ") {
+                index = skip_braced_item(&lines, candidate);
+                continue;
+            }
+        }
+        output.push_str(lines[index]);
+        output.push('\n');
+        index += 1;
+    }
+
+    output
+}
+
+fn skip_braced_item(lines: &[&str], start: usize) -> usize {
+    let mut index = start;
+    let mut depth = 0usize;
+    let mut saw_open = false;
+
+    while index < lines.len() {
+        for character in lines[index].chars() {
+            match character {
+                '{' => {
+                    depth += 1;
+                    saw_open = true;
+                }
+                '}' if depth > 0 => {
+                    depth -= 1;
+                }
+                _ => {}
+            }
+        }
+        index += 1;
+        if saw_open && depth == 0 {
+            break;
+        }
+    }
+
+    index
+}
+
 fn source_without_pub_mod_statements(source: &str) -> String {
     source
         .lines()
         .filter(|line| !line.trim_start().starts_with("pub mod "))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn module_symbol_references(source: &str, prefix: &str) -> BTreeSet<String> {
+    source
+        .match_indices(prefix)
+        .filter_map(|(index, _)| {
+            let tail = &source[index + prefix.len()..];
+            let symbol = tail
+                .chars()
+                .take_while(|character| character.is_ascii_alphanumeric() || *character == '_')
+                .collect::<String>();
+            (!symbol.is_empty()).then_some(symbol)
+        })
+        .collect()
+}
+
+fn module_path_references(source: &str, prefix: &str) -> BTreeSet<String> {
+    source
+        .match_indices(prefix)
+        .filter_map(|(index, _)| {
+            let tail = &source[index + prefix.len()..];
+            let path = tail
+                .chars()
+                .take_while(|character| {
+                    character.is_ascii_alphanumeric() || *character == '_' || *character == ':'
+                })
+                .collect::<String>()
+                .trim_end_matches(':')
+                .to_string();
+            (!path.is_empty()).then_some(path)
+        })
+        .collect()
 }
 
 fn source_without_allowed_interfaces_hooks_reexport(file: &Path, source: &str) -> String {
