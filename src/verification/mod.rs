@@ -1,7 +1,7 @@
 //! Legacy compatibility shim for Proof.
 
 pub mod events {
-    pub use crate::domain::proof::compatibility::{event_files_under, managed_event_files};
+    pub use crate::domain::proof::compatibility::managed_event_files;
 }
 
 pub mod proof_status {

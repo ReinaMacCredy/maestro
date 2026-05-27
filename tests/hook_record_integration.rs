@@ -1,9 +1,11 @@
 mod support;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::thread;
 
 use git2::{Repository, Signature};
 use maestro::hooks::event::run_dir_name;
@@ -336,6 +338,94 @@ fn skill_activation_event_is_normalized() {
     assert_eq!(events[0]["event_type"], "skill_activation");
     assert_eq!(events[0]["skill_name"], "maestro-task");
     assert_eq!(events[0]["activation_mode"], "agent_selected");
+}
+
+#[test]
+fn append_after_partial_trailing_line_preserves_next_jsonl_event() {
+    let repo = init_repo();
+    let events_path = repo
+        .path()
+        .join(".maestro/runs/session-partial/events.jsonl");
+    fs::create_dir_all(
+        events_path
+            .parent()
+            .expect("invariant: event path has parent"),
+    )
+    .expect("invariant: event parent should be creatable");
+    fs::write(&events_path, r#"{"event_type":"partial""#)
+        .expect("invariant: partial fixture should be writable");
+
+    let output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-partial","event_type":"UserPromptSubmit"}"#,
+    );
+
+    assert!(output.status.success());
+    let raw = fs::read_to_string(events_path).expect("invariant: events.jsonl should be readable");
+    let valid_events = raw
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .collect::<Vec<_>>();
+    assert_eq!(valid_events.len(), 1);
+    assert_eq!(valid_events[0]["event_type"], "UserPromptSubmit");
+}
+
+#[test]
+fn concurrent_same_session_records_append_complete_json_lines() {
+    let repo = init_repo();
+    let repo_path = repo.path().to_path_buf();
+    let handles = (0..12)
+        .map(|index| {
+            let repo_path = repo_path.clone();
+            thread::spawn(move || {
+                maestro_record(
+                    &repo_path,
+                    &format!(
+                        r#"{{"session_id":"session-concurrent","event_type":"PostToolUse","tool_name":"Tool{index}"}}"#
+                    ),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        let output = handle
+            .join()
+            .expect("invariant: hook record worker should not panic");
+        assert!(
+            output.status.success(),
+            "hook record failed\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let events_path = repo
+        .path()
+        .join(".maestro/runs/session-concurrent/events.jsonl");
+    let raw = fs::read_to_string(events_path).expect("invariant: events.jsonl should be readable");
+    let events = raw
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("event line should be valid JSON"))
+        .collect::<Vec<_>>();
+    assert_eq!(events.len(), 12);
+    assert!(events
+        .iter()
+        .all(|event| event["event_type"] == "PostToolUse"));
+    let actual_tools = events
+        .iter()
+        .map(|event| {
+            event["tool_name"]
+                .as_str()
+                .expect("event should include tool_name")
+        })
+        .fold(BTreeMap::<String, usize>::new(), |mut counts, tool| {
+            *counts.entry(tool.to_string()).or_default() += 1;
+            counts
+        });
+    let expected_tools = (0..12)
+        .map(|index| (format!("Tool{index}"), 1_usize))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(actual_tools, expected_tools);
 }
 
 #[test]

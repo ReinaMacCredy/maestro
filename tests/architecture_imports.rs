@@ -56,8 +56,7 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
 const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
     &[("src/interfaces/mcp/tools.rs", &["metrics"])];
 
-const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
-    &[("src/interfaces/hooks/record.rs", &["evidence"])];
+const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 
 const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
     &[("src/interfaces/tui/task_list_watch.rs", &["feature"])];
@@ -68,6 +67,7 @@ const DOMAIN_FACADES: &[&str] = &[
     "harness",
     "install",
     "proof",
+    "run",
     "skills",
     "task",
 ];
@@ -280,6 +280,10 @@ fn selected_compatibility_smoke_paths_resolve() {
         new_run_dir_name("agent/session"),
         legacy_run_dir_name("agent/session")
     );
+    assert_eq!(
+        maestro::domain::run::hook_event_contract().shared_events(),
+        maestro::hooks::event::SHARED_HOOK_EVENTS
+    );
 }
 
 #[test]
@@ -389,6 +393,20 @@ fn proof_domain_facade_does_not_publish_leaf_modules() {
             "legacy crate::verification shim should preserve compatibility module {leaf}"
         );
     }
+    let legacy_events_module = verification_shim
+        .split("pub mod events {")
+        .nth(1)
+        .and_then(|body| body.split("\npub mod proof_status {").next())
+        .expect("legacy crate::verification shim should contain events before proof_status");
+    assert_eq!(
+        public_reexport_item_names(legacy_events_module),
+        BTreeSet::from(["managed_event_files".to_string()]),
+        "legacy crate::verification events shim should expose managed Proof event reads only"
+    );
+    assert!(
+        !legacy_events_module.contains("event_files_under"),
+        "legacy crate::verification events shim should not expose unmanaged Run event discovery"
+    );
     let legacy_proof_status_module = verification_shim
         .split("pub mod proof_status {")
         .nth(1)
@@ -413,6 +431,107 @@ fn proof_domain_facade_does_not_publish_leaf_modules() {
             && !verification_shim.contains("mod stale;")
             && !verification_shim.contains("mod verify_task;"),
         "legacy crate::verification shim should not own Proof implementation files"
+    );
+}
+
+#[test]
+fn run_domain_facade_does_not_publish_leaf_modules() {
+    let run_facade = read_source_file(Path::new("src/domain/run/mod.rs"));
+    for leaf in [
+        "append",
+        "discovery",
+        "evidence",
+        "event",
+        "reader",
+        "record",
+    ] {
+        assert!(
+            !run_facade.contains(&format!("pub mod {leaf};")),
+            "src/domain/run/mod.rs should expose Run through root facade exports, not pub mod {leaf}"
+        );
+        assert!(
+            !run_facade.contains(&format!("pub(crate) mod {leaf};")),
+            "src/domain/run/mod.rs should keep Run leaf module {leaf} private"
+        );
+    }
+    assert_eq!(
+        public_reexport_item_names(&run_facade),
+        BTreeSet::from([
+            "hook_event_contract".to_string(),
+            "load_run_evidence".to_string(),
+            "managed_event_logs".to_string(),
+            "visit_managed_events".to_string(),
+            "write_evidence_for_session".to_string(),
+            "HookEventContract".to_string(),
+            "RunEvent".to_string(),
+            "RunEventLog".to_string(),
+            "RunEventRecord".to_string(),
+            "RunEvidenceLoad".to_string(),
+            "RunEvidenceRecord".to_string(),
+        ]),
+        "src/domain/run/mod.rs should expose only the deliberate Run contract surface"
+    );
+    for leaked_helper in [
+        "event_files_under",
+        "is_accepted_event",
+        "managed_event_files",
+        "managed_run_evidence_files",
+        "normalized_event_type",
+        "read_event_records",
+        "run_dir_name",
+        "run_evidence_files_under",
+        "string_field",
+        "visit_event_log",
+        "SHARED_HOOK_EVENTS",
+        "UNATTRIBUTED_SESSION",
+    ] {
+        assert!(
+            !public_reexport_item_names(&run_facade).contains(leaked_helper),
+            "src/domain/run/mod.rs should not leak low-level Run helper {leaked_helper}"
+        );
+    }
+}
+
+#[test]
+fn non_interface_sources_use_run_domain_instead_of_legacy_hooks() {
+    let mut violations = Vec::new();
+
+    for root in PRODUCTION_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            if file.starts_with(Path::new("src/interfaces")) {
+                continue;
+            }
+
+            let source = read_source_file(&file);
+            let code = source_without_allowed_interfaces_hooks_reexport(
+                &file,
+                &code_for_path_scan(&source),
+            );
+            if code.contains("crate::hooks::") {
+                violations.push(format!(
+                    "{} references legacy crate::hooks:: path",
+                    file.display()
+                ));
+                continue;
+            }
+            for (line_number, import_statement) in crate_import_statements(&source) {
+                if contains_legacy_root_import(&import_statement, "hooks")
+                    || contains_legacy_deep_import(&import_statement, "hooks")
+                {
+                    violations.push(format!(
+                        "{}:{} imports legacy crate::hooks path",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "non-interface code should use domain::run instead of legacy crate::hooks:\n{}",
+        violations.join("\n")
     );
 }
 
@@ -541,7 +660,15 @@ fn non_task_sources_do_not_reach_into_task_domain_leaf_modules() {
 fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/domain/mod.rs"),
-        &["decisions", "feature", "harness", "proof", "skills", "task"],
+        &[
+            "decisions",
+            "feature",
+            "harness",
+            "proof",
+            "run",
+            "skills",
+            "task",
+        ],
         &["crate::install"],
     );
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
@@ -899,7 +1026,7 @@ fn non_interface_sources_do_not_depend_on_interfaces_hooks() {
 
     assert!(
         violations.is_empty(),
-        "non-interface code should keep using crate::hooks until Run exposes a non-interface facade:\n{}",
+        "non-interface code should avoid interface Hooks paths and use domain::run for Run behavior:\n{}",
         violations.join("\n")
     );
 }
@@ -1005,6 +1132,10 @@ fn protected_interface_import(line: &str) -> Option<String> {
 }
 
 fn is_allowed_transitional_interface_import(file: &Path, line: &str) -> bool {
+    if file == Path::new("src/interfaces/hooks/event.rs") && line == "use crate::domain::run;" {
+        return true;
+    }
+
     transitional_interface_legacy_roots(file).is_some_and(|roots| {
         roots.iter().any(|root| {
             contains_legacy_root_import(line, root) || contains_legacy_deep_import(line, root)

@@ -1,17 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
-use serde::Deserialize;
+use anyhow::Result;
 
+use crate::domain::run;
 use crate::domain::task::{self, TaskState, VerificationBinding};
-use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
 use crate::foundation::core::time::parse_utc_timestamp;
+
+pub use crate::domain::run::{RunEvidenceLoad, RunEvidenceRecord};
 
 /// Computed metrics rendered by `maestro metrics summary`.
 #[derive(Clone, Debug, PartialEq)]
@@ -29,19 +25,6 @@ pub struct AgentSummary {
     pub agent: String,
     pub tasks: usize,
     pub average_duration_seconds: Option<u64>,
-}
-
-/// Run evidence subset used by metrics and improver rules.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct RunEvidenceRecord {
-    pub schema_version: String,
-    #[serde(default)]
-    pub session_id: String,
-    pub agent: Option<String>,
-    pub task_id: Option<String>,
-    pub duration_seconds: Option<u64>,
-    #[serde(default)]
-    pub human_interventions: u64,
 }
 
 /// Build metrics by reading current task and run artifacts on demand.
@@ -108,31 +91,7 @@ pub fn summarize(paths: &MaestroPaths) -> Result<MetricsSummary> {
 
 /// Load valid managed run evidence records.
 pub fn load_run_evidence(paths: &MaestroPaths) -> Result<RunEvidenceLoad> {
-    let mut records = Vec::new();
-    let mut skipped = 0;
-    for path in managed_run_evidence_files(paths)? {
-        let Ok(raw) = fs::read_to_string(&path) else {
-            skipped += 1;
-            continue;
-        };
-        let Ok(record) = serde_yaml::from_str::<RunEvidenceRecord>(&raw) else {
-            skipped += 1;
-            continue;
-        };
-        if record.schema_version == RUN_EVIDENCE_SCHEMA_VERSION {
-            records.push(record);
-        } else {
-            skipped += 1;
-        }
-    }
-    Ok(RunEvidenceLoad { records, skipped })
-}
-
-/// Best-effort run evidence load result.
-#[derive(Clone, Debug, PartialEq)]
-pub struct RunEvidenceLoad {
-    pub records: Vec<RunEvidenceRecord>,
-    pub skipped: usize,
+    run::load_run_evidence(paths)
 }
 
 /// Render metrics in the human-readable summary format from the spec.
@@ -187,83 +146,6 @@ pub fn task_verification_durations(paths: &MaestroPaths) -> Result<BTreeMap<Stri
         }
     }
     Ok(durations)
-}
-
-fn managed_run_evidence_files(paths: &MaestroPaths) -> Result<Vec<PathBuf>> {
-    let runs_dir = match managed_path(paths, ".maestro/runs", SymlinkPolicy::RejectAllComponents) {
-        Ok(path) => path,
-        Err(error)
-            if matches!(
-                error.downcast_ref::<MaestroError>(),
-                Some(MaestroError::ManagedPathContainsSymlink { .. })
-            ) =>
-        {
-            return Ok(Vec::new());
-        }
-        Err(error) => return Err(error),
-    };
-    run_evidence_files_under(&runs_dir)
-}
-
-fn run_evidence_files_under(runs_dir: &Path) -> Result<Vec<PathBuf>> {
-    match fs::symlink_metadata(runs_dir) {
-        Ok(metadata) if metadata.file_type().is_symlink() => return Ok(Vec::new()),
-        Ok(_) => {}
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to inspect {}", runs_dir.display()));
-        }
-    }
-    let root = match fs::canonicalize(runs_dir) {
-        Ok(root) => root,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to resolve {}", runs_dir.display()));
-        }
-    };
-    let mut files = Vec::new();
-    collect_run_evidence_files(runs_dir, &root, &mut files)?;
-    files.sort();
-    Ok(files)
-}
-
-fn collect_run_evidence_files(dir: &Path, root: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-    if !is_inside_canonical_root(dir, root)? {
-        return Ok(());
-    }
-    match fs::read_dir(dir) {
-        Ok(entries) => {
-            for entry in entries {
-                let entry = entry.with_context(|| format!("failed to list {}", dir.display()))?;
-                let path = entry.path();
-                let file_type = entry
-                    .file_type()
-                    .with_context(|| format!("failed to inspect {}", path.display()))?;
-                if file_type.is_symlink() {
-                    continue;
-                }
-                if file_type.is_dir() {
-                    collect_run_evidence_files(&path, root, files)?;
-                } else if file_type.is_file()
-                    && path.file_name().and_then(|name| name.to_str()) == Some("run_evidence.yaml")
-                    && is_inside_canonical_root(&path, root)?
-                {
-                    files.push(path);
-                }
-            }
-            Ok(())
-        }
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("failed to read {}", dir.display())),
-    }
-}
-
-fn is_inside_canonical_root(path: &Path, root: &Path) -> Result<bool> {
-    match fs::canonicalize(path) {
-        Ok(canonical) => Ok(canonical.starts_with(root)),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error).with_context(|| format!("failed to resolve {}", path.display())),
-    }
 }
 
 #[derive(Default)]

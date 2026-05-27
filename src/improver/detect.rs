@@ -1,17 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
 
 use anyhow::{Context, Result};
 use serde_json::Value;
 
 use crate::domain::decisions::query::decision_entries;
 use crate::domain::harness::{BacklogItem, HarnessConfig};
-use crate::domain::proof;
+use crate::domain::run;
 use crate::domain::task::{self, TaskEntry};
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::metrics::friction::{event_kind, event_text, looks_like_correction};
+use crate::metrics::friction::looks_like_correction;
 use crate::metrics::summary::task_verification_durations;
 
 /// Detect rule-based harness improvement proposals without LLM calls.
@@ -27,30 +26,19 @@ pub fn detect(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
 
 fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
     let mut corrections_by_session = BTreeMap::<String, Vec<String>>::new();
-    for path in proof::managed_event_files(paths)? {
-        let session = path
-            .parent()
-            .and_then(Path::file_name)
-            .and_then(|name| name.to_str())
-            .unwrap_or("<unknown>")
-            .to_string();
-        let raw = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        for line in raw.lines() {
-            let Ok(event) = serde_json::from_str::<Value>(line) else {
-                continue;
-            };
-            if event_kind(&event) == "UserPromptSubmit" {
-                let text = event_text(&event).unwrap_or_default();
-                if looks_like_correction(&text) {
-                    corrections_by_session
-                        .entry(session.clone())
-                        .or_default()
-                        .push(text);
-                }
+    run::visit_managed_events(paths, |record| {
+        let event = record.event();
+        if event.is_event_type("UserPromptSubmit") {
+            let text = event.prompt_text().unwrap_or_default();
+            if looks_like_correction(text) {
+                corrections_by_session
+                    .entry(record.session_id().to_string())
+                    .or_default()
+                    .push(text.to_string());
             }
         }
-    }
+        Ok(())
+    })?;
 
     let proposals = corrections_by_session
         .into_iter()

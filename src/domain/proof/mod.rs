@@ -18,7 +18,7 @@ pub(crate) use verify_task::{
 pub use verify_task::{TaskVerification, TaskVerificationStatus};
 
 pub(crate) mod compatibility {
-    pub use super::events::{event_files_under, managed_event_files};
+    pub use super::events::managed_event_files;
     pub(crate) use super::proof_status::{
         legacy_proof_status, render_legacy_proof_status, LegacyProofStatus,
     };

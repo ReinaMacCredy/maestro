@@ -4,6 +4,7 @@ pub mod decisions;
 pub mod feature;
 pub mod harness;
 pub mod proof;
+pub mod run;
 pub mod skills;
 pub mod task;
 

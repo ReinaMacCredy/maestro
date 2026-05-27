@@ -1,8 +1,8 @@
 //! Task verification execution helpers.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::{ErrorKind, Read};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::process::Command;
@@ -11,12 +11,12 @@ use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use super::events::managed_event_files;
 use super::stale::{FreshnessInputs, StoredFreshness};
 use crate::domain::harness::HarnessConfig;
+use crate::domain::run;
 use crate::domain::task::{self, AcceptanceFile, TaskRecord, TaskState, VerificationBinding};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
@@ -894,75 +894,63 @@ fn collect_event_text(
     task_id: &str,
     evidence: &mut Vec<EvidenceText>,
 ) -> Result<()> {
-    for path in managed_event_files(paths)? {
-        let mut matched = Vec::new();
-        let mut claims = Vec::new();
-        for line in event_lines(&path)? {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let Ok(event) = serde_json::from_str::<Value>(&line) else {
-                continue;
-            };
-            if event.get("task_id").and_then(Value::as_str) == Some(task_id)
-                && is_proof_event(&event)
-            {
-                claims.extend(event_claims(&event));
-                matched.push(line);
-            }
+    let mut matched_by_path = BTreeMap::<PathBuf, (Vec<String>, Vec<String>)>::new();
+    run::visit_managed_events(paths, |record| {
+        let event = record.event();
+        if event.task_id() == Some(task_id) && is_proof_event(event) {
+            let (matched, claims) = matched_by_path
+                .entry(record.path().to_path_buf())
+                .or_default();
+            claims.extend(event_claims(event));
+            matched.push(record.raw_line().to_string());
         }
-        if !matched.is_empty() {
-            evidence.push(EvidenceText {
-                kind: EVENT_PROOF_SOURCE_KIND.to_string(),
-                path,
-                text: matched.join("\n"),
-                claims,
-            });
-        }
+        Ok(())
+    })?;
+    for (path, (matched, claims)) in matched_by_path {
+        evidence.push(EvidenceText {
+            kind: EVENT_PROOF_SOURCE_KIND.to_string(),
+            path,
+            text: matched.join("\n"),
+            claims,
+        });
     }
     Ok(())
 }
 
-fn is_proof_event(event: &Value) -> bool {
+fn is_proof_event(event: &run::RunEvent) -> bool {
     matches!(event_kind(event), Some("proof" | "Proof" | "task_proof"))
         || is_phase4_tool_proof_event(event)
 }
 
-fn event_kind(event: &Value) -> Option<&str> {
-    event
-        .get("kind")
-        .or_else(|| event.get("event"))
-        .or_else(|| event.get("type"))
-        .and_then(Value::as_str)
+fn event_kind(event: &run::RunEvent) -> Option<&str> {
+    event.alias_kind()
 }
 
-fn event_claims(event: &Value) -> Vec<String> {
+fn event_claims(event: &run::RunEvent) -> Vec<String> {
     let mut claims = Vec::new();
-    if let Some(claim) = event.get("claim").and_then(Value::as_str) {
+    if let Some(claim) = event.claim() {
         claims.push(claim.to_string());
     }
-    if let Some(message) = event.get("message").and_then(Value::as_str) {
+    if let Some(message) = event.message() {
         claims.push(message.to_string());
     }
-    if let Some(values) = event.get("claims").and_then(Value::as_array) {
-        claims.extend(values.iter().filter_map(Value::as_str).map(str::to_string));
-    }
+    claims.extend(event.claims());
     if is_phase4_tool_proof_event(event) {
         claims.extend(phase4_tool_claims(event));
     }
     claims
 }
 
-fn is_phase4_tool_proof_event(event: &Value) -> bool {
-    event.get("schema_version").and_then(Value::as_str) == Some(EVENT_SCHEMA_VERSION)
-        && event.get("event_type").and_then(Value::as_str) == Some("PostToolUse")
-        && event.get("status").and_then(Value::as_str) == Some("ok")
+fn is_phase4_tool_proof_event(event: &run::RunEvent) -> bool {
+    event.schema_version() == Some(EVENT_SCHEMA_VERSION)
+        && event.event_type() == Some("PostToolUse")
+        && event.status() == Some("ok")
 }
 
-fn phase4_tool_claims(event: &Value) -> Vec<String> {
+fn phase4_tool_claims(event: &run::RunEvent) -> Vec<String> {
     let mut claims = Vec::new();
-    let tool_name = event.get("tool_name").and_then(Value::as_str);
-    let tool_input_hash = event.get("tool_input_hash").and_then(Value::as_str);
+    let tool_name = event.tool_name();
+    let tool_input_hash = event.tool_input_hash();
 
     if let (Some(tool_name), Some(tool_input_hash)) = (tool_name, tool_input_hash) {
         claims.push(format!("{tool_name} {tool_input_hash}"));
@@ -986,19 +974,6 @@ fn proof_text_claims(text: &str) -> Vec<String> {
 
 fn normalize_claim(claim: &str) -> String {
     claim.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-fn event_lines(path: &Path) -> Result<Vec<String>> {
-    let mut bytes = Vec::new();
-    fs::File::open(path)
-        .with_context(|| format!("failed to read {}", path.display()))?
-        .read_to_end(&mut bytes)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    Ok(bytes
-        .split(|byte| *byte == b'\n')
-        .filter_map(|line| std::str::from_utf8(line).ok())
-        .map(str::to_string)
-        .collect())
 }
 
 fn text_files_under(dir: &Path) -> Result<Vec<PathBuf>> {

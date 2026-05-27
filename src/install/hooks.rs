@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-use crate::hooks::event::SHARED_HOOK_EVENTS;
+use crate::domain::run;
 use crate::install::InstallAgent;
 
 const HOOK_COMMAND: &str = "maestro hook record";
@@ -37,7 +37,7 @@ enum HookConfigFlavor {
 
 fn hook_json(flavor: HookConfigFlavor) -> Value {
     let mut hooks = Map::new();
-    for event in SHARED_HOOK_EVENTS {
+    for event in run::hook_event_contract().shared_events() {
         let command = match flavor {
             HookConfigFlavor::Claude => json!({"type": "command", "command": HOOK_COMMAND}),
             HookConfigFlavor::Codex => {

@@ -681,20 +681,26 @@ session id is written to:
 - `.maestro/runs/<encoded-session-id>/run_evidence.yaml` after a `Stop` event
   when evidence generation succeeds.
 
-Current run behavior is split across several modules:
+Current run behavior is owned by `src/domain/run/`:
 
-- `src/interfaces/hooks/event.rs`: accepted hook event names, event aliases,
-  string-field extraction, unattributed session handling, and
-  collision-resistant run directory encoding.
-- `src/interfaces/hooks/record.rs`: stdin payload parsing, event normalization,
-  commit snapshots for `SessionStart` and `Stop`, managed append to
-  `events.jsonl`, and triggering run evidence generation on `Stop`.
-- `src/evidence/run_evidence.rs`: aggregation of `events.jsonl` into
+- `src/domain/run/event.rs`: accepted hook event contract, event aliases,
+  unattributed session handling, and collision-resistant run directory
+  encoding.
+- `src/domain/run/record.rs`: event normalization, commit snapshots for
+  `SessionStart` and `Stop`, managed append to `events.jsonl`, and triggering
+  run evidence generation on `Stop`.
+- `src/domain/run/append.rs`: managed, retry-safe JSONL append behavior.
+- `src/domain/run/reader.rs`: typed, streaming Run event read models.
+- `src/domain/run/discovery.rs`: managed discovery of run event logs and run
+  evidence files.
+- `src/domain/run/evidence.rs`: aggregation of `events.jsonl` into
   `run_evidence.yaml`.
-- `src/domain/proof/events.rs`: managed discovery of `events.jsonl` files for
-  Proof. `src/verification/` preserves the legacy compatibility surface.
-- `src/metrics/summary.rs`: managed discovery and loading of
-  `run_evidence.yaml` files for Metrics.
+
+`src/interfaces/hooks/record.rs` is now a thin adapter that reads stdin, parses
+JSON, and calls Run. `src/interfaces/hooks/event.rs` and
+`src/evidence/run_evidence.rs` preserve legacy compatibility shims.
+`src/domain/proof/events.rs` preserves the legacy Proof compatibility surface
+while delegating discovery to Run.
 
 The normalized event records use `maestro.event.v1`. Run evidence uses
 `maestro.run_evidence.v1`. `core` also declares `maestro.run.v1`, but the
@@ -706,13 +712,10 @@ use `maestro.event.v1` event lines and `maestro.run_evidence.v1` evidence. If
 `run.yaml` becomes active, this spec must define its artifact path, schema,
 migration behavior, and tests in the same change.
 
-The rough edge is that Run is not yet one deep module. Event normalization,
-event appending, run evidence derivation, proof event discovery, and metrics run
-evidence loading are split across Hooks, Evidence, Verification, and Metrics.
-The hook adapter now lives under `interfaces/hooks`, while the legacy
-`crate::hooks` and `maestro::hooks` paths remain compatibility re-exports. That
-still makes it easy for readers to confuse hook adapters, run storage, proof
-input, and metrics projection.
+The remaining rough edge is compatibility surface area, not ownership:
+`crate::hooks`, `maestro::hooks`, and `crate::evidence::run_evidence` still
+exist as shims during the migration. New code should call `domain/run` for Run
+behavior and keep hook adapters focused on process input and output.
 
 #### Target State
 

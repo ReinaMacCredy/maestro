@@ -131,9 +131,9 @@ file-specific allowances until those domain read facades move in later phases.
 
 Hook command adapter code lives under `src/interfaces/hooks`, and `crate::hooks`
 remains a compatibility re-export. New interface-layer references should prefer
-`crate::interfaces::hooks`. Non-interface callers that still need run-event
-helpers may keep using `crate::hooks` until the later Run aggregate extraction
-moves those helpers behind a non-interface facade.
+`crate::interfaces::hooks`. Run event normalization, append behavior, discovery,
+and run evidence generation now live behind `crate::domain::run`; non-interface
+callers should use that Run facade instead of `crate::hooks`.
 
 TUI/watch rendering lives under `src/interfaces/tui`, and `crate::tui` remains
 a compatibility re-export. New production references should prefer
