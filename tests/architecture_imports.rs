@@ -46,7 +46,7 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
         &["decisions", "feature", "harness", "metrics"],
     ),
     ("src/interfaces/cli/task.rs", &[]),
-    ("src/interfaces/cli/update.rs", &["update"]),
+    ("src/interfaces/cli/update.rs", &[]),
     ("src/interfaces/cli/watch.rs", &[]),
 ];
 
@@ -240,7 +240,14 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _new_migration_plan = |paths: &maestro::foundation::core::paths::MaestroPaths| {
         maestro::operations::migrate::plan(paths)
     };
-    let _ = std::any::type_name::<maestro::operations::update::InstallMethod>();
+    assert_eq!(
+        std::any::type_name::<maestro::operations::update::InstallMethod>(),
+        std::any::type_name::<maestro::update::InstallMethod>()
+    );
+    let _legacy_detect_update_install_method: fn(&Path) -> maestro::update::InstallMethod =
+        maestro::update::detect_install_method;
+    let _new_detect_update_install_method: fn(&Path) -> maestro::operations::update::InstallMethod =
+        maestro::operations::update::detect_install_method;
     assert_eq!(
         std::any::type_name::<maestro::interfaces::shell::Shell>(),
         std::any::type_name::<maestro::shell::Shell>()
@@ -616,6 +623,77 @@ fn migration_operation_owns_implementation_and_legacy_shim_stays_thin() {
 }
 
 #[test]
+fn update_operation_owns_implementation_and_legacy_shim_stays_thin() {
+    assert!(
+        Path::new("src/operations/update/mod.rs").is_file(),
+        "Update implementation should live under src/operations/update"
+    );
+
+    let operations_facade = read_source_file(Path::new("src/operations/update/mod.rs"));
+    for item in [
+        "run_update",
+        "run_update_with_seams",
+        "detect_install_method",
+        "detect_schema_mismatches",
+        "InstallMethod",
+        "UpdateOutcome",
+    ] {
+        assert!(
+            operations_facade.contains(item),
+            "operations/update facade should expose {item}"
+        );
+    }
+
+    let legacy_shim = read_source_file(Path::new("src/update/mod.rs"));
+    assert!(
+        legacy_shim.contains("pub use crate::operations::update::*;"),
+        "legacy crate::update should re-export the operations-owned update module"
+    );
+    for implementation_item in [
+        "pub fn run_update",
+        "pub trait UpdateDownloader",
+        "pub struct GitHubCurlDownloader",
+        "fn replace_binary_atomic",
+        "fn detect_schema_mismatches",
+    ] {
+        assert!(
+            !legacy_shim.contains(implementation_item),
+            "legacy crate::update should stay a compatibility shim and not own {implementation_item}"
+        );
+    }
+
+    let mut violations = Vec::new();
+    for file in rust_files_under(Path::new("src")) {
+        if file == Path::new("src/update/mod.rs") {
+            continue;
+        }
+        let source = read_source_file(&file);
+        let code = code_for_path_scan(&source);
+        if code.contains("crate::update::") {
+            violations.push(format!("{} imports legacy crate::update", file.display()));
+            continue;
+        }
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if contains_legacy_root_import(&import_statement, "update")
+                || contains_legacy_deep_import(&import_statement, "update")
+            {
+                violations.push(format!(
+                    "{}:{} imports legacy crate::update path",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should use operations::update instead of the legacy shim:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn proof_domain_does_not_apply_or_mutate_task_directly() {
     let mut violations = Vec::new();
     let allowed_task_symbols = BTreeSet::from([
@@ -962,8 +1040,8 @@ fn transitional_public_surfaces_match_phase_policy() {
     );
     assert_public_modules(
         Path::new("src/operations/mod.rs"),
-        &["migrate"],
-        &["crate::improver", "crate::metrics", "crate::update"],
+        &["migrate", "update"],
+        &["crate::improver", "crate::metrics"],
     );
 }
 

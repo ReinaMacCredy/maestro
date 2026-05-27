@@ -9,10 +9,7 @@ use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::interfaces::cli::UpdateArgs;
-use crate::update::{
-    detect_install_method, run_update, BinaryStatus, InstallMethod, ReleaseInfo, UpdateFailure,
-    UpdateFailurePhase, UpdateOptions, UpdateOutcome,
-};
+use crate::operations::update;
 
 const AUTO_CHECK_INTERVAL_SECONDS: u64 = 24 * 60 * 60;
 
@@ -37,7 +34,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
     let colors = Colors::detect();
     println!("{}", colors.info("Checking for updates..."));
 
-    let outcome = match run_update(&UpdateOptions {
+    let outcome = match update::run_update(&update::UpdateOptions {
         paths: &paths,
         executable_path: &executable_path,
         backup_timestamp: &backup_timestamp,
@@ -47,7 +44,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
     }) {
         Ok(outcome) => outcome,
         Err(error) => {
-            if let Some(failure) = error.downcast_ref::<UpdateFailure>() {
+            if let Some(failure) = error.downcast_ref::<update::UpdateFailure>() {
                 print!("{}", render_failure(failure, colors));
             } else {
                 println!(
@@ -76,7 +73,7 @@ pub fn run_auto_check() -> Result<()> {
     }
 
     let executable_path = env::current_exe()?;
-    if detect_install_method(&executable_path) != InstallMethod::Curl {
+    if update::detect_install_method(&executable_path) != update::InstallMethod::Curl {
         return Ok(());
     }
 
@@ -90,7 +87,7 @@ pub fn run_auto_check() -> Result<()> {
         return Ok(());
     }
 
-    let outcome = run_update(&UpdateOptions {
+    let outcome = update::run_update(&update::UpdateOptions {
         paths: &paths,
         executable_path: &executable_path,
         backup_timestamp: "",
@@ -100,7 +97,7 @@ pub fn run_auto_check() -> Result<()> {
     })?;
     record_auto_check(&paths, now)?;
 
-    if let BinaryStatus::UpdateAvailable { release, .. } = outcome.binary_status {
+    if let update::BinaryStatus::UpdateAvailable { release, .. } = outcome.binary_status {
         let colors = Colors::detect();
         println!(
             "{}",
@@ -114,10 +111,10 @@ pub fn run_auto_check() -> Result<()> {
     Ok(())
 }
 
-fn render_outcome(outcome: &UpdateOutcome, verbose: bool, colors: Colors) -> String {
+fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors) -> String {
     let mut out = String::new();
     match &outcome.binary_status {
-        BinaryStatus::UpdateAvailable {
+        update::BinaryStatus::UpdateAvailable {
             release,
             current_version,
         } => {
@@ -127,17 +124,17 @@ fn render_outcome(outcome: &UpdateOutcome, verbose: bool, colors: Colors) -> Str
             ));
             out.push_str(&format!("Current version: {current_version}\n"));
         }
-        BinaryStatus::UpToDate { release } => {
+        update::BinaryStatus::UpToDate { release } => {
             out.push_str(&colors.success(&format!(
                 "✓ Maestro is already up to date ({})",
                 release.version
             )));
             out.push('\n');
         }
-        BinaryStatus::Skipped { reason } => {
+        update::BinaryStatus::Skipped { reason } => {
             out.push_str(&format!("Update unavailable {reason}.\n"));
         }
-        BinaryStatus::Replaced { release, .. } => {
+        update::BinaryStatus::Replaced { release, .. } => {
             if let Some(release) = release {
                 out.push_str(&colors.info(&format!("Updating to version {}...", release.version)));
                 out.push('\n');
@@ -169,7 +166,7 @@ fn render_outcome(outcome: &UpdateOutcome, verbose: bool, colors: Colors) -> Str
     }
 
     if verbose {
-        if let BinaryStatus::Replaced { path, .. } = &outcome.binary_status {
+        if let update::BinaryStatus::Replaced { path, .. } = &outcome.binary_status {
             out.push_str(&format!("Installed binary: {}\n", path.display()));
         }
     }
@@ -191,20 +188,20 @@ fn render_outcome(outcome: &UpdateOutcome, verbose: bool, colors: Colors) -> Str
     out
 }
 
-fn render_failure(failure: &UpdateFailure, colors: Colors) -> String {
+fn render_failure(failure: &update::UpdateFailure, colors: Colors) -> String {
     let mut out = String::new();
     if let Some(release) = &failure.release {
         out.push_str(&colors.info(&format!("Updating to version {}...", release.version)));
         out.push('\n');
         match failure.phase {
-            UpdateFailurePhase::Download => {
+            update::UpdateFailurePhase::Download => {
                 out.push_str(&download_progress_line(
                     release,
                     failure.downloaded_bytes,
                     failure.total_bytes,
                 ));
             }
-            UpdateFailurePhase::Install => {
+            update::UpdateFailurePhase::Install => {
                 out.push_str(&download_complete_line(release));
                 out.push_str("Installing update...\n");
             }
@@ -292,7 +289,7 @@ fn current_unix_seconds() -> Result<u64> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
 
-fn download_complete_line(release: &ReleaseInfo) -> String {
+fn download_complete_line(release: &update::ReleaseInfo) -> String {
     match release.size_bytes {
         Some(size_bytes) => {
             let size = format_size(size_bytes);
@@ -303,7 +300,7 @@ fn download_complete_line(release: &ReleaseInfo) -> String {
 }
 
 fn download_progress_line(
-    release: &ReleaseInfo,
+    release: &update::ReleaseInfo,
     downloaded_bytes: Option<u64>,
     total_bytes: Option<u64>,
 ) -> String {
@@ -319,7 +316,7 @@ fn download_progress_line(
     }
 }
 
-fn release_summary(release: &ReleaseInfo) -> String {
+fn release_summary(release: &update::ReleaseInfo) -> String {
     match (&release.released_at, &release.relative_age) {
         (Some(released_at), Some(relative_age)) => {
             format!(
@@ -333,7 +330,7 @@ fn release_summary(release: &ReleaseInfo) -> String {
     }
 }
 
-fn release_summary_short(release: &ReleaseInfo) -> String {
+fn release_summary_short(release: &update::ReleaseInfo) -> String {
     match &release.relative_age {
         Some(relative_age) => format!("{} (released {})", release.version, relative_age),
         None => release_summary(release),
@@ -362,17 +359,15 @@ fn sentence(message: impl AsRef<str>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        auto_check_due, record_auto_check, render_failure, render_outcome, Colors, ReleaseInfo,
-    };
+    use super::{auto_check_due, record_auto_check, render_failure, render_outcome, Colors};
     use crate::foundation::core::paths::MaestroPaths;
-    use crate::update::{BinaryStatus, UpdateFailure, UpdateOutcome};
+    use crate::operations::update;
 
     #[test]
     fn renders_no_update_as_version_only() {
-        let outcome = UpdateOutcome {
-            binary_status: BinaryStatus::UpToDate {
-                release: ReleaseInfo {
+        let outcome = update::UpdateOutcome {
+            binary_status: update::BinaryStatus::UpToDate {
+                release: update::ReleaseInfo {
                     version: "0.0.1779772576-g751b94".to_string(),
                     released_at: Some("2026-05-26T05:16:16.000Z".to_string()),
                     relative_age: Some("1h ago".to_string()),
@@ -391,10 +386,10 @@ mod tests {
 
     #[test]
     fn renders_update_progress_with_download_size() {
-        let outcome = UpdateOutcome {
-            binary_status: BinaryStatus::Replaced {
+        let outcome = update::UpdateOutcome {
+            binary_status: update::BinaryStatus::Replaced {
                 path: std::path::PathBuf::from("/tmp/maestro"),
-                release: Some(ReleaseInfo {
+                release: Some(update::ReleaseInfo {
                     version: "0.0.1779772576-g751b94".to_string(),
                     released_at: Some("2026-05-26T05:16:16.000Z".to_string()),
                     relative_age: Some("1h ago".to_string()),
@@ -418,9 +413,9 @@ mod tests {
 
     #[test]
     fn renders_no_update_without_release_metadata() {
-        let outcome = UpdateOutcome {
-            binary_status: BinaryStatus::UpToDate {
-                release: ReleaseInfo {
+        let outcome = update::UpdateOutcome {
+            binary_status: update::BinaryStatus::UpToDate {
+                release: update::ReleaseInfo {
                     version: "0.0.1779772576-g751b94".to_string(),
                     released_at: None,
                     relative_age: None,
@@ -439,9 +434,9 @@ mod tests {
 
     #[test]
     fn renders_check_update_available() {
-        let outcome = UpdateOutcome {
-            binary_status: BinaryStatus::UpdateAvailable {
-                release: ReleaseInfo {
+        let outcome = update::UpdateOutcome {
+            binary_status: update::BinaryStatus::UpdateAvailable {
+                release: update::ReleaseInfo {
                     version: "0.0.1779772576-g751b94".to_string(),
                     released_at: Some("2026-05-26T05:16:16.000Z".to_string()),
                     relative_age: Some("1h ago".to_string()),
@@ -464,8 +459,8 @@ mod tests {
 
     #[test]
     fn renders_download_failure_with_partial_progress() {
-        let failure = UpdateFailure::download(
-            Some(ReleaseInfo {
+        let failure = update::UpdateFailure::download(
+            Some(update::ReleaseInfo {
                 version: "0.0.1779772576-g751b94".to_string(),
                 released_at: Some("2026-05-26T05:16:16.000Z".to_string()),
                 relative_age: Some("1h ago".to_string()),
@@ -490,8 +485,8 @@ mod tests {
 
     #[test]
     fn renders_install_failure_with_restore_message() {
-        let failure = UpdateFailure::install(
-            Some(ReleaseInfo {
+        let failure = update::UpdateFailure::install(
+            Some(update::ReleaseInfo {
                 version: "0.0.1779772576-g751b94".to_string(),
                 released_at: Some("2026-05-26T05:16:16.000Z".to_string()),
                 relative_age: Some("1h ago".to_string()),
@@ -516,10 +511,10 @@ mod tests {
 
     #[test]
     fn colors_success_and_progress_lines_when_enabled() {
-        let outcome = UpdateOutcome {
-            binary_status: BinaryStatus::Replaced {
+        let outcome = update::UpdateOutcome {
+            binary_status: update::BinaryStatus::Replaced {
                 path: std::path::PathBuf::from("/tmp/maestro"),
-                release: Some(ReleaseInfo {
+                release: Some(update::ReleaseInfo {
                     version: "0.0.1779772576-g751b94".to_string(),
                     released_at: None,
                     relative_age: None,

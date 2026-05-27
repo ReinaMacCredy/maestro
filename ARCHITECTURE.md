@@ -1362,9 +1362,10 @@ The target source map should make each module's ownership contract explicit:
 - `migrate`: target home is `operations/migrate`; it owns explicit migrations
   between supported on-disk formats. It should use target-domain writers where
   possible, or document any lower-level writes as migration-only exceptions.
-- `update`: target home is `operations/update`; it owns binary update checks
-  and repo-local drift detection. It must not silently rewrite user-owned
-  Harness, Task, Feature, Decision, or Install artifacts.
+- `operations/update`: owns binary update checks and repo-local drift detection.
+  The legacy `update` root is only a compatibility re-export. Update must not
+  silently rewrite user-owned Harness, Task, Feature, Decision, or Install
+  artifacts.
 - `interfaces/mcp`: owns MCP transport and tool exposure. The legacy `mcp`
   root is only a compatibility re-export. It should call the same operations
   and domain interfaces as CLI commands.
@@ -2253,7 +2254,7 @@ Current test types:
     `tests/core_managed_blocks.rs`, `tests/core_paths_fs.rs`,
     `tests/core_schema_error.rs`, `tests/core_backup_diff_git.rs`,
     `tests/harness_templates.rs`, `tests/skills_extract.rs`, and module-local
-    tests in `src/update/mod.rs`, `src/interfaces/cli/update.rs`,
+    tests in `src/operations/update/mod.rs`, `src/interfaces/cli/update.rs`,
     `src/interfaces/tui/task_list_watch.rs`, and
     `src/domain/install/mirrors.rs`.
 
@@ -2346,7 +2347,7 @@ should eventually sit behind the owning domain module.
 | `verification` | Proof owns report/freshness/claim logic and CLI verification is coordinated by `operations/task_verify`; legacy `verification` remains a compatibility shim. | Deep Proof aggregate coordinated by `operations/task_verify` for Task outcome application. | Keep production callers on the operation boundary and keep proof status accurate for applied, stale, failed, and unapplied reports. |
 | `install` and `skills` | Install owns mirrors/locks and calls skill symlink helpers. Skills owns extraction and symlink mechanics. | Install owns wiring; Skills owns content/extraction. | Keep the split sharp so Install does not own bundled skill content and Skills does not own install policy. |
 | `operations/migrate` | Strong migration plan/apply module, with some direct target artifact construction and a legacy `migrate` shim. | Explicit migration operation that preserves target-domain contracts. | Lower-level writes should remain migration-only exceptions or move to target-domain writers. |
-| `update` | Binary update, bundled skill refresh, rollback, auto-check, schema mismatch reporting. | Update owns binary/skill refresh and reports drift. | Update must not silently become migration or Harness rewrite logic. |
+| `operations/update` | Binary update, bundled skill refresh, rollback, auto-check, schema mismatch reporting. Legacy `update` remains a compatibility shim. | Update owns binary/skill refresh and reports drift. | Update must not silently become migration or Harness rewrite logic. |
 | `metrics`, `query`, `tui`, `mcp` | Read and present projections from tasks, runs, proof, decisions, backlog, and metrics. | Read-model adapters over domain contracts. | These modules should avoid rescanning private artifact layouts independently when domain read models exist. |
 | `shell` | Emits shell wrappers around the CLI. | Shell adapter only. | Must not absorb install or task lifecycle policy. |
 
@@ -2372,7 +2373,7 @@ The target architecture should make the following true:
 | Where do I edit agent install files? | `install`, unless changing Harness content or Skills content. |
 | Where do I edit run evidence derivation? | Run-owned code, not Proof or Metrics. |
 | Where do I edit old-format conversion? | `operations/migrate`, preserving target-domain contracts. |
-| Where do I edit binary update behavior? | `update`, without adding schema migration side effects. |
+| Where do I edit binary update behavior? | `operations/update`, without adding schema migration side effects. |
 
 The most important target gap is ownership locality. A future maintainer should
 be able to change one module's private implementation and run that module's

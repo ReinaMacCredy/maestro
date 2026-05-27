@@ -118,6 +118,67 @@ fn update_accepts_check_verbose_and_force_flags_without_writing() {
 }
 
 #[test]
+fn update_check_auto_check_and_update_preserve_user_owned_harness_artifacts() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+    mark_user_owned_harness_artifacts(&paths);
+    let before = snapshot_files(&user_owned_harness_artifacts(&paths));
+
+    let check = maestro(&["update", "--check"], temp_dir.path());
+
+    assert_success(&check);
+    assert_files_unchanged(&before);
+
+    let path = fake_curl_path_env(
+        &temp_dir,
+        format!(
+            r#"#!/bin/sh
+printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
+"#,
+            platform_asset_name()
+        ),
+    );
+    let auto_check = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .arg("doctor")
+        .current_dir(temp_dir.path())
+        .env("MAESTRO_INSTALL_METHOD", "curl")
+        .env("PATH", path)
+        .output()
+        .expect("invariant: maestro doctor should run");
+
+    assert_success(&auto_check);
+    assert_files_unchanged(&before);
+
+    let curl_update_path = fake_curl_path_env(
+        &temp_dir,
+        format!(
+            r#"#!/bin/sh
+printf '{{"tag_name":"v{}","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
+"#,
+            env!("MAESTRO_BUILD_VERSION"),
+            platform_asset_name()
+        ),
+    );
+    let curl_update = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .arg("update")
+        .current_dir(temp_dir.path())
+        .env("MAESTRO_INSTALL_METHOD", "curl")
+        .env("PATH", curl_update_path)
+        .output()
+        .expect("invariant: maestro update should run");
+
+    assert_success(&curl_update);
+    assert_files_unchanged(&before);
+
+    let update = maestro(&["update"], temp_dir.path());
+
+    assert_success(&update);
+    assert_files_unchanged(&before);
+}
+
+#[test]
 fn update_reports_manager_commands_for_brew_and_cargo_installs() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
@@ -334,19 +395,12 @@ fn schema_mismatch_reports_migrate_and_does_not_mutate_harness_files() {
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
     let harness_yml = paths.harness_dir().join("harness.yml");
-    let backlog_yaml = paths.harness_dir().join("backlog.yaml");
-    let features_yaml = paths.features_dir().join("features.yaml");
     fs::write(
         &harness_yml,
         "schema_version: maestro.harness.v0\nverify: []\n",
     )
     .expect("invariant: harness schema should be writable");
-    let before_harness =
-        fs::read_to_string(&harness_yml).expect("invariant: harness should be readable");
-    let before_backlog =
-        fs::read_to_string(&backlog_yaml).expect("invariant: backlog should be readable");
-    let before_features =
-        fs::read_to_string(&features_yaml).expect("invariant: features should be readable");
+    let before = snapshot_files(&user_owned_harness_artifacts(&paths));
 
     let update = maestro(&["update"], temp_dir.path());
 
@@ -354,18 +408,7 @@ fn schema_mismatch_reports_migrate_and_does_not_mutate_harness_files() {
     let stdout = String::from_utf8_lossy(&update.stdout);
     assert!(stdout.contains("schema mismatch detected"));
     assert!(stdout.contains("maestro migrate"));
-    assert_eq!(
-        fs::read_to_string(&harness_yml).expect("invariant: harness should be readable"),
-        before_harness
-    );
-    assert_eq!(
-        fs::read_to_string(&backlog_yaml).expect("invariant: backlog should be readable"),
-        before_backlog
-    );
-    assert_eq!(
-        fs::read_to_string(&features_yaml).expect("invariant: features should be readable"),
-        before_features
-    );
+    assert_files_unchanged(&before);
 }
 
 #[test]
@@ -564,6 +607,62 @@ fn fake_curl_path_env(temp_dir: &TestTempDir, script: impl AsRef<str>) -> String
 
     let path = env::var_os("PATH").expect("invariant: PATH should be set");
     format!("{}:{}", fakebin.display(), path.to_string_lossy())
+}
+
+fn mark_user_owned_harness_artifacts(paths: &MaestroPaths) {
+    let harness_protocol = paths.harness_dir().join("HARNESS.md");
+    fs::write(
+        &harness_protocol,
+        "# User-owned Harness Protocol\n\nDo not rewrite this file during update.\n",
+    )
+    .expect("invariant: harness protocol should be writable");
+
+    for path in [
+        paths.harness_dir().join("harness.yml"),
+        paths.harness_dir().join("backlog.yaml"),
+        paths.features_dir().join("features.yaml"),
+    ] {
+        let contents = fs::read_to_string(&path)
+            .expect("invariant: initialized schema artifact should be readable");
+        fs::write(
+            &path,
+            format!("{contents}\n# user-owned update non-mutation marker\n"),
+        )
+        .expect("invariant: initialized schema artifact should be writable");
+    }
+}
+
+fn user_owned_harness_artifacts(paths: &MaestroPaths) -> Vec<PathBuf> {
+    vec![
+        paths.harness_dir().join("HARNESS.md"),
+        paths.harness_dir().join("harness.yml"),
+        paths.harness_dir().join("backlog.yaml"),
+        paths.features_dir().join("features.yaml"),
+    ]
+}
+
+fn snapshot_files(paths: &[PathBuf]) -> Vec<(PathBuf, String)> {
+    paths
+        .iter()
+        .map(|path| {
+            (
+                path.clone(),
+                fs::read_to_string(path).expect("invariant: snapshot file should be readable"),
+            )
+        })
+        .collect()
+}
+
+fn assert_files_unchanged(snapshot: &[(PathBuf, String)]) {
+    for (path, expected) in snapshot {
+        let actual = fs::read_to_string(path).expect("invariant: snapshot file should be readable");
+        assert_eq!(
+            actual.as_str(),
+            expected.as_str(),
+            "{} should not be rewritten by update flows",
+            path.display()
+        );
+    }
 }
 
 fn update_backup_for(paths: &MaestroPaths, skill_name: &str) -> PathBuf {

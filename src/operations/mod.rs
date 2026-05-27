@@ -4,6 +4,7 @@
 //! while legacy operation-like roots stay re-exported during the migration.
 
 pub mod migrate;
+pub mod update;
 
 mod task_verify;
 
@@ -66,4 +67,3 @@ pub(crate) fn verify_task_report(
 
 pub use crate::improver;
 pub use crate::metrics;
-pub use crate::update;
