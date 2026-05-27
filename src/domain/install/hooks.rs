@@ -1,7 +1,8 @@
 use serde_json::{json, Map, Value};
 
 use crate::domain::run;
-use crate::install::InstallAgent;
+
+use super::InstallAgent;
 
 const HOOK_COMMAND: &str = "maestro hook record";
 

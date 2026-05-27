@@ -4,9 +4,11 @@ use std::collections::BTreeSet;
 use std::fs;
 
 use maestro::core::paths::MaestroPaths;
-use maestro::install::lock::{AgentInstall, FileOwnership, InstallLock, MirrorKind};
-use maestro::install::mirrors::{apply_mirrors, mirror_plan, remove_mirrors};
-use maestro::install::InstallAgent;
+use maestro::domain::install::{
+    install_agent, mirror_plan, uninstall_agent, AgentInstall, FileOwnership, InstallAgent,
+    InstallLock, InstallState, MirrorKind,
+};
+use maestro::install as legacy_install;
 use support::TestTempDir;
 
 const HOOK_EVENTS: [&str; 6] = [
@@ -70,42 +72,63 @@ fn mirror_plan_writes_codex_hook_timeout_and_trust_related_files() {
 #[test]
 fn apply_mirrors_preserves_user_content_and_records_ownership() {
     let temp_dir = TestTempDir::new("maestro-install-test");
-    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: git marker should be writable");
+    init_repo(temp_dir.path());
     fs::write(temp_dir.path().join("CLAUDE.md"), "# User\n")
         .expect("invariant: user CLAUDE.md should be writable");
     let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
 
-    let install = apply_mirrors(
-        &paths,
-        InstallAgent::Claude,
-        "2026-05-25T10:00:00Z".to_string(),
-    )
-    .expect("invariant: mirrors should apply");
+    install_agent(&paths, InstallAgent::Claude).expect("invariant: mirrors should apply");
+    let lock =
+        InstallLock::load(&paths.install_lock_file()).expect("invariant: install lock should load");
+    let install = &lock.agents["claude"];
 
     let claude = fs::read_to_string(temp_dir.path().join("CLAUDE.md"))
         .expect("invariant: CLAUDE.md should be readable");
     assert!(claude.starts_with("# User\n"));
     assert!(claude.contains("<!-- maestro:start -->"));
     assert!(install.files.contains_key("CLAUDE.md"));
+    assert!(install.files["CLAUDE.md"]
+        .content_hash
+        .as_deref()
+        .is_some_and(|hash| hash.starts_with("sha256:")));
     assert!(matches!(
         install.files[".claude/settings.local.json"].kind,
         MirrorKind::JsonManagedKeys
     ));
 }
 
+#[test]
+fn legacy_apply_mirrors_preserves_supplied_installed_at_without_creating_lock() {
+    let temp_dir = TestTempDir::new("maestro-install-test");
+    init_repo(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
+
+    let install = legacy_install::mirrors::apply_mirrors(
+        &paths,
+        InstallAgent::Codex,
+        "caller-supplied-time".to_string(),
+    )
+    .expect("invariant: legacy mirror apply should succeed");
+
+    assert_eq!(install.installed_at, "caller-supplied-time");
+    assert_eq!(install.state, InstallState::Committed);
+    assert!(!paths.install_lock_file().exists());
+    let agents = fs::read_to_string(temp_dir.path().join("AGENTS.md"))
+        .expect("invariant: AGENTS.md should be readable");
+    assert!(agents.contains("<!-- maestro:start -->"));
+}
+
 #[cfg(unix)]
 #[test]
 fn apply_mirrors_creates_skill_symlink_and_records_ownership() {
     let temp_dir = TestTempDir::new("maestro-install-test");
-    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: git marker should be writable");
+    init_repo(temp_dir.path());
     let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
 
-    let install = apply_mirrors(
-        &paths,
-        InstallAgent::Claude,
-        "2026-05-25T10:00:00Z".to_string(),
-    )
-    .expect("invariant: mirrors should apply");
+    install_agent(&paths, InstallAgent::Claude).expect("invariant: mirrors should apply");
+    let lock =
+        InstallLock::load(&paths.install_lock_file()).expect("invariant: install lock should load");
+    let install = &lock.agents["claude"];
 
     let target = fs::read_link(temp_dir.path().join(".claude/skills"))
         .expect("invariant: Claude skills mirror should be a symlink");
@@ -122,17 +145,13 @@ fn apply_mirrors_creates_skill_symlink_and_records_ownership() {
 #[test]
 fn apply_mirrors_refuses_existing_user_skill_tree() {
     let temp_dir = TestTempDir::new("maestro-install-test");
-    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: git marker should be writable");
+    init_repo(temp_dir.path());
     fs::create_dir_all(temp_dir.path().join(".codex/skills"))
         .expect("invariant: user skill tree should be writable");
     let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
 
-    let error = apply_mirrors(
-        &paths,
-        InstallAgent::Codex,
-        "2026-05-25T10:00:00Z".to_string(),
-    )
-    .expect_err("existing user skill tree should make install fail");
+    let error = install_agent(&paths, InstallAgent::Codex)
+        .expect_err("existing user skill tree should make install fail");
 
     assert!(error
         .to_string()
@@ -144,19 +163,14 @@ fn apply_mirrors_refuses_existing_user_skill_tree() {
 #[test]
 fn apply_mirrors_uses_one_backup_directory_per_operation_and_skips_noop_reapply() {
     let temp_dir = TestTempDir::new("maestro-install-test");
-    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: git marker should be writable");
+    init_repo(temp_dir.path());
     fs::write(temp_dir.path().join("CLAUDE.md"), "# User Claude\n")
         .expect("invariant: user CLAUDE.md should be writable");
     fs::write(temp_dir.path().join("AGENTS.md"), "# User Agents\n")
         .expect("invariant: user AGENTS.md should be writable");
     let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
 
-    apply_mirrors(
-        &paths,
-        InstallAgent::Claude,
-        "2026-05-25T10:00:00Z".to_string(),
-    )
-    .expect("invariant: mirrors should apply");
+    install_agent(&paths, InstallAgent::Claude).expect("invariant: mirrors should apply");
 
     let backup_root = temp_dir.path().join(".maestro/backups");
     let backup_dirs = fs::read_dir(&backup_root)
@@ -167,12 +181,7 @@ fn apply_mirrors_uses_one_backup_directory_per_operation_and_skips_noop_reapply(
     assert!(backup_dirs[0].path().join("CLAUDE.md").is_file());
     assert!(backup_dirs[0].path().join("AGENTS.md").is_file());
 
-    apply_mirrors(
-        &paths,
-        InstallAgent::Claude,
-        "2026-05-25T10:00:01Z".to_string(),
-    )
-    .expect("invariant: no-op mirrors should reapply");
+    install_agent(&paths, InstallAgent::Claude).expect("invariant: no-op mirrors should reapply");
 
     let backup_dirs_after_noop = fs::read_dir(&backup_root)
         .expect("invariant: backup root should still exist")
@@ -183,19 +192,12 @@ fn apply_mirrors_uses_one_backup_directory_per_operation_and_skips_noop_reapply(
 #[test]
 fn remove_mirrors_removes_only_owned_content() {
     let temp_dir = TestTempDir::new("maestro-install-test");
-    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: git marker should be writable");
+    init_repo(temp_dir.path());
     fs::write(temp_dir.path().join("AGENTS.md"), "# User\n")
         .expect("invariant: user AGENTS.md should be writable");
     let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
-    let install = apply_mirrors(
-        &paths,
-        InstallAgent::Codex,
-        "2026-05-25T10:00:00Z".to_string(),
-    )
-    .expect("invariant: mirrors should apply");
-
-    remove_mirrors(&paths, InstallAgent::Codex, &install, &BTreeSet::new())
-        .expect("invariant: mirrors should uninstall");
+    install_agent(&paths, InstallAgent::Codex).expect("invariant: mirrors should apply");
+    uninstall_agent(&paths, InstallAgent::Codex).expect("invariant: mirrors should uninstall");
 
     let agents = fs::read_to_string(temp_dir.path().join("AGENTS.md"))
         .expect("invariant: AGENTS.md should be readable");
@@ -206,9 +208,52 @@ fn remove_mirrors_removes_only_owned_content() {
 }
 
 #[test]
+fn legacy_remove_mirrors_uses_supplied_install_and_preserves_lock() {
+    let temp_dir = TestTempDir::new("maestro-install-test");
+    init_repo(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
+    install_agent(&paths, InstallAgent::Codex).expect("invariant: mirrors should apply");
+    let install = InstallLock::load(&paths.install_lock_file())
+        .expect("invariant: install lock should load")
+        .agents["codex"]
+        .clone();
+    let mut sentinel_lock = InstallLock::empty();
+    sentinel_lock.set_agent(
+        InstallAgent::Claude,
+        AgentInstall::new("sentinel".to_string()),
+    );
+    sentinel_lock
+        .save(&paths.install_lock_file())
+        .expect("invariant: sentinel lock should save");
+    let lock_before = fs::read_to_string(paths.install_lock_file())
+        .expect("invariant: sentinel lock should be readable");
+    let still_owned_paths = BTreeSet::from(["AGENTS.md".to_string()]);
+
+    legacy_install::mirrors::remove_mirrors(
+        &paths,
+        InstallAgent::Codex,
+        &install,
+        &still_owned_paths,
+    )
+    .expect("invariant: legacy mirror remove should succeed");
+
+    let agents = fs::read_to_string(temp_dir.path().join("AGENTS.md"))
+        .expect("invariant: AGENTS.md should be readable");
+    assert!(agents.contains("<!-- maestro:start -->"));
+    let codex_config = fs::read_to_string(temp_dir.path().join(".codex/config.toml"))
+        .expect("invariant: Codex config should be readable");
+    assert!(!codex_config.contains("# >>> maestro >>>"));
+    assert_eq!(
+        fs::read_to_string(paths.install_lock_file())
+            .expect("invariant: install lock should remain readable"),
+        lock_before
+    );
+}
+
+#[test]
 fn apply_mirrors_snapshots_preexisting_key_even_with_stale_manifest() {
     let temp_dir = TestTempDir::new("maestro-install-test");
-    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: git marker should be writable");
+    init_repo(temp_dir.path());
     fs::create_dir_all(temp_dir.path().join(".codex"))
         .expect("invariant: codex dir should be writable");
     let hooks_path = temp_dir.path().join(".codex/hooks.json");
@@ -219,14 +264,8 @@ fn apply_mirrors_snapshots_preexisting_key_even_with_stale_manifest() {
     .expect("invariant: hooks should be writable");
     let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
 
-    let install = apply_mirrors(
-        &paths,
-        InstallAgent::Codex,
-        "2026-05-25T10:00:00Z".to_string(),
-    )
-    .expect("invariant: mirrors should apply");
-    remove_mirrors(&paths, InstallAgent::Codex, &install, &BTreeSet::new())
-        .expect("invariant: mirrors should uninstall");
+    install_agent(&paths, InstallAgent::Codex).expect("invariant: mirrors should apply");
+    uninstall_agent(&paths, InstallAgent::Codex).expect("invariant: mirrors should uninstall");
 
     let hooks = fs::read_to_string(hooks_path).expect("invariant: hooks should be readable");
     assert!(hooks.contains("\"Stop\""));
@@ -276,6 +315,27 @@ fn install_lock_rejects_schema_mismatch() {
     assert!(error.to_string().contains("schema mismatch"));
 }
 
+#[test]
+fn install_lock_defaults_legacy_agent_state_to_committed() {
+    let temp_dir = TestTempDir::new("maestro-install-test");
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    fs::create_dir_all(
+        lock_path
+            .parent()
+            .expect("invariant: lock path should have parent"),
+    )
+    .expect("invariant: lock parent should be writable");
+    fs::write(
+        &lock_path,
+        "schema_version: maestro.install_lock.v1\nagents:\n  codex:\n    installed_at: old\n    files: {}\n",
+    )
+    .expect("invariant: legacy lock should be writable");
+
+    let loaded = InstallLock::load(&lock_path).expect("invariant: legacy lock should load");
+
+    assert_eq!(loaded.agents["codex"].state, InstallState::Committed);
+}
+
 fn assert_hook_shape(contents: &str, expect_timeout: bool) {
     let value = serde_json::from_str::<serde_json::Value>(contents)
         .expect("invariant: hook mirror should be valid JSON");
@@ -309,4 +369,15 @@ fn assert_hook_shape(contents: &str, expect_timeout: bool) {
             assert!(command.get("timeout").is_none());
         }
     }
+}
+
+fn init_repo(repo: &std::path::Path) {
+    fs::create_dir(repo.join(".git")).expect("invariant: git marker should be writable");
+    fs::create_dir_all(repo.join(".maestro/harness"))
+        .expect("invariant: harness dir should be writable");
+    fs::write(
+        repo.join(".maestro/harness/HARNESS.md"),
+        "# Maestro Harness Protocol\n",
+    )
+    .expect("invariant: harness protocol should be writable");
 }

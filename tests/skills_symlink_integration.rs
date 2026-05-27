@@ -6,7 +6,7 @@ mod unix {
     use std::path::Path;
     use std::process::Command;
 
-    use maestro::install::lock::{InstallLock, MirrorKind};
+    use maestro::install::{AgentInstall, FileOwnership, InstallAgent, InstallLock, MirrorKind};
 
     use super::support::TestTempDir;
 
@@ -20,6 +20,13 @@ mod unix {
 
     fn init_repo(repo: &Path) {
         fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+        fs::create_dir_all(repo.join(".maestro/harness"))
+            .expect("invariant: harness dir should be creatable");
+        fs::write(
+            repo.join(".maestro/harness/HARNESS.md"),
+            "# Maestro Harness Protocol\n",
+        )
+        .expect("invariant: harness protocol should be writable");
     }
 
     fn assert_expected_symlink(repo: &Path, relative_path: &str) {
@@ -166,14 +173,14 @@ mod unix {
         let previous_lock = InstallLock::load(&temp_dir.path().join(".maestro/install-lock.yaml"))
             .unwrap_or_else(|_| InstallLock::empty());
         if let Some(install) = previous_lock.agents.get("codex").cloned() {
-            lock.set_agent(maestro::install::InstallAgent::Codex, install);
+            lock.set_agent(InstallAgent::Codex, install);
         } else {
-            let mut install = maestro::install::lock::AgentInstall::new("test".to_string());
+            let mut install = AgentInstall::new("test".to_string());
             install.insert(
                 ".codex/skills",
-                maestro::install::lock::FileOwnership::symlink("../.maestro/skills"),
+                FileOwnership::symlink("../.maestro/skills"),
             );
-            lock.set_agent(maestro::install::InstallAgent::Codex, install);
+            lock.set_agent(InstallAgent::Codex, install);
         }
         lock.save(&temp_dir.path().join(".maestro/install-lock.yaml"))
             .expect("invariant: lock should be writable");

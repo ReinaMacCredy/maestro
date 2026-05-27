@@ -6,11 +6,12 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::InstallAgent;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
+use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::INSTALL_LOCK_SCHEMA_VERSION;
-use crate::install::InstallAgent;
 
 /// `.maestro/install-lock.yaml`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -26,8 +27,24 @@ pub struct InstallLock {
 pub struct AgentInstall {
     /// Install timestamp string.
     pub installed_at: String,
+    /// Transaction state for this agent install.
+    #[serde(default)]
+    pub state: InstallState,
     /// Files owned by this agent install.
     pub files: BTreeMap<String, FileOwnership>,
+}
+
+/// Transaction state for one agent install.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallState {
+    /// Lock was written before all managed files were committed.
+    Pending,
+    /// Uninstall is removing or has removed mirrors and must be retried to finalize the lock.
+    Removing,
+    /// Managed files were written and the lock can authorize uninstall.
+    #[default]
+    Committed,
 }
 
 /// Ownership information for one mirror file.
@@ -117,6 +134,7 @@ impl AgentInstall {
     pub fn new(installed_at: String) -> Self {
         Self {
             installed_at,
+            state: InstallState::Committed,
             files: BTreeMap::new(),
         }
     }
@@ -125,10 +143,25 @@ impl AgentInstall {
     pub fn insert(&mut self, path: impl Into<String>, ownership: FileOwnership) {
         self.files.insert(path.into(), ownership);
     }
+
+    /// Mark this install as pending before managed file writes.
+    pub fn mark_pending(&mut self) {
+        self.state = InstallState::Pending;
+    }
+
+    /// Mark this install as removing before managed file removal.
+    pub fn mark_removing(&mut self) {
+        self.state = InstallState::Removing;
+    }
+
+    /// Mark this install as committed after managed file writes complete.
+    pub fn mark_committed(&mut self) {
+        self.state = InstallState::Committed;
+    }
 }
 
 impl FileOwnership {
-    /// Text managed block ownership.
+    /// Text mirror ownership for a Maestro-owned managed block or section.
     pub fn text(kind: MirrorKind, content: &str) -> Self {
         Self {
             kind,
@@ -160,9 +193,43 @@ impl FileOwnership {
             target: Some(target.into()),
         }
     }
+
+    pub(crate) fn matches_text_content(&self, content: &str) -> bool {
+        self.matches_strong_text_content(content) || self.matches_legacy_text_content(content)
+    }
+
+    pub(crate) fn matches_legacy_text_content(&self, content: &str) -> bool {
+        let Some(content_hash) = self.content_hash.as_deref() else {
+            return false;
+        };
+
+        content_hash == legacy_content_hash(content)
+    }
+
+    pub(crate) fn has_legacy_text_hash(&self) -> bool {
+        self.content_hash
+            .as_deref()
+            .is_some_and(|content_hash| content_hash.starts_with("len:"))
+    }
+
+    fn matches_strong_text_content(&self, content: &str) -> bool {
+        let Some(content_hash) = self.content_hash.as_deref() else {
+            return false;
+        };
+
+        content_hash == strong_content_hash(content)
+    }
 }
 
 fn content_hash(content: &str) -> String {
+    strong_content_hash(content)
+}
+
+fn strong_content_hash(content: &str) -> String {
+    sha256_prefixed(content.as_bytes())
+}
+
+fn legacy_content_hash(content: &str) -> String {
     format!(
         "len:{}:sum:{:016x}",
         content.len(),
@@ -176,7 +243,7 @@ fn byte_sum(bytes: &[u8]) -> u64 {
         .fold(0_u64, |sum, byte| sum.wrapping_add(u64::from(*byte)))
 }
 
-/// Remove an empty lockfile parent only when the lockfile itself exists.
+/// Remove the lockfile if it exists.
 pub fn remove_lock_file(path: &Path) -> Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),

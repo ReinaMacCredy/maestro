@@ -6,7 +6,6 @@ use anyhow::{bail, Context, Result};
 use crate::foundation::core::fs::ensure_parent_dir;
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::install::InstallAgent;
 
 /// Relative target used by agent skill mirrors.
 pub const SKILLS_SYMLINK_TARGET: &str = "../.maestro/skills";
@@ -18,20 +17,6 @@ pub struct SkillSymlink {
     pub relative_path: &'static str,
     /// Symlink target, relative to the agent config directory.
     pub target: &'static str,
-}
-
-/// Return the expected skill symlink for an agent.
-pub fn skill_symlink_for_agent(agent: InstallAgent) -> SkillSymlink {
-    match agent {
-        InstallAgent::Claude => SkillSymlink {
-            relative_path: ".claude/skills",
-            target: SKILLS_SYMLINK_TARGET,
-        },
-        InstallAgent::Codex => SkillSymlink {
-            relative_path: ".codex/skills",
-            target: SKILLS_SYMLINK_TARGET,
-        },
-    }
 }
 
 /// Validate that the destination is absent or already the expected symlink.

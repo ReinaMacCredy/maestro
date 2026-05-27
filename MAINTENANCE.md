@@ -204,7 +204,7 @@ state, or durable migration output:
 
 | Surface | Maintenance rule |
 | --- | --- |
-| `install` and `skills` | Preserve install-lock ownership, pending/committed recovery state, rollback, managed-block boundaries, and skill symlink safety. |
+| `install` and `skills` | Preserve install-lock ownership, pending/committed/removing recovery state, rollback, managed-block boundaries, Harness prerequisite checks, JSON restore validation, and skill symlink safety. |
 | `migrate` | Keep dry-run/check behavior non-mutating, preserve backups, document direct-write exceptions, and verify migrated artifacts through target-domain loaders where possible. |
 | `update` | Keep check/update behavior separate, preserve rollback for downloaded or extracted files, report schema drift clearly, and do not apply Harness changes silently. |
 | `task` | Preserve optimistic concurrency, acceptance locking, state history, blockers, and verification binding semantics. |

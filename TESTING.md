@@ -163,7 +163,8 @@ line tolerance, and symlinked run path handling.
 If changing Install locks, managed mirrors, or uninstall ownership behavior, run
 Install and Skills tests plus focused interrupted-install recovery tests: after
 lock save, after partial mirror writes, reinstall recovery, and uninstall with
-unverifiable ownership.
+unverifiable ownership, persisted removing-state retry, verified JSON restore
+metadata, and install-before-init Harness prerequisite behavior.
 
 If changing Harness templates for existing repositories, run tests proving
 passive update/check paths do not mutate Harness files. Run explicit Harness

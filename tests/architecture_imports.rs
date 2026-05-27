@@ -40,7 +40,6 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/feature.rs", &["feature"]),
     ("src/interfaces/cli/improve.rs", &["harness", "improver"]),
     ("src/interfaces/cli/init.rs", &["harness", "skills"]),
-    ("src/interfaces/cli/install.rs", &["install"]),
     ("src/interfaces/cli/metrics.rs", &["metrics"]),
     ("src/interfaces/cli/migrate.rs", &["migrate"]),
     (
@@ -48,7 +47,6 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
         &["decisions", "feature", "harness", "metrics"],
     ),
     ("src/interfaces/cli/task.rs", &[]),
-    ("src/interfaces/cli/uninstall.rs", &["install"]),
     ("src/interfaces/cli/update.rs", &["update"]),
     ("src/interfaces/cli/watch.rs", &[]),
 ];
@@ -284,6 +282,20 @@ fn selected_compatibility_smoke_paths_resolve() {
         maestro::domain::run::hook_event_contract().shared_events(),
         maestro::hooks::event::SHARED_HOOK_EVENTS
     );
+
+    let _legacy_remove_lock: fn(&Path) -> anyhow::Result<()> =
+        maestro::install::lock::remove_lock_file;
+    let _legacy_apply: fn(
+        &maestro::foundation::core::paths::MaestroPaths,
+        maestro::install::InstallAgent,
+        String,
+    ) -> anyhow::Result<maestro::install::AgentInstall> = maestro::install::mirrors::apply_mirrors;
+    let _legacy_remove: fn(
+        &maestro::foundation::core::paths::MaestroPaths,
+        maestro::install::InstallAgent,
+        &maestro::install::AgentInstall,
+        &BTreeSet<String>,
+    ) -> anyhow::Result<()> = maestro::install::mirrors::remove_mirrors;
 }
 
 #[test]
@@ -490,6 +502,55 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
             "src/domain/run/mod.rs should not leak low-level Run helper {leaked_helper}"
         );
     }
+}
+
+#[test]
+fn install_domain_facade_does_not_publish_leaf_modules() {
+    let install_facade = read_source_file(Path::new("src/domain/install/mod.rs"));
+    for leaf in ["hooks", "lock", "mirrors"] {
+        assert!(
+            !install_facade.contains(&format!("pub mod {leaf};")),
+            "src/domain/install/mod.rs should expose Install through root facade exports, not pub mod {leaf}"
+        );
+        assert!(
+            !install_facade.contains(&format!("pub(crate) mod {leaf};")),
+            "src/domain/install/mod.rs should keep Install leaf module {leaf} private"
+        );
+    }
+    assert_eq!(
+        public_modules(&install_facade),
+        BTreeSet::new(),
+        "src/domain/install/mod.rs should not publish leaf modules"
+    );
+    assert_eq!(
+        public_reexport_item_names(&install_facade),
+        BTreeSet::from([
+            "AgentInstall".to_string(),
+            "FileOwnership".to_string(),
+            "InstallLock".to_string(),
+            "InstallState".to_string(),
+            "MirrorKind".to_string(),
+            "MirrorPlan".to_string(),
+            "mirror_plan".to_string(),
+        ]),
+        "src/domain/install/mod.rs should expose only deliberate Install contract re-exports"
+    );
+    for root_item in [
+        "pub enum InstallAgent",
+        "pub fn install_agent",
+        "pub fn uninstall_agent",
+    ] {
+        assert!(
+            install_facade.contains(root_item),
+            "src/domain/install/mod.rs should expose root facade item {root_item}"
+        );
+    }
+
+    let legacy_shim = read_source_file(Path::new("src/install/mod.rs"));
+    assert!(
+        !legacy_shim.contains("pub use crate::domain::install::*"),
+        "legacy crate::install shim should explicitly re-export the compatibility surface"
+    );
 }
 
 #[test]
@@ -823,12 +884,13 @@ fn transitional_public_surfaces_match_phase_policy() {
             "decisions",
             "feature",
             "harness",
+            "install",
             "proof",
             "run",
             "skills",
             "task",
         ],
-        &["crate::install"],
+        &[],
     );
     assert_public_modules(Path::new("src/foundation/mod.rs"), &["core"], &[]);
     assert_public_modules(

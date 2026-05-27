@@ -979,22 +979,29 @@ Codex. The install ownership record lives at:
 
 The install lock uses `maestro.install_lock.v1` and records per-agent ownership
 for managed files, managed JSON keys, previous JSON values, content hashes, and
-skill symlink targets.
+skill symlink targets. Agent lock state is explicit: `pending` protects
+interrupted installs before the final committed lock is saved, including after
+mirror writes, `committed` authorizes normal uninstall, and `removing` records a
+durable uninstall retry point after removal has started.
 
 Current install behavior is split across:
 
-- `src/install/mirrors.rs`: mirror plans, managed block insertion/removal,
-  JSON managed key insertion/removal, previous JSON value snapshots, backups,
-  diffs, rollback, mirror ownership validation, and uninstall removal.
-- `src/install/lock.rs`: install lock schema, load/save, agent ownership, file
-  ownership, mirror kinds, and lock removal.
-- `src/install/hooks.rs`: agent-specific hook JSON for Claude and Codex.
-- `src/skills/symlink.rs`: expected agent skill symlinks, destination
-  validation, symlink creation, and owned symlink removal.
-- `src/interfaces/cli/install.rs`: CLI adapter for install, lock persistence before
-  mirror writes, mirror rollback on failure, and Codex hook approval reminder.
-- `src/interfaces/cli/uninstall.rs`: CLI adapter for uninstall and shared-file
-  preservation when multiple agents own the same path.
+- `src/domain/install/mirrors.rs`: mirror plans, managed block
+  insertion/removal, JSON managed key insertion/removal, previous JSON value
+  snapshots, backups, diffs, rollback, mirror ownership validation, and
+  uninstall removal.
+- `src/domain/install/lock.rs`: install lock schema, pending/committed/removing
+  state, load/save, agent ownership, file ownership, mirror kinds, and lock
+  removal.
+- `src/domain/install/hooks.rs`: agent-specific hook JSON for Claude and Codex.
+- `src/domain/skills/symlink.rs`: generic skill symlink destination
+  validation, symlink creation, and owned symlink removal. Install owns the
+  agent-specific mapping to `.claude/skills` and `.codex/skills`.
+- `src/interfaces/cli/install.rs`: thin CLI adapter for repo discovery, CLI
+  agent conversion, and Codex hook approval reminder.
+- `src/interfaces/cli/uninstall.rs`: thin CLI adapter for repo discovery and
+  CLI agent conversion.
+- `src/install/mod.rs`: temporary compatibility shim over the Install facade.
 
 Install currently creates or updates these kinds of files:
 
@@ -1005,6 +1012,11 @@ Install currently creates or updates these kinds of files:
 - `.claude/settings.local.json` and `.codex/hooks.json` managed hook keys.
 - `.codex/config.toml` managed section.
 - `.claude/skills` and `.codex/skills` symlinks to `../.maestro/skills`.
+
+Install requires the canonical Harness protocol file to already exist before it
+writes agent-facing pointers to that path. A repository should run
+`maestro init` first; install does not create or update Harness protocol
+content.
 
 The rough edge is that Install coordinates many adjacent concepts. It references
 Harness, Hooks, Skills, Core managed blocks, and agent config files. This is
@@ -1054,6 +1066,8 @@ that command belongs to Run.
 **Tests**
 
 - install writes expected Claude and Codex mirror plans.
+- install fails before writing mirrors when the Harness protocol file is
+  missing.
 - install writes managed blocks without deleting user content.
 - install writes hook JSON managed keys and records ownership.
 - install creates skill symlinks and records symlink ownership.
@@ -1061,6 +1075,8 @@ that command belongs to Run.
 - install rejects symlinked managed directories before partial writes.
 - lock save failure does not write mirrors.
 - mirror write failure rolls back mirrors and install lock.
+- uninstall persists a removing state before destructive mirror removal, and a
+  retry can finalize after mirrors were already removed.
 - interrupted installs after lock save and before mirror writes are detected as
   incomplete and do not authorize unsafe uninstall.
 - interrupted installs after partial mirror writes are recovered or reconciled
@@ -1068,7 +1084,8 @@ that command belongs to Run.
 - uninstall removes only owned managed blocks and preserves user content.
 - uninstall restores preexisting JSON hook values from verified snapshots.
 - reinstall preserves valid JSON restore snapshots and does not trust forged
-  restore snapshots.
+  restore snapshots; corrupted restore metadata fails safely instead of
+  re-blessing managed hook state.
 - uninstall rejects forged lock entries, unexpected paths, unexpected JSON keys,
   forged previous values, and symlinked managed directories.
 - uninstalling one agent preserves files still owned by another agent.
@@ -1770,7 +1787,7 @@ structured defaults still live in Rust serializers.
 | Harness protocol Markdown | `resources/harness/HARNESS.md`, embedded by `src/domain/harness/templates.rs` | Installed by `maestro init`. |
 | Default Harness YAML and backlog YAML | `src/domain/harness/templates.rs`, `src/domain/harness/schema.rs` | Structured defaults serialized from Rust structs. |
 | Bundled skills | `resources/skills/bundled/*/SKILL.md`, embedded by `src/domain/skills/bundled.rs` | `SKILL.md` contents embedded in the binary. |
-| Install mirror blocks | `src/install/mirrors.rs`, `src/install/hooks.rs` | Short managed blocks and hook JSON generated by Install. |
+| Install mirror blocks | `src/domain/install/mirrors.rs`, `src/domain/install/hooks.rs` | Short managed blocks and hook JSON generated by Install. |
 | Shell init snippets | `resources/shell/posix.sh`, `resources/shell/fish.fish`, embedded by `src/interfaces/shell/mod.rs` | Bash/zsh/fish shell snippets returned by `maestro shell-init`. |
 | Decision Markdown template | `src/domain/decisions/template.rs` | Small generated decision file body. |
 | Task Markdown template | `src/domain/task/template.rs` | Small generated task body pointing to `acceptance.yaml`. |
@@ -2223,7 +2240,8 @@ Current test types:
     `tests/core_schema_error.rs`, `tests/core_backup_diff_git.rs`,
     `tests/harness_templates.rs`, `tests/skills_extract.rs`, and module-local
     tests in `src/update/mod.rs`, `src/interfaces/cli/update.rs`,
-    `src/interfaces/tui/task_list_watch.rs`, and `src/install/mirrors.rs`.
+    `src/interfaces/tui/task_list_watch.rs`, and
+    `src/domain/install/mirrors.rs`.
 
 - **Command integration tests**
   - Run the compiled `maestro` binary and check real repo-local file effects.
@@ -2366,7 +2384,7 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 | P1 | Run aggregate boundary | `src/interfaces/hooks/record.rs`, `src/interfaces/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/domain/proof/events.rs`, `src/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
 | P1 | Feature aggregate boundary | `src/interfaces/cli/feature.rs`, `src/feature/schema.rs`, `src/feature/query.rs` | Feature schema and rollups live in `feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
 | P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
-| P1 | Install and Skills ownership | `src/install/*`, `src/skills/symlink.rs`, `src/skills/extract.rs` | Install owns mirrors and locks while Skills owns skill file mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
+| P1 | Install and Skills ownership | `src/domain/install/*`, `src/domain/skills/symlink.rs`, `src/domain/skills/extract.rs` | Install owns mirrors, locks, agent-specific skill-link mapping, pending/committed recovery state, rollback, and uninstall safety while Skills owns generic skill filesystem mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
 | P2 | Migration target writers | `src/migrate/v0_106_to_v0_8.rs`, target domain modules | Migration intentionally writes many target artifacts directly. That is acceptable as an explicit migration exception, but it can drift from target domain write rules. |
 | P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/interfaces/mcp/tools.rs`, `src/interfaces/tui/*`, `src/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
 

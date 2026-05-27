@@ -3,9 +3,8 @@
 pub mod decisions;
 pub mod feature;
 pub mod harness;
+pub mod install;
 pub mod proof;
 pub mod run;
 pub mod skills;
 pub mod task;
-
-pub use crate::install;

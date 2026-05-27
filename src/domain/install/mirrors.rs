@@ -2,9 +2,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Context, Error, Result};
 use serde_json::{Map, Value};
 
+use crate::domain::skills::symlink::{
+    create_skill_symlink, validate_skill_symlink_destination, SkillSymlink,
+};
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::diff::unified_diff;
 use crate::foundation::core::fs::{ensure_parent_dir, read_to_string_if_exists};
@@ -15,13 +18,10 @@ use crate::foundation::core::managed_blocks::{
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::install::hooks::ManagedHookConfig;
-use crate::install::lock::{AgentInstall, FileOwnership, MirrorKind};
-use crate::install::InstallAgent;
-use crate::skills::symlink::{
-    create_skill_symlink, remove_skill_symlink_if_owned, skill_symlink_for_agent,
-    validate_skill_symlink_destination, SkillSymlink,
-};
+
+use super::hooks::ManagedHookConfig;
+use super::lock::{AgentInstall, FileOwnership, MirrorKind};
+use super::{ensure_uninstallable_install, skill_symlink_for_agent, InstallAgent};
 
 const JSON_PREVIOUS_VALUE_HASHES: &str = "_maestro_previous_value_hashes";
 
@@ -37,6 +37,43 @@ pub struct MirrorPlan {
     /// Managed JSON keys for JSON mirrors.
     pub managed_keys: Vec<String>,
     managed_json: Option<Map<String, Value>>,
+}
+
+#[derive(Debug)]
+pub(crate) struct MirrorWriteFailure {
+    source: Error,
+    rollback_error: Option<Error>,
+}
+
+impl MirrorWriteFailure {
+    fn rolled_back(source: Error) -> Self {
+        Self {
+            source,
+            rollback_error: None,
+        }
+    }
+
+    pub(super) fn rollback_failed(source: Error, rollback_error: Error) -> Self {
+        Self {
+            source,
+            rollback_error: Some(rollback_error),
+        }
+    }
+
+    pub(crate) fn rollback_completed(&self) -> bool {
+        self.rollback_error.is_none()
+    }
+
+    pub(crate) fn into_error(self) -> Error {
+        match self.rollback_error {
+            Some(rollback_error) => anyhow::anyhow!(
+                "{}; additionally failed to roll back partial mirror writes: {}",
+                self.source,
+                rollback_error
+            ),
+            None => self.source,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -61,6 +98,35 @@ struct MirrorRemoval {
     path: PathBuf,
     contents: String,
     next: String,
+}
+
+#[derive(Debug)]
+pub(crate) struct MirrorRemovalRollback {
+    removals: Vec<MirrorRemoval>,
+    symlink_removals: Vec<RemovedSymlink>,
+}
+
+impl MirrorRemovalRollback {
+    pub(crate) fn rollback(self) -> Result<()> {
+        let mut errors = Vec::new();
+        if let Err(error) = rollback_mirror_removals(&self.removals) {
+            errors.push(format!("failed to roll back file mirrors: {error}"));
+        }
+        if let Err(error) = rollback_removed_symlinks(&self.symlink_removals) {
+            errors.push(format!("failed to roll back symlinks: {error}"));
+        }
+        if errors.is_empty() {
+            return Ok(());
+        }
+
+        bail!("{}", errors.join("; "))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct RemovedSymlink {
+    path: PathBuf,
+    target: String,
 }
 
 /// Build all mirror writes for an agent.
@@ -90,18 +156,6 @@ pub fn mirror_plan(agent: InstallAgent) -> Result<Vec<MirrorPlan>> {
     Ok(plans)
 }
 
-/// Apply mirrors and return install-lock ownership records.
-pub fn apply_mirrors(
-    paths: &MaestroPaths,
-    agent: InstallAgent,
-    installed_at: String,
-) -> Result<AgentInstall> {
-    let prepared = prepare_mirrors(paths, agent, installed_at, None)?;
-    write_prepared_mirrors(paths, &prepared)?;
-
-    Ok(prepared.install)
-}
-
 /// Prepare all mirror updates without mutating the repository.
 pub(crate) fn prepare_mirrors(
     paths: &MaestroPaths,
@@ -122,7 +176,7 @@ pub(crate) fn prepare_mirrors(
             BTreeMap::new()
         };
         let contents = contents_for_existing(&plan, existing.as_deref(), &previous_values)?;
-        let ownership = ownership_for_plan(&plan, &contents, previous_values);
+        let ownership = ownership_for_plan(&plan, &contents, previous_values)?;
         install.insert(plan.relative_path.clone(), ownership);
 
         updates.push(MirrorUpdate {
@@ -151,23 +205,75 @@ pub(crate) fn prepare_mirrors(
 pub(crate) fn write_prepared_mirrors(
     paths: &MaestroPaths,
     prepared: &PreparedMirrors,
-) -> Result<()> {
+) -> std::result::Result<(), MirrorWriteFailure> {
+    let mut effects = FilesystemMirrorEffects;
+    write_prepared_mirrors_with_effects(paths, prepared, &mut effects)
+}
+
+fn write_prepared_mirrors_with_effects(
+    paths: &MaestroPaths,
+    prepared: &PreparedMirrors,
+    effects: &mut impl MirrorEffects,
+) -> std::result::Result<(), MirrorWriteFailure> {
     let mut written = Vec::new();
     for update in &prepared.updates {
-        if let Err(error) = write_mirror_update(paths, prepared, update) {
-            rollback_mirror_updates(&written)?;
-            return Err(error);
+        if let Err(error) = effects.write_mirror_update(paths, prepared, update) {
+            return Err(rollback_write_failure(effects, error, &written));
         }
         if update.existing.as_deref() != Some(update.contents.as_str()) {
             written.push(update);
         }
     }
-    if let Err(error) = create_skill_symlink(paths, prepared.skill_symlink) {
-        rollback_mirror_updates(&written)?;
-        return Err(error);
+    if let Err(error) = effects.create_skill_symlink(paths, prepared.skill_symlink) {
+        return Err(rollback_write_failure(effects, error, &written));
     }
 
     Ok(())
+}
+
+fn rollback_write_failure(
+    effects: &mut impl MirrorEffects,
+    error: Error,
+    written: &[&MirrorUpdate],
+) -> MirrorWriteFailure {
+    match effects.rollback_mirror_updates(written) {
+        Ok(()) => MirrorWriteFailure::rolled_back(error),
+        Err(rollback_error) => MirrorWriteFailure::rollback_failed(error, rollback_error),
+    }
+}
+
+trait MirrorEffects {
+    fn write_mirror_update(
+        &mut self,
+        paths: &MaestroPaths,
+        prepared: &PreparedMirrors,
+        update: &MirrorUpdate,
+    ) -> Result<()>;
+
+    fn create_skill_symlink(&mut self, paths: &MaestroPaths, symlink: SkillSymlink) -> Result<()>;
+
+    fn rollback_mirror_updates(&mut self, written: &[&MirrorUpdate]) -> Result<()>;
+}
+
+struct FilesystemMirrorEffects;
+
+impl MirrorEffects for FilesystemMirrorEffects {
+    fn write_mirror_update(
+        &mut self,
+        paths: &MaestroPaths,
+        prepared: &PreparedMirrors,
+        update: &MirrorUpdate,
+    ) -> Result<()> {
+        write_mirror_update(paths, prepared, update)
+    }
+
+    fn create_skill_symlink(&mut self, paths: &MaestroPaths, symlink: SkillSymlink) -> Result<()> {
+        create_skill_symlink(paths, symlink)
+    }
+
+    fn rollback_mirror_updates(&mut self, written: &[&MirrorUpdate]) -> Result<()> {
+        rollback_mirror_updates(written)
+    }
 }
 
 fn write_mirror_update(
@@ -224,14 +330,18 @@ fn ownership_for_plan(
     plan: &MirrorPlan,
     contents: &str,
     previous_values: BTreeMap<String, Value>,
-) -> FileOwnership {
+) -> Result<FileOwnership> {
     match plan.kind {
         MirrorKind::MarkdownManagedBlock
         | MirrorKind::GitignoreSection
-        | MirrorKind::TomlSection => FileOwnership::text(plan.kind.clone(), contents),
-        MirrorKind::JsonManagedKeys => {
-            FileOwnership::json_keys(plan.managed_keys.clone(), previous_values)
-        }
+        | MirrorKind::TomlSection => Ok(FileOwnership::text(
+            plan.kind.clone(),
+            text_ownership_content(&plan.kind, contents)?,
+        )),
+        MirrorKind::JsonManagedKeys => Ok(FileOwnership::json_keys(
+            plan.managed_keys.clone(),
+            previous_values,
+        )),
         MirrorKind::Symlink => {
             unreachable!("symlink mirrors are not written by text mirror planner")
         }
@@ -273,14 +383,15 @@ fn contents_for_existing(
 }
 
 /// Remove managed mirror content for files recorded in the install lock.
-pub fn remove_mirrors(
+pub(crate) fn remove_mirrors(
     paths: &MaestroPaths,
     agent: InstallAgent,
     install: &AgentInstall,
     still_owned_paths: &BTreeSet<String>,
-) -> Result<()> {
+) -> Result<MirrorRemovalRollback> {
     let backup_timestamp = backup_operation_timestamp()?;
-    validate_install_ownership(agent, install)?;
+    let expected_plans = expected_mirror_plans(agent)?;
+    validate_install_ownership(agent, install, &expected_plans)?;
     let mut removals = Vec::new();
     let mut symlink_removals = Vec::new();
 
@@ -297,15 +408,44 @@ pub fn remove_mirrors(
         let Some(contents) = read_to_string_if_exists(&path)? else {
             continue;
         };
-
+        let plan = expected_plans.get(relative_path).with_context(|| {
+            format!("install lock entry is not an expected mirror: {relative_path}")
+        })?;
         let next = match ownership.kind {
             MirrorKind::MarkdownManagedBlock => {
-                remove_managed_block(&contents, ManagedBlockFormat::Markdown)
+                match remove_text_mirror_content(
+                    relative_path,
+                    ownership,
+                    plan,
+                    &contents,
+                    ManagedBlockFormat::Markdown,
+                    install.state == super::InstallState::Removing,
+                )? {
+                    Some(next) => next,
+                    None => continue,
+                }
             }
             MirrorKind::GitignoreSection | MirrorKind::TomlSection => {
-                remove_managed_block(&contents, ManagedBlockFormat::HashComment)
+                match remove_text_mirror_content(
+                    relative_path,
+                    ownership,
+                    plan,
+                    &contents,
+                    ManagedBlockFormat::HashComment,
+                    install.state == super::InstallState::Removing,
+                )? {
+                    Some(next) => next,
+                    None => continue,
+                }
             }
-            MirrorKind::JsonManagedKeys => remove_json_keys_with_restore(&contents, ownership)?,
+            MirrorKind::JsonManagedKeys => match remove_json_keys_with_restore(
+                &contents,
+                ownership,
+                install.state == super::InstallState::Removing,
+            )? {
+                Some(next) => next,
+                None => continue,
+            },
             MirrorKind::Symlink => unreachable!("symlink ownership is handled before file reads"),
         };
         if next == contents {
@@ -320,12 +460,98 @@ pub fn remove_mirrors(
     }
 
     write_mirror_removals(paths, &removals, &backup_timestamp)?;
-    if let Err(error) = remove_symlinks(&symlink_removals) {
-        rollback_mirror_removals(&removals)?;
-        return Err(error);
+    let symlink_removals = match remove_symlinks(&symlink_removals) {
+        Ok(symlink_removals) => symlink_removals,
+        Err(error) => {
+            rollback_mirror_removals(&removals)?;
+            return Err(error);
+        }
+    };
+
+    Ok(MirrorRemovalRollback {
+        removals,
+        symlink_removals,
+    })
+}
+
+fn remove_symlinks(symlink_removals: &[(PathBuf, &FileOwnership)]) -> Result<Vec<RemovedSymlink>> {
+    let mut removed = Vec::new();
+    for (path, ownership) in symlink_removals {
+        match remove_symlink_if_owned(path, ownership) {
+            Ok(Some(symlink)) => removed.push(symlink),
+            Ok(None) => {}
+            Err(error) => {
+                rollback_removed_symlinks(&removed)?;
+                return Err(error);
+            }
+        }
+    }
+
+    Ok(removed)
+}
+
+fn remove_symlink_if_owned(
+    path: &Path,
+    ownership: &FileOwnership,
+) -> Result<Option<RemovedSymlink>> {
+    let Some(expected_target) = ownership.target.as_deref() else {
+        return Ok(None);
+    };
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            let target = fs::read_link(path)
+                .with_context(|| format!("failed to read symlink {}", path.display()))?;
+            if target != Path::new(expected_target) {
+                return Ok(None);
+            }
+            fs::remove_file(path)
+                .with_context(|| format!("failed to remove symlink {}", path.display()))?;
+            Ok(Some(RemovedSymlink {
+                path: path.to_path_buf(),
+                target: expected_target.to_string(),
+            }))
+        }
+        Ok(_) => Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("failed to inspect {}", path.display())),
+    }
+}
+
+fn rollback_removed_symlinks(symlinks: &[RemovedSymlink]) -> Result<()> {
+    for symlink in symlinks.iter().rev() {
+        match fs::symlink_metadata(&symlink.path) {
+            Ok(_) => {
+                bail!(
+                    "failed to roll back removed symlink {} because the path now exists",
+                    symlink.path.display()
+                );
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "failed to inspect removed symlink {}",
+                        symlink.path.display()
+                    )
+                });
+            }
+        }
+        ensure_parent_dir(&symlink.path)?;
+        create_directory_symlink(Path::new(&symlink.target), &symlink.path)
+            .with_context(|| format!("failed to roll back symlink {}", symlink.path.display()))?;
     }
 
     Ok(())
+}
+
+#[cfg(unix)]
+fn create_directory_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn create_directory_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(target, link)
 }
 
 fn write_mirror_removals(
@@ -375,20 +601,32 @@ fn rollback_mirror_removals(removals: &[MirrorRemoval]) -> Result<()> {
     Ok(())
 }
 
-fn remove_symlinks(symlink_removals: &[(PathBuf, &FileOwnership)]) -> Result<()> {
-    for (path, ownership) in symlink_removals {
-        remove_symlink_if_owned(path, ownership)?;
-    }
-
-    Ok(())
+fn expected_mirror_plans(agent: InstallAgent) -> Result<BTreeMap<String, MirrorPlan>> {
+    mirror_plan(agent).map(|plans| {
+        plans
+            .into_iter()
+            .map(|plan| (plan.relative_path.clone(), plan))
+            .collect()
+    })
 }
 
-fn validate_install_ownership(agent: InstallAgent, install: &AgentInstall) -> Result<()> {
-    let mut allowed = BTreeMap::new();
-    for plan in mirror_plan(agent)? {
-        allowed.insert(plan.relative_path.clone(), plan);
-    }
+fn validate_install_ownership(
+    agent: InstallAgent,
+    install: &AgentInstall,
+    allowed: &BTreeMap<String, MirrorPlan>,
+) -> Result<()> {
+    ensure_uninstallable_install(agent, install)?;
+
     let skill_symlink = skill_symlink_for_agent(agent);
+    let owned_paths = install.files.keys().cloned().collect::<BTreeSet<_>>();
+    let mut expected_paths = allowed.keys().cloned().collect::<BTreeSet<_>>();
+    expected_paths.insert(skill_symlink.relative_path.to_string());
+    if owned_paths != expected_paths && !is_legacy_symlink_only_install(install, skill_symlink) {
+        bail!(
+            "install lock for {} does not match the expected mirror set",
+            agent.key()
+        );
+    }
 
     for (relative_path, ownership) in &install.files {
         if relative_path == skill_symlink.relative_path {
@@ -435,11 +673,114 @@ fn validate_install_ownership(agent: InstallAgent, install: &AgentInstall) -> Re
     Ok(())
 }
 
-fn remove_symlink_if_owned(path: &Path, ownership: &FileOwnership) -> Result<()> {
-    let Some(expected_target) = ownership.target.as_deref() else {
-        return Ok(());
+fn is_legacy_symlink_only_install(
+    install: &AgentInstall,
+    skill_symlink: crate::domain::skills::symlink::SkillSymlink,
+) -> bool {
+    install.files.len() == 1
+        && install
+            .files
+            .get(skill_symlink.relative_path)
+            .is_some_and(|ownership| {
+                ownership.kind == MirrorKind::Symlink
+                    && ownership.target.as_deref() == Some(skill_symlink.target)
+            })
+}
+
+fn verify_text_content_ownership(
+    relative_path: &str,
+    ownership: &FileOwnership,
+    plan: &MirrorPlan,
+    contents: &str,
+) -> Result<()> {
+    match ownership.kind {
+        MirrorKind::MarkdownManagedBlock
+        | MirrorKind::GitignoreSection
+        | MirrorKind::TomlSection => {
+            let owned_content = text_ownership_content(&ownership.kind, contents)?;
+            if !ownership.matches_text_content(owned_content)
+                && !legacy_full_file_lock_still_owns_current_block(ownership, plan, owned_content)?
+            {
+                bail!(
+                    "refusing to uninstall {} because the current contents do not match the install lock",
+                    relative_path
+                );
+            }
+        }
+        MirrorKind::JsonManagedKeys | MirrorKind::Symlink => {}
+    }
+
+    Ok(())
+}
+
+fn remove_text_mirror_content(
+    relative_path: &str,
+    ownership: &FileOwnership,
+    plan: &MirrorPlan,
+    contents: &str,
+    format: ManagedBlockFormat,
+    removing_retry: bool,
+) -> Result<Option<String>> {
+    match verify_text_content_ownership(relative_path, ownership, plan, contents) {
+        Ok(()) => Ok(Some(remove_managed_block(contents, format))),
+        Err(error) => {
+            if removing_retry && marked_block_for_format(contents, format).is_none() {
+                return Ok(None);
+            }
+            Err(error)
+        }
+    }
+}
+
+fn legacy_full_file_lock_still_owns_current_block(
+    ownership: &FileOwnership,
+    plan: &MirrorPlan,
+    owned_content: &str,
+) -> Result<bool> {
+    if !ownership.has_legacy_text_hash() {
+        return Ok(false);
+    }
+    Ok(owned_content == text_ownership_content(&plan.kind, &plan.contents)?)
+}
+
+fn text_ownership_content<'a>(kind: &MirrorKind, contents: &'a str) -> Result<&'a str> {
+    let Some((start_marker, end_marker)) = text_markers(kind) else {
+        bail!("install lock entry is not a text mirror");
     };
-    remove_skill_symlink_if_owned(path, expected_target)
+    let Some(block) = marked_block(contents, start_marker, end_marker) else {
+        bail!("managed text mirror is missing Maestro ownership markers");
+    };
+    Ok(block)
+}
+
+fn text_markers(kind: &MirrorKind) -> Option<(&'static str, &'static str)> {
+    match kind {
+        MirrorKind::MarkdownManagedBlock => {
+            Some(("<!-- maestro:start -->", "<!-- maestro:end -->"))
+        }
+        MirrorKind::GitignoreSection | MirrorKind::TomlSection => {
+            Some(("# >>> maestro >>>", "# <<< maestro <<<"))
+        }
+        MirrorKind::JsonManagedKeys | MirrorKind::Symlink => None,
+    }
+}
+
+fn marked_block<'a>(contents: &'a str, start_marker: &str, end_marker: &str) -> Option<&'a str> {
+    let block_start = contents.find(start_marker)?;
+    let end_marker_start = contents[block_start..].find(end_marker)? + block_start;
+    let mut block_end = end_marker_start + end_marker.len();
+    if contents[block_end..].starts_with('\n') {
+        block_end += 1;
+    }
+    Some(&contents[block_start..block_end])
+}
+
+fn marked_block_for_format(contents: &str, format: ManagedBlockFormat) -> Option<&str> {
+    let (start_marker, end_marker) = match format {
+        ManagedBlockFormat::Markdown => ("<!-- maestro:start -->", "<!-- maestro:end -->"),
+        ManagedBlockFormat::HashComment => ("# >>> maestro >>>", "# <<< maestro <<<"),
+    };
+    marked_block(contents, start_marker, end_marker)
 }
 
 fn managed_mirror_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
@@ -526,9 +867,11 @@ fn previous_json_values(
         .and_then(|install| install.files.get(&plan.relative_path))
         .filter(|ownership| ownership.kind == MirrorKind::JsonManagedKeys)
     {
-        if validate_previous_value_hashes(&object, previous_ownership).is_ok() {
-            return Ok(previous_ownership.previous_values.clone());
-        }
+        validate_previous_value_hashes(&object, previous_ownership)?;
+        return Ok(previous_ownership.previous_values.clone());
+    }
+    if object.contains_key(JSON_PREVIOUS_VALUE_HASHES) {
+        bail!("managed JSON restore metadata has no validated install lock snapshot");
     }
 
     let mut previous_values = BTreeMap::new();
@@ -541,12 +884,19 @@ fn previous_json_values(
     Ok(previous_values)
 }
 
-fn remove_json_keys_with_restore(existing: &str, ownership: &FileOwnership) -> Result<String> {
+fn remove_json_keys_with_restore(
+    existing: &str,
+    ownership: &FileOwnership,
+    removing_retry: bool,
+) -> Result<Option<String>> {
     let Value::Object(mut object) =
         serde_json::from_str::<Value>(existing).context("failed to parse existing JSON mirror")?
     else {
         bail!("managed JSON mirror must be an object");
     };
+    if removing_retry && json_restore_already_applied(&object, ownership) {
+        return Ok(None);
+    }
     validate_previous_value_hashes(&object, ownership)?;
 
     for key in &ownership.managed_keys {
@@ -560,7 +910,16 @@ fn remove_json_keys_with_restore(existing: &str, ownership: &FileOwnership) -> R
 
     let mut formatted = serde_json::to_string_pretty(&Value::Object(object))?;
     formatted.push('\n');
-    Ok(formatted)
+    Ok(Some(formatted))
+}
+
+fn json_restore_already_applied(object: &Map<String, Value>, ownership: &FileOwnership) -> bool {
+    !object.contains_key("_maestro_managed_keys")
+        && !object.contains_key(JSON_PREVIOUS_VALUE_HASHES)
+        && ownership
+            .managed_keys
+            .iter()
+            .all(|key| ownership.previous_values.contains_key(key) || !object.contains_key(key))
 }
 
 fn add_previous_value_hashes(
@@ -619,7 +978,15 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{rollback_mirror_removals, MirrorRemoval};
+    use anyhow::{bail, Result};
+
+    use super::{
+        rollback_mirror_removals, write_prepared_mirrors_with_effects, MirrorEffects,
+        MirrorRemoval, MirrorUpdate, PreparedMirrors,
+    };
+    use crate::domain::install::AgentInstall;
+    use crate::domain::skills::symlink::SkillSymlink;
+    use crate::foundation::core::paths::MaestroPaths;
 
     #[test]
     fn rollback_mirror_removals_restores_written_files() {
@@ -643,5 +1010,89 @@ mod tests {
         let contents = fs::read_to_string(&path).expect("invariant: rolled back file is readable");
         assert_eq!(contents, "original\n");
         fs::remove_dir_all(root).expect("invariant: temp root should be removable");
+    }
+
+    #[test]
+    fn write_prepared_mirrors_reports_rollback_failure() {
+        let root = temp_root("maestro-mirror-effects-test");
+        let paths = MaestroPaths::new(root.clone());
+        let prepared = PreparedMirrors {
+            install: AgentInstall::new("test".to_string()),
+            updates: vec![
+                MirrorUpdate {
+                    relative_path: "AGENTS.md".to_string(),
+                    path: root.join("AGENTS.md"),
+                    existing: Some("old\n".to_string()),
+                    contents: "new\n".to_string(),
+                },
+                MirrorUpdate {
+                    relative_path: "CLAUDE.md".to_string(),
+                    path: root.join("CLAUDE.md"),
+                    existing: None,
+                    contents: "later\n".to_string(),
+                },
+            ],
+            skill_symlink: SkillSymlink {
+                relative_path: ".codex/skills",
+                target: "../.maestro/skills",
+            },
+            backup_timestamp: "test".to_string(),
+        };
+        let mut effects = FailingRollbackEffects::default();
+
+        let failure = write_prepared_mirrors_with_effects(&paths, &prepared, &mut effects)
+            .expect_err("invariant: second write and rollback should fail");
+
+        assert!(!failure.rollback_completed());
+        assert!(failure.into_error().to_string().contains("rollback failed"));
+        assert_eq!(effects.write_attempts, 2);
+        assert_eq!(effects.rollback_count, 1);
+
+        fs::remove_dir_all(root).expect("invariant: temp root should be removable");
+    }
+
+    #[derive(Default)]
+    struct FailingRollbackEffects {
+        write_attempts: usize,
+        rollback_count: usize,
+    }
+
+    impl MirrorEffects for FailingRollbackEffects {
+        fn write_mirror_update(
+            &mut self,
+            _paths: &MaestroPaths,
+            _prepared: &PreparedMirrors,
+            _update: &MirrorUpdate,
+        ) -> Result<()> {
+            self.write_attempts += 1;
+            if self.write_attempts == 2 {
+                bail!("write failed");
+            }
+            Ok(())
+        }
+
+        fn create_skill_symlink(
+            &mut self,
+            _paths: &MaestroPaths,
+            _symlink: SkillSymlink,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        fn rollback_mirror_updates(&mut self, written: &[&MirrorUpdate]) -> Result<()> {
+            self.rollback_count += 1;
+            assert_eq!(written.len(), 1);
+            bail!("rollback failed");
+        }
+    }
+
+    fn temp_root(prefix: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock should be after epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
+        fs::create_dir(&root).expect("invariant: temp root should be creatable");
+        root
     }
 }

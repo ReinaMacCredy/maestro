@@ -3,6 +3,11 @@ mod support;
 use std::fs;
 use std::process::Command;
 
+use maestro::domain::install::{
+    AgentInstall, FileOwnership, InstallAgent, InstallLock, InstallState, MirrorKind,
+};
+use maestro::foundation::core::hash::sha256_prefixed;
+use maestro::foundation::core::managed_blocks::{remove_managed_block, ManagedBlockFormat};
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
@@ -15,6 +20,13 @@ fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
 
 fn init_repo(repo: &std::path::Path) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
+    fs::create_dir_all(repo.join(".maestro/harness"))
+        .expect("invariant: harness dir should be creatable");
+    fs::write(
+        repo.join(".maestro/harness/HARNESS.md"),
+        "# Maestro Harness Protocol\n",
+    )
+    .expect("invariant: harness protocol should be writable");
 }
 
 #[test]
@@ -58,6 +70,43 @@ fn install_defaults_to_codex_when_agent_is_omitted() {
         .expect("invariant: install lock should be readable");
     assert!(lock.contains("codex:"));
     assert!(temp_dir.path().join(".codex/config.toml").is_file());
+}
+
+#[test]
+fn install_without_harness_fails_with_init_prerequisite() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: .git marker should exist");
+
+    let output = maestro(&["install", "--agent", "codex"], temp_dir.path());
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("run `maestro init` first"));
+    assert!(!temp_dir.path().join("AGENTS.md").exists());
+    assert!(!temp_dir.path().join(".maestro/install-lock.yaml").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn install_rejects_symlinked_harness_protocol_without_partial_writes() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    let external = TestTempDir::new("maestro-install-external-test");
+    fs::create_dir(temp_dir.path().join(".git")).expect("invariant: .git marker should exist");
+    fs::create_dir_all(temp_dir.path().join(".maestro/harness"))
+        .expect("invariant: harness dir should be creatable");
+    fs::write(external.path().join("HARNESS.md"), "# external harness\n")
+        .expect("invariant: external harness should be writable");
+    std::os::unix::fs::symlink(
+        external.path().join("HARNESS.md"),
+        temp_dir.path().join(".maestro/harness/HARNESS.md"),
+    )
+    .expect("invariant: symlinked harness should be creatable");
+
+    let output = maestro(&["install", "--agent", "codex"], temp_dir.path());
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+    assert!(!temp_dir.path().join("AGENTS.md").exists());
+    assert!(!temp_dir.path().join(".maestro/install-lock.yaml").exists());
 }
 
 #[test]
@@ -105,7 +154,6 @@ fn install_lock_save_failure_does_not_write_mirrors() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());
     let maestro_dir = temp_dir.path().join(".maestro");
-    fs::create_dir(&maestro_dir).expect("invariant: maestro dir should be creatable");
     let original_permissions = fs::metadata(&maestro_dir)
         .expect("invariant: maestro dir metadata should be readable")
         .permissions();
@@ -342,6 +390,368 @@ fn reinstall_preserves_json_restore_snapshot() {
 }
 
 #[test]
+fn reinstall_replaces_pending_install_lock_and_commits_recovered_state() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    let mut lock = InstallLock::empty();
+    let mut install = AgentInstall::new("interrupted".to_string());
+    install.mark_pending();
+    install.insert(
+        "AGENTS.md",
+        FileOwnership::text(MirrorKind::MarkdownManagedBlock, "interrupted\n"),
+    );
+    lock.set_agent(InstallAgent::Codex, install);
+    lock.save(&lock_path)
+        .expect("invariant: pending lock should be writable");
+
+    let reinstall = maestro(&["install", "--agent", "codex"], temp_dir.path());
+
+    assert!(
+        reinstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&reinstall.stderr)
+    );
+    let recovered =
+        InstallLock::load(&lock_path).expect("invariant: recovered install lock should load");
+    assert_eq!(recovered.agents["codex"].state, InstallState::Committed);
+    assert!(recovered.agents["codex"].files.contains_key("AGENTS.md"));
+    assert!(temp_dir.path().join("AGENTS.md").is_file());
+}
+
+#[test]
+fn reinstall_from_pending_after_mirror_writes_preserves_json_restore_snapshot() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::create_dir_all(temp_dir.path().join(".codex"))
+        .expect("invariant: codex config dir should be creatable");
+    let original_hooks = "{\n  \"hooks\": {\n    \"Stop\": []\n  }\n}\n";
+    fs::write(temp_dir.path().join(".codex/hooks.json"), original_hooks)
+        .expect("invariant: hooks json should be writable");
+
+    let first_install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(first_install.status.success());
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    let mut pending_lock =
+        InstallLock::load(&lock_path).expect("invariant: install lock should load");
+    pending_lock
+        .agents
+        .get_mut("codex")
+        .expect("invariant: codex install should exist")
+        .mark_pending();
+    pending_lock
+        .save(&lock_path)
+        .expect("invariant: pending lock should save");
+
+    let reinstall = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(
+        reinstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&reinstall.stderr)
+    );
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+    assert!(
+        uninstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+    let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
+        .expect("invariant: hooks json should be readable");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&hooks)
+            .expect("invariant: restored hooks should parse"),
+        serde_json::from_str::<serde_json::Value>(original_hooks)
+            .expect("invariant: original hooks should parse")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn uninstall_retries_removing_state_after_mirrors_were_removed() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(install.status.success());
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    let mut lock = InstallLock::load(&lock_path).expect("invariant: install lock should load");
+    lock.agents
+        .get_mut("codex")
+        .expect("invariant: codex install should exist")
+        .mark_removing();
+    lock.save(&lock_path)
+        .expect("invariant: removing lock should save");
+
+    remove_managed_text(
+        temp_dir.path().join("AGENTS.md"),
+        ManagedBlockFormat::Markdown,
+    );
+    remove_managed_text(
+        temp_dir.path().join("CLAUDE.md"),
+        ManagedBlockFormat::Markdown,
+    );
+    remove_managed_text(
+        temp_dir.path().join(".gitignore"),
+        ManagedBlockFormat::HashComment,
+    );
+    remove_managed_text(
+        temp_dir.path().join(".codex/config.toml"),
+        ManagedBlockFormat::HashComment,
+    );
+    fs::write(temp_dir.path().join(".codex/hooks.json"), "{}\n")
+        .expect("invariant: restored hooks json should be writable");
+    fs::remove_file(temp_dir.path().join(".codex/skills"))
+        .expect("invariant: removed skill symlink should be removable");
+
+    let retry = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(
+        retry.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&retry.stderr)
+    );
+    assert!(!lock_path.exists());
+    let agents = fs::read_to_string(temp_dir.path().join("AGENTS.md"))
+        .expect("invariant: AGENTS.md should remain readable");
+    assert!(!agents.contains("<!-- maestro:start -->"));
+}
+
+#[test]
+fn uninstall_refuses_pending_install_lock_and_leaves_files_untouched() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::write(temp_dir.path().join("AGENTS.md"), "pending-owned\n")
+        .expect("invariant: pending mirror should be writable");
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    let mut lock = InstallLock::empty();
+    let mut install = AgentInstall::new("interrupted".to_string());
+    install.mark_pending();
+    install.insert(
+        "AGENTS.md",
+        FileOwnership::text(MirrorKind::MarkdownManagedBlock, "pending-owned\n"),
+    );
+    lock.set_agent(InstallAgent::Codex, install);
+    lock.save(&lock_path)
+        .expect("invariant: pending lock should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(!uninstall.status.success());
+    assert!(String::from_utf8_lossy(&uninstall.stderr).contains("pending codex install"));
+    let agents = fs::read_to_string(temp_dir.path().join("AGENTS.md"))
+        .expect("invariant: AGENTS.md should remain readable");
+    assert_eq!(agents, "pending-owned\n");
+    let preserved = InstallLock::load(&lock_path).expect("invariant: lock should remain readable");
+    assert_eq!(preserved.agents["codex"].state, InstallState::Pending);
+}
+
+#[test]
+fn uninstall_refuses_text_mirror_when_current_hash_differs_from_lock() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(install.status.success());
+    let agents_path = temp_dir.path().join("AGENTS.md");
+    let agents = fs::read_to_string(&agents_path)
+        .expect("invariant: AGENTS.md should be readable after install");
+    let agents = agents.replace(
+        "Read .maestro/harness/HARNESS.md first before working in this repo.",
+        "tampered managed block",
+    );
+    fs::write(&agents_path, agents).expect("invariant: AGENTS.md edit should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(!uninstall.status.success());
+    assert!(String::from_utf8_lossy(&uninstall.stderr).contains("current contents"));
+    let agents_after =
+        fs::read_to_string(&agents_path).expect("invariant: AGENTS.md should remain readable");
+    assert!(agents_after.contains("<!-- maestro:start -->"));
+    assert!(temp_dir.path().join(".maestro/install-lock.yaml").exists());
+}
+
+#[test]
+fn uninstall_allows_user_edits_outside_text_mirror_managed_block() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::write(temp_dir.path().join("AGENTS.md"), "# User\n")
+        .expect("invariant: AGENTS.md should be writable");
+
+    let install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(install.status.success());
+    let agents_path = temp_dir.path().join("AGENTS.md");
+    let mut agents = fs::read_to_string(&agents_path)
+        .expect("invariant: AGENTS.md should be readable after install");
+    agents.push_str("\n# user edit after install\n");
+    fs::write(&agents_path, agents).expect("invariant: AGENTS.md edit should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(
+        uninstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+    let agents_after =
+        fs::read_to_string(&agents_path).expect("invariant: AGENTS.md should remain readable");
+    assert!(!agents_after.contains("<!-- maestro:start -->"));
+    assert!(agents_after.contains("# User"));
+    assert!(agents_after.contains("# user edit after install"));
+}
+
+#[test]
+fn uninstall_refuses_truncated_current_install_lock_and_leaves_files_untouched() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(install.status.success());
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    let mut lock = InstallLock::load(&lock_path).expect("invariant: install lock should load");
+    let codex = lock
+        .agents
+        .get_mut("codex")
+        .expect("invariant: codex install should exist");
+    codex
+        .files
+        .retain(|relative_path, _| relative_path == "AGENTS.md");
+    lock.save(&lock_path)
+        .expect("invariant: truncated lock should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(!uninstall.status.success());
+    assert!(String::from_utf8_lossy(&uninstall.stderr).contains("expected mirror set"));
+    let agents_after =
+        fs::read_to_string(temp_dir.path().join("AGENTS.md")).expect("AGENTS.md should remain");
+    assert!(agents_after.contains("<!-- maestro:start -->"));
+    assert!(temp_dir.path().join(".codex/hooks.json").exists());
+    assert!(temp_dir.path().join(".codex/config.toml").exists());
+    assert!(temp_dir.path().join(".maestro/install-lock.yaml").exists());
+}
+
+#[test]
+fn uninstall_accepts_legacy_full_file_hash_when_managed_block_is_unchanged() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::write(temp_dir.path().join("AGENTS.md"), "# User\n")
+        .expect("invariant: AGENTS.md should be writable");
+
+    let install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(install.status.success());
+    let agents_path = temp_dir.path().join("AGENTS.md");
+    let original_agents = fs::read_to_string(&agents_path)
+        .expect("invariant: AGENTS.md should be readable after install");
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    let mut lock = InstallLock::load(&lock_path).expect("invariant: install lock should load");
+    lock.agents
+        .get_mut("codex")
+        .expect("invariant: codex install should exist")
+        .files
+        .get_mut("AGENTS.md")
+        .expect("invariant: AGENTS.md ownership should exist")
+        .content_hash = Some(legacy_text_hash(&original_agents));
+    lock.save(&lock_path)
+        .expect("invariant: legacy lock should be writable");
+    let mut edited_agents = original_agents;
+    edited_agents.push_str("\n# user edit after legacy install\n");
+    fs::write(&agents_path, edited_agents).expect("invariant: AGENTS.md edit should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(
+        uninstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+    let agents_after =
+        fs::read_to_string(&agents_path).expect("invariant: AGENTS.md should remain readable");
+    assert!(!agents_after.contains("<!-- maestro:start -->"));
+    assert!(agents_after.contains("# User"));
+    assert!(agents_after.contains("# user edit after legacy install"));
+}
+
+#[test]
+fn uninstall_refuses_legacy_full_file_hash_when_managed_block_changed() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(install.status.success());
+    let agents_path = temp_dir.path().join("AGENTS.md");
+    let original_agents = fs::read_to_string(&agents_path)
+        .expect("invariant: AGENTS.md should be readable after install");
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    let mut lock = InstallLock::load(&lock_path).expect("invariant: install lock should load");
+    lock.agents
+        .get_mut("codex")
+        .expect("invariant: codex install should exist")
+        .files
+        .get_mut("AGENTS.md")
+        .expect("invariant: AGENTS.md ownership should exist")
+        .content_hash = Some(legacy_text_hash(&original_agents));
+    lock.save(&lock_path)
+        .expect("invariant: legacy lock should be writable");
+    let tampered_agents = original_agents.replace(
+        "Read .maestro/harness/HARNESS.md first before working in this repo.",
+        "tampered managed block",
+    );
+    fs::write(&agents_path, tampered_agents)
+        .expect("invariant: AGENTS.md tamper should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(!uninstall.status.success());
+    assert!(String::from_utf8_lossy(&uninstall.stderr).contains("current contents"));
+    let agents_after =
+        fs::read_to_string(&agents_path).expect("invariant: AGENTS.md should remain readable");
+    assert!(agents_after.contains("tampered managed block"));
+    assert!(temp_dir.path().join(".maestro/install-lock.yaml").exists());
+}
+
+#[test]
+fn uninstall_refuses_forged_strong_full_file_hash_when_managed_block_changed() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::write(temp_dir.path().join("AGENTS.md"), "# User\n")
+        .expect("invariant: AGENTS.md should be writable");
+
+    let install = maestro(&["install", "--agent", "codex"], temp_dir.path());
+    assert!(install.status.success());
+    let agents_path = temp_dir.path().join("AGENTS.md");
+    let original_agents = fs::read_to_string(&agents_path)
+        .expect("invariant: AGENTS.md should be readable after install");
+    let tampered_agents = original_agents.replace(
+        "Read .maestro/harness/HARNESS.md first before working in this repo.",
+        "tampered managed block",
+    );
+    fs::write(&agents_path, &tampered_agents)
+        .expect("invariant: AGENTS.md tamper should be writable");
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    let mut lock = InstallLock::load(&lock_path).expect("invariant: install lock should load");
+    lock.agents
+        .get_mut("codex")
+        .expect("invariant: codex install should exist")
+        .files
+        .get_mut("AGENTS.md")
+        .expect("invariant: AGENTS.md ownership should exist")
+        .content_hash = Some(sha256_prefixed(tampered_agents.as_bytes()));
+    lock.save(&lock_path)
+        .expect("invariant: forged strong lock should be writable");
+
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+
+    assert!(!uninstall.status.success());
+    assert!(String::from_utf8_lossy(&uninstall.stderr).contains("current contents"));
+    let agents_after =
+        fs::read_to_string(&agents_path).expect("invariant: AGENTS.md should remain readable");
+    assert!(agents_after.contains("tampered managed block"));
+    assert!(agents_after.contains("<!-- maestro:start -->"));
+    assert!(temp_dir.path().join(".maestro/install-lock.yaml").exists());
+}
+
+#[test]
 fn reinstall_does_not_bless_forged_json_restore_snapshot() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());
@@ -360,12 +770,13 @@ fn reinstall_does_not_bless_forged_json_restore_snapshot() {
     .expect("invariant: forged lock should be writable");
 
     let reinstall = maestro(&["install", "--agent", "codex"], temp_dir.path());
-    assert!(reinstall.status.success());
-    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
-    assert!(uninstall.status.success());
+    assert!(!reinstall.status.success());
+    assert!(String::from_utf8_lossy(&reinstall.stderr)
+        .contains("managed JSON restore metadata does not match install lock"));
     let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
         .expect("invariant: hooks json should be readable");
     assert!(!hooks.contains("forged"));
+    assert!(hooks.contains("_maestro_previous_value_hashes"));
 }
 
 #[cfg(unix)]
@@ -553,4 +964,18 @@ fn uninstall_one_agent_preserves_shared_files_owned_by_remaining_agent() {
         .expect("invariant: install lock should remain");
     assert!(lock.contains("codex:"));
     assert!(!lock.contains("claude:"));
+}
+
+fn legacy_text_hash(content: &str) -> String {
+    let byte_sum = content
+        .as_bytes()
+        .iter()
+        .fold(0_u64, |sum, byte| sum.wrapping_add(u64::from(*byte)));
+    format!("len:{}:sum:{:016x}", content.len(), byte_sum)
+}
+
+fn remove_managed_text(path: std::path::PathBuf, format: ManagedBlockFormat) {
+    let contents = fs::read_to_string(&path).expect("invariant: managed mirror should be readable");
+    fs::write(path, remove_managed_block(&contents, format))
+        .expect("invariant: managed mirror should be writable");
 }
