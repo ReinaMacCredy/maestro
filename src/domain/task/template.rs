@@ -362,6 +362,7 @@ impl Drop for TaskSaveLock {
     }
 }
 
-fn task_markdown(task: &TaskRecord) -> String {
+/// Render the Task-owned `task.md` companion artifact.
+pub fn task_markdown(task: &TaskRecord) -> String {
     format!("# {}\n\n## Acceptance\nSee acceptance.yaml.\n", task.title)
 }

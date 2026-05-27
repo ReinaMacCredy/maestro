@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::foundation::core::paths::{discover_repo_root, discover_repo_root_from, MaestroPaths};
 use crate::interfaces::cli::MigrateArgs;
-use crate::migrate::v0_106_to_v0_8;
+use crate::operations::migrate;
 
 /// Execute `maestro migrate`.
 pub fn run(args: MigrateArgs) -> Result<()> {
@@ -11,12 +11,12 @@ pub fn run(args: MigrateArgs) -> Result<()> {
         None => discover_repo_root()?,
     };
     let paths = MaestroPaths::new(repo_root);
-    let plan = v0_106_to_v0_8::plan(&paths)?;
+    let plan = migrate::plan(&paths)?;
 
     if args.check {
-        print!("{}", v0_106_to_v0_8::render_check(&plan));
+        print!("{}", migrate::render_check(&plan));
     } else {
-        v0_106_to_v0_8::apply(&paths, &plan, args.force)?;
+        migrate::apply(&paths, &plan, args.force)?;
         println!("migration applied: {} change(s)", plan.changes.len());
     }
     Ok(())

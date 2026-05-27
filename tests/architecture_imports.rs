@@ -41,7 +41,6 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/improve.rs", &["harness", "improver"]),
     ("src/interfaces/cli/init.rs", &["harness", "skills"]),
     ("src/interfaces/cli/metrics.rs", &["metrics"]),
-    ("src/interfaces/cli/migrate.rs", &["migrate"]),
     (
         "src/interfaces/cli/query.rs",
         &["decisions", "feature", "harness", "metrics"],
@@ -231,6 +230,16 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
     let _ = std::any::type_name::<maestro::domain::proof::ProofStatusKind>();
     let _ = std::any::type_name::<maestro::operations::metrics::summary::MetricsSummary>();
+    assert_eq!(
+        std::any::type_name::<maestro::operations::migrate::MigrationPlan>(),
+        std::any::type_name::<maestro::migrate::v0_106_to_v0_8::MigrationPlan>()
+    );
+    let _legacy_migration_plan = |paths: &maestro::foundation::core::paths::MaestroPaths| {
+        maestro::migrate::v0_106_to_v0_8::plan(paths)
+    };
+    let _new_migration_plan = |paths: &maestro::foundation::core::paths::MaestroPaths| {
+        maestro::operations::migrate::plan(paths)
+    };
     let _ = std::any::type_name::<maestro::operations::update::InstallMethod>();
     assert_eq!(
         std::any::type_name::<maestro::interfaces::shell::Shell>(),
@@ -550,6 +559,59 @@ fn install_domain_facade_does_not_publish_leaf_modules() {
     assert!(
         !legacy_shim.contains("pub use crate::domain::install::*"),
         "legacy crate::install shim should explicitly re-export the compatibility surface"
+    );
+}
+
+#[test]
+fn migration_operation_owns_implementation_and_legacy_shim_stays_thin() {
+    assert!(
+        Path::new("src/operations/migrate/v0_106_to_v0_8.rs").is_file(),
+        "Migration implementation should live under src/operations/migrate"
+    );
+    assert!(
+        !Path::new("src/migrate/v0_106_to_v0_8.rs").exists(),
+        "legacy src/migrate should not own version implementation files"
+    );
+
+    let operations_facade = read_source_file(Path::new("src/operations/migrate/mod.rs"));
+    assert!(
+        operations_facade.contains("pub mod v0_106_to_v0_8;"),
+        "operations/migrate should expose the version module it owns"
+    );
+    for item in ["apply", "plan", "render_check", "MigrationPlan"] {
+        assert!(
+            operations_facade.contains(item),
+            "operations/migrate facade should expose {item}"
+        );
+    }
+
+    let legacy_shim = read_source_file(Path::new("src/migrate/mod.rs"));
+    assert!(
+        legacy_shim.contains("pub use crate::operations::migrate::v0_106_to_v0_8;"),
+        "legacy crate::migrate should re-export the operations-owned version module"
+    );
+    assert!(
+        !legacy_shim.contains("pub mod v0_106_to_v0_8;")
+            && !legacy_shim.contains("mod v0_106_to_v0_8;"),
+        "legacy crate::migrate should stay a compatibility shim"
+    );
+
+    let mut violations = Vec::new();
+    for file in rust_files_under(Path::new("src")) {
+        if file == Path::new("src/migrate/mod.rs") {
+            continue;
+        }
+        let source = read_source_file(&file);
+        let code = code_for_path_scan(&source);
+        if code.contains("crate::migrate::") {
+            violations.push(format!("{} imports legacy crate::migrate", file.display()));
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should use operations::migrate instead of the legacy shim:\n{}",
+        violations.join("\n")
     );
 }
 
@@ -898,14 +960,10 @@ fn transitional_public_surfaces_match_phase_policy() {
         &["cli", "hooks", "mcp", "shell", "tui"],
         &[],
     );
-    assert_reexports(
+    assert_public_modules(
         Path::new("src/operations/mod.rs"),
-        &[
-            "crate::improver",
-            "crate::metrics",
-            "crate::migrate",
-            "crate::update",
-        ],
+        &["migrate"],
+        &["crate::improver", "crate::metrics", "crate::update"],
     );
 }
 
@@ -1381,24 +1439,6 @@ fn transitional_interface_legacy_roots(file: &Path) -> Option<&'static [&'static
         .find_map(|(allowed_file, roots)| (file == Path::new(allowed_file)).then_some(*roots))
 }
 
-fn assert_reexports(path: &Path, expected_roots: &[&str]) {
-    let source = read_source_file(path);
-    let actual = crate_reexports(&source);
-    let expected = expected_roots
-        .iter()
-        .map(|root| root.to_string())
-        .collect::<BTreeSet<_>>();
-
-    assert_eq!(
-        actual,
-        expected,
-        "{} must expose exactly the current transitional re-export set",
-        path.display()
-    );
-
-    assert_no_public_module_items(path, &source);
-}
-
 fn assert_public_modules(path: &Path, expected_modules: &[&str], expected_reexports: &[&str]) {
     let source = read_source_file(path);
     let actual = public_modules(&source);
@@ -1519,24 +1559,6 @@ fn public_modules(source: &str) -> BTreeSet<String> {
                 .map(str::to_string)
         })
         .collect()
-}
-
-fn assert_no_public_module_items(path: &Path, source: &str) {
-    let has_public_module = source.lines().any(|line| {
-        let line = line.trim_start();
-        line.starts_with("pub mod ")
-            || line.starts_with("pub(crate) mod ")
-            || line.starts_with("pub(super) mod ")
-            || line.starts_with("pub(crate) use ")
-            || line.starts_with("pub(super) use ")
-            || line.starts_with("pub(in ")
-    });
-
-    assert!(
-        !has_public_module,
-        "{} must expose only the current transitional re-exports",
-        path.display()
-    );
 }
 
 fn protected_interface_path_reference(source: &str) -> Option<String> {

@@ -23,8 +23,8 @@ pub use doctor::{
 };
 pub use lifecycle::TransitionDetails;
 pub use template::{
-    AcceptanceFile, AppliedVerificationReceipt, Blocker, BlockerKind, BlockerRef, BlockerSource,
-    TaskRecord, TaskState, VerificationBinding,
+    task_markdown, AcceptanceFile, AppliedVerificationReceipt, Blocker, BlockerKind, BlockerRef,
+    BlockerSource, TaskRecord, TaskState, VerificationBinding,
 };
 pub(crate) use template::{StateHistoryEntry, TaskSaveError};
 

@@ -5,6 +5,12 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
+use maestro::domain::{decisions, feature, harness, run, task};
+use maestro::foundation::core::paths::MaestroPaths;
+use maestro::foundation::core::schema::{
+    ACCEPTANCE_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION, TASK_SCHEMA_VERSION,
+};
+
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
@@ -251,6 +257,77 @@ fn migrate_apply_writes_v1_artifacts_and_backups_sources() {
     assert!(backup_files
         .iter()
         .any(|path| path.ends_with(".maestro/features/features.yaml")));
+
+    assert_migrated_artifacts_match_target_contracts(repo);
+}
+
+fn assert_migrated_artifacts_match_target_contracts(repo: &Path) {
+    let paths = MaestroPaths::new(repo);
+
+    let task = task::load_task_record(&paths.tasks_dir(), "task-001")
+        .expect("invariant: migrated Task should load through Task facade");
+    assert_eq!(task.schema_version, TASK_SCHEMA_VERSION);
+    assert_eq!(task.id, "task-001");
+    assert_eq!(task.feature_id.as_deref(), Some("feat-one"));
+    assert_eq!(task.verification.verified_commit.as_deref(), Some("abc123"));
+
+    let task_dir = paths.tasks_dir().join(task.directory_name());
+    let task_md_raw = fs::read_to_string(task_dir.join("task.md"))
+        .expect("invariant: migrated task.md should be readable");
+    assert_eq!(
+        task_md_raw,
+        "# Migrate old task\n\n## Acceptance\nSee acceptance.yaml.\n"
+    );
+    assert_eq!(task_md_raw, task::task_markdown(&task));
+
+    let acceptance_raw = fs::read_to_string(task_dir.join("acceptance.yaml"))
+        .expect("invariant: migrated acceptance should be readable");
+    let acceptance: task::AcceptanceFile = serde_yaml::from_str(&acceptance_raw)
+        .expect("invariant: migrated acceptance should parse through Task contract");
+    assert_eq!(acceptance.schema_version, ACCEPTANCE_SCHEMA_VERSION);
+    assert_eq!(acceptance.task, "task-001");
+
+    let features_raw = fs::read_to_string(paths.features_dir().join("features.yaml"))
+        .expect("invariant: migrated features should be readable");
+    let registry: feature::schema::FeatureRegistry = serde_yaml::from_str(&features_raw)
+        .expect("invariant: migrated features should parse through Feature schema");
+    assert_eq!(registry.schema_version, FEATURE_SCHEMA_VERSION);
+    assert_eq!(registry.features.len(), 1);
+    assert_eq!(registry.features[0].id, "feat-one");
+    let counts = feature::query::count_tasks_for_feature(&paths.tasks_dir(), "feat-one")
+        .expect("invariant: migrated feature rollup should read Task projections");
+    assert_eq!(counts.total, 1);
+
+    let decisions = decisions::query::decision_entries(&paths.decisions_dir())
+        .expect("invariant: migrated decisions should list through Decision query");
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0].file_name, "decision-001-old-choice.md");
+    let decision_path =
+        decisions::query::resolve_decision_path(&paths.decisions_dir(), "decision-001")
+            .expect("invariant: migrated decision should resolve through Decision query");
+    assert_eq!(
+        decision_path,
+        paths.decisions_dir().join("decision-001-old-choice.md")
+    );
+
+    let harness_raw = fs::read_to_string(paths.harness_dir().join("harness.yml"))
+        .expect("invariant: migrated Harness should be readable");
+    let harness: harness::HarnessConfig = serde_yaml::from_str(&harness_raw)
+        .expect("invariant: migrated Harness should parse through Harness schema");
+    assert_eq!(harness.schema_version, HARNESS_SCHEMA_VERSION);
+    assert_eq!(harness.stack.verify, vec!["cargo test".to_string()]);
+
+    let run_logs = run::managed_event_logs(&paths)
+        .expect("invariant: migrated Run logs should list through Run read model");
+    assert_eq!(run_logs.len(), 1);
+    assert_eq!(run_logs[0].session_id(), "session-1");
+    assert_eq!(
+        run_logs[0].path(),
+        paths
+            .runs_dir()
+            .join("migrated/session-1/events.jsonl")
+            .as_path()
+    );
 }
 
 fn backup_files(repo: &Path) -> Vec<String> {

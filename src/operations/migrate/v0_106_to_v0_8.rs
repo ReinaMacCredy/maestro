@@ -6,15 +6,15 @@ use std::path::{Component, Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
-use crate::domain::task::{
-    AcceptanceFile, StateHistoryEntry, TaskRecord, TaskState, VerificationBinding,
-};
+use crate::domain::{decisions, task};
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::diff::unified_diff;
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_atomic;
-use crate::foundation::core::schema::{ACCEPTANCE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
+use crate::foundation::core::schema::{
+    ACCEPTANCE_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION, TASK_SCHEMA_VERSION,
+};
 use crate::foundation::core::slug::slugify_ascii;
 
 /// One planned migration write.
@@ -143,7 +143,7 @@ fn plan_tasks(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
                 .with_context(|| format!("failed to parse task JSONL in {}", path.display()))?;
             let task = old.into_task(paths)?;
             let task_dir = tasks_dir.join(task.directory_name());
-            let acceptance = AcceptanceFile {
+            let acceptance = task::AcceptanceFile {
                 schema_version: ACCEPTANCE_SCHEMA_VERSION.to_string(),
                 task: task.id.clone(),
                 checks: Vec::new(),
@@ -168,7 +168,7 @@ fn plan_tasks(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
                 plan,
                 paths,
                 task_dir.join("task.md"),
-                migrated_task_markdown(&task).into_bytes(),
+                task::task_markdown(&task).into_bytes(),
                 Some(&path),
             )?;
         }
@@ -284,7 +284,7 @@ fn normalize_features_yaml(raw: &str) -> Result<String> {
     if let Some(mapping) = value.as_mapping_mut() {
         mapping.insert(
             serde_yaml::Value::String("schema_version".to_string()),
-            serde_yaml::Value::String("maestro.feature.v1".to_string()),
+            serde_yaml::Value::String(FEATURE_SCHEMA_VERSION.to_string()),
         );
     }
     Ok(serde_yaml::to_string(&value)?)
@@ -351,7 +351,7 @@ fn plan_decisions(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> 
             .lines()
             .find_map(|line| line.strip_prefix("# "))
             .unwrap_or(file_name.trim_end_matches(".md"));
-        let target = dir.join(format!("decision-{number:03}-{}.md", slugify_ascii(title)));
+        let target = dir.join(decisions::template::decision_file_name(number, title));
         push_change(plan, paths, target, raw.into_bytes(), Some(&path))?;
     }
     Ok(())
@@ -402,7 +402,7 @@ fn plan_harness_verify(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result
     let mut after = serde_yaml::Mapping::new();
     after.insert(
         serde_yaml::Value::String("schema_version".to_string()),
-        serde_yaml::Value::String("maestro.harness.v1".to_string()),
+        serde_yaml::Value::String(HARNESS_SCHEMA_VERSION.to_string()),
     );
     after.insert(
         serde_yaml::Value::String("stack".to_string()),
@@ -636,10 +636,6 @@ fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-fn migrated_task_markdown(task: &TaskRecord) -> String {
-    format!("# {}\n\nState: {}\n", task.title, state_label(&task.state))
-}
-
 #[derive(Deserialize)]
 struct OldTask {
     id: String,
@@ -655,12 +651,12 @@ struct OldTask {
 }
 
 impl OldTask {
-    fn into_task(self, paths: &MaestroPaths) -> Result<TaskRecord> {
+    fn into_task(self, paths: &MaestroPaths) -> Result<task::TaskRecord> {
         validate_old_task_id(&self.id)?;
         let created_at = self.created_at.unwrap_or_else(|| "0".to_string());
         let updated_at = self.updated_at.unwrap_or_else(|| created_at.clone());
         let state = parse_state(self.state.as_deref());
-        let mut task = TaskRecord {
+        let mut task = task::TaskRecord {
             schema_version: TASK_SCHEMA_VERSION.to_string(),
             slug: slugify_ascii(&self.title),
             id: self.id,
@@ -676,15 +672,15 @@ impl OldTask {
             state: state.clone(),
             acceptance_locked: matches!(
                 state,
-                TaskState::Ready
-                    | TaskState::InProgress
-                    | TaskState::NeedsVerification
-                    | TaskState::Verified
+                task::TaskState::Ready
+                    | task::TaskState::InProgress
+                    | task::TaskState::NeedsVerification
+                    | task::TaskState::Verified
             ),
             claimed_by: None,
             claimed_at: None,
             blockers: Vec::new(),
-            state_history: vec![StateHistoryEntry {
+            state_history: vec![task::StateHistoryEntry {
                 state,
                 at: created_at.clone(),
                 by: "migrate".to_string(),
@@ -693,7 +689,7 @@ impl OldTask {
                 claims: Vec::new(),
                 open_items: Vec::new(),
             }],
-            verification: VerificationBinding::default(),
+            verification: task::VerificationBinding::default(),
             created_at,
             updated_at,
         };
@@ -729,7 +725,7 @@ struct OldIntake {
     open_questions: Vec<String>,
 }
 
-fn apply_intake(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
+fn apply_intake(paths: &MaestroPaths, task: &mut task::TaskRecord) -> Result<()> {
     let path = paths
         .maestro_dir()
         .join("intake")
@@ -748,7 +744,7 @@ fn apply_intake(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
     Ok(())
 }
 
-fn apply_handoff(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
+fn apply_handoff(paths: &MaestroPaths, task: &mut task::TaskRecord) -> Result<()> {
     let path = paths
         .maestro_dir()
         .join("handoffs")
@@ -762,7 +758,7 @@ fn apply_handoff(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
         .lines()
         .find_map(|line| line.strip_prefix("# "))
         .unwrap_or("handoff");
-    task.state_history.push(StateHistoryEntry {
+    task.state_history.push(task::StateHistoryEntry {
         state: task.state.clone(),
         at: task.updated_at.clone(),
         by: "migrate".to_string(),
@@ -798,7 +794,7 @@ struct OldVerdict {
     checks_hash: Option<String>,
 }
 
-fn apply_verdict(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
+fn apply_verdict(paths: &MaestroPaths, task: &mut task::TaskRecord) -> Result<()> {
     let path = paths
         .maestro_dir()
         .join("verdicts")
@@ -817,42 +813,28 @@ fn apply_verdict(paths: &MaestroPaths, task: &mut TaskRecord) -> Result<()> {
     if !matches!(status, "pass" | "passed" | "verified" | "ok") {
         return Ok(());
     }
-    task.verification = VerificationBinding {
+    task.verification = task::VerificationBinding {
         verified_at: verdict.verified_at,
         verified_commit: verdict.verified_commit.or(verdict.commit),
         verified_by_run: verdict.verified_by_run.or(verdict.run_id),
         task_contract_hash: verdict.task_contract_hash,
         acceptance_hash: verdict.acceptance_hash,
         checks_hash: verdict.checks_hash,
-        ..VerificationBinding::default()
+        ..task::VerificationBinding::default()
     };
     Ok(())
 }
 
-fn parse_state(state: Option<&str>) -> TaskState {
+fn parse_state(state: Option<&str>) -> task::TaskState {
     match state.unwrap_or("draft") {
-        "exploring" => TaskState::Exploring,
-        "ready" => TaskState::Ready,
-        "in_progress" => TaskState::InProgress,
-        "needs_verification" => TaskState::NeedsVerification,
-        "verified" => TaskState::Verified,
-        "rejected" => TaskState::Rejected,
-        "abandoned" => TaskState::Abandoned,
-        "superseded" => TaskState::Superseded,
-        _ => TaskState::Draft,
-    }
-}
-
-fn state_label(state: &TaskState) -> &'static str {
-    match state {
-        TaskState::Draft => "draft",
-        TaskState::Exploring => "exploring",
-        TaskState::Ready => "ready",
-        TaskState::InProgress => "in_progress",
-        TaskState::NeedsVerification => "needs_verification",
-        TaskState::Verified => "verified",
-        TaskState::Rejected => "rejected",
-        TaskState::Abandoned => "abandoned",
-        TaskState::Superseded => "superseded",
+        "exploring" => task::TaskState::Exploring,
+        "ready" => task::TaskState::Ready,
+        "in_progress" => task::TaskState::InProgress,
+        "needs_verification" => task::TaskState::NeedsVerification,
+        "verified" => task::TaskState::Verified,
+        "rejected" => task::TaskState::Rejected,
+        "abandoned" => task::TaskState::Abandoned,
+        "superseded" => task::TaskState::Superseded,
+        _ => task::TaskState::Draft,
     }
 }

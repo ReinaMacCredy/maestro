@@ -1,6 +1,6 @@
 mod support;
 
-use maestro::domain::task::{AcceptanceFile, TaskRecord};
+use maestro::domain::task::{task_markdown, AcceptanceFile, TaskRecord};
 use maestro::task::template::{
     load_task, save_task_with_snapshot, write_task_artifacts, LegacyProofStateExt, ProofState,
     VerificationBinding,
@@ -35,7 +35,9 @@ fn task_artifacts_write_v1_task_markdown_and_acceptance_files() {
     assert!(task_yaml.contains("state: draft"));
     assert!(task_yaml.contains("acceptance_locked: false"));
     assert!(task_yaml.contains("verification:"));
-    assert!(task_md.contains("# Add CSV export"));
+    let expected_task_md = "# Add CSV export\n\n## Acceptance\nSee acceptance.yaml.\n";
+    assert_eq!(task_md, expected_task_md);
+    assert_eq!(task_markdown(&task), expected_task_md);
     assert!(acceptance_yaml.contains("schema_version: maestro.acceptance.v1"));
     assert!(acceptance_yaml.contains("task: task-003"));
 }

@@ -203,7 +203,12 @@ If changing bundled skill subfolders such as `references/`, `scripts/`, or
 not installed unless explicitly intended.
 
 If changing Migration, run `tests/migrate_integration.rs` and the target domain
-tests for artifacts Migration creates.
+tests for artifacts Migration creates. Migration's current direct-write
+exceptions are Task artifacts, Feature registry, Decision markdown, Harness
+config, Run logs under `runs/migrated/`, raw archives, backups, and rollback
+targets. Keep coverage that loads or validates each target family through the
+owning domain contract where practical; archive, backup, and rollback files are
+Migration-owned and need explicit migration fixture assertions.
 
 ## Safety Invariants
 

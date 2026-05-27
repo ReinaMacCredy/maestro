@@ -1116,12 +1116,14 @@ apply behavior. It does not mean Update, normal domain behavior, release policy,
 or routine Harness template upgrades.
 
 The current migration implementation supports a v0.106.1 to v0.8 path in
-`src/migrate/v0_106_to_v0_8.rs`.
+`src/operations/migrate/v0_106_to_v0_8.rs`. The legacy `src/migrate` root is a
+compatibility shim for existing public imports.
 
-That filename describes the current legacy path. Future migration version
-modules should use exact, sortable source and target artifact versions when the
-version scheme allows it, and the migration doc should explain any nonstandard
-version jump that could otherwise look like a downgrade.
+That version module name describes the current legacy artifact path. Future
+migration version modules should use exact, sortable source and target artifact
+versions when the version scheme allows it, and the migration doc should
+explain any nonstandard version jump that could otherwise look like a
+downgrade.
 
 Current migration behavior includes:
 
@@ -1156,6 +1158,17 @@ preserve dry-run clarity, rollback ordering, legacy normalization, or
 cross-artifact conversion semantics. Every direct-write exception should name
 the target artifact family, explain why the domain writer is insufficient, and
 prove the output through the target-domain loader or contract tests.
+
+Current migration-only direct-write exceptions:
+
+| Target artifact family | Why Migration writes directly | Required contract coverage |
+| --- | --- | --- |
+| Task `task.yaml`, `acceptance.yaml`, and `task.md` | The v0.106.1 conversion has to fold legacy task JSONL, intake, handoff, and verdict data into one target task directory while preserving dry-run and rollback ordering. | `tests/migrate_integration.rs` loads migrated tasks through the Task facade and parses the migrated acceptance file through the Task contract. |
+| Feature registry | Legacy feature files can live at the old root path or current nested path and may need status normalization, task-field removal, or single-feature wrapping before relocation. | `tests/migrate_integration.rs` parses the migrated registry through the Feature schema and checks Feature rollups through Task projections. |
+| Decision markdown files | Legacy `ADR-*` files are renamed into current decision file names without invoking normal decision creation sequencing. | `tests/migrate_integration.rs` lists and resolves migrated files through Decision query helpers. |
+| Harness `harness.yml` | Legacy verify policies and workflow defaults are converted only during an explicit migration, not as a normal Harness template refresh. | `tests/migrate_integration.rs` parses the migrated file through the Harness schema. |
+| Run `events.jsonl` files under `runs/migrated/` | Legacy evidence is byte-preserved and moved into a quarantine-like managed Run location, even when old payloads are not valid current hook JSONL. | `tests/migrate_integration.rs` checks byte preservation and discovers the migrated log through the Run read model. |
+| Raw archives, migration backups, and rollback targets | These are Migration-owned audit and recovery artifacts rather than normal target-domain artifacts. | `tests/migrate_integration.rs` asserts archive placement, backups, and rollback on partial failure. |
 
 #### Target State
 
@@ -1291,9 +1304,10 @@ Current module groups:
   and time.
 - **CLI adapter**: `interfaces/cli` owns argument parsing and command routing,
   but several command files still coordinate domain details directly.
-- **Artifact/domain modules**: `harness`, `task`, `feature`, `decisions`,
-  `verification`, `evidence`, `install`, `skills`, `improver`, `metrics`,
-  `migrate`, and `update` own or coordinate repo-local artifacts.
+- **Artifact/domain/operation modules**: `harness`, `task`, `feature`,
+  `decisions`, `verification`, `evidence`, `install`, `skills`, `improver`,
+  `metrics`, `operations/migrate`, and `update` own or coordinate repo-local
+  artifacts. Legacy `migrate` remains only as a compatibility shim.
 - **Interface adapters**: `interfaces/hooks`, `interfaces/shell`,
   `interfaces/mcp`, and `interfaces/tui` expose alternate operator interfaces
   over the same local substrate. Legacy `hooks`, `shell`, `mcp`, and `tui` are
@@ -2331,7 +2345,7 @@ should eventually sit behind the owning domain module.
 | `interfaces/hooks` and `evidence` | Hook adapter normalizes/appends events; evidence derives run evidence. Legacy `hooks` remains a compatibility root. | Run aggregate plus hook adapter. | Run rules are split across hook and evidence modules. Hook process behavior should be separated from Run artifact ownership. |
 | `verification` | Proof owns report/freshness/claim logic and CLI verification is coordinated by `operations/task_verify`; legacy `verification` remains a compatibility shim. | Deep Proof aggregate coordinated by `operations/task_verify` for Task outcome application. | Keep production callers on the operation boundary and keep proof status accurate for applied, stale, failed, and unapplied reports. |
 | `install` and `skills` | Install owns mirrors/locks and calls skill symlink helpers. Skills owns extraction and symlink mechanics. | Install owns wiring; Skills owns content/extraction. | Keep the split sharp so Install does not own bundled skill content and Skills does not own install policy. |
-| `migrate` | Strong migration plan/apply module, with some direct target artifact construction. | Explicit migration operation that preserves target-domain contracts. | Lower-level writes should remain migration-only exceptions or move to target-domain writers. |
+| `operations/migrate` | Strong migration plan/apply module, with some direct target artifact construction and a legacy `migrate` shim. | Explicit migration operation that preserves target-domain contracts. | Lower-level writes should remain migration-only exceptions or move to target-domain writers. |
 | `update` | Binary update, bundled skill refresh, rollback, auto-check, schema mismatch reporting. | Update owns binary/skill refresh and reports drift. | Update must not silently become migration or Harness rewrite logic. |
 | `metrics`, `query`, `tui`, `mcp` | Read and present projections from tasks, runs, proof, decisions, backlog, and metrics. | Read-model adapters over domain contracts. | These modules should avoid rescanning private artifact layouts independently when domain read models exist. |
 | `shell` | Emits shell wrappers around the CLI. | Shell adapter only. | Must not absorb install or task lifecycle policy. |
@@ -2357,7 +2371,7 @@ The target architecture should make the following true:
 | Where do I edit Harness template content? | `harness`, with existing repos changed only by explicit Harness apply behavior, `init --force` or merge behavior, or a documented migration path. |
 | Where do I edit agent install files? | `install`, unless changing Harness content or Skills content. |
 | Where do I edit run evidence derivation? | Run-owned code, not Proof or Metrics. |
-| Where do I edit old-format conversion? | `migrate`, preserving target-domain contracts. |
+| Where do I edit old-format conversion? | `operations/migrate`, preserving target-domain contracts. |
 | Where do I edit binary update behavior? | `update`, without adding schema migration side effects. |
 
 The most important target gap is ownership locality. A future maintainer should
@@ -2385,7 +2399,7 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 | P1 | Feature aggregate boundary | `src/interfaces/cli/feature.rs`, `src/feature/schema.rs`, `src/feature/query.rs` | Feature schema and rollups live in `feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
 | P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
 | P1 | Install and Skills ownership | `src/domain/install/*`, `src/domain/skills/symlink.rs`, `src/domain/skills/extract.rs` | Install owns mirrors, locks, agent-specific skill-link mapping, pending/committed recovery state, rollback, and uninstall safety while Skills owns generic skill filesystem mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
-| P2 | Migration target writers | `src/migrate/v0_106_to_v0_8.rs`, target domain modules | Migration intentionally writes many target artifacts directly. That is acceptable as an explicit migration exception, but it can drift from target domain write rules. |
+| P2 | Migration target writers | `src/operations/migrate/v0_106_to_v0_8.rs`, target domain modules | Migration intentionally writes many target artifacts directly. That is acceptable as an explicit migration exception, but it can drift from target domain write rules. |
 | P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/interfaces/mcp/tools.rs`, `src/interfaces/tui/*`, `src/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
 
 ### Target State
