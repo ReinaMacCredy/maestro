@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::interfaces::cli::{MetricsArgs, MetricsCommand};
-use crate::metrics::summary::{render_summary, summarize};
+use crate::operations::metrics;
 
 /// Execute `maestro metrics`.
 pub fn run(args: MetricsArgs) -> Result<()> {
@@ -15,6 +15,6 @@ pub fn run(args: MetricsArgs) -> Result<()> {
 }
 
 fn summary(paths: &MaestroPaths) -> Result<()> {
-    print!("{}", render_summary(&summarize(paths)?));
+    print!("{}", metrics::render_summary(&metrics::summarize(paths)?));
     Ok(())
 }

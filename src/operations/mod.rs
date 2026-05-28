@@ -3,6 +3,9 @@
 //! Concrete operation modules own orchestration that crosses domain aggregates,
 //! while legacy operation-like roots stay re-exported during the migration.
 
+pub mod improver;
+pub mod init;
+pub mod metrics;
 pub mod migrate;
 pub mod update;
 
@@ -64,6 +67,3 @@ pub(crate) fn verify_task_report(
 ) -> Result<proof::VerificationReport> {
     task_verify::verify_task_report(paths, task_id, actor)
 }
-
-pub use crate::improver;
-pub use crate::metrics;

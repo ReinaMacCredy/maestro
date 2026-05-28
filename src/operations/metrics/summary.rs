@@ -3,9 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::Result;
 
 use crate::domain::run;
-use crate::domain::task::{self, TaskState, VerificationBinding};
+use crate::domain::task::{self, TaskEntry, TaskState};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::time::parse_utc_timestamp;
 
 pub use crate::domain::run::{RunEvidenceLoad, RunEvidenceRecord};
 
@@ -30,18 +29,26 @@ pub struct AgentSummary {
 /// Build metrics by reading current task and run artifacts on demand.
 pub fn summarize(paths: &MaestroPaths) -> Result<MetricsSummary> {
     let tasks = task::load_task_entries(&paths.tasks_dir())?;
+    summarize_task_entries(paths, &tasks)
+}
+
+pub(crate) fn summarize_task_entries(
+    paths: &MaestroPaths,
+    tasks: &[TaskEntry],
+) -> Result<MetricsSummary> {
     let evidence = load_run_evidence(paths)?;
     let mut task_counts = BTreeMap::<String, usize>::new();
     let mut verify_durations = Vec::new();
 
-    for entry in &tasks {
+    for entry in tasks {
         *task_counts
             .entry(task_state_label(&entry.task.state).to_string())
             .or_default() += 1;
         if entry.task.state == TaskState::Verified {
-            if let Some(seconds) =
-                verification_duration_seconds(&entry.task.created_at, &entry.task.verification)
-            {
+            if let Some(seconds) = task::verification_duration_seconds(
+                &entry.task.created_at,
+                &entry.task.verification,
+            ) {
                 verify_durations.push(seconds);
             }
         }
@@ -137,51 +144,14 @@ pub fn render_summary(summary: &MetricsSummary) -> String {
 
 /// Return per-task verification durations, grouped by task id.
 pub fn task_verification_durations(paths: &MaestroPaths) -> Result<BTreeMap<String, u64>> {
-    let mut durations = BTreeMap::new();
-    for entry in task::load_task_entries(&paths.tasks_dir())? {
-        if let Some(seconds) =
-            verification_duration_seconds(&entry.task.created_at, &entry.task.verification)
-        {
-            durations.insert(entry.task.id, seconds);
-        }
-    }
-    Ok(durations)
+    let tasks = task::load_task_entries(&paths.tasks_dir())?;
+    Ok(task::task_verification_durations(&tasks))
 }
 
 #[derive(Default)]
 struct AgentAccumulator {
     tasks: BTreeSet<String>,
     durations: Vec<u64>,
-}
-
-fn verification_duration_seconds(
-    created_at: &str,
-    verification: &VerificationBinding,
-) -> Option<u64> {
-    let start = parse_timestamp_seconds(created_at)?;
-    let end = parse_timestamp_seconds(verification.verified_at.as_deref()?)?;
-    end.checked_sub(start)
-}
-
-fn parse_timestamp_seconds(value: &str) -> Option<u64> {
-    if value.chars().all(|character| character.is_ascii_digit()) {
-        return parse_numeric_timestamp_seconds(value);
-    }
-    let parsed = parse_utc_timestamp(value)?;
-    if parsed.nanos_since_epoch < 0 {
-        return None;
-    }
-    Some((parsed.nanos_since_epoch / 1_000_000_000) as u64)
-}
-
-fn parse_numeric_timestamp_seconds(value: &str) -> Option<u64> {
-    let timestamp = value.parse::<u64>().ok()?;
-    match value.len() {
-        0..=10 => Some(timestamp),
-        11..=13 => Some(timestamp / 1_000),
-        14..=16 => Some(timestamp / 1_000_000),
-        _ => Some(timestamp / 1_000_000_000),
-    }
 }
 
 fn average(values: &[u64]) -> Option<u64> {

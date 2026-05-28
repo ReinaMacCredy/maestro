@@ -53,6 +53,7 @@ pub fn mark_applied(backlog: &mut BacklogConfig, id: &str) -> Result<BacklogItem
 
 /// Merge proposals by stable source/type/title key and assign deterministic ids.
 pub fn merge_proposals(backlog: &mut BacklogConfig, mut proposals: Vec<BacklogItem>) {
+    sanitize_existing_generated_evidence(backlog);
     let mut keys = backlog
         .items
         .iter()
@@ -64,6 +65,13 @@ pub fn merge_proposals(backlog: &mut BacklogConfig, mut proposals: Vec<BacklogIt
     for mut proposal in proposals {
         let key = proposal_key(&proposal);
         if keys.contains(&key) {
+            if let Some(existing) = backlog
+                .items
+                .iter_mut()
+                .find(|item| proposal_key(item) == key)
+            {
+                refresh_existing_evidence(existing, &proposal);
+            }
             continue;
         }
         proposal.id = format!("hb-{next:03}");
@@ -76,6 +84,116 @@ pub fn merge_proposals(backlog: &mut BacklogConfig, mut proposals: Vec<BacklogIt
 /// Return the stable duplicate-detection key for a backlog proposal.
 pub fn proposal_key(item: &BacklogItem) -> String {
     format!("{}\t{}\t{}", item.source, item.item_type, item.title)
+}
+
+fn refresh_existing_evidence(existing: &mut BacklogItem, proposal: &BacklogItem) {
+    if existing.item_type != "missing_verification" {
+        return;
+    }
+
+    let mut refreshed = existing
+        .evidence
+        .iter()
+        .filter(|evidence| !is_generated_missing_verification_evidence(evidence))
+        .cloned()
+        .collect::<Vec<_>>();
+    for (index, evidence) in proposal.evidence.iter().enumerate() {
+        let evidence = sanitize_missing_verification_evidence(evidence, index);
+        if !refreshed.contains(&evidence) {
+            refreshed.push(evidence);
+        }
+    }
+    existing.evidence = refreshed;
+}
+
+fn sanitize_existing_generated_evidence(backlog: &mut BacklogConfig) {
+    for item in &mut backlog.items {
+        if item.item_type == "missing_verification" {
+            let mut generated_index = 0;
+            item.evidence = item
+                .evidence
+                .iter()
+                .map(|evidence| {
+                    if is_generated_missing_verification_evidence(evidence) {
+                        let sanitized =
+                            sanitize_missing_verification_evidence(evidence, generated_index);
+                        generated_index += 1;
+                        sanitized
+                    } else {
+                        evidence.to_string()
+                    }
+                })
+                .collect();
+        }
+    }
+}
+
+fn is_generated_missing_verification_evidence(evidence: &str) -> bool {
+    is_safe_missing_verification_evidence(evidence)
+        || is_legacy_generated_missing_verification_evidence(evidence)
+}
+
+fn sanitize_missing_verification_evidence(evidence: &str, index: usize) -> String {
+    if let Some(source) = safe_missing_verification_source(evidence) {
+        return format!(
+            "{} used verification command {} outside harness.yml",
+            source,
+            index + 1
+        );
+    }
+    let Some((source, detail)) = evidence.split_once(" used ") else {
+        return evidence.to_string();
+    };
+    if !detail.ends_with(" outside harness.yml") {
+        return evidence.to_string();
+    }
+    let source = safe_verification_source(source);
+    if source == "verification evidence" {
+        return evidence.to_string();
+    }
+    format!(
+        "{} used verification command {} outside harness.yml",
+        source,
+        index + 1
+    )
+}
+
+fn is_safe_missing_verification_evidence(evidence: &str) -> bool {
+    safe_missing_verification_source(evidence).is_some()
+}
+
+fn safe_missing_verification_source(evidence: &str) -> Option<&str> {
+    let (source, command) = evidence.split_once(" used ")?;
+    let label = command
+        .strip_prefix("verification command ")
+        .and_then(|label| label.strip_suffix(" outside harness.yml"))?;
+    if safe_verification_source(source) == source.trim() && label.parse::<usize>().is_ok() {
+        Some(source.trim())
+    } else {
+        None
+    }
+}
+
+fn is_legacy_generated_missing_verification_evidence(evidence: &str) -> bool {
+    let Some((source, detail)) = evidence.split_once(" used ") else {
+        return false;
+    };
+    detail.ends_with(" outside harness.yml")
+        && safe_verification_source(source) != "verification evidence"
+}
+
+fn safe_verification_source(source: &str) -> &'static str {
+    let source = source.trim();
+    if source == "verification.json" {
+        return "verification.json";
+    }
+    if source == "verification.attempts/latest.json" {
+        return "verification.attempts/latest.json";
+    }
+    if source.starts_with("verification.attempts/") {
+        return "verification.attempts/archived attempt";
+    }
+    "verification evidence"
 }
 
 fn backlog_path(paths: &MaestroPaths) -> Result<std::path::PathBuf> {

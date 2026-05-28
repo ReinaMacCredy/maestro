@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 
 use crate::domain::task;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::metrics::summary::{render_summary, summarize};
+use crate::operations::metrics;
 
 /// MCP tool metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,7 +52,7 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_decision_new" => cli(required_args(arguments, &["decision", "new"], &["title"])?),
         "maestro_verify" => cli(required_args(arguments, &["task", "verify"], &["id"])?),
         "maestro_query_matrix" => cli(vec!["query".to_string(), "matrix".to_string()]),
-        "maestro_metrics_summary" => Ok(render_summary(&summarize(paths)?)),
+        "maestro_metrics_summary" => Ok(metrics::render_summary(&metrics::summarize(paths)?)),
         _ => bail!("unknown MCP tool: {name}"),
     }
 }
@@ -66,15 +66,16 @@ fn tool(name: &'static str, description: &'static str, input_schema: Value) -> T
 }
 
 fn status(paths: &MaestroPaths) -> Result<String> {
-    let summary = summarize(paths)?;
+    let tasks = task::load_task_entries(&paths.tasks_dir())?;
+    let summary = metrics::summarize_task_entries(paths, &tasks)?;
     let mut claimed = BTreeMap::<String, Vec<String>>::new();
-    for task in task::load_task_records(&paths.tasks_dir())? {
-        if let Some(agent) = task.claimed_by {
-            claimed.entry(agent).or_default().push(task.id);
+    for entry in tasks {
+        if let Some(agent) = entry.task.claimed_by {
+            claimed.entry(agent).or_default().push(entry.task.id);
         }
     }
 
-    let mut out = render_summary(&summary);
+    let mut out = metrics::render_summary(&summary);
     match std::env::var("MAESTRO_CURRENT_TASK") {
         Ok(task_id) => out.push_str(&format!("Current task: {task_id}\n")),
         Err(_) => out.push_str("Current task: <none>\n"),

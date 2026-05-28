@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use super::stale::{FreshnessInputs, StoredFreshness};
@@ -25,6 +25,7 @@ use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{EVENT_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION};
+use crate::foundation::core::time::parse_utc_timestamp;
 
 static ATTEMPT_COUNTER: AtomicU64 = AtomicU64::new(0);
 const EVENT_PROOF_SOURCE_KIND: &str = "event";
@@ -76,11 +77,57 @@ pub struct ProofSource {
 }
 
 /// One verification command result captured from `harness.yml.verify`.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct VerificationCommand {
     pub cmd: String,
     pub exit_code: i32,
     pub duration_ms: u128,
+}
+
+impl<'de> Deserialize<'de> for VerificationCommand {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let Value::Object(object) = value else {
+            return Err(serde::de::Error::custom(
+                "verification command must be an object",
+            ));
+        };
+        let cmd = match object.get("cmd") {
+            Some(Value::String(cmd)) => cmd.clone(),
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "verification command object missing string cmd",
+                ));
+            }
+        };
+        let exit_code = match object.get("exit_code").and_then(Value::as_i64) {
+            Some(exit_code) => i32::try_from(exit_code)
+                .map_err(|_| serde::de::Error::custom("exit_code out of range"))?,
+            None => 0,
+        };
+        let duration_ms = match object.get("duration_ms") {
+            Some(Value::Number(number)) => number.as_u64().map(u128::from).ok_or_else(|| {
+                serde::de::Error::custom("duration_ms must be a positive integer")
+            })?,
+            Some(Value::String(duration)) => duration
+                .parse::<u128>()
+                .map_err(|_| serde::de::Error::custom("duration_ms must parse"))?,
+            Some(_) => {
+                return Err(serde::de::Error::custom(
+                    "duration_ms must be a number or string",
+                ));
+            }
+            None => 0,
+        };
+        Ok(Self {
+            cmd,
+            exit_code,
+            duration_ms,
+        })
+    }
 }
 
 /// Verification artifact persisted in a task directory.
@@ -114,6 +161,23 @@ pub struct VerificationTaskSnapshot {
 struct CanonicalReportRestoreJournal {
     schema_version: String,
     previous: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum VerificationReportRead {
+    Missing,
+    Malformed,
+    Report {
+        report: Box<VerificationReport>,
+        source: VerificationReportSource,
+        path: PathBuf,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum VerificationReportSource {
+    Canonical,
+    LatestAttempt,
 }
 
 /// Paths and records for a loaded task.
@@ -353,7 +417,13 @@ fn prune_old_attempt_reports(attempts_dir: &Path) -> Result<()> {
         let entry =
             entry.with_context(|| format!("failed to read entry in {}", attempts_dir.display()))?;
         let path = entry.path();
-        if path.file_name().and_then(|name| name.to_str()) == Some(LATEST_ATTEMPT_REPORT_FILE) {
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if file_name == LATEST_ATTEMPT_REPORT_FILE {
+            continue;
+        }
+        if !is_archived_attempt_file_name(file_name) {
             continue;
         }
         let file_type = entry
@@ -478,11 +548,14 @@ pub(crate) fn read_managed_report_file_if_exists(
     parse_report_file(path, &raw)
 }
 
-pub(crate) fn read_report_file_if_exists(path: &Path) -> Result<Option<VerificationReport>> {
-    let Some(raw) = read_to_string_if_exists(path)? else {
-        return Ok(None);
+pub(super) fn read_managed_report_file_for_command_read(
+    path: &Path,
+    source: VerificationReportSource,
+) -> Result<VerificationReportRead> {
+    let Some(raw) = read_managed_report_file_text_if_exists(path)? else {
+        return Ok(VerificationReportRead::Missing);
     };
-    parse_report_file(path, &raw)
+    Ok(parse_report_file_for_command_read(path, &raw, source))
 }
 
 fn parse_report_file(path: &Path, raw: &str) -> Result<Option<VerificationReport>> {
@@ -499,45 +572,302 @@ fn parse_report_file(path: &Path, raw: &str) -> Result<Option<VerificationReport
     Ok(Some(report))
 }
 
-pub(crate) fn latest_attempt_report(
-    task_dir: &Path,
-) -> Result<Option<(VerificationReport, PathBuf)>> {
+fn parse_report_file_for_command_read(
+    path: &Path,
+    raw: &str,
+    source: VerificationReportSource,
+) -> VerificationReportRead {
+    let Ok(mut value) = serde_json::from_str::<Value>(raw) else {
+        return VerificationReportRead::Malformed;
+    };
+    normalize_command_read_report(&mut value);
+    let Ok(report) = serde_json::from_value::<VerificationReport>(value) else {
+        return VerificationReportRead::Malformed;
+    };
+    if report.schema_version != VERIFICATION_SCHEMA_VERSION {
+        return VerificationReportRead::Malformed;
+    }
+    VerificationReportRead::Report {
+        report: Box::new(report),
+        source,
+        path: path.to_path_buf(),
+    }
+}
+
+fn normalize_command_read_report(value: &mut Value) {
+    let Some(commands) = value.get_mut("commands").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for command in commands {
+        let legacy_command = match command {
+            Value::String(command) => Some(command.clone()),
+            _ => None,
+        };
+        if let Some(command_text) = legacy_command {
+            *command = json!({
+                "cmd": command_text,
+                "exit_code": 0,
+                "duration_ms": 0,
+            });
+        }
+    }
+}
+
+struct AttemptReportPaths {
+    marker_path: PathBuf,
+    archived_paths: Vec<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AttemptReportReader {
+    Strict,
+    CommandRead,
+}
+
+fn attempt_report_paths(task_dir: &Path) -> Result<Option<AttemptReportPaths>> {
     let Some(attempts_dir) = existing_managed_attempts_dir(task_dir)? else {
         return Ok(None);
     };
     let marker_path = attempts_dir.join(LATEST_ATTEMPT_REPORT_FILE);
-    let marker = read_managed_report_file_if_exists(&marker_path)?;
-
     let entries = fs::read_dir(&attempts_dir)
         .with_context(|| format!("failed to read {}", attempts_dir.display()))?;
-    let mut latest_path = None;
+    let mut archived_paths = Vec::new();
     for entry in entries {
         let entry =
             entry.with_context(|| format!("failed to read entry in {}", attempts_dir.display()))?;
         let path = entry.path();
-        if path.file_name().and_then(|name| name.to_str()) == Some(LATEST_ATTEMPT_REPORT_FILE) {
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if file_name == LATEST_ATTEMPT_REPORT_FILE {
+            continue;
+        }
+        if !is_archived_attempt_file_name(file_name) {
             continue;
         }
         let file_type = entry
             .file_type()
             .with_context(|| format!("failed to inspect {}", path.display()))?;
-        if file_type.is_file()
-            && !file_type.is_symlink()
-            && latest_path
-                .as_ref()
-                .map(|current: &PathBuf| path > *current)
-                .unwrap_or(true)
-        {
-            latest_path = Some(path);
+        if file_type.is_symlink() {
+            bail!(
+                "managed verification attempt path must not be a symlink: {}",
+                path.display()
+            );
+        }
+        if !file_type.is_file() {
+            bail!(
+                "managed verification attempt path must be a file: {}",
+                path.display()
+            );
+        }
+        archived_paths.push(path);
+    }
+    archived_paths.sort_by(|left, right| right.cmp(left));
+    Ok(Some(AttemptReportPaths {
+        marker_path,
+        archived_paths,
+    }))
+}
+
+fn is_archived_attempt_file_name(file_name: &str) -> bool {
+    !file_name.starts_with('.') && file_name.ends_with(".json")
+}
+
+pub(crate) fn latest_attempt_report(
+    task_dir: &Path,
+) -> Result<Option<(VerificationReport, PathBuf)>> {
+    match latest_attempt_report_candidate(task_dir, AttemptReportReader::Strict)? {
+        VerificationReportRead::Missing => Ok(None),
+        VerificationReportRead::Malformed => bail!("malformed verification attempt report"),
+        VerificationReportRead::Report { report, path, .. } => Ok(Some((*report, path))),
+    }
+}
+
+pub(super) fn latest_attempt_report_for_command_read(
+    task_dir: &Path,
+) -> Result<VerificationReportRead> {
+    latest_attempt_report_candidate_for_command_read(task_dir)
+}
+
+pub(super) fn latest_attempt_report_candidate_for_command_read(
+    task_dir: &Path,
+) -> Result<VerificationReportRead> {
+    latest_attempt_report_candidate(task_dir, AttemptReportReader::CommandRead)
+}
+
+fn latest_attempt_report_candidate(
+    task_dir: &Path,
+    reader: AttemptReportReader,
+) -> Result<VerificationReportRead> {
+    let Some(paths) = attempt_report_paths(task_dir)? else {
+        return Ok(VerificationReportRead::Missing);
+    };
+    let marker = read_attempt_report_candidate(
+        &paths.marker_path,
+        VerificationReportSource::LatestAttempt,
+        reader,
+        true,
+    )?;
+    if reader == AttemptReportReader::Strict && matches!(marker, VerificationReportRead::Malformed)
+    {
+        return Ok(VerificationReportRead::Malformed);
+    }
+    let mut saw_malformed = matches!(marker, VerificationReportRead::Malformed);
+    let mut selected = match marker {
+        report @ VerificationReportRead::Report { .. } => Some(report),
+        VerificationReportRead::Missing | VerificationReportRead::Malformed => None,
+    };
+
+    for path in paths.archived_paths {
+        match read_attempt_report_candidate(
+            &path,
+            VerificationReportSource::LatestAttempt,
+            reader,
+            false,
+        )? {
+            report @ VerificationReportRead::Report { .. } => {
+                if selected
+                    .as_ref()
+                    .map(|selected| report_is_newer(&report, selected))
+                    .unwrap_or(true)
+                {
+                    selected = Some(report);
+                }
+            }
+            VerificationReportRead::Malformed => {
+                saw_malformed = true;
+                if reader == AttemptReportReader::Strict
+                    && malformed_archive_may_be_newer_than_selected(&path, selected.as_ref())
+                {
+                    return Ok(VerificationReportRead::Malformed);
+                }
+            }
+            VerificationReportRead::Missing => {}
         }
     }
-    let Some(path) = latest_path else {
-        return Ok(marker.map(|report| (report, marker_path)));
-    };
-    let report = read_report_file_if_exists(&path)?
-        .with_context(|| format!("missing verification attempt {}", path.display()))?;
-    Ok(Some((report, path)))
+    if let Some(report) = selected {
+        Ok(report)
+    } else if saw_malformed {
+        Ok(VerificationReportRead::Malformed)
+    } else {
+        Ok(VerificationReportRead::Missing)
+    }
 }
+
+fn malformed_archive_may_be_newer_than_selected(
+    archive_path: &Path,
+    selected: Option<&VerificationReportRead>,
+) -> bool {
+    let Some(VerificationReportRead::Report { report, .. }) = selected else {
+        return true;
+    };
+    let Some(archive_stem) = archive_path.file_stem().and_then(|name| name.to_str()) else {
+        return true;
+    };
+    archive_stem > report_file_stem(report).as_str()
+}
+
+fn report_is_newer(candidate: &VerificationReportRead, selected: &VerificationReportRead) -> bool {
+    match (candidate, selected) {
+        (
+            VerificationReportRead::Report {
+                report: candidate, ..
+            },
+            VerificationReportRead::Report {
+                report: selected, ..
+            },
+        ) => verification_report_is_newer(candidate, selected),
+        _ => false,
+    }
+}
+
+pub(super) fn verification_report_is_newer(
+    candidate: &VerificationReport,
+    selected: &VerificationReport,
+) -> bool {
+    report_ordering(candidate, selected) == std::cmp::Ordering::Greater
+}
+
+fn report_order_key(report: &VerificationReport) -> (&str, &str) {
+    (report.verified_at.as_str(), attempt_id_or_empty(report))
+}
+
+fn report_ordering(left: &VerificationReport, right: &VerificationReport) -> std::cmp::Ordering {
+    match (report_timestamp_nanos(left), report_timestamp_nanos(right)) {
+        (Some(left), Some(right)) => match left.cmp(&right) {
+            std::cmp::Ordering::Equal => {}
+            ordering => return ordering,
+        },
+        (Some(_), None) => return std::cmp::Ordering::Greater,
+        (None, Some(_)) => return std::cmp::Ordering::Less,
+        (None, None) => {}
+    }
+    report_order_key(left).cmp(&report_order_key(right))
+}
+
+fn report_timestamp_nanos(report: &VerificationReport) -> Option<i128> {
+    parse_report_timestamp_nanos(&report.verified_at)
+}
+
+fn parse_report_timestamp_nanos(value: &str) -> Option<i128> {
+    if value.chars().all(|character| character.is_ascii_digit()) {
+        return parse_numeric_report_timestamp_nanos(value);
+    }
+    parse_utc_timestamp(value).map(|timestamp| timestamp.nanos_since_epoch)
+}
+
+fn parse_numeric_report_timestamp_nanos(value: &str) -> Option<i128> {
+    let timestamp = value.parse::<i128>().ok()?;
+    match value.len() {
+        0..=10 => timestamp.checked_mul(1_000_000_000),
+        11..=13 => timestamp.checked_mul(1_000_000),
+        14..=16 => timestamp.checked_mul(1_000),
+        _ => Some(timestamp),
+    }
+}
+
+fn attempt_id_or_empty(report: &VerificationReport) -> &str {
+    report.attempt_id.as_deref().unwrap_or_default()
+}
+
+fn read_attempt_report_candidate(
+    path: &Path,
+    source: VerificationReportSource,
+    reader: AttemptReportReader,
+    managed: bool,
+) -> Result<VerificationReportRead> {
+    let raw = if managed {
+        read_managed_report_file_text_if_exists(path)?
+    } else {
+        match read_to_string_if_exists(path) {
+            Ok(raw) => raw,
+            Err(_) => return Ok(VerificationReportRead::Malformed),
+        }
+    };
+    let Some(raw) = raw else {
+        return Ok(VerificationReportRead::Missing);
+    };
+    Ok(match reader {
+        AttemptReportReader::Strict => parse_report_file_for_strict_candidate(path, &raw, source),
+        AttemptReportReader::CommandRead => parse_report_file_for_command_read(path, &raw, source),
+    })
+}
+
+fn parse_report_file_for_strict_candidate(
+    path: &Path,
+    raw: &str,
+    source: VerificationReportSource,
+) -> VerificationReportRead {
+    let Ok(Some(report)) = parse_report_file(path, raw) else {
+        return VerificationReportRead::Malformed;
+    };
+    VerificationReportRead::Report {
+        report: Box::new(report),
+        source,
+        path: path.to_path_buf(),
+    }
+}
+
 pub(crate) struct CanonicalReportRestore {
     path: PathBuf,
     journal_path: PathBuf,
@@ -1095,9 +1425,10 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
+        latest_attempt_report, latest_attempt_report_for_command_read,
         recover_canonical_report_for_task, replace_task_report_preserving_previous,
-        verification_outcome_for_report, verification_path, VerificationReport, VerificationStatus,
-        VerificationTaskSnapshot,
+        verification_attempts_dir, verification_outcome_for_report, verification_path,
+        VerificationReport, VerificationReportRead, VerificationStatus, VerificationTaskSnapshot,
     };
     use crate::domain::task::{self, AcceptanceFile, TaskRecord};
     use crate::foundation::core::schema::VERIFICATION_SCHEMA_VERSION;
@@ -1172,6 +1503,156 @@ mod tests {
             serde_json::from_str(&restored).expect("invariant: report should parse");
         assert_eq!(restored.attempt_id.as_deref(), Some("old-attempt"));
         assert!(!task_dir.join(super::CANONICAL_REPORT_RESTORE_FILE).exists());
+    }
+
+    #[test]
+    fn latest_attempt_selection_uses_parsed_timestamp_order() {
+        let temp = TestTempDir::new("maestro-proof-attempt-timestamp-order");
+        let task_dir = temp.path().join("task-001");
+        let attempts_dir = verification_attempts_dir(&task_dir);
+        fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be creatable");
+        let stale_marker = report("task-001", "stale-marker", "900");
+        let newer_archive = report("task-001", "newer-archive", "1000");
+        super::write_report_file(&attempts_dir.join("latest.json"), &stale_marker)
+            .expect("invariant: marker report should be writable");
+        super::write_report_file(&attempts_dir.join("zz-newer-archive.json"), &newer_archive)
+            .expect("invariant: archived report should be writable");
+
+        let (status_report, status_path) = latest_attempt_report(&task_dir)
+            .expect("invariant: status selector should not fail")
+            .expect("invariant: status selector should find an attempt");
+        assert_eq!(status_report.attempt_id.as_deref(), Some("newer-archive"));
+        assert_eq!(
+            status_path.file_name().and_then(|name| name.to_str()),
+            Some("zz-newer-archive.json")
+        );
+
+        let command_read = latest_attempt_report_for_command_read(&task_dir)
+            .expect("invariant: command-read selector should not fail");
+        match command_read {
+            VerificationReportRead::Report { report, path, .. } => {
+                assert_eq!(report.attempt_id.as_deref(), Some("newer-archive"));
+                assert_eq!(
+                    path.file_name().and_then(|name| name.to_str()),
+                    Some("zz-newer-archive.json")
+                );
+            }
+            other => panic!("expected newer archived report, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn latest_attempt_selection_ignores_older_malformed_archived_attempt() {
+        let temp = TestTempDir::new("maestro-proof-attempt-older-malformed");
+        let task_dir = temp.path().join("task-001");
+        let attempts_dir = verification_attempts_dir(&task_dir);
+        fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be creatable");
+        let current = report("task-001", "zz-current-marker", "2000");
+        super::write_report_file(&attempts_dir.join("latest.json"), &current)
+            .expect("invariant: marker report should be writable");
+        fs::write(attempts_dir.join("aa-old-archive.json"), "{not-json")
+            .expect("invariant: malformed archive should be writable");
+
+        let (status_report, status_path) = latest_attempt_report(&task_dir)
+            .expect("invariant: status selector should not fail")
+            .expect("invariant: status selector should find an attempt");
+        assert_eq!(
+            status_report.attempt_id.as_deref(),
+            Some("zz-current-marker")
+        );
+        assert_eq!(
+            status_path.file_name().and_then(|name| name.to_str()),
+            Some("latest.json")
+        );
+
+        let command_read = latest_attempt_report_for_command_read(&task_dir)
+            .expect("invariant: command-read selector should not fail");
+        match command_read {
+            VerificationReportRead::Report { report, path, .. } => {
+                assert_eq!(report.attempt_id.as_deref(), Some("zz-current-marker"));
+                assert_eq!(
+                    path.file_name().and_then(|name| name.to_str()),
+                    Some("latest.json")
+                );
+            }
+            other => panic!("expected marker report, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn latest_attempt_selection_reports_malformed_newer_archive_before_valid_archive() {
+        let temp = TestTempDir::new("maestro-proof-attempt-newer-malformed");
+        let task_dir = temp.path().join("task-001");
+        let attempts_dir = verification_attempts_dir(&task_dir);
+        fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be creatable");
+        fs::write(attempts_dir.join("zz-newer-malformed.json"), "{not-json")
+            .expect("invariant: malformed archive should be writable");
+        let archived = report("task-001", "aa-valid-archive", "1000");
+        super::write_report_file(&attempts_dir.join("aa-valid-archive.json"), &archived)
+            .expect("invariant: archived report should be writable");
+
+        let error = latest_attempt_report(&task_dir)
+            .expect_err("invariant: strict selector should report malformed attempts");
+        assert!(error
+            .to_string()
+            .contains("malformed verification attempt report"));
+
+        let command_read = latest_attempt_report_for_command_read(&task_dir)
+            .expect("invariant: command-read selector should not fail");
+        match command_read {
+            VerificationReportRead::Report { report, .. } => {
+                assert_eq!(report.attempt_id.as_deref(), Some("aa-valid-archive"));
+            }
+            other => panic!("expected archived report, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn command_read_attempt_selection_falls_back_to_valid_archive_after_malformed_marker() {
+        let temp = TestTempDir::new("maestro-proof-attempt-malformed-marker");
+        let task_dir = temp.path().join("task-001");
+        let attempts_dir = verification_attempts_dir(&task_dir);
+        fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be creatable");
+        fs::write(attempts_dir.join("latest.json"), "{not-json")
+            .expect("invariant: malformed marker should be writable");
+        let archived = report("task-001", "archived-attempt", "1000");
+        super::write_report_file(&attempts_dir.join("zz-archived-attempt.json"), &archived)
+            .expect("invariant: archived report should be writable");
+
+        let error = latest_attempt_report(&task_dir)
+            .expect_err("invariant: strict selector should report malformed attempts");
+        assert!(error
+            .to_string()
+            .contains("malformed verification attempt report"));
+
+        let command_read = latest_attempt_report_for_command_read(&task_dir)
+            .expect("invariant: command-read selector should not fail");
+        match command_read {
+            VerificationReportRead::Report { report, .. } => {
+                assert_eq!(report.attempt_id.as_deref(), Some("archived-attempt"));
+            }
+            other => panic!("expected archived report, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn latest_attempt_selection_reports_malformed_when_no_valid_attempt_exists() {
+        let temp = TestTempDir::new("maestro-proof-attempt-all-malformed");
+        let task_dir = temp.path().join("task-001");
+        let attempts_dir = verification_attempts_dir(&task_dir);
+        fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be creatable");
+        fs::write(attempts_dir.join("latest.json"), "{not-json")
+            .expect("invariant: malformed marker should be writable");
+
+        let error = latest_attempt_report(&task_dir)
+            .expect_err("invariant: status selector should report malformed attempts");
+        assert!(error
+            .to_string()
+            .contains("malformed verification attempt report"));
+
+        let command_read = latest_attempt_report_for_command_read(&task_dir)
+            .expect("invariant: command-read selector should not fail");
+        assert!(matches!(command_read, VerificationReportRead::Malformed));
     }
 
     fn report(task_id: &str, attempt_id: &str, verified_at: &str) -> VerificationReport {

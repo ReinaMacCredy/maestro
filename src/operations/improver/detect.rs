@@ -2,25 +2,25 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 use anyhow::{Context, Result};
-use serde_json::Value;
 
 use crate::domain::decisions::query::decision_entries;
 use crate::domain::harness::{BacklogItem, HarnessConfig};
+use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{self, TaskEntry};
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::metrics::friction::looks_like_correction;
-use crate::metrics::summary::task_verification_durations;
+use crate::operations::metrics;
 
 /// Detect rule-based harness improvement proposals without LLM calls.
 pub fn detect(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut proposals = Vec::new();
     proposals.extend(detect_recurring_interventions(paths)?);
-    proposals.extend(detect_missing_checks(paths)?);
-    proposals.extend(detect_recurring_blockers(paths)?);
-    proposals.extend(detect_missing_skills(paths)?);
-    proposals.extend(detect_rediscovered_decisions(paths)?);
+    proposals.extend(detect_missing_checks(paths, &task_entries)?);
+    proposals.extend(detect_recurring_blockers(&task_entries));
+    proposals.extend(detect_missing_skills(&task_entries));
+    proposals.extend(detect_rediscovered_decisions(paths, &task_entries)?);
     Ok(proposals)
 }
 
@@ -30,7 +30,7 @@ fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogIte
         let event = record.event();
         if event.is_event_type("UserPromptSubmit") {
             let text = event.prompt_text().unwrap_or_default();
-            if looks_like_correction(text) {
+            if metrics::looks_like_correction(text) {
                 corrections_by_session
                     .entry(record.session_id().to_string())
                     .or_default()
@@ -58,25 +58,18 @@ fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogIte
     Ok(proposals)
 }
 
-fn detect_missing_checks(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
+fn detect_missing_checks(paths: &MaestroPaths, entries: &[TaskEntry]) -> Result<Vec<BacklogItem>> {
     let harness_commands = harness_verify_commands(paths)?;
     let mut proposals = Vec::new();
-    for entry in task::load_task_entries(&paths.tasks_dir())? {
-        let path = entry.task_dir.join("verification.json");
-        let Ok(raw) = fs::read_to_string(&path) else {
-            continue;
-        };
-        let Ok(report) = serde_json::from_str::<Value>(&raw) else {
-            continue;
-        };
-        let missing = report
-            .get("commands")
-            .and_then(Value::as_array)
+    for entry in entries {
+        let (commands, source) =
+            match proof::verification_command_read_for_task(&entry.task, &entry.task_dir)? {
+                proof::VerificationCommandRead::Commands { commands, source } => (commands, source),
+                proof::VerificationCommandRead::SkippedMalformedReport => continue,
+            };
+        let missing = commands
             .into_iter()
-            .flatten()
-            .filter_map(command_value)
-            .filter(|command| !harness_commands.contains(*command))
-            .map(str::to_string)
+            .filter(|command| !harness_commands.contains(command.command()))
             .collect::<Vec<_>>();
         if !missing.is_empty() {
             proposals.push(proposal(
@@ -87,8 +80,9 @@ fn detect_missing_checks(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
                     .into_iter()
                     .map(|command| {
                         format!(
-                            "verification.json used `{}` outside harness.yml",
-                            redact_command(&command)
+                            "{} used {} outside harness.yml",
+                            source.evidence_name(),
+                            command.safe_summary()
                         )
                     })
                     .collect(),
@@ -98,15 +92,9 @@ fn detect_missing_checks(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
     Ok(proposals)
 }
 
-fn command_value(value: &Value) -> Option<&str> {
-    value
-        .as_str()
-        .or_else(|| value.get("cmd").and_then(Value::as_str))
-}
-
-fn detect_recurring_blockers(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
+fn detect_recurring_blockers(entries: &[TaskEntry]) -> Vec<BacklogItem> {
     let mut by_reason = BTreeMap::<String, BTreeSet<String>>::new();
-    for entry in task::load_task_entries(&paths.tasks_dir())? {
+    for entry in entries {
         for blocker in &entry.task.blockers {
             let key = normalize_topic(&blocker.reason);
             if !key.is_empty() {
@@ -118,7 +106,7 @@ fn detect_recurring_blockers(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
         }
     }
 
-    let proposals = by_reason
+    by_reason
         .into_iter()
         .filter(|(_, tasks)| tasks.len() >= 2)
         .map(|(reason, tasks)| {
@@ -133,23 +121,21 @@ fn detect_recurring_blockers(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
                 )],
             )
         })
-        .collect();
-    Ok(proposals)
+        .collect()
 }
 
-fn detect_missing_skills(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
-    let entries = task::load_task_entries(&paths.tasks_dir())?;
-    let durations = task_verification_durations(paths)?;
+fn detect_missing_skills(entries: &[TaskEntry]) -> Vec<BacklogItem> {
+    let durations = task::task_verification_durations(entries);
     let all_durations = durations.values().copied().collect::<Vec<_>>();
     let Some(overall_median) = median(&all_durations) else {
-        return Ok(Vec::new());
+        return Vec::new();
     };
     if overall_median == 0 {
-        return Ok(Vec::new());
+        return Vec::new();
     }
 
     let mut by_domain = BTreeMap::<String, Vec<u64>>::new();
-    for entry in &entries {
+    for entry in entries {
         if let Some(duration) = durations.get(&entry.task.id) {
             by_domain
                 .entry(task_domain(entry))
@@ -158,7 +144,7 @@ fn detect_missing_skills(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
         }
     }
 
-    let proposals = by_domain
+    by_domain
         .into_iter()
         .filter(|(_, values)| values.len() >= 2)
         .filter_map(|(domain, values)| {
@@ -178,11 +164,13 @@ fn detect_missing_skills(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
                 None
             }
         })
-        .collect();
-    Ok(proposals)
+        .collect()
 }
 
-fn detect_rediscovered_decisions(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
+fn detect_rediscovered_decisions(
+    paths: &MaestroPaths,
+    entries: &[TaskEntry],
+) -> Result<Vec<BacklogItem>> {
     let decisions = decision_entries(&paths.decisions_dir())?;
     let decision_texts = decisions
         .iter()
@@ -191,7 +179,7 @@ fn detect_rediscovered_decisions(paths: &MaestroPaths) -> Result<Vec<BacklogItem
         .collect::<Vec<_>>();
     let mut by_topic = BTreeMap::<String, BTreeSet<String>>::new();
 
-    for entry in task::load_task_entries(&paths.tasks_dir())? {
+    for entry in entries {
         let path = entry.task_dir.join("task.md");
         let Ok(markdown) = fs::read_to_string(&path) else {
             continue;
@@ -310,30 +298,5 @@ fn proposal(
         priority: "medium".to_string(),
         status: "proposed".to_string(),
         evidence,
-    }
-}
-
-fn redact_command(command: &str) -> String {
-    command
-        .split_whitespace()
-        .map(redact_command_token)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn redact_command_token(token: &str) -> String {
-    let Some((key, _)) = token.split_once('=') else {
-        return token.to_string();
-    };
-    let lower = key.to_ascii_lowercase();
-    if lower.contains("key")
-        || lower.contains("secret")
-        || lower.contains("token")
-        || lower.contains("password")
-        || lower.contains("credential")
-    {
-        format!("{key}=<redacted>")
-    } else {
-        token.to_string()
     }
 }

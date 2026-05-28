@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use crate::domain::harness::{BacklogConfig, BacklogItem};
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
-use crate::improver::propose;
 use crate::interfaces::cli::{ImproveArgs, ImproveCommand};
+use crate::operations::improver;
 
 /// Execute `maestro improve`.
 pub fn run(args: ImproveArgs) -> Result<()> {
@@ -18,7 +18,7 @@ pub fn run(args: ImproveArgs) -> Result<()> {
 }
 
 fn list(paths: &MaestroPaths) -> Result<()> {
-    let backlog = propose::refresh(paths)?;
+    let backlog = improver::refresh(paths)?;
     if backlog.items.is_empty() {
         println!("no improvement proposals found");
         return Ok(());
@@ -37,14 +37,14 @@ fn list(paths: &MaestroPaths) -> Result<()> {
 }
 
 fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let backlog = propose::refresh(paths)?;
+    let backlog = improver::refresh(paths)?;
     let item = find_item(&backlog, id)?;
     print_item(item);
     Ok(())
 }
 
 fn apply(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let item = propose::apply(paths, id)?;
+    let item = improver::apply(paths, id)?;
     println!("applied {}", item.id);
     Ok(())
 }

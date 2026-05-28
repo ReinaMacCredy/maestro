@@ -38,20 +38,18 @@ const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/decision.rs", &["decisions"]),
     ("src/interfaces/cli/doctor.rs", &["feature", "harness"]),
     ("src/interfaces/cli/feature.rs", &["feature"]),
-    ("src/interfaces/cli/improve.rs", &["harness", "improver"]),
-    ("src/interfaces/cli/init.rs", &["harness", "skills"]),
-    ("src/interfaces/cli/metrics.rs", &["metrics"]),
+    ("src/interfaces/cli/improve.rs", &["harness"]),
+    ("src/interfaces/cli/init.rs", &[]),
     (
         "src/interfaces/cli/query.rs",
-        &["decisions", "feature", "harness", "metrics"],
+        &["decisions", "feature", "harness"],
     ),
     ("src/interfaces/cli/task.rs", &[]),
     ("src/interfaces/cli/update.rs", &[]),
     ("src/interfaces/cli/watch.rs", &[]),
 ];
 
-const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
-    &[("src/interfaces/mcp/tools.rs", &["metrics"])];
+const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 
 const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 
@@ -69,7 +67,7 @@ const DOMAIN_FACADES: &[&str] = &[
     "task",
 ];
 
-const OPERATION_FACADES: &[&str] = &["improver", "metrics", "migrate", "update"];
+const OPERATION_FACADES: &[&str] = &["improver", "init", "metrics", "migrate", "update"];
 
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
@@ -229,7 +227,7 @@ fn selected_compatibility_smoke_paths_resolve() {
     > = maestro::verification::verify_task::verify_task;
     let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
     let _ = std::any::type_name::<maestro::domain::proof::ProofStatusKind>();
-    let _ = std::any::type_name::<maestro::operations::metrics::summary::MetricsSummary>();
+    let _ = std::any::type_name::<maestro::operations::metrics::MetricsSummary>();
     assert_eq!(
         std::any::type_name::<maestro::operations::migrate::MigrationPlan>(),
         std::any::type_name::<maestro::migrate::v0_106_to_v0_8::MigrationPlan>()
@@ -694,6 +692,210 @@ fn update_operation_owns_implementation_and_legacy_shim_stays_thin() {
 }
 
 #[test]
+fn improver_operation_owns_implementation_and_legacy_shim_stays_thin() {
+    for leaf in ["detect.rs", "propose.rs"] {
+        assert!(
+            Path::new(&format!("src/operations/improver/{leaf}")).is_file(),
+            "Improver implementation should live under src/operations/improver"
+        );
+        assert!(
+            !Path::new(&format!("src/improver/{leaf}")).exists(),
+            "legacy src/improver should not own implementation file {leaf}"
+        );
+    }
+
+    let operations_facade = read_source_file(Path::new("src/operations/improver/mod.rs"));
+    for item in [
+        "mod detect;",
+        "mod propose;",
+        "pub use detect::detect;",
+        "pub use propose::{apply, refresh};",
+    ] {
+        assert!(
+            operations_facade.contains(item),
+            "operations/improver facade should expose {item}"
+        );
+    }
+    assert_eq!(
+        public_modules(&operations_facade),
+        BTreeSet::new(),
+        "operations/improver should keep leaf modules private"
+    );
+    assert_eq!(
+        public_reexport_item_names(&operations_facade),
+        BTreeSet::from([
+            "apply".to_string(),
+            "detect".to_string(),
+            "refresh".to_string(),
+        ]),
+        "operations/improver should expose only deliberate root facade symbols"
+    );
+
+    let legacy_shim = read_source_file(Path::new("src/improver/mod.rs"));
+    assert_eq!(
+        public_modules(&legacy_shim),
+        BTreeSet::from(["detect".to_string(), "propose".to_string()]),
+        "legacy crate::improver should expose wrapper modules for old deep paths"
+    );
+    assert!(
+        legacy_shim.contains("pub use crate::operations::improver::detect;"),
+        "legacy crate::improver::detect should re-export the operation root detect function"
+    );
+    assert!(
+        legacy_shim.contains("pub use crate::operations::improver::{apply, refresh};"),
+        "legacy crate::improver::propose should re-export operation root apply/refresh functions"
+    );
+    assert!(
+        !legacy_shim.contains("pub use crate::operations::improver::{detect, propose};"),
+        "legacy crate::improver should not re-export operation leaf modules"
+    );
+    for implementation_item in ["pub fn detect", "pub fn refresh", "pub fn apply"] {
+        assert!(
+            !legacy_shim.contains(implementation_item),
+            "legacy crate::improver should stay a compatibility shim and not own {implementation_item}"
+        );
+    }
+
+    let improve_adapter = read_source_file(Path::new("src/interfaces/cli/improve.rs"));
+    assert!(
+        improve_adapter.contains("use crate::operations::improver;"),
+        "CLI Improve adapter should call operations::improver"
+    );
+    let improver_detect = read_source_file(Path::new("src/operations/improver/detect.rs"));
+    assert!(
+        improver_detect.contains("use crate::domain::proof;"),
+        "Improver detection should read Proof-owned data through the Proof facade"
+    );
+    for forbidden in [
+        "join(\"verification.json\")",
+        "serde_json::Value",
+        "serde_json::from_str",
+        "domain::proof::compatibility",
+        "crate::verification",
+    ] {
+        assert!(
+            !improver_detect.contains(forbidden),
+            "Improver detection should not bypass the Proof facade with {forbidden}"
+        );
+    }
+    assert_production_sources_use_operation_instead_of_legacy_shim("improver");
+    assert_production_sources_use_operation_root_facade("improver", &["detect", "propose"]);
+}
+
+#[test]
+fn metrics_operation_owns_implementation_and_legacy_shim_stays_thin() {
+    for leaf in ["friction.rs", "summary.rs"] {
+        assert!(
+            Path::new(&format!("src/operations/metrics/{leaf}")).is_file(),
+            "Metrics implementation should live under src/operations/metrics"
+        );
+        assert!(
+            !Path::new(&format!("src/metrics/{leaf}")).exists(),
+            "legacy src/metrics should not own implementation file {leaf}"
+        );
+    }
+
+    let operations_facade = read_source_file(Path::new("src/operations/metrics/mod.rs"));
+    for item in [
+        "mod friction;",
+        "mod summary;",
+        "pub use friction::{",
+        "event_kind",
+        "looks_like_correction",
+        "pub use summary::{",
+        "render_summary",
+        "summarize",
+        "MetricsSummary",
+    ] {
+        assert!(
+            operations_facade.contains(item),
+            "operations/metrics facade should expose {item}"
+        );
+    }
+    assert_eq!(
+        public_modules(&operations_facade),
+        BTreeSet::new(),
+        "operations/metrics should keep leaf modules private"
+    );
+    assert_eq!(
+        public_reexport_item_names(&operations_facade),
+        BTreeSet::from([
+            "AgentSummary".to_string(),
+            "MetricsSummary".to_string(),
+            "RunEvidenceLoad".to_string(),
+            "RunEvidenceRecord".to_string(),
+            "event_kind".to_string(),
+            "event_text".to_string(),
+            "load_run_evidence".to_string(),
+            "looks_like_correction".to_string(),
+            "render_summary".to_string(),
+            "string_field".to_string(),
+            "summarize".to_string(),
+            "task_verification_durations".to_string(),
+        ]),
+        "operations/metrics should expose only deliberate root facade symbols"
+    );
+    assert!(
+        operations_facade.contains("pub(crate) use summary::summarize_task_entries;"),
+        "operations/metrics should keep summarize_task_entries crate-visible for MCP status"
+    );
+
+    let legacy_shim = read_source_file(Path::new("src/metrics/mod.rs"));
+    assert_eq!(
+        public_modules(&legacy_shim),
+        BTreeSet::from(["friction".to_string(), "summary".to_string()]),
+        "legacy crate::metrics should expose wrapper modules for old deep paths"
+    );
+    assert!(
+        legacy_shim.contains("event_kind, event_text, looks_like_correction, string_field"),
+        "legacy crate::metrics::friction should re-export operation root friction functions"
+    );
+    for summary_symbol in [
+        "AgentSummary",
+        "MetricsSummary",
+        "RunEvidenceLoad",
+        "RunEvidenceRecord",
+        "load_run_evidence",
+        "render_summary",
+        "summarize",
+        "task_verification_durations",
+    ] {
+        assert!(
+            legacy_shim.contains(summary_symbol),
+            "legacy crate::metrics::summary should re-export operation root {summary_symbol}"
+        );
+    }
+    assert!(
+        !legacy_shim.contains("pub use crate::operations::metrics::{friction, summary};"),
+        "legacy crate::metrics should not re-export operation leaf modules"
+    );
+    for implementation_item in [
+        "pub fn summarize",
+        "pub fn render_summary",
+        "pub struct MetricsSummary",
+    ] {
+        assert!(
+            !legacy_shim.contains(implementation_item),
+            "legacy crate::metrics should stay a compatibility shim and not own {implementation_item}"
+        );
+    }
+
+    for adapter in [
+        "src/interfaces/cli/metrics.rs",
+        "src/interfaces/cli/query.rs",
+        "src/interfaces/mcp/tools.rs",
+    ] {
+        let source = read_source_file(Path::new(adapter));
+        assert!(
+            source.contains("use crate::operations::metrics;"),
+            "{adapter} should call operations::metrics"
+        );
+    }
+    assert_production_sources_use_operation_instead_of_legacy_shim("metrics");
+    assert_production_sources_use_operation_root_facade("metrics", &["friction", "summary"]);
+}
+
+#[test]
 fn proof_domain_does_not_apply_or_mutate_task_directly() {
     let mut violations = Vec::new();
     let allowed_task_symbols = BTreeSet::from([
@@ -1040,8 +1242,8 @@ fn transitional_public_surfaces_match_phase_policy() {
     );
     assert_public_modules(
         Path::new("src/operations/mod.rs"),
-        &["migrate", "update"],
-        &["crate::improver", "crate::metrics"],
+        &["improver", "init", "metrics", "migrate", "update"],
+        &[],
     );
 }
 
@@ -1080,6 +1282,90 @@ fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
         "skills" => line == "pub use domain::skills;" || line == "pub use crate::domain::skills;",
         _ => false,
     }
+}
+
+fn assert_production_sources_use_operation_instead_of_legacy_shim(legacy_root: &str) {
+    let mut violations = Vec::new();
+    let legacy_shim = PathBuf::from(format!("src/{legacy_root}/mod.rs"));
+
+    for file in rust_files_under(Path::new("src")) {
+        if file == legacy_shim {
+            continue;
+        }
+
+        let source = read_source_file(&file);
+        let code = code_for_path_scan(&source);
+        if code.contains(&format!("crate::{legacy_root}::")) {
+            violations.push(format!(
+                "{} references legacy crate::{legacy_root}:: path",
+                file.display()
+            ));
+            continue;
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if contains_legacy_root_import(&import_statement, legacy_root)
+                || contains_legacy_deep_import(&import_statement, legacy_root)
+            {
+                violations.push(format!(
+                    "{}:{} imports legacy crate::{legacy_root} path",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should use operations::{legacy_root} instead of the legacy shim:\n{}",
+        violations.join("\n")
+    );
+}
+
+fn assert_production_sources_use_operation_root_facade(operation_root: &str, leaves: &[&str]) {
+    let mut violations = Vec::new();
+    let operation_root_dir = PathBuf::from(format!("src/operations/{operation_root}"));
+    let legacy_shim = PathBuf::from(format!("src/{operation_root}/mod.rs"));
+
+    for file in rust_files_under(Path::new("src")) {
+        if file.starts_with(&operation_root_dir) || file == legacy_shim {
+            continue;
+        }
+
+        let source = read_source_file(&file);
+        let non_import_source = source_without_import_statements(&source);
+        let code = code_for_path_scan(&non_import_source);
+        for leaf in leaves {
+            let needle = format!("crate::operations::{operation_root}::{leaf}::");
+            if code.contains(&needle) {
+                violations.push(format!(
+                    "{} references deep operation path {needle}",
+                    file.display()
+                ));
+            }
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if let Some(leaf) =
+                namespaced_deep_import_segment(&import_statement, "operations", operation_root)
+            {
+                if leaves.contains(&leaf) {
+                    violations.push(format!(
+                        "{}:{} imports deep operation path operations::{operation_root}::{leaf}",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "production code should use operations::{operation_root} root facade symbols instead of operation leaf modules:\n{}",
+        violations.join("\n")
+    );
 }
 
 #[test]
@@ -1632,8 +1918,10 @@ fn public_modules(source: &str) -> BTreeSet<String> {
         .lines()
         .filter_map(|line| {
             let line = line.trim();
-            line.strip_prefix("pub mod ")
-                .and_then(|module| module.strip_suffix(';'))
+            let module = line.strip_prefix("pub mod ")?;
+            module
+                .strip_suffix(';')
+                .or_else(|| module.strip_suffix(" {"))
                 .map(str::to_string)
         })
         .collect()

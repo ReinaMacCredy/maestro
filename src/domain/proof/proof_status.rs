@@ -6,10 +6,11 @@ use anyhow::Result;
 
 use super::stale::{stale_reasons, StaleReason};
 use super::verify_task::{
-    applied_receipt_for_report, freshness_inputs_for_task, latest_attempt_report, load_task_by_id,
-    passed_binding_matches_report, read_managed_report_file_if_exists,
-    recover_canonical_report_for_task, verification_path, LoadedTask, VerificationReport,
-    VerificationStatus,
+    applied_receipt_for_report, freshness_inputs_for_task, latest_attempt_report,
+    latest_attempt_report_for_command_read, load_task_by_id, passed_binding_matches_report,
+    read_managed_report_file_for_command_read, read_managed_report_file_if_exists,
+    recover_canonical_report_for_task, verification_path, verification_report_is_newer, LoadedTask,
+    VerificationReport, VerificationReportRead, VerificationReportSource, VerificationStatus,
 };
 use crate::domain::task;
 use crate::foundation::core::git;
@@ -65,6 +66,43 @@ pub(crate) struct LegacyProofStatus {
     pub(crate) stale_reasons: Vec<StaleReason>,
 }
 
+/// Proof-owned outcome for Improve's verification command read model.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum VerificationCommandRead {
+    Commands {
+        commands: Vec<VerificationCommandEvidence>,
+        source: VerificationCommandSource,
+    },
+    SkippedMalformedReport,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct VerificationCommandEvidence {
+    command: String,
+    safe_summary: String,
+}
+
+impl VerificationCommandEvidence {
+    pub(crate) fn command(&self) -> &str {
+        &self.command
+    }
+
+    pub(crate) fn safe_summary(&self) -> &str {
+        &self.safe_summary
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct VerificationCommandSource {
+    evidence_name: String,
+}
+
+impl VerificationCommandSource {
+    pub(crate) fn evidence_name(&self) -> &str {
+        &self.evidence_name
+    }
+}
+
 /// Load persisted proof and derive freshness against current task inputs.
 pub fn proof_status(paths: &MaestroPaths, task_id: &str) -> Result<ProofStatus> {
     let loaded = load_task_by_id(paths, task_id)?;
@@ -108,6 +146,136 @@ pub fn needs_verification_proof_status_kind_for_task(
         return Ok(ProofStatusKind::Missing);
     };
     Ok(classify_without_freshness(task, &selected.report))
+}
+
+/// Read verification commands without repairing or promoting proof reports.
+pub(crate) fn verification_command_read_for_task(
+    task: &task::TaskRecord,
+    task_dir: &Path,
+) -> Result<VerificationCommandRead> {
+    let canonical_path = verification_path(task_dir);
+    let canonical = read_managed_report_file_for_command_read(
+        &canonical_path,
+        VerificationReportSource::Canonical,
+    )?;
+    match report_for_command_read(task, task_dir, canonical)? {
+        VerificationReportRead::Report {
+            report,
+            source: _,
+            path,
+        } => {
+            let report = *report;
+            Ok(VerificationCommandRead::Commands {
+                commands: report
+                    .commands
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, command)| VerificationCommandEvidence {
+                        command: command.cmd,
+                        safe_summary: format!("verification command {}", index + 1),
+                    })
+                    .collect(),
+                source: VerificationCommandSource {
+                    evidence_name: evidence_name(task_dir, &path),
+                },
+            })
+        }
+        VerificationReportRead::Missing => Ok(VerificationCommandRead::Commands {
+            commands: Vec::new(),
+            source: VerificationCommandSource {
+                evidence_name: "verification.json".to_string(),
+            },
+        }),
+        VerificationReportRead::Malformed => Ok(VerificationCommandRead::SkippedMalformedReport),
+    }
+}
+
+fn evidence_name(task_dir: &Path, path: &Path) -> String {
+    if path == verification_path(task_dir) {
+        return "verification.json".to_string();
+    }
+    if path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        == Some("verification.attempts")
+    {
+        if path.file_name().and_then(|name| name.to_str()) == Some("latest.json") {
+            return "verification.attempts/latest.json".to_string();
+        }
+        return "verification.attempts/archived attempt".to_string();
+    }
+    "verification evidence".to_string()
+}
+
+fn report_for_command_read(
+    task: &task::TaskRecord,
+    task_dir: &Path,
+    canonical: VerificationReportRead,
+) -> Result<VerificationReportRead> {
+    match canonical {
+        VerificationReportRead::Report {
+            report,
+            source,
+            path,
+        } if report_reflected_in_task(task, &report) => {
+            if canonical_report_can_short_circuit(&report) {
+                return Ok(VerificationReportRead::Report {
+                    report,
+                    source,
+                    path,
+                });
+            }
+            match latest_attempt_report_for_command_read(task_dir)? {
+                attempt @ VerificationReportRead::Report { .. } => {
+                    let is_newer = match &attempt {
+                        VerificationReportRead::Report {
+                            report: attempt_report,
+                            ..
+                        } => verification_report_is_newer(attempt_report, &report),
+                        _ => false,
+                    };
+                    if is_newer {
+                        Ok(attempt)
+                    } else {
+                        Ok(VerificationReportRead::Report {
+                            report,
+                            source,
+                            path,
+                        })
+                    }
+                }
+                VerificationReportRead::Malformed => Ok(VerificationReportRead::Malformed),
+                VerificationReportRead::Missing => Ok(VerificationReportRead::Report {
+                    report,
+                    source,
+                    path,
+                }),
+            }
+        }
+        VerificationReportRead::Report {
+            report,
+            source,
+            path,
+        } => match latest_attempt_report_for_command_read(task_dir)? {
+            VerificationReportRead::Missing => Ok(VerificationReportRead::Report {
+                report,
+                source,
+                path,
+            }),
+            VerificationReportRead::Malformed => Ok(VerificationReportRead::Malformed),
+            attempt => Ok(attempt),
+        },
+        VerificationReportRead::Missing => latest_attempt_report_for_command_read(task_dir),
+        VerificationReportRead::Malformed => {
+            match latest_attempt_report_for_command_read(task_dir)? {
+                VerificationReportRead::Missing | VerificationReportRead::Malformed => {
+                    Ok(VerificationReportRead::Malformed)
+                }
+                attempt => Ok(attempt),
+            }
+        }
+    }
 }
 
 /// Load persisted proof for an already loaded task and derive its status.
@@ -416,6 +584,10 @@ fn report_reflected_in_task(task: &task::TaskRecord, report: &VerificationReport
     }
 }
 
+fn canonical_report_can_short_circuit(report: &VerificationReport) -> bool {
+    report.status != VerificationStatus::Failed || applied_receipt_for_report(report).is_some()
+}
+
 struct SelectedReport {
     report: VerificationReport,
     path: PathBuf,
@@ -428,10 +600,22 @@ fn read_report_for_task(
     recover_canonical_report_for_task(task, task_dir, report_reflected_in_task)?;
     let canonical_path = verification_path(task_dir);
     match read_managed_report_file_if_exists(&canonical_path)? {
-        Some(report) if report_reflected_in_task(task, &report) => Ok(Some(SelectedReport {
-            report,
-            path: canonical_path,
-        })),
+        Some(report) if report_reflected_in_task(task, &report) => {
+            if !canonical_report_can_short_circuit(&report) {
+                if let Some((attempt, path)) = latest_attempt_report(task_dir)? {
+                    if verification_report_is_newer(&attempt, &report) {
+                        return Ok(Some(SelectedReport {
+                            report: attempt,
+                            path,
+                        }));
+                    }
+                }
+            }
+            Ok(Some(SelectedReport {
+                report,
+                path: canonical_path,
+            }))
+        }
         canonical => {
             if let Some((report, path)) = latest_attempt_report(task_dir)? {
                 return Ok(Some(SelectedReport { report, path }));

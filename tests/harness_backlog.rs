@@ -79,6 +79,94 @@ fn refresh_preserves_existing_ids_and_uses_next_number() {
 }
 
 #[test]
+fn refresh_updates_existing_proposal_evidence_without_changing_status() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    let mut existing = BacklogConfig::empty();
+    let mut existing_item = proposal("existing", "missing_verification", "Add existing check");
+    existing_item.id = "hb-003".to_string();
+    existing_item.status = "applied".to_string();
+    existing_item.evidence = vec![
+        "manual note: keep this context".to_string(),
+        "verification.json used `api_key='old secret' cargo test` outside harness.yml".to_string(),
+    ];
+    existing.items.push(existing_item);
+    backlog::save(&paths, &existing).expect("invariant: existing backlog should save");
+
+    let mut refreshed_proposal = proposal("existing", "missing_verification", "Add existing check");
+    refreshed_proposal.evidence =
+        vec!["verification.json used verification command 1 outside harness.yml".to_string()];
+    let refreshed = backlog::refresh(&paths, vec![refreshed_proposal])
+        .expect("invariant: backlog refresh should succeed");
+
+    assert_eq!(refreshed.items.len(), 1);
+    assert_eq!(refreshed.items[0].id, "hb-003");
+    assert_eq!(refreshed.items[0].status, "applied");
+    assert_eq!(
+        refreshed.items[0].evidence,
+        vec![
+            "manual note: keep this context",
+            "verification.json used verification command 1 outside harness.yml",
+        ]
+    );
+}
+
+#[test]
+fn refresh_sanitizes_orphaned_legacy_missing_verification_evidence() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    let mut existing = BacklogConfig::empty();
+    let mut existing_item = proposal(
+        "task-001",
+        "missing_verification",
+        "Add legacy verification",
+    );
+    existing_item.id = "hb-003".to_string();
+    existing_item.evidence = vec![
+        "manual note: keep this context".to_string(),
+        "verification.attempts/api_key=top_secret.json used `api_key='top secret' cargo test` outside harness.yml"
+            .to_string(),
+    ];
+    existing.items.push(existing_item);
+    backlog::save(&paths, &existing).expect("invariant: existing backlog should save");
+
+    let refreshed =
+        backlog::refresh(&paths, Vec::new()).expect("invariant: backlog refresh should succeed");
+
+    assert_eq!(
+        refreshed.items[0].evidence,
+        vec![
+            "manual note: keep this context",
+            "verification.attempts/archived attempt used verification command 1 outside harness.yml",
+        ]
+    );
+}
+
+#[test]
+fn refresh_preserves_manual_missing_verification_evidence() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    let mut existing = BacklogConfig::empty();
+    let mut existing_item = proposal(
+        "task-001",
+        "missing_verification",
+        "Add manual verification",
+    );
+    existing_item.id = "hb-003".to_string();
+    existing_item.evidence = vec!["manual note: keep this context".to_string()];
+    existing.items.push(existing_item);
+    backlog::save(&paths, &existing).expect("invariant: existing backlog should save");
+
+    let refreshed =
+        backlog::refresh(&paths, Vec::new()).expect("invariant: backlog refresh should succeed");
+
+    assert_eq!(
+        refreshed.items[0].evidence,
+        vec!["manual note: keep this context"]
+    );
+}
+
+#[test]
 fn mark_applied_changes_only_the_selected_item_status() {
     let temp = TestTempDir::new("maestro-harness-backlog");
     let paths = paths_for(&temp);

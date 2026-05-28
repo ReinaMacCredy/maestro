@@ -410,8 +410,9 @@ Harness Backlog owns:
 
 Current code path: `src/domain/harness/backlog.rs` owns backlog load, save,
 proposal merge, schema validation, and applied-status mutation. Improver
-detection remains in `src/improver/detect.rs`, and `src/improver/propose.rs`
-routes detected proposals through the Harness Backlog contract.
+detection remains in `src/operations/improver/detect.rs`, and
+`src/operations/improver/propose.rs` routes detected proposals through the
+Harness Backlog contract.
 
 Improve may propose or refresh backlog items through the Harness Backlog
 contract. It must not silently apply Harness protocol or config changes. Any
@@ -1305,9 +1306,11 @@ Current module groups:
 - **CLI adapter**: `interfaces/cli` owns argument parsing and command routing,
   but several command files still coordinate domain details directly.
 - **Artifact/domain/operation modules**: `harness`, `task`, `feature`,
-  `decisions`, `verification`, `evidence`, `install`, `skills`, `improver`,
-  `metrics`, `operations/migrate`, and `update` own or coordinate repo-local
-  artifacts. Legacy `migrate` remains only as a compatibility shim.
+  `decisions`, `verification`, `evidence`, `install`, `skills`,
+  `operations/init`, `operations/improver`, `operations/metrics`,
+  `operations/migrate`, and `operations/update` own or coordinate repo-local
+  artifacts. Legacy `improver`, `metrics`, `migrate`, and `update` remain only
+  as compatibility shims.
 - **Interface adapters**: `interfaces/hooks`, `interfaces/shell`,
   `interfaces/mcp`, and `interfaces/tui` expose alternate operator interfaces
   over the same local substrate. Legacy `hooks`, `shell`, `mcp`, and `tui` are
@@ -1354,8 +1357,9 @@ The target source map should make each module's ownership contract explicit:
 - `skills`: owns bundled skill extraction and agent skill symlink mechanics. It
   must not own install policy beyond skill-specific filesystem operations.
 - `improver`: target home is `operations/improver`; it owns rule-based
-  friction detection and backlog proposal refresh through the Harness Backlog
-  contract. It must not silently apply Harness changes.
+  friction detection from Task, Run, Decision, and Harness read models plus
+  backlog proposal refresh through the Harness Backlog contract. It must not
+  silently apply Harness changes.
 - `metrics`: target home is `operations/metrics`; it owns read-only projections
   over tasks, runs, events, and proof artifacts. It must not mutate source
   artifacts.
@@ -1462,7 +1466,7 @@ Allowed contract edges:
 | `domain/install` | `domain/skills` | Use skill extraction/link contracts and record ownership. | Own bundled skill content. |
 | `operations/init` | `domain/harness`, `domain/feature`, `domain/decisions`, `domain/skills` | Coordinate startup artifact creation through owning domain contracts. | Own private template, registry, decision, or extraction details. |
 | `operations/task_verify` | `domain/task`, `domain/proof` | Coordinate Task snapshot planning, Proof evaluation, and Task outcome application. | Own Proof semantics or Task lifecycle rules. |
-| `operations/improver` | `domain/harness` | Propose or refresh Harness Backlog items. | Apply Harness changes silently. |
+| `operations/improver` | `domain/harness`, `domain/task`, `domain/run`, `domain/decisions`, `domain/proof`, `operations/metrics` | Read domain evidence and Proof-owned verification report commands to propose or refresh Harness Backlog items, and reuse the metrics correction heuristic (`looks_like_correction`) through the metrics root facade. | Apply Harness changes silently, mutate Task, Run, Decision, or Proof artifacts, parse Proof-owned report JSON directly, or import metrics internals below its root facade. |
 | `operations/metrics` | `domain/task`, `domain/run`, `domain/proof`, `domain/feature` | Read stable read models for projections. | Mutate source artifacts or scan private layouts when read models exist. |
 | `operations/migrate` | target domains | Use target writers where possible, or documented migration-only direct writes. | Become normal domain behavior after migration. |
 | `operations/update` | `operations/migrate`, `domain/install`, `domain/skills` | Call migration checks/plans and refresh explicitly owned install or skill artifacts. | Apply schema migrations or rewrite user-owned Harness files silently. |
@@ -2348,7 +2352,7 @@ should eventually sit behind the owning domain module.
 | `install` and `skills` | Install owns mirrors/locks and calls skill symlink helpers. Skills owns extraction and symlink mechanics. | Install owns wiring; Skills owns content/extraction. | Keep the split sharp so Install does not own bundled skill content and Skills does not own install policy. |
 | `operations/migrate` | Strong migration plan/apply module, with some direct target artifact construction and a legacy `migrate` shim. | Explicit migration operation that preserves target-domain contracts. | Lower-level writes should remain migration-only exceptions or move to target-domain writers. |
 | `operations/update` | Binary update, bundled skill refresh, rollback, auto-check, schema mismatch reporting. Legacy `update` remains a compatibility shim. | Update owns binary/skill refresh and reports drift. | Update must not silently become migration or Harness rewrite logic. |
-| `metrics`, `query`, `tui`, `mcp` | Read and present projections from tasks, runs, proof, decisions, backlog, and metrics. | Read-model adapters over domain contracts. | These modules should avoid rescanning private artifact layouts independently when domain read models exist. |
+| `operations/init`, `operations/improver`, `operations/metrics` | Init startup orchestration, rule-based backlog proposal refresh, and metrics projections now live behind operation root facades. Legacy `improver` and `metrics` preserve old deep paths through thin wrapper modules only. | Operation-owned workflows with thin adapters and domain read models. | Query, TUI, MCP, and remaining adapters should avoid operation leaf modules or private artifact layouts independently when domain read models exist. |
 | `shell` | Emits shell wrappers around the CLI. | Shell adapter only. | Must not absorb install or task lifecycle policy. |
 
 ### Target State
@@ -2396,12 +2400,12 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 | --- | --- | --- | --- |
 | P0 | Task aggregate boundary | `src/interfaces/cli/task.rs`, `src/domain/task/template.rs`, `src/domain/task/lifecycle.rs`, `src/domain/task/blockers.rs`, `src/domain/task/doctor.rs` | The CLI adapter still owns task id allocation, acceptance locking, blocker id allocation, and several state-history writes. |
 | P0 | Proof result to Task lifecycle | `src/domain/proof/verify_task.rs`, `src/operations/task_verify/`, `src/domain/task/mod.rs` | CLI verification now uses `operations/task_verify` for Proof report writing and Task-owned outcome application. The remaining friction is compatibility and read-model discipline: legacy `crate::verification` must not become the production boundary, and proof status must distinguish applied reports from unapplied written reports. |
-| P1 | Run aggregate boundary | `src/interfaces/hooks/record.rs`, `src/interfaces/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/domain/proof/events.rs`, `src/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
+| P1 | Run aggregate boundary | `src/interfaces/hooks/record.rs`, `src/interfaces/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/domain/proof/events.rs`, `src/operations/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
 | P1 | Feature aggregate boundary | `src/interfaces/cli/feature.rs`, `src/feature/schema.rs`, `src/feature/query.rs` | Feature schema and rollups live in `feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
 | P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
 | P1 | Install and Skills ownership | `src/domain/install/*`, `src/domain/skills/symlink.rs`, `src/domain/skills/extract.rs` | Install owns mirrors, locks, agent-specific skill-link mapping, pending/committed recovery state, rollback, and uninstall safety while Skills owns generic skill filesystem mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
 | P2 | Migration target writers | `src/operations/migrate/v0_106_to_v0_8.rs`, target domain modules | Migration intentionally writes many target artifacts directly. That is acceptable as an explicit migration exception, but it can drift from target domain write rules. |
-| P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/interfaces/mcp/tools.rs`, `src/interfaces/tui/*`, `src/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
+| P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/interfaces/mcp/tools.rs`, `src/interfaces/tui/*`, `src/operations/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |
 
 ### Target State
 

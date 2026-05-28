@@ -129,6 +129,14 @@ compatibility checks or transition work until the legacy path is removed.
 Current MCP tool imports into legacy source-read roots are temporary,
 file-specific allowances until those domain read facades move in later phases.
 
+Init orchestration lives under `src/operations/init`, metrics projections live
+under `src/operations/metrics`, and rule-based improvement proposal refresh
+lives under `src/operations/improver`. New production callers should use those
+operation root facades. The `operations/improver` and `operations/metrics`
+leaf files are private implementation details; `crate::improver` and
+`crate::metrics` preserve legacy deep paths through wrapper modules until those
+public paths are removed.
+
 Hook command adapter code lives under `src/interfaces/hooks`, and `crate::hooks`
 remains a compatibility re-export. New interface-layer references should prefer
 `crate::interfaces::hooks`. Run event normalization, append behavior, discovery,

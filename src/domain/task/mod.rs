@@ -1,5 +1,6 @@
 //! Task aggregate facade.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -7,6 +8,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::time::parse_utc_timestamp;
 
 pub(crate) mod blockers;
 pub(crate) mod display;
@@ -116,6 +118,50 @@ pub fn load_feature_task_projections(tasks_dir: &Path) -> Result<Vec<FeatureTask
         projections.push(projection);
     }
     Ok(projections)
+}
+
+/// Return per-task verification durations for loaded task entries.
+pub fn task_verification_durations(entries: &[TaskEntry]) -> BTreeMap<String, u64> {
+    let mut durations = BTreeMap::new();
+    for entry in entries {
+        if let Some(seconds) =
+            verification_duration_seconds(&entry.task.created_at, &entry.task.verification)
+        {
+            durations.insert(entry.task.id.clone(), seconds);
+        }
+    }
+    durations
+}
+
+/// Return verification duration in seconds for one task, when timestamps are complete.
+pub fn verification_duration_seconds(
+    created_at: &str,
+    verification: &VerificationBinding,
+) -> Option<u64> {
+    let start = parse_timestamp_seconds(created_at)?;
+    let end = parse_timestamp_seconds(verification.verified_at.as_deref()?)?;
+    end.checked_sub(start)
+}
+
+fn parse_timestamp_seconds(value: &str) -> Option<u64> {
+    if value.chars().all(|character| character.is_ascii_digit()) {
+        return parse_numeric_timestamp_seconds(value);
+    }
+    let parsed = parse_utc_timestamp(value)?;
+    if parsed.nanos_since_epoch < 0 {
+        return None;
+    }
+    Some((parsed.nanos_since_epoch / 1_000_000_000) as u64)
+}
+
+fn parse_numeric_timestamp_seconds(value: &str) -> Option<u64> {
+    let timestamp = value.parse::<u64>().ok()?;
+    match value.len() {
+        0..=10 => Some(timestamp),
+        11..=13 => Some(timestamp / 1_000),
+        14..=16 => Some(timestamp / 1_000_000),
+        _ => Some(timestamp / 1_000_000_000),
+    }
 }
 
 /// Load one Task aggregate by id or id prefix with its Task-owned save context.

@@ -11,6 +11,7 @@ pub use proof_status::{
     proof_status_kind_for_task, render_proof_status, ProofStaleReason, ProofStatus,
     ProofStatusKind, ProofStatusSource,
 };
+pub(crate) use proof_status::{verification_command_read_for_task, VerificationCommandRead};
 pub(crate) use verify_task::{
     evaluate_and_write_task_report_attempt, replace_task_report_preserving_previous,
     verification_outcome_for_report, VerificationReport,

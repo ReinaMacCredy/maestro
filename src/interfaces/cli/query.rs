@@ -15,7 +15,7 @@ use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION};
 use crate::harness::schema::BacklogConfig;
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
-use crate::metrics::friction::{event_kind, event_text, looks_like_correction};
+use crate::operations::metrics;
 
 /// Execute `maestro query`.
 pub fn run(args: QueryArgs) -> Result<()> {
@@ -93,11 +93,13 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
                 continue;
             };
             events += 1;
-            let kind = event_kind(&event);
+            let kind = metrics::event_kind(&event);
             *kinds.entry(kind.clone()).or_default() += 1;
             if kind == "UserPromptSubmit" {
                 user_prompts += 1;
-                if looks_like_correction(event_text(&event).as_deref().unwrap_or_default()) {
+                if metrics::looks_like_correction(
+                    metrics::event_text(&event).as_deref().unwrap_or_default(),
+                ) {
                     corrections += 1;
                 }
             }
