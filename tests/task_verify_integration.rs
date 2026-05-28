@@ -698,7 +698,7 @@ fn query_proof_reports_failed_when_acceptance_disappears_after_failed_verify() {
 }
 
 #[test]
-fn legacy_proof_status_errors_when_passed_report_loses_acceptance() {
+fn proof_status_errors_when_passed_report_loses_acceptance() {
     let temp = setup_repo();
     let repo = temp.path();
     create_completed_task(repo, "implemented legacy passed freshness error");
@@ -713,7 +713,7 @@ fn legacy_proof_status_errors_when_passed_report_loses_acceptance() {
         .expect("invariant: acceptance should be removable");
     let paths = maestro::foundation::core::paths::MaestroPaths::new(repo.to_path_buf());
 
-    let status = maestro::verification::proof_status::proof_status(&paths, "task-001");
+    let status = maestro::domain::proof::proof_status(&paths, "task-001");
 
     assert!(status.is_err());
 }

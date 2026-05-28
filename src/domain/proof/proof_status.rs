@@ -9,7 +9,7 @@ use super::verify_task::{
     applied_receipt_for_report, freshness_inputs_for_task, latest_attempt_report,
     latest_attempt_report_for_command_read, load_task_by_id, passed_binding_matches_report,
     read_managed_report_file_for_command_read, read_managed_report_file_if_exists,
-    recover_canonical_report_for_task, verification_path, verification_report_is_newer, LoadedTask,
+    recover_canonical_report_for_task, verification_path, verification_report_is_newer,
     VerificationReport, VerificationReportRead, VerificationReportSource, VerificationStatus,
 };
 use crate::domain::task;
@@ -54,16 +54,6 @@ pub struct ProofStatus {
     pub sources: Vec<ProofStatusSource>,
     pub stale_reasons: Vec<ProofStaleReason>,
     pub failures: Vec<String>,
-}
-
-/// Legacy proof status shape preserved for `crate::verification` callers.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct LegacyProofStatus {
-    pub(crate) task_id: String,
-    pub(crate) kind: ProofStatusKind,
-    pub(crate) verification_path: String,
-    pub(crate) report: Option<VerificationReport>,
-    pub(crate) stale_reasons: Vec<StaleReason>,
 }
 
 /// Proof-owned outcome for Improve's verification command read model.
@@ -417,86 +407,6 @@ fn status_from_report(
         stale_reasons,
         failures: report.failures,
     }
-}
-
-pub(crate) fn legacy_proof_status(
-    paths: &MaestroPaths,
-    task_id: &str,
-) -> Result<LegacyProofStatus> {
-    let loaded = load_task_by_id(paths, task_id)?;
-    legacy_proof_status_for_loaded(paths, loaded)
-}
-
-pub(crate) fn render_legacy_proof_status(status: &LegacyProofStatus) -> String {
-    let read_model = legacy_status_as_read_model(status);
-    render_proof_status(&read_model)
-}
-
-fn legacy_proof_status_for_loaded(
-    paths: &MaestroPaths,
-    loaded: LoadedTask,
-) -> Result<LegacyProofStatus> {
-    let selected = read_report_for_task(&loaded.task, &loaded.task_dir)?;
-
-    let Some(selected) = selected else {
-        return Ok(LegacyProofStatus {
-            task_id: loaded.task.id,
-            kind: ProofStatusKind::Missing,
-            verification_path: display_verification_path(
-                paths,
-                &verification_path(&loaded.task_dir),
-            ),
-            report: None,
-            stale_reasons: Vec::new(),
-        });
-    };
-
-    let report = selected.report;
-    let classification = classify_report(
-        &loaded.task,
-        &loaded.task_dir,
-        git::head(paths.repo_root()).unwrap_or(None),
-        &report,
-        FailedStalePolicy::BestEffort,
-    )?;
-
-    Ok(LegacyProofStatus {
-        task_id: loaded.task.id,
-        kind: classification.kind,
-        verification_path: display_verification_path(paths, &selected.path),
-        report: Some(report),
-        stale_reasons: classification.stale,
-    })
-}
-
-fn legacy_status_as_read_model(status: &LegacyProofStatus) -> ProofStatus {
-    let Some(report) = status.report.clone() else {
-        return ProofStatus {
-            task_id: status.task_id.clone(),
-            kind: status.kind.clone(),
-            verification_path: status.verification_path.clone(),
-            verified_at: None,
-            verified_commit: None,
-            matched_claims: 0,
-            total_claims: 0,
-            sources: Vec::new(),
-            stale_reasons: Vec::new(),
-            failures: Vec::new(),
-        };
-    };
-
-    status_from_report(
-        status.task_id.clone(),
-        status.kind.clone(),
-        status.verification_path.clone(),
-        report,
-        status
-            .stale_reasons
-            .clone()
-            .into_iter()
-            .map(ProofStaleReason::from)
-            .collect(),
-    )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

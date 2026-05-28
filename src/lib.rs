@@ -1,15 +1,8 @@
 pub mod domain;
-pub mod evidence;
 pub mod foundation;
-pub mod improver;
-pub mod install;
 pub mod interfaces;
-pub mod metrics;
-pub mod migrate;
 pub mod operations;
 pub mod task;
-pub mod update;
-pub mod verification;
 
 pub use domain::decisions;
 pub use domain::feature;

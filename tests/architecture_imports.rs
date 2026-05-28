@@ -13,21 +13,14 @@ const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
     "commands",
     "core",
     "decisions",
-    "evidence",
     "feature",
     "harness",
     "task",
     "hooks",
-    "improver",
-    "install",
     "mcp",
-    "metrics",
-    "migrate",
     "shell",
     "skills",
     "tui",
-    "update",
-    "verification",
 ];
 
 const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[];
@@ -194,58 +187,9 @@ fn selected_compatibility_smoke_paths_resolve() {
         |entry: &std::fs::DirEntry| maestro::task::lookup::task_yaml_path_for_entry(entry);
     let _legacy_valid_task_yaml_path =
         |path: &Path| maestro::task::lookup::valid_task_yaml_path(path);
-    let _ = std::any::type_name::<maestro::verification::proof_status::ProofStatusKind>();
-    let _legacy_proof_status_fields =
-        |status: &maestro::verification::proof_status::ProofStatus| {
-            let _report: &Option<maestro::verification::verify_task::VerificationReport> =
-                &status.report;
-            let _stale_reasons: &Vec<maestro::verification::stale::StaleReason> =
-                &status.stale_reasons;
-            let _task_id: &String = &status.task_id;
-            let _path: &String = &status.verification_path;
-            let _kind: &maestro::verification::proof_status::ProofStatusKind = &status.kind;
-        };
-    let _legacy_proof_status: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-        &str,
-    ) -> anyhow::Result<
-        maestro::verification::proof_status::ProofStatus,
-    > = maestro::verification::proof_status::proof_status;
-    let _legacy_render_proof_status: fn(
-        &maestro::verification::proof_status::ProofStatus,
-    ) -> String = maestro::verification::proof_status::render_proof_status;
-    let _legacy_loaded_task_fields = |loaded: &maestro::verification::verify_task::LoadedTask| {
-        let _task: &maestro::domain::task::TaskRecord = &loaded.task;
-        let _task_dir: &PathBuf = &loaded.task_dir;
-    };
-    let _legacy_verify_task: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-        &str,
-        &str,
-    ) -> anyhow::Result<
-        maestro::verification::verify_task::VerificationReport,
-    > = maestro::verification::verify_task::verify_task;
     let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
     let _ = std::any::type_name::<maestro::domain::proof::ProofStatusKind>();
     let _ = std::any::type_name::<maestro::operations::metrics::MetricsSummary>();
-    assert_eq!(
-        std::any::type_name::<maestro::operations::migrate::MigrationPlan>(),
-        std::any::type_name::<maestro::migrate::v0_106_to_v0_8::MigrationPlan>()
-    );
-    let _legacy_migration_plan = |paths: &maestro::foundation::core::paths::MaestroPaths| {
-        maestro::migrate::v0_106_to_v0_8::plan(paths)
-    };
-    let _new_migration_plan = |paths: &maestro::foundation::core::paths::MaestroPaths| {
-        maestro::operations::migrate::plan(paths)
-    };
-    assert_eq!(
-        std::any::type_name::<maestro::operations::update::InstallMethod>(),
-        std::any::type_name::<maestro::update::InstallMethod>()
-    );
-    let _legacy_detect_update_install_method: fn(&Path) -> maestro::update::InstallMethod =
-        maestro::update::detect_install_method;
-    let _new_detect_update_install_method: fn(&Path) -> maestro::operations::update::InstallMethod =
-        maestro::operations::update::detect_install_method;
     assert_eq!(
         std::any::type_name::<maestro::interfaces::shell::Shell>(),
         std::any::type_name::<maestro::shell::Shell>()
@@ -296,20 +240,6 @@ fn selected_compatibility_smoke_paths_resolve() {
         maestro::domain::run::hook_event_contract().shared_events(),
         maestro::hooks::event::SHARED_HOOK_EVENTS
     );
-
-    let _legacy_remove_lock: fn(&Path) -> anyhow::Result<()> =
-        maestro::install::lock::remove_lock_file;
-    let _legacy_apply: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-        maestro::install::InstallAgent,
-        String,
-    ) -> anyhow::Result<maestro::install::AgentInstall> = maestro::install::mirrors::apply_mirrors;
-    let _legacy_remove: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-        maestro::install::InstallAgent,
-        &maestro::install::AgentInstall,
-        &BTreeSet<String>,
-    ) -> anyhow::Result<()> = maestro::install::mirrors::remove_mirrors;
 }
 
 #[test]
@@ -383,12 +313,8 @@ fn task_domain_facade_does_not_publish_leaf_modules() {
 #[test]
 fn proof_domain_facade_does_not_publish_leaf_modules() {
     let proof_facade = read_source_file(Path::new("src/domain/proof/mod.rs"));
-    let proof_root_facade = proof_facade
-        .split("pub(crate) mod compatibility")
-        .next()
-        .expect("invariant: split always yields root facade prefix");
     assert_eq!(
-        public_reexport_item_names(proof_root_facade),
+        public_reexport_item_names(&proof_facade),
         BTreeSet::from([
             "ProofStatus".to_string(),
             "ProofStatusKind".to_string(),
@@ -411,53 +337,6 @@ fn proof_domain_facade_does_not_publish_leaf_modules() {
             "src/domain/proof/mod.rs should expose Proof through root facade exports, not pub mod {leaf}"
         );
     }
-
-    let verification_shim = read_source_file(Path::new("src/verification/mod.rs"));
-    for leaf in ["events", "proof_status", "stale", "verify_task"] {
-        assert!(
-            verification_shim.contains(&format!("pub mod {leaf}")),
-            "legacy crate::verification shim should preserve compatibility module {leaf}"
-        );
-    }
-    let legacy_events_module = verification_shim
-        .split("pub mod events {")
-        .nth(1)
-        .and_then(|body| body.split("\npub mod proof_status {").next())
-        .expect("legacy crate::verification shim should contain events before proof_status");
-    assert_eq!(
-        public_reexport_item_names(legacy_events_module),
-        BTreeSet::from(["managed_event_files".to_string()]),
-        "legacy crate::verification events shim should expose managed Proof event reads only"
-    );
-    assert!(
-        !legacy_events_module.contains("event_files_under"),
-        "legacy crate::verification events shim should not expose unmanaged Run event discovery"
-    );
-    let legacy_proof_status_module = verification_shim
-        .split("pub mod proof_status {")
-        .nth(1)
-        .and_then(|body| body.split("\npub mod stale {").next())
-        .expect("legacy crate::verification shim should contain proof_status before stale");
-    for duplicated_domain_logic in [
-        "read_report",
-        "freshness_inputs",
-        "stale_reasons(",
-        "VerificationStatus::",
-        "format_claims",
-        "format_sources",
-    ] {
-        assert!(
-            !legacy_proof_status_module.contains(duplicated_domain_logic),
-            "legacy crate::verification proof_status shim should adapt domain::proof compatibility helpers, not duplicate Proof logic: {duplicated_domain_logic}"
-        );
-    }
-    assert!(
-        !verification_shim.contains("mod events;")
-            && !verification_shim.contains("mod proof_status;")
-            && !verification_shim.contains("mod stale;")
-            && !verification_shim.contains("mod verify_task;"),
-        "legacy crate::verification shim should not own Proof implementation files"
-    );
 }
 
 #[test]
@@ -559,16 +438,10 @@ fn install_domain_facade_does_not_publish_leaf_modules() {
             "src/domain/install/mod.rs should expose root facade item {root_item}"
         );
     }
-
-    let legacy_shim = read_source_file(Path::new("src/install/mod.rs"));
-    assert!(
-        !legacy_shim.contains("pub use crate::domain::install::*"),
-        "legacy crate::install shim should explicitly re-export the compatibility surface"
-    );
 }
 
 #[test]
-fn migration_operation_owns_implementation_and_legacy_shim_stays_thin() {
+fn migration_operation_owns_implementation() {
     assert!(
         Path::new("src/operations/migrate/v0_106_to_v0_8.rs").is_file(),
         "Migration implementation should live under src/operations/migrate"
@@ -590,22 +463,8 @@ fn migration_operation_owns_implementation_and_legacy_shim_stays_thin() {
         );
     }
 
-    let legacy_shim = read_source_file(Path::new("src/migrate/mod.rs"));
-    assert!(
-        legacy_shim.contains("pub use crate::operations::migrate::v0_106_to_v0_8;"),
-        "legacy crate::migrate should re-export the operations-owned version module"
-    );
-    assert!(
-        !legacy_shim.contains("pub mod v0_106_to_v0_8;")
-            && !legacy_shim.contains("mod v0_106_to_v0_8;"),
-        "legacy crate::migrate should stay a compatibility shim"
-    );
-
     let mut violations = Vec::new();
     for file in rust_files_under(Path::new("src")) {
-        if file == Path::new("src/migrate/mod.rs") {
-            continue;
-        }
         let source = read_source_file(&file);
         let code = code_for_path_scan(&source);
         if code.contains("crate::migrate::") {
@@ -615,13 +474,13 @@ fn migration_operation_owns_implementation_and_legacy_shim_stays_thin() {
 
     assert!(
         violations.is_empty(),
-        "production code should use operations::migrate instead of the legacy shim:\n{}",
+        "production code should use operations::migrate and not reintroduce crate::migrate:\n{}",
         violations.join("\n")
     );
 }
 
 #[test]
-fn update_operation_owns_implementation_and_legacy_shim_stays_thin() {
+fn update_operation_owns_implementation() {
     assert!(
         Path::new("src/operations/update/mod.rs").is_file(),
         "Update implementation should live under src/operations/update"
@@ -642,29 +501,8 @@ fn update_operation_owns_implementation_and_legacy_shim_stays_thin() {
         );
     }
 
-    let legacy_shim = read_source_file(Path::new("src/update/mod.rs"));
-    assert!(
-        legacy_shim.contains("pub use crate::operations::update::*;"),
-        "legacy crate::update should re-export the operations-owned update module"
-    );
-    for implementation_item in [
-        "pub fn run_update",
-        "pub trait UpdateDownloader",
-        "pub struct GitHubCurlDownloader",
-        "fn replace_binary_atomic",
-        "fn detect_schema_mismatches",
-    ] {
-        assert!(
-            !legacy_shim.contains(implementation_item),
-            "legacy crate::update should stay a compatibility shim and not own {implementation_item}"
-        );
-    }
-
     let mut violations = Vec::new();
     for file in rust_files_under(Path::new("src")) {
-        if file == Path::new("src/update/mod.rs") {
-            continue;
-        }
         let source = read_source_file(&file);
         let code = code_for_path_scan(&source);
         if code.contains("crate::update::") {
@@ -692,7 +530,7 @@ fn update_operation_owns_implementation_and_legacy_shim_stays_thin() {
 }
 
 #[test]
-fn improver_operation_owns_implementation_and_legacy_shim_stays_thin() {
+fn improver_operation_owns_implementation() {
     for leaf in ["detect.rs", "propose.rs"] {
         assert!(
             Path::new(&format!("src/operations/improver/{leaf}")).is_file(),
@@ -731,31 +569,6 @@ fn improver_operation_owns_implementation_and_legacy_shim_stays_thin() {
         "operations/improver should expose only deliberate root facade symbols"
     );
 
-    let legacy_shim = read_source_file(Path::new("src/improver/mod.rs"));
-    assert_eq!(
-        public_modules(&legacy_shim),
-        BTreeSet::from(["detect".to_string(), "propose".to_string()]),
-        "legacy crate::improver should expose wrapper modules for old deep paths"
-    );
-    assert!(
-        legacy_shim.contains("pub use crate::operations::improver::detect;"),
-        "legacy crate::improver::detect should re-export the operation root detect function"
-    );
-    assert!(
-        legacy_shim.contains("pub use crate::operations::improver::{apply, refresh};"),
-        "legacy crate::improver::propose should re-export operation root apply/refresh functions"
-    );
-    assert!(
-        !legacy_shim.contains("pub use crate::operations::improver::{detect, propose};"),
-        "legacy crate::improver should not re-export operation leaf modules"
-    );
-    for implementation_item in ["pub fn detect", "pub fn refresh", "pub fn apply"] {
-        assert!(
-            !legacy_shim.contains(implementation_item),
-            "legacy crate::improver should stay a compatibility shim and not own {implementation_item}"
-        );
-    }
-
     let improve_adapter = read_source_file(Path::new("src/interfaces/cli/improve.rs"));
     assert!(
         improve_adapter.contains("use crate::operations::improver;"),
@@ -783,7 +596,7 @@ fn improver_operation_owns_implementation_and_legacy_shim_stays_thin() {
 }
 
 #[test]
-fn metrics_operation_owns_implementation_and_legacy_shim_stays_thin() {
+fn metrics_operation_owns_implementation() {
     for leaf in ["friction.rs", "summary.rs"] {
         assert!(
             Path::new(&format!("src/operations/metrics/{leaf}")).is_file(),
@@ -839,46 +652,6 @@ fn metrics_operation_owns_implementation_and_legacy_shim_stays_thin() {
         operations_facade.contains("pub(crate) use summary::summarize_task_entries;"),
         "operations/metrics should keep summarize_task_entries crate-visible for MCP status"
     );
-
-    let legacy_shim = read_source_file(Path::new("src/metrics/mod.rs"));
-    assert_eq!(
-        public_modules(&legacy_shim),
-        BTreeSet::from(["friction".to_string(), "summary".to_string()]),
-        "legacy crate::metrics should expose wrapper modules for old deep paths"
-    );
-    assert!(
-        legacy_shim.contains("event_kind, event_text, looks_like_correction, string_field"),
-        "legacy crate::metrics::friction should re-export operation root friction functions"
-    );
-    for summary_symbol in [
-        "AgentSummary",
-        "MetricsSummary",
-        "RunEvidenceLoad",
-        "RunEvidenceRecord",
-        "load_run_evidence",
-        "render_summary",
-        "summarize",
-        "task_verification_durations",
-    ] {
-        assert!(
-            legacy_shim.contains(summary_symbol),
-            "legacy crate::metrics::summary should re-export operation root {summary_symbol}"
-        );
-    }
-    assert!(
-        !legacy_shim.contains("pub use crate::operations::metrics::{friction, summary};"),
-        "legacy crate::metrics should not re-export operation leaf modules"
-    );
-    for implementation_item in [
-        "pub fn summarize",
-        "pub fn render_summary",
-        "pub struct MetricsSummary",
-    ] {
-        assert!(
-            !legacy_shim.contains(implementation_item),
-            "legacy crate::metrics should stay a compatibility shim and not own {implementation_item}"
-        );
-    }
 
     for adapter in [
         "src/interfaces/cli/metrics.rs",

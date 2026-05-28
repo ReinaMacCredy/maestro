@@ -45,18 +45,6 @@ pub fn install_agent(paths: &MaestroPaths, agent: InstallAgent) -> Result<()> {
     install_agent_with_writer(paths, agent, write_prepared_mirrors)
 }
 
-pub(crate) fn apply_mirrors_for_compat(
-    paths: &MaestroPaths,
-    agent: InstallAgent,
-    installed_at: String,
-) -> Result<AgentInstall> {
-    harness::ensure_harness_protocol_exists(paths)?;
-    let prepared = prepare_mirrors(paths, agent, installed_at, None)?;
-    write_prepared_mirrors(paths, &prepared).map_err(mirrors::MirrorWriteFailure::into_error)?;
-
-    Ok(prepared.install)
-}
-
 fn install_agent_with_writer<F>(
     paths: &MaestroPaths,
     agent: InstallAgent,
@@ -143,17 +131,6 @@ where
     if let Err(error) = finalize_lock(&lock_path, &lock) {
         return rollback_uninstall_after_lock_failure(&lock_path, &previous_lock, removal, error);
     }
-
-    Ok(())
-}
-
-pub(crate) fn remove_mirrors_for_compat(
-    paths: &MaestroPaths,
-    agent: InstallAgent,
-    install: &AgentInstall,
-    still_owned_paths: &BTreeSet<String>,
-) -> Result<()> {
-    let _removal = mirrors::remove_mirrors(paths, agent, install, still_owned_paths)?;
 
     Ok(())
 }

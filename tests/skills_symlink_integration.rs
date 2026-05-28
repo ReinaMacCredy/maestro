@@ -6,7 +6,9 @@ mod unix {
     use std::path::Path;
     use std::process::Command;
 
-    use maestro::install::{AgentInstall, FileOwnership, InstallAgent, InstallLock, MirrorKind};
+    use maestro::domain::install::{
+        AgentInstall, FileOwnership, InstallAgent, InstallLock, MirrorKind,
+    };
 
     use super::support::TestTempDir;
 

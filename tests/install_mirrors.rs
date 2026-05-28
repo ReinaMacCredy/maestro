@@ -1,6 +1,5 @@
 mod support;
 
-use std::collections::BTreeSet;
 use std::fs;
 
 use maestro::core::paths::MaestroPaths;
@@ -8,7 +7,6 @@ use maestro::domain::install::{
     install_agent, mirror_plan, uninstall_agent, AgentInstall, FileOwnership, InstallAgent,
     InstallLock, InstallState, MirrorKind,
 };
-use maestro::install as legacy_install;
 use support::TestTempDir;
 
 const HOOK_EVENTS: [&str; 6] = [
@@ -95,27 +93,6 @@ fn apply_mirrors_preserves_user_content_and_records_ownership() {
         install.files[".claude/settings.local.json"].kind,
         MirrorKind::JsonManagedKeys
     ));
-}
-
-#[test]
-fn legacy_apply_mirrors_preserves_supplied_installed_at_without_creating_lock() {
-    let temp_dir = TestTempDir::new("maestro-install-test");
-    init_repo(temp_dir.path());
-    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
-
-    let install = legacy_install::mirrors::apply_mirrors(
-        &paths,
-        InstallAgent::Codex,
-        "caller-supplied-time".to_string(),
-    )
-    .expect("invariant: legacy mirror apply should succeed");
-
-    assert_eq!(install.installed_at, "caller-supplied-time");
-    assert_eq!(install.state, InstallState::Committed);
-    assert!(!paths.install_lock_file().exists());
-    let agents = fs::read_to_string(temp_dir.path().join("AGENTS.md"))
-        .expect("invariant: AGENTS.md should be readable");
-    assert!(agents.contains("<!-- maestro:start -->"));
 }
 
 #[cfg(unix)]
@@ -205,49 +182,6 @@ fn remove_mirrors_removes_only_owned_content() {
     let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
         .expect("invariant: hooks json should be readable");
     assert_eq!(hooks, "{}\n");
-}
-
-#[test]
-fn legacy_remove_mirrors_uses_supplied_install_and_preserves_lock() {
-    let temp_dir = TestTempDir::new("maestro-install-test");
-    init_repo(temp_dir.path());
-    let paths = MaestroPaths::new(temp_dir.path().to_path_buf());
-    install_agent(&paths, InstallAgent::Codex).expect("invariant: mirrors should apply");
-    let install = InstallLock::load(&paths.install_lock_file())
-        .expect("invariant: install lock should load")
-        .agents["codex"]
-        .clone();
-    let mut sentinel_lock = InstallLock::empty();
-    sentinel_lock.set_agent(
-        InstallAgent::Claude,
-        AgentInstall::new("sentinel".to_string()),
-    );
-    sentinel_lock
-        .save(&paths.install_lock_file())
-        .expect("invariant: sentinel lock should save");
-    let lock_before = fs::read_to_string(paths.install_lock_file())
-        .expect("invariant: sentinel lock should be readable");
-    let still_owned_paths = BTreeSet::from(["AGENTS.md".to_string()]);
-
-    legacy_install::mirrors::remove_mirrors(
-        &paths,
-        InstallAgent::Codex,
-        &install,
-        &still_owned_paths,
-    )
-    .expect("invariant: legacy mirror remove should succeed");
-
-    let agents = fs::read_to_string(temp_dir.path().join("AGENTS.md"))
-        .expect("invariant: AGENTS.md should be readable");
-    assert!(agents.contains("<!-- maestro:start -->"));
-    let codex_config = fs::read_to_string(temp_dir.path().join(".codex/config.toml"))
-        .expect("invariant: Codex config should be readable");
-    assert!(!codex_config.contains("# >>> maestro >>>"));
-    assert_eq!(
-        fs::read_to_string(paths.install_lock_file())
-            .expect("invariant: install lock should remain readable"),
-        lock_before
-    );
 }
 
 #[test]

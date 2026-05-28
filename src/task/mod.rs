@@ -1,4 +1,11 @@
-//! Temporary compatibility alias for the Task domain facade.
+//! Public compatibility surface for the Task domain.
+//!
+//! Retained after the Phase 6 shim cleanup: this is the only public path
+//! integration tests have to the Task domain's internal leaf operations
+//! (`blockers`, `lifecycle`, `template`, `lookup`, `display`, `doctor`), which
+//! live behind `pub(crate)` modules in [`crate::domain::task`]. Every item here
+//! is a thin re-export or delegating wrapper that routes to that owning facade;
+//! it owns no Task implementation of its own.
 
 pub mod blockers {
     use anyhow::Result;

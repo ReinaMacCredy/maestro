@@ -59,11 +59,6 @@ pub fn stale_reasons(current: &FreshnessInputs, stored: &StoredFreshness) -> Vec
     reasons
 }
 
-/// Return true when the stored proof still matches current inputs.
-pub fn is_fresh(current: &FreshnessInputs, stored: &StoredFreshness) -> bool {
-    stale_reasons(current, stored).is_empty()
-}
-
 fn push_if_changed(
     reasons: &mut Vec<StaleReason>,
     field: &'static str,

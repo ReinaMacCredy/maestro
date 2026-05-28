@@ -285,18 +285,6 @@ pub(crate) fn verification_attempts_dir(task_dir: &Path) -> PathBuf {
     task_dir.join("verification.attempts")
 }
 
-/// Read `verification.json` when it exists.
-pub fn read_report(task_dir: &Path) -> Result<Option<VerificationReport>> {
-    let path = verification_path(task_dir);
-    read_managed_report_file_if_exists(&path)
-}
-
-/// Compute current proof freshness inputs for a loaded task.
-pub fn freshness_inputs(paths: &MaestroPaths, loaded: &LoadedTask) -> Result<FreshnessInputs> {
-    let commit = git::head(paths.repo_root()).unwrap_or(None);
-    freshness_inputs_for_task(&loaded.task, &loaded.task_dir, commit)
-}
-
 /// Compute current proof freshness inputs for a task artifact directory.
 pub fn freshness_inputs_for_task(
     task: &TaskRecord,

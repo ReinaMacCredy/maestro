@@ -54,18 +54,6 @@ pub(crate) fn verify_task(
     })
 }
 
-pub(crate) fn verify_task_report(
-    paths: &MaestroPaths,
-    task_id: &str,
-    actor: &str,
-) -> Result<proof::VerificationReport> {
-    let mut handle = task::load_task_for_update(&paths.tasks_dir(), task_id)?;
-    let verified_at = timestamp();
-    let attempt = verify_loaded_task(paths, &mut handle, actor, &verified_at)?;
-    attempt.application?;
-    Ok(attempt.report)
-}
-
 fn verify_loaded_task(
     paths: &MaestroPaths,
     handle: &mut task::TaskHandle,

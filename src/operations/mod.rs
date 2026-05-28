@@ -15,7 +15,7 @@ use std::fmt;
 
 use anyhow::Result;
 
-use crate::domain::{proof, task};
+use crate::domain::task;
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Result of applying a written Proof report back to Task.
@@ -58,12 +58,4 @@ pub(crate) fn verify_task(
     actor: &str,
 ) -> Result<task_verify::TaskVerifyResult> {
     task_verify::verify_task(paths, task_id, actor)
-}
-
-pub(crate) fn verify_task_report(
-    paths: &MaestroPaths,
-    task_id: &str,
-    actor: &str,
-) -> Result<proof::VerificationReport> {
-    task_verify::verify_task_report(paths, task_id, actor)
 }

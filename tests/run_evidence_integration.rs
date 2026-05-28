@@ -6,7 +6,6 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use maestro::domain::run;
-use maestro::evidence::run_evidence as legacy_run_evidence;
 use maestro::foundation::core::paths::MaestroPaths;
 use serde_yaml::Value;
 use support::TestTempDir;
@@ -150,7 +149,7 @@ fn evidence_generation_fails_for_missing_source_log_without_writing_empty_eviden
     fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
     let paths = MaestroPaths::new(repo.path());
 
-    let error = legacy_run_evidence::write_for_session(&paths, "session-missing-source")
+    let error = run::write_evidence_for_session(&paths, "session-missing-source")
         .expect_err("evidence generation should fail when events.jsonl is missing");
 
     assert!(format!("{error:#}").contains("events.jsonl"));
@@ -173,11 +172,11 @@ fn evidence_regeneration_is_idempotent_for_same_event_log() {
     let first = fs::read_to_string(&evidence_path).expect("invariant: evidence should be readable");
     let paths = MaestroPaths::new(repo.path());
 
-    legacy_run_evidence::write_for_session(&paths, "session-idempotent")
+    run::write_evidence_for_session(&paths, "session-idempotent")
         .expect("invariant: evidence regeneration should succeed");
     let second =
         fs::read_to_string(&evidence_path).expect("invariant: evidence should be readable");
-    legacy_run_evidence::write_for_session(&paths, "session-idempotent")
+    run::write_evidence_for_session(&paths, "session-idempotent")
         .expect("invariant: evidence regeneration should succeed");
     let third = fs::read_to_string(&evidence_path).expect("invariant: evidence should be readable");
 
@@ -206,7 +205,7 @@ fn evidence_can_be_regenerated_after_stop_when_late_event_is_recorded() {
     assert!(stale_stop_evidence["tools_used"]["Bash"].is_null());
 
     let paths = MaestroPaths::new(repo.path());
-    legacy_run_evidence::write_for_session(&paths, "session-late-event")
+    run::write_evidence_for_session(&paths, "session-late-event")
         .expect("invariant: evidence regeneration should succeed after late event");
 
     let evidence_path = repo
@@ -217,7 +216,7 @@ fn evidence_can_be_regenerated_after_stop_when_late_event_is_recorded() {
     let first_regeneration =
         fs::read(&evidence_path).expect("invariant: regenerated evidence should be readable");
 
-    legacy_run_evidence::write_for_session(&paths, "session-late-event")
+    run::write_evidence_for_session(&paths, "session-late-event")
         .expect("invariant: no-op evidence regeneration should succeed");
 
     let second_regeneration =
@@ -240,7 +239,7 @@ fn evidence_generation_ignores_partial_trailing_event_line() {
     .expect("invariant: partial event fixture should be writable");
     let paths = MaestroPaths::new(repo.path());
 
-    legacy_run_evidence::write_for_session(&paths, "session-partial-read")
+    run::write_evidence_for_session(&paths, "session-partial-read")
         .expect("invariant: evidence generation should tolerate partial trailing lines");
 
     let evidence = run_evidence(repo.path(), "session-partial-read");

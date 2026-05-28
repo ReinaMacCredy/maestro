@@ -8,11 +8,11 @@ use std::{env, fs};
 
 use anyhow::{bail, Result};
 use maestro::core::paths::MaestroPaths;
-use maestro::skills::bundled::bundled_skills;
-use maestro::update::{
+use maestro::operations::update::{
     run_update_with_seams, AtomicBinaryReplacer, BinaryReplacer, ChecksumVerifier,
     DownloadedBinary, ReleaseInfo, UpdateDownloader, UpdateOptions, UpdateRequest,
 };
+use maestro::skills::bundled::bundled_skills;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {

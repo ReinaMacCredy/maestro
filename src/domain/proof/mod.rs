@@ -17,18 +17,3 @@ pub(crate) use verify_task::{
     verification_outcome_for_report, VerificationReport,
 };
 pub use verify_task::{TaskVerification, TaskVerificationStatus};
-
-pub(crate) mod compatibility {
-    pub use super::events::managed_event_files;
-    pub(crate) use super::proof_status::{
-        legacy_proof_status, render_legacy_proof_status, LegacyProofStatus,
-    };
-    pub use super::stale::{
-        is_fresh, stale_reasons, FreshnessInputs, StaleReason, StoredFreshness,
-    };
-    pub use super::verify_task::{
-        freshness_inputs, freshness_inputs_for_task, load_task_by_id, read_report,
-        verification_path, ClaimCheck, LoadedTask, ProofSource, VerificationCommand,
-        VerificationReport, VerificationStatus,
-    };
-}

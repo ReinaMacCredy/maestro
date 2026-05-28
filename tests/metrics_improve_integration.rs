@@ -99,54 +99,6 @@ fn failed_verification_report_with_command(
     )
 }
 
-#[test]
-fn metrics_and_improver_operation_and_legacy_paths_resolve() {
-    let legacy_refresh: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-    ) -> anyhow::Result<maestro::domain::harness::BacklogConfig> =
-        maestro::improver::propose::refresh;
-    let legacy_detect: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-    ) -> anyhow::Result<Vec<maestro::domain::harness::BacklogItem>> =
-        maestro::improver::detect::detect;
-    let operation_refresh: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-    ) -> anyhow::Result<maestro::domain::harness::BacklogConfig> =
-        maestro::operations::improver::refresh;
-    let operation_detect: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-    ) -> anyhow::Result<Vec<maestro::domain::harness::BacklogItem>> =
-        maestro::operations::improver::detect;
-    let legacy_summarize: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-    ) -> anyhow::Result<maestro::metrics::summary::MetricsSummary> =
-        maestro::metrics::summary::summarize;
-    let operation_summarize: fn(
-        &maestro::foundation::core::paths::MaestroPaths,
-    )
-        -> anyhow::Result<maestro::operations::metrics::MetricsSummary> =
-        maestro::operations::metrics::summarize;
-    let legacy_render: fn(&maestro::operations::metrics::MetricsSummary) -> String =
-        maestro::metrics::summary::render_summary;
-    let operation_render: fn(&maestro::operations::metrics::MetricsSummary) -> String =
-        maestro::operations::metrics::render_summary;
-    let legacy_event_kind: fn(&JsonValue) -> String = maestro::metrics::friction::event_kind;
-    let operation_event_kind: fn(&JsonValue) -> String = maestro::operations::metrics::event_kind;
-
-    let _ = (
-        legacy_refresh,
-        legacy_detect,
-        operation_refresh,
-        operation_detect,
-        legacy_summarize,
-        operation_summarize,
-        legacy_render,
-        operation_render,
-        legacy_event_kind,
-        operation_event_kind,
-    );
-}
-
 fn mcp_frames(values: &[&str]) -> Vec<u8> {
     let mut bytes = Vec::new();
     for value in values {
