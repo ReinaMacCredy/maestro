@@ -896,6 +896,171 @@ fn metrics_operation_owns_implementation_and_legacy_shim_stays_thin() {
 }
 
 #[test]
+fn operations_do_not_depend_on_interfaces() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src/operations")) {
+        let source = read_source_file(&file);
+        let code = source_without_pub_mod_statements(&code_for_path_scan(&source));
+        if code.contains("crate::interfaces") {
+            violations.push(format!(
+                "{} references crate::interfaces directly",
+                file.display()
+            ));
+            continue;
+        }
+        if contains_bare_path_reference(&code, "interfaces") {
+            violations.push(format!(
+                "{} references Interfaces through a bare root path",
+                file.display()
+            ));
+            continue;
+        }
+        if contains_relative_path(&code, "interfaces") {
+            violations.push(format!(
+                "{} references Interfaces through a relative path",
+                file.display()
+            ));
+            continue;
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if import_statement.contains("crate::interfaces")
+                || contains_legacy_root_import(&import_statement, "interfaces")
+                || contains_legacy_deep_import(&import_statement, "interfaces")
+            {
+                violations.push(format!(
+                    "{}:{} imports Interfaces",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Operations must not depend on Interfaces:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn domain_does_not_depend_on_interfaces_or_operations() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src/domain")) {
+        let source = read_source_file(&file);
+        let code = source_without_pub_mod_statements(&code_for_path_scan(&source));
+        for upstream in ["interfaces", "operations"] {
+            if code.contains(&format!("crate::{upstream}")) {
+                violations.push(format!(
+                    "{} references crate::{upstream} directly",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_bare_path_reference(&code, upstream) {
+                violations.push(format!(
+                    "{} references {upstream} through a bare root path",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_relative_path(&code, upstream) {
+                violations.push(format!(
+                    "{} references {upstream} through a relative path",
+                    file.display()
+                ));
+            }
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            for upstream in ["interfaces", "operations"] {
+                if import_statement.contains(&format!("crate::{upstream}"))
+                    || contains_legacy_root_import(&import_statement, upstream)
+                    || contains_legacy_deep_import(&import_statement, upstream)
+                {
+                    violations.push(format!(
+                        "{}:{} imports {upstream}",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Domain must not depend on Interfaces or Operations:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn install_production_sources_use_domain_facade_not_legacy_shim() {
+    assert_production_sources_use_operation_instead_of_legacy_shim("install");
+
+    let domain_facade = read_source_file(Path::new("src/domain/install/mod.rs"));
+    for entrypoint in ["pub fn install_agent", "pub fn uninstall_agent"] {
+        assert!(
+            domain_facade.contains(entrypoint),
+            "src/domain/install/mod.rs should expose orchestration entrypoint {entrypoint}"
+        );
+    }
+}
+
+#[test]
+fn update_routes_schema_drift_through_migration_and_does_not_import_harness_writes() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src/operations/update")) {
+        let source = read_source_file(&file);
+        let code = code_for_path_scan(&source);
+        if code.contains("crate::domain::harness::templates") {
+            violations.push(format!(
+                "{} references the Harness template write surface crate::domain::harness::templates",
+                file.display()
+            ));
+        }
+        if contains_bare_path_reference(&code, "harness::templates") {
+            violations.push(format!(
+                "{} reaches the Harness template write surface through a bare harness::templates path",
+                file.display()
+            ));
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            if namespaced_deep_import_segment(&import_statement, "domain", "harness")
+                == Some("templates")
+            {
+                violations.push(format!(
+                    "{}:{} imports the Harness template write surface domain::harness::templates",
+                    file.display(),
+                    line_number
+                ));
+            }
+            if let Some(segment) =
+                namespaced_deep_import_segment(&import_statement, "operations", "migrate")
+            {
+                violations.push(format!(
+                    "{}:{} reaches into operations::migrate::{segment} instead of the migrate root facade",
+                    file.display(),
+                    line_number
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Update must consume Migration only through the operations::migrate root facade and must not import Harness template writes:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn proof_domain_does_not_apply_or_mutate_task_directly() {
     let mut violations = Vec::new();
     let allowed_task_symbols = BTreeSet::from([

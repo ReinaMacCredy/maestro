@@ -1452,6 +1452,14 @@ The adapter rule:
   or shell entrypoint starts coordinating multiple domain contracts, move that
   sequencing behind `operations/`.
 
+These boundaries are now test-backed by `tests/architecture_imports.rs`.
+`operations_do_not_depend_on_interfaces` and
+`domain_does_not_depend_on_interfaces_or_operations` enforce the dependency
+direction, `install_production_sources_use_domain_facade_not_legacy_shim` keeps
+Install as the only domain-owned orchestration exception, and
+`update_routes_schema_drift_through_migration_and_does_not_import_harness_writes`
+keeps Update off the Harness write surface.
+
 Allowed contract edges:
 
 | From | To | Allowed interaction | Must not do |
@@ -1469,7 +1477,7 @@ Allowed contract edges:
 | `operations/improver` | `domain/harness`, `domain/task`, `domain/run`, `domain/decisions`, `domain/proof`, `operations/metrics` | Read domain evidence and Proof-owned verification report commands to propose or refresh Harness Backlog items, and reuse the metrics correction heuristic (`looks_like_correction`) through the metrics root facade. | Apply Harness changes silently, mutate Task, Run, Decision, or Proof artifacts, parse Proof-owned report JSON directly, or import metrics internals below its root facade. |
 | `operations/metrics` | `domain/task`, `domain/run`, `domain/proof`, `domain/feature` | Read stable read models for projections. | Mutate source artifacts or scan private layouts when read models exist. |
 | `operations/migrate` | target domains | Use target writers where possible, or documented migration-only direct writes. | Become normal domain behavior after migration. |
-| `operations/update` | `operations/migrate`, `domain/install`, `domain/skills` | Call migration checks/plans and refresh explicitly owned install or skill artifacts. | Apply schema migrations or rewrite user-owned Harness files silently. |
+| `operations/update` | `operations/migrate`, `domain/install`, `domain/skills` | Route schema drift through `operations/migrate` checks/plans and refresh explicitly owned install or skill artifacts. Update is not a silent schema or Harness migration path. | Apply schema migrations, import the Harness template write surface, or rewrite user-owned Harness files silently. |
 
 Cycles between domain aggregates are not allowed through concrete models. If a
 relationship would create a cycle, use ids, small value objects, read models, or

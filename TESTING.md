@@ -91,7 +91,7 @@ has callers or user data safety impact.
 | Shell | `tests/shell_init_integration.rs` | Install tests if shell output starts depending on install state. |
 | TUI and Watch | Module-local tests in `src/interfaces/tui/task_list_watch.rs` plus command/read-model tests for the source data | Task, Feature, Proof, and Run tests when displayed fields or freshness logic change. |
 | CLI surface | `tests/cli_help.rs` and the command-specific integration test | The owning domain contract tests when CLI behavior encodes domain rules. |
-| Architecture/import boundaries | `tests/architecture_imports.rs` | Any moved module, compatibility alias removal, facade-protected import rule, source-layout refactor, or Task/Proof/Run contract-edge change. |
+| Architecture/import boundaries | `tests/architecture_imports.rs` | Any moved module, compatibility alias removal, facade-protected import rule, source-layout refactor, Task/Proof/Run contract-edge change, or Install/Migration/Update/Init/Improver/Metrics safety-boundary change. |
 | Template and resource content | Owning module tests for Harness, Skills, Shell, Decision, Task, or Install | At least one command integration test that writes or renders the resource. |
 | End-to-end demos | `tests/phase3_core_verbs_e2e.rs`, `tests/v1_demo.rs` | Use after broad architecture, schema, or workflow changes. |
 
@@ -138,6 +138,20 @@ If changing the Task, Proof, or Run boundary, update and run
 application behind `operations/task_verify`, keep Proof on Run read-model
 symbols instead of unmanaged path readers, and keep Run from importing Task
 while still allowing Run event/read models to expose opaque `task_id` strings.
+
+If changing the Install, Migration, Update, Init, Improver, or Metrics safety
+boundaries, run `tests/architecture_imports.rs`. The
+`operations_do_not_depend_on_interfaces` and
+`domain_does_not_depend_on_interfaces_or_operations` guards keep the dependency
+direction intact across Init, Improver, and Metrics; the
+`install_production_sources_use_domain_facade_not_legacy_shim` guard keeps
+Install as the only domain-owned orchestration exception; and the
+`update_routes_schema_drift_through_migration_and_does_not_import_harness_writes`
+guard keeps Update routing schema drift through the `operations/migrate` root
+facade instead of importing the Harness template write surface. These are
+import-boundary checks; Migration and Update behavioral coverage still lives in
+`tests/migrate_integration.rs` and `tests/update_integration.rs` per the rows
+above.
 
 If changing current Task verification surfaces such as
 `src/domain/proof/verify_task.rs`, the legacy `src/verification` shim, the task

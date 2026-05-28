@@ -224,6 +224,15 @@ state, or durable migration output:
 When changing any safety-sensitive surface, run the module tests plus at least
 one runtime-flow test that exercises the user-visible path.
 
+The Install, Migration, and Update boundaries above are also protected by
+`tests/architecture_imports.rs`. Per the dependency and adapter rules in
+`ARCHITECTURE.md`, Operations must not depend on Interfaces, Install is the only
+domain-owned orchestration exception
+(`install_production_sources_use_domain_facade_not_legacy_shim`), and Update must
+not silently apply Harness changes or act as a schema migration path
+(`update_routes_schema_drift_through_migration_and_does_not_import_harness_writes`).
+Run those guards alongside the behavioral tests when these surfaces change.
+
 ## Artifact Compatibility
 
 Durable artifacts need compatibility discipline:
