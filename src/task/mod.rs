@@ -136,52 +136,6 @@ pub mod template {
         VerificationBinding,
     };
 
-    /// Legacy binding-only proof state retained for `crate::task` compatibility.
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    pub enum ProofState {
-        Missing,
-        Failed,
-        Accepted,
-        Stale,
-    }
-
-    /// Temporary legacy extension trait for binding-only proof-state
-    /// classification without adding this method to the target domain type.
-    pub trait LegacyProofStateExt {
-        /// Compute the legacy binding-only proof state.
-        fn proof_state(
-            &self,
-            current_commit: Option<&str>,
-            current_acceptance_hash: Option<&str>,
-            current_checks_hash: Option<&str>,
-            latest_failed: bool,
-        ) -> ProofState;
-    }
-
-    impl LegacyProofStateExt for VerificationBinding {
-        fn proof_state(
-            &self,
-            current_commit: Option<&str>,
-            current_acceptance_hash: Option<&str>,
-            current_checks_hash: Option<&str>,
-            latest_failed: bool,
-        ) -> ProofState {
-            if latest_failed {
-                return ProofState::Failed;
-            }
-            let Some(verified_commit) = self.verified_commit.as_deref() else {
-                return ProofState::Missing;
-            };
-            if Some(verified_commit) != current_commit
-                || self.acceptance_hash.as_deref() != current_acceptance_hash
-                || self.checks_hash.as_deref() != current_checks_hash
-            {
-                return ProofState::Stale;
-            }
-            ProofState::Accepted
-        }
-    }
-
     pub fn write_task_artifacts(
         tasks_dir: &Path,
         task: &TaskRecord,

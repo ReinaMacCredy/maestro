@@ -1,10 +1,7 @@
 mod support;
 
 use maestro::domain::task::{task_markdown, AcceptanceFile, TaskRecord};
-use maestro::task::template::{
-    load_task, save_task_with_snapshot, write_task_artifacts, LegacyProofStateExt, ProofState,
-    VerificationBinding,
-};
+use maestro::task::template::{load_task, save_task_with_snapshot, write_task_artifacts};
 use support::TestTempDir;
 
 #[test]
@@ -84,32 +81,4 @@ fn optimistic_concurrency_rejects_existing_save_lock() {
 
     assert!(error.to_string().contains("task is locked"));
     std::fs::remove_file(lock_path).expect("invariant: lock file should be removable");
-}
-
-#[test]
-fn legacy_task_template_proof_state_compatibility_remains_available() {
-    let binding = VerificationBinding::default();
-    assert_eq!(
-        binding.proof_state(Some("abc"), Some("a"), Some("c"), false),
-        ProofState::Missing
-    );
-    assert_eq!(
-        binding.proof_state(Some("abc"), Some("a"), Some("c"), true),
-        ProofState::Failed
-    );
-
-    let binding = VerificationBinding {
-        verified_commit: Some("abc".to_string()),
-        acceptance_hash: Some("a".to_string()),
-        checks_hash: Some("c".to_string()),
-        ..VerificationBinding::default()
-    };
-    assert_eq!(
-        binding.proof_state(Some("abc"), Some("a"), Some("c"), false),
-        ProofState::Accepted
-    );
-    assert_eq!(
-        binding.proof_state(Some("def"), Some("a"), Some("c"), false),
-        ProofState::Stale
-    );
 }
