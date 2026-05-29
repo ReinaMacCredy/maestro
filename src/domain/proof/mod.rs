@@ -1,6 +1,7 @@
 //! Proof aggregate facade.
 
 mod attempts;
+mod claims;
 mod commands;
 mod events;
 mod proof_status;

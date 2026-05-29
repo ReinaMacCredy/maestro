@@ -445,6 +445,7 @@ fn proof_domain_facade_does_not_publish_leaf_modules() {
     );
     for leaf in [
         "attempts",
+        "claims",
         "commands",
         "events",
         "proof_status",
