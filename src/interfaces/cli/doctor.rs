@@ -1,10 +1,10 @@
 use anyhow::{bail, Context, Result};
 
+use crate::domain::feature;
 use crate::domain::task;
-use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::schema::{
-    classify, Compat, BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
+    classify, Compat, BACKLOG_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
 };
 use crate::harness::schema::{BacklogConfig, HarnessConfig};
 
@@ -91,22 +91,21 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
 }
 
 fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
-    let path = paths.features_dir().join("features.yaml");
-    match read_yaml::<FeatureRegistry>(&path) {
-        Ok(registry)
-            if classify(&registry.schema_version, FEATURE_SCHEMA_VERSION) == Compat::Exact =>
-        {
-            checks.push(DoctorCheck {
-                name: "features",
-                detail: format!("{} feature(s)", registry.features.len()),
-            });
-        }
-        Ok(registry) => errors.push(schema_diagnostic(
-            &path,
-            FEATURE_SCHEMA_VERSION,
-            &registry.schema_version,
+    let diagnostic = feature::diagnose(paths);
+    match (diagnostic.found, diagnostic.compatibility) {
+        (Ok((_, count)), Some(Compat::Exact)) => checks.push(DoctorCheck {
+            name: "features",
+            detail: format!("{count} feature(s)"),
+        }),
+        (Ok((found, _)), Some(Compat::NeedsMigration)) => errors.push(format!(
+            "features schema needs migration: expected {}, found {found}; run `maestro migrate`",
+            diagnostic.expected
         )),
-        Err(error) => errors.push(error.to_string()),
+        (Ok((found, _)), _) => errors.push(format!(
+            "features schema incompatible: expected {}, found {found}",
+            diagnostic.expected
+        )),
+        (Err(error), _) => errors.push(error),
     }
 }
 

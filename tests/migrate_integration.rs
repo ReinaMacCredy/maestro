@@ -298,6 +298,17 @@ fn assert_migrated_artifacts_match_target_contracts(repo: &Path) {
         .expect("invariant: migrated feature rollup should read Task projections");
     assert_eq!(counts.total, 1);
 
+    // The migrated registry must round-trip through the Feature facade reads.
+    let views = feature::list(&paths).expect("invariant: migrated features should load via list");
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].id, "feat-one");
+    assert_eq!(views[0].counts.total, 1);
+    let view = feature::show(&paths, "feat-one")
+        .expect("invariant: migrated feature should load via show");
+    assert_eq!(view.id, "feat-one");
+    let titles = feature::titles(&paths);
+    assert!(titles.contains_key("feat-one"));
+
     let decisions = decisions::query::decision_entries(&paths.decisions_dir())
         .expect("invariant: migrated decisions should list through Decision query");
     assert_eq!(decisions.len(), 1);

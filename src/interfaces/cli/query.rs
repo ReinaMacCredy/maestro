@@ -7,14 +7,12 @@ use anyhow::{bail, Context, Result};
 use serde_json::Value;
 
 use crate::decisions::query::{decision_entries, decision_id};
+use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::task;
-use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
-use crate::foundation::core::schema::{
-    classify, Compat, BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION,
-};
+use crate::foundation::core::schema::{classify, Compat, BACKLOG_SCHEMA_VERSION};
 use crate::harness::schema::BacklogConfig;
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::operations::metrics;
@@ -44,7 +42,7 @@ pub fn run(args: QueryArgs) -> Result<()> {
 }
 
 fn query_matrix(paths: &MaestroPaths) -> Result<()> {
-    let registry = load_feature_registry(paths)?;
+    let features = feature::list(paths)?;
     let current_commit = git::head(paths.repo_root()).unwrap_or(None);
     let entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut task_rows = entries
@@ -69,12 +67,11 @@ fn query_matrix(paths: &MaestroPaths) -> Result<()> {
         );
     }
 
-    for feature in registry
-        .features
+    for view in features
         .iter()
-        .filter(|feature| !features_with_tasks.contains(&feature.id))
+        .filter(|view| !features_with_tasks.contains(&view.id))
     {
-        println!("{}\t<none>\t<none>\t<none>\t{}", feature.id, feature.title);
+        println!("{}\t<none>\t<none>\t<none>\t{}", view.id, view.title);
     }
     Ok(())
 }
@@ -185,26 +182,6 @@ fn matrix_row(
         proof: proof_label(paths, task, task_dir, current_commit)?,
         title: task.title.clone(),
     })
-}
-
-fn load_feature_registry(paths: &MaestroPaths) -> Result<FeatureRegistry> {
-    let path = paths.features_dir().join("features.yaml");
-    if !path.is_file() {
-        return Ok(FeatureRegistry::empty());
-    }
-    let raw =
-        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    let registry: FeatureRegistry = serde_yaml::from_str(&raw)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    if classify(&registry.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
-        bail!(
-            "schema mismatch for {}: expected {}, found {}",
-            path.display(),
-            FEATURE_SCHEMA_VERSION,
-            registry.schema_version
-        );
-    }
-    Ok(registry)
 }
 
 fn load_backlog(path: &Path) -> Result<BacklogConfig> {

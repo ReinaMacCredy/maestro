@@ -1,17 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 
+use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::task;
-use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::schema::{classify, Compat, FEATURE_SCHEMA_VERSION};
 
 /// Run the polling task status screen.
 pub fn run<F>(paths: &MaestroPaths, interval_seconds: u64, load_tasks: F) -> Result<()>
@@ -37,7 +35,7 @@ where
 
 /// Render one sandcastle-style task status snapshot.
 pub fn render_snapshot(paths: &MaestroPaths, tasks: &[task::TaskRecord]) -> Result<String> {
-    let features = load_feature_titles(paths)?;
+    let features = feature::titles(paths);
     let current_commit = git::head(paths.repo_root()).unwrap_or(None);
     let active_agents = active_agents(tasks);
     let mut groups = BTreeMap::<String, Vec<&task::TaskRecord>>::new();
@@ -73,25 +71,6 @@ pub fn render_snapshot(paths: &MaestroPaths, tasks: &[task::TaskRecord]) -> Resu
         out.push('\n');
     }
     Ok(out)
-}
-
-fn load_feature_titles(paths: &MaestroPaths) -> Result<BTreeMap<String, String>> {
-    let path = paths.features_dir().join("features.yaml");
-    if !path.is_file() {
-        return Ok(BTreeMap::new());
-    }
-    let raw =
-        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    let registry: FeatureRegistry = serde_yaml::from_str(&raw)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    if classify(&registry.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
-        return Ok(BTreeMap::new());
-    }
-    Ok(registry
-        .features
-        .into_iter()
-        .map(|feature| (feature.id, feature.title))
-        .collect())
 }
 
 fn active_agents(tasks: &[task::TaskRecord]) -> BTreeSet<String> {

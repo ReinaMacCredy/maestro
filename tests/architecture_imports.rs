@@ -29,14 +29,10 @@ const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
 const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
 const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/decision.rs", &["decisions"]),
-    ("src/interfaces/cli/doctor.rs", &["feature", "harness"]),
-    ("src/interfaces/cli/feature.rs", &["feature"]),
+    ("src/interfaces/cli/doctor.rs", &["harness"]),
     ("src/interfaces/cli/improve.rs", &["harness"]),
     ("src/interfaces/cli/init.rs", &[]),
-    (
-        "src/interfaces/cli/query.rs",
-        &["decisions", "feature", "harness"],
-    ),
+    ("src/interfaces/cli/query.rs", &["decisions", "harness"]),
     ("src/interfaces/cli/task.rs", &[]),
     ("src/interfaces/cli/update.rs", &[]),
     ("src/interfaces/cli/watch.rs", &[]),
@@ -46,8 +42,7 @@ const MCP_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 
 const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 
-const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] =
-    &[("src/interfaces/tui/task_list_watch.rs", &["feature"])];
+const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 
 const DOMAIN_FACADES: &[&str] = &[
     "decisions",
@@ -307,6 +302,67 @@ fn task_domain_facade_does_not_publish_leaf_modules() {
     assert!(
         !legacy_shim.contains("pub fn append_history"),
         "legacy crate::task shim should not grow lifecycle helpers outside the old leaf surface"
+    );
+}
+
+#[test]
+fn interfaces_obtain_features_through_domain_facade() {
+    let mut violations = Vec::new();
+
+    for root in INTERFACE_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            let source = source_without_test_modules(&read_source_file(&file));
+            let code = code_for_path_scan(&source);
+
+            for symbol in ["FeatureRegistry", "FeatureRecord"] {
+                if code.contains(symbol) {
+                    violations.push(format!(
+                        "{} constructs feature registry internal {symbol}; obtain features via crate::domain::feature",
+                        file.display()
+                    ));
+                }
+            }
+
+            // `code_for_path_scan` blanks string literals, so scan the
+            // comment-free source for the registry path literal directly.
+            if source.contains("\"features.yaml\"") {
+                violations.push(format!(
+                    "{} reads the features.yaml registry directly; route through crate::domain::feature",
+                    file.display()
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "interface code must obtain features through the domain::feature facade, not by reading or constructing the registry:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn feature_domain_facade_exposes_the_deliberate_surface() {
+    let feature_facade = read_source_file(Path::new("src/domain/feature/mod.rs"));
+    assert_eq!(
+        public_reexport_item_names(&feature_facade),
+        BTreeSet::from([
+            "FeatureDiagnostic".to_string(),
+            "FeatureStatus".to_string(),
+            "FeatureView".to_string(),
+            "create".to_string(),
+            "diagnose".to_string(),
+            "list".to_string(),
+            "set_status".to_string(),
+            "show".to_string(),
+            "status_label".to_string(),
+            "titles".to_string(),
+        ]),
+        "src/domain/feature/mod.rs should expose only the deliberate feature facade surface"
+    );
+    assert!(
+        feature_facade.contains("pub(crate) mod registry;"),
+        "src/domain/feature/mod.rs should keep the registry operation surface private to the crate"
     );
 }
 
