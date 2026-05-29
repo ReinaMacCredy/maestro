@@ -136,9 +136,8 @@ impl UpdateDownloader for GitHubCurlDownloader {
             )
             .into());
         }
-        if let Some(digest) = asset.sha256_digest() {
-            Sha256Verifier::new(digest).verify(&candidate)?;
-        }
+        let digest = require_sha256_digest(asset)?;
+        Sha256Verifier::new(digest).verify(&candidate)?;
 
         Ok(DownloadedBinary::Available {
             path: candidate,
@@ -170,6 +169,21 @@ impl GithubAsset {
     fn sha256_digest(&self) -> Option<&str> {
         self.digest.as_deref()?.strip_prefix("sha256:")
     }
+}
+
+/// Require a verifiable sha256 digest for a release asset.
+///
+/// GitHub populates a `sha256:` digest on release assets; the updater verifies
+/// the download against it. When the digest is absent or uses another
+/// algorithm there is nothing to check, so fail closed rather than install an
+/// unverified binary.
+fn require_sha256_digest(asset: &GithubAsset) -> Result<&str> {
+    asset.sha256_digest().with_context(|| {
+        format!(
+            "release asset `{}` has no sha256 checksum; refusing to install an unverified binary",
+            asset.name
+        )
+    })
 }
 
 fn release_repo() -> String {
@@ -322,6 +336,40 @@ mod tests {
         assert_eq!(
             select_platform_asset(&assets).map(|asset| asset.name.as_str()),
             Some(platform_asset.as_str())
+        );
+    }
+
+    #[test]
+    fn require_sha256_digest_returns_the_hex_for_a_sha256_asset() {
+        let mut asset = asset("maestro-linux-amd64");
+        asset.digest = Some("sha256:abc123".to_string());
+        assert_eq!(
+            super::require_sha256_digest(&asset)
+                .expect("invariant: a sha256 digest should resolve"),
+            "abc123"
+        );
+    }
+
+    #[test]
+    fn require_sha256_digest_fails_closed_without_a_digest() {
+        let asset = asset("maestro-linux-amd64");
+        let error =
+            super::require_sha256_digest(&asset).expect_err("a missing digest must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("refusing to install an unverified binary"),
+            "error should explain the fail-closed refusal: {error}"
+        );
+    }
+
+    #[test]
+    fn require_sha256_digest_fails_closed_for_non_sha256_digest() {
+        let mut asset = asset("maestro-linux-amd64");
+        asset.digest = Some("sha512:deadbeef".to_string());
+        assert!(
+            super::require_sha256_digest(&asset).is_err(),
+            "a non-sha256 digest must fail closed rather than skip verification"
         );
     }
 
