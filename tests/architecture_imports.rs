@@ -10,7 +10,6 @@ const TARGET_MODULE_ROOTS: &[&str] = &[
 ];
 
 const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
-    "commands",
     "core",
     "decisions",
     "feature",
@@ -154,7 +153,6 @@ fn selected_compatibility_smoke_paths_resolve() {
         )
     };
 
-    let _ = std::any::type_name::<maestro::commands::Cli>();
     let _ = std::any::type_name::<maestro::interfaces::cli::Cli>();
     let _ = std::any::type_name::<maestro::task::template::TaskRecord>();
     let _legacy_load_task = |path: &Path| maestro::task::template::load_task(path);
@@ -1403,10 +1401,6 @@ fn lib_exposes_crate_root(lib: &str, root: &str) -> bool {
 
 fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
     match root {
-        "commands" => {
-            line == "pub use interfaces::cli as commands;"
-                || line == "pub use crate::interfaces::cli as commands;"
-        }
         "core" => line == "pub use foundation::core;" || line == "pub use crate::foundation::core;",
         "shell" => {
             line == "pub use interfaces::shell;" || line == "pub use crate::interfaces::shell;"
