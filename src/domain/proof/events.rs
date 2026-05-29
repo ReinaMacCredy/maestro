@@ -21,14 +21,13 @@ pub fn managed_event_files(paths: &MaestroPaths) -> Result<Vec<PathBuf>> {
 /// Record a task proof event into the managed run log.
 ///
 /// Gathers the task's recorded claims, merges any explicit claims, and writes a
-/// schema-stamped, session-attributed event through the hardened run append
-/// seam. `kind` names the alias written to the `event` field; `run` is both the
-/// logical session id stamped on the event and the run directory it lands in.
+/// schema-stamped, session-attributed `task_proof` event through the hardened
+/// run append seam. `run` is both the logical session id stamped on the event
+/// and the run directory it lands in.
 pub fn record_claim(
     paths: &MaestroPaths,
     run: &str,
     task_id: &str,
-    kind: &str,
     message: Option<String>,
     payload: Option<String>,
     explicit_claims: Vec<String>,
@@ -38,7 +37,7 @@ pub fn record_claim(
     let claims = dedupe_claims(claims);
 
     let mut event = json!({
-        "event": kind,
+        "event": "task_proof",
         "schema_version": EVENT_SCHEMA_VERSION,
         "session_id": run,
         "task_id": task_id,

@@ -216,8 +216,6 @@ pub enum EventCommand {
         payload: Option<String>,
         #[arg(long)]
         claim: Vec<String>,
-        #[arg(long, alias = "kind", default_value = "task_proof")]
-        event: String,
         #[arg(long, default_value = "manual")]
         run: String,
     },

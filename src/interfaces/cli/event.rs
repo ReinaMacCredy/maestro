@@ -13,9 +13,8 @@ pub fn run(args: EventArgs) -> Result<()> {
             message,
             payload,
             claim,
-            event,
             run,
-        } => create_event(task_id, message, payload, claim, &event, &run),
+        } => create_event(task_id, message, payload, claim, &run),
     }
 }
 
@@ -24,7 +23,6 @@ fn create_event(
     message: Option<String>,
     payload: Option<String>,
     explicit_claims: Vec<String>,
-    event: &str,
     run: &str,
 ) -> Result<()> {
     let repo_root = discover_repo_root()?;
@@ -34,15 +32,7 @@ fn create_event(
         task_id,
         "--task-id is required or set MAESTRO_CURRENT_TASK",
     )?;
-    proof::record_claim(
-        &paths,
-        run,
-        &task_id,
-        event,
-        message,
-        payload,
-        explicit_claims,
-    )?;
-    println!("created {event} event for run {run}");
+    proof::record_claim(&paths, run, &task_id, message, payload, explicit_claims)?;
+    println!("created task_proof event for run {run}");
     Ok(())
 }

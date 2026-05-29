@@ -95,14 +95,7 @@ fn nested_help_lists_section_38_command_tree() {
     assert_contains_all(&maestro(&["event", "--help"]), &["create"]);
     assert_contains_all(
         &maestro(&["event", "create", "--help"]),
-        &[
-            "--task-id",
-            "--message",
-            "--payload",
-            "--claim",
-            "--event",
-            "--run",
-        ],
+        &["--task-id", "--message", "--payload", "--claim", "--run"],
     );
     assert_contains_all(
         &maestro(&["feature", "--help"]),
