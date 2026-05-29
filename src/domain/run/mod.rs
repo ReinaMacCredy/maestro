@@ -7,6 +7,7 @@ mod evidence;
 mod reader;
 mod record;
 
+pub(crate) use append::append_manual_event;
 pub use discovery::{managed_event_logs, RunEventLog};
 pub use event::{hook_event_contract, HookEventContract};
 pub(crate) use event::{

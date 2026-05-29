@@ -1,12 +1,10 @@
 use std::collections::BTreeSet;
-use std::fs::OpenOptions;
-use std::io::Write;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde_json::{json, Value};
 
+use crate::domain::run;
 use crate::domain::task;
-use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
@@ -41,9 +39,6 @@ fn create_event(
         task_id,
         "--task-id is required or set MAESTRO_CURRENT_TASK",
     )?;
-    let run_dir = paths.runs_dir().join(run);
-    ensure_dir(&run_dir)?;
-    let path = run_dir.join("events.jsonl");
     let mut claims = task_claims(&paths, &task_id);
     claims.extend(explicit_claims);
     let claims = dedupe_claims(claims);
@@ -61,14 +56,8 @@ fn create_event(
     if !claims.is_empty() {
         event_value["claims"] = Value::Array(claims.into_iter().map(Value::String).collect());
     }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .with_context(|| format!("failed to open {}", path.display()))?;
-    writeln!(file, "{event_value}")
-        .with_context(|| format!("failed to write {}", path.display()))?;
-    println!("created event {}", path.display());
+    run::append_manual_event(&paths, run, &event_value)?;
+    println!("created {event} event for run {run}");
     Ok(())
 }
 

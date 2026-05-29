@@ -20,7 +20,28 @@ pub(crate) fn append_normalized_event(paths: &MaestroPaths, event: &Value) -> Re
         .and_then(Value::as_str)
         .map(run_dir_name)
         .unwrap_or_else(|| UNATTRIBUTED_SESSION.to_string());
-    let relative_path = format!(".maestro/runs/{session_id}/events.jsonl");
+    append_event_to_session_dir(paths, &session_id, event)
+}
+
+/// Append a manually created event (`maestro event create`) into the managed
+/// Run event log for `session_id`, applying the same symlink-hardened,
+/// newline-repairing append the hook recorder uses. `session_id` is percent-
+/// encoded into a single safe directory component, so a caller-supplied run id
+/// can never escape `.maestro/runs/`.
+pub(crate) fn append_manual_event(
+    paths: &MaestroPaths,
+    session_id: &str,
+    event: &Value,
+) -> Result<()> {
+    append_event_to_session_dir(paths, &run_dir_name(session_id), event)
+}
+
+fn append_event_to_session_dir(
+    paths: &MaestroPaths,
+    session_dir: &str,
+    event: &Value,
+) -> Result<()> {
+    let relative_path = format!(".maestro/runs/{session_dir}/events.jsonl");
     let path = managed_path(paths, &relative_path, SymlinkPolicy::RejectAllComponents)?;
     let mut file = open_event_file(paths, &relative_path, &path)
         .with_context(|| format!("failed to open {}", path.display()))?;
@@ -443,4 +464,103 @@ fn ensure_open_file_matches_path(path: &Path, file: &File) -> io::Result<()> {
 #[cfg(not(unix))]
 fn ensure_open_file_matches_path(_path: &Path, _file: &File) -> io::Result<()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn append_manual_event_keeps_a_traversal_session_id_inside_runs_dir() {
+        let temp_dir = TestTempDir::new("maestro-run-append-manual-traversal");
+        let paths = MaestroPaths::new(temp_dir.path());
+
+        append_manual_event(&paths, "../../escape", &json!({"event": "note"}))
+            .expect("a traversal-shaped run id should still write safely");
+
+        // The encoded run id must not escape .maestro/runs/.
+        assert!(
+            !temp_dir.path().join("escape").exists(),
+            "`../../escape` must not write a sibling of .maestro/"
+        );
+        assert!(
+            !temp_dir
+                .path()
+                .parent()
+                .map(|parent| parent.join("escape").exists())
+                .unwrap_or(false),
+            "`../../escape` must not climb above the repo root"
+        );
+        let children: Vec<PathBuf> = fs::read_dir(paths.runs_dir())
+            .expect("runs dir should exist after a manual event")
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .collect();
+        assert_eq!(
+            children.len(),
+            1,
+            "exactly one encoded run directory should exist, got {children:?}"
+        );
+        assert!(
+            children[0]
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name != ".." && !name.contains('/'))
+                .unwrap_or(false),
+            "the run directory must be a single safe component, got {children:?}"
+        );
+    }
+
+    #[test]
+    fn append_manual_event_appends_newline_separated_lines() {
+        let temp_dir = TestTempDir::new("maestro-run-append-manual-lines");
+        let paths = MaestroPaths::new(temp_dir.path());
+
+        append_manual_event(&paths, "sess-1", &json!({"event": "first"}))
+            .expect("first manual event should write");
+        append_manual_event(&paths, "sess-1", &json!({"event": "second"}))
+            .expect("second manual event should append");
+
+        let log = paths.runs_dir().join("sess-1").join("events.jsonl");
+        let contents = fs::read_to_string(&log).expect("event log should be readable");
+        let lines: Vec<&str> = contents.lines().filter(|line| !line.is_empty()).collect();
+        assert_eq!(
+            lines.len(),
+            2,
+            "two appends should yield two JSONL lines: {contents:?}"
+        );
+        assert!(lines[0].contains("\"first\""));
+        assert!(lines[1].contains("\"second\""));
+    }
+
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("invariant: system clock should be after the Unix epoch")
+                .as_nanos();
+            let path =
+                std::env::temp_dir().join(format!("{prefix}-{}-{nanos}", std::process::id()));
+            fs::create_dir_all(&path).expect("invariant: temp dir should be creatable");
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 }
