@@ -4,7 +4,7 @@ use crate::domain::task;
 use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::schema::{
-    BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
+    classify, Compat, BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
 };
 use crate::harness::schema::{BacklogConfig, HarnessConfig};
 
@@ -75,15 +75,16 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
 fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     let path = paths.harness_dir().join("harness.yml");
     match read_yaml::<HarnessConfig>(&path) {
-        Ok(config) if config.schema_version == HARNESS_SCHEMA_VERSION => checks.push(DoctorCheck {
-            name: "harness",
-            detail: path.display().to_string(),
-        }),
-        Ok(config) => errors.push(format!(
-            "{} schema mismatch: expected {}, found {}",
-            path.display(),
+        Ok(config) if classify(&config.schema_version, HARNESS_SCHEMA_VERSION) == Compat::Exact => {
+            checks.push(DoctorCheck {
+                name: "harness",
+                detail: path.display().to_string(),
+            })
+        }
+        Ok(config) => errors.push(schema_diagnostic(
+            &path,
             HARNESS_SCHEMA_VERSION,
-            config.schema_version
+            &config.schema_version,
         )),
         Err(error) => errors.push(error.to_string()),
     }
@@ -92,17 +93,18 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
 fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     let path = paths.features_dir().join("features.yaml");
     match read_yaml::<FeatureRegistry>(&path) {
-        Ok(registry) if registry.schema_version == FEATURE_SCHEMA_VERSION => {
+        Ok(registry)
+            if classify(&registry.schema_version, FEATURE_SCHEMA_VERSION) == Compat::Exact =>
+        {
             checks.push(DoctorCheck {
                 name: "features",
                 detail: format!("{} feature(s)", registry.features.len()),
             });
         }
-        Ok(registry) => errors.push(format!(
-            "{} schema mismatch: expected {}, found {}",
-            path.display(),
+        Ok(registry) => errors.push(schema_diagnostic(
+            &path,
             FEATURE_SCHEMA_VERSION,
-            registry.schema_version
+            &registry.schema_version,
         )),
         Err(error) => errors.push(error.to_string()),
     }
@@ -111,19 +113,37 @@ fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &
 fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     let path = paths.harness_dir().join("backlog.yaml");
     match read_yaml::<BacklogConfig>(&path) {
-        Ok(backlog) if backlog.schema_version == BACKLOG_SCHEMA_VERSION => {
+        Ok(backlog)
+            if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) == Compat::Exact =>
+        {
             checks.push(DoctorCheck {
                 name: "backlog",
                 detail: format!("{} item(s)", backlog.items.len()),
             });
         }
-        Ok(backlog) => errors.push(format!(
-            "{} schema mismatch: expected {}, found {}",
-            path.display(),
+        Ok(backlog) => errors.push(schema_diagnostic(
+            &path,
             BACKLOG_SCHEMA_VERSION,
-            backlog.schema_version
+            &backlog.schema_version,
         )),
         Err(error) => errors.push(error.to_string()),
+    }
+}
+
+/// Build a doctor diagnostic for a schema gap, routing the message by
+/// classification: a migratable gap points at `maestro migrate`; anything
+/// unknown is reported as incompatible (stop).
+fn schema_diagnostic(path: &std::path::Path, expected: &str, found: &str) -> String {
+    match classify(found, expected) {
+        Compat::Exact => format!("{} schema ok ({expected})", path.display()),
+        Compat::NeedsMigration => format!(
+            "{} schema needs migration: expected {expected}, found {found}; run `maestro migrate`",
+            path.display()
+        ),
+        Compat::Incompatible => format!(
+            "{} schema incompatible: expected {expected}, found {found}",
+            path.display()
+        ),
     }
 }
 

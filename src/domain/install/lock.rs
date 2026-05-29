@@ -11,7 +11,7 @@ use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::INSTALL_LOCK_SCHEMA_VERSION;
+use crate::foundation::core::schema::{classify, Compat, INSTALL_LOCK_SCHEMA_VERSION};
 
 /// `.maestro/install-lock.yaml`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -99,7 +99,7 @@ impl InstallLock {
 
         let lock: Self = serde_yaml::from_str(&contents)
             .with_context(|| format!("failed to parse install lock {}", path.display()))?;
-        if lock.schema_version != INSTALL_LOCK_SCHEMA_VERSION {
+        if classify(&lock.schema_version, INSTALL_LOCK_SCHEMA_VERSION) != Compat::Exact {
             return Err(MaestroError::SchemaMismatch {
                 artifact: path.display().to_string(),
                 expected: INSTALL_LOCK_SCHEMA_VERSION,

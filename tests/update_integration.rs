@@ -9,8 +9,9 @@ use std::{env, fs};
 use anyhow::{bail, Result};
 use maestro::core::paths::MaestroPaths;
 use maestro::operations::update::{
-    run_update_with_seams, AtomicBinaryReplacer, BinaryReplacer, ChecksumVerifier,
-    DownloadedBinary, ReleaseInfo, UpdateDownloader, UpdateOptions, UpdateRequest,
+    detect_schema_mismatches, run_update_with_seams, AtomicBinaryReplacer, BinaryReplacer,
+    ChecksumVerifier, DownloadedBinary, ReleaseInfo, UpdateDownloader, UpdateOptions,
+    UpdateRequest,
 };
 use maestro::skills::bundled::bundled_skills;
 use support::TestTempDir;
@@ -409,6 +410,44 @@ fn schema_mismatch_reports_migrate_and_does_not_mutate_harness_files() {
     assert!(stdout.contains("schema mismatch detected"));
     assert!(stdout.contains("maestro migrate"));
     assert_files_unchanged(&before);
+}
+
+#[test]
+fn detect_schema_mismatches_reports_advisory_mismatches_without_erroring() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+
+    // A migratable older generation (NeedsMigration) ...
+    fs::write(
+        paths.harness_dir().join("harness.yml"),
+        "schema_version: maestro.harness.v0\nverify: []\n",
+    )
+    .expect("invariant: harness schema should be writable");
+    // ... and an unknown version (Incompatible) must both surface as advisory
+    // mismatches; the detector classifies but never aborts.
+    fs::write(
+        paths.features_dir().join("features.yaml"),
+        "schema_version: totally-bogus\nfeatures: []\n",
+    )
+    .expect("invariant: features schema should be writable");
+
+    let mismatches = detect_schema_mismatches(&paths)
+        .expect("invariant: schema-mismatch detection stays advisory and never errors");
+
+    assert!(
+        mismatches
+            .iter()
+            .any(|mismatch| mismatch.found == "maestro.harness.v0"),
+        "NeedsMigration gap should be reported as an advisory mismatch: {mismatches:?}"
+    );
+    assert!(
+        mismatches
+            .iter()
+            .any(|mismatch| mismatch.found == "totally-bogus"),
+        "Incompatible gap should be reported as an advisory mismatch: {mismatches:?}"
+    );
 }
 
 #[test]

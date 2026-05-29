@@ -7,6 +7,7 @@ use maestro::domain::install::{
     install_agent, mirror_plan, uninstall_agent, AgentInstall, FileOwnership, InstallAgent,
     InstallLock, InstallState, MirrorKind,
 };
+use maestro::foundation::core::error::MaestroError;
 use support::TestTempDir;
 
 const HOOK_EVENTS: [&str; 6] = [
@@ -247,6 +248,39 @@ fn install_lock_rejects_schema_mismatch() {
     let error = InstallLock::load(&lock_path).expect_err("schema mismatch should fail");
 
     assert!(error.to_string().contains("schema mismatch"));
+    assert!(
+        matches!(
+            error.downcast_ref::<MaestroError>(),
+            Some(MaestroError::SchemaMismatch { .. })
+        ),
+        "install-lock gate must stay a hard MaestroError::SchemaMismatch, got: {error}"
+    );
+}
+
+#[test]
+fn install_lock_rejects_unknown_schema_version() {
+    // The install-lock gate is a non-migratable write path: an unknown /
+    // unparseable version classifies as Incompatible and must stop hard.
+    let temp_dir = TestTempDir::new("maestro-install-test");
+    let lock_path = temp_dir.path().join(".maestro/install-lock.yaml");
+    fs::create_dir_all(
+        lock_path
+            .parent()
+            .expect("invariant: lock path should have parent"),
+    )
+    .expect("invariant: lock parent should be writable");
+    fs::write(&lock_path, "schema_version: totally-bogus\nagents: {}\n")
+        .expect("invariant: lock should be writable");
+
+    let error = InstallLock::load(&lock_path).expect_err("unknown schema version should fail");
+
+    assert!(
+        matches!(
+            error.downcast_ref::<MaestroError>(),
+            Some(MaestroError::SchemaMismatch { .. })
+        ),
+        "unknown install-lock version must stop hard, got: {error}"
+    );
 }
 
 #[test]

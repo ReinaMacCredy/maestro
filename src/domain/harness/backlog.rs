@@ -8,7 +8,7 @@ use crate::domain::harness::schema::{BacklogConfig, BacklogItem};
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::BACKLOG_SCHEMA_VERSION;
+use crate::foundation::core::schema::{classify, Compat, BACKLOG_SCHEMA_VERSION};
 
 /// Load the Harness backlog, returning an empty V1 backlog when it does not exist.
 pub fn load(paths: &MaestroPaths) -> Result<BacklogConfig> {
@@ -205,7 +205,7 @@ fn backlog_path(paths: &MaestroPaths) -> Result<std::path::PathBuf> {
 }
 
 fn validate_schema(path: &std::path::Path, backlog: &BacklogConfig) -> Result<()> {
-    if backlog.schema_version != BACKLOG_SCHEMA_VERSION {
+    if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) != Compat::Exact {
         bail!(
             "schema mismatch for {}: expected {}, found {}",
             path.display(),

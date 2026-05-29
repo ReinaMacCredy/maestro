@@ -7,7 +7,7 @@ use crate::feature::schema::{FeatureRecord, FeatureRegistry, FeatureStatus};
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
+use crate::foundation::core::schema::{classify, Compat, FEATURE_SCHEMA_VERSION};
 use crate::foundation::core::slug::slugify_ascii;
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand};
 
@@ -123,7 +123,7 @@ fn load_registry(paths: &MaestroPaths) -> Result<FeatureRegistry> {
 
     let registry: FeatureRegistry = serde_yaml::from_str(&contents)
         .with_context(|| format!("failed to parse {}", path.display()))?;
-    if registry.schema_version != FEATURE_SCHEMA_VERSION {
+    if classify(&registry.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
         bail!(
             "schema mismatch for {}: expected {}, found {}",
             path.display(),

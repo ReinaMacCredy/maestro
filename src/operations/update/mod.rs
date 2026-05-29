@@ -17,7 +17,7 @@ use crate::foundation::core::fs::ensure_parent_dir;
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
-    BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
+    classify, Compat, BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
     INSTALL_LOCK_SCHEMA_VERSION,
 };
 use crate::foundation::core::time::parse_utc_timestamp;
@@ -676,7 +676,7 @@ pub fn detect_schema_mismatches(paths: &MaestroPaths) -> Result<Vec<SchemaMismat
         }
 
         let found = read_schema_version(&path)?;
-        if found != expected {
+        if classify(&found, expected) != Compat::Exact {
             mismatches.push(SchemaMismatch {
                 path,
                 expected,

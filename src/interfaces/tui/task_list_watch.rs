@@ -11,7 +11,7 @@ use crate::domain::task;
 use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
+use crate::foundation::core::schema::{classify, Compat, FEATURE_SCHEMA_VERSION};
 
 /// Run the polling task status screen.
 pub fn run<F>(paths: &MaestroPaths, interval_seconds: u64, load_tasks: F) -> Result<()>
@@ -84,7 +84,7 @@ fn load_feature_titles(paths: &MaestroPaths) -> Result<BTreeMap<String, String>>
         fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
     let registry: FeatureRegistry = serde_yaml::from_str(&raw)
         .with_context(|| format!("failed to parse {}", path.display()))?;
-    if registry.schema_version != FEATURE_SCHEMA_VERSION {
+    if classify(&registry.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
         return Ok(BTreeMap::new());
     }
     Ok(registry

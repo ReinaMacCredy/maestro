@@ -24,7 +24,10 @@ use crate::foundation::core::git;
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{EVENT_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION};
+use crate::foundation::core::schema::{
+    classify, Compat, EVENT_SCHEMA_VERSION, VERIFICATION_RESTORE_SCHEMA_VERSION,
+    VERIFICATION_SCHEMA_VERSION,
+};
 use crate::foundation::core::time::parse_utc_timestamp;
 
 static ATTEMPT_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -32,7 +35,6 @@ const EVENT_PROOF_SOURCE_KIND: &str = "event";
 const LATEST_ATTEMPT_REPORT_FILE: &str = "latest.json";
 const MAX_STORED_ATTEMPT_REPORTS: usize = 20;
 const CANONICAL_REPORT_RESTORE_FILE: &str = "verification.json.restore";
-const CANONICAL_REPORT_RESTORE_SCHEMA: &str = "maestro.verification.restore.v1";
 
 /// High-level result returned by the Proof facade after task verification.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -549,7 +551,7 @@ pub(super) fn read_managed_report_file_for_command_read(
 fn parse_report_file(path: &Path, raw: &str) -> Result<Option<VerificationReport>> {
     let report: VerificationReport =
         serde_json::from_str(raw).with_context(|| format!("failed to parse {}", path.display()))?;
-    if report.schema_version != VERIFICATION_SCHEMA_VERSION {
+    if classify(&report.schema_version, VERIFICATION_SCHEMA_VERSION) != Compat::Exact {
         bail!(
             "schema mismatch for {}: expected {}, found {}",
             path.display(),
@@ -572,7 +574,7 @@ fn parse_report_file_for_command_read(
     let Ok(report) = serde_json::from_value::<VerificationReport>(value) else {
         return VerificationReportRead::Malformed;
     };
-    if report.schema_version != VERIFICATION_SCHEMA_VERSION {
+    if classify(&report.schema_version, VERIFICATION_SCHEMA_VERSION) != Compat::Exact {
         return VerificationReportRead::Malformed;
     }
     VerificationReportRead::Report {
@@ -926,7 +928,7 @@ fn write_canonical_report_restore_journal(
     previous: Option<&String>,
 ) -> Result<()> {
     let journal = CanonicalReportRestoreJournal {
-        schema_version: CANONICAL_REPORT_RESTORE_SCHEMA.to_string(),
+        schema_version: VERIFICATION_RESTORE_SCHEMA_VERSION.to_string(),
         previous: previous.cloned(),
     };
     let raw = serde_json::to_string_pretty(&journal)?;
@@ -957,11 +959,11 @@ fn read_canonical_report_restore_journal(
         fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
     let journal: CanonicalReportRestoreJournal = serde_json::from_str(&raw)
         .with_context(|| format!("failed to parse {}", path.display()))?;
-    if journal.schema_version != CANONICAL_REPORT_RESTORE_SCHEMA {
+    if classify(&journal.schema_version, VERIFICATION_RESTORE_SCHEMA_VERSION) != Compat::Exact {
         bail!(
             "schema mismatch for {}: expected {}, found {}",
             path.display(),
-            CANONICAL_REPORT_RESTORE_SCHEMA,
+            VERIFICATION_RESTORE_SCHEMA_VERSION,
             journal.schema_version
         );
     }

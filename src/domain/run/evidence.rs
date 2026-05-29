@@ -11,7 +11,7 @@ use crate::domain::run::reader::{visit_open_event_log, RunEvent};
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::RUN_EVIDENCE_SCHEMA_VERSION;
+use crate::foundation::core::schema::{classify, Compat, RUN_EVIDENCE_SCHEMA_VERSION};
 use crate::foundation::core::time::{parse_utc_timestamp, ParsedTimestamp};
 
 #[derive(Debug, Serialize)]
@@ -92,7 +92,7 @@ pub fn load_run_evidence(paths: &MaestroPaths) -> Result<RunEvidenceLoad> {
             skipped += 1;
             continue;
         };
-        if record.schema_version == RUN_EVIDENCE_SCHEMA_VERSION {
+        if classify(&record.schema_version, RUN_EVIDENCE_SCHEMA_VERSION) == Compat::Exact {
             records.push(record);
         } else {
             skipped += 1;

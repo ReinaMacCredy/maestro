@@ -12,7 +12,9 @@ use crate::domain::task;
 use crate::feature::schema::FeatureRegistry;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
-use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION};
+use crate::foundation::core::schema::{
+    classify, Compat, BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION,
+};
 use crate::harness::schema::BacklogConfig;
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::operations::metrics;
@@ -194,7 +196,7 @@ fn load_feature_registry(paths: &MaestroPaths) -> Result<FeatureRegistry> {
         fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
     let registry: FeatureRegistry = serde_yaml::from_str(&raw)
         .with_context(|| format!("failed to parse {}", path.display()))?;
-    if registry.schema_version != FEATURE_SCHEMA_VERSION {
+    if classify(&registry.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
         bail!(
             "schema mismatch for {}: expected {}, found {}",
             path.display(),
@@ -210,7 +212,7 @@ fn load_backlog(path: &Path) -> Result<BacklogConfig> {
         fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
     let backlog: BacklogConfig = serde_yaml::from_str(&raw)
         .with_context(|| format!("failed to parse {}", path.display()))?;
-    if backlog.schema_version != BACKLOG_SCHEMA_VERSION {
+    if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) != Compat::Exact {
         bail!(
             "schema mismatch for {}: expected {}, found {}",
             path.display(),
