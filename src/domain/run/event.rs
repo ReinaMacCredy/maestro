@@ -2,7 +2,11 @@ use std::path::Path;
 
 use serde_json::Value;
 
-/// Shared hook events supported by Claude and Codex V1 hook config.
+/// The lifecycle events Maestro installs and records, identical for Claude and
+/// Codex today.
+///
+/// Split into per-agent sets only if Maestro ever installs or consumes an event
+/// valid for one agent but not the other.
 pub(crate) const SHARED_HOOK_EVENTS: [&str; 6] = [
     "SessionStart",
     "UserPromptSubmit",
