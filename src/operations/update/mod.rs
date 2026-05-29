@@ -1,29 +1,30 @@
+mod github_release;
+mod replace;
+
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{self, Command};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::domain::skills::extract::{
     extract_bundled_skills, rollback_bundled_skill_writes, ExtractMode, SkillBackup,
 };
-use crate::foundation::core::fs::ensure_parent_dir;
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
     classify, Compat, BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
     INSTALL_LOCK_SCHEMA_VERSION,
 };
-use crate::foundation::core::time::parse_utc_timestamp;
 
-static REPLACE_COUNTER: AtomicU64 = AtomicU64::new(0);
-const DEFAULT_RELEASE_REPO: &str = "ReinaMacCredy/maestro";
+pub use github_release::GitHubCurlDownloader;
+pub use replace::AtomicBinaryReplacer;
+
+use replace::{
+    cleanup_prepared_binary, prepare_binary_update, prepared_release, replace_prepared_binary,
+};
 
 /// Options for one `maestro update` operation.
 #[derive(Debug)]
@@ -366,16 +367,6 @@ impl ChecksumVerifier for Sha256Verifier {
     }
 }
 
-/// Replacer that writes a sibling temp file and renames it over the executable.
-#[derive(Debug, Default)]
-pub struct AtomicBinaryReplacer;
-
-impl BinaryReplacer for AtomicBinaryReplacer {
-    fn replace(&self, current: &Path, candidate: &Path) -> Result<()> {
-        replace_binary_atomic(current, candidate)
-    }
-}
-
 /// Run update with the default offline-safe seams.
 pub fn run_update(options: &UpdateOptions<'_>) -> Result<UpdateOutcome> {
     match detect_install_method(options.executable_path) {
@@ -418,69 +409,6 @@ pub fn run_update(options: &UpdateOptions<'_>) -> Result<UpdateOutcome> {
     }
 }
 
-/// `curl`-backed GitHub Releases downloader.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GitHubCurlDownloader {
-    release_repo: Option<String>,
-    api_base_url: String,
-    asset_name: Option<String>,
-}
-
-impl GitHubCurlDownloader {
-    /// Build the default downloader from environment overrides.
-    pub fn new() -> Self {
-        Self {
-            release_repo: Some(release_repo()),
-            api_base_url: std::env::var("MAESTRO_RELEASE_API_BASE_URL")
-                .unwrap_or_else(|_| "https://api.github.com".to_string()),
-            asset_name: std::env::var("MAESTRO_RELEASE_ASSET").ok(),
-        }
-    }
-
-    fn release_url(&self) -> Option<String> {
-        let repo = self.release_repo.as_ref()?;
-        Some(format!(
-            "{}/repos/{repo}/releases/latest",
-            self.api_base_url.trim_end_matches('/')
-        ))
-    }
-
-    fn latest_release(&self, check_only: bool) -> Result<Option<GithubRelease>> {
-        let Some(url) = self.release_url() else {
-            return Ok(None);
-        };
-        let response = curl_bytes(&url, None, check_only)?;
-        let release: GithubRelease = serde_json::from_slice(&response)
-            .with_context(|| format!("failed to parse GitHub release response from {url}"))?;
-        Ok(Some(release))
-    }
-
-    fn selected_asset<'a>(&self, release: &'a GithubRelease) -> Option<&'a GithubAsset> {
-        if let Some(asset_name) = self.asset_name.as_deref() {
-            return release.assets.iter().find(|asset| asset.name == asset_name);
-        }
-        select_platform_asset(&release.assets)
-    }
-
-    fn release_info(&self, release: &GithubRelease, asset: Option<&GithubAsset>) -> ReleaseInfo {
-        ReleaseInfo {
-            version: normalized_release_version(&release.tag_name),
-            released_at: release.published_at.clone(),
-            relative_age: release
-                .published_at
-                .as_deref()
-                .and_then(relative_age_from_rfc3339),
-            size_bytes: asset.map(|asset| asset.size),
-        }
-    }
-}
-
-impl Default for GitHubCurlDownloader {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Detect how the current binary is managed.
 pub fn detect_install_method(executable_path: &Path) -> InstallMethod {
     if let Ok(value) = std::env::var("MAESTRO_INSTALL_METHOD") {
@@ -504,76 +432,6 @@ pub fn detect_install_method(executable_path: &Path) -> InstallMethod {
         return InstallMethod::Homebrew;
     }
     InstallMethod::Curl
-}
-
-impl UpdateDownloader for GitHubCurlDownloader {
-    fn check(&self, request: &UpdateRequest) -> Result<UpdateCheck> {
-        let Some(release) = self.latest_release(request.check_only)? else {
-            return Ok(UpdateCheck::Unavailable(
-                UpdateUnavailable::LocalDevelopment,
-            ));
-        };
-        let asset = self.selected_asset(&release);
-        let release_info = self.release_info(&release, asset);
-        if release_versions_match(&release_info.version, &request.current_version) && !request.force
-        {
-            return Ok(UpdateCheck::UpToDate(release_info));
-        }
-        if asset.is_none() {
-            return Ok(UpdateCheck::Unavailable(
-                UpdateUnavailable::NoPlatformAsset {
-                    hint: platform_asset_hint(),
-                },
-            ));
-        }
-        Ok(UpdateCheck::Available {
-            release: release_info,
-            current_version: request.current_version.clone(),
-        })
-    }
-
-    fn download(&self, request: &UpdateRequest) -> Result<DownloadedBinary> {
-        let Some(release) = self.latest_release(request.check_only)? else {
-            return Ok(DownloadedBinary::Unavailable(
-                UpdateUnavailable::LocalDevelopment,
-            ));
-        };
-        let asset = self.selected_asset(&release).ok_or_else(|| {
-            UpdateFailure::download(
-                Some(self.release_info(&release, None)),
-                None,
-                None,
-                format!("no GitHub release asset matches {}", platform_asset_hint()),
-            )
-        })?;
-        let release_info = self.release_info(&release, Some(asset));
-        if release_versions_match(&release_info.version, &request.current_version) && !request.force
-        {
-            return Ok(DownloadedBinary::UpToDate(release_info));
-        }
-
-        fs::create_dir_all(&request.work_dir)
-            .with_context(|| format!("failed to create {}", request.work_dir.display()))?;
-        let candidate = request.work_dir.join("maestro-update-candidate");
-        if curl_download(&asset.browser_download_url, &candidate).is_err() {
-            let downloaded = fs::metadata(&candidate).ok().map(|metadata| metadata.len());
-            return Err(UpdateFailure::download(
-                Some(release_info),
-                downloaded,
-                Some(asset.size),
-                "download interrupted",
-            )
-            .into());
-        }
-        if let Some(digest) = asset.sha256_digest() {
-            Sha256Verifier::new(digest).verify(&candidate)?;
-        }
-
-        Ok(DownloadedBinary::Available {
-            path: candidate,
-            release: Some(release_info),
-        })
-    }
 }
 
 /// Run update with explicit seams for tests and future release wiring.
@@ -625,7 +483,7 @@ pub fn run_update_with_seams(
     })
 }
 
-fn update_request(options: &UpdateOptions<'_>) -> UpdateRequest {
+pub(super) fn update_request(options: &UpdateOptions<'_>) -> UpdateRequest {
     UpdateRequest {
         work_dir: options.paths.maestro_dir().join("update"),
         current_version: options.current_version.to_string(),
@@ -688,99 +546,6 @@ pub fn detect_schema_mismatches(paths: &MaestroPaths) -> Result<Vec<SchemaMismat
     Ok(mismatches)
 }
 
-enum PreparedBinary {
-    UpToDate {
-        release: ReleaseInfo,
-    },
-    Skipped {
-        reason: UpdateUnavailable,
-    },
-    Candidate {
-        path: PathBuf,
-        work_dir: PathBuf,
-        release: Option<ReleaseInfo>,
-    },
-}
-
-fn prepare_binary_update(
-    options: &UpdateOptions<'_>,
-    downloader: &dyn UpdateDownloader,
-    verifier: &dyn ChecksumVerifier,
-) -> Result<PreparedBinary> {
-    let request = update_request(options);
-    let work_dir = request.work_dir.clone();
-    let candidate = match downloader.download(&request) {
-        Ok(DownloadedBinary::Available { path, release }) => (path, release),
-        Ok(DownloadedBinary::UpToDate(release)) => {
-            cleanup_work_dir(&work_dir);
-            return Ok(PreparedBinary::UpToDate { release });
-        }
-        Ok(DownloadedBinary::Unavailable(reason)) => {
-            cleanup_work_dir(&work_dir);
-            return Ok(PreparedBinary::Skipped { reason });
-        }
-        Err(error) => {
-            cleanup_work_dir(&work_dir);
-            return Err(error);
-        }
-    };
-
-    if let Err(error) = verifier.verify(&candidate.0) {
-        cleanup_work_dir(&work_dir);
-        return Err(error);
-    }
-
-    Ok(PreparedBinary::Candidate {
-        path: candidate.0,
-        work_dir,
-        release: candidate.1,
-    })
-}
-
-fn replace_prepared_binary(
-    options: &UpdateOptions<'_>,
-    replacer: &dyn BinaryReplacer,
-    binary: PreparedBinary,
-) -> Result<BinaryStatus> {
-    match binary {
-        PreparedBinary::UpToDate { release } => Ok(BinaryStatus::UpToDate { release }),
-        PreparedBinary::Skipped { reason } => Ok(BinaryStatus::Skipped { reason }),
-        PreparedBinary::Candidate {
-            path,
-            work_dir,
-            release,
-        } => {
-            let result =
-                replacer
-                    .replace(options.executable_path, &path)
-                    .map(|()| BinaryStatus::Replaced {
-                        path: options.executable_path.to_path_buf(),
-                        release,
-                    });
-            cleanup_work_dir(&work_dir);
-            result
-        }
-    }
-}
-
-fn cleanup_work_dir(work_dir: &Path) {
-    let _ = fs::remove_dir_all(work_dir);
-}
-
-fn cleanup_prepared_binary(binary: &PreparedBinary) {
-    if let PreparedBinary::Candidate { work_dir, .. } = binary {
-        cleanup_work_dir(work_dir);
-    }
-}
-
-fn prepared_release(binary: &PreparedBinary) -> Option<ReleaseInfo> {
-    match binary {
-        PreparedBinary::UpToDate { release } => Some(release.clone()),
-        PreparedBinary::Skipped { .. } => None,
-        PreparedBinary::Candidate { release, .. } => release.clone(),
-    }
-}
-
 fn read_schema_version(path: &Path) -> Result<String> {
     let contents = fs::read_to_string(path)
         .with_context(|| format!("failed to read schema artifact {}", path.display()))?;
@@ -795,264 +560,9 @@ fn read_schema_version(path: &Path) -> Result<String> {
     Ok(found.to_string())
 }
 
-fn replace_binary_atomic(current: &Path, candidate: &Path) -> Result<()> {
-    ensure_parent_dir(current)?;
-
-    let permissions = fs::metadata(current)
-        .or_else(|_| fs::metadata(candidate))
-        .with_context(|| {
-            format!(
-                "failed to inspect update replacement permissions for {}",
-                candidate.display()
-            )
-        })?
-        .permissions();
-    let temp_path = temp_sibling_path(current)?;
-
-    if let Err(error) = copy_candidate_to_temp(candidate, &temp_path, permissions) {
-        let _ = fs::remove_file(&temp_path);
-        return Err(error);
-    }
-
-    if let Err(error) = fs::rename(&temp_path, current) {
-        let _ = fs::remove_file(&temp_path);
-        return Err(error).with_context(|| {
-            format!(
-                "failed to replace {} with update candidate {}",
-                current.display(),
-                temp_path.display()
-            )
-        });
-    }
-    let _ = sync_parent_dir(current);
-
-    Ok(())
-}
-
-fn copy_candidate_to_temp(
-    candidate: &Path,
-    temp_path: &Path,
-    permissions: fs::Permissions,
-) -> Result<()> {
-    let mut source = File::open(candidate)
-        .with_context(|| format!("failed to open update candidate {}", candidate.display()))?;
-    let mut temp = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(temp_path)
-        .with_context(|| format!("failed to create temp update file {}", temp_path.display()))?;
-
-    std::io::copy(&mut source, &mut temp)
-        .and_then(|_| temp.flush())
-        .and_then(|_| temp.sync_all())
-        .with_context(|| {
-            format!(
-                "failed to copy update candidate {} to {}",
-                candidate.display(),
-                temp_path.display()
-            )
-        })?;
-    fs::set_permissions(temp_path, permissions)
-        .with_context(|| format!("failed to set permissions on {}", temp_path.display()))
-}
-
-fn temp_sibling_path(path: &Path) -> Result<PathBuf> {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .with_context(|| format!("path has no valid file name: {}", path.display()))?;
-    let parent = match path.parent() {
-        Some(parent) => parent,
-        None => Path::new(""),
-    };
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system clock is before the Unix epoch")?
-        .as_nanos();
-    let counter = REPLACE_COUNTER.fetch_add(1, Ordering::Relaxed);
-
-    Ok(parent.join(format!(
-        ".{file_name}.update.{}.{}.{}",
-        process::id(),
-        timestamp,
-        counter
-    )))
-}
-
-fn sync_parent_dir(path: &Path) -> Result<()> {
-    let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    else {
-        return Ok(());
-    };
-
-    File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .with_context(|| format!("failed to sync parent directory {}", parent.display()))
-}
-
-#[derive(Debug, Deserialize)]
-struct GithubRelease {
-    tag_name: String,
-    #[serde(default)]
-    published_at: Option<String>,
-    #[serde(default)]
-    assets: Vec<GithubAsset>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GithubAsset {
-    name: String,
-    browser_download_url: String,
-    #[serde(default)]
-    size: u64,
-    #[serde(default)]
-    digest: Option<String>,
-}
-
-impl GithubAsset {
-    fn sha256_digest(&self) -> Option<&str> {
-        self.digest.as_deref()?.strip_prefix("sha256:")
-    }
-}
-
-fn release_repo() -> String {
-    if let Ok(repo) = std::env::var("MAESTRO_RELEASE_REPO") {
-        if !repo.trim().is_empty() {
-            return repo;
-        }
-    }
-    DEFAULT_RELEASE_REPO.to_string()
-}
-
-fn curl_bytes(url: &str, output: Option<&Path>, fast_timeout: bool) -> Result<Vec<u8>> {
-    let mut command = Command::new("curl");
-    command.args([
-        "--fail",
-        "--silent",
-        "--show-error",
-        "--location",
-        "--header",
-        "Accept: application/vnd.github+json",
-        "--header",
-        "User-Agent: maestro",
-    ]);
-    if fast_timeout {
-        command.args(["--connect-timeout", "3", "--max-time", "8"]);
-    } else {
-        command.args(["--connect-timeout", "15", "--max-time", "600"]);
-    }
-    if let Some(output) = output {
-        command.arg("--output");
-        command.arg(output);
-    }
-    command.arg(url);
-
-    let output = command
-        .output()
-        .with_context(|| "failed to run curl for GitHub release update")?;
-    if !output.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
-    }
-    Ok(output.stdout)
-}
-
-fn curl_download(url: &str, output: &Path) -> Result<()> {
-    curl_bytes(url, Some(output), false).map(|_| ())
-}
-
-fn select_platform_asset(assets: &[GithubAsset]) -> Option<&GithubAsset> {
-    let os_aliases = os_aliases();
-    let arch_aliases = arch_aliases();
-    let mut fallback = None;
-
-    for asset in assets {
-        if is_checksum_asset(&asset.name) {
-            continue;
-        }
-        if asset.name == "maestro" && fallback.is_none() {
-            fallback = Some(asset);
-        }
-
-        let name = asset.name.to_ascii_lowercase();
-        if !name.contains("maestro") {
-            continue;
-        }
-        if os_aliases.iter().any(|alias| name.contains(*alias))
-            && arch_aliases.iter().any(|alias| name.contains(*alias))
-        {
-            return Some(asset);
-        }
-    }
-
-    fallback
-}
-
-fn is_checksum_asset(name: &str) -> bool {
-    let name = name.to_ascii_lowercase();
-    name.ends_with(".sha256")
-        || name.ends_with(".sha256sum")
-        || name.ends_with(".sig")
-        || name.ends_with(".asc")
-}
-
-fn platform_asset_hint() -> String {
-    format!(
-        "maestro {} {}",
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    )
-}
-
-fn os_aliases() -> &'static [&'static str] {
-    match std::env::consts::OS {
-        "macos" => &["macos", "darwin", "apple"],
-        "linux" => &["linux"],
-        "windows" => &["windows", "win"],
-        _ => &[],
-    }
-}
-
-fn arch_aliases() -> &'static [&'static str] {
-    match std::env::consts::ARCH {
-        "x86_64" => &["x86_64", "amd64"],
-        "aarch64" => &["aarch64", "arm64"],
-        "arm" => &["arm"],
-        _ => &[],
-    }
-}
-
-fn normalized_release_version(tag_name: &str) -> String {
-    tag_name.strip_prefix('v').unwrap_or(tag_name).to_string()
-}
-
-fn release_versions_match(release_version: &str, current_version: &str) -> bool {
-    normalized_release_version(release_version) == normalized_release_version(current_version)
-}
-
-fn relative_age_from_rfc3339(value: &str) -> Option<String> {
-    let released = (parse_utc_timestamp(value)?.nanos_since_epoch / 1_000_000_000) as i64;
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs() as i64;
-    let elapsed = now.saturating_sub(released);
-    if elapsed < 60 {
-        return Some("less than 1m ago".to_string());
-    }
-    if elapsed < 3_600 {
-        return Some(format!("{}m ago", elapsed / 60));
-    }
-    if elapsed < 86_400 {
-        return Some(format!("{}h ago", elapsed / 3_600));
-    }
-    Some(format!("{}d ago", elapsed / 86_400))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        detect_install_method, release_versions_match, select_platform_asset, GithubAsset,
-        InstallMethod,
-    };
+    use super::{detect_install_method, InstallMethod};
 
     #[test]
     fn detects_common_install_methods_from_path() {
@@ -1074,39 +584,5 @@ mod tests {
             detect_install_method(std::path::Path::new("/usr/local/bin/maestro")),
             InstallMethod::Curl
         );
-    }
-
-    #[test]
-    fn selects_current_platform_maestro_asset() {
-        let platform_asset = format!(
-            "maestro-{}-{}",
-            std::env::consts::OS,
-            std::env::consts::ARCH
-        );
-        let assets = vec![
-            asset("maestro-linux-amd64.sha256"),
-            asset("maestro-windows-amd64.exe"),
-            asset(&platform_asset),
-        ];
-
-        assert_eq!(
-            select_platform_asset(&assets).map(|asset| asset.name.as_str()),
-            Some(platform_asset.as_str())
-        );
-    }
-
-    #[test]
-    fn parses_release_timestamp_and_version_match() {
-        assert!(super::relative_age_from_rfc3339("1970-01-01T00:00:00Z").is_some());
-        assert!(release_versions_match("v0.1.0", "0.1.0"));
-    }
-
-    fn asset(name: &str) -> GithubAsset {
-        GithubAsset {
-            name: name.to_string(),
-            browser_download_url: format!("https://example.test/{name}"),
-            size: 123,
-            digest: None,
-        }
     }
 }

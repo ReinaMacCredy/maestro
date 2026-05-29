@@ -549,6 +549,14 @@ fn update_operation_owns_implementation() {
         "Update implementation should live under src/operations/update"
     );
 
+    for leaf in ["github_release.rs", "replace.rs"] {
+        assert!(
+            Path::new(&format!("src/operations/update/{leaf}")).is_file(),
+            "Update implementation should split the GitHub-release and replacement \
+             concerns into src/operations/update/{leaf}"
+        );
+    }
+
     let operations_facade = read_source_file(Path::new("src/operations/update/mod.rs"));
     for item in [
         "run_update",
@@ -557,12 +565,27 @@ fn update_operation_owns_implementation() {
         "detect_schema_mismatches",
         "InstallMethod",
         "UpdateOutcome",
+        "mod github_release;",
+        "mod replace;",
     ] {
         assert!(
             operations_facade.contains(item),
             "operations/update facade should expose {item}"
         );
     }
+    assert_eq!(
+        public_modules(&operations_facade),
+        BTreeSet::new(),
+        "operations/update should keep the split leaf modules private"
+    );
+    assert_eq!(
+        public_reexport_item_names(&operations_facade),
+        BTreeSet::from([
+            "AtomicBinaryReplacer".to_string(),
+            "GitHubCurlDownloader".to_string(),
+        ]),
+        "operations/update should re-export only the relocated downloader and replacer"
+    );
 
     let mut violations = Vec::new();
     for file in rust_files_under(Path::new("src")) {

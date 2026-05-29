@@ -297,6 +297,48 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
 }
 
 #[test]
+fn checksum_verification_failure_prevents_binary_replacement() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    let executable_path = temp_dir.path().join("bin").join("maestro");
+    fs::create_dir_all(
+        executable_path
+            .parent()
+            .expect("invariant: executable path should have a parent"),
+    )
+    .expect("invariant: executable parent should be creatable");
+    fs::write(&executable_path, "current binary\n")
+        .expect("invariant: current binary should be writable");
+
+    let error = run_update_with_seams(
+        &UpdateOptions {
+            paths: &paths,
+            executable_path: &executable_path,
+            backup_timestamp: "test",
+            current_version: "0.0.1779700000-gabc123",
+            check_only: false,
+            force: false,
+        },
+        &CandidateDownloader,
+        &FailingVerifier,
+        &PanickingReplacer,
+    )
+    .expect_err("invariant: a failed checksum must abort the update before replacement");
+
+    assert!(
+        error.to_string().contains("checksum verification failed"),
+        "verification failure should surface its cause: {error}"
+    );
+    assert_eq!(
+        fs::read_to_string(executable_path)
+            .expect("invariant: current binary should still be readable"),
+        "current binary\n",
+        "an unverified candidate must never reach the replacer"
+    );
+    assert!(!paths.maestro_dir().join("update").exists());
+}
+
+#[test]
 fn simulated_replace_failure_preserves_existing_binary_file() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
@@ -780,6 +822,22 @@ struct NoopVerifier;
 impl ChecksumVerifier for NoopVerifier {
     fn verify(&self, _candidate: &Path) -> Result<()> {
         Ok(())
+    }
+}
+
+struct FailingVerifier;
+
+impl ChecksumVerifier for FailingVerifier {
+    fn verify(&self, _candidate: &Path) -> Result<()> {
+        bail!("checksum verification failed")
+    }
+}
+
+struct PanickingReplacer;
+
+impl BinaryReplacer for PanickingReplacer {
+    fn replace(&self, _current: &Path, _candidate: &Path) -> Result<()> {
+        panic!("invariant: replacer must not run when verification fails")
     }
 }
 
