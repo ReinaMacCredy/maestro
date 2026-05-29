@@ -28,7 +28,6 @@ const INTERFACE_COMPATIBILITY_REEXPORTS: &[(&str, &str)] = &[];
 const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
 const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
 const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
-    ("src/interfaces/cli/decision.rs", &["decisions"]),
     ("src/interfaces/cli/doctor.rs", &["harness"]),
     ("src/interfaces/cli/improve.rs", &["harness"]),
     ("src/interfaces/cli/init.rs", &[]),

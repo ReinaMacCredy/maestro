@@ -2,13 +2,8 @@ use std::fs;
 
 use anyhow::{Context, Result};
 
-use crate::decisions::query::{
-    decision_entries, decision_id, parse_decision_number, resolve_decision_path,
-};
-use crate::decisions::template::{decision_file_name, decision_markdown};
-use crate::foundation::core::fs::ensure_dir;
+use crate::domain::decisions;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
-use crate::foundation::core::safe_write::write_string_atomic;
 use crate::interfaces::cli::{DecisionArgs, DecisionCommand};
 
 /// Execute `maestro decision`.
@@ -24,19 +19,13 @@ pub fn run(args: DecisionArgs) -> Result<()> {
 }
 
 fn new_decision(paths: &MaestroPaths, title: &str) -> Result<()> {
-    ensure_dir(paths.decisions_dir())?;
-    let number = next_decision_number(&paths.decisions_dir())?;
-    let file_name = decision_file_name(number, title);
-    let path = paths.decisions_dir().join(&file_name);
-    let contents = decision_markdown(number, title);
-    write_string_atomic(&path, &contents)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    let number = decisions::create(paths, title)?;
     println!("created decision decision-{number:03}");
     Ok(())
 }
 
 fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let path = resolve_decision_path(&paths.decisions_dir(), id)?;
+    let path = decisions::resolve_decision_path(&paths.decisions_dir(), id)?;
     let contents = fs::read_to_string(&path)
         .with_context(|| format!("failed to read decision file {}", path.display()))?;
     print!("{contents}");
@@ -44,25 +33,19 @@ fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
 }
 
 fn list_decisions(paths: &MaestroPaths) -> Result<()> {
-    let entries = decision_entries(&paths.decisions_dir())?;
+    let entries = decisions::decision_entries(&paths.decisions_dir())?;
     if entries.is_empty() {
         println!("no decisions found");
         return Ok(());
     }
 
     for entry in entries {
-        println!("{}\t{}", decision_id(&entry.file_name), entry.file_name);
+        println!(
+            "{}\t{}",
+            decisions::decision_id(&entry.file_name),
+            entry.file_name
+        );
     }
 
     Ok(())
-}
-
-fn next_decision_number(decisions_dir: &std::path::Path) -> Result<u32> {
-    let mut max_number = 0_u32;
-    for entry in decision_entries(decisions_dir)? {
-        if let Some(number) = parse_decision_number(&entry.file_name) {
-            max_number = max_number.max(number);
-        }
-    }
-    Ok(max_number + 1)
 }
