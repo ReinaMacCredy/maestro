@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 
-use crate::domain::skills::catalog::{skills, Skill};
+use crate::domain::skills::catalog::{frontmatter_version, skills, Skill};
 use crate::foundation::core::backup::backup_file_with_timestamp;
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
@@ -136,7 +136,11 @@ fn plan_skill<'a>(
             (true, Some("init"), Some(backup_timestamp))
         }
         (Some(existing), ExtractMode::Update { backup_timestamp }) => {
-            if existing == skill.contents {
+            // Version-gated: refresh only when the shipped version differs from
+            // the installed one, so local edits survive across updates until the
+            // shipped `version:` changes. A missing installed version (None)
+            // differs from the shipped Some(..), migrating pre-version installs.
+            if frontmatter_version(existing) == frontmatter_version(skill.contents) {
                 (false, None, None)
             } else {
                 (true, Some("update"), Some(backup_timestamp))

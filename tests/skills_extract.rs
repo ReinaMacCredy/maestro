@@ -287,3 +287,75 @@ fn extract_bundled_skills_update_skips_unchanged_bundled_files() {
         .join(format!("{backup_timestamp}-update"))
         .exists());
 }
+
+#[test]
+fn extract_skills_update_preserves_local_edit_when_version_matches() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    extract_skills(&paths, ExtractMode::Create)
+        .expect("invariant: initial extraction should succeed");
+
+    // Locally edit an installed skill while keeping the shipped version.
+    let installed = paths.skills_dir().join("maestro-task").join("SKILL.md");
+    let edited = "---\nname: maestro-task\nversion: 1.0.0\n---\n\nlocal edit\n";
+    fs::write(&installed, edited).expect("invariant: installed skill should be writable");
+    let backup_timestamp =
+        backup_operation_timestamp().expect("invariant: backup timestamp should be available");
+
+    let report = extract_skills(
+        &paths,
+        ExtractMode::Update {
+            backup_timestamp: &backup_timestamp,
+        },
+    )
+    .expect("invariant: update extraction should succeed");
+
+    assert!(report.backups.is_empty());
+    assert_eq!(
+        fs::read_to_string(&installed).expect("invariant: installed skill should be readable"),
+        edited,
+        "a matching version must preserve the local edit"
+    );
+}
+
+#[test]
+fn extract_skills_update_refreshes_and_backs_up_when_version_differs() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    extract_skills(&paths, ExtractMode::Create)
+        .expect("invariant: initial extraction should succeed");
+
+    let installed = paths.skills_dir().join("maestro-task").join("SKILL.md");
+    let stale = "---\nname: maestro-task\nversion: 0.9.0\n---\n\nstale\n";
+    fs::write(&installed, stale).expect("invariant: installed skill should be writable");
+    let backup_timestamp =
+        backup_operation_timestamp().expect("invariant: backup timestamp should be available");
+
+    let report = extract_skills(
+        &paths,
+        ExtractMode::Update {
+            backup_timestamp: &backup_timestamp,
+        },
+    )
+    .expect("invariant: update extraction should succeed");
+
+    let shipped = skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-task")
+        .expect("invariant: maestro-task should ship");
+    assert_eq!(
+        fs::read_to_string(&installed).expect("invariant: installed skill should be readable"),
+        shipped.contents,
+        "a differing version must refresh to the shipped contents"
+    );
+    assert_eq!(report.backups.len(), 1);
+    let backup = paths
+        .backups_dir()
+        .join(format!("{backup_timestamp}-update"))
+        .join(".maestro/skills/maestro-task/SKILL.md");
+    assert_eq!(
+        fs::read_to_string(backup).expect("invariant: backup should be readable"),
+        stale,
+        "the stale local copy must be backed up before refresh"
+    );
+}

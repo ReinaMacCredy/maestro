@@ -1,5 +1,6 @@
 ---
 name: maestro-setup
+version: 1.0.0
 description: Initial setup and harness tuning protocol for a Maestro-enabled repository.
 ---
 

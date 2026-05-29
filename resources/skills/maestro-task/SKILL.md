@@ -1,5 +1,6 @@
 ---
 name: maestro-task
+version: 1.0.0
 description: Feature and task workflow layer for operating the Maestro harness.
 ---
 

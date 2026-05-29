@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 /// A skill Maestro ships and refreshes, distinct from user-added skills under
 /// `.maestro/skills/`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,4 +38,57 @@ const SKILLS: [Skill; 4] = [
 /// distinct from user-added skills under `.maestro/skills/`.
 pub fn skills() -> &'static [Skill] {
     &SKILLS
+}
+
+/// Read the `version:` field from a `SKILL.md` frontmatter block.
+///
+/// Returns `None` when the contents lack a leading `---` fence, the frontmatter
+/// is not valid YAML, or no `version` key is present. An installed `SKILL.md` is
+/// a trust boundary (a user may edit it into malformed YAML), so this never
+/// errors: an unreadable version is treated as absent, which forces a refresh.
+pub(crate) fn frontmatter_version(contents: &str) -> Option<String> {
+    let body = contents.strip_prefix("---\n")?;
+    let end = body.find("\n---")?;
+
+    #[derive(Deserialize)]
+    struct Frontmatter {
+        #[serde(default)]
+        version: Option<String>,
+    }
+
+    serde_yaml::from_str::<Frontmatter>(&body[..end])
+        .ok()?
+        .version
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frontmatter_version_reads_shipped_skill_versions() {
+        for skill in skills() {
+            assert_eq!(
+                frontmatter_version(skill.contents).as_deref(),
+                Some("1.0.0"),
+                "shipped skill {} should declare version 1.0.0",
+                skill.name
+            );
+        }
+    }
+
+    #[test]
+    fn frontmatter_version_is_none_without_a_fence() {
+        assert_eq!(frontmatter_version("no frontmatter here\n"), None);
+    }
+
+    #[test]
+    fn frontmatter_version_is_none_for_malformed_yaml() {
+        assert_eq!(frontmatter_version("---\n: : : not yaml\n---\n"), None);
+    }
+
+    #[test]
+    fn frontmatter_version_is_none_when_version_absent() {
+        assert_eq!(frontmatter_version("---\nname: x\n---\n"), None);
+    }
 }

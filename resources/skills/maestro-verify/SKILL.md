@@ -1,5 +1,6 @@
 ---
 name: maestro-verify
+version: 1.0.0
 description: Verification protocol for Maestro tasks and feature work.
 ---
 

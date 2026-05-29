@@ -1,5 +1,6 @@
 ---
 name: maestro-design
+version: 1.0.0
 description: Spec authoring and design grilling protocol for Maestro work.
 ---
 
