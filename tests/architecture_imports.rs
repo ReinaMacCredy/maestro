@@ -61,10 +61,7 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         "src/domain/harness/templates.rs",
         &["resources/harness/HARNESS.md"],
     ),
-    (
-        "src/domain/skills/bundled.rs",
-        &["resources/skills/bundled/"],
-    ),
+    ("src/domain/skills/catalog.rs", &["resources/skills/"]),
     ("src/interfaces/shell/mod.rs", &["resources/shell/"]),
 ];
 
@@ -124,8 +121,8 @@ fn selected_compatibility_smoke_paths_resolve() {
         std::any::type_name::<maestro::feature::schema::FeatureRecord>()
     );
     assert_eq!(
-        std::any::type_name::<maestro::domain::skills::bundled::BundledSkill>(),
-        std::any::type_name::<maestro::skills::bundled::BundledSkill>()
+        std::any::type_name::<maestro::domain::skills::catalog::Skill>(),
+        std::any::type_name::<maestro::skills::catalog::Skill>()
     );
     let _legacy_decision_file_name: fn(u32, &str) -> String =
         maestro::decisions::template::decision_file_name;
@@ -1853,7 +1850,7 @@ fn resource_embeds_stay_in_owning_modules() {
 
 #[test]
 fn bundled_skill_resources_are_skill_directories_without_evals() {
-    let root = Path::new("resources/skills/bundled");
+    let root = Path::new("resources/skills");
     let mut violations = Vec::new();
 
     for entry in sorted_dir_entries(root) {

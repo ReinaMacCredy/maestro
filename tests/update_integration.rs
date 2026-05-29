@@ -13,7 +13,7 @@ use maestro::operations::update::{
     ChecksumVerifier, DownloadedBinary, ReleaseInfo, UpdateDownloader, UpdateOptions,
     UpdateRequest,
 };
-use maestro::skills::bundled::bundled_skills;
+use maestro::skills::catalog::skills;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
@@ -40,7 +40,7 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
     let paths = MaestroPaths::new(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
-    let skill = bundled_skills()
+    let skill = skills()
         .iter()
         .find(|skill| skill.name == "maestro-task")
         .expect("invariant: maestro-task should be bundled");
@@ -259,7 +259,7 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
     .expect("invariant: executable parent should be creatable");
     fs::write(&executable_path, "current binary\n")
         .expect("invariant: current binary should be writable");
-    let skill = bundled_skills()
+    let skill = skills()
         .iter()
         .find(|skill| skill.name == "maestro-task")
         .expect("invariant: maestro-task should be bundled");
@@ -391,7 +391,7 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
     .expect("invariant: executable parent should be creatable");
     fs::write(&executable_path, "current binary\n")
         .expect("invariant: current binary should be writable");
-    let skill = bundled_skills()
+    let skill = skills()
         .iter()
         .find(|skill| skill.name == "maestro-task")
         .expect("invariant: maestro-task should be bundled");

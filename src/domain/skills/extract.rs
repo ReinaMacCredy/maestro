@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 
-use crate::domain::skills::bundled::{bundled_skills, BundledSkill};
+use crate::domain::skills::catalog::{skills, Skill};
 use crate::foundation::core::backup::backup_file_with_timestamp;
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
@@ -53,14 +53,11 @@ pub struct SkillWrite {
 }
 
 /// Extract all bundled skills into `.maestro/skills/`.
-pub fn extract_bundled_skills(
-    paths: &MaestroPaths,
-    mode: ExtractMode<'_>,
-) -> Result<ExtractReport> {
+pub fn extract_skills(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<ExtractReport> {
     managed_path(paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     ensure_dir(paths.skills_dir())?;
     let mut report = ExtractReport::default();
-    let actions = bundled_skills()
+    let actions = skills()
         .iter()
         .map(|skill| plan_skill(paths, skill, mode))
         .collect::<Result<Vec<_>>>()?;
@@ -71,9 +68,9 @@ pub fn extract_bundled_skills(
 }
 
 /// Validate bundled skill extraction without writing files.
-pub fn validate_bundled_skills(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<()> {
+pub fn validate_skills(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<()> {
     managed_path(paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
-    bundled_skills()
+    skills()
         .iter()
         .map(|skill| plan_skill(paths, skill, mode))
         .collect::<Result<Vec<_>>>()?;
@@ -81,7 +78,7 @@ pub fn validate_bundled_skills(paths: &MaestroPaths, mode: ExtractMode<'_>) -> R
 }
 
 /// Roll back skill file writes recorded in an extraction report.
-pub fn rollback_bundled_skill_writes(report: &ExtractReport) -> Result<()> {
+pub fn rollback_skill_writes(report: &ExtractReport) -> Result<()> {
     for write in report.writes.iter().rev() {
         match &write.previous {
             Some(contents) => write_string_atomic(&write.path, contents)
@@ -102,7 +99,7 @@ pub fn rollback_bundled_skill_writes(report: &ExtractReport) -> Result<()> {
 
 #[derive(Debug)]
 struct SkillAction<'a> {
-    skill: &'a BundledSkill,
+    skill: &'a Skill,
     path: PathBuf,
     existing: Option<String>,
     backup_operation: Option<&'static str>,
@@ -118,7 +115,7 @@ struct AppliedWrite {
 
 fn plan_skill<'a>(
     paths: &MaestroPaths,
-    skill: &'a BundledSkill,
+    skill: &'a Skill,
     mode: ExtractMode<'a>,
 ) -> Result<SkillAction<'a>> {
     let relative_path = format!(".maestro/skills/{}/SKILL.md", skill.name);

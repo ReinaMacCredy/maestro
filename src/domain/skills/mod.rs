@@ -1,5 +1,5 @@
-//! Bundled skill registry and extraction helpers.
+//! Skill catalog and extraction helpers.
 
-pub mod bundled;
+pub mod catalog;
 pub mod extract;
 pub mod symlink;

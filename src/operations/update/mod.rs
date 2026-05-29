@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
 use crate::domain::skills::extract::{
-    extract_bundled_skills, rollback_bundled_skill_writes, ExtractMode, SkillBackup,
+    extract_skills, rollback_skill_writes, ExtractMode, SkillBackup,
 };
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
@@ -450,7 +450,7 @@ pub fn run_update_with_seams(
     }
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
-    let extract_report = match extract_bundled_skills(
+    let extract_report = match extract_skills(
         options.paths,
         ExtractMode::Update {
             backup_timestamp: options.backup_timestamp,
@@ -466,7 +466,7 @@ pub fn run_update_with_seams(
     let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
         Ok(status) => status,
         Err(_error) => {
-            rollback_bundled_skill_writes(&extract_report)?;
+            rollback_skill_writes(&extract_report)?;
             return Err(UpdateFailure::install(
                 prepared_release,
                 "could not replace the current binary",

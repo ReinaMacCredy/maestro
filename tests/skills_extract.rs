@@ -4,8 +4,8 @@ use std::fs;
 
 use maestro::core::backup::backup_operation_timestamp;
 use maestro::core::paths::MaestroPaths;
-use maestro::skills::bundled::bundled_skills;
-use maestro::skills::extract::{extract_bundled_skills, ExtractMode};
+use maestro::skills::catalog::skills;
+use maestro::skills::extract::{extract_skills, ExtractMode};
 use support::TestTempDir;
 
 const BUNDLED_SKILL_NAMES: [&str; 4] = [
@@ -18,35 +18,32 @@ const BUNDLED_SKILL_NAMES: [&str; 4] = [
 const BUNDLED_SKILL_RESOURCES: [(&str, &str); 4] = [
     (
         "maestro-task",
-        include_str!("../resources/skills/bundled/maestro-task/SKILL.md"),
+        include_str!("../resources/skills/maestro-task/SKILL.md"),
     ),
     (
         "maestro-setup",
-        include_str!("../resources/skills/bundled/maestro-setup/SKILL.md"),
+        include_str!("../resources/skills/maestro-setup/SKILL.md"),
     ),
     (
         "maestro-verify",
-        include_str!("../resources/skills/bundled/maestro-verify/SKILL.md"),
+        include_str!("../resources/skills/maestro-verify/SKILL.md"),
     ),
     (
         "maestro-design",
-        include_str!("../resources/skills/bundled/maestro-design/SKILL.md"),
+        include_str!("../resources/skills/maestro-design/SKILL.md"),
     ),
 ];
 
 #[test]
 fn bundled_skill_list_is_exactly_the_four_v1_skills() {
-    let names = bundled_skills()
-        .iter()
-        .map(|skill| skill.name)
-        .collect::<Vec<_>>();
+    let names = skills().iter().map(|skill| skill.name).collect::<Vec<_>>();
 
     assert_eq!(names, BUNDLED_SKILL_NAMES);
 }
 
 #[test]
 fn bundled_skill_contents_match_embedded_resources() {
-    for skill in bundled_skills() {
+    for skill in skills() {
         let resource = BUNDLED_SKILL_RESOURCES
             .iter()
             .find_map(|(name, contents)| (*name == skill.name).then_some(*contents))
@@ -60,10 +57,10 @@ fn extract_bundled_skills_writes_each_skill_without_index() {
     let temp_dir = TestTempDir::new("maestro-skills-test");
     let paths = MaestroPaths::new(temp_dir.path());
 
-    extract_bundled_skills(&paths, ExtractMode::Create)
+    extract_skills(&paths, ExtractMode::Create)
         .expect("invariant: bundled skills should extract into an empty temp repo");
 
-    for skill in bundled_skills() {
+    for skill in skills() {
         let path = paths.skills_dir().join(skill.name).join("SKILL.md");
         let contents =
             fs::read_to_string(&path).expect("invariant: extracted skill should be readable");
@@ -90,7 +87,7 @@ fn extract_bundled_skills_preserves_user_added_skills() {
     .expect("invariant: custom skill directory should be creatable");
     fs::write(&custom_skill, "custom skill\n").expect("invariant: custom skill should be writable");
 
-    extract_bundled_skills(&paths, ExtractMode::Create)
+    extract_skills(&paths, ExtractMode::Create)
         .expect("invariant: bundled extraction should not touch custom skills");
 
     assert_eq!(
@@ -109,7 +106,7 @@ fn extract_bundled_skills_rejects_symlinked_skill_tree() {
     std::os::unix::fs::symlink(external.path(), paths.skills_dir())
         .expect("invariant: symlinked skills dir should be creatable");
 
-    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+    let error = extract_skills(&paths, ExtractMode::Create)
         .expect_err("invariant: symlinked skills dir should be rejected");
 
     assert!(error.to_string().contains("symlink"));
@@ -125,7 +122,7 @@ fn extract_bundled_skills_rejects_symlinked_maestro_root() {
     std::os::unix::fs::symlink(external.path(), paths.maestro_dir())
         .expect("invariant: symlinked maestro dir should be creatable");
 
-    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+    let error = extract_skills(&paths, ExtractMode::Create)
         .expect_err("invariant: symlinked maestro root should be rejected");
 
     assert!(error.to_string().contains("symlink"));
@@ -137,7 +134,7 @@ fn extract_bundled_skills_rejects_symlinked_maestro_root() {
 
 #[test]
 fn bundled_skill_contents_include_activation_logging_instruction() {
-    for skill in bundled_skills() {
+    for skill in skills() {
         assert!(skill.contents.contains("skill_activation"));
         assert!(skill.contents.contains(skill.name));
         assert!(skill.contents.contains("maestro hook record"));
@@ -154,7 +151,7 @@ fn extract_bundled_skills_rejects_symlinked_skill_parent() {
     std::os::unix::fs::symlink(external.path(), paths.skills_dir().join("maestro-task"))
         .expect("invariant: symlinked skill dir should be creatable");
 
-    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+    let error = extract_skills(&paths, ExtractMode::Create)
         .expect_err("invariant: symlinked skill parent should be rejected");
 
     assert!(error.to_string().contains("symlink"));
@@ -174,7 +171,7 @@ fn extract_bundled_skills_refuses_existing_bundled_file_by_default() {
     .expect("invariant: bundled skill directory should be creatable");
     fs::write(&existing, "custom task\n").expect("invariant: skill should be writable");
 
-    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+    let error = extract_skills(&paths, ExtractMode::Create)
         .expect_err("invariant: existing bundled skill should be rejected");
 
     assert!(error.to_string().contains("already exists"));
@@ -197,7 +194,7 @@ fn extract_bundled_skills_create_preflights_before_writing() {
     .expect("invariant: bundled skill directory should be creatable");
     fs::write(&existing, "custom setup\n").expect("invariant: skill should be writable");
 
-    let error = extract_bundled_skills(&paths, ExtractMode::Create)
+    let error = extract_skills(&paths, ExtractMode::Create)
         .expect_err("invariant: existing bundled skill should be rejected");
 
     assert!(error.to_string().contains("already exists"));
@@ -221,7 +218,7 @@ fn extract_bundled_skills_merge_preserves_existing_bundled_file() {
     .expect("invariant: bundled skill directory should be creatable");
     fs::write(&existing, "custom task\n").expect("invariant: skill should be writable");
 
-    extract_bundled_skills(&paths, ExtractMode::Merge)
+    extract_skills(&paths, ExtractMode::Merge)
         .expect("invariant: merge extraction should preserve existing bundled skills");
 
     assert_eq!(
@@ -245,7 +242,7 @@ fn extract_bundled_skills_force_backs_up_existing_bundled_file() {
     let backup_timestamp =
         backup_operation_timestamp().expect("invariant: backup timestamp should be available");
 
-    extract_bundled_skills(
+    extract_skills(
         &paths,
         ExtractMode::Force {
             backup_timestamp: &backup_timestamp,
@@ -255,7 +252,7 @@ fn extract_bundled_skills_force_backs_up_existing_bundled_file() {
 
     assert_eq!(
         fs::read_to_string(&existing).expect("invariant: rewritten skill should be readable"),
-        bundled_skills()[0].contents
+        skills()[0].contents
     );
     let backup = paths
         .backups_dir()
@@ -271,12 +268,12 @@ fn extract_bundled_skills_force_backs_up_existing_bundled_file() {
 fn extract_bundled_skills_update_skips_unchanged_bundled_files() {
     let temp_dir = TestTempDir::new("maestro-skills-test");
     let paths = MaestroPaths::new(temp_dir.path());
-    extract_bundled_skills(&paths, ExtractMode::Create)
+    extract_skills(&paths, ExtractMode::Create)
         .expect("invariant: initial bundled extraction should succeed");
     let backup_timestamp =
         backup_operation_timestamp().expect("invariant: backup timestamp should be available");
 
-    let report = extract_bundled_skills(
+    let report = extract_skills(
         &paths,
         ExtractMode::Update {
             backup_timestamp: &backup_timestamp,
