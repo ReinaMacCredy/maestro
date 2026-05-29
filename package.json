@@ -33,19 +33,19 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opentui/core": "0.1.105",
-    "@opentui/react": "0.1.105",
+    "@opentui/core": "0.3.0",
+    "@opentui/react": "0.3.0",
     "cli-spinners": "^3.4.0",
     "commander": "^14.0.3",
-    "react": "19.2.5",
+    "react": "19.2.6",
     "react-devtools-core": "^7.0.1",
-    "ws": "^8.18.0",
-    "yaml": "^2.7.0",
+    "ws": "^8.21.0",
+    "yaml": "^2.9.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.15",
     "typescript": "^5.7.0"
   }
 }
