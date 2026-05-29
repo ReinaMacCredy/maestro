@@ -8,7 +8,7 @@ mod restore_journal;
 mod stale;
 mod verify_task;
 
-pub use events::managed_event_files;
+pub use events::{managed_event_files, record_claim};
 pub use proof_status::{
     needs_verification_proof_status_kind_for_task, proof_status, proof_status_for_task,
     proof_status_kind_for_task, render_proof_status, ProofStaleReason, ProofStatus,

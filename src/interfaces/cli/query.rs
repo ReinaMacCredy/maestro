@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::Read;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use serde_json::Value;
 
 use crate::decisions::query::{decision_entries, decision_id};
 use crate::domain::feature;
 use crate::domain::proof;
+use crate::domain::run;
 use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
@@ -77,33 +76,29 @@ fn query_matrix(paths: &MaestroPaths) -> Result<()> {
 }
 
 fn query_friction(paths: &MaestroPaths) -> Result<()> {
-    let event_files = proof::managed_event_files(paths)?;
+    let sessions = proof::managed_event_files(paths)?.len();
     let mut events = 0_usize;
     let mut user_prompts = 0_usize;
     let mut corrections = 0_usize;
     let mut kinds = BTreeMap::<String, usize>::new();
 
-    for path in &event_files {
-        for line in event_lines(path)? {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let Ok(event) = serde_json::from_str::<Value>(&line) else {
-                continue;
-            };
-            events += 1;
-            let kind = metrics::event_kind(&event);
-            *kinds.entry(kind.clone()).or_default() += 1;
-            if kind == "UserPromptSubmit" {
-                user_prompts += 1;
-                if metrics::looks_like_correction(
-                    metrics::event_text(&event).as_deref().unwrap_or_default(),
-                ) {
-                    corrections += 1;
-                }
+    run::visit_managed_events(paths, |record| {
+        let event = record.event();
+        events += 1;
+        let kind = event
+            .event_type()
+            .or_else(|| event.alias_kind())
+            .unwrap_or("<unknown>")
+            .to_string();
+        *kinds.entry(kind.clone()).or_default() += 1;
+        if kind == "UserPromptSubmit" {
+            user_prompts += 1;
+            if metrics::looks_like_correction(event.prompt_text().unwrap_or_default()) {
+                corrections += 1;
             }
         }
-    }
+        Ok(())
+    })?;
 
     if events == 0 {
         println!("friction: no events found");
@@ -111,7 +106,7 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
     }
 
     println!("FRICTION");
-    println!("sessions: {}", event_files.len());
+    println!("sessions: {sessions}");
     println!("events: {events}");
     println!("user_prompts: {user_prompts}");
     println!("corrections: {corrections}");
@@ -235,17 +230,4 @@ fn decision_title(path: &Path) -> Result<String> {
         .and_then(|heading| heading.split_once(": ").map(|(_, title)| title.to_string()))
         .unwrap_or_else(|| "<untitled>".to_string());
     Ok(title)
-}
-
-fn event_lines(path: &Path) -> Result<Vec<String>> {
-    let mut bytes = Vec::new();
-    fs::File::open(path)
-        .with_context(|| format!("failed to read {}", path.display()))?
-        .read_to_end(&mut bytes)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    Ok(bytes
-        .split(|byte| *byte == b'\n')
-        .filter_map(|line| std::str::from_utf8(line).ok())
-        .map(str::to_string)
-        .collect())
 }

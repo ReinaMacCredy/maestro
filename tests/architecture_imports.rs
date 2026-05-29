@@ -371,6 +371,35 @@ fn interfaces_enumerate_decisions_through_domain_facade() {
 }
 
 #[test]
+fn interfaces_record_run_events_through_domain_facade() {
+    let mut violations = Vec::new();
+
+    for root in INTERFACE_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            let source = source_without_test_modules(&read_source_file(&file));
+
+            // The managed run event log path (`events.jsonl`) is constructed
+            // only inside crate::domain::run. An interface file that names the
+            // literal is hand-rolling the run-log location instead of reading
+            // through run::visit_managed_events / proof and writing through
+            // proof::record_claim.
+            if source.contains("\"events.jsonl\"") {
+                violations.push(format!(
+                    "{} names the events.jsonl run-log path; record and read run events via crate::domain::run / crate::domain::proof",
+                    file.display()
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "interface code must record and read run events through the domain facades, not by naming the events.jsonl log path:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn feature_domain_facade_exposes_the_deliberate_surface() {
     let feature_facade = read_source_file(Path::new("src/domain/feature/mod.rs"));
     assert_eq!(
@@ -412,6 +441,7 @@ fn proof_domain_facade_does_not_publish_leaf_modules() {
             "proof_status".to_string(),
             "proof_status_for_task".to_string(),
             "proof_status_kind_for_task".to_string(),
+            "record_claim".to_string(),
             "render_proof_status".to_string(),
         ]),
         "src/domain/proof/mod.rs should expose only the deliberate Proof facade surface"
@@ -728,9 +758,7 @@ fn metrics_operation_owns_implementation() {
     for item in [
         "mod friction;",
         "mod summary;",
-        "pub use friction::{",
-        "event_kind",
-        "looks_like_correction",
+        "pub use friction::looks_like_correction;",
         "pub use summary::{",
         "render_summary",
         "summarize",
@@ -753,12 +781,9 @@ fn metrics_operation_owns_implementation() {
             "MetricsSummary".to_string(),
             "RunEvidenceLoad".to_string(),
             "RunEvidenceRecord".to_string(),
-            "event_kind".to_string(),
-            "event_text".to_string(),
             "load_run_evidence".to_string(),
             "looks_like_correction".to_string(),
             "render_summary".to_string(),
-            "string_field".to_string(),
             "summarize".to_string(),
             "task_verification_durations".to_string(),
         ]),
@@ -1026,6 +1051,7 @@ fn proof_domain_does_not_apply_or_mutate_task_directly() {
         "VerificationOutcome".to_string(),
         "VerificationPassed".to_string(),
         "load_task_for_update".to_string(),
+        "load_task_record".to_string(),
     ]);
 
     for file in rust_files_under(Path::new("src/domain/proof")) {
@@ -1088,12 +1114,16 @@ fn task_verification_application_stays_behind_task_verify_operation() {
 #[test]
 fn proof_domain_reads_run_through_run_read_models() {
     let mut violations = Vec::new();
-    let allowed_run_read_symbols = BTreeSet::from([
+    // Managed Run seams Proof may consume: read models plus the single hardened
+    // write seam. `append_manual_event` is traversal- and symlink-safe, so it is
+    // the one sanctioned way for Proof to record proof events (C2 Fork A).
+    let allowed_run_symbols = BTreeSet::from([
         "RunEvent".to_string(),
         "RunEventLog".to_string(),
         "RunEventRecord".to_string(),
         "RunEvidenceLoad".to_string(),
         "RunEvidenceRecord".to_string(),
+        "append_manual_event".to_string(),
         "load_run_evidence".to_string(),
         "managed_event_logs".to_string(),
         "visit_managed_events".to_string(),
@@ -1123,9 +1153,9 @@ fn proof_domain_reads_run_through_run_read_models() {
         }
 
         for symbol in module_symbol_references(&code, "run::") {
-            if !allowed_run_read_symbols.contains(&symbol) {
+            if !allowed_run_symbols.contains(&symbol) {
                 violations.push(format!(
-                    "{} references Run symbol run::{symbol} outside the approved read model set",
+                    "{} references Run symbol run::{symbol} outside the approved managed Run seam set",
                     file.display()
                 ));
             }
@@ -1134,7 +1164,7 @@ fn proof_domain_reads_run_through_run_read_models() {
 
     assert!(
         violations.is_empty(),
-        "Proof should consume Run through managed Run read models, not unmanaged Run path readers:\n{}",
+        "Proof should consume Run only through managed Run seams (read models plus the hardened append), not unmanaged Run path access:\n{}",
         violations.join("\n")
     );
 }
