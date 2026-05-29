@@ -147,16 +147,16 @@ direction intact across Init, Improver, and Metrics; the
 `install_production_sources_use_domain_facade_not_legacy_shim` guard keeps
 Install as the only domain-owned orchestration exception; and the
 `update_routes_schema_drift_through_migration_and_does_not_import_harness_writes`
-guard keeps Update routing schema drift through the `operations/migrate` root
-facade instead of importing the Harness template write surface. These are
+guard keeps Update off the Harness template write surface and requires any
+Migration use to go through the `operations/migrate` root facade. These are
 import-boundary checks; Migration and Update behavioral coverage still lives in
 `tests/migrate_integration.rs` and `tests/update_integration.rs` per the rows
 above.
 
 If changing current Task verification surfaces such as
-`src/domain/proof/verify_task.rs`, the legacy `src/verification` shim, the task
-verify command path, `operations/task_verify`, Proof report writing, or Task
-verification binding behavior, run `tests/task_verify_integration.rs`, Task
+`src/domain/proof/verify_task.rs`, the task verify command path,
+`operations/task_verify`, Proof report writing, or Task verification binding
+behavior, run `tests/task_verify_integration.rs`, Task
 lifecycle tests, and focused tests for stale Task snapshots, report-write
 failure, typed Task-apply failure leaving a readable unapplied report, failed
 verification moving a previously verified Task only through Task-owned

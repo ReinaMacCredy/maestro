@@ -476,13 +476,10 @@ Current task behavior is split across several modules:
   it loads the Task snapshot, asks Proof to write a receipt-keyed attempt under
   `verification.attempts/`, and asks Task to promote `verification.json` and
   apply the outcome through optimistic concurrency.
-- `src/verification/` remains a legacy compatibility shim over Proof. Legacy
-  compatibility keeps its historical direct-apply behavior, but CLI task
-  verification no longer routes through that shim.
 
 The rough edge is that task invariants are not all behind one Task aggregate
 interface. Some of them live in task modules, some in command code, and some in
-the verification subsystem.
+the Proof and task-verify modules.
 
 #### Target State
 
@@ -533,11 +530,11 @@ Feature means the feature aggregate, not only `features.yaml` and not the whole
 planning workflow.
 
 Feature records currently live in `.maestro/features/features.yaml` using
-`maestro.feature.v1`. `src/feature/schema.rs` defines the registry, feature
-records, and feature lifecycle status. The code explicitly keeps task counts out
-of stored feature records.
+`maestro.feature.v1`. `src/domain/feature/schema.rs` defines the registry,
+feature records, and feature lifecycle status. The code explicitly keeps task
+counts out of stored feature records.
 
-Feature rollups are derived on demand. `src/feature/query.rs` scans
+Feature rollups are derived on demand. `src/domain/feature/query.rs` scans
 `.maestro/tasks/**/task.yaml` and counts total and verified tasks by
 `feature_id`.
 
@@ -605,9 +602,9 @@ named like `decision-001-use-computed-query-views.md`.
 
 Current decision behavior is split across:
 
-- `src/decisions/template.rs`: decision file names and Markdown template.
-- `src/decisions/query.rs`: decision file discovery, id resolution, sequence
-  number parsing, and path traversal/symlink avoidance.
+- `src/domain/decisions/template.rs`: decision file names and Markdown template.
+- `src/domain/decisions/query.rs`: decision file discovery, id resolution,
+  sequence number parsing, and path traversal/symlink avoidance.
 - `src/interfaces/cli/decision.rs`: CLI routing, decision creation, list, show, next
   decision number calculation, and output.
 
@@ -702,10 +699,9 @@ Current run behavior is owned by `src/domain/run/`:
   `run_evidence.yaml`.
 
 `src/interfaces/hooks/record.rs` is now a thin adapter that reads stdin, parses
-JSON, and calls Run. `src/interfaces/hooks/event.rs` and
-`src/evidence/run_evidence.rs` preserve legacy compatibility shims.
-`src/domain/proof/events.rs` preserves the legacy Proof compatibility surface
-while delegating discovery to Run.
+JSON, and calls Run. `src/interfaces/hooks/event.rs` is a thin re-export of Run
+event helpers for the hooks interface. `src/domain/proof/events.rs` exposes the
+Proof event-discovery surface while delegating discovery to Run.
 
 The normalized event records use `maestro.event.v1`. Run evidence uses
 `maestro.run_evidence.v1`. `core` also declares `maestro.run.v1`, but the
@@ -718,9 +714,9 @@ use `maestro.event.v1` event lines and `maestro.run_evidence.v1` evidence. If
 migration behavior, and tests in the same change.
 
 The remaining rough edge is compatibility surface area, not ownership:
-`crate::hooks`, `maestro::hooks`, and `crate::evidence::run_evidence` still
-exist as shims during the migration. New code should call `domain/run` for Run
-behavior and keep hook adapters focused on process input and output.
+`crate::hooks` and `maestro::hooks` still exist as compatibility re-exports.
+New code should call `domain/run` for Run behavior and keep hook adapters
+focused on process input and output.
 
 #### Target State
 
@@ -823,8 +819,7 @@ Current proof behavior is split across:
 - `src/domain/proof/verify_task.rs`: task loading, freshness input calculation,
   verify command execution from `harness.yml`, completion-claim extraction,
   proof/evidence collection, claim matching, failure generation,
-  receipt-keyed attempt writing, canonical `verification.json` promotion, and
-  legacy direct-apply compatibility.
+  receipt-keyed attempt writing, and canonical `verification.json` promotion.
 - `src/domain/proof/stale.rs`: freshness comparison and stale reason
   generation.
 - `src/domain/proof/proof_status.rs`: persisted proof loading, freshness
@@ -839,10 +834,9 @@ Current proof behavior is split across:
 - `src/interfaces/cli/query.rs`: proof status and matrix read paths.
 
 `domain::proof::verify_task` is intentionally not a public facade export in
-the target shape because Task verification is a multi-domain operation. Legacy
-report-returning compatibility remains at `crate::verification::verify_task`.
-This is the compatibility rule for moved public paths: legacy roots preserve
-old imports while new `domain::*` facades expose the target contract only.
+the target shape because Task verification is a multi-domain operation
+coordinated by `operations/task_verify`. The legacy report-returning path that
+once lived at `crate::verification` has been removed.
 
 Proof reads several other concepts:
 
@@ -851,10 +845,8 @@ Proof reads several other concepts:
   binding fields.
 - Run provides event evidence through managed `events.jsonl` files.
 
-The rough edge is now legacy-only: `crate::verification` still preserves its
-historical direct-apply behavior for compatibility. Current CLI verification
-routes through `operations/task_verify`, so Proof writes reports and Task owns
-the lifecycle and binding mutation.
+Current CLI verification routes through `operations/task_verify`, so Proof
+writes reports and Task owns the lifecycle and binding mutation.
 
 #### Target State
 
@@ -1002,7 +994,6 @@ Current install behavior is split across:
   agent conversion, and Codex hook approval reminder.
 - `src/interfaces/cli/uninstall.rs`: thin CLI adapter for repo discovery and
   CLI agent conversion.
-- `src/install/mod.rs`: temporary compatibility shim over the Install facade.
 
 Install currently creates or updates these kinds of files:
 
@@ -1117,8 +1108,7 @@ apply behavior. It does not mean Update, normal domain behavior, release policy,
 or routine Harness template upgrades.
 
 The current migration implementation supports a v0.106.1 to v0.8 path in
-`src/operations/migrate/v0_106_to_v0_8.rs`. The legacy `src/migrate` root is a
-compatibility shim for existing public imports.
+`src/operations/migrate/v0_106_to_v0_8.rs`.
 
 That version module name describes the current legacy artifact path. Future
 migration version modules should use exact, sortable source and target artifact
@@ -1241,25 +1231,18 @@ The public crate surface currently exposes these top-level source modules from
   - `foundation`
   - `interfaces`
   - `operations`
-- Legacy roots that still resolve during the compatibility migration:
+- Legacy roots that still resolve as documented compatibility re-exports:
   - `commands`
   - `core`
   - `decisions`
-  - `evidence`
   - `feature`
   - `harness`
   - `hooks`
-  - `improver`
-  - `install`
   - `mcp`
-  - `metrics`
-  - `migrate`
   - `shell`
   - `skills`
   - `task`
   - `tui`
-  - `update`
-  - `verification`
 
 `foundation/core` now holds the Core implementation. The legacy `core` crate
 root remains as a compatibility re-export while callers migrate to
@@ -1267,11 +1250,10 @@ root remains as a compatibility re-export while callers migrate to
 
 `interfaces/cli` now holds the CLI adapter implementation. The legacy
 `commands` crate root remains as a compatibility re-export while callers
-migrate to `interfaces::cli`. Because most domain facades are still
-transitional aliases, `tests/architecture_imports.rs` explicitly allows current
-adapter imports into legacy domain/operation/interface roots until the owning
-modules move in later phases. Those allowances must stay file-specific and
-shrink as each owning facade becomes real.
+migrate to `interfaces::cli`. `tests/architecture_imports.rs` explicitly allows
+the remaining CLI adapter imports into the retained domain compatibility aliases
+(`decisions`, `feature`, `harness`). Those allowances must stay file-specific
+and shrink as callers move to the owning domain facades.
 
 `interfaces/shell` now holds shell integration rendering. The legacy `shell`
 crate root remains as a compatibility re-export while callers migrate to
@@ -1279,8 +1261,8 @@ crate root remains as a compatibility re-export while callers migrate to
 
 `interfaces/mcp` now holds MCP transport and tool exposure. The legacy `mcp`
 crate root remains as a compatibility re-export while callers migrate to
-`interfaces::mcp`. Its temporary legacy imports are limited to the source-read
-facades still pending later domain moves.
+`interfaces::mcp`. MCP tools read through the canonical domain and operation
+facades, with no remaining legacy source-read imports.
 
 `interfaces/hooks` now holds hook process adapter code. The legacy `hooks`
 crate root remains as a compatibility re-export while callers migrate to
@@ -1290,8 +1272,8 @@ aggregate exposes a non-interface facade.
 
 `interfaces/tui` now holds TUI/watch rendering. The legacy `tui` crate root
 remains as a compatibility re-export while callers migrate to
-`interfaces::tui`. Its temporary legacy imports are limited to source-read
-facades still pending later domain moves.
+`interfaces::tui`. Its one remaining legacy import is `crate::feature` in a
+single watch file; other read paths use the canonical domain facades.
 
 The current source tree already has useful domain-oriented modules, but the
 seams are uneven. Some modules are deep enough to own a meaningful contract;
@@ -1305,12 +1287,11 @@ Current module groups:
   and time.
 - **CLI adapter**: `interfaces/cli` owns argument parsing and command routing,
   but several command files still coordinate domain details directly.
-- **Artifact/domain/operation modules**: `harness`, `task`, `feature`,
-  `decisions`, `verification`, `evidence`, `install`, `skills`,
-  `operations/init`, `operations/improver`, `operations/metrics`,
-  `operations/migrate`, and `operations/update` own or coordinate repo-local
-  artifacts. Legacy `improver`, `metrics`, `migrate`, and `update` remain only
-  as compatibility shims.
+- **Artifact/domain/operation modules**: `domain/harness`, `domain/task`,
+  `domain/feature`, `domain/decisions`, `domain/proof`, `domain/run`,
+  `domain/install`, `domain/skills`, `operations/init`, `operations/improver`,
+  `operations/metrics`, `operations/migrate`, and `operations/update` own or
+  coordinate repo-local artifacts.
 - **Interface adapters**: `interfaces/hooks`, `interfaces/shell`,
   `interfaces/mcp`, and `interfaces/tui` expose alternate operator interfaces
   over the same local substrate. Legacy `hooks`, `shell`, `mcp`, and `tui` are
@@ -1347,8 +1328,7 @@ The target source map should make each module's ownership contract explicit:
   hook ingestion or Proof verdicts.
 - `domain/proof`: owns Proof execution, freshness checks, claim matching,
   verification reports, and proof status. CLI Task verification reaches it
-  through `operations/task_verify`, while `verification` remains a legacy
-  compatibility shim.
+  through `operations/task_verify`.
 - `install`: owns install plans, mirrors, hook installation, uninstall behavior,
   and install locks. It is the explicit domain-owned exception for install
   orchestration because wiring and ownership policy are the Install aggregate.
@@ -1367,9 +1347,8 @@ The target source map should make each module's ownership contract explicit:
   between supported on-disk formats. It should use target-domain writers where
   possible, or document any lower-level writes as migration-only exceptions.
 - `operations/update`: owns binary update checks and repo-local drift detection.
-  The legacy `update` root is only a compatibility re-export. Update must not
-  silently rewrite user-owned Harness, Task, Feature, Decision, or Install
-  artifacts.
+  Update must not silently rewrite user-owned Harness, Task, Feature, Decision,
+  or Install artifacts.
 - `interfaces/mcp`: owns MCP transport and tool exposure. The legacy `mcp`
   root is only a compatibility re-export. It should call the same operations
   and domain interfaces as CLI commands.
@@ -2134,9 +2113,6 @@ Current runtime flow summary:
     attempt remains readable as an unapplied report but must not overwrite a
     canonical report already reflected by `task.yaml`.
   - CLI rendering maps typed unapplied reasons to human output.
-  - Legacy `crate::verification::verify_task::verify_task` preserves its
-    historical report-returning compatibility path; current CLI verification
-    does not route through that shim.
 
 - **`maestro hook record`**
   - The hook adapter reads stdin and records a warning instead of failing the
@@ -2355,12 +2331,12 @@ should eventually sit behind the owning domain module.
 | `task` | Has lifecycle, blockers, lookup, display, doctor, and artifact structs, but command code still mutates some task details directly. | Deep Task aggregate. | Task mutation should be concentrated behind Task operations, especially acceptance locking, id allocation, blocker id allocation, state-history writes, and verification binding updates. |
 | `feature` | Schema and rollup reads live in `feature`, but command code creates records and changes status directly. | Deep Feature aggregate. | Registry load/save, creation, duplicate checks, status transitions, and render-ready read models should sit behind Feature. |
 | `decisions` | File naming, template, and lookup are in `decisions`, while command code owns creation sequencing and writing. | Deep Decision aggregate. | Decision id allocation, creation, and future structured metadata should move behind Decision. |
-| `interfaces/hooks` and `evidence` | Hook adapter normalizes/appends events; evidence derives run evidence. Legacy `hooks` remains a compatibility root. | Run aggregate plus hook adapter. | Run rules are split across hook and evidence modules. Hook process behavior should be separated from Run artifact ownership. |
-| `verification` | Proof owns report/freshness/claim logic and CLI verification is coordinated by `operations/task_verify`; legacy `verification` remains a compatibility shim. | Deep Proof aggregate coordinated by `operations/task_verify` for Task outcome application. | Keep production callers on the operation boundary and keep proof status accurate for applied, stale, failed, and unapplied reports. |
+| `interfaces/hooks` and `domain/run` | Hook adapter normalizes/appends events; Run derives run evidence. Legacy `hooks` remains a compatibility re-export. | Run aggregate plus hook adapter. | Run rules are split across the hook adapter and Run evidence modules. Hook process behavior should be separated from Run artifact ownership. |
+| `domain/proof` | Proof owns report/freshness/claim logic and CLI verification is coordinated by `operations/task_verify`. | Deep Proof aggregate coordinated by `operations/task_verify` for Task outcome application. | Keep production callers on the operation boundary and keep proof status accurate for applied, stale, failed, and unapplied reports. |
 | `install` and `skills` | Install owns mirrors/locks and calls skill symlink helpers. Skills owns extraction and symlink mechanics. | Install owns wiring; Skills owns content/extraction. | Keep the split sharp so Install does not own bundled skill content and Skills does not own install policy. |
-| `operations/migrate` | Strong migration plan/apply module, with some direct target artifact construction and a legacy `migrate` shim. | Explicit migration operation that preserves target-domain contracts. | Lower-level writes should remain migration-only exceptions or move to target-domain writers. |
-| `operations/update` | Binary update, bundled skill refresh, rollback, auto-check, schema mismatch reporting. Legacy `update` remains a compatibility shim. | Update owns binary/skill refresh and reports drift. | Update must not silently become migration or Harness rewrite logic. |
-| `operations/init`, `operations/improver`, `operations/metrics` | Init startup orchestration, rule-based backlog proposal refresh, and metrics projections now live behind operation root facades. Legacy `improver` and `metrics` preserve old deep paths through thin wrapper modules only. | Operation-owned workflows with thin adapters and domain read models. | Query, TUI, MCP, and remaining adapters should avoid operation leaf modules or private artifact layouts independently when domain read models exist. |
+| `operations/migrate` | Strong migration plan/apply module, with some direct target artifact construction. | Explicit migration operation that preserves target-domain contracts. | Lower-level writes should remain migration-only exceptions or move to target-domain writers. |
+| `operations/update` | Binary update, bundled skill refresh, rollback, auto-check, schema mismatch reporting. | Update owns binary/skill refresh and reports drift. | Update must not silently become migration or Harness rewrite logic. |
+| `operations/init`, `operations/improver`, `operations/metrics` | Init startup orchestration, rule-based backlog proposal refresh, and metrics projections live behind operation root facades. | Operation-owned workflows with thin adapters and domain read models. | Query, TUI, MCP, and remaining adapters should avoid operation leaf modules or private artifact layouts independently when domain read models exist. |
 | `shell` | Emits shell wrappers around the CLI. | Shell adapter only. | Must not absorb install or task lifecycle policy. |
 
 ### Target State
@@ -2380,7 +2356,7 @@ The target architecture should make the following true:
 | Question | Target Answer |
 | --- | --- |
 | Where do I edit a task lifecycle rule? | `task`, then adapter tests for callers. |
-| Where do I edit a proof freshness rule? | `verification`, then proof status and verify-flow tests. |
+| Where do I edit a proof freshness rule? | `domain/proof`, then proof status and verify-flow tests. |
 | Where do I edit Harness template content? | `harness`, with existing repos changed only by explicit Harness apply behavior, `init --force` or merge behavior, or a documented migration path. |
 | Where do I edit agent install files? | `install`, unless changing Harness content or Skills content. |
 | Where do I edit run evidence derivation? | Run-owned code, not Proof or Metrics. |
@@ -2407,10 +2383,10 @@ ownership boundaries. Priority here means maintenance leverage, not emergency.
 | Priority | Seam | Files | Current friction |
 | --- | --- | --- | --- |
 | P0 | Task aggregate boundary | `src/interfaces/cli/task.rs`, `src/domain/task/template.rs`, `src/domain/task/lifecycle.rs`, `src/domain/task/blockers.rs`, `src/domain/task/doctor.rs` | The CLI adapter still owns task id allocation, acceptance locking, blocker id allocation, and several state-history writes. |
-| P0 | Proof result to Task lifecycle | `src/domain/proof/verify_task.rs`, `src/operations/task_verify/`, `src/domain/task/mod.rs` | CLI verification now uses `operations/task_verify` for Proof report writing and Task-owned outcome application. The remaining friction is compatibility and read-model discipline: legacy `crate::verification` must not become the production boundary, and proof status must distinguish applied reports from unapplied written reports. |
-| P1 | Run aggregate boundary | `src/interfaces/hooks/record.rs`, `src/interfaces/hooks/event.rs`, `src/evidence/run_evidence.rs`, `src/domain/proof/events.rs`, `src/operations/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
-| P1 | Feature aggregate boundary | `src/interfaces/cli/feature.rs`, `src/feature/schema.rs`, `src/feature/query.rs` | Feature schema and rollups live in `feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
-| P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/decisions/template.rs`, `src/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
+| P0 | Proof result to Task lifecycle | `src/domain/proof/verify_task.rs`, `src/operations/task_verify/`, `src/domain/task/mod.rs` | CLI verification now uses `operations/task_verify` for Proof report writing and Task-owned outcome application. The remaining friction is read-model discipline: proof status must distinguish applied reports from unapplied written reports. |
+| P1 | Run aggregate boundary | `src/interfaces/hooks/record.rs`, `src/interfaces/hooks/event.rs`, `src/domain/run/evidence.rs`, `src/domain/proof/events.rs`, `src/operations/metrics/summary.rs` | Hook recording, run evidence creation, proof event discovery, and metrics discovery all know pieces of the Run artifact layout. |
+| P1 | Feature aggregate boundary | `src/interfaces/cli/feature.rs`, `src/domain/feature/schema.rs`, `src/domain/feature/query.rs` | Feature schema and rollups live in `domain/feature`, but CLI command code still creates records, changes status, saves the registry, and formats display status. |
+| P1 | Decision aggregate boundary | `src/interfaces/cli/decision.rs`, `src/domain/decisions/template.rs`, `src/domain/decisions/query.rs` | Decision naming and lookup are partly centralized, but command code still owns id allocation and file creation. |
 | P1 | Install and Skills ownership | `src/domain/install/*`, `src/domain/skills/symlink.rs`, `src/domain/skills/extract.rs` | Install owns mirrors, locks, agent-specific skill-link mapping, pending/committed recovery state, rollback, and uninstall safety while Skills owns generic skill filesystem mechanics. The split is mostly healthy, but future changes can easily blur install policy with skill content ownership. |
 | P2 | Migration target writers | `src/operations/migrate/v0_106_to_v0_8.rs`, target domain modules | Migration intentionally writes many target artifacts directly. That is acceptable as an explicit migration exception, but it can drift from target domain write rules. |
 | P2 | Projection and read-model access | `src/interfaces/cli/query.rs`, `src/interfaces/mcp/tools.rs`, `src/interfaces/tui/*`, `src/operations/metrics/summary.rs`, `src/interfaces/cli/watch.rs`, `src/interfaces/cli/event.rs` | Query, MCP, TUI, watch, event, and metrics surfaces read task/run/proof artifacts directly or through partial helpers. |

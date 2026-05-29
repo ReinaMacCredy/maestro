@@ -113,9 +113,10 @@ work until the legacy path is removed.
 
 CLI adapter files live under `src/interfaces/cli`, and `crate::commands`
 remains a compatibility re-export. New production references should prefer
-`crate::interfaces::cli`; current CLI imports into legacy domain, operation,
-and interface roots are temporary allowances until those facades move in later
-phases.
+`crate::interfaces::cli`; current CLI imports into the retained domain
+compatibility aliases (`crate::decisions`, `crate::feature`, `crate::harness`)
+are temporary allowances that should shrink as callers move to the owning
+domain facades.
 
 Shell integration lives under `src/interfaces/shell`, and `crate::shell` remains
 a compatibility re-export. New production references should prefer
@@ -126,16 +127,15 @@ MCP integration lives under `src/interfaces/mcp`, and `crate::mcp` remains a
 compatibility re-export. New production references should prefer
 `crate::interfaces::mcp`; keep `crate::mcp` and `maestro::mcp` usage to
 compatibility checks or transition work until the legacy path is removed.
-Current MCP tool imports into legacy source-read roots are temporary,
-file-specific allowances until those domain read facades move in later phases.
+MCP tools now read through the canonical domain and operation facades, with no
+remaining legacy source-read alias imports.
 
 Init orchestration lives under `src/operations/init`, metrics projections live
 under `src/operations/metrics`, and rule-based improvement proposal refresh
 lives under `src/operations/improver`. New production callers should use those
 operation root facades. The `operations/improver` and `operations/metrics`
-leaf files are private implementation details; `crate::improver` and
-`crate::metrics` preserve legacy deep paths through wrapper modules until those
-public paths are removed.
+leaf files are private implementation details; the legacy `crate::improver` and
+`crate::metrics` roots have been removed.
 
 Hook command adapter code lives under `src/interfaces/hooks`, and `crate::hooks`
 remains a compatibility re-export. New interface-layer references should prefer
@@ -147,9 +147,9 @@ TUI/watch rendering lives under `src/interfaces/tui`, and `crate::tui` remains
 a compatibility re-export. New production references should prefer
 `crate::interfaces::tui`; keep `crate::tui` and `maestro::tui` usage to
 compatibility checks or transition work until the legacy path is removed.
-Current TUI imports into legacy Task, Feature, and Proof source-read roots are
-temporary, file-specific allowances until those read facades move in later
-phases.
+The only remaining TUI import into a retained source-read alias is
+`crate::feature` in one watch file; Task and Proof are read through the
+canonical `crate::domain::task` and `crate::domain::proof` facades.
 
 When adding a folder inside a domain or operations module:
 
