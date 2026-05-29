@@ -195,6 +195,34 @@ fn doctor_fails_on_blocker_cycles() {
 }
 
 #[test]
+fn doctor_counts_real_decisions_and_skips_symlinked_entries() {
+    let temp = setup_repo("maestro-doctor-decision-symlink");
+    let repo = temp.path();
+
+    run_success(repo, &["decision", "new", "Use the domain decision reader"]);
+
+    // Doctor now enumerates decisions through the domain reader, which skips
+    // symlinks for parity with resolve_decision_path's symlink rejection. A
+    // symlinked decision-*.md must not inflate the count (the previous inline
+    // `is_file()` predicate followed the link and counted it).
+    let decisions_dir = repo.join(".maestro/decisions");
+    let real = decisions_dir.join("decision-001-use-the-domain-decision-reader.md");
+    assert!(
+        real.is_file(),
+        "decision new should create the real decision file"
+    );
+    unix_fs::symlink(&real, decisions_dir.join("decision-002-symlinked.md"))
+        .expect("invariant: symlink should be creatable in test");
+
+    let doctor = maestro(repo, &["doctor"]);
+    let out = stdout(&doctor);
+    assert!(
+        out.contains("check decisions: ok (1 decision file(s))"),
+        "doctor should count only the real decision, not the symlink:\n{out}"
+    );
+}
+
+#[test]
 fn query_views_scan_current_artifacts_without_writing_cache_files() {
     let temp = setup_repo("maestro-query-views");
     let repo = temp.path();

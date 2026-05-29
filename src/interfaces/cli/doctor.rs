@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 
+use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::task;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
@@ -153,25 +154,12 @@ fn check_decisions(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: 
         return;
     }
 
-    match std::fs::read_dir(&dir) {
-        Ok(entries) => {
-            let count = entries
-                .filter_map(Result::ok)
-                .filter(|entry| {
-                    entry.path().is_file()
-                        && entry
-                            .file_name()
-                            .to_str()
-                            .map(|name| name.starts_with("decision-") && name.ends_with(".md"))
-                            .unwrap_or(false)
-                })
-                .count();
-            checks.push(DoctorCheck {
-                name: "decisions",
-                detail: format!("{count} decision file(s)"),
-            });
-        }
-        Err(error) => errors.push(format!("failed to read {}: {error}", dir.display())),
+    match decisions::decision_entries(&dir) {
+        Ok(entries) => checks.push(DoctorCheck {
+            name: "decisions",
+            detail: format!("{} decision file(s)", entries.len()),
+        }),
+        Err(error) => errors.push(format!("{error:#}")),
     }
 }
 

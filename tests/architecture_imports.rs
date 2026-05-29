@@ -341,6 +341,36 @@ fn interfaces_obtain_features_through_domain_facade() {
 }
 
 #[test]
+fn interfaces_enumerate_decisions_through_domain_facade() {
+    let mut violations = Vec::new();
+
+    for root in INTERFACE_SCAN_ROOTS {
+        for file in rust_files_under(Path::new(root)) {
+            let source = source_without_test_modules(&read_source_file(&file));
+
+            // The decision file-naming predicate (a `decision-` prefix plus a
+            // `.md` suffix) must live only in crate::domain::decisions. An
+            // interface file that encodes both literals is re-deriving the
+            // registry's on-disk shape instead of routing through
+            // decision_entries; bare `decision-` (a blocker-target prefix) is
+            // a reference classification and stays allowed.
+            if source.contains("\"decision-\"") && source.contains("\".md\"") {
+                violations.push(format!(
+                    "{} encodes the decision-*.md file predicate; enumerate decisions via crate::domain::decisions::decision_entries",
+                    file.display()
+                ));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "interface code must enumerate decisions through the domain::decisions facade, not by re-deriving the decision-*.md file predicate:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn feature_domain_facade_exposes_the_deliberate_surface() {
     let feature_facade = read_source_file(Path::new("src/domain/feature/mod.rs"));
     assert_eq!(
