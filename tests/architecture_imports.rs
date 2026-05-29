@@ -386,7 +386,15 @@ fn proof_domain_facade_does_not_publish_leaf_modules() {
         ]),
         "src/domain/proof/mod.rs should expose only the deliberate Proof facade surface"
     );
-    for leaf in ["events", "proof_status", "stale", "verify_task"] {
+    for leaf in [
+        "attempts",
+        "commands",
+        "events",
+        "proof_status",
+        "restore_journal",
+        "stale",
+        "verify_task",
+    ] {
         assert!(
             !proof_facade.contains(&format!("pub mod {leaf};")),
             "src/domain/proof/mod.rs should expose Proof through root facade exports, not pub mod {leaf}"
@@ -2503,6 +2511,7 @@ fn source_without_pub_mod_statements(source: &str) -> String {
 fn module_symbol_references(source: &str, prefix: &str) -> BTreeSet<String> {
     source
         .match_indices(prefix)
+        .filter(|(index, _)| at_module_boundary(source, *index))
         .filter_map(|(index, _)| {
             let tail = &source[index + prefix.len()..];
             let symbol = tail
@@ -2517,6 +2526,7 @@ fn module_symbol_references(source: &str, prefix: &str) -> BTreeSet<String> {
 fn module_path_references(source: &str, prefix: &str) -> BTreeSet<String> {
     source
         .match_indices(prefix)
+        .filter(|(index, _)| at_module_boundary(source, *index))
         .filter_map(|(index, _)| {
             let tail = &source[index + prefix.len()..];
             let path = tail
@@ -2530,6 +2540,17 @@ fn module_path_references(source: &str, prefix: &str) -> BTreeSet<String> {
             (!path.is_empty()).then_some(path)
         })
         .collect()
+}
+
+/// True when a `module::` prefix match begins a module path rather than the
+/// tail of a compound identifier (e.g. `verify_task::` must not count as a
+/// `task::` reference). Path separators (`:`) are allowed before the prefix so
+/// nested paths like `domain::task::` still match.
+fn at_module_boundary(source: &str, index: usize) -> bool {
+    match source[..index].chars().last() {
+        None => true,
+        Some(previous) => !(previous.is_ascii_alphanumeric() || previous == '_'),
+    }
 }
 
 fn source_without_allowed_interfaces_hooks_reexport(file: &Path, source: &str) -> String {
@@ -2721,6 +2742,22 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
         Path::new("src/interfaces/mod.rs"),
         "pub use crate::hooks;"
     ));
+}
+
+#[test]
+fn module_reference_scanners_only_match_at_a_module_boundary() {
+    // A compound identifier ending in the prefix is not a module reference.
+    assert!(
+        module_path_references("use super::verify_task::VerificationReport;", "task::").is_empty()
+    );
+    assert!(module_symbol_references("fn go() { overrun::start(); }", "run::").is_empty());
+
+    // Real module paths still match, including nested and leading positions.
+    assert!(
+        module_path_references("use crate::domain::task::Status;", "task::").contains("Status")
+    );
+    assert!(module_path_references("task::Status", "task::").contains("Status"));
+    assert!(module_symbol_references("run::append_event()", "run::").contains("append_event"));
 }
 
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {

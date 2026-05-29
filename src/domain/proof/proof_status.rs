@@ -4,13 +4,17 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
+use super::attempts::{
+    latest_attempt_report, latest_attempt_report_for_command_read,
+    read_managed_report_file_for_command_read, read_managed_report_file_if_exists,
+    verification_path, verification_report_is_newer, VerificationReportRead,
+    VerificationReportSource,
+};
+use super::restore_journal::recover_canonical_report_for_task;
 use super::stale::{stale_reasons, StaleReason};
 use super::verify_task::{
-    applied_receipt_for_report, freshness_inputs_for_task, latest_attempt_report,
-    latest_attempt_report_for_command_read, load_task_by_id, passed_binding_matches_report,
-    read_managed_report_file_for_command_read, read_managed_report_file_if_exists,
-    recover_canonical_report_for_task, verification_path, verification_report_is_newer,
-    VerificationReport, VerificationReportRead, VerificationReportSource, VerificationStatus,
+    applied_receipt_for_report, freshness_inputs_for_task, load_task_by_id,
+    passed_binding_matches_report, VerificationReport, VerificationStatus,
 };
 use crate::domain::task;
 use crate::foundation::core::git;

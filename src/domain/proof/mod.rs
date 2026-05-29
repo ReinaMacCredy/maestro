@@ -1,7 +1,10 @@
 //! Proof aggregate facade.
 
+mod attempts;
+mod commands;
 mod events;
 mod proof_status;
+mod restore_journal;
 mod stale;
 mod verify_task;
 
@@ -12,8 +15,8 @@ pub use proof_status::{
     ProofStatusKind, ProofStatusSource,
 };
 pub(crate) use proof_status::{verification_command_read_for_task, VerificationCommandRead};
+pub(crate) use restore_journal::replace_task_report_preserving_previous;
 pub(crate) use verify_task::{
-    evaluate_and_write_task_report_attempt, replace_task_report_preserving_previous,
-    verification_outcome_for_report, VerificationReport,
+    evaluate_and_write_task_report_attempt, verification_outcome_for_report, VerificationReport,
 };
 pub use verify_task::{TaskVerification, TaskVerificationStatus};
