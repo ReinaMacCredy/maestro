@@ -772,6 +772,70 @@ fn domain_does_not_depend_on_interfaces_or_operations() {
 }
 
 #[test]
+fn foundation_does_not_depend_on_domain_operations_or_interfaces() {
+    let mut violations = Vec::new();
+
+    for file in rust_files_under(Path::new("src/foundation")) {
+        let source = read_source_file(&file);
+        let code = source_without_pub_mod_statements(&code_for_path_scan(&source));
+        for upstream in ["interfaces", "operations", "domain"] {
+            if code.contains(&format!("crate::{upstream}")) {
+                violations.push(format!(
+                    "{} references crate::{upstream} directly",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_bare_path_reference(&code, upstream) {
+                violations.push(format!(
+                    "{} references {upstream} through a bare root path",
+                    file.display()
+                ));
+                continue;
+            }
+            if contains_relative_path(&code, upstream) {
+                violations.push(format!(
+                    "{} references {upstream} through a relative path",
+                    file.display()
+                ));
+            }
+        }
+
+        for (line_number, import_statement) in crate_import_statements(&source) {
+            for upstream in ["interfaces", "operations", "domain"] {
+                if import_statement.contains(&format!("crate::{upstream}")) {
+                    violations.push(format!(
+                        "{}:{} imports {upstream}",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+            for legacy_root in LEGACY_COMPATIBILITY_ROOTS {
+                if *legacy_root == "core" {
+                    continue;
+                }
+                if contains_legacy_root_import(&import_statement, legacy_root)
+                    || contains_legacy_deep_import(&import_statement, legacy_root)
+                {
+                    violations.push(format!(
+                        "{}:{} imports Maestro-specific module {legacy_root}",
+                        file.display(),
+                        line_number
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Foundation must stay domain-neutral (no domain, operation, or interface dependencies):\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
 fn install_production_sources_use_domain_facade_not_legacy_shim() {
     assert_production_sources_use_operation_instead_of_legacy_shim("install");
 

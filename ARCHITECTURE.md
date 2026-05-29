@@ -1432,10 +1432,12 @@ The adapter rule:
   sequencing behind `operations/`.
 
 These boundaries are now test-backed by `tests/architecture_imports.rs`.
-`operations_do_not_depend_on_interfaces` and
-`domain_does_not_depend_on_interfaces_or_operations` enforce the dependency
-direction, `install_production_sources_use_domain_facade_not_legacy_shim` keeps
-Install as the only domain-owned orchestration exception, and
+`operations_do_not_depend_on_interfaces`,
+`domain_does_not_depend_on_interfaces_or_operations`, and
+`foundation_does_not_depend_on_domain_operations_or_interfaces` enforce the
+dependency direction (the last keeps Foundation domain-neutral),
+`install_production_sources_use_domain_facade_not_legacy_shim` keeps Install as
+the only domain-owned orchestration exception, and
 `update_routes_schema_drift_through_migration_and_does_not_import_harness_writes`
 keeps Update off the Harness write surface.
 

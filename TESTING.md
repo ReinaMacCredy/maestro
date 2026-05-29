@@ -141,9 +141,11 @@ while still allowing Run event/read models to expose opaque `task_id` strings.
 
 If changing the Install, Migration, Update, Init, Improver, or Metrics safety
 boundaries, run `tests/architecture_imports.rs`. The
-`operations_do_not_depend_on_interfaces` and
-`domain_does_not_depend_on_interfaces_or_operations` guards keep the dependency
-direction intact across Init, Improver, and Metrics; the
+`operations_do_not_depend_on_interfaces`,
+`domain_does_not_depend_on_interfaces_or_operations`, and
+`foundation_does_not_depend_on_domain_operations_or_interfaces` guards keep the
+dependency direction intact across Init, Improver, and Metrics and keep
+Foundation domain-neutral; the
 `install_production_sources_use_domain_facade_not_legacy_shim` guard keeps
 Install as the only domain-owned orchestration exception; and the
 `update_routes_schema_drift_through_migration_and_does_not_import_harness_writes`
