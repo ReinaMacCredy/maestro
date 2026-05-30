@@ -356,7 +356,7 @@ fn failures_for(
     if task.state != TaskState::NeedsVerification && task.state != TaskState::Verified {
         failures.push(format!(
             "task is {}, expected needs_verification",
-            state_name(&task.state)
+            task.state.as_str()
         ));
     }
     if claims.is_empty() {
@@ -467,18 +467,4 @@ fn display_path(root: &Path, path: &Path) -> String {
 fn new_attempt_id(task: &TaskRecord, verified_at: &str) -> String {
     let counter = ATTEMPT_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("{}-{verified_at}-{}-{counter}", task.id, process::id())
-}
-
-fn state_name(state: &TaskState) -> &'static str {
-    match state {
-        TaskState::Draft => "draft",
-        TaskState::Exploring => "exploring",
-        TaskState::Ready => "ready",
-        TaskState::InProgress => "in_progress",
-        TaskState::NeedsVerification => "needs_verification",
-        TaskState::Verified => "verified",
-        TaskState::Rejected => "rejected",
-        TaskState::Abandoned => "abandoned",
-        TaskState::Superseded => "superseded",
-    }
 }

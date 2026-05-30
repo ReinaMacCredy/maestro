@@ -42,7 +42,7 @@ pub(crate) fn summarize_task_entries(
 
     for entry in tasks {
         *task_counts
-            .entry(task_state_label(&entry.task.state).to_string())
+            .entry(entry.task.state.as_str().to_string())
             .or_default() += 1;
         if entry.task.state == TaskState::Verified {
             if let Some(seconds) = task::verification_duration_seconds(
@@ -159,20 +159,6 @@ fn average(values: &[u64]) -> Option<u64> {
         return None;
     }
     Some(values.iter().sum::<u64>() / values.len() as u64)
-}
-
-fn task_state_label(state: &TaskState) -> &'static str {
-    match state {
-        TaskState::Draft => "draft",
-        TaskState::Exploring => "exploring",
-        TaskState::Ready => "ready",
-        TaskState::InProgress => "in_progress",
-        TaskState::NeedsVerification => "needs_verification",
-        TaskState::Verified => "verified",
-        TaskState::Rejected => "rejected",
-        TaskState::Abandoned => "abandoned",
-        TaskState::Superseded => "superseded",
-    }
 }
 
 fn count(counts: &BTreeMap<String, usize>, state: &str) -> usize {

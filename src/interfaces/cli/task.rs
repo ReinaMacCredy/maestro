@@ -142,7 +142,7 @@ fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
 fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let now = nanos_since_epoch_string();
     let task = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
-    println!("updated {} -> {}", task.id, state_name(&task.state));
+    println!("updated {} -> {}", task.id, task.state.as_str());
     Ok(())
 }
 
@@ -155,7 +155,7 @@ fn transition_task(
 ) -> Result<()> {
     let now = nanos_since_epoch_string();
     let task = task::transition_task(&paths.tasks_dir(), id, to, actor, &now, details)?;
-    println!("updated {} -> {}", task.id, state_name(&task.state));
+    println!("updated {} -> {}", task.id, task.state.as_str());
     Ok(())
 }
 
@@ -324,19 +324,5 @@ fn blocker_target(by: Option<String>) -> BlockerTarget {
         Some(by) if by.starts_with("decision-") => BlockerTarget::Decision(by),
         Some(by) => BlockerTarget::External(by),
         None => BlockerTarget::Human,
-    }
-}
-
-fn state_name(state: &TaskState) -> &'static str {
-    match state {
-        TaskState::Draft => "draft",
-        TaskState::Exploring => "exploring",
-        TaskState::Ready => "ready",
-        TaskState::InProgress => "in_progress",
-        TaskState::NeedsVerification => "needs_verification",
-        TaskState::Verified => "verified",
-        TaskState::Rejected => "rejected",
-        TaskState::Abandoned => "abandoned",
-        TaskState::Superseded => "superseded",
     }
 }

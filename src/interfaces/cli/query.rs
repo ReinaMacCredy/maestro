@@ -208,17 +208,7 @@ fn task_state_label(state: &task::TaskState, blocked: bool) -> &'static str {
     if blocked {
         return "blocked";
     }
-    match state {
-        task::TaskState::Draft => "draft",
-        task::TaskState::Exploring => "exploring",
-        task::TaskState::Ready => "ready",
-        task::TaskState::InProgress => "in_progress",
-        task::TaskState::NeedsVerification => "needs_verification",
-        task::TaskState::Verified => "verified",
-        task::TaskState::Rejected => "rejected",
-        task::TaskState::Abandoned => "abandoned",
-        task::TaskState::Superseded => "superseded",
-    }
+    state.as_str()
 }
 
 fn decision_title(path: &Path) -> Result<String> {

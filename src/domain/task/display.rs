@@ -1,5 +1,5 @@
 use crate::domain::task::blockers::has_unresolved_blockers;
-use crate::domain::task::template::{TaskRecord, TaskState};
+use crate::domain::task::template::TaskRecord;
 
 /// Render one task for `maestro task show`.
 pub fn render_task(task: &TaskRecord) -> String {
@@ -48,17 +48,7 @@ pub fn render_task_list(tasks: &[TaskRecord]) -> String {
 }
 
 fn state_label(task: &TaskRecord) -> String {
-    let base = match task.state {
-        TaskState::Draft => "draft",
-        TaskState::Exploring => "exploring",
-        TaskState::Ready => "ready",
-        TaskState::InProgress => "in_progress",
-        TaskState::NeedsVerification => "needs_verification",
-        TaskState::Verified => "verified",
-        TaskState::Rejected => "rejected",
-        TaskState::Abandoned => "abandoned",
-        TaskState::Superseded => "superseded",
-    };
+    let base = task.state.as_str();
     if has_unresolved_blockers(task) {
         format!("{base} / blocked")
     } else {

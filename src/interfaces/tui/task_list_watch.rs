@@ -123,7 +123,7 @@ fn task_substatus(
     if task.state == task::TaskState::Verified {
         return verified_substatus(paths, task, current_commit);
     }
-    Ok(state_label(&task.state).to_string())
+    Ok(task.state.as_str().to_string())
 }
 
 fn needs_verification_substatus(
@@ -172,20 +172,6 @@ fn task_dir(paths: &MaestroPaths, task: &task::TaskRecord) -> Option<std::path::
         Some(dir)
     } else {
         None
-    }
-}
-
-fn state_label(state: &task::TaskState) -> &'static str {
-    match state {
-        task::TaskState::Draft => "draft",
-        task::TaskState::Exploring => "exploring",
-        task::TaskState::Ready => "ready",
-        task::TaskState::InProgress => "in_progress",
-        task::TaskState::NeedsVerification => "needs_verification",
-        task::TaskState::Verified => "verified",
-        task::TaskState::Rejected => "rejected",
-        task::TaskState::Abandoned => "abandoned",
-        task::TaskState::Superseded => "superseded",
     }
 }
 

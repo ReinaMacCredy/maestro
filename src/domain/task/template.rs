@@ -27,6 +27,25 @@ pub enum TaskState {
     Superseded,
 }
 
+impl TaskState {
+    /// Canonical lifecycle label, identical to the serde `snake_case` wire form.
+    /// Used for CLI/TUI output and as a metric bucket key, so these strings are a
+    /// contract and must not drift.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Draft => "draft",
+            Self::Exploring => "exploring",
+            Self::Ready => "ready",
+            Self::InProgress => "in_progress",
+            Self::NeedsVerification => "needs_verification",
+            Self::Verified => "verified",
+            Self::Rejected => "rejected",
+            Self::Abandoned => "abandoned",
+            Self::Superseded => "superseded",
+        }
+    }
+}
+
 /// V1 task record stored in `task.yaml`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TaskRecord {
