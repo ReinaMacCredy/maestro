@@ -10,7 +10,9 @@ use crate::domain::skills::symlink::{
 };
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::diff::unified_diff;
-use crate::foundation::core::fs::{ensure_parent_dir, read_to_string_if_exists};
+use crate::foundation::core::fs::{
+    create_directory_symlink, ensure_parent_dir, read_to_string_if_exists,
+};
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::managed_blocks::{
     remove_managed_block, upsert_managed_block, upsert_managed_json_keys, ManagedBlockFormat,
@@ -542,16 +544,6 @@ fn rollback_removed_symlinks(symlinks: &[RemovedSymlink]) -> Result<()> {
     }
 
     Ok(())
-}
-
-#[cfg(unix)]
-fn create_directory_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::unix::fs::symlink(target, link)
-}
-
-#[cfg(windows)]
-fn create_directory_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::windows::fs::symlink_dir(target, link)
 }
 
 fn write_mirror_removals(

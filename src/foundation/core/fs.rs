@@ -39,6 +39,18 @@ pub fn ensure_parent_dir(path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
+/// Create a directory symlink at `link` pointing to `target`, using the
+/// platform-native symlink call.
+#[cfg(unix)]
+pub(crate) fn create_directory_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+pub(crate) fn create_directory_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(target, link)
+}
+
 /// Read a UTF-8 file if it exists.
 pub fn read_to_string_if_exists(path: impl AsRef<Path>) -> Result<Option<String>> {
     let path = path.as_ref();

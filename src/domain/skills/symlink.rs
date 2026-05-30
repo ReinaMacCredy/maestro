@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-use crate::foundation::core::fs::ensure_parent_dir;
+use crate::foundation::core::fs::{create_directory_symlink, ensure_parent_dir};
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -84,14 +84,4 @@ fn managed_symlink_path(paths: &MaestroPaths, relative_path: &str) -> Result<Pat
 fn validate_canonical_skills_tree(paths: &MaestroPaths) -> Result<()> {
     managed_path(paths, ".maestro/skills", SymlinkPolicy::RejectAllComponents)?;
     Ok(())
-}
-
-#[cfg(unix)]
-fn create_directory_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::unix::fs::symlink(target, link)
-}
-
-#[cfg(windows)]
-fn create_directory_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::windows::fs::symlink_dir(target, link)
 }
