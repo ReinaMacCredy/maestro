@@ -26,7 +26,7 @@ pub mod watch;
 #[derive(Debug, Parser)]
 #[command(
     name = "maestro",
-    version = env!("MAESTRO_BUILD_VERSION"),
+    version = env!("CARGO_PKG_VERSION"),
     about = "Local-first agent harness CLI",
     arg_required_else_help = true
 )]

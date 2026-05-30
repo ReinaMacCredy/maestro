@@ -38,7 +38,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         paths: &paths,
         executable_path: &executable_path,
         backup_timestamp: &backup_timestamp,
-        current_version: env!("MAESTRO_BUILD_VERSION"),
+        current_version: env!("CARGO_PKG_VERSION"),
         check_only: args.check,
         force: args.force,
     }) {
@@ -91,7 +91,7 @@ pub fn run_auto_check() -> Result<()> {
         paths: &paths,
         executable_path: &executable_path,
         backup_timestamp: "",
-        current_version: env!("MAESTRO_BUILD_VERSION"),
+        current_version: env!("CARGO_PKG_VERSION"),
         check_only: true,
         force: false,
     })?;

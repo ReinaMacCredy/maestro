@@ -89,8 +89,10 @@ Do not tag, publish, push, or create GitHub releases without explicit approval.
 
 ## NOTES
 
-- Version source is `VERSION` plus `VERSION_COMMIT`; CLI versions render as
-  `0.0.<VERSION>-g<VERSION_COMMIT>`.
+- Version source is `Cargo.toml` (`package.version`); CLI versions render as
+  pure semver via `env!("CARGO_PKG_VERSION")`. Repo-tracked behavior changes
+  bump the version; docs-only do not. Release publishing requires manual
+  dispatch or a head commit named `chore(release): v<version>`.
 - If editing `resources/skills/<name>/`, `resources/hooks/record.sh`, or
   `resources/harness/HARNESS.md`, bump its version marker and update
   `tests/resources_version_guard.rs`.

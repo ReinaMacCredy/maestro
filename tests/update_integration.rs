@@ -158,7 +158,7 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
             r#"#!/bin/sh
 printf '{{"tag_name":"v{}","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
 "#,
-            env!("MAESTRO_BUILD_VERSION"),
+            env!("CARGO_PKG_VERSION"),
             platform_asset_name()
         ),
     );
