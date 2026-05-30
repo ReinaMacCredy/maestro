@@ -105,6 +105,7 @@ pub struct TaskArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum TaskCommand {
+    #[command(about = "Create a task (-> draft)")]
     Create {
         title: String,
         #[arg(long)]
@@ -114,15 +115,19 @@ pub enum TaskCommand {
         #[arg(long)]
         risk: Option<String>,
     },
+    #[command(about = "Move a draft into exploring (-> exploring)")]
     Explore {
         id: String,
     },
+    #[command(about = "Lock acceptance and mark the task ready (-> ready)")]
     Accept {
         id: String,
     },
+    #[command(about = "Claim a ready, unblocked task to work on it (-> in_progress)")]
     Claim {
         id: String,
     },
+    #[command(about = "Submit work for verification (-> needs_verification)")]
     Complete {
         id: String,
         #[arg(long)]
@@ -133,9 +138,11 @@ pub enum TaskCommand {
         )]
         claim: String,
     },
+    #[command(about = "Run the evidence gate; on pass marks the task verified")]
     Verify {
         id: Option<String>,
     },
+    #[command(about = "Record progress (summary and/or claims) without changing state")]
     Update {
         id: String,
         #[arg(long)]
@@ -143,6 +150,7 @@ pub enum TaskCommand {
         #[arg(long)]
         claim: Vec<String>,
     },
+    #[command(about = "Add a blocker to a task")]
     Block {
         id: String,
         #[arg(long)]
@@ -150,21 +158,25 @@ pub enum TaskCommand {
         #[arg(long)]
         by: Option<String>,
     },
+    #[command(about = "Resolve a blocker by its blk- id")]
     Unblock {
         id: String,
         #[arg(long)]
         blocker: String,
     },
+    #[command(about = "Terminally reject a task (-> rejected)")]
     Reject {
         id: String,
         #[arg(long)]
         reason: String,
     },
+    #[command(about = "Terminally abandon a task (-> abandoned)")]
     Abandon {
         id: String,
         #[arg(long)]
         reason: String,
     },
+    #[command(about = "Replace a task with another (-> superseded)")]
     Supersede {
         id: String,
         #[arg(long)]
@@ -172,9 +184,11 @@ pub enum TaskCommand {
         #[arg(long)]
         reason: String,
     },
+    #[command(about = "Show a task's detail: state, claim, blockers")]
     Show {
         id: Option<String>,
     },
+    #[command(about = "List tasks, with optional filters")]
     List {
         #[arg(long)]
         blocked: bool,
@@ -191,11 +205,13 @@ pub enum TaskCommand {
         #[arg(long)]
         interval: Option<u64>,
     },
+    #[command(about = "Watch tasks live, refreshing on an interval")]
     Watch {
         id: Option<String>,
         #[arg(long)]
         interval: Option<u64>,
     },
+    #[command(about = "Check the task blocker graph for cycles and dangling refs")]
     Doctor,
 }
 
