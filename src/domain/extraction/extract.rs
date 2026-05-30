@@ -156,6 +156,48 @@ pub(crate) fn folder_gate<'a>(
     })
 }
 
+/// Resolve one file's write decision from a folder gate into a planned action.
+///
+/// Shared by every resource planner: skills call it per tree file, while the
+/// hook script and harness call it once. In `Create` mode an existing file is a
+/// hard error; otherwise the gate decides whether to skip, write, or back up
+/// the edited file before overwriting.
+pub(crate) fn file_action<'a>(
+    name: &'a str,
+    contents: &'a [u8],
+    path: PathBuf,
+    existing: Option<String>,
+    gate: FolderGate<'a>,
+) -> Result<Action<'a>> {
+    let (write, backup_operation, backup_timestamp) = match gate {
+        FolderGate::Create => match existing {
+            Some(_) => bail!(
+                "{} already exists; use --merge to keep it or --force to overwrite with backup",
+                path.display()
+            ),
+            None => (true, None, None),
+        },
+        FolderGate::Skip => (existing.is_none(), None, None),
+        FolderGate::Refresh {
+            operation,
+            backup_timestamp,
+        } => match existing {
+            Some(_) => (true, Some(operation), Some(backup_timestamp)),
+            None => (true, None, None),
+        },
+    };
+
+    Ok(Action {
+        name,
+        contents,
+        path,
+        existing,
+        backup_operation,
+        backup_timestamp,
+        write,
+    })
+}
+
 /// Read an existing file's contents, returning `None` when it is absent.
 pub(crate) fn read_existing(path: &Path) -> Result<Option<String>> {
     if path.exists() {

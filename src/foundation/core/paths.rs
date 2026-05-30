@@ -49,6 +49,11 @@ impl MaestroPaths {
         self.maestro_dir().join("skills")
     }
 
+    /// Return the bundled hook scripts directory.
+    pub fn hooks_dir(&self) -> PathBuf {
+        self.maestro_dir().join("hooks")
+    }
+
     /// Return the task artifact directory.
     pub fn tasks_dir(&self) -> PathBuf {
         self.maestro_dir().join("tasks")

@@ -62,6 +62,10 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         &["resources/harness/HARNESS.md"],
     ),
     ("src/domain/run/event.rs", &["resources/hooks/events.yaml"]),
+    (
+        "src/domain/extraction/hook_script.rs",
+        &["resources/hooks/record.sh"],
+    ),
     ("src/domain/skills/catalog.rs", &["resources/skills"]),
     ("src/interfaces/shell/mod.rs", &["resources/shell/"]),
 ];

@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 
+use crate::domain::extraction::{extract_all, validate_all, ExtractMode};
 use crate::domain::harness::schema::HarnessConfig;
 use crate::domain::harness::templates::{backlog_yaml, features_yaml, harness_yml, HARNESS_MD};
-use crate::domain::skills::extract::{extract_skills, validate_skills, ExtractMode};
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::ensure_dir;
@@ -50,7 +50,7 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
         None
     };
     let extract_mode = extract_mode(options, backup_timestamp.as_deref())?;
-    validate_skills(&paths, extract_mode)?;
+    validate_all(&paths, extract_mode)?;
 
     for directory in plan.directories {
         ensure_dir(directory)?;
@@ -58,7 +58,7 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
     for file in plan.files {
         write_init_file(&paths, file, options, backup_timestamp.as_deref())?;
     }
-    extract_skills(&paths, extract_mode)?;
+    extract_all(&paths, extract_mode)?;
 
     Ok(InitOutcome::Applied)
 }

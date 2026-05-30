@@ -9,8 +9,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
-use crate::domain::extraction::{rollback_writes, ExtractMode, ResourceBackup};
-use crate::domain::skills::extract::extract_skills;
+use crate::domain::extraction::{extract_all, rollback_writes, ExtractMode, ResourceBackup};
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
@@ -449,7 +448,7 @@ pub fn run_update_with_seams(
     }
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
-    let extract_report = match extract_skills(
+    let extract_report = match extract_all(
         options.paths,
         ExtractMode::Update {
             backup_timestamp: options.backup_timestamp,

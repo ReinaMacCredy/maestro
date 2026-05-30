@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 
 use crate::domain::extraction::extract::{
-    apply_actions, folder_gate, read_existing, Action, FolderGate,
+    apply_actions, file_action, folder_gate, read_existing, Action,
 };
 use crate::domain::skills::catalog::{frontmatter_version, skills, Skill};
 use crate::foundation::core::fs::ensure_dir;
@@ -81,33 +81,13 @@ fn plan_skill<'a>(
         } else {
             read_existing(&path)?
         };
-        let (write, backup_operation, backup_timestamp) = match folder_gate {
-            FolderGate::Create => match existing {
-                Some(_) => bail!(
-                    "{} already exists; use --merge to keep it or --force to overwrite with backup",
-                    path.display()
-                ),
-                None => (true, None, None),
-            },
-            FolderGate::Skip => (existing.is_none(), None, None),
-            FolderGate::Refresh {
-                operation,
-                backup_timestamp,
-            } => match existing {
-                Some(_) => (true, Some(operation), Some(backup_timestamp)),
-                None => (true, None, None),
-            },
-        };
-
-        actions.push(Action {
-            name: skill.name,
-            contents: file.contents,
+        actions.push(file_action(
+            skill.name,
+            file.contents,
             path,
             existing,
-            backup_operation,
-            backup_timestamp,
-            write,
-        });
+            folder_gate,
+        )?);
     }
 
     Ok(actions)
