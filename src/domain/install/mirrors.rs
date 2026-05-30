@@ -15,7 +15,8 @@ use crate::foundation::core::fs::{
 };
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::managed_blocks::{
-    remove_managed_block, upsert_managed_block, upsert_managed_json_keys, ManagedBlockFormat,
+    find_block, remove_managed_block, upsert_managed_block, upsert_managed_json_keys,
+    ManagedBlockFormat,
 };
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
@@ -746,32 +747,20 @@ fn text_ownership_content<'a>(kind: &MirrorKind, contents: &'a str) -> Result<&'
 }
 
 fn text_markers(kind: &MirrorKind) -> Option<(&'static str, &'static str)> {
-    match kind {
-        MirrorKind::MarkdownManagedBlock => {
-            Some(("<!-- maestro:start -->", "<!-- maestro:end -->"))
-        }
-        MirrorKind::GitignoreSection | MirrorKind::TomlSection => {
-            Some(("# >>> maestro >>>", "# <<< maestro <<<"))
-        }
-        MirrorKind::JsonManagedKeys | MirrorKind::Symlink => None,
-    }
+    let format = match kind {
+        MirrorKind::MarkdownManagedBlock => ManagedBlockFormat::Markdown,
+        MirrorKind::GitignoreSection | MirrorKind::TomlSection => ManagedBlockFormat::HashComment,
+        MirrorKind::JsonManagedKeys | MirrorKind::Symlink => return None,
+    };
+    Some(format.markers())
 }
 
 fn marked_block<'a>(contents: &'a str, start_marker: &str, end_marker: &str) -> Option<&'a str> {
-    let block_start = contents.find(start_marker)?;
-    let end_marker_start = contents[block_start..].find(end_marker)? + block_start;
-    let mut block_end = end_marker_start + end_marker.len();
-    if contents[block_end..].starts_with('\n') {
-        block_end += 1;
-    }
-    Some(&contents[block_start..block_end])
+    find_block(contents, start_marker, end_marker).map(|(start, end)| &contents[start..end])
 }
 
 fn marked_block_for_format(contents: &str, format: ManagedBlockFormat) -> Option<&str> {
-    let (start_marker, end_marker) = match format {
-        ManagedBlockFormat::Markdown => ("<!-- maestro:start -->", "<!-- maestro:end -->"),
-        ManagedBlockFormat::HashComment => ("# >>> maestro >>>", "# <<< maestro <<<"),
-    };
+    let (start_marker, end_marker) = format.markers();
     marked_block(contents, start_marker, end_marker)
 }
 

@@ -14,7 +14,9 @@ pub enum ManagedBlockFormat {
 }
 
 impl ManagedBlockFormat {
-    fn markers(self) -> (&'static str, &'static str) {
+    /// Start and end marker literals for this block style. Single source for the
+    /// write path here and the uninstall read path in `install::mirrors`.
+    pub(crate) fn markers(self) -> (&'static str, &'static str) {
         match self {
             Self::Markdown => ("<!-- maestro:start -->", "<!-- maestro:end -->"),
             Self::HashComment => ("# >>> maestro >>>", "# <<< maestro <<<"),
@@ -110,7 +112,9 @@ fn render_block(start: &str, end: &str, body: &str) -> String {
     block
 }
 
-fn find_block(existing: &str, start: &str, end: &str) -> Option<(usize, usize)> {
+/// Locate a managed block by its markers, returning the byte range covering the
+/// start marker through the end marker (plus a trailing newline when present).
+pub(crate) fn find_block(existing: &str, start: &str, end: &str) -> Option<(usize, usize)> {
     let block_start = existing.find(start)?;
     let end_marker_start = existing[block_start..].find(end)? + block_start;
     let mut block_end = end_marker_start + end.len();
