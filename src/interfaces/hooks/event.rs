@@ -2,7 +2,8 @@ use serde_json::Value;
 
 use crate::domain::run;
 
-/// Shared hook events supported by Claude and Codex V1 hook config.
+/// Shared lifecycle hook events installed and recorded for both Claude and Codex,
+/// sourced from `resources/hooks/events.yaml` via the Run contract.
 pub fn shared_hook_events() -> &'static [String] {
     run::hook_event_contract().shared_events()
 }
