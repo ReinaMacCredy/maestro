@@ -4,8 +4,6 @@ use crate::domain::run;
 
 use super::InstallAgent;
 
-const HOOK_COMMAND: &str = "maestro hook record";
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ManagedHookConfig {
     pub(crate) relative_path: &'static str,
@@ -37,13 +35,23 @@ enum HookConfigFlavor {
 }
 
 fn hook_json(flavor: HookConfigFlavor) -> Value {
+    let contract = run::hook_event_contract();
+    let agent_events = match flavor {
+        HookConfigFlavor::Claude => contract.claude_events(),
+        HookConfigFlavor::Codex => contract.codex_events(),
+    };
+
     let mut hooks = Map::new();
-    for event in run::hook_event_contract().shared_events() {
+    for event in contract.shared_events().iter().chain(agent_events) {
         let command = match flavor {
-            HookConfigFlavor::Claude => json!({"type": "command", "command": HOOK_COMMAND}),
-            HookConfigFlavor::Codex => {
-                json!({"type": "command", "command": HOOK_COMMAND, "timeout": 5})
+            HookConfigFlavor::Claude => {
+                json!({"type": "command", "command": contract.command()})
             }
+            HookConfigFlavor::Codex => json!({
+                "type": "command",
+                "command": contract.command(),
+                "timeout": contract.codex_timeout(),
+            }),
         };
         hooks.insert(
             event.to_string(),
@@ -52,4 +60,32 @@ fn hook_json(flavor: HookConfigFlavor) -> Value {
     }
 
     json!({ "hooks": hooks })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every event the installer writes must also be accepted by the recorder;
+    /// otherwise an installed hook would fire `maestro hook record` on an event
+    /// the recorder silently drops. This locks the single-source installer ⊆
+    /// recorder invariant by driving the installer's real output path
+    /// (`hook_json`) for both flavors, so it keeps holding if per-agent events
+    /// are ever added to `resources/hooks/events.yaml`.
+    #[test]
+    fn installed_events_are_accepted_by_the_recorder() {
+        for flavor in [HookConfigFlavor::Claude, HookConfigFlavor::Codex] {
+            let json = hook_json(flavor);
+            let hooks = json
+                .get("hooks")
+                .and_then(Value::as_object)
+                .expect("hook_json always produces a hooks object");
+            for event in hooks.keys() {
+                assert!(
+                    run::is_accepted_event(event),
+                    "{flavor:?} installs {event} but the recorder rejects it"
+                );
+            }
+        }
+    }
 }
