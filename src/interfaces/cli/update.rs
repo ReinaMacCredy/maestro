@@ -154,14 +154,10 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
         }
     }
 
-    if !outcome.skill_backups.is_empty() {
+    if !outcome.resource_backups.is_empty() {
         out.push_str("Bundled skills re-extracted; edited skills backed up:\n");
-        for backup in &outcome.skill_backups {
-            out.push_str(&format!(
-                "{} -> {}\n",
-                backup.skill_name,
-                backup.path.display()
-            ));
+        for backup in &outcome.resource_backups {
+            out.push_str(&format!("{} -> {}\n", backup.name, backup.path.display()));
         }
     }
 
@@ -374,7 +370,7 @@ mod tests {
                     size_bytes: None,
                 },
             },
-            skill_backups: Vec::new(),
+            resource_backups: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 
@@ -396,7 +392,7 @@ mod tests {
                     size_bytes: Some(25_350_000),
                 }),
             },
-            skill_backups: Vec::new(),
+            resource_backups: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 
@@ -422,7 +418,7 @@ mod tests {
                     size_bytes: None,
                 },
             },
-            skill_backups: Vec::new(),
+            resource_backups: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 
@@ -444,7 +440,7 @@ mod tests {
                 },
                 current_version: "0.0.1779700000-gabc123".to_string(),
             },
-            skill_backups: Vec::new(),
+            resource_backups: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 
@@ -521,7 +517,7 @@ mod tests {
                     size_bytes: Some(25_350_000),
                 }),
             },
-            skill_backups: Vec::new(),
+            resource_backups: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 

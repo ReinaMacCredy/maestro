@@ -540,7 +540,9 @@ fn extract_skills_from_rolls_back_a_partial_multi_file_write() {
 
     let error = extract_skills_from(&paths, std::slice::from_ref(&skill), ExtractMode::Create)
         .expect_err("invariant: writing a file under a path already taken by a file should fail");
-    assert!(error.to_string().contains("failed to write bundled skill"));
+    assert!(error
+        .to_string()
+        .contains("failed to write bundled resource"));
 
     // Rollback removed the files this extraction had already written.
     let skill_dir = paths.skills_dir().join("synthetic");

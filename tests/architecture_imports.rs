@@ -44,6 +44,7 @@ const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 
 const DOMAIN_FACADES: &[&str] = &[
     "decisions",
+    "extraction",
     "feature",
     "harness",
     "install",
@@ -1368,6 +1369,7 @@ fn transitional_public_surfaces_match_phase_policy() {
         Path::new("src/domain/mod.rs"),
         &[
             "decisions",
+            "extraction",
             "feature",
             "harness",
             "install",

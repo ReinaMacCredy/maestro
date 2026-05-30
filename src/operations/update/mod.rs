@@ -9,9 +9,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
-use crate::domain::skills::extract::{
-    extract_skills, rollback_skill_writes, ExtractMode, SkillBackup,
-};
+use crate::domain::extraction::{rollback_writes, ExtractMode, ResourceBackup};
+use crate::domain::skills::extract::extract_skills;
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
@@ -48,8 +47,8 @@ pub struct UpdateOptions<'a> {
 pub struct UpdateOutcome {
     /// Binary replacement result.
     pub binary_status: BinaryStatus,
-    /// Edited bundled skills backed up before overwrite.
-    pub skill_backups: Vec<SkillBackup>,
+    /// Edited bundled resources backed up before overwrite.
+    pub resource_backups: Vec<ResourceBackup>,
     /// On-disk schema versions that differ from this binary.
     pub schema_mismatches: Vec<SchemaMismatch>,
 }
@@ -444,7 +443,7 @@ pub fn run_update_with_seams(
     if options.check_only {
         return Ok(UpdateOutcome {
             binary_status: check_binary_update(options, downloader)?,
-            skill_backups: Vec::new(),
+            resource_backups: Vec::new(),
             schema_mismatches: Vec::new(),
         });
     }
@@ -466,7 +465,7 @@ pub fn run_update_with_seams(
     let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
         Ok(status) => status,
         Err(_error) => {
-            rollback_skill_writes(&extract_report)?;
+            rollback_writes(&extract_report)?;
             return Err(UpdateFailure::install(
                 prepared_release,
                 "could not replace the current binary",
@@ -478,7 +477,7 @@ pub fn run_update_with_seams(
 
     Ok(UpdateOutcome {
         binary_status,
-        skill_backups: extract_report.backups,
+        resource_backups: extract_report.backups,
         schema_mismatches,
     })
 }
