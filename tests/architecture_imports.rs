@@ -61,7 +61,7 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         &["resources/harness/HARNESS.md"],
     ),
     ("src/domain/run/event.rs", &["resources/hooks/events.yaml"]),
-    ("src/domain/skills/catalog.rs", &["resources/skills/"]),
+    ("src/domain/skills/catalog.rs", &["resources/skills"]),
     ("src/interfaces/shell/mod.rs", &["resources/shell/"]),
 ];
 
@@ -1821,7 +1821,8 @@ fn resource_embeds_stay_in_owning_modules() {
     for file in rust_files_under(Path::new("src")) {
         let source = read_source_file(&file);
         for (line_number, line) in source.lines().enumerate() {
-            if !line.contains("include_str!") || !line.contains("resources/") {
+            let embeds_resource = line.contains("include_str!") || line.contains("include_dir!");
+            if !embeds_resource || !line.contains("resources/") {
                 continue;
             }
             if resource_embed_is_allowed(&file, line) {
