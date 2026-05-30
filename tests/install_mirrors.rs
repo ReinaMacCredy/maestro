@@ -356,4 +356,11 @@ fn init_repo(repo: &std::path::Path) {
         "# Maestro Harness Protocol\n",
     )
     .expect("invariant: harness protocol should be writable");
+    fs::create_dir_all(repo.join(".maestro/hooks"))
+        .expect("invariant: hooks dir should be writable");
+    fs::write(
+        repo.join(".maestro/hooks/record.sh"),
+        "# maestro:hook-version: 1.0.0\nexec maestro hook record\n",
+    )
+    .expect("invariant: hook recorder script should be writable");
 }

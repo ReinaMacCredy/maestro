@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use anyhow::{bail, Context, Result};
 
+use crate::domain::extraction;
 use crate::domain::harness;
 use crate::domain::skills::symlink::{SkillSymlink, SKILLS_SYMLINK_TARGET};
 use crate::foundation::core::paths::MaestroPaths;
@@ -57,6 +58,7 @@ where
     ) -> std::result::Result<(), mirrors::MirrorWriteFailure>,
 {
     harness::ensure_harness_protocol_exists(paths)?;
+    extraction::ensure_hook_script_exists(paths)?;
     let lock_path = paths.install_lock_file();
     let mut lock = InstallLock::load(&lock_path)?;
     let previous_install = lock.agents.get(agent.key()).cloned();
@@ -263,6 +265,30 @@ mod tests {
         let lock = InstallLock::load(&paths.install_lock_file())
             .expect("invariant: pending lock should remain readable");
         assert_eq!(lock.agents["codex"].state, InstallState::Pending);
+
+        fs::remove_dir_all(root).expect("invariant: temp repo should be removable");
+    }
+
+    #[test]
+    fn install_refuses_when_hook_recorder_script_is_missing() {
+        let root = temp_repo("maestro-install-missing-recorder-test");
+        let paths = MaestroPaths::new(root.clone());
+        fs::remove_file(root.join(".maestro/hooks/record.sh"))
+            .expect("invariant: seeded hook recorder should be removable");
+
+        let error = install_agent(&paths, InstallAgent::Claude)
+            .expect_err("invariant: install must refuse when the hook recorder script is missing");
+
+        assert!(
+            error
+                .to_string()
+                .contains("hook recorder is not initialized"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            !root.join(".claude/settings.local.json").exists(),
+            "install must fail before writing agent mirrors"
+        );
 
         fs::remove_dir_all(root).expect("invariant: temp repo should be removable");
     }
@@ -502,6 +528,13 @@ mod tests {
             "# Maestro Harness Protocol\n",
         )
         .expect("invariant: harness protocol should be writable");
+        fs::create_dir_all(root.join(".maestro/hooks"))
+            .expect("invariant: hooks dir should be creatable");
+        fs::write(
+            root.join(".maestro/hooks/record.sh"),
+            "# maestro:hook-version: 1.0.0\nexec maestro hook record\n",
+        )
+        .expect("invariant: hook recorder script should be writable");
         root
     }
 }

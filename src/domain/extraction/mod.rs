@@ -17,7 +17,9 @@ use crate::domain::skills::extract::{extract_skills, validate_skills};
 use crate::foundation::core::paths::MaestroPaths;
 
 pub use extract::{rollback_writes, ExtractMode, ExtractReport, ResourceBackup, ResourceWrite};
-pub use hook_script::{extract_hook_script, extract_hook_script_from, validate_hook_script};
+pub use hook_script::{
+    ensure_hook_script_exists, extract_hook_script, extract_hook_script_from, validate_hook_script,
+};
 
 /// Extract every bundled resource (skills, then the hook script) into
 /// `.maestro/`, merging their reports.

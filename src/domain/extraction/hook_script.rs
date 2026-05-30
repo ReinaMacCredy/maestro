@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use crate::domain::extraction::extract::{
     apply_actions, file_action, folder_gate, read_existing, Action, ExtractMode, ExtractReport,
@@ -26,6 +26,28 @@ const RECORD_SH_NAME: &str = "record.sh";
 /// Extract the bundled hook recorder script into `.maestro/hooks/`.
 pub fn extract_hook_script(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<ExtractReport> {
     extract_hook_script_from(paths, RECORD_SH, mode)
+}
+
+/// Require the bundled hook recorder script that install wires every hook
+/// command to invoke.
+///
+/// Install emits `sh ".../.maestro/hooks/record.sh"` for each event, but only
+/// `maestro init`/`maestro update` (through [`extract_hook_script`]) ever
+/// materialize the script. A `.maestro/` left over from a pre-recorder install,
+/// or one whose `hooks/` directory was hand-pruned, can still satisfy the
+/// harness guard while lacking the recorder, which would install hooks that
+/// silently point at a missing file. Fail closed with the same "run `maestro
+/// init`" guidance the harness guard uses.
+pub fn ensure_hook_script_exists(paths: &MaestroPaths) -> Result<()> {
+    let path = hook_file_path(paths, RECORD_SH_NAME)?;
+    if path.is_file() {
+        return Ok(());
+    }
+
+    bail!(
+        "Maestro hook recorder is not initialized: {} is missing; run `maestro init` first",
+        path.display()
+    )
 }
 
 /// Extract a hook script with explicit contents into `.maestro/hooks/`.
