@@ -111,9 +111,9 @@ New production imports should prefer `crate::foundation::core`; keep
 `crate::core` and `maestro::core` usage to compatibility checks or transition
 work until the legacy path is removed.
 
-CLI adapter files live under `src/interfaces/cli`, and `crate::commands`
-remains a compatibility re-export. New production references should prefer
-`crate::interfaces::cli`; current CLI imports into the retained domain
+CLI adapter files live under `src/interfaces/cli`; there is no `crate::commands`
+compatibility re-export, so production code references `crate::interfaces::cli`
+directly. Current CLI imports into the retained domain
 compatibility aliases (`crate::decisions`, `crate::feature`, `crate::harness`)
 are temporary allowances that should shrink as callers move to the owning
 domain facades.
