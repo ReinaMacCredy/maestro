@@ -3,6 +3,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=MAESTRO_BUILD_COMMIT");
     println!("cargo:rerun-if-changed=VERSION");
     println!("cargo:rerun-if-changed=VERSION_COMMIT");
+    println!("cargo:rerun-if-changed=resources/skills");
 
     let version = std::env::var("MAESTRO_BUILD_VERSION")
         .ok()
