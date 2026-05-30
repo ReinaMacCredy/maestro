@@ -11,5 +11,4 @@ pub use domain::skills;
 pub use foundation::core;
 pub use interfaces::hooks;
 pub use interfaces::mcp;
-pub use interfaces::shell;
 pub use interfaces::tui;

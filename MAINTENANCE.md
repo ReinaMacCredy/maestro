@@ -118,11 +118,6 @@ compatibility aliases (`crate::decisions`, `crate::feature`, `crate::harness`)
 are temporary allowances that should shrink as callers move to the owning
 domain facades.
 
-Shell integration lives under `src/interfaces/shell`, and `crate::shell` remains
-a compatibility re-export. New production references should prefer
-`crate::interfaces::shell`; keep `crate::shell` and `maestro::shell` usage to
-compatibility checks or transition work until the legacy path is removed.
-
 MCP integration lives under `src/interfaces/mcp`, and `crate::mcp` remains a
 compatibility re-export. New production references should prefer
 `crate::interfaces::mcp`; keep `crate::mcp` and `maestro::mcp` usage to

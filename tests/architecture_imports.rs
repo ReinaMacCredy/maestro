@@ -17,7 +17,6 @@ const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
     "task",
     "hooks",
     "mcp",
-    "shell",
     "skills",
     "tui",
 ];
@@ -185,21 +184,6 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
     let _ = std::any::type_name::<maestro::domain::proof::ProofStatusKind>();
     let _ = std::any::type_name::<maestro::operations::metrics::MetricsSummary>();
-    assert_eq!(
-        std::any::type_name::<maestro::interfaces::shell::Shell>(),
-        std::any::type_name::<maestro::shell::Shell>()
-    );
-    let legacy_render_shell_init: fn(maestro::shell::Shell) -> &'static str =
-        maestro::shell::render_shell_init;
-    let new_render_shell_init: fn(maestro::interfaces::shell::Shell) -> &'static str =
-        maestro::interfaces::shell::render_shell_init;
-    assert_eq!(
-        new_render_shell_init(maestro::interfaces::shell::Shell::Bash),
-        legacy_render_shell_init(maestro::shell::Shell::Bash)
-    );
-    let _legacy_detect_shell: fn() -> maestro::shell::Shell = maestro::shell::Shell::detect;
-    let _new_detect_shell: fn() -> maestro::interfaces::shell::Shell =
-        maestro::interfaces::shell::Shell::detect;
 
     let _legacy_task_watch_render: fn(
         &maestro::foundation::core::paths::MaestroPaths,
@@ -1408,9 +1392,6 @@ fn lib_exposes_crate_root(lib: &str, root: &str) -> bool {
 fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
     match root {
         "core" => line == "pub use foundation::core;" || line == "pub use crate::foundation::core;",
-        "shell" => {
-            line == "pub use interfaces::shell;" || line == "pub use crate::interfaces::shell;"
-        }
         "mcp" => line == "pub use interfaces::mcp;" || line == "pub use crate::interfaces::mcp;",
         "hooks" => {
             line == "pub use interfaces::hooks;" || line == "pub use crate::interfaces::hooks;"
