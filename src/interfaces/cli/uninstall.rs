@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::domain::install;
+use crate::domain::install::{self, UninstallOutcome};
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::interfaces::cli::AgentArgs;
 
@@ -9,7 +9,17 @@ pub fn run(args: AgentArgs) -> Result<()> {
     let agent = install::InstallAgent::from(args.agent);
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
-    install::uninstall_agent(&paths, agent)?;
+    match install::uninstall_agent(&paths, agent)? {
+        UninstallOutcome::Removed => {
+            println!("uninstalled maestro {} integration", agent.key());
+        }
+        UninstallOutcome::NotInstalled => {
+            println!(
+                "no maestro {} integration was installed; nothing to uninstall",
+                agent.key()
+            );
+        }
+    }
 
     Ok(())
 }

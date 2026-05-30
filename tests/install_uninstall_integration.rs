@@ -366,6 +366,39 @@ fn uninstall_without_lock_does_not_remove_hook_config() {
 }
 
 #[test]
+fn uninstall_targeting_a_not_installed_agent_reports_the_no_op() {
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let install = maestro(&["install", "--agent", "claude"], temp_dir.path());
+    assert!(
+        install.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+
+    // A bare `uninstall` defaults to codex; with only claude installed it must
+    // surface the no-op rather than exiting silently and leaving hooks wired.
+    let uninstall = maestro(&["uninstall", "--agent", "codex"], temp_dir.path());
+    assert!(
+        uninstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+    let stdout = String::from_utf8(uninstall.stdout).expect("invariant: stdout should be UTF-8");
+    assert!(
+        stdout.contains("no maestro codex integration was installed"),
+        "uninstall should report the no-op instead of staying silent: {stdout}"
+    );
+    let settings = fs::read_to_string(temp_dir.path().join(".claude/settings.local.json"))
+        .expect("invariant: claude settings should remain readable");
+    assert!(
+        settings.contains("record.sh"),
+        "claude hooks must remain wired after a codex-targeted no-op uninstall"
+    );
+}
+
+#[test]
 fn reinstall_preserves_json_restore_snapshot() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());

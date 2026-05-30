@@ -86,8 +86,17 @@ where
     Ok(())
 }
 
+/// Whether an uninstall removed an installed agent or found nothing to remove.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UninstallOutcome {
+    /// The agent integration was installed and has been removed.
+    Removed,
+    /// No integration for the agent was installed; nothing was removed.
+    NotInstalled,
+}
+
 /// Uninstall one agent integration from the repository.
-pub fn uninstall_agent(paths: &MaestroPaths, agent: InstallAgent) -> Result<()> {
+pub fn uninstall_agent(paths: &MaestroPaths, agent: InstallAgent) -> Result<UninstallOutcome> {
     uninstall_agent_with_finalizer(paths, agent, finalize_uninstall_lock)
 }
 
@@ -95,7 +104,7 @@ fn uninstall_agent_with_finalizer<F>(
     paths: &MaestroPaths,
     agent: InstallAgent,
     finalize_lock: F,
-) -> Result<()>
+) -> Result<UninstallOutcome>
 where
     F: FnOnce(&std::path::Path, &InstallLock) -> Result<()>,
 {
@@ -103,7 +112,8 @@ where
     let mut lock = InstallLock::load(&lock_path)?;
 
     let Some(install) = lock.agents.get(agent.key()).cloned() else {
-        return finalize_lock(&lock_path, &lock);
+        finalize_lock(&lock_path, &lock)?;
+        return Ok(UninstallOutcome::NotInstalled);
     };
 
     let previous_lock = lock.clone();
@@ -131,10 +141,10 @@ where
     lock.remove_agent(agent);
 
     if let Err(error) = finalize_lock(&lock_path, &lock) {
-        return rollback_uninstall_after_lock_failure(&lock_path, &previous_lock, removal, error);
+        rollback_uninstall_after_lock_failure(&lock_path, &previous_lock, removal, error)?;
     }
 
-    Ok(())
+    Ok(UninstallOutcome::Removed)
 }
 
 fn finalize_uninstall_lock(lock_path: &std::path::Path, lock: &InstallLock) -> Result<()> {
