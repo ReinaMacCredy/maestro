@@ -20,7 +20,7 @@ use crate::foundation::core::managed_blocks::{
 };
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::safe_write::{restore_or_remove, write_string_atomic};
 
 use super::hooks::ManagedHookConfig;
 use super::lock::{AgentInstall, FileOwnership, MirrorKind};
@@ -308,22 +308,17 @@ fn write_mirror_update(
 
 fn rollback_mirror_updates(written: &[&MirrorUpdate]) -> Result<()> {
     for update in written.iter().rev() {
-        match &update.existing {
-            Some(contents) => write_string_atomic(&update.path, contents)
-                .with_context(|| format!("failed to roll back mirror {}", update.path.display()))?,
-            None => match fs::remove_file(&update.path) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(error).with_context(|| {
-                        format!(
-                            "failed to remove rolled-back mirror {}",
-                            update.path.display()
-                        )
-                    });
-                }
+        restore_or_remove(
+            &update.path,
+            update.existing.as_deref(),
+            || format!("failed to roll back mirror {}", update.path.display()),
+            || {
+                format!(
+                    "failed to remove rolled-back mirror {}",
+                    update.path.display()
+                )
             },
-        }
+        )?;
     }
 
     Ok(())

@@ -38,6 +38,29 @@ pub fn write_atomic(path: impl AsRef<Path>, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Undo a single write during rollback: restore `path` to its `previous`
+/// contents, or remove it when there was none (an already-absent file is
+/// success). `restore_ctx`/`remove_ctx` supply the error context for each
+/// branch so callers keep their own wording.
+pub(crate) fn restore_or_remove(
+    path: &Path,
+    previous: Option<&str>,
+    restore_ctx: impl FnOnce() -> String,
+    remove_ctx: impl FnOnce() -> String,
+) -> Result<()> {
+    match previous {
+        Some(contents) => {
+            write_string_atomic(path, contents).with_context(restore_ctx)?;
+        }
+        None => match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => return Err(error).with_context(remove_ctx),
+        },
+    }
+    Ok(())
+}
+
 fn create_temp_sibling(path: &Path, contents: &[u8]) -> Result<PathBuf> {
     let mut last_error = None;
 

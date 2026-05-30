@@ -15,7 +15,7 @@ use anyhow::{bail, Context, Result};
 
 use crate::foundation::core::backup::backup_file_with_timestamp;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::safe_write::{write_atomic, write_string_atomic};
+use crate::foundation::core::safe_write::{restore_or_remove, write_atomic};
 
 /// Existing-file policy for bundled resource extraction.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -62,18 +62,12 @@ pub struct ResourceWrite {
 /// Roll back resource file writes recorded in an extraction report.
 pub fn rollback_writes(report: &ExtractReport) -> Result<()> {
     for write in report.writes.iter().rev() {
-        match &write.previous {
-            Some(contents) => write_string_atomic(&write.path, contents)
-                .with_context(|| format!("failed to roll back {}", write.path.display()))?,
-            None => match fs::remove_file(&write.path) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(error)
-                        .with_context(|| format!("failed to roll back {}", write.path.display()));
-                }
-            },
-        }
+        restore_or_remove(
+            &write.path,
+            write.previous.as_deref(),
+            || format!("failed to roll back {}", write.path.display()),
+            || format!("failed to roll back {}", write.path.display()),
+        )?;
     }
 
     Ok(())
@@ -259,18 +253,12 @@ pub(crate) fn apply_actions(
 
 fn rollback_applied_writes(written: &[AppliedWrite]) -> Result<()> {
     for write in written.iter().rev() {
-        match &write.previous {
-            Some(contents) => write_string_atomic(&write.path, contents)
-                .with_context(|| format!("failed to roll back {}", write.path.display()))?,
-            None => match fs::remove_file(&write.path) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(error)
-                        .with_context(|| format!("failed to roll back {}", write.path.display()));
-                }
-            },
-        }
+        restore_or_remove(
+            &write.path,
+            write.previous.as_deref(),
+            || format!("failed to roll back {}", write.path.display()),
+            || format!("failed to roll back {}", write.path.display()),
+        )?;
     }
 
     Ok(())

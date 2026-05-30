@@ -13,7 +13,7 @@ use super::attempts::{
 };
 use super::verify_task::VerificationReport;
 use crate::domain::task;
-use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::safe_write::{restore_or_remove, write_string_atomic};
 use crate::foundation::core::schema::{classify, Compat, VERIFICATION_RESTORE_SCHEMA_VERSION};
 
 const CANONICAL_REPORT_RESTORE_FILE: &str = "verification.json.restore";
@@ -159,19 +159,12 @@ fn restore_canonical_report_from_journal(path: &Path, journal_path: &Path) -> Re
     else {
         return Ok(());
     };
-    match journal.previous {
-        Some(previous) => {
-            write_string_atomic(path, &previous)
-                .with_context(|| format!("failed to restore {}", path.display()))?;
-        }
-        None => match fs::remove_file(path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error).with_context(|| format!("failed to remove {}", path.display()));
-            }
-        },
-    }
+    restore_or_remove(
+        path,
+        journal.previous.as_deref(),
+        || format!("failed to restore {}", path.display()),
+        || format!("failed to remove {}", path.display()),
+    )?;
     remove_canonical_report_restore_journal(journal_path)
 }
 
