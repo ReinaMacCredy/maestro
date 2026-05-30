@@ -52,7 +52,7 @@ pub(crate) fn frontmatter_version(contents: &str) -> Option<String> {
 
     #[derive(Deserialize)]
     struct Frontmatter {
-        #[serde(default)]
+        // serde defaults a missing `Option` field to `None`, so no `#[serde(default)]`.
         version: Option<String>,
     }
 
@@ -67,11 +67,16 @@ mod tests {
 
     #[test]
     fn frontmatter_version_reads_shipped_skill_versions() {
+        // The exact per-skill version is pinned by tests/skills_version_guard.rs;
+        // here we only assert the parser extracts a non-empty version from every
+        // shipped skill, so bumping one skill's version does not break this test.
         for skill in skills() {
-            assert_eq!(
-                frontmatter_version(skill.contents).as_deref(),
-                Some("1.0.0"),
-                "shipped skill {} should declare version 1.0.0",
+            let version = frontmatter_version(skill.contents);
+            assert!(
+                version
+                    .as_deref()
+                    .is_some_and(|version| !version.is_empty()),
+                "shipped skill {} should declare a non-empty version, got {version:?}",
                 skill.name
             );
         }
@@ -90,5 +95,10 @@ mod tests {
     #[test]
     fn frontmatter_version_is_none_when_version_absent() {
         assert_eq!(frontmatter_version("---\nname: x\n---\n"), None);
+    }
+
+    #[test]
+    fn frontmatter_version_is_none_without_a_closing_fence() {
+        assert_eq!(frontmatter_version("---\nname: x\nversion: 1.0.0\n"), None);
     }
 }

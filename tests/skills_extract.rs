@@ -359,3 +359,38 @@ fn extract_skills_update_refreshes_and_backs_up_when_version_differs() {
         "the stale local copy must be backed up before refresh"
     );
 }
+
+#[test]
+fn extract_skills_update_refreshes_a_pre_version_install() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    extract_skills(&paths, ExtractMode::Create)
+        .expect("invariant: initial extraction should succeed");
+
+    // A pre-versioning install whose frontmatter carries no `version:` reads as
+    // None, which differs from the shipped Some(..) and must refresh once.
+    let installed = paths.skills_dir().join("maestro-task").join("SKILL.md");
+    let pre_version = "---\nname: maestro-task\n---\n\npre-version\n";
+    fs::write(&installed, pre_version).expect("invariant: installed skill should be writable");
+    let backup_timestamp =
+        backup_operation_timestamp().expect("invariant: backup timestamp should be available");
+
+    let report = extract_skills(
+        &paths,
+        ExtractMode::Update {
+            backup_timestamp: &backup_timestamp,
+        },
+    )
+    .expect("invariant: update extraction should succeed");
+
+    let shipped = skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-task")
+        .expect("invariant: maestro-task should ship");
+    assert_eq!(
+        fs::read_to_string(&installed).expect("invariant: installed skill should be readable"),
+        shipped.contents,
+        "a missing installed version must refresh to the shipped contents"
+    );
+    assert_eq!(report.backups.len(), 1);
+}
