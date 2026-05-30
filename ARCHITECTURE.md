@@ -1788,14 +1788,15 @@ that artifact or a documented migration-only exception.
 ### Template And Resource Content Policy
 
 Current state: long human-facing resources are embedded into the binary from
-files under `resources/` with `include_str!`. Short generated templates and
-structured defaults still live in Rust serializers.
+files under `resources/` with `include_str!`, and skill directory trees with
+`include_dir!`. Short generated templates and structured defaults still live in
+Rust serializers.
 
 | Content | Current location | Current role |
 | --- | --- | --- |
 | Harness protocol Markdown | `resources/harness/HARNESS.md`, embedded by `src/domain/harness/templates.rs` | Installed by `maestro init`. |
 | Default Harness YAML and backlog YAML | `src/domain/harness/templates.rs`, `src/domain/harness/schema.rs` | Structured defaults serialized from Rust structs. |
-| Catalog skills | `resources/skills/*/SKILL.md`, embedded by `src/domain/skills/catalog.rs` | `SKILL.md` contents embedded in the binary. |
+| Catalog skills | `resources/skills/<name>/`, embedded by `src/domain/skills/catalog.rs` with `include_dir!` | Each skill directory tree (`SKILL.md` plus any sibling files) embedded in the binary. |
 | Hook event list | `resources/hooks/events.yaml`, embedded by `src/domain/run/event.rs` | Single source for installed and recorded hook events, read by Install through the Run contract. |
 | Install mirror blocks | `src/domain/install/mirrors.rs`, `src/domain/install/hooks.rs` | Short managed blocks and hook JSON assembled by Install; the hook event list comes from `resources/hooks/events.yaml` via the Run contract. |
 | Shell init snippets | `resources/shell/posix.sh`, `resources/shell/fish.fish`, embedded by `src/interfaces/shell/mod.rs` | Bash/zsh/fish shell snippets returned by `maestro shell-init`. |
