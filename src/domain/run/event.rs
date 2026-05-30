@@ -14,20 +14,10 @@ static HOOK_CONFIG_YAML: &str = include_str!("../../../resources/hooks/events.ya
 struct HookConfig {
     /// Events installed for every supported agent.
     events: Vec<String>,
-    /// Command every installed hook entry invokes.
-    command: String,
-    /// Claude-only knobs.
-    #[serde(default)]
-    claude: AgentEvents,
+    /// Hook script under `.maestro/hooks/` each installed hook entry runs.
+    script: String,
     /// Codex-only knobs.
     codex: CodexConfig,
-}
-
-/// Per-agent extra events installed in addition to the shared set.
-#[derive(Debug, Default, Deserialize)]
-struct AgentEvents {
-    #[serde(default)]
-    events: Vec<String>,
 }
 
 /// Codex-only hook knobs.
@@ -35,8 +25,6 @@ struct AgentEvents {
 struct CodexConfig {
     /// Per-hook timeout in seconds Codex applies to the recorder command.
     timeout: u64,
-    #[serde(default)]
-    events: Vec<String>,
 }
 
 /// Parse the embedded hook config once. The file ships in the binary and is not
@@ -63,19 +51,10 @@ impl HookEventContract {
         &hook_config().events
     }
 
-    /// Claude-only hook events installed in addition to the shared set.
-    pub fn claude_events(self) -> &'static [String] {
-        &hook_config().claude.events
-    }
-
-    /// Codex-only hook events installed in addition to the shared set.
-    pub fn codex_events(self) -> &'static [String] {
-        &hook_config().codex.events
-    }
-
-    /// Command every installed hook entry invokes.
-    pub fn command(self) -> &'static str {
-        &hook_config().command
+    /// Hook script under `.maestro/hooks/` each installed hook entry runs. The
+    /// installer wraps it in the per-agent invocation that resolves the repo root.
+    pub fn script(self) -> &'static str {
+        &hook_config().script
     }
 
     /// Per-hook timeout in seconds Codex applies to the recorder command.
@@ -96,12 +75,9 @@ pub fn hook_event_contract() -> HookEventContract {
 
 /// Return whether an event type is accepted by `maestro hook record`.
 pub(crate) fn is_accepted_event(event_type: &str) -> bool {
-    let config = hook_config();
-    config
+    hook_config()
         .events
         .iter()
-        .chain(&config.claude.events)
-        .chain(&config.codex.events)
         .any(|event| event.as_str() == event_type)
         || matches!(event_type, "SkillActivation" | "skill_activation")
 }
@@ -212,10 +188,8 @@ mod tests {
                 "Stop",
             ]
         );
-        assert_eq!(contract.command(), "maestro hook record");
+        assert_eq!(contract.script(), "record.sh");
         assert_eq!(contract.codex_timeout(), 5);
-        assert!(contract.claude_events().is_empty());
-        assert!(contract.codex_events().is_empty());
     }
 
     #[test]

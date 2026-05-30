@@ -42,7 +42,11 @@ fn mirror_plan_writes_managed_content_for_claude() {
         .find(|plan| plan.relative_path == ".claude/settings.local.json")
         .expect("invariant: Claude hook plan should exist");
     assert_eq!(hook_plan.managed_keys, vec!["hooks"]);
-    assert_hook_shape(&hook_plan.contents, false);
+    assert_hook_shape(
+        &hook_plan.contents,
+        false,
+        "sh \"$CLAUDE_PROJECT_DIR/.maestro/hooks/record.sh\"",
+    );
 }
 
 #[test]
@@ -58,14 +62,18 @@ fn mirror_plan_writes_codex_hook_timeout_and_trust_related_files() {
     assert!(plans.iter().any(|plan| {
         plan.relative_path == ".codex/hooks.json"
             && plan.contents.contains("\"timeout\": 5")
-            && plan.contents.contains("maestro hook record")
+            && plan.contents.contains(".maestro/hooks/record.sh")
     }));
     let hook_plan = plans
         .iter()
         .find(|plan| plan.relative_path == ".codex/hooks.json")
         .expect("invariant: Codex hook plan should exist");
     assert_eq!(hook_plan.managed_keys, vec!["hooks"]);
-    assert_hook_shape(&hook_plan.contents, true);
+    assert_hook_shape(
+        &hook_plan.contents,
+        true,
+        "sh \"$(git rev-parse --show-toplevel)/.maestro/hooks/record.sh\"",
+    );
 }
 
 #[test]
@@ -304,7 +312,7 @@ fn install_lock_defaults_legacy_agent_state_to_committed() {
     assert_eq!(loaded.agents["codex"].state, InstallState::Committed);
 }
 
-fn assert_hook_shape(contents: &str, expect_timeout: bool) {
+fn assert_hook_shape(contents: &str, expect_timeout: bool, expected_command: &str) {
     let value = serde_json::from_str::<serde_json::Value>(contents)
         .expect("invariant: hook mirror should be valid JSON");
     let hooks = value
@@ -329,7 +337,7 @@ fn assert_hook_shape(contents: &str, expect_timeout: bool) {
         assert_eq!(command.get("type"), Some(&serde_json::json!("command")));
         assert_eq!(
             command.get("command"),
-            Some(&serde_json::json!("maestro hook record"))
+            Some(&serde_json::json!(expected_command))
         );
         if expect_timeout {
             assert_eq!(command.get("timeout"), Some(&serde_json::json!(5)));

@@ -5,9 +5,10 @@
 # changes both the generated .claude/settings.local.json / .codex/hooks.json and
 # the events `maestro hook record` accepts.
 #
-# `events` is installed for every supported agent. `claude.events` / `codex.events`
-# are installed only for that agent (both empty today; every event Maestro uses is
-# valid for both Claude and Codex). The recorder accepts the union of all three.
+# `events` is installed for every supported agent. `script` is the file under
+# .maestro/hooks/ each installed hook entry runs; the installer wraps it in a
+# per-agent invocation that resolves the repo root ($CLAUDE_PROJECT_DIR for Claude,
+# `git rev-parse` for Codex). `codex.timeout` bounds the recorder run on Codex.
 events:
   - SessionStart
   - UserPromptSubmit
@@ -15,9 +16,6 @@ events:
   - PermissionRequest
   - PostToolUse
   - Stop
-command: "maestro hook record"
-claude:
-  events: []
+script: record.sh
 codex:
   timeout: 5
-  events: []

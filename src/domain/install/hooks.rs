@@ -36,20 +36,21 @@ enum HookConfigFlavor {
 
 fn hook_json(flavor: HookConfigFlavor) -> Value {
     let contract = run::hook_event_contract();
-    let agent_events = match flavor {
-        HookConfigFlavor::Claude => contract.claude_events(),
-        HookConfigFlavor::Codex => contract.codex_events(),
-    };
+    let script = contract.script();
 
     let mut hooks = Map::new();
-    for event in contract.shared_events().iter().chain(agent_events) {
+    for event in contract.shared_events() {
+        // Each agent shell-evals the command string and resolves the repo root
+        // its own way (Claude exports $CLAUDE_PROJECT_DIR; Codex may start in a
+        // subdir, so it self-discovers via `git rev-parse`).
         let command = match flavor {
-            HookConfigFlavor::Claude => {
-                json!({"type": "command", "command": contract.command()})
-            }
+            HookConfigFlavor::Claude => json!({
+                "type": "command",
+                "command": format!("sh \"$CLAUDE_PROJECT_DIR/.maestro/hooks/{script}\""),
+            }),
             HookConfigFlavor::Codex => json!({
                 "type": "command",
-                "command": contract.command(),
+                "command": format!("sh \"$(git rev-parse --show-toplevel)/.maestro/hooks/{script}\""),
                 "timeout": contract.codex_timeout(),
             }),
         };
