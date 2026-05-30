@@ -74,6 +74,7 @@ fn init_creates_minimal_artifact_tree() {
         .path()
         .join(".maestro/harness/HARNESS.md")
         .is_file());
+    assert!(temp_dir.path().join(".maestro/hooks/record.sh").is_file());
     assert!(temp_dir
         .path()
         .join(".maestro/harness/harness.yml")

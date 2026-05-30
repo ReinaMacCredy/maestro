@@ -21,8 +21,8 @@ pub use hook_script::{
     ensure_hook_script_exists, extract_hook_script, extract_hook_script_from, validate_hook_script,
 };
 
-/// Extract every bundled resource (skills, then the hook script) into
-/// `.maestro/`, merging their reports.
+/// Extract every bundled resource (skills, the hook script, then the harness
+/// protocol) into `.maestro/`, merging their reports.
 ///
 /// If a later resource fails after an earlier one has written, the earlier
 /// writes are rolled back so the operation leaves no partial extraction.
