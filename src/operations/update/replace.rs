@@ -1,9 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
@@ -12,8 +9,7 @@ use super::{
     UpdateDownloader, UpdateOptions, UpdateUnavailable,
 };
 use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
-
-static REPLACE_COUNTER: AtomicU64 = AtomicU64::new(0);
+use crate::foundation::core::safe_write::temp_sibling_path;
 
 /// Replacer that writes a sibling temp file and renames it over the executable.
 #[derive(Debug, Default)]
@@ -130,7 +126,7 @@ fn replace_binary_atomic(current: &Path, candidate: &Path) -> Result<()> {
             )
         })?
         .permissions();
-    let temp_path = temp_sibling_path(current)?;
+    let temp_path = temp_sibling_path(current, "update")?;
 
     if let Err(error) = copy_candidate_to_temp(candidate, &temp_path, permissions) {
         let _ = fs::remove_file(&temp_path);
@@ -177,27 +173,4 @@ fn copy_candidate_to_temp(
         })?;
     fs::set_permissions(temp_path, permissions)
         .with_context(|| format!("failed to set permissions on {}", temp_path.display()))
-}
-
-fn temp_sibling_path(path: &Path) -> Result<PathBuf> {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .with_context(|| format!("path has no valid file name: {}", path.display()))?;
-    let parent = match path.parent() {
-        Some(parent) => parent,
-        None => Path::new(""),
-    };
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system clock is before the Unix epoch")?
-        .as_nanos();
-    let counter = REPLACE_COUNTER.fetch_add(1, Ordering::Relaxed);
-
-    Ok(parent.join(format!(
-        ".{file_name}.update.{}.{}.{}",
-        process::id(),
-        timestamp,
-        counter
-    )))
 }

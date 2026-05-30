@@ -42,7 +42,7 @@ fn create_temp_sibling(path: &Path, contents: &[u8]) -> Result<PathBuf> {
     let mut last_error = None;
 
     for _ in 0..16 {
-        let temp_path = temp_sibling_path(path)?;
+        let temp_path = temp_sibling_path(path, "tmp")?;
         match OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -75,7 +75,10 @@ fn create_temp_sibling(path: &Path, contents: &[u8]) -> Result<PathBuf> {
     }
 }
 
-fn temp_sibling_path(path: &Path) -> Result<PathBuf> {
+/// Build a collision-resistant sibling temp path next to `path`, tagged by `tag`
+/// (e.g. `tmp`, `update`). The pid, nanosecond timestamp, and a process-local
+/// counter keep concurrent writers from colliding.
+pub(crate) fn temp_sibling_path(path: &Path, tag: &str) -> Result<PathBuf> {
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -88,7 +91,7 @@ fn temp_sibling_path(path: &Path) -> Result<PathBuf> {
     let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
 
     Ok(parent.join(format!(
-        ".{file_name}.tmp.{}.{}.{}",
+        ".{file_name}.{tag}.{}.{}.{}",
         process::id(),
         timestamp,
         counter

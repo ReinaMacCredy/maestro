@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::safe_write::temp_sibling_path;
 
 static BACKUP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -62,7 +63,7 @@ pub fn backup_file_with_timestamp(
 fn copy_without_overwrite(source: &Path, destination: &Path) -> Result<()> {
     let mut source_file =
         fs::File::open(source).with_context(|| format!("failed to open {}", source.display()))?;
-    let temp_path = temp_sibling_path(destination)?;
+    let temp_path = temp_sibling_path(destination, "tmp")?;
     let mut temp_file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -109,21 +110,6 @@ fn reject_backup_symlinks(paths: &MaestroPaths) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn temp_sibling_path(destination: &Path) -> Result<PathBuf> {
-    let file_name = destination
-        .file_name()
-        .and_then(|name| name.to_str())
-        .with_context(|| format!("path has no valid file name: {}", destination.display()))?;
-    let parent = destination.parent().unwrap_or_else(|| Path::new(""));
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system clock is before the Unix epoch")?
-        .as_nanos();
-    let counter = BACKUP_COUNTER.fetch_add(1, Ordering::Relaxed);
-
-    Ok(parent.join(format!(".{file_name}.tmp.{nanos}.{counter}")))
 }
 
 fn backup_timestamp() -> Result<String> {
