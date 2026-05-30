@@ -9,7 +9,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
 use super::attempts::write_task_report_attempt;
 use super::claims::{check_claims, collect_evidence};
@@ -17,6 +16,7 @@ use super::commands::run_verify_commands;
 use super::stale::{FreshnessInputs, StoredFreshness};
 use crate::domain::task::{self, AcceptanceFile, TaskRecord, TaskState, VerificationBinding};
 use crate::foundation::core::git;
+use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::VERIFICATION_SCHEMA_VERSION;
 
@@ -207,7 +207,7 @@ pub(crate) fn evaluate_task_report(
             .map(|source| ProofSource {
                 kind: source.kind.clone(),
                 path: display_path(paths.repo_root(), &source.path),
-                hash: hash_bytes(source.text.as_bytes()),
+                hash: sha256_hex(source.text.as_bytes()),
             })
             .collect(),
         failures,
@@ -425,7 +425,7 @@ fn load_acceptance_with_hash(task_dir: &Path) -> Result<(AcceptanceFile, String)
         .with_context(|| format!("failed to read {} as UTF-8", path.display()))?;
     let acceptance = serde_yaml::from_str(&raw)
         .with_context(|| format!("failed to parse {}", path.display()))?;
-    Ok((acceptance, hash_bytes(&bytes)))
+    Ok((acceptance, sha256_hex(&bytes)))
 }
 
 fn task_contract_hash(task: &TaskRecord) -> String {
@@ -446,20 +446,15 @@ fn task_contract_hash(task: &TaskRecord) -> String {
         "acceptance_locked": task.acceptance_locked,
         "claims": claims,
     });
-    hash_bytes(contract.to_string().as_bytes())
+    sha256_hex(contract.to_string().as_bytes())
 }
 
 fn checks_hash(acceptance: &AcceptanceFile) -> String {
-    hash_bytes(
+    sha256_hex(
         serde_json::to_string(&acceptance.checks)
             .expect("invariant: acceptance checks should serialize")
             .as_bytes(),
     )
-}
-
-fn hash_bytes(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn display_path(root: &Path, path: &Path) -> String {
