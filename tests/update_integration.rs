@@ -11,8 +11,8 @@ use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::operations::update::{
     detect_schema_mismatches, run_update_with_seams, AtomicBinaryReplacer, BinaryReplacer,
-    ChecksumVerifier, DownloadedBinary, ReleaseInfo, UpdateDownloader, UpdateOptions,
-    UpdateRequest,
+    ChecksumVerifier, DownloadedBinary, ReleaseInfo, Sha256Verifier, UpdateDownloader,
+    UpdateOptions, UpdateRequest,
 };
 use support::TestTempDir;
 
@@ -336,6 +336,29 @@ fn checksum_verification_failure_prevents_binary_replacement() {
         "an unverified candidate must never reach the replacer"
     );
     assert!(!paths.maestro_dir().join("update").exists());
+}
+
+#[test]
+fn sha256_verifier_accepts_matching_and_rejects_mismatched_digests() {
+    let temp_dir = TestTempDir::new("maestro-verify-test");
+    let candidate = temp_dir.path().join("candidate");
+    fs::write(&candidate, "maestro update candidate")
+        .expect("invariant: candidate should be writable");
+
+    // The recorded digest of the candidate bytes verifies cleanly.
+    let expected = "42d10557681c62ed026f94dce482e685c714b55064617a9d562cba4ad34667ad";
+    Sha256Verifier::new(expected)
+        .verify(&candidate)
+        .expect("invariant: a matching digest must verify");
+
+    // A wrong expected digest aborts with a checksum-mismatch error.
+    let error = Sha256Verifier::new("0".repeat(64))
+        .verify(&candidate)
+        .expect_err("invariant: a mismatched digest must be rejected");
+    assert!(
+        error.to_string().contains("checksum mismatch"),
+        "a digest mismatch should surface its cause: {error}"
+    );
 }
 
 #[test]
