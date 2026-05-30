@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
@@ -8,6 +7,7 @@ use crate::domain::task;
 use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::time::nanos_since_epoch_string;
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::verify;
 use crate::interfaces::cli::{TaskArgs, TaskCommand};
@@ -124,7 +124,7 @@ fn create_task(
     lane: Option<String>,
     risk: Option<String>,
 ) -> Result<()> {
-    let now = timestamp();
+    let now = nanos_since_epoch_string();
     let task = task::create_task(&paths.tasks_dir(), title, feature, lane, risk, &now)?;
 
     println!("created {}", task.id);
@@ -132,7 +132,7 @@ fn create_task(
 }
 
 fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
-    let now = timestamp();
+    let now = nanos_since_epoch_string();
     let task = task::accept_task(&paths.tasks_dir(), id, actor, &now)?;
 
     println!("accepted {}", task.id);
@@ -140,7 +140,7 @@ fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
 }
 
 fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
-    let now = timestamp();
+    let now = nanos_since_epoch_string();
     let task = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
     println!("updated {} -> {}", task.id, state_name(&task.state));
     Ok(())
@@ -153,7 +153,7 @@ fn transition_task(
     actor: &str,
     details: TransitionDetails,
 ) -> Result<()> {
-    let now = timestamp();
+    let now = nanos_since_epoch_string();
     let task = task::transition_task(&paths.tasks_dir(), id, to, actor, &now, details)?;
     println!("updated {} -> {}", task.id, state_name(&task.state));
     Ok(())
@@ -166,7 +166,7 @@ fn block_task(
     by: Option<String>,
     actor: &str,
 ) -> Result<()> {
-    let now = timestamp();
+    let now = nanos_since_epoch_string();
     let target = blocker_target(by);
     let (task, blocker_id) = task::block_task(&paths.tasks_dir(), id, reason, target, actor, &now)?;
 
@@ -175,7 +175,7 @@ fn block_task(
 }
 
 fn unblock_task(paths: &MaestroPaths, id: &str, blocker_id: &str, actor: &str) -> Result<()> {
-    let now = timestamp();
+    let now = nanos_since_epoch_string();
     let task = task::unblock_task(&paths.tasks_dir(), id, blocker_id, actor, &now)?;
 
     println!("unblocked {} ({blocker_id})", task.id);
@@ -192,7 +192,7 @@ fn update_task(
     if summary.is_none() && claims.is_empty() {
         bail!("task update requires --summary or --claim");
     }
-    let now = timestamp();
+    let now = nanos_since_epoch_string();
     let task = task::update_task_history(
         &paths.tasks_dir(),
         id,
@@ -339,11 +339,4 @@ fn state_name(state: &TaskState) -> &'static str {
         TaskState::Abandoned => "abandoned",
         TaskState::Superseded => "superseded",
     }
-}
-
-fn timestamp() -> String {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos().to_string())
-        .unwrap_or_else(|_| "0".to_string())
 }

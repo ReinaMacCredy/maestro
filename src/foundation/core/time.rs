@@ -9,6 +9,15 @@ pub struct ParsedTimestamp {
     pub nanos_since_epoch: i128,
 }
 
+/// Return nanoseconds since the Unix epoch as a decimal string, falling back to
+/// `"0"` when the system clock predates the epoch.
+pub fn nanos_since_epoch_string() -> String {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos().to_string())
+        .unwrap_or_else(|_| "0".to_string())
+}
+
 /// Return the current time as a UTC event timestamp.
 pub fn utc_now_timestamp() -> String {
     let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) else {

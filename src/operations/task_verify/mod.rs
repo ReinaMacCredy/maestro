@@ -1,12 +1,11 @@
 //! Task verification operation.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use anyhow::Result;
 
 use super::{TaskVerifyApplication, TaskVerifyUnappliedReason};
 use crate::domain::{proof, task};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::time::nanos_since_epoch_string;
 
 /// Task verification result plus Task-application status.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,7 +37,7 @@ pub(crate) fn verify_task(
     actor: &str,
 ) -> Result<TaskVerifyResult> {
     let mut handle = task::load_task_for_update(&paths.tasks_dir(), task_id)?;
-    let verified_at = timestamp();
+    let verified_at = nanos_since_epoch_string();
     let attempt = verify_loaded_task(paths, &mut handle, actor, &verified_at)?;
     let verification = proof::TaskVerification::from_report(&attempt.report);
     let application = match attempt.application {
@@ -81,11 +80,4 @@ fn verify_loaded_task(
         report,
         application,
     })
-}
-
-fn timestamp() -> String {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos().to_string())
-        .unwrap_or_else(|_| "0".to_string())
 }
