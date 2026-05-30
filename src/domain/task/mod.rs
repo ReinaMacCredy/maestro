@@ -337,9 +337,9 @@ pub fn supersede_task(
 ) -> Result<TaskRecord> {
     let (replacement, _, _) = lookup::load_task_with_snapshot(tasks_dir, by)
         .with_context(|| format!("supersede target `{by}` was not found"))?;
-    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
-    lifecycle::transition(
-        &mut task,
+    transition_task(
+        tasks_dir,
+        id,
         TaskState::Superseded,
         actor,
         superseded_at,
@@ -348,9 +348,7 @@ pub fn supersede_task(
             summary: Some(reason.to_string()),
             ..TransitionDetails::default()
         },
-    )?;
-    template::save_task_with_snapshot(&task, &snapshot)?;
-    Ok(task)
+    )
 }
 
 /// Add a Task-owned blocker and state-history entry.
