@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn frontmatter_version_reads_shipped_skill_versions() {
-        // The exact per-skill version is pinned by tests/skills_version_guard.rs;
+        // The exact per-skill version is pinned by tests/resources_version_guard.rs;
         // here we only assert the parser extracts a non-empty version from every
         // shipped skill, so bumping one skill's version does not break this test.
         for skill in skills() {
