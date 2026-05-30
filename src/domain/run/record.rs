@@ -12,10 +12,21 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::EVENT_SCHEMA_VERSION;
 use crate::foundation::core::time::utc_now_timestamp;
 
+/// Outcome of recording one hook payload.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RecordOutcome {
+    /// The payload was a recognized hook event and was appended.
+    Recorded,
+    /// The payload was not a recognized hook event; nothing was recorded.
+    Ignored { event_type: Option<String> },
+}
+
 /// Normalize and append one hook payload into the managed Run event log.
-pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<()> {
+pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<RecordOutcome> {
     let Some(mut event) = normalize_event(payload) else {
-        return Ok(());
+        return Ok(RecordOutcome::Ignored {
+            event_type: event_type(payload),
+        });
     };
     attach_commit_snapshot(paths, &mut event);
     append_normalized_event(paths, &event)?;
@@ -26,7 +37,7 @@ pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<()> {
             .unwrap_or(UNATTRIBUTED_SESSION);
         write_evidence_for_session(paths, session_id).context("failed to write run evidence")?;
     }
-    Ok(())
+    Ok(RecordOutcome::Recorded)
 }
 
 fn normalize_event(payload: &Value) -> Option<Value> {

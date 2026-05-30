@@ -181,6 +181,31 @@ fn valid_event_writes_schema_and_event_type_for_session() {
 }
 
 #[test]
+fn unrecognized_event_type_is_reported_and_not_recorded() {
+    let repo = init_repo();
+    let output = maestro_record(
+        repo.path(),
+        r#"{"session_id":"session-unknown","hook_event_name":"NotARealEvent"}"#,
+    );
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("ignored unrecognized event type `NotARealEvent`"),
+        "hook record should explain the drop instead of staying silent: {stderr}"
+    );
+    let events_path = repo
+        .path()
+        .join(".maestro/runs")
+        .join(run_dir_name("session-unknown"))
+        .join("events.jsonl");
+    assert!(
+        !events_path.exists(),
+        "an unrecognized event must not be appended to the run log"
+    );
+}
+
+#[test]
 fn missing_session_id_writes_unattributed_run() {
     let repo = init_repo();
     let output = maestro_record(repo.path(), r#"{"event_type":"UserPromptSubmit"}"#);

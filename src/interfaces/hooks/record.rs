@@ -16,5 +16,16 @@ pub(crate) fn record_stdin(paths: &MaestroPaths) -> Result<()> {
 
 fn record_payload(paths: &MaestroPaths, raw: &str) -> Result<()> {
     let payload: Value = serde_json::from_str(raw).context("failed to parse hook payload JSON")?;
-    run::record_hook_event(paths, &payload)
+    match run::record_hook_event(paths, &payload)? {
+        run::RecordOutcome::Recorded => {}
+        run::RecordOutcome::Ignored { event_type } => match event_type {
+            Some(event_type) => {
+                eprintln!("maestro hook record: ignored unrecognized event type `{event_type}`");
+            }
+            None => {
+                eprintln!("maestro hook record: ignored payload with no recognizable event type");
+            }
+        },
+    }
+    Ok(())
 }
