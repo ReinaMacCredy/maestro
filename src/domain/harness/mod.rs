@@ -1,4 +1,5 @@
 pub mod backlog;
+pub mod extract;
 pub mod schema;
 pub mod templates;
 

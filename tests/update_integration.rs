@@ -691,25 +691,25 @@ fn fake_curl_path_env(temp_dir: &TestTempDir, script: impl AsRef<str>) -> String
 }
 
 fn mark_user_owned_harness_artifacts(paths: &MaestroPaths) {
-    let harness_protocol = paths.harness_dir().join("HARNESS.md");
-    fs::write(
-        &harness_protocol,
-        "# User-owned Harness Protocol\n\nDo not rewrite this file during update.\n",
-    )
-    .expect("invariant: harness protocol should be writable");
-
+    // HARNESS.md is extraction-managed and version-gated: a local edit that keeps
+    // the shipped frontmatter version survives update because the gate skips a
+    // matching version. harness.yml, backlog.yaml, and features.yaml are
+    // user-owned config that update never rewrites. Editing each in place (rather
+    // than replacing HARNESS.md with version-less content) keeps every file's
+    // shipped version intact, so all four must stay byte-identical across update.
     for path in [
+        paths.harness_dir().join("HARNESS.md"),
         paths.harness_dir().join("harness.yml"),
         paths.harness_dir().join("backlog.yaml"),
         paths.features_dir().join("features.yaml"),
     ] {
-        let contents = fs::read_to_string(&path)
-            .expect("invariant: initialized schema artifact should be readable");
+        let contents =
+            fs::read_to_string(&path).expect("invariant: initialized artifact should be readable");
         fs::write(
             &path,
             format!("{contents}\n# user-owned update non-mutation marker\n"),
         )
-        .expect("invariant: initialized schema artifact should be writable");
+        .expect("invariant: initialized artifact should be writable");
     }
 }
 

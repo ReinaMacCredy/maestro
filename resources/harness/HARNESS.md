@@ -1,3 +1,7 @@
+---
+version: 1.0.0
+---
+
 # Maestro Harness Protocol
 
 You are an agent (Claude, Codex, or future) working in a repo that

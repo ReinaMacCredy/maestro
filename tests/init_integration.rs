@@ -47,7 +47,9 @@ fn init_dry_run_prints_tree_without_writing() {
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
     assert!(stdout.contains("maestro init would create:"));
-    assert!(stdout.contains(".maestro/harness/HARNESS.md"));
+    // HARNESS.md is now extraction-owned (like skills and the hook script), so it
+    // is no longer enumerated in the InitPlan dry-run; harness.yml still is.
+    assert!(stdout.contains(".maestro/harness/harness.yml"));
     assert!(!temp_dir.path().join(".maestro").exists());
 }
 
