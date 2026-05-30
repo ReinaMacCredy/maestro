@@ -323,6 +323,36 @@ pub fn transition_task(
     Ok(task)
 }
 
+/// Replace a task with another existing task, recording the superseded-by ref.
+///
+/// The replacement target is loaded first so `supersede --by` can never record
+/// a dangling reference; the target's canonical id is the one stored.
+pub fn supersede_task(
+    tasks_dir: &Path,
+    id: &str,
+    by: &str,
+    reason: &str,
+    actor: &str,
+    superseded_at: &str,
+) -> Result<TaskRecord> {
+    let (replacement, _, _) = lookup::load_task_with_snapshot(tasks_dir, by)
+        .with_context(|| format!("supersede target `{by}` was not found"))?;
+    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    lifecycle::transition(
+        &mut task,
+        TaskState::Superseded,
+        actor,
+        superseded_at,
+        TransitionDetails {
+            to: Some(replacement.id),
+            summary: Some(reason.to_string()),
+            ..TransitionDetails::default()
+        },
+    )?;
+    template::save_task_with_snapshot(&task, &snapshot)?;
+    Ok(task)
+}
+
 /// Add a Task-owned blocker and state-history entry.
 pub fn block_task(
     tasks_dir: &Path,

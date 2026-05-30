@@ -79,17 +79,9 @@ pub fn run(args: TaskArgs) -> Result<()> {
                 ..TransitionDetails::default()
             },
         ),
-        TaskCommand::Supersede { id, by, reason } => transition_task(
-            &paths,
-            &id,
-            TaskState::Superseded,
-            &actor,
-            TransitionDetails {
-                to: Some(by),
-                summary: Some(reason),
-                ..TransitionDetails::default()
-            },
-        ),
+        TaskCommand::Supersede { id, by, reason } => {
+            supersede_task(&paths, &id, &by, &reason, &actor)
+        }
         TaskCommand::Show { id } => show_task(&paths, id),
         TaskCommand::List {
             blocked,
@@ -154,6 +146,19 @@ fn transition_task(
 ) -> Result<()> {
     let now = nanos_since_epoch_string();
     let task = task::transition_task(&paths.tasks_dir(), id, to, actor, &now, details)?;
+    println!("updated {} -> {}", task.id, task.state.as_str());
+    Ok(())
+}
+
+fn supersede_task(
+    paths: &MaestroPaths,
+    id: &str,
+    by: &str,
+    reason: &str,
+    actor: &str,
+) -> Result<()> {
+    let now = nanos_since_epoch_string();
+    let task = task::supersede_task(&paths.tasks_dir(), id, by, reason, actor, &now)?;
     println!("updated {} -> {}", task.id, task.state.as_str());
     Ok(())
 }

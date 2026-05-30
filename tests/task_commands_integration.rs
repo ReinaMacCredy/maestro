@@ -180,6 +180,64 @@ fn claim_from_draft_advances_to_in_progress() {
 }
 
 #[test]
+fn supersede_rejects_a_nonexistent_target_and_leaves_the_task_untouched() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Original task"]),
+        &["task", "create", "Original task"],
+    );
+
+    let args = &[
+        "task",
+        "supersede",
+        "task-001",
+        "--by",
+        "task-999",
+        "--reason",
+        "replaced",
+    ];
+    let supersede = maestro(repo, args);
+    assert_failure(&supersede, args);
+    assert!(
+        stderr(&supersede).contains("supersede target"),
+        "supersede should reject a dangling target: {}",
+        stderr(&supersede)
+    );
+    let task = task_yaml(repo, "task-001");
+    assert_eq!(task["state"], Value::String("draft".to_string()));
+}
+
+#[test]
+fn supersede_records_an_existing_target() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Old"]),
+        &["task", "create", "Old"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "create", "New"]),
+        &["task", "create", "New"],
+    );
+
+    let args = &[
+        "task",
+        "supersede",
+        "task-001",
+        "--by",
+        "task-002",
+        "--reason",
+        "replaced by task-002",
+    ];
+    assert_success(&maestro(repo, args), args);
+    let task = task_yaml(repo, "task-001");
+    assert_eq!(task["state"], Value::String("superseded".to_string()));
+}
+
+#[test]
 fn claim_from_exploring_fails_with_an_actionable_message() {
     let temp = setup_repo();
     let repo = temp.path();
@@ -290,6 +348,10 @@ fn blockers_terminal_transitions_and_claim_gate_behave_as_expected() {
     assert_success(
         &maestro(repo, &["task", "create", "Task D"]),
         &["task", "create", "Task D"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "create", "Task E"]),
+        &["task", "create", "Task E"],
     );
     assert_success(
         &maestro(
