@@ -18,3 +18,11 @@ serde_yaml = "0.9"
 sha2 = "0.11.0"
 similar = "2"
 thiserror = "2"
+
+# Codify the zero-warning gate (`cargo clippy --all-targets -- -D warnings`) so a
+# plain `cargo build`/`cargo clippy` enforces it without the flag.
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = "deny"
