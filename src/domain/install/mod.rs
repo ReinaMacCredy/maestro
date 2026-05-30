@@ -285,6 +285,13 @@ mod tests {
                 .contains("hook recorder is not initialized"),
             "unexpected error: {error}"
         );
+        // The guard trips after the harness guard passes, so `.maestro/` already
+        // holds files a plain `maestro init` would bail on; the remedy must name
+        // the self-healing path, `maestro update`.
+        assert!(
+            error.to_string().contains("maestro update"),
+            "guard must point at the self-healing command: {error}"
+        );
         assert!(
             !root.join(".claude/settings.local.json").exists(),
             "install must fail before writing agent mirrors"
