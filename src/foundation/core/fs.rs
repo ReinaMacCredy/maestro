@@ -4,6 +4,21 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+/// Flush a path's parent directory entry to disk so a preceding rename or
+/// hard-link is durable across a crash. A no-op when the path has no parent.
+pub(crate) fn sync_parent_dir(path: &Path) -> Result<()> {
+    let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    else {
+        return Ok(());
+    };
+
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .with_context(|| format!("failed to sync parent directory {}", parent.display()))
+}
+
 /// Create a directory and any missing ancestors.
 pub fn ensure_dir(path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();

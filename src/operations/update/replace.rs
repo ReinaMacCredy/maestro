@@ -11,7 +11,7 @@ use super::{
     update_request, BinaryReplacer, BinaryStatus, ChecksumVerifier, DownloadedBinary, ReleaseInfo,
     UpdateDownloader, UpdateOptions, UpdateUnavailable,
 };
-use crate::foundation::core::fs::ensure_parent_dir;
+use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
 
 static REPLACE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -200,17 +200,4 @@ fn temp_sibling_path(path: &Path) -> Result<PathBuf> {
         timestamp,
         counter
     )))
-}
-
-fn sync_parent_dir(path: &Path) -> Result<()> {
-    let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    else {
-        return Ok(());
-    };
-
-    File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .with_context(|| format!("failed to sync parent directory {}", parent.display()))
 }

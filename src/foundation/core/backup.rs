@@ -1,4 +1,4 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result};
 
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::ensure_parent_dir;
+use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
 use crate::foundation::core::paths::MaestroPaths;
 
 static BACKUP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -124,19 +124,6 @@ fn temp_sibling_path(destination: &Path) -> Result<PathBuf> {
     let counter = BACKUP_COUNTER.fetch_add(1, Ordering::Relaxed);
 
     Ok(parent.join(format!(".{file_name}.tmp.{nanos}.{counter}")))
-}
-
-fn sync_parent_dir(path: &Path) -> Result<()> {
-    let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    else {
-        return Ok(());
-    };
-
-    File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .with_context(|| format!("failed to sync parent directory {}", parent.display()))
 }
 
 fn backup_timestamp() -> Result<String> {

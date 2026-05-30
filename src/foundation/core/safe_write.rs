@@ -1,4 +1,4 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process;
@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
-use crate::foundation::core::fs::ensure_parent_dir;
+use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -36,19 +36,6 @@ pub fn write_atomic(path: impl AsRef<Path>, contents: &[u8]) -> Result<()> {
     sync_parent_dir(path)?;
 
     Ok(())
-}
-
-fn sync_parent_dir(path: &Path) -> Result<()> {
-    let Some(parent) = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    else {
-        return Ok(());
-    };
-
-    File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .with_context(|| format!("failed to sync parent directory {}", parent.display()))
 }
 
 fn create_temp_sibling(path: &Path, contents: &[u8]) -> Result<PathBuf> {
