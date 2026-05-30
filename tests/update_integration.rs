@@ -57,7 +57,7 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
     assert!(stdout.contains("edited skills backed up"));
     assert_eq!(
         fs::read_to_string(&skill_path).expect("invariant: skill should be readable"),
-        skill.contents
+        skill.skill_md()
     );
 
     let backup = update_backup_for(&paths, skill.name);

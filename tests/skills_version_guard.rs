@@ -44,14 +44,14 @@ fn shipped_skill_bodies_and_versions_match_the_recorded_guard() {
             .expect("invariant: every shipped skill must appear in SKILL_VERSION_GUARD");
 
         assert_eq!(
-            sha256_hex(skill.contents.as_bytes()),
+            sha256_hex(skill.skill_md().as_bytes()),
             hash,
             "skill {} body changed; bump its `version:` if user-visible, then \
              re-record (version, sha256) in tests/skills_version_guard.rs",
             skill.name
         );
         assert!(
-            skill.contents.contains(&format!("version: {version}")),
+            skill.skill_md().contains(&format!("version: {version}")),
             "skill {} frontmatter version must match the recorded {version}",
             skill.name
         );

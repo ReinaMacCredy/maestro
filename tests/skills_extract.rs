@@ -4,8 +4,8 @@ use std::fs;
 
 use maestro::core::backup::backup_operation_timestamp;
 use maestro::core::paths::MaestroPaths;
-use maestro::skills::catalog::skills;
-use maestro::skills::extract::{extract_skills, ExtractMode};
+use maestro::skills::catalog::{skills, Skill, SkillFile};
+use maestro::skills::extract::{extract_skills, extract_skills_from, ExtractMode};
 use support::TestTempDir;
 
 const BUNDLED_SKILL_NAMES: [&str; 4] = [
@@ -48,7 +48,7 @@ fn bundled_skill_contents_match_embedded_resources() {
             .iter()
             .find_map(|(name, contents)| (*name == skill.name).then_some(*contents))
             .expect("invariant: every bundled skill has a resource fixture");
-        assert_eq!(skill.contents, resource);
+        assert_eq!(skill.skill_md(), resource);
     }
 }
 
@@ -65,7 +65,7 @@ fn extract_bundled_skills_writes_each_skill_without_index() {
         let contents =
             fs::read_to_string(&path).expect("invariant: extracted skill should be readable");
 
-        assert_eq!(contents, skill.contents);
+        assert_eq!(contents, skill.skill_md());
         assert!(contents.starts_with("---\n"));
         assert!(contents.contains(&format!("name: {}", skill.name)));
         assert!(contents.contains("description: "));
@@ -135,9 +135,10 @@ fn extract_bundled_skills_rejects_symlinked_maestro_root() {
 #[test]
 fn bundled_skill_contents_include_activation_logging_instruction() {
     for skill in skills() {
-        assert!(skill.contents.contains("skill_activation"));
-        assert!(skill.contents.contains(skill.name));
-        assert!(skill.contents.contains("maestro hook record"));
+        let skill_md = skill.skill_md();
+        assert!(skill_md.contains("skill_activation"));
+        assert!(skill_md.contains(skill.name));
+        assert!(skill_md.contains("maestro hook record"));
     }
 }
 
@@ -252,7 +253,7 @@ fn extract_bundled_skills_force_backs_up_existing_bundled_file() {
 
     assert_eq!(
         fs::read_to_string(&existing).expect("invariant: rewritten skill should be readable"),
-        skills()[0].contents
+        skills()[0].skill_md()
     );
     let backup = paths
         .backups_dir()
@@ -345,7 +346,7 @@ fn extract_skills_update_refreshes_and_backs_up_when_version_differs() {
         .expect("invariant: maestro-task should ship");
     assert_eq!(
         fs::read_to_string(&installed).expect("invariant: installed skill should be readable"),
-        shipped.contents,
+        shipped.skill_md(),
         "a differing version must refresh to the shipped contents"
     );
     assert_eq!(report.backups.len(), 1);
@@ -389,8 +390,163 @@ fn extract_skills_update_refreshes_a_pre_version_install() {
         .expect("invariant: maestro-task should ship");
     assert_eq!(
         fs::read_to_string(&installed).expect("invariant: installed skill should be readable"),
-        shipped.contents,
+        shipped.skill_md(),
         "a missing installed version must refresh to the shipped contents"
     );
     assert_eq!(report.backups.len(), 1);
+}
+
+const SYNTHETIC_SKILL_MD: &[u8] =
+    b"---\nname: synthetic\nversion: 1.0.0\n---\n\nsynthetic skill body\n";
+
+/// Build a synthetic multi-file skill: a versioned `SKILL.md` plus a nested
+/// `reference/guide.md` and a `scripts/run.sh`. Multi-file skills are not yet
+/// shipped, so this drives the tree writer through the `extract_skills_from`
+/// seam to prove the directory-tree write path.
+fn synthetic_multi_file_skill() -> Skill {
+    Skill {
+        name: "synthetic",
+        files: vec![
+            SkillFile {
+                relative_path: "SKILL.md",
+                contents: SYNTHETIC_SKILL_MD,
+            },
+            SkillFile {
+                relative_path: "reference/guide.md",
+                contents: b"# guide\n",
+            },
+            SkillFile {
+                relative_path: "scripts/run.sh",
+                contents: b"#!/bin/sh\necho run\n",
+            },
+        ],
+    }
+}
+
+#[test]
+fn extract_skills_from_writes_a_multi_file_tree() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    let skill = synthetic_multi_file_skill();
+
+    let report = extract_skills_from(&paths, std::slice::from_ref(&skill), ExtractMode::Create)
+        .expect("invariant: a synthetic multi-file skill should extract into an empty repo");
+
+    let skill_dir = paths.skills_dir().join("synthetic");
+    assert_eq!(
+        fs::read(skill_dir.join("SKILL.md")).expect("invariant: SKILL.md should be readable"),
+        SYNTHETIC_SKILL_MD
+    );
+    assert_eq!(
+        fs::read_to_string(skill_dir.join("reference/guide.md"))
+            .expect("invariant: nested reference file should be readable"),
+        "# guide\n"
+    );
+    assert_eq!(
+        fs::read_to_string(skill_dir.join("scripts/run.sh"))
+            .expect("invariant: nested script file should be readable"),
+        "#!/bin/sh\necho run\n"
+    );
+    assert_eq!(
+        report.writes.len(),
+        3,
+        "every file in the tree should be recorded as a write"
+    );
+}
+
+#[test]
+fn extract_skills_from_backs_up_and_refreshes_an_edited_multi_file_tree() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    let skill = synthetic_multi_file_skill();
+    let skills = std::slice::from_ref(&skill);
+    extract_skills_from(&paths, skills, ExtractMode::Create)
+        .expect("invariant: initial synthetic extraction should succeed");
+
+    // Install a stale, lower-versioned SKILL.md and locally edit a sibling file.
+    let skill_dir = paths.skills_dir().join("synthetic");
+    let stale_skill_md = "---\nname: synthetic\nversion: 0.9.0\n---\n\nstale\n";
+    fs::write(skill_dir.join("SKILL.md"), stale_skill_md)
+        .expect("invariant: installed SKILL.md should be writable");
+    fs::write(skill_dir.join("reference/guide.md"), "edited guide\n")
+        .expect("invariant: installed reference file should be writable");
+    let backup_timestamp =
+        backup_operation_timestamp().expect("invariant: backup timestamp should be available");
+
+    let report = extract_skills_from(
+        &paths,
+        skills,
+        ExtractMode::Update {
+            backup_timestamp: &backup_timestamp,
+        },
+    )
+    .expect("invariant: synthetic update extraction should succeed");
+
+    // The whole folder refreshes: every installed file is backed up and rewritten.
+    assert_eq!(
+        fs::read(skill_dir.join("SKILL.md")).expect("invariant: SKILL.md should be readable"),
+        SYNTHETIC_SKILL_MD
+    );
+    assert_eq!(
+        fs::read_to_string(skill_dir.join("reference/guide.md"))
+            .expect("invariant: refreshed reference file should be readable"),
+        "# guide\n"
+    );
+    assert_eq!(
+        report.backups.len(),
+        3,
+        "every installed tree file is backed up"
+    );
+    let backup_root = paths
+        .backups_dir()
+        .join(format!("{backup_timestamp}-update"))
+        .join(".maestro/skills/synthetic");
+    assert_eq!(
+        fs::read_to_string(backup_root.join("SKILL.md"))
+            .expect("invariant: backed up SKILL.md should be readable"),
+        stale_skill_md
+    );
+    assert_eq!(
+        fs::read_to_string(backup_root.join("reference/guide.md"))
+            .expect("invariant: backed up reference file should be readable"),
+        "edited guide\n"
+    );
+}
+
+#[test]
+fn extract_skills_from_rolls_back_a_partial_multi_file_write() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    // Order matters: `reference` is written as a regular file first, so writing
+    // `reference/guide.md` next fails (its parent is a file), forcing a rollback
+    // of the already-written files within this extraction.
+    let skill = Skill {
+        name: "synthetic",
+        files: vec![
+            SkillFile {
+                relative_path: "SKILL.md",
+                contents: SYNTHETIC_SKILL_MD,
+            },
+            SkillFile {
+                relative_path: "reference",
+                contents: b"collides with the directory\n",
+            },
+            SkillFile {
+                relative_path: "reference/guide.md",
+                contents: b"# guide\n",
+            },
+        ],
+    };
+
+    let error = extract_skills_from(&paths, std::slice::from_ref(&skill), ExtractMode::Create)
+        .expect_err("invariant: writing a file under a path already taken by a file should fail");
+    assert!(error.to_string().contains("failed to write bundled skill"));
+
+    // Rollback removed the files this extraction had already written.
+    let skill_dir = paths.skills_dir().join("synthetic");
+    assert!(
+        !skill_dir.join("SKILL.md").exists(),
+        "a failed tree write must roll back files it already wrote"
+    );
+    assert!(!skill_dir.join("reference").exists());
 }
