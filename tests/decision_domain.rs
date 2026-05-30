@@ -2,9 +2,9 @@ mod support;
 
 use std::fs;
 
-use maestro::core::paths::MaestroPaths;
 use maestro::decisions::template::decision_markdown;
 use maestro::domain::decisions;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 #[test]

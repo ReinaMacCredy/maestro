@@ -2,10 +2,10 @@ mod support;
 
 use std::fs;
 
-use maestro::core::fs::ensure_dir;
 use maestro::decisions::template::{decision_file_name, decision_markdown};
 use maestro::feature::query::{count_tasks_for_feature, FeatureTaskCounts};
 use maestro::feature::schema::{FeatureRegistry, FeatureStatus};
+use maestro::foundation::core::fs::ensure_dir;
 use support::TestTempDir;
 
 #[test]

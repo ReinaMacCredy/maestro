@@ -10,7 +10,6 @@ const TARGET_MODULE_ROOTS: &[&str] = &[
 ];
 
 const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
-    "core",
     "decisions",
     "feature",
     "harness",
@@ -97,26 +96,6 @@ fn target_module_roots_exist_and_legacy_roots_remain() {
 #[test]
 fn selected_compatibility_smoke_paths_resolve() {
     assert_eq!(
-        maestro::foundation::core::schema::TASK_SCHEMA_VERSION,
-        maestro::core::schema::TASK_SCHEMA_VERSION
-    );
-    assert_eq!(
-        std::any::type_name::<maestro::foundation::core::paths::MaestroPaths>(),
-        std::any::type_name::<maestro::core::paths::MaestroPaths>()
-    );
-    assert_eq!(
-        std::any::type_name::<maestro::foundation::core::error::MaestroError>(),
-        std::any::type_name::<maestro::core::error::MaestroError>()
-    );
-    assert_eq!(
-        std::any::type_name::<maestro::foundation::core::git::GitSnapshot>(),
-        std::any::type_name::<maestro::core::git::GitSnapshot>()
-    );
-    assert_eq!(
-        std::any::type_name::<maestro::foundation::core::managed_blocks::ManagedBlockFormat>(),
-        std::any::type_name::<maestro::core::managed_blocks::ManagedBlockFormat>()
-    );
-    assert_eq!(
         std::any::type_name::<maestro::domain::harness::schema::HarnessConfig>(),
         std::any::type_name::<maestro::harness::schema::HarnessConfig>()
     );
@@ -132,31 +111,6 @@ fn selected_compatibility_smoke_paths_resolve() {
         maestro::decisions::template::decision_file_name;
     let _new_decision_file_name: fn(u32, &str) -> String =
         maestro::domain::decisions::template::decision_file_name;
-
-    let _legacy_ensure_dir = |path: &Path| maestro::core::fs::ensure_dir(path);
-    let _new_ensure_dir = |path: &Path| maestro::foundation::core::fs::ensure_dir(path);
-    let _legacy_write_string_atomic = |path: &Path, contents: &str| {
-        maestro::core::safe_write::write_string_atomic(path, contents)
-    };
-    let _new_write_string_atomic = |path: &Path, contents: &str| {
-        maestro::foundation::core::safe_write::write_string_atomic(path, contents)
-    };
-    let _legacy_head = |path: &Path| maestro::core::git::head(path);
-    let _new_head = |path: &Path| maestro::foundation::core::git::head(path);
-    let _legacy_backup_file = |paths: &maestro::core::paths::MaestroPaths,
-                               source: &Path,
-                               operation: &str,
-                               timestamp: &str| {
-        maestro::core::backup::backup_file_with_timestamp(paths, source, operation, timestamp)
-    };
-    let _new_backup_file = |paths: &maestro::foundation::core::paths::MaestroPaths,
-                            source: &Path,
-                            operation: &str,
-                            timestamp: &str| {
-        maestro::foundation::core::backup::backup_file_with_timestamp(
-            paths, source, operation, timestamp,
-        )
-    };
 
     let _ = std::any::type_name::<maestro::interfaces::cli::Cli>();
     let _ = std::any::type_name::<maestro::task::template::TaskRecord>();
@@ -1391,7 +1345,6 @@ fn lib_exposes_crate_root(lib: &str, root: &str) -> bool {
 
 fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
     match root {
-        "core" => line == "pub use foundation::core;" || line == "pub use crate::foundation::core;",
         "mcp" => line == "pub use interfaces::mcp;" || line == "pub use crate::interfaces::mcp;",
         "hooks" => {
             line == "pub use interfaces::hooks;" || line == "pub use crate::interfaces::hooks;"

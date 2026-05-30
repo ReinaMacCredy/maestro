@@ -9,7 +9,7 @@
 //! user-visible, bump its version per `AGENTS.md`). It enforces acknowledgement,
 //! not a mechanical bump.
 
-use maestro::core::hash::sha256_hex;
+use maestro::foundation::core::hash::sha256_hex;
 use maestro::skills::catalog::skills;
 
 /// The shipped hook recorder script (its `# maestro:hook-version:` comment is

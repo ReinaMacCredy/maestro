@@ -2,7 +2,7 @@ mod support;
 
 use std::fs;
 
-use maestro::core::paths::MaestroPaths;
+use maestro::foundation::core::paths::MaestroPaths;
 use maestro::harness::schema::{detect_stack, HarnessConfig, StackKind};
 use maestro::harness::templates::{backlog_yaml, features_yaml, harness_yml, HARNESS_MD};
 use support::TestTempDir;

@@ -2,12 +2,12 @@ mod support;
 
 use std::fs;
 
-use maestro::core::paths::MaestroPaths;
 use maestro::domain::install::{
     install_agent, mirror_plan, uninstall_agent, AgentInstall, FileOwnership, InstallAgent,
     InstallLock, InstallState, MirrorKind,
 };
 use maestro::foundation::core::error::MaestroError;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 const HOOK_EVENTS: [&str; 6] = [

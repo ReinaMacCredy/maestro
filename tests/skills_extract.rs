@@ -2,8 +2,8 @@ mod support;
 
 use std::fs;
 
-use maestro::core::backup::backup_operation_timestamp;
-use maestro::core::paths::MaestroPaths;
+use maestro::foundation::core::backup::backup_operation_timestamp;
+use maestro::foundation::core::paths::MaestroPaths;
 use maestro::skills::catalog::{skills, Skill, SkillFile};
 use maestro::skills::extract::{extract_skills, extract_skills_from, ExtractMode};
 use support::TestTempDir;

@@ -3,9 +3,9 @@ mod support;
 use std::fs;
 use std::path::Path;
 
-use maestro::core::fs::ensure_dir;
-use maestro::core::paths::MaestroPaths;
 use maestro::domain::feature;
+use maestro::foundation::core::fs::ensure_dir;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 fn write_registry(paths: &MaestroPaths, contents: &str) {
@@ -177,7 +177,7 @@ fn diagnose_reports_count_on_compatible_registry() {
     assert_eq!(diagnostic.found, Ok(("maestro.feature.v1".to_string(), 1)));
     assert_eq!(
         diagnostic.compatibility,
-        Some(maestro::core::schema::Compat::Exact)
+        Some(maestro::foundation::core::schema::Compat::Exact)
     );
 }
 
@@ -207,7 +207,7 @@ fn diagnose_reports_incompatible_version_as_data() {
     assert_eq!(diagnostic.found, Ok(("maestro.galaxy.v9".to_string(), 0)));
     assert_eq!(
         diagnostic.compatibility,
-        Some(maestro::core::schema::Compat::Incompatible)
+        Some(maestro::foundation::core::schema::Compat::Incompatible)
     );
 }
 

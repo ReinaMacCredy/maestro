@@ -3,9 +3,9 @@ mod support;
 use std::fs;
 use std::path::PathBuf;
 
-use maestro::core::backup::backup_operation_timestamp;
-use maestro::core::paths::MaestroPaths;
 use maestro::domain::harness::extract::{extract_harness, extract_harness_from, ExtractMode};
+use maestro::foundation::core::backup::backup_operation_timestamp;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 const V1: &str = "---\nversion: 1.0.0\n---\n# Maestro Harness Protocol\n";

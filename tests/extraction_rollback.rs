@@ -3,8 +3,8 @@ mod support;
 use std::fs;
 use std::path::Path;
 
-use maestro::core::paths::MaestroPaths;
 use maestro::domain::extraction::{extract_all, ExtractMode};
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 /// Count regular files anywhere under `dir`, returning 0 when it is absent.

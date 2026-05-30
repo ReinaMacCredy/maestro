@@ -3,9 +3,9 @@ mod support;
 use std::fs;
 use std::path::PathBuf;
 
-use maestro::core::backup::backup_operation_timestamp;
-use maestro::core::paths::MaestroPaths;
 use maestro::domain::extraction::{extract_hook_script, extract_hook_script_from, ExtractMode};
+use maestro::foundation::core::backup::backup_operation_timestamp;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 const V1: &str = "# maestro:hook-version: 1.0.0\nexec maestro hook record\n";

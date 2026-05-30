@@ -2,9 +2,9 @@ mod support;
 
 use std::fs;
 
-use maestro::core::paths::MaestroPaths;
 use maestro::domain::harness::backlog;
 use maestro::domain::harness::schema::{BacklogConfig, BacklogItem};
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 fn paths_for(temp: &TestTempDir) -> MaestroPaths {

@@ -106,10 +106,9 @@ moves, update the facade and `tests/architecture_imports.rs` in the same slice
 before removing the old path.
 
 Current migration state: Core implementation files live under
-`src/foundation/core`, and `crate::core` remains a compatibility re-export.
-New production imports should prefer `crate::foundation::core`; keep
-`crate::core` and `maestro::core` usage to compatibility checks or transition
-work until the legacy path is removed.
+`src/foundation/core`; the legacy `crate::core` compatibility re-export has
+been retired, so production and test code reference `crate::foundation::core`
+directly.
 
 CLI adapter files live under `src/interfaces/cli`; there is no `crate::commands`
 compatibility re-export, so production code references `crate::interfaces::cli`

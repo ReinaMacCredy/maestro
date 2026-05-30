@@ -5,8 +5,8 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
-use maestro::core::fs::ensure_dir;
 use maestro::decisions::template::decision_markdown;
+use maestro::foundation::core::fs::ensure_dir;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
