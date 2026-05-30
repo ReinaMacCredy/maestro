@@ -24,8 +24,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 6] = [
     (
         "skill",
         "maestro-task",
-        "1.0.0",
-        "b55f520c234c90ec4c24d52c190f8741e58f071f2d3b41c05eb2696fd849bc38",
+        "1.1.0",
+        "b251b94d9febc749419c372f03ec918208c861bd148eca2ddaf1e6c7bc5c8581",
     ),
     (
         "skill",
@@ -54,8 +54,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 6] = [
     (
         "harness",
         "HARNESS.md",
-        "1.0.0",
-        "dfd7874db3011cffd7dd2c1e62a6942af83fcb9f3879e2126ff3f5890031a431",
+        "1.1.0",
+        "bca30da6c7f2298fc6f18b0fc8787ff728e5a80f86f6c02a9d80cdf74affae4a",
     ),
 ];
 
