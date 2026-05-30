@@ -3,7 +3,9 @@ use serde_json::Value;
 use crate::domain::run;
 
 /// Shared hook events supported by Claude and Codex V1 hook config.
-pub const SHARED_HOOK_EVENTS: [&str; 6] = run::SHARED_HOOK_EVENTS;
+pub fn shared_hook_events() -> &'static [String] {
+    run::hook_event_contract().shared_events()
+}
 
 /// Run directory used when a hook payload has no session id.
 pub const UNATTRIBUTED_SESSION: &str = run::UNATTRIBUTED_SESSION;

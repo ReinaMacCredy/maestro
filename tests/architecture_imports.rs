@@ -60,6 +60,7 @@ const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
         "src/domain/harness/templates.rs",
         &["resources/harness/HARNESS.md"],
     ),
+    ("src/domain/run/event.rs", &["resources/hooks/events.yaml"]),
     ("src/domain/skills/catalog.rs", &["resources/skills/"]),
     ("src/interfaces/shell/mod.rs", &["resources/shell/"]),
 ];
@@ -216,8 +217,8 @@ fn selected_compatibility_smoke_paths_resolve() {
     let _new_mcp_serve: fn() -> anyhow::Result<()> = maestro::interfaces::mcp::server::serve;
 
     assert_eq!(
-        maestro::interfaces::hooks::event::SHARED_HOOK_EVENTS,
-        maestro::hooks::event::SHARED_HOOK_EVENTS
+        maestro::interfaces::hooks::event::shared_hook_events(),
+        maestro::hooks::event::shared_hook_events()
     );
     let legacy_run_dir_name: fn(&str) -> String = maestro::hooks::event::run_dir_name;
     let new_run_dir_name: fn(&str) -> String = maestro::interfaces::hooks::event::run_dir_name;
@@ -227,7 +228,7 @@ fn selected_compatibility_smoke_paths_resolve() {
     );
     assert_eq!(
         maestro::domain::run::hook_event_contract().shared_events(),
-        maestro::hooks::event::SHARED_HOOK_EVENTS
+        maestro::hooks::event::shared_hook_events()
     );
 }
 
@@ -506,7 +507,6 @@ fn run_domain_facade_does_not_publish_leaf_modules() {
         "run_evidence_files_under",
         "string_field",
         "visit_event_log",
-        "SHARED_HOOK_EVENTS",
         "UNATTRIBUTED_SESSION",
     ] {
         assert!(

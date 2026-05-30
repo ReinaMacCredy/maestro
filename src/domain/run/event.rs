@@ -1,20 +1,54 @@
 use std::path::Path;
+use std::sync::OnceLock;
 
+use serde::Deserialize;
 use serde_json::Value;
 
-/// The lifecycle events Maestro installs and records, identical for Claude and
-/// Codex today.
-///
-/// Split into per-agent sets only if Maestro ever installs or consumes an event
-/// valid for one agent but not the other.
-pub(crate) const SHARED_HOOK_EVENTS: [&str; 6] = [
-    "SessionStart",
-    "UserPromptSubmit",
-    "PreToolUse",
-    "PermissionRequest",
-    "PostToolUse",
-    "Stop",
-];
+/// Single source for the lifecycle hook events Maestro installs and records,
+/// shared by the installer (`install/hooks.rs`) and the recorder
+/// (`is_accepted_event`). Editing the embedded file changes both.
+static HOOK_CONFIG_YAML: &str = include_str!("../../../resources/hooks/events.yaml");
+
+/// Deserialized form of `resources/hooks/events.yaml`.
+#[derive(Debug, Deserialize)]
+struct HookConfig {
+    /// Events installed for every supported agent.
+    events: Vec<String>,
+    /// Command every installed hook entry invokes.
+    command: String,
+    /// Claude-only knobs.
+    #[serde(default)]
+    claude: AgentEvents,
+    /// Codex-only knobs.
+    codex: CodexConfig,
+}
+
+/// Per-agent extra events installed in addition to the shared set.
+#[derive(Debug, Default, Deserialize)]
+struct AgentEvents {
+    #[serde(default)]
+    events: Vec<String>,
+}
+
+/// Codex-only hook knobs.
+#[derive(Debug, Deserialize)]
+struct CodexConfig {
+    /// Per-hook timeout in seconds Codex applies to the recorder command.
+    timeout: u64,
+    #[serde(default)]
+    events: Vec<String>,
+}
+
+/// Parse the embedded hook config once. The file ships in the binary and is not
+/// runtime user input, so a malformed file is a build-time bug, not a recoverable
+/// error.
+fn hook_config() -> &'static HookConfig {
+    static CONFIG: OnceLock<HookConfig> = OnceLock::new();
+    CONFIG.get_or_init(|| {
+        serde_yaml::from_str(HOOK_CONFIG_YAML)
+            .expect("invariant: embedded resources/hooks/events.yaml is valid")
+    })
+}
 
 /// Run directory used when a hook payload has no session id.
 pub(crate) const UNATTRIBUTED_SESSION: &str = "unattributed";
@@ -24,9 +58,29 @@ pub(crate) const UNATTRIBUTED_SESSION: &str = "unattributed";
 pub struct HookEventContract;
 
 impl HookEventContract {
-    /// Hook event names shared across supported agents.
-    pub fn shared_events(self) -> [&'static str; 6] {
-        SHARED_HOOK_EVENTS
+    /// Hook event names installed and recorded for every supported agent.
+    pub fn shared_events(self) -> &'static [String] {
+        &hook_config().events
+    }
+
+    /// Claude-only hook events installed in addition to the shared set.
+    pub fn claude_events(self) -> &'static [String] {
+        &hook_config().claude.events
+    }
+
+    /// Codex-only hook events installed in addition to the shared set.
+    pub fn codex_events(self) -> &'static [String] {
+        &hook_config().codex.events
+    }
+
+    /// Command every installed hook entry invokes.
+    pub fn command(self) -> &'static str {
+        &hook_config().command
+    }
+
+    /// Per-hook timeout in seconds Codex applies to the recorder command.
+    pub fn codex_timeout(self) -> u64 {
+        hook_config().codex.timeout
     }
 
     /// Return whether an event type is accepted by `maestro hook record`.
@@ -42,7 +96,13 @@ pub fn hook_event_contract() -> HookEventContract {
 
 /// Return whether an event type is accepted by `maestro hook record`.
 pub(crate) fn is_accepted_event(event_type: &str) -> bool {
-    SHARED_HOOK_EVENTS.contains(&event_type)
+    let config = hook_config();
+    config
+        .events
+        .iter()
+        .chain(&config.claude.events)
+        .chain(&config.codex.events)
+        .any(|event| event.as_str() == event_type)
         || matches!(event_type, "SkillActivation" | "skill_activation")
 }
 
@@ -125,5 +185,54 @@ fn hex_value(byte: u8) -> Option<u8> {
         b'a'..=b'f' => Some(byte - b'a' + 10),
         b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_config_matches_the_shared_contract() {
+        let contract = hook_event_contract();
+
+        let events: Vec<&str> = contract
+            .shared_events()
+            .iter()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(
+            events,
+            [
+                "SessionStart",
+                "UserPromptSubmit",
+                "PreToolUse",
+                "PermissionRequest",
+                "PostToolUse",
+                "Stop",
+            ]
+        );
+        assert_eq!(contract.command(), "maestro hook record");
+        assert_eq!(contract.codex_timeout(), 5);
+        assert!(contract.claude_events().is_empty());
+        assert!(contract.codex_events().is_empty());
+    }
+
+    #[test]
+    fn is_accepted_event_accepts_contract_events_and_skill_aliases() {
+        for event in hook_event_contract().shared_events() {
+            assert!(is_accepted_event(event), "{event} should be accepted");
+        }
+        assert!(is_accepted_event("SkillActivation"));
+        assert!(is_accepted_event("skill_activation"));
+    }
+
+    #[test]
+    fn is_accepted_event_rejects_unknown_events() {
+        // `Notification` is a real Claude event but Maestro neither installs nor
+        // records it, so the recorder must reject it.
+        assert!(!is_accepted_event("Notification"));
+        assert!(!is_accepted_event("PreToolUseX"));
+        assert!(!is_accepted_event(""));
     }
 }

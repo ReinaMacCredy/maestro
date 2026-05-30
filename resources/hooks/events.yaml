@@ -1,0 +1,23 @@
+# Single source for the lifecycle hook events Maestro installs and records.
+#
+# Read at compile time by src/domain/run/event.rs (the recorder contract) and,
+# through it, by src/domain/install/hooks.rs (the installer). Editing this list
+# changes both the generated .claude/settings.local.json / .codex/hooks.json and
+# the events `maestro hook record` accepts.
+#
+# `events` is installed for every supported agent. `claude.events` / `codex.events`
+# are installed only for that agent (both empty today; every event Maestro uses is
+# valid for both Claude and Codex). The recorder accepts the union of all three.
+events:
+  - SessionStart
+  - UserPromptSubmit
+  - PreToolUse
+  - PermissionRequest
+  - PostToolUse
+  - Stop
+command: "maestro hook record"
+claude:
+  events: []
+codex:
+  timeout: 5
+  events: []
