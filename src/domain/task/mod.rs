@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -289,6 +289,13 @@ pub fn claim_task(tasks_dir: &Path, id: &str, actor: &str, claimed_at: &str) -> 
             actor,
             claimed_at,
         )?;
+    }
+    if task.state == TaskState::Exploring {
+        bail!(
+            "task {} is exploring; run `maestro task accept {}` to make it ready before claiming",
+            task.id,
+            task.id
+        );
     }
     lifecycle::transition(
         &mut task,

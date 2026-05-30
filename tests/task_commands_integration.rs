@@ -180,6 +180,29 @@ fn claim_from_draft_advances_to_in_progress() {
 }
 
 #[test]
+fn claim_from_exploring_fails_with_an_actionable_message() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Exploring task"]),
+        &["task", "create", "Exploring task"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "explore", "task-001"]),
+        &["task", "explore", "task-001"],
+    );
+
+    let claim = maestro(repo, &["task", "claim", "task-001"]);
+    assert_failure(&claim, &["task", "claim", "task-001"]);
+    let message = stderr(&claim);
+    assert!(
+        message.contains("exploring") && message.contains("task accept"),
+        "claiming an exploring task should name the state and point at accept: {message}"
+    );
+}
+
+#[test]
 fn blockers_terminal_transitions_and_claim_gate_behave_as_expected() {
     let temp = setup_repo();
     let repo = temp.path();

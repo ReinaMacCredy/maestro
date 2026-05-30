@@ -118,6 +118,30 @@ fn terminal_transitions_are_allowed_from_non_terminal_states() {
 }
 
 #[test]
+fn invalid_transition_names_the_current_and_target_states() {
+    let mut task = TaskRecord::draft("task-001", "Add CSV export", "t0");
+    task.state = TaskState::Exploring;
+
+    let error = transition(
+        &mut task,
+        TaskState::InProgress,
+        "codex",
+        "t1",
+        TransitionDetails::default(),
+    )
+    .expect_err("invariant: exploring cannot jump straight to in_progress");
+    let message = error.to_string();
+    assert!(
+        message.contains("exploring"),
+        "error should name the current state: {message}"
+    );
+    assert!(
+        message.contains("in_progress"),
+        "error should name the target state: {message}"
+    );
+}
+
+#[test]
 fn generic_lifecycle_cannot_mark_verified() {
     let mut task = TaskRecord::draft("task-001", "Add CSV export", "t0");
     task.state = TaskState::NeedsVerification;

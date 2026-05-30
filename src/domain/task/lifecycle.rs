@@ -83,7 +83,11 @@ fn validate_transition(task: &TaskRecord, to: &TaskState) -> Result<()> {
             bail!("verified transition is owned by verification subsystem")
         }
         (_, TaskState::Rejected | TaskState::Abandoned | TaskState::Superseded) => Ok(()),
-        _ => bail!("invalid task transition"),
+        _ => bail!(
+            "cannot transition task from {} to {}",
+            task.state.as_str(),
+            to.as_str()
+        ),
     }
 }
 
