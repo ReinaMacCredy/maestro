@@ -16,7 +16,6 @@ const LEGACY_COMPATIBILITY_ROOTS: &[&str] = &[
     "task",
     "hooks",
     "mcp",
-    "skills",
     "tui",
 ];
 
@@ -102,10 +101,6 @@ fn selected_compatibility_smoke_paths_resolve() {
     assert_eq!(
         std::any::type_name::<maestro::domain::feature::schema::FeatureRecord>(),
         std::any::type_name::<maestro::feature::schema::FeatureRecord>()
-    );
-    assert_eq!(
-        std::any::type_name::<maestro::domain::skills::catalog::Skill>(),
-        std::any::type_name::<maestro::skills::catalog::Skill>()
     );
     let _legacy_decision_file_name: fn(u32, &str) -> String =
         maestro::decisions::template::decision_file_name;
@@ -1359,7 +1354,6 @@ fn compatibility_reexport_exposes_root(line: &str, root: &str) -> bool {
         "harness" => {
             line == "pub use domain::harness;" || line == "pub use crate::domain::harness;"
         }
-        "skills" => line == "pub use domain::skills;" || line == "pub use crate::domain::skills;",
         _ => false,
     }
 }

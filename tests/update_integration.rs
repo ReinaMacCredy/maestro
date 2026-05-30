@@ -7,13 +7,13 @@ use std::process::Command;
 use std::{env, fs};
 
 use anyhow::{bail, Result};
+use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::operations::update::{
     detect_schema_mismatches, run_update_with_seams, AtomicBinaryReplacer, BinaryReplacer,
     ChecksumVerifier, DownloadedBinary, ReleaseInfo, UpdateDownloader, UpdateOptions,
     UpdateRequest,
 };
-use maestro::skills::catalog::skills;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
