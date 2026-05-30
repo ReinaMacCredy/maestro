@@ -1,10 +1,10 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 
 use crate::foundation::core::fs::{create_directory_symlink, ensure_parent_dir};
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{managed_path, managed_symlink_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Relative target used by agent skill mirrors.
@@ -75,10 +75,6 @@ fn inspect_destination(path: &Path, symlink: SkillSymlink) -> Result<Destination
         }
         Err(error) => Err(error).with_context(|| format!("failed to inspect {}", path.display())),
     }
-}
-
-fn managed_symlink_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
-    managed_path(paths, relative_path, SymlinkPolicy::RejectParentComponents)
 }
 
 fn validate_canonical_skills_tree(paths: &MaestroPaths) -> Result<()> {

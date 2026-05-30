@@ -25,6 +25,12 @@ pub fn managed_path(
     Ok(paths.repo_root().join(relative))
 }
 
+/// Managed path for a symlink leaf: rejects symlinks in the parent components
+/// but allows the leaf itself to be the Maestro-managed symlink.
+pub(crate) fn managed_symlink_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
+    managed_path(paths, relative_path, SymlinkPolicy::RejectParentComponents)
+}
+
 /// Which components of a managed path may be symlinks.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SymlinkPolicy {

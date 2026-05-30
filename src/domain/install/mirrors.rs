@@ -18,7 +18,7 @@ use crate::foundation::core::managed_blocks::{
     find_block, remove_managed_block, upsert_managed_block, upsert_managed_json_keys,
     ManagedBlockFormat,
 };
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{managed_path, managed_symlink_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::{restore_or_remove, write_string_atomic};
 
@@ -761,10 +761,6 @@ fn marked_block_for_format(contents: &str, format: ManagedBlockFormat) -> Option
 
 fn managed_mirror_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
     managed_path(paths, relative_path, SymlinkPolicy::RejectAllComponents)
-}
-
-fn managed_symlink_path(paths: &MaestroPaths, relative_path: &str) -> Result<PathBuf> {
-    managed_path(paths, relative_path, SymlinkPolicy::RejectParentComponents)
 }
 
 fn markdown(relative_path: &str, body: &str) -> MirrorPlan {
