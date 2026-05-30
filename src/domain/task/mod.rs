@@ -1,6 +1,6 @@
 //! Task aggregate facade.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -93,6 +93,70 @@ pub fn create_task(
 pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     let (task, _, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     Ok(task)
+}
+
+/// Filters applied to a task listing by the CLI and MCP surfaces.
+#[derive(Default)]
+pub struct TaskFilter {
+    pub ready: bool,
+    pub blocked: bool,
+    pub blocked_by: Option<String>,
+    pub blocks: Option<String>,
+    pub feature_id: Option<String>,
+    pub claimed_by: Option<String>,
+}
+
+/// Apply `filter` to `tasks` and return the matching records sorted by id.
+///
+/// The `blocks` target is resolved against the full input set before any
+/// narrowing, and only `BlockerKind::Task` edges count toward the task graph.
+pub fn filter_tasks(mut tasks: Vec<TaskRecord>, filter: &TaskFilter) -> Vec<TaskRecord> {
+    let blocking_ids = filter.blocks.as_deref().map(|blocks| {
+        tasks
+            .iter()
+            .find(|task| task.id == blocks)
+            .map(|task| {
+                task.blockers
+                    .iter()
+                    .filter(|blocker| blocker.resolved_at.is_none())
+                    .filter_map(|blocker| blocker.blocked_ref.as_ref())
+                    .filter(|blocked_ref| blocked_ref.kind == BlockerKind::Task)
+                    .map(|blocked_ref| blocked_ref.id.clone())
+                    .collect::<BTreeSet<String>>()
+            })
+            .unwrap_or_default()
+    });
+
+    if filter.ready {
+        tasks.retain(|task| task.state == TaskState::Ready && !has_unresolved_blockers(task));
+    }
+    if filter.blocked {
+        tasks.retain(has_unresolved_blockers);
+    }
+    if let Some(feature_id) = filter.feature_id.as_deref() {
+        tasks.retain(|task| task.feature_id.as_deref() == Some(feature_id));
+    }
+    if let Some(claimed_by) = filter.claimed_by.as_deref() {
+        tasks.retain(|task| task.claimed_by.as_deref() == Some(claimed_by));
+    }
+    if let Some(blocked_by) = filter.blocked_by.as_deref() {
+        tasks.retain(|task| {
+            task.blockers.iter().any(|blocker| {
+                blocker.resolved_at.is_none()
+                    && blocker
+                        .blocked_ref
+                        .as_ref()
+                        .map(|blocked_ref| blocked_ref.id.as_str() == blocked_by)
+                        .unwrap_or(false)
+            })
+        });
+    }
+    if let Some(blocking_ids) = blocking_ids.as_ref() {
+        tasks.retain(|task| blocking_ids.contains(&task.id));
+    }
+
+    tasks.sort_by(|left, right| left.id.cmp(&right.id));
+    tasks
 }
 
 /// Load minimal task projections for feature read models without full record sorting.

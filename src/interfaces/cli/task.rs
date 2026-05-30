@@ -1,10 +1,9 @@
-use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 
 use crate::domain::task;
-use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
+use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::foundation::core::time::nanos_since_epoch_string;
@@ -252,52 +251,18 @@ fn watch_tasks(paths: &MaestroPaths, id: Option<String>, interval: Option<u64>) 
 }
 
 fn filtered_tasks(paths: &MaestroPaths, filters: &TaskListFilters) -> Result<Vec<TaskRecord>> {
-    let mut tasks = load_all_tasks(&paths.tasks_dir())?;
-    let task_map: HashMap<String, TaskRecord> = tasks
-        .iter()
-        .cloned()
-        .map(|task| (task.id.clone(), task))
-        .collect();
-
-    if filters.blocked {
-        tasks.retain(task::has_unresolved_blockers);
-    }
-    if let Some(feature) = filters.feature.as_deref() {
-        tasks.retain(|task| task.feature_id.as_deref() == Some(feature));
-    }
-    if filters.ready {
-        tasks.retain(|task| task.state == TaskState::Ready && !task::has_unresolved_blockers(task));
-    }
-    if let Some(blocked_by_id) = filters.blocked_by.as_deref() {
-        tasks.retain(|task| {
-            task.blockers.iter().any(|blocker| {
-                blocker.resolved_at.is_none()
-                    && blocker
-                        .blocked_ref
-                        .as_ref()
-                        .map(|r| r.id.as_str() == blocked_by_id)
-                        .unwrap_or(false)
-            })
-        });
-    }
-    if let Some(task_id) = filters.blocks.as_deref() {
-        let blocking_ids = task_map
-            .get(task_id)
-            .map(|task| {
-                task.blockers
-                    .iter()
-                    .filter(|blocker| blocker.resolved_at.is_none())
-                    .filter_map(|blocker| blocker.blocked_ref.as_ref())
-                    .filter(|blocked_ref| blocked_ref.kind == BlockerKind::Task)
-                    .map(|blocked_ref| blocked_ref.id.clone())
-                    .collect::<HashSet<_>>()
-            })
-            .unwrap_or_default();
-        tasks.retain(|task| blocking_ids.contains(&task.id));
-    }
-
-    tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(tasks)
+    let tasks = load_all_tasks(&paths.tasks_dir())?;
+    Ok(task::filter_tasks(
+        tasks,
+        &task::TaskFilter {
+            ready: filters.ready,
+            blocked: filters.blocked,
+            blocked_by: filters.blocked_by.clone(),
+            blocks: filters.blocks.clone(),
+            feature_id: filters.feature.clone(),
+            claimed_by: None,
+        },
+    ))
 }
 
 fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {

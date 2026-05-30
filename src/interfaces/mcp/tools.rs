@@ -92,54 +92,19 @@ fn status(paths: &MaestroPaths) -> Result<String> {
 }
 
 fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
-    let ready = bool_arg(arguments, "ready");
-    let blocked = bool_arg(arguments, "blocked");
-    let blocked_by = string_arg(arguments, "blocked_by");
-    let blocks = string_arg(arguments, "blocks");
-    let feature_id = string_arg(arguments, "feature_id");
-    let claimed_by = string_arg(arguments, "claimed_by");
-    let mut tasks = task::load_task_records(&paths.tasks_dir())?;
-
-    if ready {
-        tasks.retain(|task| {
-            task.state == task::TaskState::Ready && !task::has_unresolved_blockers(task)
-        });
-    }
-    if blocked {
-        tasks.retain(task::has_unresolved_blockers);
-    }
-    if let Some(feature_id) = feature_id.as_deref() {
-        tasks.retain(|task| task.feature_id.as_deref() == Some(feature_id));
-    }
-    if let Some(claimed_by) = claimed_by.as_deref() {
-        tasks.retain(|task| task.claimed_by.as_deref() == Some(claimed_by));
-    }
-    if let Some(blocked_by) = blocked_by.as_deref() {
-        tasks.retain(|task| {
-            task.blockers.iter().any(|blocker| {
-                blocker.resolved_at.is_none()
-                    && blocker
-                        .blocked_ref
-                        .as_ref()
-                        .map(|blocked_ref| blocked_ref.id.as_str() == blocked_by)
-                        .unwrap_or(false)
-            })
-        });
-    }
-    if let Some(blocks) = blocks.as_deref() {
-        let task = task::load_task_record(&paths.tasks_dir(), blocks)?;
-        let blocking = task
-            .blockers
-            .iter()
-            .filter(|blocker| blocker.resolved_at.is_none())
-            .filter_map(|blocker| blocker.blocked_ref.as_ref())
-            .map(|blocked_ref| blocked_ref.id.clone())
-            .collect::<std::collections::BTreeSet<_>>();
-        tasks.retain(|task| blocking.contains(&task.id));
-    }
-
-    tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(task::render_task_list(&tasks))
+    let tasks = task::load_task_records(&paths.tasks_dir())?;
+    let filtered = task::filter_tasks(
+        tasks,
+        &task::TaskFilter {
+            ready: bool_arg(arguments, "ready"),
+            blocked: bool_arg(arguments, "blocked"),
+            blocked_by: string_arg(arguments, "blocked_by"),
+            blocks: string_arg(arguments, "blocks"),
+            feature_id: string_arg(arguments, "feature_id"),
+            claimed_by: string_arg(arguments, "claimed_by"),
+        },
+    );
+    Ok(task::render_task_list(&filtered))
 }
 
 fn task_complete(arguments: &Value) -> Result<String> {
