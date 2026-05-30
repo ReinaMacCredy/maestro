@@ -54,7 +54,7 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
     let stdout = String::from_utf8_lossy(&update.stdout);
     assert!(stdout.contains("Checking for updates..."));
     assert!(stdout.contains("Update unavailable for this build"));
-    assert!(stdout.contains("edited skills backed up"));
+    assert!(stdout.contains("edited files backed up"));
     assert_eq!(
         fs::read_to_string(&skill_path).expect("invariant: skill should be readable"),
         skill.skill_md()

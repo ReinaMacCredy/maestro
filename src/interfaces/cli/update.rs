@@ -155,7 +155,7 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
     }
 
     if !outcome.resource_backups.is_empty() {
-        out.push_str("Bundled skills re-extracted; edited skills backed up:\n");
+        out.push_str("Bundled resources re-extracted; edited files backed up:\n");
         for backup in &outcome.resource_backups {
             out.push_str(&format!("{} -> {}\n", backup.name, backup.path.display()));
         }
