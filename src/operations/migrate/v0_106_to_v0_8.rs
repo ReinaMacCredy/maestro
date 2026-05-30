@@ -154,21 +154,21 @@ fn plan_tasks(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
                 plan,
                 paths,
                 task_dir.join("task.yaml"),
-                serde_yaml::to_string(&task)?.into_bytes(),
+                Some(serde_yaml::to_string(&task)?.into_bytes()),
                 Some(&path),
             )?;
             push_change(
                 plan,
                 paths,
                 task_dir.join("acceptance.yaml"),
-                serde_yaml::to_string(&acceptance)?.into_bytes(),
+                Some(serde_yaml::to_string(&acceptance)?.into_bytes()),
                 Some(&path),
             )?;
             push_change(
                 plan,
                 paths,
                 task_dir.join("task.md"),
-                task::task_markdown(&task).into_bytes(),
+                Some(task::task_markdown(&task).into_bytes()),
                 Some(&path),
             )?;
         }
@@ -176,7 +176,7 @@ fn plan_tasks(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
             .maestro_dir()
             .join("raw/archived/tasks")
             .join(path.file_name().unwrap_or_default());
-        push_change(plan, paths, archive, raw.into_bytes(), Some(&path))?;
+        push_change(plan, paths, archive, Some(raw.into_bytes()), Some(&path))?;
     }
     Ok(())
 }
@@ -193,7 +193,7 @@ fn plan_archives(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
                 .join("raw/archived")
                 .join(dir)
                 .join(relative);
-            push_change(plan, paths, target, raw, Some(&path))?;
+            push_change(plan, paths, target, Some(raw), Some(&path))?;
         }
     }
 
@@ -202,7 +202,7 @@ fn plan_archives(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
         let raw = fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
         let relative = path.strip_prefix(&evidence_dir).unwrap_or(&path);
         let target = paths.runs_dir().join("migrated").join(relative);
-        push_change(plan, paths, target, raw, Some(&path))?;
+        push_change(plan, paths, target, Some(raw), Some(&path))?;
     }
     Ok(())
 }
@@ -217,7 +217,7 @@ fn plan_features(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
             plan,
             paths,
             paths.features_dir().join("features.yaml"),
-            after.into_bytes(),
+            Some(after.into_bytes()),
             Some(&legacy_path),
         )?;
         push_change(
@@ -226,18 +226,20 @@ fn plan_features(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
             paths
                 .maestro_dir()
                 .join("raw/archived/features/features.yaml"),
-            raw.into_bytes(),
+            Some(raw.into_bytes()),
             Some(&legacy_path),
         )?;
         push_change(
             plan,
             paths,
             paths.maestro_dir().join("archive/features/features.yaml"),
-            fs::read(&legacy_path)
-                .with_context(|| format!("failed to read {}", legacy_path.display()))?,
+            Some(
+                fs::read(&legacy_path)
+                    .with_context(|| format!("failed to read {}", legacy_path.display()))?,
+            ),
             Some(&legacy_path),
         )?;
-        push_delete(plan, paths, legacy_path, None)?;
+        push_change(plan, paths, legacy_path, None, None)?;
         return Ok(());
     }
 
@@ -248,7 +250,7 @@ fn plan_features(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> {
     let raw =
         fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
     let after = normalize_features_yaml(&raw)?;
-    push_change(plan, paths, path, after.into_bytes(), None)
+    push_change(plan, paths, path, Some(after.into_bytes()), None)
 }
 
 fn normalize_features_yaml(raw: &str) -> Result<String> {
@@ -352,7 +354,7 @@ fn plan_decisions(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result<()> 
             .find_map(|line| line.strip_prefix("# "))
             .unwrap_or(file_name.trim_end_matches(".md"));
         let target = dir.join(decisions::template::decision_file_name(number, title));
-        push_change(plan, paths, target, raw.into_bytes(), Some(&path))?;
+        push_change(plan, paths, target, Some(raw.into_bytes()), Some(&path))?;
     }
     Ok(())
 }
@@ -416,7 +418,7 @@ fn plan_harness_verify(paths: &MaestroPaths, plan: &mut MigrationPlan) -> Result
         plan,
         paths,
         paths.harness_dir().join("harness.yml"),
-        after.into_bytes(),
+        Some(after.into_bytes()),
         None,
     )
 }
@@ -465,7 +467,7 @@ fn push_change(
     plan: &mut MigrationPlan,
     paths: &MaestroPaths,
     path: PathBuf,
-    after: Vec<u8>,
+    after: Option<Vec<u8>>,
     source: Option<&Path>,
 ) -> Result<()> {
     ensure_managed_target(paths, &path)?;
@@ -477,37 +479,11 @@ fn push_change(
             return Err(error).with_context(|| format!("failed to read {}", path.display()))
         }
     };
-    if before.as_deref() != Some(after.as_slice()) {
+    if before.as_deref() != after.as_deref() {
         plan.changes.push(MigrationChange {
             path,
             before,
-            after: Some(after),
-            source: source.map(Path::to_path_buf),
-        });
-    }
-    Ok(())
-}
-
-fn push_delete(
-    plan: &mut MigrationPlan,
-    paths: &MaestroPaths,
-    path: PathBuf,
-    source: Option<&Path>,
-) -> Result<()> {
-    ensure_managed_target(paths, &path)?;
-    reject_symlinked_target(&path)?;
-    let before = match fs::read(&path) {
-        Ok(before) => Some(before),
-        Err(error) if error.kind() == ErrorKind::NotFound => None,
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to read {}", path.display()))
-        }
-    };
-    if before.is_some() {
-        plan.changes.push(MigrationChange {
-            path,
-            before,
-            after: None,
+            after,
             source: source.map(Path::to_path_buf),
         });
     }
