@@ -275,18 +275,6 @@ pub trait BinaryReplacer {
     fn replace(&self, current: &Path, candidate: &Path) -> Result<()>;
 }
 
-/// Offline downloader used by V1 until real release downloads are wired in.
-#[derive(Debug, Default)]
-pub struct OfflineDownloader;
-
-impl UpdateDownloader for OfflineDownloader {
-    fn download(&self, _request: &UpdateRequest) -> Result<DownloadedBinary> {
-        Ok(DownloadedBinary::Unavailable(
-            UpdateUnavailable::LocalDevelopment,
-        ))
-    }
-}
-
 /// Downloader used for install methods Maestro should not mutate directly.
 #[derive(Debug)]
 pub struct UnavailableDownloader {

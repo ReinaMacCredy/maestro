@@ -45,24 +45,6 @@ pub fn create_skill_symlink(paths: &MaestroPaths, symlink: SkillSymlink) -> Resu
         .with_context(|| format!("failed to create skill symlink {}", path.display()))
 }
 
-/// Remove a skill symlink only when the live target still matches install-lock ownership.
-pub fn remove_skill_symlink_if_owned(path: &Path, expected_target: &str) -> Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            let target = fs::read_link(path)
-                .with_context(|| format!("failed to read symlink {}", path.display()))?;
-            if target == Path::new(expected_target) {
-                fs::remove_file(path)
-                    .with_context(|| format!("failed to remove symlink {}", path.display()))?;
-            }
-            Ok(())
-        }
-        Ok(_) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("failed to inspect {}", path.display())),
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DestinationState {
     Missing,

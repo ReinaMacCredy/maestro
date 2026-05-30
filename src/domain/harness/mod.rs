@@ -3,19 +3,12 @@ pub mod extract;
 pub mod schema;
 pub mod templates;
 
-use std::path::PathBuf;
-
 use anyhow::{bail, Result};
 
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 
 pub use schema::{BacklogConfig, BacklogItem, HarnessConfig, StackConfig, StackKind};
-
-/// Return the repository-local Harness protocol file path.
-pub fn harness_protocol_path(paths: &MaestroPaths) -> PathBuf {
-    paths.harness_dir().join("HARNESS.md")
-}
 
 /// Require the Harness protocol file that install-managed pointers reference.
 pub fn ensure_harness_protocol_exists(paths: &MaestroPaths) -> Result<()> {

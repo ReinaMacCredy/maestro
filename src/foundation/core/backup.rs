@@ -12,16 +12,6 @@ use crate::foundation::core::paths::MaestroPaths;
 
 static BACKUP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// Copy a file into `.maestro/backups/<timestamp>-<operation>/`.
-pub fn backup_file(
-    paths: &MaestroPaths,
-    source: impl AsRef<Path>,
-    operation: &str,
-) -> Result<PathBuf> {
-    let timestamp = backup_operation_timestamp()?;
-    backup_file_with_timestamp(paths, source, operation, &timestamp)
-}
-
 /// Return a backup timestamp suitable for grouping one logical operation.
 pub fn backup_operation_timestamp() -> Result<String> {
     backup_timestamp()

@@ -61,11 +61,6 @@ impl HookEventContract {
     pub fn codex_timeout(self) -> u64 {
         hook_config().codex.timeout
     }
-
-    /// Return whether an event type is accepted by `maestro hook record`.
-    pub fn accepts(self, event_type: &str) -> bool {
-        is_accepted_event(event_type)
-    }
 }
 
 /// Return the accepted Run hook event contract.
