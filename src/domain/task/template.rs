@@ -385,3 +385,34 @@ impl Drop for TaskSaveLock {
 pub fn task_markdown(task: &TaskRecord) -> String {
     format!("# {}\n\n## Acceptance\nSee acceptance.yaml.\n", task.title)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `as_str` doubles as the serde wire form, CLI/TUI label, and metric bucket
+    /// key, so the two representations must never drift. Lock every variant.
+    #[test]
+    fn as_str_matches_serde_wire_form() {
+        let all = [
+            TaskState::Draft,
+            TaskState::Exploring,
+            TaskState::Ready,
+            TaskState::InProgress,
+            TaskState::NeedsVerification,
+            TaskState::Verified,
+            TaskState::Rejected,
+            TaskState::Abandoned,
+            TaskState::Superseded,
+        ];
+        for state in all {
+            let json = serde_json::to_string(&state).expect("invariant: TaskState serializes");
+            let wire = json.trim_matches('"');
+            assert_eq!(
+                state.as_str(),
+                wire,
+                "as_str() drifted from serde wire form for {state:?}"
+            );
+        }
+    }
+}
