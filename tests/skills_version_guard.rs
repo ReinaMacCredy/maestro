@@ -1,41 +1,62 @@
 //! CI bump guard for shipped skills.
 //!
-//! A committed `(name, version, sha256(contents))` table for every shipped
-//! skill. The test recomputes the hash of the embedded `SKILL.md` contents and
-//! asserts it matches the recorded one. Editing a skill body turns this red,
-//! forcing you to *notice* the edit and re-record the table (and, when the
-//! change is user-visible, bump the `version:` per `AGENTS.md`). It enforces
+//! A committed `(name, version, tree-hash)` table for every shipped skill. The
+//! test recomputes a hash over the skill's whole directory tree (every file's
+//! relative path and bytes, in a canonical sorted order) and asserts it matches
+//! the recorded one. Editing any file in a skill tree turns this red, forcing
+//! you to *notice* the edit and re-record the table (and, when the change is
+//! user-visible, bump the `version:` per `AGENTS.md`). It enforces
 //! acknowledgement, not a mechanical bump.
 
 use maestro::core::hash::sha256_hex;
-use maestro::skills::catalog::skills;
+use maestro::skills::catalog::{skills, Skill};
 
-/// `(skill name, shipped version, sha256 of the embedded `SKILL.md` contents)`.
+/// `(skill name, shipped version, sha256 tree-hash of the skill directory)`.
 const SKILL_VERSION_GUARD: [(&str, &str, &str); 4] = [
     (
         "maestro-task",
         "1.0.0",
-        "7ac2444322903cea06214f013650c70c3de62608fa08485c235b2b60b8d15f57",
+        "b55f520c234c90ec4c24d52c190f8741e58f071f2d3b41c05eb2696fd849bc38",
     ),
     (
         "maestro-setup",
         "1.0.0",
-        "6fed9a0d57624a6fa519cef4d21f7bf814bdd654019667c996cdf5a9b95428d2",
+        "faa0ac058f347ddc0f4913aa6751573adcc2fa5e2fdb4e0dd41ef9883807a4c7",
     ),
     (
         "maestro-verify",
         "1.0.0",
-        "b9e49b7e32f69ce90de6a06a84a887555bc84f20125a5857808030c6fc5cbb2c",
+        "6fa64229274d7204d868a86816437cfd123bc05aaf217947c156089b3e0036c4",
     ),
     (
         "maestro-design",
         "1.0.0",
-        "b93e020aa7c10d69f70131cbb6fccd4674d9ec51cd1e831f9ba1e4602329e927",
+        "76aec1db895d719f6d44ab73bc9fffbcda55b80841ed1d4ed53de2fabdea7a3b",
     ),
 ];
 
+/// Hash a skill's whole tree: every file's relative path and bytes, in a
+/// canonical order imposed here (sorted by relative path) so the hash is a
+/// property of the `(path, bytes)` set and independent of catalog iteration
+/// order. Each file is length-prefixed so no separator can be forged by a path
+/// or byte payload (matters once a skill ships a binary asset).
+fn tree_hash(skill: &Skill) -> String {
+    let mut files: Vec<_> = skill.files.iter().collect();
+    files.sort_by_key(|file| file.relative_path);
+
+    let mut buf = Vec::new();
+    for file in files {
+        let path = file.relative_path.as_bytes();
+        buf.extend_from_slice(&(path.len() as u32).to_le_bytes());
+        buf.extend_from_slice(path);
+        buf.extend_from_slice(&(file.contents.len() as u64).to_le_bytes());
+        buf.extend_from_slice(file.contents);
+    }
+    sha256_hex(&buf)
+}
+
 #[test]
-fn shipped_skill_bodies_and_versions_match_the_recorded_guard() {
+fn shipped_skill_trees_and_versions_match_the_recorded_guard() {
     for skill in skills() {
         let (_, version, hash) = SKILL_VERSION_GUARD
             .iter()
@@ -44,10 +65,10 @@ fn shipped_skill_bodies_and_versions_match_the_recorded_guard() {
             .expect("invariant: every shipped skill must appear in SKILL_VERSION_GUARD");
 
         assert_eq!(
-            sha256_hex(skill.skill_md().as_bytes()),
+            tree_hash(skill),
             hash,
-            "skill {} body changed; bump its `version:` if user-visible, then \
-             re-record (version, sha256) in tests/skills_version_guard.rs",
+            "skill {} tree changed; bump its `version:` if user-visible, then \
+             re-record (version, tree-hash) in tests/skills_version_guard.rs",
             skill.name
         );
         assert!(
