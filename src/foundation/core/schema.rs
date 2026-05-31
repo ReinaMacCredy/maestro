@@ -1,6 +1,6 @@
 /// Schema version for `.maestro/harness/harness.yml`.
 pub const HARNESS_SCHEMA_VERSION: &str = "maestro.harness.v1";
-/// Schema version for `.maestro/features/features.yaml`.
+/// Schema version for `.maestro/features/<id>/feature.yaml`.
 pub const FEATURE_SCHEMA_VERSION: &str = "maestro.feature.v1";
 /// Schema version for task metadata.
 pub const TASK_SCHEMA_VERSION: &str = "maestro.task.v1";

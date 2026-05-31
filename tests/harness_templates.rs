@@ -4,7 +4,7 @@ use std::fs;
 
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::harness::schema::{detect_stack, HarnessConfig, StackKind};
-use maestro::harness::templates::{backlog_yaml, features_yaml, harness_yml, HARNESS_MD};
+use maestro::harness::templates::{backlog_yaml, harness_yml, HARNESS_MD};
 use support::TestTempDir;
 
 #[test]
@@ -59,14 +59,6 @@ fn harness_yaml_and_backlog_yaml_are_valid_yaml() {
     assert!(harness.contains("kind: generic"));
     assert!(backlog.contains("schema_version: maestro.backlog.v1"));
     assert!(backlog.contains("items: []"));
-}
-
-#[test]
-fn features_yaml_is_empty_v1_registry() {
-    assert_eq!(
-        features_yaml(),
-        "schema_version: maestro.feature.v1\nfeatures: []\n"
-    );
 }
 
 #[test]

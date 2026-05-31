@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 
 use crate::domain::extraction::{extract_all, validate_all, ExtractMode};
 use crate::domain::harness::schema::HarnessConfig;
-use crate::domain::harness::templates::{backlog_yaml, features_yaml, harness_yml};
+use crate::domain::harness::templates::{backlog_yaml, harness_yml};
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::ensure_dir;
@@ -130,10 +130,6 @@ impl InitPlan {
                 InitFile {
                     path: paths.harness_dir().join("backlog.yaml"),
                     contents: backlog_yaml()?,
-                },
-                InitFile {
-                    path: paths.features_dir().join("features.yaml"),
-                    contents: features_yaml(),
                 },
             ],
         })

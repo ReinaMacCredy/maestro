@@ -92,21 +92,12 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
 }
 
 fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
-    let diagnostic = feature::diagnose(paths);
-    match (diagnostic.found, diagnostic.compatibility) {
-        (Ok((_, count)), Some(Compat::Exact)) => checks.push(DoctorCheck {
+    match feature::diagnose(paths).found {
+        Ok(count) => checks.push(DoctorCheck {
             name: "features",
             detail: format!("{count} feature(s)"),
         }),
-        (Ok((found, _)), Some(Compat::NeedsMigration)) => errors.push(format!(
-            "features schema needs migration: expected {}, found {found}; run `maestro migrate`",
-            diagnostic.expected
-        )),
-        (Ok((found, _)), _) => errors.push(format!(
-            "features schema incompatible: expected {}, found {found}",
-            diagnostic.expected
-        )),
-        (Err(error), _) => errors.push(error),
+        Err(error) => errors.push(error),
     }
 }
 

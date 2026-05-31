@@ -262,12 +262,78 @@ pub struct FeatureArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum FeatureCommand {
+    #[command(about = "Propose a new feature (-> proposed)")]
     New { title: String },
+    #[command(about = "Author a proposed feature's contract (replace-per-field; proposed only)")]
+    Set {
+        id: String,
+        #[arg(
+            long = "acceptance",
+            help = "Acceptance criterion (repeatable); replaces the current acceptance list"
+        )]
+        acceptance: Vec<String>,
+        #[arg(
+            long = "area",
+            help = "Affected area (repeatable); replaces the current areas list"
+        )]
+        area: Vec<String>,
+        #[arg(
+            long = "non-goal",
+            help = "Non-goal (repeatable); replaces the current non-goals list"
+        )]
+        non_goal: Vec<String>,
+        #[arg(
+            long = "question",
+            help = "Open question (repeatable); replaces the current questions list"
+        )]
+        question: Vec<String>,
+        #[arg(long, help = "Replace the description")]
+        description: Option<String>,
+        #[arg(long, help = "Replace the raw request")]
+        request: Option<String>,
+        #[arg(long = "type", help = "Replace the input type (e.g. bug_report, refactor)")]
+        input_type: Option<String>,
+    },
+    #[command(about = "Accept a feature into ready, freezing its contract (-> ready; gated)")]
+    Accept {
+        id: String,
+        #[arg(long, help = "Preview the accept gate without transitioning")]
+        dry_run: bool,
+    },
+    #[command(about = "Grow a frozen contract additively with an audit reason (ready/in_progress)")]
+    Amend {
+        id: String,
+        #[arg(long = "add-acceptance", help = "Acceptance criterion to add (repeatable)")]
+        add_acceptance: Vec<String>,
+        #[arg(long = "add-area", help = "Affected area to add (repeatable)")]
+        add_area: Vec<String>,
+        #[arg(long = "add-non-goal", help = "Non-goal to add (repeatable)")]
+        add_non_goal: Vec<String>,
+        #[arg(long = "add-question", help = "Open question to add (repeatable)")]
+        add_question: Vec<String>,
+        #[arg(long, help = "Why the contract is growing (required, audited)")]
+        reason: String,
+    },
+    #[command(about = "Start work on a ready feature (-> in_progress)")]
+    Start { id: String },
+    #[command(about = "Ship an in-progress feature (-> shipped; gated)")]
+    Ship {
+        id: String,
+        #[arg(long, help = "Preview the ship gate without transitioning")]
+        dry_run: bool,
+    },
+    #[command(
+        about = "Cancel a non-terminal feature, abandoning its live child tasks (-> cancelled)"
+    )]
+    Cancel {
+        id: String,
+        #[arg(long, help = "Why the feature is being cancelled (required, audited)")]
+        reason: String,
+    },
+    #[command(about = "Show a feature's status, full contract, and task counts")]
     Show { id: String },
+    #[command(about = "List features with their statuses and task counts")]
     List,
-    Edit { id: String },
-    Ship { id: String },
-    Cancel { id: String },
 }
 
 #[derive(Debug, Args)]

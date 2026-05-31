@@ -1,6 +1,6 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 
-use crate::domain::feature;
+use crate::domain::feature::{self, ContractAdditions, ContractEdits};
 use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand};
 
@@ -11,18 +11,90 @@ pub fn run(args: FeatureArgs) -> Result<()> {
 
     match args.command {
         FeatureCommand::New { title } => new_feature(&paths, &title),
+        FeatureCommand::Set {
+            id,
+            acceptance,
+            area,
+            non_goal,
+            question,
+            description,
+            request,
+            input_type,
+        } => set_feature(
+            &paths,
+            &id,
+            ContractEdits {
+                acceptance: opt_list(acceptance),
+                affected_areas: opt_list(area),
+                non_goals: opt_list(non_goal),
+                open_questions: opt_list(question),
+                description,
+                raw_request: request,
+                input_type,
+            },
+        ),
+        FeatureCommand::Accept { id, dry_run } => print_note(feature::accept(&paths, &id, dry_run)?.note),
+        FeatureCommand::Amend {
+            id,
+            add_acceptance,
+            add_area,
+            add_non_goal,
+            add_question,
+            reason,
+        } => amend_feature(
+            &paths,
+            &id,
+            ContractAdditions {
+                acceptance: add_acceptance,
+                affected_areas: add_area,
+                non_goals: add_non_goal,
+                open_questions: add_question,
+            },
+            &reason,
+        ),
+        FeatureCommand::Start { id } => print_note(feature::start(&paths, &id)?.note),
+        FeatureCommand::Ship { id, dry_run } => print_note(feature::ship(&paths, &id, dry_run)?.note),
+        FeatureCommand::Cancel { id, reason } => print_note(feature::cancel(&paths, &id, &reason)?.note),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
         FeatureCommand::List => list_features(&paths),
-        FeatureCommand::Edit { id } => set_status(&paths, &id, feature::FeatureStatus::InProgress),
-        FeatureCommand::Ship { id } => set_status(&paths, &id, feature::FeatureStatus::Shipped),
-        FeatureCommand::Cancel { id } => set_status(&paths, &id, feature::FeatureStatus::Cancelled),
     }
 }
 
 fn new_feature(paths: &MaestroPaths, title: &str) -> Result<()> {
     let id = feature::create(paths, title)?;
-    println!("created feature {id}");
+    println!("created feature {id} (proposed)");
     Ok(())
+}
+
+fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<()> {
+    if edits.is_empty() {
+        bail!(
+            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  flags: --acceptance --area --non-goal --question --description --request --type"
+        );
+    }
+    let view = feature::set(paths, id, edits)?;
+    println!(
+        "set {id}; acceptance={}, areas={}, non_goals={}, questions={}",
+        view.acceptance.len(),
+        view.affected_areas.len(),
+        view.non_goals.len(),
+        view.open_questions.len()
+    );
+    Ok(())
+}
+
+fn amend_feature(
+    paths: &MaestroPaths,
+    id: &str,
+    additions: ContractAdditions,
+    reason: &str,
+) -> Result<()> {
+    if additions.is_empty() {
+        bail!(
+            "no values to amend\n  maestro feature amend {id} --add-acceptance \"<criterion>\" --reason \"<why>\"\n  add-flags: --add-acceptance --add-area --add-non-goal --add-question"
+        );
+    }
+    print_note(feature::amend(paths, id, additions, reason)?.note)
 }
 
 fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
@@ -38,6 +110,16 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     if let Some(description) = view.description.as_deref() {
         println!("description: {description}");
     }
+    if let Some(request) = view.raw_request.as_deref() {
+        println!("raw_request: {request}");
+    }
+    if let Some(input_type) = view.input_type.as_deref() {
+        println!("input_type: {input_type}");
+    }
+    print_list("acceptance", &view.acceptance);
+    print_list("affected_areas", &view.affected_areas);
+    print_list("non_goals", &view.non_goals);
+    print_list("open_questions", &view.open_questions);
 
     Ok(())
 }
@@ -63,11 +145,25 @@ fn list_features(paths: &MaestroPaths) -> Result<()> {
     Ok(())
 }
 
-fn set_status(paths: &MaestroPaths, id: &str, status: feature::FeatureStatus) -> Result<()> {
-    feature::set_status(paths, id, status.clone())?;
-    println!(
-        "feature {id} status set to {}",
-        feature::status_label(&status)
-    );
+fn print_note(note: String) -> Result<()> {
+    println!("{note}");
     Ok(())
+}
+
+fn print_list(label: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    println!("{label}:");
+    for item in items {
+        println!("  - {item}");
+    }
+}
+
+fn opt_list(values: Vec<String>) -> Option<Vec<String>> {
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
 }

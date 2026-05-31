@@ -33,6 +33,7 @@ pub(crate) use template::{StateHistoryEntry, TaskSaveError};
 /// Minimal Task projection for feature rollups.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct FeatureTaskProjection {
+    pub id: String,
     pub feature_id: Option<String>,
     pub state: Option<TaskState>,
 }

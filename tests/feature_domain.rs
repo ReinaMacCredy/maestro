@@ -3,28 +3,48 @@ mod support;
 use std::fs;
 use std::path::Path;
 
-use maestro::domain::feature;
+use maestro::domain::feature::{self, ContractAdditions, ContractEdits};
 use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
-fn write_registry(paths: &MaestroPaths, contents: &str) {
-    let dir = paths.features_dir();
-    ensure_dir(&dir).expect("invariant: features dir should be creatable");
-    fs::write(dir.join("features.yaml"), contents).expect("invariant: registry should be writable");
+/// Write a feature record directly into its per-feature directory.
+fn write_feature(paths: &MaestroPaths, id: &str, contents: &str) {
+    let dir = paths.features_dir().join(id);
+    ensure_dir(&dir).expect("invariant: feature dir should be creatable");
+    fs::write(dir.join("feature.yaml"), contents).expect("invariant: feature.yaml should be writable");
 }
 
+/// Write a minimal task.yaml carrying the fields the feature projection reads.
 fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
     let dir = tasks_dir.join(id);
     ensure_dir(&dir).expect("invariant: task directory should be creatable");
+    // A complete TaskRecord: the cancel cascade loads and transitions the child,
+    // so a projection-only stub (id/feature_id/state) fails to deserialize.
     fs::write(
         dir.join("task.yaml"),
-        format!("feature_id: {feature_id}\nstate: {state}\n"),
+        format!(
+            "schema_version: maestro.task.v1\nid: {id}\nslug: {id}\nfeature_id: {feature_id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"1\"\nupdated_at: \"1\"\n"
+        ),
     )
     .expect("invariant: task.yaml should be writable");
 }
 
-const BAD_REGISTRY: &str = "schema_version: maestro.galaxy.v9\nfeatures: []\n";
+const BAD_RECORD: &str = "schema_version: maestro.galaxy.v9\nid: billing-csv\ntitle: Billing CSV\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n";
+
+/// Author a complete contract on a freshly-created Proposed feature.
+fn author_contract(paths: &MaestroPaths, id: &str) {
+    feature::set(
+        paths,
+        id,
+        ContractEdits {
+            acceptance: Some(vec!["exports a valid csv".to_string()]),
+            affected_areas: Some(vec!["billing".to_string()]),
+            ..Default::default()
+        },
+    )
+    .expect("invariant: set should succeed on a proposed feature");
+}
 
 #[test]
 fn create_generates_slug_id_and_persists() {
@@ -61,32 +81,250 @@ fn create_rejects_duplicate_id() {
 }
 
 #[test]
-fn set_status_mutates_and_bumps_updated_at() {
-    let temp = TestTempDir::new("maestro-feature-status");
+fn set_replaces_per_field_and_is_proposed_only() {
+    let temp = TestTempDir::new("maestro-feature-set");
     let paths = MaestroPaths::new(temp.path());
 
     feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
-    let before = feature::show(&paths, "billing-csv").expect("invariant: show should succeed");
+    let view = feature::set(
+        &paths,
+        "billing-csv",
+        ContractEdits {
+            acceptance: Some(vec!["a".to_string(), "b".to_string()]),
+            affected_areas: Some(vec!["billing".to_string()]),
+            description: Some("export billing rows".to_string()),
+            ..Default::default()
+        },
+    )
+    .expect("invariant: set should succeed");
+    assert_eq!(view.acceptance.len(), 2);
+    assert_eq!(view.affected_areas, vec!["billing".to_string()]);
 
-    feature::set_status(&paths, "billing-csv", feature::FeatureStatus::Shipped)
-        .expect("invariant: set_status should succeed");
+    // A second set replaces the whole field rather than appending.
+    let view = feature::set(
+        &paths,
+        "billing-csv",
+        ContractEdits {
+            acceptance: Some(vec!["only".to_string()]),
+            ..Default::default()
+        },
+    )
+    .expect("invariant: set should replace");
+    assert_eq!(view.acceptance, vec!["only".to_string()]);
+    assert_eq!(view.affected_areas, vec!["billing".to_string()]);
 
-    let after = feature::show(&paths, "billing-csv").expect("invariant: show should succeed");
-    assert_eq!(after.status, feature::FeatureStatus::Shipped);
-    assert!(
-        after.updated_at >= before.updated_at,
-        "updated_at should not regress"
-    );
+    // Once accepted the contract is frozen; set is rejected.
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+    let error = feature::set(
+        &paths,
+        "billing-csv",
+        ContractEdits {
+            acceptance: Some(vec!["late".to_string()]),
+            ..Default::default()
+        },
+    )
+    .expect_err("invariant: set must be rejected once frozen");
+    assert!(error.to_string().contains("frozen"));
 }
 
 #[test]
-fn set_status_errors_on_missing_feature() {
-    let temp = TestTempDir::new("maestro-feature-missing");
+fn accept_gate_requires_acceptance_and_areas() {
+    let temp = TestTempDir::new("maestro-feature-accept-gate");
     let paths = MaestroPaths::new(temp.path());
 
-    let error = feature::set_status(&paths, "nope", feature::FeatureStatus::Shipped)
-        .expect_err("invariant: missing feature must error");
-    assert!(error.to_string().contains("not found"));
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    let error = feature::accept(&paths, "billing-csv", false)
+        .expect_err("invariant: accept must block on an incomplete contract");
+    let message = error.to_string();
+    assert!(message.contains("acceptance"));
+    assert!(message.contains("affected_areas"));
+
+    author_contract(&paths, "billing-csv");
+    let report = feature::accept(&paths, "billing-csv", false).expect("invariant: accept succeeds");
+    assert!(report.changed);
+    assert_eq!(report.status, feature::FeatureStatus::Ready);
+}
+
+#[test]
+fn accept_dry_run_previews_without_transitioning() {
+    let temp = TestTempDir::new("maestro-feature-accept-dry");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    let report = feature::accept(&paths, "billing-csv", true).expect("invariant: dry-run is exit 0");
+    assert!(!report.changed);
+    assert!(report.note.contains("would block"));
+
+    let view = feature::show(&paths, "billing-csv").expect("invariant: show should succeed");
+    assert_eq!(view.status, feature::FeatureStatus::Proposed);
+}
+
+#[test]
+fn full_lifecycle_new_set_accept_start_ship() {
+    let temp = TestTempDir::new("maestro-feature-lifecycle");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+    let started = feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
+    assert_eq!(started.status, feature::FeatureStatus::InProgress);
+    let shipped = feature::ship(&paths, "billing-csv", false).expect("invariant: ship should succeed");
+    assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
+}
+
+#[test]
+fn illegal_transitions_name_the_gap() {
+    let temp = TestTempDir::new("maestro-feature-illegal");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    // start before accept
+    let error = feature::start(&paths, "billing-csv").expect_err("invariant: start must block");
+    assert!(error.to_string().contains("not accepted"));
+
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+    // ship before start
+    let error = feature::ship(&paths, "billing-csv", false).expect_err("invariant: ship must block");
+    assert!(error.to_string().contains("not started"));
+}
+
+#[test]
+fn completed_transitions_are_idempotent_no_ops() {
+    let temp = TestTempDir::new("maestro-feature-noop");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+
+    // accept again: no-op at exit 0
+    let report = feature::accept(&paths, "billing-csv", false).expect("invariant: re-accept is a no-op");
+    assert!(!report.changed);
+    assert!(report.note.contains("already ready"));
+}
+
+#[test]
+fn ship_blocks_on_live_child_task() {
+    let temp = TestTempDir::new("maestro-feature-ship-block");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+    feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
+
+    write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
+    let error = feature::ship(&paths, "billing-csv", false).expect_err("invariant: ship must block");
+    assert!(error.to_string().contains("task-001"));
+
+    // A verified child does not block ship.
+    write_task(&paths.tasks_dir(), "task-001", "billing-csv", "verified");
+    let shipped = feature::ship(&paths, "billing-csv", false).expect("invariant: ship succeeds");
+    assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
+}
+
+#[test]
+fn cancel_cascades_to_live_child_tasks() {
+    let temp = TestTempDir::new("maestro-feature-cancel");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+    feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
+    write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
+
+    let report = feature::cancel(&paths, "billing-csv", "scope dropped").expect("invariant: cancel succeeds");
+    assert!(report.changed);
+    assert_eq!(report.abandoned, vec!["task-001".to_string()]);
+
+    let view = feature::show(&paths, "billing-csv").expect("invariant: show should succeed");
+    assert_eq!(view.status, feature::FeatureStatus::Cancelled);
+    // The child task is now abandoned.
+    let task_raw = fs::read_to_string(paths.tasks_dir().join("task-001").join("task.yaml"))
+        .expect("invariant: child task should be readable");
+    assert!(task_raw.contains("abandoned"));
+}
+
+#[test]
+fn cannot_cancel_a_shipped_feature() {
+    let temp = TestTempDir::new("maestro-feature-cancel-shipped");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+    feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
+    feature::ship(&paths, "billing-csv", false).expect("invariant: ship should succeed");
+
+    let error = feature::cancel(&paths, "billing-csv", "too late")
+        .expect_err("invariant: shipped features cannot be cancelled");
+    assert!(error.to_string().contains("terminal"));
+}
+
+#[test]
+fn amend_is_append_only_with_value_dedup() {
+    let temp = TestTempDir::new("maestro-feature-amend");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+
+    // amend grows the frozen contract
+    let report = feature::amend(
+        &paths,
+        "billing-csv",
+        ContractAdditions {
+            acceptance: vec!["handles empty rows".to_string()],
+            ..Default::default()
+        },
+        "widen scope",
+    )
+    .expect("invariant: amend should succeed");
+    assert!(report.changed);
+    assert_eq!(report.added.acceptance, vec!["handles empty rows".to_string()]);
+
+    // re-adding a present value is a no-op (safe retries)
+    let report = feature::amend(
+        &paths,
+        "billing-csv",
+        ContractAdditions {
+            acceptance: vec!["handles empty rows".to_string()],
+            ..Default::default()
+        },
+        "retry",
+    )
+    .expect("invariant: amend retry should succeed");
+    assert!(!report.changed);
+
+    // the amend-log records the one genuine amend
+    let log_raw = fs::read_to_string(paths.features_dir().join("billing-csv").join("amend-log.yaml"))
+        .expect("invariant: amend-log should be readable");
+    assert!(log_raw.contains("widen scope"));
+    assert!(!log_raw.contains("retry"));
+}
+
+#[test]
+fn amend_rejects_a_proposed_feature() {
+    let temp = TestTempDir::new("maestro-feature-amend-proposed");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    let error = feature::amend(
+        &paths,
+        "billing-csv",
+        ContractAdditions {
+            acceptance: vec!["x".to_string()],
+            ..Default::default()
+        },
+        "too early",
+    )
+    .expect_err("invariant: amend must be rejected before accept");
+    assert!(error.to_string().contains("not accepted"));
 }
 
 #[test]
@@ -106,50 +344,47 @@ fn list_joins_task_counts() {
 }
 
 #[test]
-fn strict_list_errors_on_incompatible_registry() {
+fn strict_list_errors_on_incompatible_record() {
     let temp = TestTempDir::new("maestro-feature-strict");
     let paths = MaestroPaths::new(temp.path());
-    write_registry(&paths, BAD_REGISTRY);
+    write_feature(&paths, "billing-csv", BAD_RECORD);
 
     let error = feature::list(&paths).expect_err("invariant: strict read must error on bad schema");
     assert!(error.to_string().contains("schema"));
 }
 
 #[test]
-fn strict_show_errors_on_incompatible_registry() {
+fn strict_show_errors_on_incompatible_record() {
     let temp = TestTempDir::new("maestro-feature-strict-show");
     let paths = MaestroPaths::new(temp.path());
-    write_registry(&paths, BAD_REGISTRY);
+    write_feature(&paths, "billing-csv", BAD_RECORD);
 
-    let error = feature::show(&paths, "anything")
+    let error = feature::show(&paths, "billing-csv")
         .expect_err("invariant: strict read must error on bad schema");
     assert!(error.to_string().contains("schema"));
 }
 
 #[test]
-fn tolerant_titles_degrade_to_empty_on_incompatible_registry() {
+fn tolerant_titles_degrade_to_empty_on_incompatible_record() {
     let temp = TestTempDir::new("maestro-feature-tolerant");
     let paths = MaestroPaths::new(temp.path());
-    write_registry(&paths, BAD_REGISTRY);
+    write_feature(&paths, "billing-csv", BAD_RECORD);
 
     let titles = feature::titles(&paths);
     assert!(
         titles.is_empty(),
-        "tolerant titles must degrade to empty for a bad registry"
+        "tolerant titles must skip a bad record"
     );
 }
 
 #[test]
-fn tolerant_titles_degrade_to_empty_on_unparseable_registry() {
+fn tolerant_titles_degrade_to_empty_on_unparseable_record() {
     let temp = TestTempDir::new("maestro-feature-tolerant-parse");
     let paths = MaestroPaths::new(temp.path());
-    write_registry(&paths, "this: is: not: valid: yaml: [");
+    write_feature(&paths, "billing-csv", "this: is: not: valid: yaml: [");
 
     let titles = feature::titles(&paths);
-    assert!(
-        titles.is_empty(),
-        "tolerant titles must degrade on parse error"
-    );
+    assert!(titles.is_empty(), "tolerant titles must skip a parse error");
 }
 
 #[test]
@@ -167,64 +402,47 @@ fn tolerant_titles_return_id_to_title_map() {
 }
 
 #[test]
-fn diagnose_reports_count_on_compatible_registry() {
+fn diagnose_reports_count_on_compatible_store() {
     let temp = TestTempDir::new("maestro-feature-diag-ok");
     let paths = MaestroPaths::new(temp.path());
 
     feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
 
-    let diagnostic = feature::diagnose(&paths);
-    assert_eq!(diagnostic.found, Ok(("maestro.feature.v1".to_string(), 1)));
-    assert_eq!(
-        diagnostic.compatibility,
-        Some(maestro::foundation::core::schema::Compat::Exact)
-    );
+    assert_eq!(feature::diagnose(&paths).found, Ok(1));
 }
 
 #[test]
-fn diagnose_reports_absent_registry_as_error_data() {
+fn diagnose_reports_absent_features_dir_as_error_data() {
     let temp = TestTempDir::new("maestro-feature-diag-absent");
     let paths = MaestroPaths::new(temp.path());
 
-    let diagnostic = feature::diagnose(&paths);
     assert!(
-        diagnostic.found.is_err(),
-        "an absent registry must report as error data so doctor flags it"
-    );
-    assert_eq!(
-        diagnostic.compatibility, None,
-        "an absent registry has no compatibility verdict"
+        feature::diagnose(&paths).found.is_err(),
+        "an absent features dir must report as error data so doctor flags it"
     );
 }
 
 #[test]
-fn diagnose_reports_incompatible_version_as_data() {
+fn diagnose_reports_incompatible_record_as_error_data() {
     let temp = TestTempDir::new("maestro-feature-diag-bad");
     let paths = MaestroPaths::new(temp.path());
-    write_registry(&paths, BAD_REGISTRY);
+    write_feature(&paths, "billing-csv", BAD_RECORD);
 
-    let diagnostic = feature::diagnose(&paths);
-    assert_eq!(diagnostic.found, Ok(("maestro.galaxy.v9".to_string(), 0)));
-    assert_eq!(
-        diagnostic.compatibility,
-        Some(maestro::foundation::core::schema::Compat::Incompatible)
+    assert!(
+        feature::diagnose(&paths).found.is_err(),
+        "an incompatible record must report as error data"
     );
 }
 
 #[test]
-fn diagnose_reports_parse_error_as_data() {
+fn diagnose_reports_parse_error_as_error_data() {
     let temp = TestTempDir::new("maestro-feature-diag-parse");
     let paths = MaestroPaths::new(temp.path());
-    write_registry(&paths, "this: is: not: valid: yaml: [");
+    write_feature(&paths, "billing-csv", "this: is: not: valid: yaml: [");
 
-    let diagnostic = feature::diagnose(&paths);
     assert!(
-        diagnostic.found.is_err(),
-        "diagnose should report parse error as data"
-    );
-    assert_eq!(
-        diagnostic.compatibility, None,
-        "a parse failure has no compatibility verdict"
+        feature::diagnose(&paths).found.is_err(),
+        "a parse failure must report as error data"
     );
 }
 
@@ -234,6 +452,7 @@ fn status_label_renders_snake_case() {
         feature::status_label(&feature::FeatureStatus::Proposed),
         "proposed"
     );
+    assert_eq!(feature::status_label(&feature::FeatureStatus::Ready), "ready");
     assert_eq!(
         feature::status_label(&feature::FeatureStatus::InProgress),
         "in_progress"

@@ -83,10 +83,11 @@ fn init_creates_minimal_artifact_tree() {
         .path()
         .join(".maestro/harness/backlog.yaml")
         .is_file());
-    assert!(temp_dir
+    assert!(temp_dir.path().join(".maestro/features").is_dir());
+    assert!(!temp_dir
         .path()
         .join(".maestro/features/features.yaml")
-        .is_file());
+        .exists());
     assert!(temp_dir.path().join(".maestro/decisions").is_dir());
     assert!(temp_dir.path().join(".maestro/skills").is_dir());
     for skill in BUNDLED_SKILLS {
@@ -195,21 +196,15 @@ fn init_force_groups_multiple_backups_in_one_operation_directory() {
     let temp_dir = TestTempDir::new("maestro-init-test");
     init_git_marker(temp_dir.path());
     let harness = temp_dir.path().join(".maestro/harness/HARNESS.md");
-    let features = temp_dir.path().join(".maestro/features/features.yaml");
+    let backlog = temp_dir.path().join(".maestro/harness/backlog.yaml");
     fs::create_dir_all(
         harness
             .parent()
             .expect("invariant: harness path should have parent"),
     )
     .expect("invariant: harness directory should be creatable");
-    fs::create_dir_all(
-        features
-            .parent()
-            .expect("invariant: features path should have parent"),
-    )
-    .expect("invariant: features directory should be creatable");
     fs::write(&harness, "custom harness\n").expect("invariant: harness should be writable");
-    fs::write(&features, "custom features\n").expect("invariant: features should be writable");
+    fs::write(&backlog, "custom backlog\n").expect("invariant: backlog should be writable");
 
     let output = maestro(&["init", "--force"], temp_dir.path());
 
@@ -225,7 +220,7 @@ fn init_force_groups_multiple_backups_in_one_operation_directory() {
     assert_eq!(backup_dirs.len(), 1);
     let backup_dir = backup_dirs[0].path();
     assert!(backup_dir.join(".maestro/harness/HARNESS.md").is_file());
-    assert!(backup_dir.join(".maestro/features/features.yaml").is_file());
+    assert!(backup_dir.join(".maestro/harness/backlog.yaml").is_file());
 }
 
 #[test]
@@ -297,10 +292,7 @@ fn init_bootstraps_empty_directory_without_git_marker() {
         .path()
         .join(".maestro/harness/HARNESS.md")
         .is_file());
-    assert!(temp_dir
-        .path()
-        .join(".maestro/features/features.yaml")
-        .is_file());
+    assert!(temp_dir.path().join(".maestro/features").is_dir());
 }
 
 #[test]

@@ -4,40 +4,38 @@ use std::fs;
 
 use maestro::decisions::template::{decision_file_name, decision_markdown};
 use maestro::feature::query::{count_tasks_for_feature, FeatureTaskCounts};
-use maestro::feature::schema::{FeatureRegistry, FeatureStatus};
+use maestro::feature::schema::FeatureRecord;
 use maestro::foundation::core::fs::ensure_dir;
+use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 #[test]
-fn empty_feature_registry_matches_v1_schema() {
-    let registry = FeatureRegistry::empty();
-    let yaml = serde_yaml::to_string(&registry).expect("invariant: registry should serialize");
+fn created_feature_record_carries_v1_schema_version() {
+    let temp_dir = TestTempDir::new("maestro-feature-schema");
+    let paths = MaestroPaths::new(temp_dir.path());
 
+    maestro::feature::create(&paths, "Billing CSV export").expect("invariant: create should succeed");
+
+    let yaml = fs::read_to_string(
+        paths
+            .features_dir()
+            .join("billing-csv-export")
+            .join("feature.yaml"),
+    )
+    .expect("invariant: per-feature feature.yaml should be readable");
     assert!(yaml.contains("schema_version: maestro.feature.v1"));
-    assert!(yaml.contains("features: []"));
+    assert!(yaml.contains("status: proposed"));
 }
 
 #[test]
 fn feature_records_do_not_store_task_counts() {
-    let registry = FeatureRegistry {
-        schema_version: "maestro.feature.v1".to_string(),
-        features: vec![maestro::feature::schema::FeatureRecord {
-            id: "billing-csv-export".to_string(),
-            title: "Billing CSV export".to_string(),
-            description: None,
-            status: FeatureStatus::InProgress,
-            created_at: "2026-05-25T08:00:00Z".to_string(),
-            updated_at: "2026-05-25T08:00:00Z".to_string(),
-            raw_request: None,
-            input_type: None,
-            affected_areas: Vec::new(),
-            open_questions: Vec::new(),
-            acceptance: Vec::new(),
-            non_goals: Vec::new(),
-        }],
-    };
+    let record = FeatureRecord::proposed(
+        "billing-csv-export",
+        "Billing CSV export",
+        "2026-05-25T08:00:00Z",
+    );
 
-    let yaml = serde_yaml::to_string(&registry).expect("invariant: registry should serialize");
+    let yaml = serde_yaml::to_string(&record).expect("invariant: record should serialize");
 
     assert!(!yaml.contains("task_count"));
     assert!(!yaml.contains("tasks:"));
@@ -90,7 +88,7 @@ fn write_task(tasks_dir: &std::path::Path, id: &str, feature_id: &str, state: &s
     ensure_dir(&dir).expect("invariant: task directory should be creatable");
     fs::write(
         dir.join("task.yaml"),
-        format!("feature_id: {feature_id}\nstate: {state}\n"),
+        format!("id: {id}\nfeature_id: {feature_id}\nstate: {state}\n"),
     )
     .expect("invariant: task.yaml should be writable");
 }

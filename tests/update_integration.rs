@@ -493,10 +493,10 @@ fn detect_schema_mismatches_reports_advisory_mismatches_without_erroring() {
     // ... and an unknown version (Incompatible) must both surface as advisory
     // mismatches; the detector classifies but never aborts.
     fs::write(
-        paths.features_dir().join("features.yaml"),
-        "schema_version: totally-bogus\nfeatures: []\n",
+        paths.harness_dir().join("backlog.yaml"),
+        "schema_version: totally-bogus\nitems: []\n",
     )
-    .expect("invariant: features schema should be writable");
+    .expect("invariant: backlog schema should be writable");
 
     let mismatches = detect_schema_mismatches(&paths)
         .expect("invariant: schema-mismatch detection stays advisory and never errors");
@@ -716,15 +716,14 @@ fn fake_curl_path_env(temp_dir: &TestTempDir, script: impl AsRef<str>) -> String
 fn mark_user_owned_harness_artifacts(paths: &MaestroPaths) {
     // HARNESS.md is extraction-managed and version-gated: a local edit that keeps
     // the shipped frontmatter version survives update because the gate skips a
-    // matching version. harness.yml, backlog.yaml, and features.yaml are
-    // user-owned config that update never rewrites. Editing each in place (rather
-    // than replacing HARNESS.md with version-less content) keeps every file's
-    // shipped version intact, so all four must stay byte-identical across update.
+    // matching version. harness.yml and backlog.yaml are user-owned config that
+    // update never rewrites. Editing each in place (rather than replacing
+    // HARNESS.md with version-less content) keeps every file's shipped version
+    // intact, so all three must stay byte-identical across update.
     for path in [
         paths.harness_dir().join("HARNESS.md"),
         paths.harness_dir().join("harness.yml"),
         paths.harness_dir().join("backlog.yaml"),
-        paths.features_dir().join("features.yaml"),
     ] {
         let contents =
             fs::read_to_string(&path).expect("invariant: initialized artifact should be readable");
@@ -741,7 +740,6 @@ fn user_owned_harness_artifacts(paths: &MaestroPaths) -> Vec<PathBuf> {
         paths.harness_dir().join("HARNESS.md"),
         paths.harness_dir().join("harness.yml"),
         paths.harness_dir().join("backlog.yaml"),
-        paths.features_dir().join("features.yaml"),
     ]
 }
 

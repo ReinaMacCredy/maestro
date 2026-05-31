@@ -13,8 +13,7 @@ use crate::domain::extraction::{extract_all, rollback_writes, ExtractMode, Resou
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
-    classify, Compat, BACKLOG_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
-    INSTALL_LOCK_SCHEMA_VERSION,
+    classify, Compat, BACKLOG_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION,
 };
 
 pub use github_release::GitHubCurlDownloader;
@@ -501,10 +500,6 @@ pub fn detect_schema_mismatches(paths: &MaestroPaths) -> Result<Vec<SchemaMismat
         (
             paths.harness_dir().join("harness.yml"),
             HARNESS_SCHEMA_VERSION,
-        ),
-        (
-            paths.features_dir().join("features.yaml"),
-            FEATURE_SCHEMA_VERSION,
         ),
         (
             paths.harness_dir().join("backlog.yaml"),

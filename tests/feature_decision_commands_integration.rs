@@ -46,7 +46,7 @@ fn assert_failure(output: std::process::Output, args: &[&str]) -> String {
 }
 
 #[test]
-fn feature_lifecycle_views_compute_task_counts_from_task_yaml() {
+fn feature_guarded_lifecycle_via_cli() {
     let temp_dir = TestTempDir::new("maestro-feature-command-test");
     init_git_marker(temp_dir.path());
     stdout(
@@ -60,55 +60,130 @@ fn feature_lifecycle_views_compute_task_counts_from_task_yaml() {
     );
     assert!(create_output.contains("created feature billing-csv-export"));
 
-    let tasks_dir = temp_dir.path().join(".maestro/tasks");
-    write_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
-    write_task(&tasks_dir, "task-002", "billing-csv-export", "ready");
-    write_task(&tasks_dir, "task-003", "other-feature", "verified");
-
     let show_output = stdout(
         maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
         &["feature", "show", "billing-csv-export"],
     );
-    assert!(show_output.contains("id: billing-csv-export"));
     assert!(show_output.contains("status: proposed"));
-    assert!(show_output.contains("tasks_total: 2"));
-    assert!(show_output.contains("tasks_verified: 1"));
 
-    stdout(
-        maestro(&["feature", "edit", "billing-csv-export"], temp_dir.path()),
-        &["feature", "edit", "billing-csv-export"],
-    );
-    let show_after_edit = stdout(
-        maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
-        &["feature", "show", "billing-csv-export"],
-    );
-    assert!(show_after_edit.contains("status: in_progress"));
+    // accept blocks on an incomplete contract, naming the gaps.
+    let accept_args = ["feature", "accept", "billing-csv-export"];
+    let accept_stderr = assert_failure(maestro(&accept_args, temp_dir.path()), &accept_args);
+    assert!(accept_stderr.contains("acceptance"));
+    assert!(accept_stderr.contains("affected_areas"));
 
+    // author the contract, then accept freezes it.
+    let set_args = [
+        "feature",
+        "set",
+        "billing-csv-export",
+        "--acceptance",
+        "exports a valid csv",
+        "--area",
+        "billing",
+    ];
+    let set_output = stdout(maestro(&set_args, temp_dir.path()), &set_args);
+    assert!(set_output.contains("acceptance=1"));
+    assert!(set_output.contains("areas=1"));
+
+    let dry_args = ["feature", "accept", "billing-csv-export", "--dry-run"];
+    let dry_output = stdout(maestro(&dry_args, temp_dir.path()), &dry_args);
+    assert!(dry_output.contains("would accept"));
+
+    let accept_output = stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
+    assert!(accept_output.contains("accepted billing-csv-export"));
+
+    // start, then ship blocks while a live child task exists.
     stdout(
-        maestro(&["feature", "ship", "billing-csv-export"], temp_dir.path()),
-        &["feature", "ship", "billing-csv-export"],
+        maestro(&["feature", "start", "billing-csv-export"], temp_dir.path()),
+        &["feature", "start", "billing-csv-export"],
     );
+
+    let tasks_dir = temp_dir.path().join(".maestro/tasks");
+    write_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
+    write_task(&tasks_dir, "task-002", "billing-csv-export", "verified");
+    write_task(&tasks_dir, "task-003", "billing-csv-export", "in_progress");
+
+    let ship_args = ["feature", "ship", "billing-csv-export"];
+    let ship_stderr = assert_failure(maestro(&ship_args, temp_dir.path()), &ship_args);
+    assert!(ship_stderr.contains("task-003"));
+
+    // resolve the live child, then ship succeeds.
+    write_task(&tasks_dir, "task-003", "billing-csv-export", "verified");
+    let ship_output = stdout(maestro(&ship_args, temp_dir.path()), &ship_args);
+    assert!(ship_output.contains("shipped billing-csv-export"));
+
     let show_after_ship = stdout(
         maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
         &["feature", "show", "billing-csv-export"],
     );
     assert!(show_after_ship.contains("status: shipped"));
 
-    stdout(
-        maestro(
-            &["feature", "cancel", "billing-csv-export"],
-            temp_dir.path(),
-        ),
-        &["feature", "cancel", "billing-csv-export"],
-    );
     let list_output = stdout(
         maestro(&["feature", "list"], temp_dir.path()),
         &["feature", "list"],
     );
     assert!(list_output.contains("billing-csv-export"));
-    assert!(list_output.contains("cancelled"));
-    assert!(list_output.contains("tasks=2"));
-    assert!(list_output.contains("verified=1"));
+    assert!(list_output.contains("shipped"));
+    assert!(list_output.contains("tasks=3"));
+    assert!(list_output.contains("verified=3"));
+}
+
+#[test]
+fn feature_cancel_via_cli_cascades_to_live_tasks() {
+    let temp_dir = TestTempDir::new("maestro-feature-cancel-test");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], temp_dir.path()),
+        &["feature", "new", "Billing CSV export"],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        "billing-csv-export",
+        "--acceptance",
+        "exports a valid csv",
+        "--area",
+        "billing",
+    ];
+    stdout(maestro(&set_args, temp_dir.path()), &set_args);
+    stdout(
+        maestro(&["feature", "accept", "billing-csv-export"], temp_dir.path()),
+        &["feature", "accept", "billing-csv-export"],
+    );
+    stdout(
+        maestro(&["feature", "start", "billing-csv-export"], temp_dir.path()),
+        &["feature", "start", "billing-csv-export"],
+    );
+
+    let tasks_dir = temp_dir.path().join(".maestro/tasks");
+    write_task(&tasks_dir, "task-001", "billing-csv-export", "in_progress");
+
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope dropped",
+    ];
+    let cancel_output = stdout(maestro(&cancel_args, temp_dir.path()), &cancel_args);
+    assert!(cancel_output.contains("cancelled billing-csv-export"));
+    assert!(cancel_output.contains("task-001"));
+
+    let show_output = stdout(
+        maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
+        &["feature", "show", "billing-csv-export"],
+    );
+    assert!(show_output.contains("status: cancelled"));
+
+    let task_raw = fs::read_to_string(tasks_dir.join("task-001").join("task.yaml"))
+        .expect("invariant: cascaded child task should be readable");
+    assert!(task_raw.contains("abandoned"));
 }
 
 #[test]
@@ -213,9 +288,13 @@ fn decision_show_rejects_path_traversal_ids() {
 fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
     let task_dir = tasks_dir.join(id);
     ensure_dir(&task_dir).expect("invariant: task directory should be creatable");
+    // A complete TaskRecord: the cancel cascade loads and transitions the child,
+    // so a projection-only stub (id/feature_id/state) fails to deserialize.
     fs::write(
         task_dir.join("task.yaml"),
-        format!("feature_id: {feature_id}\nstate: {state}\n"),
+        format!(
+            "schema_version: maestro.task.v1\nid: {id}\nslug: {id}\nfeature_id: {feature_id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"1\"\nupdated_at: \"1\"\n"
+        ),
     )
     .expect("invariant: task yaml should be writable");
 }

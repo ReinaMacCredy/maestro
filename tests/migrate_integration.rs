@@ -287,27 +287,28 @@ fn assert_migrated_artifacts_match_target_contracts(repo: &Path) {
     assert_eq!(acceptance.schema_version, ACCEPTANCE_SCHEMA_VERSION);
     assert_eq!(acceptance.task, "task-001");
 
+    // The legacy v0.106->v0.8 migration still emits the flat features.yaml
+    // registry. Under the per-feature-directory rewrite that output is orphaned
+    // legacy (the Feature domain reads .maestro/features/<id>/feature.yaml, not
+    // the flat file), and the whole migrate path is removed in the clean-rewrite
+    // deletion phase. Assert only migrate's still-true behavior: it writes the
+    // flat registry with the expected shape.
     let features_raw = fs::read_to_string(paths.features_dir().join("features.yaml"))
         .expect("invariant: migrated features should be readable");
-    let registry: feature::schema::FeatureRegistry = serde_yaml::from_str(&features_raw)
-        .expect("invariant: migrated features should parse through Feature schema");
-    assert_eq!(registry.schema_version, FEATURE_SCHEMA_VERSION);
-    assert_eq!(registry.features.len(), 1);
-    assert_eq!(registry.features[0].id, "feat-one");
+    let registry: serde_yaml::Value = serde_yaml::from_str(&features_raw)
+        .expect("invariant: migrated features should parse as YAML");
+    assert_eq!(
+        registry["schema_version"].as_str(),
+        Some(FEATURE_SCHEMA_VERSION)
+    );
+    let features = registry["features"]
+        .as_sequence()
+        .expect("invariant: migrated registry should carry a features sequence");
+    assert_eq!(features.len(), 1);
+    assert_eq!(features[0]["id"].as_str(), Some("feat-one"));
     let counts = feature::query::count_tasks_for_feature(&paths.tasks_dir(), "feat-one")
         .expect("invariant: migrated feature rollup should read Task projections");
     assert_eq!(counts.total, 1);
-
-    // The migrated registry must round-trip through the Feature facade reads.
-    let views = feature::list(&paths).expect("invariant: migrated features should load via list");
-    assert_eq!(views.len(), 1);
-    assert_eq!(views[0].id, "feat-one");
-    assert_eq!(views[0].counts.total, 1);
-    let view = feature::show(&paths, "feat-one")
-        .expect("invariant: migrated feature should load via show");
-    assert_eq!(view.id, "feat-one");
-    let titles = feature::titles(&paths);
-    assert!(titles.contains_key("feat-one"));
 
     let decisions = decisions::query::decision_entries(&paths.decisions_dir())
         .expect("invariant: migrated decisions should list through Decision query");
