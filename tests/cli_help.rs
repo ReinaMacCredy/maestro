@@ -37,6 +37,7 @@ fn root_help_lists_top_level_commands() {
             "init",
             "install",
             "update",
+            "sync",
             "uninstall",
             "doctor",
             "shell-init",
@@ -54,6 +55,29 @@ fn root_help_lists_top_level_commands() {
             "identity",
         ],
     );
+}
+
+#[test]
+fn top_level_help_fills_descriptions_and_examples() {
+    // Every top-level command carries a non-blank `about`; spot-check ones that
+    // were previously blank (init-ux D5), including the new `sync` verb.
+    assert_contains_all(
+        &maestro(&["--help"]),
+        &[
+            "Resync bundled resources to this binary's versions (offline)",
+            "Scaffold .maestro/ and extract bundled resources into this repo",
+            "Diagnose the maestro installation and report problems",
+        ],
+    );
+
+    // The refresh trio documents real invocations under an Examples block.
+    for command in ["init", "sync", "update"] {
+        let help = maestro(&[command, "--help"]);
+        assert!(
+            help.contains("Examples:") && help.contains(&format!("maestro {command}")),
+            "expected `{command} --help` to carry an Examples block with real invocations\n{help}"
+        );
+    }
 }
 
 #[test]
