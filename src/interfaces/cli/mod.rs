@@ -349,8 +349,20 @@ pub enum FeatureCommand {
     Show { id: String },
     #[command(about = "List features with their statuses and task counts")]
     List {
-        #[arg(long, help = "Include terminal features (shipped, cancelled)")]
+        #[arg(long, help = "Include terminal features (shipped, cancelled) and archived ones")]
         all: bool,
+    },
+    #[command(
+        about = "Archive a terminal feature and its terminal child tasks (-> .maestro/archive/features)"
+    )]
+    Archive {
+        id: String,
+        #[arg(long, help = "Preview the feature and child-task moves without archiving")]
+        dry_run: bool,
+    },
+    #[command(about = "Restore an archived feature and its archived child tasks")]
+    Unarchive {
+        id: String,
     },
 }
 

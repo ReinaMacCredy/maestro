@@ -19,6 +19,7 @@ pub(crate) mod lookup;
 pub(crate) mod template;
 
 pub use archive::{archive_task, unarchive_task};
+pub(crate) use archive::live_task_referrer;
 pub use blockers::has_unresolved_blockers;
 pub use display::{render_task, render_task_list};
 pub use doctor::{

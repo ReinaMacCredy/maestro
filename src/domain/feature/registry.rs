@@ -577,6 +577,39 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     Ok(view_from_record(record, counts))
 }
 
+/// Show one archived feature (L6b read-fallthrough), counting its archived
+/// child tasks. An entangled child skipped by the cascade (§5.9 L6c) stays live,
+/// so the count reads only the archive tree and may under-report it.
+///
+/// # Errors
+///
+/// Errors when no archived feature has the given id, or the record is
+/// unparseable / schema-incompatible.
+pub fn show_archived(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
+    let record = load_record_at(&archived_feature_yaml_path(paths, id), id)?;
+    let counts = count_tasks_for_feature(&paths.archive_tasks_dir(), &record.id)?;
+    Ok(view_from_record(record, counts))
+}
+
+/// List every archived feature joined with its archived task counts (L6b,
+/// `feature list --all`).
+///
+/// # Errors
+///
+/// Errors when an archived feature record is unparseable or schema-incompatible.
+pub fn list_archived(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
+    let archive_features_dir = paths.archive_features_dir();
+    let counts_by_feature = count_tasks_by_feature(&paths.archive_tasks_dir())?;
+    feature_ids(&archive_features_dir)?
+        .iter()
+        .map(|id| {
+            let record = load_record_at(&archive_features_dir.join(id).join("feature.yaml"), id)?;
+            let counts = counts_by_feature.get(&record.id).cloned().unwrap_or_default();
+            Ok(view_from_record(record, counts))
+        })
+        .collect()
+}
+
 /// Scan-free id -> title map for display.
 ///
 /// The one documented tolerant read: it skips a missing, unparseable, or
@@ -731,8 +764,14 @@ fn amend_log_path(paths: &MaestroPaths, id: &str) -> PathBuf {
 
 /// Load one feature record, erroring on absence or schema incompatibility.
 fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
-    let path = feature_yaml_path(paths, id);
-    let Some(contents) = read_to_string_if_exists(&path)? else {
+    load_record_at(&feature_yaml_path(paths, id), id)
+}
+
+/// Load a feature record from an explicit `feature.yaml` path, erroring on
+/// absence or schema incompatibility. Lets the archive reads (§5.9) load from
+/// the archive tree with the same strictness as the live tree.
+pub(crate) fn load_record_at(path: &Path, id: &str) -> Result<FeatureRecord> {
+    let Some(contents) = read_to_string_if_exists(path)? else {
         bail!("feature {id} not found");
     };
     let record: FeatureRecord = serde_yaml::from_str(&contents)

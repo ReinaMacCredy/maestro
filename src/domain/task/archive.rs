@@ -47,7 +47,7 @@ pub fn archive_task(
             task.state.as_str()
         );
     }
-    if let Some(referrer) = live_referrer(tasks_dir, id)? {
+    if let Some(referrer) = live_task_referrer(tasks_dir, id)? {
         bail!(
             "cannot archive {id} — {referrer} is blocked by it; resolve the blocker or archive {referrer} first"
         );
@@ -97,8 +97,9 @@ pub fn unarchive_task(tasks_dir: &Path, archive_tasks_dir: &Path, id: &str) -> R
 }
 
 /// Id of the lowest-numbered live task whose unresolved blocker names
-/// `target_id` (L6c), or `None` when no live item references it.
-fn live_referrer(tasks_dir: &Path, target_id: &str) -> Result<Option<String>> {
+/// `target_id` (L6c), or `None` when no live item references it. Shared with the
+/// feature cascade so an entangled child is skipped, not blocked (§5.9).
+pub(crate) fn live_task_referrer(tasks_dir: &Path, target_id: &str) -> Result<Option<String>> {
     let mut referrers: Vec<String> = load_task_records(tasks_dir)?
         .into_iter()
         .filter(|task| task.id != target_id && task.state.is_live())

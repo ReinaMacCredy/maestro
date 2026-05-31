@@ -57,6 +57,10 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         FeatureCommand::Cancel { id, reason } => print_note(feature::cancel(&paths, &id, &reason)?.note),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
         FeatureCommand::List { all } => list_features(&paths, all),
+        FeatureCommand::Archive { id, dry_run } => {
+            print_note(feature::archive_feature(&paths, &id, dry_run)?)
+        }
+        FeatureCommand::Unarchive { id } => print_note(feature::unarchive_feature(&paths, &id)?),
     }
 }
 
@@ -98,7 +102,12 @@ fn amend_feature(
 }
 
 fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let view = feature::show(paths, id)?;
+    // L6b: reads cross the boundary — fall through to the archive so a
+    // historical reference to an archived feature still renders.
+    let view = match feature::show(paths, id) {
+        Ok(view) => view,
+        Err(live_err) => feature::show_archived(paths, id).map_err(|_| live_err)?,
+    };
 
     println!("id: {}", view.id);
     println!("title: {}", view.title);
@@ -128,7 +137,10 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     let views = feature::list(paths)?;
     let hidden = views.iter().filter(|view| view.status.is_terminal()).count();
     let shown: Vec<_> = if all {
-        views
+        // L6b: --all also reads the archive sibling tree.
+        let mut all_views = views;
+        all_views.extend(feature::list_archived(paths)?);
+        all_views
     } else {
         views
             .into_iter()
