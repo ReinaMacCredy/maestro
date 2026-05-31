@@ -666,6 +666,68 @@ fn task_create_never_reissues_an_archived_id() {
 }
 
 #[test]
+fn archive_moves_terminal_tasks_and_enforces_guards() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    // task-001 stays live; archiving a live task is refused (only done tasks archive).
+    assert_success(&maestro(repo, &["task", "create", "Keeper"]), &["task", "create", "Keeper"]);
+    let live = maestro(repo, &["task", "archive", "task-001"]);
+    assert_failure(&live, &["task", "archive", "task-001"]);
+    assert!(stderr(&live).contains("not done"));
+
+    // task-002 is abandoned (terminal) and thus archive-eligible.
+    assert_success(&maestro(repo, &["task", "create", "Done"]), &["task", "create", "Done"]);
+    assert_success(
+        &maestro(repo, &["task", "abandon", "task-002", "--reason", "nope"]),
+        &["task", "abandon", "task-002", "--reason", "nope"],
+    );
+
+    // L6c: a live task (task-001) blocked by task-002 makes the archive refuse,
+    // naming the referrer.
+    assert_success(
+        &maestro(repo, &["task", "block", "task-001", "--reason", "needs 2", "--by", "task-002"]),
+        &["task", "block", "task-001", "--reason", "needs 2", "--by", "task-002"],
+    );
+    let referenced = maestro(repo, &["task", "archive", "task-002"]);
+    assert_failure(&referenced, &["task", "archive", "task-002"]);
+    assert!(stderr(&referenced).contains("task-001"));
+
+    // Clearing the blocker unblocks the archive.
+    assert_success(
+        &maestro(repo, &["task", "unblock", "task-001", "--blocker", "blk-001"]),
+        &["task", "unblock", "task-001", "--blocker", "blk-001"],
+    );
+
+    // --dry-run previews without moving.
+    let preview = stdout(&maestro(repo, &["task", "archive", "task-002", "--dry-run"]));
+    assert!(preview.contains("would archive task-002"));
+    assert!(repo.join(".maestro/tasks/task-002-done").exists());
+
+    // The real archive moves it to the sibling tree.
+    let archived = stdout(&maestro(repo, &["task", "archive", "task-002"]));
+    assert!(archived.contains("archived task-002"));
+    assert!(!repo.join(".maestro/tasks/task-002-done").exists());
+    assert!(repo.join(".maestro/archive/tasks/task-002-done").exists());
+
+    // Default list hides it; `--all` reads the archive; `show` falls through (L6b).
+    assert!(!stdout(&maestro(repo, &["task", "list"])).contains("task-002"));
+    assert!(stdout(&maestro(repo, &["task", "list", "--all"])).contains("task-002"));
+    assert!(stdout(&maestro(repo, &["task", "show", "task-002"])).contains("task-002"));
+
+    // Idempotent: re-archiving an archived task is a no-op at exit 0.
+    let again = maestro(repo, &["task", "archive", "task-002"]);
+    assert_success(&again, &["task", "archive", "task-002"]);
+    assert!(stdout(&again).contains("already archived"));
+
+    // unarchive restores it to the live tree.
+    let restored = stdout(&maestro(repo, &["task", "unarchive", "task-002"]));
+    assert!(restored.contains("unarchived task-002"));
+    assert!(repo.join(".maestro/tasks/task-002-done").exists());
+    assert!(!repo.join(".maestro/archive/tasks/task-002-done").exists());
+}
+
+#[test]
 fn list_hides_terminal_tasks_until_all_is_passed() {
     let temp = setup_repo();
     let repo = temp.path();

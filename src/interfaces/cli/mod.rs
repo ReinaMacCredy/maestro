@@ -235,6 +235,16 @@ pub enum TaskCommand {
     },
     #[command(about = "Check the task blocker graph for cycles and dangling refs")]
     Doctor,
+    #[command(about = "Archive a done task out of the live scan (-> .maestro/archive/tasks)")]
+    Archive {
+        id: String,
+        #[arg(long, help = "Preview the move without archiving")]
+        dry_run: bool,
+    },
+    #[command(about = "Restore an archived task to the live scan")]
+    Unarchive {
+        id: String,
+    },
 }
 
 #[derive(Debug, Args)]

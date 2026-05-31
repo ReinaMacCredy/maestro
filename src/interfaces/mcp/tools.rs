@@ -96,8 +96,11 @@ fn status(paths: &MaestroPaths) -> Result<String> {
 }
 
 fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
-    let tasks = task::load_task_records(&paths.tasks_dir())?;
     let all = bool_arg(arguments, "all");
+    let mut tasks = task::load_task_records(&paths.tasks_dir())?;
+    if all {
+        tasks.extend(task::load_task_records(&paths.archive_tasks_dir())?);
+    }
     let filter = |include_terminal| task::TaskFilter {
         ready: bool_arg(arguments, "ready"),
         blocked: bool_arg(arguments, "blocked"),

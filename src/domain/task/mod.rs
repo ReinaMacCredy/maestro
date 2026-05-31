@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::parse_utc_timestamp;
 
+pub(crate) mod archive;
 pub(crate) mod blockers;
 pub(crate) mod display;
 pub(crate) mod doctor;
@@ -17,6 +18,7 @@ pub(crate) mod lifecycle;
 pub(crate) mod lookup;
 pub(crate) mod template;
 
+pub use archive::{archive_task, unarchive_task};
 pub use blockers::has_unresolved_blockers;
 pub use display::{render_task, render_task_list};
 pub use doctor::{

@@ -114,6 +114,22 @@ pub fn run(args: TaskArgs) -> Result<()> {
         ),
         TaskCommand::Watch { id, interval } => watch_tasks(&paths, id, interval),
         TaskCommand::Doctor => doctor_tasks(&paths),
+        TaskCommand::Archive { id, dry_run } => {
+            let note = task::archive_task(
+                &paths.tasks_dir(),
+                &paths.archive_tasks_dir(),
+                &id,
+                dry_run,
+            )?;
+            println!("{note}");
+            Ok(())
+        }
+        TaskCommand::Unarchive { id } => {
+            let note =
+                task::unarchive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id)?;
+            println!("{note}");
+            Ok(())
+        }
     }
 }
 
@@ -299,7 +315,13 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
         None => std::env::var("MAESTRO_CURRENT_TASK")
             .context("task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`")?,
     };
-    let task = task::load_task_record(&paths.tasks_dir(), &task_id)?;
+    // L6b: reads cross the boundary — fall through to the archive so a
+    // historical reference to an archived task still renders.
+    let task = match task::load_task_record(&paths.tasks_dir(), &task_id) {
+        Ok(task) => task,
+        Err(live_err) => task::load_task_record(&paths.archive_tasks_dir(), &task_id)
+            .map_err(|_| live_err)?,
+    };
     print!("{}", task::render_task(&task));
     Ok(())
 }
@@ -322,7 +344,12 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         });
     }
 
-    let all_tasks = load_all_tasks(&paths.tasks_dir())?;
+    // Bare list scans the live tree only (P2 hot path); `--all` also reads the
+    // archive (§5.4 / §5.7b), so the hidden-count hint stays live-tree only.
+    let mut all_tasks = load_all_tasks(&paths.tasks_dir())?;
+    if filters.all {
+        all_tasks.extend(load_all_tasks(&paths.archive_tasks_dir())?);
+    }
     let shown = task::filter_tasks(all_tasks.clone(), &task_filter(&filters, filters.all));
     print!("{}", task::render_task_list(&shown));
     if !filters.all {
