@@ -340,6 +340,21 @@ fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
     .expect("invariant: task yaml should be writable");
 }
 
+/// Drive a fresh feature all the way to Shipped: new -> set -> baseline+slice ->
+/// accept -> start -> one verified child -> ship.
+fn ship_feature(root: &Path, title: &str, slug: &str, child: &str) {
+    stdout(maestro(&["feature", "new", title], root), &["feature", "new", title]);
+    let set_args = ["feature", "set", slug, "--acceptance", "works", "--area", "core"];
+    stdout(maestro(&set_args, root), &set_args);
+    let features_dir = root.join(".maestro/features");
+    write_baseline(&features_dir, slug);
+    write_qa_slice(&features_dir, slug);
+    stdout(maestro(&["feature", "accept", slug], root), &["feature", "accept", slug]);
+    stdout(maestro(&["feature", "start", slug], root), &["feature", "start", slug]);
+    write_task(&root.join(".maestro/tasks"), child, slug, "verified");
+    stdout(maestro(&["feature", "ship", slug], root), &["feature", "ship", slug]);
+}
+
 #[test]
 fn feature_create_refuses_a_slug_held_in_the_archive() {
     let temp_dir = TestTempDir::new("maestro-feature-archive-slug");
@@ -506,4 +521,50 @@ fn feature_archive_skips_a_referenced_child_then_sweeps_it_on_rerun() {
     assert!(swept.contains("task-002"));
     assert!(root.join(".maestro/archive/tasks/task-002").is_dir());
     assert!(!tasks_dir.join("task-002").exists());
+}
+
+/// `feature archive --shipped` archives every shipped feature (each cascading its
+/// children) and leaves non-shipped features in the live tree.
+#[test]
+fn feature_archive_shipped_sweeps_only_shipped_features() {
+    let temp_dir = TestTempDir::new("maestro-feature-archive-bulk");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    // Two shipped features (each with a verified child) + one still in progress.
+    ship_feature(root, "Alpha export", "alpha-export", "task-001");
+    ship_feature(root, "Beta export", "beta-export", "task-002");
+
+    stdout(maestro(&["feature", "new", "Gamma export"], root), &["feature", "new", "Gamma export"]);
+    let set_gamma = ["feature", "set", "gamma-export", "--acceptance", "works", "--area", "core"];
+    stdout(maestro(&set_gamma, root), &set_gamma);
+    write_baseline(&root.join(".maestro/features"), "gamma-export");
+    stdout(maestro(&["feature", "accept", "gamma-export"], root), &["feature", "accept", "gamma-export"]);
+    stdout(maestro(&["feature", "start", "gamma-export"], root), &["feature", "start", "gamma-export"]);
+
+    // --shipped archives both shipped features and their children; gamma stays live.
+    let bulk = ["feature", "archive", "--shipped"];
+    let out = stdout(maestro(&bulk, root), &bulk);
+    assert!(out.contains("archived feature alpha-export"));
+    assert!(out.contains("archived feature beta-export"));
+    assert!(out.contains("archived 2 of 2 shipped feature(s)"));
+
+    let features_dir = root.join(".maestro/features");
+    assert!(root.join(".maestro/archive/features/alpha-export").is_dir());
+    assert!(root.join(".maestro/archive/features/beta-export").is_dir());
+    assert!(root.join(".maestro/archive/tasks/task-001").is_dir());
+    assert!(root.join(".maestro/archive/tasks/task-002").is_dir());
+    // The in-progress feature is untouched and stays in the live tree.
+    assert!(features_dir.join("gamma-export").join("feature.yaml").is_file());
+    assert!(!root.join(".maestro/archive/features/gamma-export").exists());
+
+    // Idempotent: no shipped features remain live.
+    let again = stdout(maestro(&bulk, root), &bulk);
+    assert!(again.contains("no shipped features to archive"));
+
+    // A feature id and --shipped are mutually exclusive.
+    let both = ["feature", "archive", "alpha-export", "--shipped"];
+    let err = assert_failure(maestro(&both, root), &both);
+    assert!(err.contains("not both"));
 }

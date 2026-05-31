@@ -356,7 +356,10 @@ pub enum FeatureCommand {
         about = "Archive a terminal feature and its terminal child tasks (-> .maestro/archive/features)"
     )]
     Archive {
-        id: String,
+        #[arg(help = "Feature id to archive (omit when using --shipped)")]
+        id: Option<String>,
+        #[arg(long, help = "Archive every shipped feature (mutually exclusive with <id>)")]
+        shipped: bool,
         #[arg(long, help = "Preview the feature and child-task moves without archiving")]
         dry_run: bool,
     },

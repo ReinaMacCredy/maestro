@@ -57,11 +57,63 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         FeatureCommand::Cancel { id, reason } => print_note(feature::cancel(&paths, &id, &reason)?.note),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
         FeatureCommand::List { all } => list_features(&paths, all),
-        FeatureCommand::Archive { id, dry_run } => {
-            print_note(feature::archive_feature(&paths, &id, dry_run)?)
+        FeatureCommand::Archive { id, shipped, dry_run } => {
+            archive_features(&paths, id, shipped, dry_run)
         }
         FeatureCommand::Unarchive { id } => print_note(feature::unarchive_feature(&paths, &id)?),
     }
+}
+
+/// Dispatch `feature archive`: exactly one of a single id or `--shipped`.
+fn archive_features(
+    paths: &MaestroPaths,
+    id: Option<String>,
+    shipped: bool,
+    dry_run: bool,
+) -> Result<()> {
+    match (id, shipped) {
+        (Some(id), false) => print_note(feature::archive_feature(paths, &id, dry_run)?),
+        (None, true) => archive_shipped(paths, dry_run),
+        (Some(_), true) | (None, false) => bail!(
+            "provide a feature id or --shipped, not both\n  maestro feature archive <id>\n  maestro feature archive --shipped"
+        ),
+    }
+}
+
+/// Bulk-archive every shipped feature (§5 L3). Collect-and-continue: one
+/// feature's failure never aborts the sweep; the summary exits non-zero iff any
+/// failed, so a re-run safely retries (archived features no-op, failures retry).
+fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
+    let shipped: Vec<String> = feature::list(paths)?
+        .into_iter()
+        .filter(|view| view.status == feature::FeatureStatus::Shipped)
+        .map(|view| view.id)
+        .collect();
+
+    if shipped.is_empty() {
+        println!("no shipped features to archive");
+        return Ok(());
+    }
+
+    let mut failures = Vec::new();
+    for id in &shipped {
+        match feature::archive_feature(paths, id, dry_run) {
+            Ok(note) => println!("{note}"),
+            Err(err) => failures.push(format!("{id}: {err:#}")),
+        }
+    }
+
+    let verb = if dry_run { "would archive" } else { "archived" };
+    println!("# {verb} {} of {} shipped feature(s)", shipped.len() - failures.len(), shipped.len());
+
+    if !failures.is_empty() {
+        bail!(
+            "{} shipped feature(s) failed to archive (re-run to retry):\n  {}",
+            failures.len(),
+            failures.join("\n  ")
+        );
+    }
+    Ok(())
 }
 
 fn new_feature(paths: &MaestroPaths, title: &str) -> Result<()> {
