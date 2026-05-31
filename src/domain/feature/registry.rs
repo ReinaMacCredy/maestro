@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
+use crate::domain::feature::qa;
 use crate::domain::feature::query::{
     count_tasks_by_feature, count_tasks_for_feature, live_child_task_ids, FeatureTaskCounts,
 };
@@ -272,6 +273,12 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
             "affected_areas (0 areas) — fix: maestro feature set {id} --area \"<surface>\""
         ));
     }
+    // F — a captured behavior baseline is a precondition of accept (before edits).
+    if !qa::baseline_present(&feature_dir(paths, id))? {
+        gaps.push(format!(
+            "qa-baseline (.maestro/features/{id}/baseline.md missing) — fix: run the qa-baseline skill to capture behavior before edits"
+        ));
+    }
 
     if dry_run {
         let note = if gaps.is_empty() {
@@ -435,26 +442,34 @@ pub fn ship(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<TransitionR
         Transition::To(target) => target,
     };
 
+    let mut gaps = Vec::new();
+    // D5 cond 1 — no live child task may outlive its shipped feature.
     let live = live_child_task_ids(&paths.tasks_dir(), &record.id)?;
+    if !live.is_empty() {
+        gaps.push(format!(
+            "{} live child task(s): {}\n    fix: verify or abandon them, then re-ship",
+            live.len(),
+            live.join(", ")
+        ));
+    }
+    // D5 cond 2/3 — QA baseline present + fresh, every behavioral scenario proven.
+    let feat_dir = feature_dir(paths, id);
+    let baseline = qa::read_baseline(&feat_dir)?;
+    let slices = qa::read_qa_slices(&feat_dir)?;
+    let amend_log = load_amend_log(paths, id)?;
+    gaps.extend(qa::ship_qa_gaps(id, baseline.as_ref(), &slices, &amend_log));
+
     if dry_run {
-        let note = if live.is_empty() {
-            format!("would ship {id} (→ shipped); no live child tasks")
+        let note = if gaps.is_empty() {
+            format!("would ship {id} (→ shipped); no live child tasks, qa-baseline proven")
         } else {
-            format!(
-                "would block ship {id} — {} live child task(s): {}\n  fix: verify or abandon them, then: maestro feature ship {id}",
-                live.len(),
-                live.join(", ")
-            )
+            format!("would block ship {id}:\n  {}", gaps.join("\n  "))
         };
         return Ok(no_op_report(id, record.status, note));
     }
 
-    if !live.is_empty() {
-        bail!(
-            "cannot ship {id} — {} live child task(s): {}\n  fix: verify or abandon them, then: maestro feature ship {id}",
-            live.len(),
-            live.join(", ")
-        );
+    if !gaps.is_empty() {
+        bail!("cannot ship {id}:\n  {}", gaps.join("\n  "));
     }
 
     record.status = target.clone();

@@ -1,5 +1,6 @@
 //! Feature aggregate facade.
 
+mod qa;
 pub mod query;
 pub(crate) mod registry;
 pub mod schema;

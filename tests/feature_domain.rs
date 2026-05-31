@@ -32,7 +32,11 @@ fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
 
 const BAD_RECORD: &str = "schema_version: maestro.galaxy.v9\nid: billing-csv\ntitle: Billing CSV\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n";
 
-/// Author a complete contract on a freshly-created Proposed feature.
+/// Author a complete contract on a freshly-created Proposed feature, plus a
+/// present baseline with no `[bl-NNN]` scenarios. The empty Scenario Matrix
+/// declares no behavioral surface (QA C), so it satisfies the accept precondition
+/// (F) and the ship coverage skip without entangling these transition-machinery
+/// tests with slice authoring (the behavioral path lives in feature_qa_gate_integration).
 fn author_contract(paths: &MaestroPaths, id: &str) {
     feature::set(
         paths,
@@ -44,6 +48,14 @@ fn author_contract(paths: &MaestroPaths, id: &str) {
         },
     )
     .expect("invariant: set should succeed on a proposed feature");
+
+    let dir = paths.features_dir().join(id);
+    ensure_dir(&dir).expect("invariant: feature dir should be creatable");
+    fs::write(
+        dir.join("baseline.md"),
+        "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Baseline gaps:\n  - none (no behavioral surface)\n",
+    )
+    .expect("invariant: baseline.md should be writable");
 }
 
 #[test]

@@ -86,6 +86,11 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(set_output.contains("acceptance=1"));
     assert!(set_output.contains("areas=1"));
 
+    // accept also requires a captured baseline (F); ship requires it proven.
+    let features_dir = temp_dir.path().join(".maestro/features");
+    write_baseline(&features_dir, "billing-csv-export");
+    write_qa_slice(&features_dir, "billing-csv-export");
+
     let dry_args = ["feature", "accept", "billing-csv-export", "--dry-run"];
     let dry_output = stdout(maestro(&dry_args, temp_dir.path()), &dry_args);
     assert!(dry_output.contains("would accept"));
@@ -152,6 +157,10 @@ fn feature_cancel_via_cli_cascades_to_live_tasks() {
         "billing",
     ];
     stdout(maestro(&set_args, temp_dir.path()), &set_args);
+    write_baseline(
+        &temp_dir.path().join(".maestro/features"),
+        "billing-csv-export",
+    );
     stdout(
         maestro(&["feature", "accept", "billing-csv-export"], temp_dir.path()),
         &["feature", "accept", "billing-csv-export"],
@@ -283,6 +292,29 @@ fn decision_show_rejects_path_traversal_ids() {
         &["decision", "show", "decision-001-leak"],
     );
     assert!(symlink_stderr.contains("not found"));
+}
+
+/// Write a minimal QA baseline (one `[bl-001]` scenario) so the accept gate's
+/// baseline precondition (F) and the ship gate's coverage check are satisfiable.
+fn write_baseline(features_dir: &Path, id: &str) {
+    let dir = features_dir.join(id);
+    ensure_dir(&dir).expect("invariant: feature directory should be creatable");
+    fs::write(
+        dir.join("baseline.md"),
+        "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] csv export round-trips\n",
+    )
+    .expect("invariant: baseline.md should be writable");
+}
+
+/// Write a counting QA slice (scenarios + evidence) covering `[bl-001]`.
+fn write_qa_slice(features_dir: &Path, id: &str) {
+    let dir = features_dir.join(id);
+    ensure_dir(&dir).expect("invariant: feature directory should be creatable");
+    fs::write(
+        dir.join("qa-slices.yaml"),
+        "slices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"manual: exported csv opens in a spreadsheet\"]\n",
+    )
+    .expect("invariant: qa-slices.yaml should be writable");
 }
 
 fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
