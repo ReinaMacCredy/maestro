@@ -59,6 +59,59 @@ fn init_dry_run_prints_tree_without_writing() {
 }
 
 #[test]
+fn init_dry_run_previews_bundled_extraction() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+
+    let output = maestro(&["init", "--dry-run"], temp_dir.path());
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
+    // The dry-run reuses the extraction-preview machinery, so every bundled
+    // folder is enumerated with its `create` verb (the tree is empty here).
+    assert!(stdout.contains("create   maestro-task"), "{stdout}");
+    assert!(stdout.contains("create   HARNESS.md"), "{stdout}");
+    assert!(stdout.contains("create   record.sh"), "{stdout}");
+    assert!(!temp_dir.path().join(".maestro").exists());
+}
+
+#[test]
+fn init_merge_hints_sync_when_a_folder_is_behind() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+
+    let first = maestro(&["init", "--yes"], temp_dir.path());
+    assert!(
+        first.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    // Drift a managed skill into a versionless state: merge preserves it, but
+    // it is now behind the binary's shipped version.
+    let skill = temp_dir
+        .path()
+        .join(".maestro/skills/maestro-task/SKILL.md");
+    fs::write(&skill, "edited bundled skill\n").expect("invariant: skill should be writable");
+
+    let output = maestro(&["init", "--merge"], temp_dir.path());
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
+    assert!(stdout.contains("behind this maestro version"), "{stdout}");
+    assert!(stdout.contains("maestro sync"), "{stdout}");
+    // Merge keeps the local edit; the hint just points at `sync` to refresh it.
+    assert_eq!(
+        fs::read_to_string(&skill).expect("invariant: skill should be readable"),
+        "edited bundled skill\n"
+    );
+}
+
+#[test]
 fn init_creates_minimal_artifact_tree() {
     let temp_dir = TestTempDir::new("maestro-init-test");
     init_git_marker(temp_dir.path());

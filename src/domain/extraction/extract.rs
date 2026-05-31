@@ -222,7 +222,7 @@ pub fn preview_folder(
     FolderPreview {
         name: name.into(),
         decision: folder_decision(mode, installed_anchor, shipped_anchor, &read_version),
-        installed_version: installed_anchor.and_then(|anchor| read_version(anchor)),
+        installed_version: installed_anchor.and_then(&read_version),
         shipped_version: read_version(shipped_anchor),
     }
 }
@@ -381,4 +381,127 @@ fn rollback_applied_writes(written: &[AppliedWrite]) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Treat the whole anchor string as its version, so tests control drift by
+    /// passing matching or differing strings.
+    fn version(anchor: &str) -> Option<String> {
+        Some(anchor.to_string())
+    }
+
+    #[test]
+    fn folder_decision_covers_every_mode_and_anchor_combination() {
+        // Missing anchor is always a fresh create, whatever the mode.
+        assert_eq!(
+            folder_decision(ExtractMode::Create, None, "v1", version),
+            FolderDecision::Create
+        );
+        assert_eq!(
+            folder_decision(
+                ExtractMode::Update {
+                    backup_timestamp: ""
+                },
+                None,
+                "v1",
+                version
+            ),
+            FolderDecision::Create
+        );
+        // Create mode over an existing anchor is a hard conflict.
+        assert_eq!(
+            folder_decision(ExtractMode::Create, Some("v1"), "v1", version),
+            FolderDecision::Conflict
+        );
+        // Merge keeps the install regardless of version.
+        assert_eq!(
+            folder_decision(ExtractMode::Merge, Some("old"), "new", version),
+            FolderDecision::Skip
+        );
+        // Force always refreshes an existing anchor.
+        assert_eq!(
+            folder_decision(
+                ExtractMode::Force {
+                    backup_timestamp: ""
+                },
+                Some("v1"),
+                "v1",
+                version
+            ),
+            FolderDecision::Refresh
+        );
+        // Update is version-gated: skip on a match, refresh on drift.
+        assert_eq!(
+            folder_decision(
+                ExtractMode::Update {
+                    backup_timestamp: ""
+                },
+                Some("v1"),
+                "v1",
+                version
+            ),
+            FolderDecision::Skip
+        );
+        assert_eq!(
+            folder_decision(
+                ExtractMode::Update {
+                    backup_timestamp: ""
+                },
+                Some("v1"),
+                "v2",
+                version
+            ),
+            FolderDecision::Refresh
+        );
+    }
+
+    #[test]
+    fn render_preview_formats_each_decision() {
+        let previews = vec![
+            FolderPreview {
+                name: "a".to_string(),
+                decision: FolderDecision::Create,
+                installed_version: None,
+                shipped_version: Some("1".to_string()),
+            },
+            FolderPreview {
+                name: "b".to_string(),
+                decision: FolderDecision::Skip,
+                installed_version: Some("1".to_string()),
+                shipped_version: Some("1".to_string()),
+            },
+            FolderPreview {
+                name: "c".to_string(),
+                decision: FolderDecision::Refresh,
+                installed_version: Some("1".to_string()),
+                shipped_version: Some("2".to_string()),
+            },
+            FolderPreview {
+                name: "d".to_string(),
+                decision: FolderDecision::Conflict,
+                installed_version: None,
+                shipped_version: Some("1".to_string()),
+            },
+        ];
+
+        assert_eq!(
+            render_preview(&previews),
+            "create   a\nskip     b (1)\nrefresh  c (1 -> 2)\nconflict d (already exists)\n"
+        );
+    }
+
+    #[test]
+    fn render_preview_marks_a_missing_installed_version_as_unversioned() {
+        let previews = vec![FolderPreview {
+            name: "x".to_string(),
+            decision: FolderDecision::Refresh,
+            installed_version: None,
+            shipped_version: Some("2".to_string()),
+        }];
+
+        assert_eq!(render_preview(&previews), "refresh  x (unversioned -> 2)\n");
+    }
 }
