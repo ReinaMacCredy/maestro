@@ -217,6 +217,11 @@ pub enum TaskCommand {
         feature: Option<String>,
         #[arg(long)]
         ready: bool,
+        #[arg(
+            long,
+            help = "Include terminal/done tasks (verified, rejected, abandoned, superseded)"
+        )]
+        all: bool,
         #[arg(long)]
         watch: bool,
         #[arg(long)]
@@ -333,7 +338,10 @@ pub enum FeatureCommand {
     #[command(about = "Show a feature's status, full contract, and task counts")]
     Show { id: String },
     #[command(about = "List features with their statuses and task counts")]
-    List,
+    List {
+        #[arg(long, help = "Include terminal features (shipped, cancelled)")]
+        all: bool,
+    },
 }
 
 #[derive(Debug, Args)]

@@ -105,6 +105,9 @@ pub struct TaskFilter {
     pub blocks: Option<String>,
     pub feature_id: Option<String>,
     pub claimed_by: Option<String>,
+    /// When false (the default), terminal/done tasks are hidden from the listing
+    /// so the active set stays readable; `--all` flips it on.
+    pub include_terminal: bool,
 }
 
 /// Apply `filter` to `tasks` and return the matching records sorted by id.
@@ -128,6 +131,9 @@ pub fn filter_tasks(mut tasks: Vec<TaskRecord>, filter: &TaskFilter) -> Vec<Task
             .unwrap_or_default()
     });
 
+    if !filter.include_terminal {
+        tasks.retain(|task| task.state.is_live());
+    }
     if filter.ready {
         tasks.retain(|task| task.state == TaskState::Ready && !has_unresolved_blockers(task));
     }

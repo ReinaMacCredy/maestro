@@ -56,7 +56,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         FeatureCommand::Ship { id, dry_run } => print_note(feature::ship(&paths, &id, dry_run)?.note),
         FeatureCommand::Cancel { id, reason } => print_note(feature::cancel(&paths, &id, &reason)?.note),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
-        FeatureCommand::List => list_features(&paths),
+        FeatureCommand::List { all } => list_features(&paths, all),
     }
 }
 
@@ -124,22 +124,35 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     Ok(())
 }
 
-fn list_features(paths: &MaestroPaths) -> Result<()> {
+fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     let views = feature::list(paths)?;
-    if views.is_empty() {
+    let hidden = views.iter().filter(|view| view.status.is_terminal()).count();
+    let shown: Vec<_> = if all {
+        views
+    } else {
+        views
+            .into_iter()
+            .filter(|view| !view.status.is_terminal())
+            .collect()
+    };
+
+    if shown.is_empty() {
         println!("no features found");
-        return Ok(());
+    } else {
+        for view in &shown {
+            println!(
+                "{}\t{}\ttasks={}\tverified={}\t{}",
+                view.id,
+                feature::status_label(&view.status),
+                view.counts.total,
+                view.counts.verified,
+                view.title
+            );
+        }
     }
 
-    for view in &views {
-        println!(
-            "{}\t{}\ttasks={}\tverified={}\t{}",
-            view.id,
-            feature::status_label(&view.status),
-            view.counts.total,
-            view.counts.verified,
-            view.title
-        );
+    if !all && hidden > 0 {
+        println!("# {hidden} terminal feature(s) hidden; use --all to include");
     }
 
     Ok(())

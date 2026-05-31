@@ -20,13 +20,13 @@ pub struct ToolDefinition {
 pub fn tool_definitions() -> Vec<ToolDefinition> {
     vec![
         tool("maestro_status", "Returns high-level repo state: counts of tasks by state, current claimed_by per agent, current MAESTRO_CURRENT_TASK (if set).", json!({"type":"object","properties":{}})),
-        tool("maestro_task_list", "Lists tasks. Filters: ready, blocked, blocked_by, blocks, feature_id, claimed_by.", json!({"type":"object","properties":{"ready":{"type":"boolean"},"blocked":{"type":"boolean"},"blocked_by":{"type":"string"},"blocks":{"type":"string"},"feature_id":{"type":"string"},"claimed_by":{"type":"string"}}})),
+        tool("maestro_task_list", "Lists tasks (terminal/done tasks hidden unless all=true). Filters: ready, blocked, blocked_by, blocks, feature_id, claimed_by, all.", json!({"type":"object","properties":{"ready":{"type":"boolean"},"blocked":{"type":"boolean"},"blocked_by":{"type":"string"},"blocks":{"type":"string"},"feature_id":{"type":"string"},"claimed_by":{"type":"string"},"all":{"type":"boolean"}}})),
         tool("maestro_task_show", "Returns full task detail for one task id (or current).", json!({"type":"object","properties":{"id":{"type":"string"}}})),
         tool("maestro_task_claim", "Claims a task; sets claimed_by; auto-progresses ready to in_progress.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
         tool("maestro_task_complete", "Completes a task; in_progress to needs_verification; takes summary and one completion claim.", json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"claim":{"type":"string"},"claims":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":1}},"required":["id","summary"]})),
         tool("maestro_task_block", "Adds a blocker to a task; takes reason and optional blocked_ref.", json!({"type":"object","properties":{"id":{"type":"string"},"reason":{"type":"string"},"blocked_ref":{"type":"string"}},"required":["id","reason"]})),
         tool("maestro_task_unblock", "Resolves a blocker on a task.", json!({"type":"object","properties":{"id":{"type":"string"},"blocker":{"type":"string"}},"required":["id","blocker"]})),
-        tool("maestro_feature_list", "Lists features with their computed task counts and statuses.", json!({"type":"object","properties":{}})),
+        tool("maestro_feature_list", "Lists features with their computed task counts and statuses (terminal features hidden unless all=true).", json!({"type":"object","properties":{"all":{"type":"boolean"}}})),
         tool("maestro_feature_show", "Returns rich feature view computed at read time.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
         tool("maestro_feature_start", "Starts a ready feature; ready to in_progress.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
         tool("maestro_feature_ship", "Ships an in_progress feature; in_progress to shipped; enforces the ship gate.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
@@ -48,7 +48,7 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_task_complete" => task_complete(arguments),
         "maestro_task_block" => task_block(arguments),
         "maestro_task_unblock" => task_unblock(arguments),
-        "maestro_feature_list" => cli(vec!["feature".to_string(), "list".to_string()]),
+        "maestro_feature_list" => feature_list(arguments),
         "maestro_feature_show" => cli(required_args(arguments, &["feature", "show"], &["id"])?),
         "maestro_feature_start" => cli(required_args(arguments, &["feature", "start"], &["id"])?),
         "maestro_feature_ship" => cli(required_args(arguments, &["feature", "ship"], &["id"])?),
@@ -97,18 +97,35 @@ fn status(paths: &MaestroPaths) -> Result<String> {
 
 fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     let tasks = task::load_task_records(&paths.tasks_dir())?;
-    let filtered = task::filter_tasks(
-        tasks,
-        &task::TaskFilter {
-            ready: bool_arg(arguments, "ready"),
-            blocked: bool_arg(arguments, "blocked"),
-            blocked_by: string_arg(arguments, "blocked_by"),
-            blocks: string_arg(arguments, "blocks"),
-            feature_id: string_arg(arguments, "feature_id"),
-            claimed_by: string_arg(arguments, "claimed_by"),
-        },
-    );
-    Ok(task::render_task_list(&filtered))
+    let all = bool_arg(arguments, "all");
+    let filter = |include_terminal| task::TaskFilter {
+        ready: bool_arg(arguments, "ready"),
+        blocked: bool_arg(arguments, "blocked"),
+        blocked_by: string_arg(arguments, "blocked_by"),
+        blocks: string_arg(arguments, "blocks"),
+        feature_id: string_arg(arguments, "feature_id"),
+        claimed_by: string_arg(arguments, "claimed_by"),
+        include_terminal,
+    };
+    let shown = task::filter_tasks(tasks.clone(), &filter(all));
+    let mut out = task::render_task_list(&shown);
+    if !all {
+        let hidden = task::filter_tasks(tasks, &filter(true)).len() - shown.len();
+        if hidden > 0 {
+            out.push_str(&format!(
+                "# {hidden} terminal task(s) hidden; set all=true to include\n"
+            ));
+        }
+    }
+    Ok(out)
+}
+
+fn feature_list(arguments: &Value) -> Result<String> {
+    let mut argv = vec!["feature".to_string(), "list".to_string()];
+    if bool_arg(arguments, "all") {
+        argv.push("--all".to_string());
+    }
+    cli(argv)
 }
 
 fn task_complete(arguments: &Value) -> Result<String> {

@@ -124,14 +124,23 @@ fn feature_guarded_lifecycle_via_cli() {
     );
     assert!(show_after_ship.contains("status: shipped"));
 
+    // A shipped feature is terminal, so the default list hides it behind a hint.
     let list_output = stdout(
         maestro(&["feature", "list"], temp_dir.path()),
         &["feature", "list"],
     );
-    assert!(list_output.contains("billing-csv-export"));
-    assert!(list_output.contains("shipped"));
-    assert!(list_output.contains("tasks=3"));
-    assert!(list_output.contains("verified=3"));
+    assert!(!list_output.contains("billing-csv-export"));
+    assert!(list_output.contains("terminal feature(s) hidden"));
+
+    // `--all` surfaces it with its frozen status and computed counts.
+    let list_all = stdout(
+        maestro(&["feature", "list", "--all"], temp_dir.path()),
+        &["feature", "list", "--all"],
+    );
+    assert!(list_all.contains("billing-csv-export"));
+    assert!(list_all.contains("shipped"));
+    assert!(list_all.contains("tasks=3"));
+    assert!(list_all.contains("verified=3"));
 }
 
 #[test]

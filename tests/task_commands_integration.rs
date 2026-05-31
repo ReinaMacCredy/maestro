@@ -644,3 +644,39 @@ fn list_supports_basic_output_and_requested_filters() {
     assert!(snapshot_out.contains("~ Task A"));
     assert!(snapshot_out.contains("! Task B"));
 }
+
+#[test]
+fn list_hides_terminal_tasks_until_all_is_passed() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Live task"]),
+        &["task", "create", "Live task"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "create", "Done task"]),
+        &["task", "create", "Done task"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "abandon", "task-002", "--reason", "not needed"]),
+        &["task", "abandon", "task-002", "--reason", "not needed"],
+    );
+
+    // Default list keeps task-002 (abandoned, terminal) off the active set and
+    // reports the count behind a parser-skippable hint.
+    let default = maestro(repo, &["task", "list"]);
+    assert_success(&default, &["task", "list"]);
+    let default_out = stdout(&default);
+    assert!(default_out.contains("task-001"));
+    assert!(!default_out.contains("task-002"));
+    assert!(default_out.contains("# 1 terminal task(s) hidden; use --all to include"));
+
+    // `--all` includes the terminal task and drops the hint.
+    let all = maestro(repo, &["task", "list", "--all"]);
+    assert_success(&all, &["task", "list", "--all"]);
+    let all_out = stdout(&all);
+    assert!(all_out.contains("task-001"));
+    assert!(all_out.contains("task-002"));
+    assert!(!all_out.contains("terminal task(s) hidden"));
+}

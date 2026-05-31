@@ -56,28 +56,10 @@ pub fn live_child_task_ids(tasks_dir: &Path, feature_id: &str) -> Result<Vec<Str
         if projection.feature_id.as_deref() != Some(feature_id) {
             continue;
         }
-        if projection.state.as_ref().is_some_and(task_state_is_live) {
+        if projection.state.as_ref().is_some_and(TaskState::is_live) {
             ids.push(projection.id);
         }
     }
     ids.sort();
     Ok(ids)
-}
-
-/// Whether a child task in this state blocks its feature from shipping.
-///
-/// Matched exhaustively so a new `TaskState` variant forces this gate to be
-/// reconsidered rather than silently defaulting.
-fn task_state_is_live(state: &TaskState) -> bool {
-    match state {
-        TaskState::Draft
-        | TaskState::Exploring
-        | TaskState::Ready
-        | TaskState::InProgress
-        | TaskState::NeedsVerification => true,
-        TaskState::Verified
-        | TaskState::Rejected
-        | TaskState::Abandoned
-        | TaskState::Superseded => false,
-    }
 }

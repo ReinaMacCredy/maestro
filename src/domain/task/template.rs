@@ -44,6 +44,23 @@ impl TaskState {
             Self::Superseded => "superseded",
         }
     }
+
+    /// Whether the task is still in flight (not done).
+    ///
+    /// Live states are shown by default in listings and block a feature from
+    /// shipping; the four done states (`Verified` is done) are hidden behind
+    /// `--all`. Matched exhaustively so a new variant forces this to be
+    /// reconsidered rather than silently defaulting.
+    pub fn is_live(&self) -> bool {
+        match self {
+            Self::Draft
+            | Self::Exploring
+            | Self::Ready
+            | Self::InProgress
+            | Self::NeedsVerification => true,
+            Self::Verified | Self::Rejected | Self::Abandoned | Self::Superseded => false,
+        }
+    }
 }
 
 /// V1 task record stored in `task.yaml`.

@@ -96,6 +96,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             blocks,
             feature,
             ready,
+            all,
             watch,
             interval,
         } => list_tasks(
@@ -106,6 +107,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
                 blocks,
                 feature,
                 ready,
+                all,
                 watch,
                 interval,
             },
@@ -308,6 +310,7 @@ struct TaskListFilters {
     blocks: Option<String>,
     feature: Option<String>,
     ready: bool,
+    all: bool,
     watch: bool,
     interval: Option<u64>,
 }
@@ -319,9 +322,31 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         });
     }
 
-    let tasks = filtered_tasks(paths, &filters)?;
-    print!("{}", task::render_task_list(&tasks));
+    let all_tasks = load_all_tasks(&paths.tasks_dir())?;
+    let shown = task::filter_tasks(all_tasks.clone(), &task_filter(&filters, filters.all));
+    print!("{}", task::render_task_list(&shown));
+    if !filters.all {
+        let with_terminal = task::filter_tasks(all_tasks, &task_filter(&filters, true));
+        let hidden = with_terminal.len() - shown.len();
+        if hidden > 0 {
+            println!("# {hidden} terminal task(s) hidden; use --all to include");
+        }
+    }
     Ok(())
+}
+
+/// Build a [`task::TaskFilter`] from the CLI flags, choosing whether terminal
+/// tasks are kept (used for the shown set and, with `true`, the hidden count).
+fn task_filter(filters: &TaskListFilters, include_terminal: bool) -> task::TaskFilter {
+    task::TaskFilter {
+        ready: filters.ready,
+        blocked: filters.blocked,
+        blocked_by: filters.blocked_by.clone(),
+        blocks: filters.blocks.clone(),
+        feature_id: filters.feature.clone(),
+        claimed_by: None,
+        include_terminal,
+    }
 }
 
 fn watch_tasks(paths: &MaestroPaths, id: Option<String>, interval: Option<u64>) -> Result<()> {
@@ -334,19 +359,12 @@ fn watch_tasks(paths: &MaestroPaths, id: Option<String>, interval: Option<u64>) 
     })
 }
 
+/// Feed for the live `task list --watch` view. Unlike the static list it shows
+/// every state (including terminal): the watch is a live monitor where seeing a
+/// task reach `verified` is the point, mirroring `task watch <id>`.
 fn filtered_tasks(paths: &MaestroPaths, filters: &TaskListFilters) -> Result<Vec<TaskRecord>> {
     let tasks = load_all_tasks(&paths.tasks_dir())?;
-    Ok(task::filter_tasks(
-        tasks,
-        &task::TaskFilter {
-            ready: filters.ready,
-            blocked: filters.blocked,
-            blocked_by: filters.blocked_by.clone(),
-            blocks: filters.blocks.clone(),
-            feature_id: filters.feature.clone(),
-            claimed_by: None,
-        },
-    ))
+    Ok(task::filter_tasks(tasks, &task_filter(filters, true)))
 }
 
 fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {
