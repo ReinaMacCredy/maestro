@@ -303,6 +303,41 @@ fn decision_show_rejects_path_traversal_ids() {
     assert!(symlink_stderr.contains("not found"));
 }
 
+#[test]
+fn feature_verbs_reject_path_traversal_ids() {
+    let temp_dir = TestTempDir::new("maestro-feature-command-traversal-test");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    // Read path: `show` joins the id into `features/<id>/feature.yaml`. A `..`
+    // id must be rejected before the join can escape the features dir (the
+    // `load_record_at` chokepoint).
+    let show_stderr = assert_failure(
+        maestro(&["feature", "show", "../outside"], temp_dir.path()),
+        &["feature", "show", "../outside"],
+    );
+    assert!(show_stderr.contains("invalid feature id"));
+
+    // An absolute id replaces the whole path on join — a distinct failure mode
+    // from `..`, both caught by the single-normal-component rule.
+    let abs_stderr = assert_failure(
+        maestro(&["feature", "show", "/etc/passwd"], temp_dir.path()),
+        &["feature", "show", "/etc/passwd"],
+    );
+    assert!(abs_stderr.contains("invalid feature id"));
+
+    // `unarchive` is the one verb that never goes through `load_record_at`; it
+    // stats and renames directly, so it carries its own guard.
+    let unarchive_stderr = assert_failure(
+        maestro(&["feature", "unarchive", "../outside"], temp_dir.path()),
+        &["feature", "unarchive", "../outside"],
+    );
+    assert!(unarchive_stderr.contains("invalid feature id"));
+}
+
 /// Write a minimal QA baseline (one `[bl-001]` scenario) so the accept gate's
 /// baseline precondition (F) and the ship gate's coverage check are satisfiable.
 fn write_baseline(features_dir: &Path, id: &str) {

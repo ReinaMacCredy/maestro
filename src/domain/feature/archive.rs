@@ -19,7 +19,7 @@ use std::fs;
 
 use anyhow::{bail, Context, Result};
 
-use crate::domain::feature::registry::load_record_at;
+use crate::domain::feature::registry::{load_record_at, validate_feature_id};
 use crate::domain::task::{self, TaskState};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
@@ -135,6 +135,10 @@ pub fn archive_feature(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<
 /// Errors when no archived feature has the given id, a live feature already
 /// occupies the id, or a move fails.
 pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
+    // Unlike `archive_feature`, this path never goes through `load_record_at`
+    // (it stats the dir and renames directly), so guard the id here before any
+    // join can escape the archive tree.
+    validate_feature_id(id)?;
     let live_dir = paths.features_dir().join(id);
     let archive_dir = paths.archive_features_dir().join(id);
     let feature_archived = archive_dir.join("feature.yaml").is_file();
