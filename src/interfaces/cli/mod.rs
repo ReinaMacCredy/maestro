@@ -35,24 +35,52 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum RootCommand {
+    #[command(
+        about = "Scaffold .maestro/ and extract bundled resources into this repo",
+        after_help = "Examples:\n  maestro init                 # scaffold .maestro/ (refuses if it already exists)\n  maestro init --yes           # idempotent: create what's missing, keep local edits\n  maestro init --dry-run       # preview the tree and extraction, write nothing\n  maestro init --force         # overwrite existing files, backing them up first"
+    )]
     Init(InitArgs),
+    #[command(about = "Install maestro hooks and config for an agent (claude, codex)")]
     Install(AgentArgs),
+    #[command(
+        about = "Upgrade the maestro binary and refresh bundled resources",
+        after_help = "Examples:\n  maestro update               # upgrade to the latest release and refresh resources\n  maestro update --check       # report whether an update is available, install nothing\n  maestro update --force       # reinstall the latest even when already up to date"
+    )]
     Update(UpdateArgs),
+    #[command(
+        about = "Resync bundled resources to this binary's versions (offline)",
+        after_help = "Examples:\n  maestro sync                 # resync bundled resources to this binary, preserving edits\n  maestro sync --dry-run       # preview the resync, write nothing"
+    )]
     Sync(SyncArgs),
+    #[command(about = "Remove maestro hooks and config for an agent")]
     Uninstall(AgentArgs),
+    #[command(about = "Diagnose the maestro installation and report problems")]
     Doctor,
+    #[command(about = "Print the shell init snippet for maestro")]
     ShellInit,
+    #[command(about = "Manage tasks: create, claim, complete, verify, and query")]
     Task(TaskArgs),
+    #[command(about = "Record run events from the agent harness")]
     Event(EventArgs),
+    #[command(about = "Manage features: the product contract and its lifecycle")]
     Feature(FeatureArgs),
+    #[command(about = "Create and list decision records in .maestro/decisions/")]
     Decision(DecisionArgs),
+    #[command(about = "List, show, and apply improvement suggestions")]
     Improve(ImproveArgs),
+    #[command(about = "Query computed read models (matrix, friction, proof, backlog)")]
     Query(QueryArgs),
+    #[command(about = "Show computed metrics summaries")]
     Metrics(MetricsArgs),
+    #[command(about = "Run or inspect the MCP server (serve, tools, list)")]
     Mcp(McpArgs),
+    #[command(about = "Hook entry points invoked by the agent harness")]
     Hook(HookArgs),
+    #[command(about = "Watch tasks and render snapshots on change")]
     Watch(WatchArgs),
+    #[command(about = "Verify a task against its recorded proof")]
     Verify { id: Option<String> },
+    #[command(about = "Print the maestro version and binary path")]
     Identity,
 }
 
@@ -63,10 +91,13 @@ pub enum RootCommand {
         .multiple(false)
 ))]
 pub struct InitArgs {
+    /// Preview the tree and bundled extraction without writing files.
     #[arg(long)]
     pub dry_run: bool,
+    /// Keep existing files; create only what is missing.
     #[arg(long)]
     pub merge: bool,
+    /// Overwrite existing files, backing them up first.
     #[arg(long)]
     pub force: bool,
     /// Assume yes for non-interactive/scripted runs: with no explicit mode,
