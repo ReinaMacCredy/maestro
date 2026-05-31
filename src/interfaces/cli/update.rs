@@ -169,7 +169,7 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
 
     if !outcome.schema_mismatches.is_empty() {
         out.push_str(
-            "Core harness/install schema mismatch detected; run `maestro migrate` before writing artifacts:\n",
+            "Core harness/install schema mismatch detected; these artifacts are incompatible with this maestro version and were left unchanged:\n",
         );
         for mismatch in &outcome.schema_mismatches {
             out.push_str(&format!(

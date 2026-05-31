@@ -49,7 +49,6 @@ fn root_help_lists_top_level_commands() {
             "metrics",
             "mcp",
             "hook",
-            "migrate",
             "watch",
             "verify",
             "identity",
@@ -116,6 +115,5 @@ fn nested_help_lists_section_38_command_tree() {
         &["serve", "stdin", "tools", "list"],
     );
     assert_contains_all(&maestro(&["hook", "--help"]), &["record"]);
-    assert_contains_all(&maestro(&["migrate", "--help"]), &["--check"]);
     assert_contains_all(&maestro(&["watch", "--help"]), &["snapshot"]);
 }

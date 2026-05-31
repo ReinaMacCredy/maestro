@@ -454,7 +454,7 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
 }
 
 #[test]
-fn schema_mismatch_reports_migrate_and_does_not_mutate_harness_files() {
+fn schema_mismatch_reports_incompatible_and_does_not_mutate_harness_files() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
     let paths = MaestroPaths::new(temp_dir.path());
@@ -473,7 +473,7 @@ fn schema_mismatch_reports_migrate_and_does_not_mutate_harness_files() {
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
     assert!(stdout.contains("schema mismatch detected"));
-    assert!(stdout.contains("maestro migrate"));
+    assert!(stdout.contains("incompatible"));
     assert_files_unchanged(&before);
 }
 
@@ -484,14 +484,14 @@ fn detect_schema_mismatches_reports_advisory_mismatches_without_erroring() {
     let paths = MaestroPaths::new(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
-    // A migratable older generation (NeedsMigration) ...
+    // An older generation ...
     fs::write(
         paths.harness_dir().join("harness.yml"),
         "schema_version: maestro.harness.v0\nverify: []\n",
     )
     .expect("invariant: harness schema should be writable");
-    // ... and an unknown version (Incompatible) must both surface as advisory
-    // mismatches; the detector classifies but never aborts.
+    // ... and an unknown version are both incompatible and must surface as
+    // advisory mismatches; the detector classifies but never aborts.
     fs::write(
         paths.harness_dir().join("backlog.yaml"),
         "schema_version: totally-bogus\nitems: []\n",
@@ -505,7 +505,7 @@ fn detect_schema_mismatches_reports_advisory_mismatches_without_erroring() {
         mismatches
             .iter()
             .any(|mismatch| mismatch.found == "maestro.harness.v0"),
-        "NeedsMigration gap should be reported as an advisory mismatch: {mismatches:?}"
+        "older-generation gap should be reported as an advisory mismatch: {mismatches:?}"
     );
     assert!(
         mismatches

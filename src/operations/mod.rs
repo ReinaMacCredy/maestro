@@ -6,7 +6,6 @@
 pub mod improver;
 pub mod init;
 pub mod metrics;
-pub mod migrate;
 pub mod update;
 
 mod task_verify;

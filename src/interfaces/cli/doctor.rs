@@ -121,16 +121,12 @@ fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
     }
 }
 
-/// Build a doctor diagnostic for a schema gap, routing the message by
-/// classification: a migratable gap points at `maestro migrate`; anything
-/// unknown is reported as incompatible (stop).
+/// Build a doctor diagnostic for a schema gap: an exact match is reported ok;
+/// any other version is incompatible (stop). This is a clean-rewrite binary
+/// with no migration path.
 fn schema_diagnostic(path: &std::path::Path, expected: &str, found: &str) -> String {
     match classify(found, expected) {
         Compat::Exact => format!("{} schema ok ({expected})", path.display()),
-        Compat::NeedsMigration => format!(
-            "{} schema needs migration: expected {expected}, found {found}; run `maestro migrate`",
-            path.display()
-        ),
         Compat::Incompatible => format!(
             "{} schema incompatible: expected {expected}, found {found}",
             path.display()

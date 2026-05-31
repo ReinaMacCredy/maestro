@@ -49,36 +49,34 @@ fn schema_constants_match_spec_section_37() {
 }
 
 #[test]
-fn classify_maps_exact_needs_migration_and_incompatible() {
+fn classify_maps_exact_match_and_treats_everything_else_as_incompatible() {
     // Exact: found equals expected for the same artifact.
     assert_eq!(
         classify(FEATURE_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION),
         Compat::Exact
     );
 
-    // NeedsMigration: an older generation of a family the bundled
-    // v0_106_to_v0_8 migration converts.
+    // This is a clean-rewrite binary with no migration path: every non-exact
+    // version is Incompatible, regardless of family, generation, or shape.
+    // An older generation of a known family stops hard (no migration exists).
     assert_eq!(
         classify("maestro.feature.v0", FEATURE_SCHEMA_VERSION),
-        Compat::NeedsMigration
+        Compat::Incompatible
     );
     assert_eq!(
         classify("maestro.task.v0", TASK_SCHEMA_VERSION),
-        Compat::NeedsMigration
+        Compat::Incompatible
     );
-    // v0.106.1 legacy artifacts carry no schema_version; the readers surface
-    // that as the "<missing>" marker, which still routes to migrate.
+    // A missing or empty schema_version is incompatible.
     assert_eq!(
         classify("<missing>", HARNESS_SCHEMA_VERSION),
-        Compat::NeedsMigration
+        Compat::Incompatible
     );
     assert_eq!(
         classify("", ACCEPTANCE_SCHEMA_VERSION),
-        Compat::NeedsMigration
+        Compat::Incompatible
     );
-
-    // Incompatible: an unknown / unparseable version stops, even when shaped
-    // like a maestro tag but from an unknown family.
+    // An unknown family or unparseable tag is incompatible.
     assert_eq!(
         classify("maestro.galaxy.v9", FEATURE_SCHEMA_VERSION),
         Compat::Incompatible
@@ -87,20 +85,14 @@ fn classify_maps_exact_needs_migration_and_incompatible() {
         classify("totally-bogus", FEATURE_SCHEMA_VERSION),
         Compat::Incompatible
     );
-    // A newer generation than this binary understands is not migratable.
+    // A newer generation than this binary understands is incompatible.
     assert_eq!(
         classify("maestro.feature.v2", FEATURE_SCHEMA_VERSION),
         Compat::Incompatible
     );
-
-    // Non-migratable family: even an older generation stops hard, because no
-    // migration module produces it. This keeps the install-lock gate hard.
+    // The install-lock gate stays hard.
     assert_eq!(
         classify("maestro.install_lock.v0", INSTALL_LOCK_SCHEMA_VERSION),
-        Compat::Incompatible
-    );
-    assert_eq!(
-        classify("<missing>", INSTALL_LOCK_SCHEMA_VERSION),
         Compat::Incompatible
     );
 }

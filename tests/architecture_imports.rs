@@ -51,7 +51,7 @@ const DOMAIN_FACADES: &[&str] = &[
     "task",
 ];
 
-const OPERATION_FACADES: &[&str] = &["improver", "init", "metrics", "migrate", "update"];
+const OPERATION_FACADES: &[&str] = &["improver", "init", "metrics", "update"];
 
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
@@ -512,45 +512,6 @@ fn install_domain_facade_does_not_publish_leaf_modules() {
 }
 
 #[test]
-fn migration_operation_owns_implementation() {
-    assert!(
-        Path::new("src/operations/migrate/v0_106_to_v0_8.rs").is_file(),
-        "Migration implementation should live under src/operations/migrate"
-    );
-    assert!(
-        !Path::new("src/migrate/v0_106_to_v0_8.rs").exists(),
-        "legacy src/migrate should not own version implementation files"
-    );
-
-    let operations_facade = read_source_file(Path::new("src/operations/migrate/mod.rs"));
-    assert!(
-        operations_facade.contains("pub mod v0_106_to_v0_8;"),
-        "operations/migrate should expose the version module it owns"
-    );
-    for item in ["apply", "plan", "render_check", "MigrationPlan"] {
-        assert!(
-            operations_facade.contains(item),
-            "operations/migrate facade should expose {item}"
-        );
-    }
-
-    let mut violations = Vec::new();
-    for file in rust_files_under(Path::new("src")) {
-        let source = read_source_file(&file);
-        let code = code_for_path_scan(&source);
-        if code.contains("crate::migrate::") {
-            violations.push(format!("{} imports legacy crate::migrate", file.display()));
-        }
-    }
-
-    assert!(
-        violations.is_empty(),
-        "production code should use operations::migrate and not reintroduce crate::migrate:\n{}",
-        violations.join("\n")
-    );
-}
-
-#[test]
 fn update_operation_owns_implementation() {
     assert!(
         Path::new("src/operations/update/mod.rs").is_file(),
@@ -938,7 +899,7 @@ fn install_production_sources_use_domain_facade_not_legacy_shim() {
 }
 
 #[test]
-fn update_routes_schema_drift_through_migration_and_does_not_import_harness_writes() {
+fn update_does_not_import_harness_template_writes() {
     let mut violations = Vec::new();
 
     for file in rust_files_under(Path::new("src/operations/update")) {
@@ -967,21 +928,12 @@ fn update_routes_schema_drift_through_migration_and_does_not_import_harness_writ
                     line_number
                 ));
             }
-            if let Some(segment) =
-                namespaced_deep_import_segment(&import_statement, "operations", "migrate")
-            {
-                violations.push(format!(
-                    "{}:{} reaches into operations::migrate::{segment} instead of the migrate root facade",
-                    file.display(),
-                    line_number
-                ));
-            }
         }
     }
 
     assert!(
         violations.is_empty(),
-        "Update must consume Migration only through the operations::migrate root facade and must not import Harness template writes:\n{}",
+        "Update must not import Harness template writes:\n{}",
         violations.join("\n")
     );
 }
@@ -1339,7 +1291,7 @@ fn transitional_public_surfaces_match_phase_policy() {
     );
     assert_public_modules(
         Path::new("src/operations/mod.rs"),
-        &["improver", "init", "metrics", "migrate", "update"],
+        &["improver", "init", "metrics", "update"],
         &[],
     );
 }

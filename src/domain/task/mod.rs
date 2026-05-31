@@ -31,7 +31,7 @@ pub use template::{
     task_markdown, AcceptanceFile, AppliedVerificationReceipt, Blocker, BlockerKind, BlockerRef,
     BlockerSource, TaskRecord, TaskState, VerificationBinding,
 };
-pub(crate) use template::{StateHistoryEntry, TaskSaveError};
+pub(crate) use template::TaskSaveError;
 
 /// Minimal Task projection for feature rollups.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

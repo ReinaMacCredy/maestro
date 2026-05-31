@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -13,7 +11,6 @@ pub mod init;
 pub mod install;
 pub mod mcp;
 pub mod metrics;
-pub mod migrate;
 pub mod query;
 pub mod shell_init;
 pub mod task;
@@ -52,7 +49,6 @@ pub enum RootCommand {
     Metrics(MetricsArgs),
     Mcp(McpArgs),
     Hook(HookArgs),
-    Migrate(MigrateArgs),
     Watch(WatchArgs),
     Verify { id: Option<String> },
     Identity,
@@ -462,16 +458,6 @@ pub enum HookCommand {
     Record,
 }
 
-#[derive(Debug, Args)]
-pub struct MigrateArgs {
-    #[arg(long)]
-    pub check: bool,
-    #[arg(long)]
-    pub force: bool,
-    #[arg(long)]
-    pub project: Option<PathBuf>,
-}
-
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         RootCommand::Init(args) => init::run(args),
@@ -489,7 +475,6 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Metrics(args) => metrics::run(args),
         RootCommand::Mcp(args) => mcp::run(args),
         RootCommand::Hook(args) => hook::run(args),
-        RootCommand::Migrate(args) => migrate::run(args),
         RootCommand::Watch(args) => watch::run(args),
         RootCommand::Verify { id } => verify::run(id),
         RootCommand::Identity => {
