@@ -35,6 +35,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         tool("maestro_verify", "Runs maestro task verify on a task; returns the verification result.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
         tool("maestro_query_matrix", "Returns the computed behavior to proof matrix.", json!({"type":"object","properties":{}})),
         tool("maestro_metrics_summary", "Returns the computed metrics summary.", json!({"type":"object","properties":{}})),
+        tool("maestro_sync", "Resyncs bundled resources (skills, hook script, harness) to this binary's shipped versions. Offline and edit-preserving; set dry_run=true to preview without writing.", json!({"type":"object","properties":{"dry_run":{"type":"boolean"}}})),
     ]
 }
 
@@ -57,6 +58,7 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_verify" => cli(required_args(arguments, &["task", "verify"], &["id"])?),
         "maestro_query_matrix" => cli(vec!["query".to_string(), "matrix".to_string()]),
         "maestro_metrics_summary" => Ok(metrics::render_summary(&metrics::summarize(paths)?)),
+        "maestro_sync" => sync_tool(arguments),
         _ => bail!("unknown MCP tool: {name}"),
     }
 }
@@ -121,6 +123,14 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         }
     }
     Ok(out)
+}
+
+fn sync_tool(arguments: &Value) -> Result<String> {
+    let mut argv = vec!["sync".to_string()];
+    if bool_arg(arguments, "dry_run") {
+        argv.push("--dry-run".to_string());
+    }
+    cli(argv)
 }
 
 fn feature_list(arguments: &Value) -> Result<String> {

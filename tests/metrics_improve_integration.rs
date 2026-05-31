@@ -1370,7 +1370,7 @@ fn mcp_serve_lists_tools_and_calls_metrics_summary_over_stdio() {
     let tools = lines[1]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return an array");
-    assert_eq!(tools.len(), 16);
+    assert_eq!(tools.len(), 17);
     assert!(tools
         .iter()
         .any(|tool| tool["name"] == "maestro_feature_start"));
@@ -1383,6 +1383,9 @@ fn mcp_serve_lists_tools_and_calls_metrics_summary_over_stdio() {
     assert!(tools
         .iter()
         .any(|tool| tool["name"] == "maestro_metrics_summary"));
+    assert!(tools
+        .iter()
+        .any(|tool| tool["name"] == "maestro_sync"));
     assert!(lines[2]["result"]["content"][0]["text"]
         .as_str()
         .expect("invariant: tool response should contain text")
