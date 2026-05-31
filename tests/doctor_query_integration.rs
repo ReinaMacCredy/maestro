@@ -127,6 +127,7 @@ fn doctor_and_task_doctor_fail_on_bad_blocker_graph() {
 
     for args in [
         vec!["task", "create", "Self blocked task"],
+        vec!["task", "set", "task-001", "--check", "self check"],
         vec!["task", "explore", "task-001"],
         vec!["task", "accept", "task-001"],
         vec![
@@ -159,6 +160,8 @@ fn doctor_fails_on_blocker_cycles() {
     for args in [
         vec!["task", "create", "Task A"],
         vec!["task", "create", "Task B"],
+        vec!["task", "set", "task-001", "--check", "task a check"],
+        vec!["task", "set", "task-002", "--check", "task b check"],
         vec!["task", "explore", "task-001"],
         vec!["task", "accept", "task-001"],
         vec!["task", "explore", "task-002"],

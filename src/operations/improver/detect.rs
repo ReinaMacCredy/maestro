@@ -233,9 +233,8 @@ fn harness_verify_commands(paths: &MaestroPaths) -> Result<BTreeSet<String>> {
 fn task_domain(entry: &TaskEntry) -> String {
     entry
         .task
-        .affected_areas
-        .first()
-        .or(entry.task.feature_id.as_ref())
+        .feature_id
+        .as_ref()
         .or(entry.task.lane.as_ref())
         .cloned()
         .unwrap_or_else(|| "general".to_string())

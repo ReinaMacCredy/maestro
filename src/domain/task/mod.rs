@@ -246,6 +246,7 @@ pub fn accept_task(
     accepted_at: &str,
 ) -> Result<TaskRecord> {
     let (mut task, snapshot, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    ensure_standalone_has_checks(&task, &task_dir)?;
     task.acceptance_locked = true;
     lifecycle::transition(
         &mut task,
@@ -268,6 +269,7 @@ pub fn accept_task(
 pub fn claim_task(tasks_dir: &Path, id: &str, actor: &str, claimed_at: &str) -> Result<TaskRecord> {
     let (mut task, snapshot, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     if task.state == TaskState::Draft {
+        ensure_standalone_has_checks(&task, &task_dir)?;
         lifecycle::transition(
             &mut task,
             TaskState::Exploring,
@@ -304,6 +306,71 @@ pub fn claim_task(tasks_dir: &Path, id: &str, actor: &str, claimed_at: &str) -> 
         claimed_at,
         TransitionDetails::default(),
     )?;
+    template::save_task_with_snapshot(&task, &snapshot)?;
+    Ok(task)
+}
+
+/// Author a task's execution `checks` (C1), replacing the current list.
+///
+/// Refuses once acceptance is locked: the contract freezes at `accept`, so
+/// re-authoring afterwards would silently move goalposts under a verified
+/// binding. Replace-per-field semantics make a repeated call idempotent.
+pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<TaskRecord> {
+    let handle = load_task_for_update(tasks_dir, id)?;
+    if handle.task().acceptance_locked {
+        bail!(
+            "task {} acceptance is locked; checks cannot be changed after accept",
+            handle.task().id
+        );
+    }
+    let path = handle.task_dir().join("acceptance.yaml");
+    let mut acceptance = read_acceptance_or_new(&path, &handle.task().id)?;
+    acceptance.checks = checks;
+    write_string_atomic(&path, &serde_yaml::to_string(&acceptance)?)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(handle.task().clone())
+}
+
+/// Attach, move, or detach a task's `feature_id` (Theme II Q-II-2/3).
+///
+/// Editing the link is working-state, not a contract edit, so it is allowed
+/// only while the task is non-terminal (`feature_link_is_settled`); a settled
+/// task keeps its link as history. Every change is audited in `state_history`.
+/// A no-op (link already equals the target) returns without writing.
+pub fn set_feature(
+    tasks_dir: &Path,
+    id: &str,
+    feature: Option<String>,
+    actor: &str,
+    at: &str,
+) -> Result<TaskRecord> {
+    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    if feature_link_is_settled(&task.state) {
+        bail!(
+            "task {} is {}; its feature link is settled history and cannot change",
+            task.id,
+            task.state.as_str()
+        );
+    }
+    if task.feature_id == feature {
+        return Ok(task);
+    }
+    let summary = match (&task.feature_id, &feature) {
+        (Some(previous), Some(next)) => format!("feature link moved: {previous} -> {next}"),
+        (None, Some(next)) => format!("feature link set: {next}"),
+        (Some(previous), None) => format!("feature link cleared (was {previous})"),
+        (None, None) => unreachable!("equal links are returned as a no-op above"),
+    };
+    task.feature_id = feature;
+    lifecycle::append_history(
+        &mut task,
+        actor,
+        at,
+        TransitionDetails {
+            summary: Some(summary),
+            ..TransitionDetails::default()
+        },
+    );
     template::save_task_with_snapshot(&task, &snapshot)?;
     Ok(task)
 }
@@ -506,15 +573,7 @@ pub(crate) struct VerificationFailed {
 }
 
 fn lock_acceptance(path: PathBuf, task_id: &str, actor: &str, locked_at: &str) -> Result<()> {
-    let acceptance = if path.exists() {
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        serde_yaml::from_str::<AcceptanceFile>(&content)
-            .with_context(|| format!("failed to parse {}", path.display()))?
-    } else {
-        AcceptanceFile::new(task_id, Vec::new())
-    };
-
+    let acceptance = read_acceptance_or_new(&path, task_id)?;
     let locked = AcceptanceFile {
         locked_by: Some(actor.to_string()),
         locked_at: Some(locked_at.to_string()),
@@ -522,6 +581,48 @@ fn lock_acceptance(path: PathBuf, task_id: &str, actor: &str, locked_at: &str) -
     };
     write_string_atomic(&path, &serde_yaml::to_string(&locked)?)
         .with_context(|| format!("failed to write {}", path.display()))
+}
+
+/// Read a task's `acceptance.yaml`, falling back to a fresh unlocked file when
+/// it is absent (a freshly created task always has one, so this only guards a
+/// hand-deleted artifact).
+fn read_acceptance_or_new(path: &Path, task_id: &str) -> Result<AcceptanceFile> {
+    if path.exists() {
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        serde_yaml::from_str::<AcceptanceFile>(&content)
+            .with_context(|| format!("failed to parse {}", path.display()))
+    } else {
+        Ok(AcceptanceFile::new(task_id, Vec::new()))
+    }
+}
+
+/// C4 lock-path gate: a standalone task (no `feature_id`) carries no inherited
+/// product contract, so its `checks` are its only contract and must be
+/// non-empty before it can be accepted or claim-auto-locked. Featured tasks
+/// inherit the feature's frozen contract and are exempt.
+fn ensure_standalone_has_checks(task: &TaskRecord, task_dir: &Path) -> Result<()> {
+    if task.feature_id.is_some() {
+        return Ok(());
+    }
+    let acceptance = read_acceptance_or_new(&task_dir.join("acceptance.yaml"), &task.id)?;
+    if acceptance.checks.is_empty() {
+        bail!(
+            "standalone task {} has no checks; add at least one with `maestro task set {} --check \"...\"` before it can be accepted",
+            task.id,
+            task.id
+        );
+    }
+    Ok(())
+}
+
+/// A task whose feature link is settled history and may no longer be re-pointed
+/// (Theme II Q-II-3): terminal tasks plus `verified` keep their link as a record.
+fn feature_link_is_settled(state: &TaskState) -> bool {
+    matches!(
+        state,
+        TaskState::Verified | TaskState::Rejected | TaskState::Abandoned | TaskState::Superseded
+    )
 }
 
 fn next_task_id(tasks_dir: &Path) -> Result<String> {

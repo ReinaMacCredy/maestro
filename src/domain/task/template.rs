@@ -65,10 +65,6 @@ pub struct TaskRecord {
     pub raw_request: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_type: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub affected_areas: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub open_questions: Vec<String>,
     pub state: TaskState,
     pub acceptance_locked: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -214,8 +210,6 @@ impl TaskRecord {
             risk: Some("medium".to_string()),
             raw_request: None,
             input_type: None,
-            affected_areas: Vec::new(),
-            open_questions: Vec::new(),
             state: TaskState::Draft,
             acceptance_locked: false,
             claimed_by: None,

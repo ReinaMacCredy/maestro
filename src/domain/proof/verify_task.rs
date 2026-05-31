@@ -178,7 +178,20 @@ pub(crate) fn evaluate_task_report(
     let claims = completion_claims(task);
     let evidence = collect_evidence(paths, task_dir, &task.id)?;
     let claim_checks = check_claims(&claims, &evidence);
-    let failures = failures_for(task, &claims, &claim_checks, &evidence, &commands);
+    let standalone_without_checks = if task.feature_id.is_none() {
+        let (acceptance, _) = load_acceptance_with_hash(task_dir)?;
+        acceptance.checks.is_empty()
+    } else {
+        false
+    };
+    let failures = failures_for(
+        task,
+        &claims,
+        &claim_checks,
+        &evidence,
+        &commands,
+        standalone_without_checks,
+    );
     let status = if failures.is_empty() {
         VerificationStatus::Passed
     } else {
@@ -350,8 +363,16 @@ fn failures_for(
     claim_checks: &[ClaimCheck],
     evidence: &[EvidenceText],
     commands: &[VerificationCommand],
+    standalone_without_checks: bool,
 ) -> Vec<String> {
     let mut failures = Vec::new();
+
+    if standalone_without_checks {
+        failures.push(format!(
+            "standalone task {} requires at least one check; add one with `maestro task set {} --check \"...\"`",
+            task.id, task.id
+        ));
+    }
 
     if task.state != TaskState::NeedsVerification && task.state != TaskState::Verified {
         failures.push(format!(
@@ -441,8 +462,6 @@ fn task_contract_hash(task: &TaskRecord) -> String {
         "risk": task.risk,
         "raw_request": task.raw_request,
         "input_type": task.input_type,
-        "affected_areas": task.affected_areas,
-        "open_questions": task.open_questions,
         "acceptance_locked": task.acceptance_locked,
         "claims": claims,
     });

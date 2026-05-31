@@ -60,6 +60,7 @@ fn v1_demo_runs_core_flow_watch_metrics_query_and_mcp() {
     run(repo, &["install", "--agent", "claude"]);
     run(repo, &["install", "--agent", "codex"]);
     run(repo, &["task", "create", "Demo task"]);
+    run(repo, &["task", "set", "task-001", "--check", "demo task verified"]);
     run(repo, &["task", "explore", "task-001"]);
     run(repo, &["task", "accept", "task-001"]);
     run(repo, &["task", "claim", "task-001"]);

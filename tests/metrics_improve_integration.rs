@@ -161,7 +161,7 @@ fn mark_verified(repo: &Path, id: &str, domain: &str, created_at: &str, verified
     task["state"] = YamlValue::String("verified".to_string());
     task["created_at"] = YamlValue::String(created_at.to_string());
     task["verification"]["verified_at"] = YamlValue::String(verified_at.to_string());
-    task["affected_areas"] = YamlValue::Sequence(vec![YamlValue::String(domain.to_string())]);
+    task["feature_id"] = YamlValue::String(domain.to_string());
     fs::write(
         &path,
         serde_yaml::to_string(&task).expect("invariant: task should serialize"),
@@ -177,6 +177,10 @@ fn metrics_summary_reads_tasks_and_run_evidence_without_cache() {
     create_task(repo, "Verified export task");
     create_task(repo, "In progress parser task");
     mark_verified(repo, "task-001", "billing", "100", "2380");
+    assert_success(
+        &maestro(repo, &["task", "set", "task-002", "--check", "parser landed"]),
+        &["task", "set", "task-002", "--check", "parser landed"],
+    );
     assert_success(
         &maestro(repo, &["task", "explore", "task-002"]),
         &["task", "explore", "task-002"],

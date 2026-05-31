@@ -643,8 +643,6 @@ impl OldTask {
             risk: Some("medium".to_string()),
             raw_request: None,
             input_type: None,
-            affected_areas: Vec::new(),
-            open_questions: Vec::new(),
             state: state.clone(),
             acceptance_locked: matches!(
                 state,
@@ -695,10 +693,6 @@ struct OldIntake {
     request: Option<String>,
     #[serde(default)]
     input_type: Option<String>,
-    #[serde(default)]
-    affected_areas: Vec<String>,
-    #[serde(default)]
-    open_questions: Vec<String>,
 }
 
 fn apply_intake(paths: &MaestroPaths, task: &mut task::TaskRecord) -> Result<()> {
@@ -715,8 +709,6 @@ fn apply_intake(paths: &MaestroPaths, task: &mut task::TaskRecord) -> Result<()>
         .with_context(|| format!("failed to parse {}", path.display()))?;
     task.raw_request = intake.raw_request.or(intake.request);
     task.input_type = intake.input_type;
-    task.affected_areas = intake.affected_areas;
-    task.open_questions = intake.open_questions;
     Ok(())
 }
 

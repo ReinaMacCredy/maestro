@@ -115,6 +115,23 @@ pub enum TaskCommand {
         #[arg(long)]
         risk: Option<String>,
     },
+    #[command(about = "Author task checks or change its feature link")]
+    Set {
+        id: String,
+        #[arg(
+            long = "check",
+            help = "Acceptance check (repeatable); replaces the task's current checks"
+        )]
+        check: Vec<String>,
+        #[arg(long, help = "Attach or move the task to this feature id")]
+        feature: Option<String>,
+        #[arg(
+            long = "no-feature",
+            conflicts_with = "feature",
+            help = "Detach the task from its feature"
+        )]
+        no_feature: bool,
+    },
     #[command(about = "Move a draft into exploring (-> exploring)")]
     Explore {
         id: String,

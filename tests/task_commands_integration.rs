@@ -167,6 +167,10 @@ fn claim_from_draft_advances_to_in_progress() {
         &maestro(repo, &["task", "create", "Direct claim task"]),
         &["task", "create", "Direct claim task"],
     );
+    assert_success(
+        &maestro(repo, &["task", "set", "task-001", "--check", "direct claim check"]),
+        &["task", "set", "task-001", "--check", "direct claim check"],
+    );
     let claim = maestro(repo, &["task", "claim", "task-001"]);
     assert_success(&claim, &["task", "claim", "task-001"]);
 
@@ -268,6 +272,10 @@ fn blockers_terminal_transitions_and_claim_gate_behave_as_expected() {
     assert_success(
         &maestro(repo, &["task", "create", "Task A"]),
         &["task", "create", "Task A"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "set", "task-001", "--check", "task a check"]),
+        &["task", "set", "task-001", "--check", "task a check"],
     );
     assert_success(
         &maestro(repo, &["task", "explore", "task-001"]),

@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 
+use crate::domain::feature::{self, FeatureStatus};
 use crate::domain::task;
 use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
@@ -26,6 +27,12 @@ pub fn run(args: TaskArgs) -> Result<()> {
             lane,
             risk,
         } => create_task(&paths, &title, feature, lane, risk),
+        TaskCommand::Set {
+            id,
+            check,
+            feature,
+            no_feature,
+        } => set_task(&paths, &id, check, feature, no_feature, &actor),
         TaskCommand::Explore { id } => transition_task(
             &paths,
             &id,
@@ -120,6 +127,78 @@ fn create_task(
 
     println!("created {}", task.id);
     Ok(())
+}
+
+fn set_task(
+    paths: &MaestroPaths,
+    id: &str,
+    checks: Vec<String>,
+    feature: Option<String>,
+    no_feature: bool,
+    actor: &str,
+) -> Result<()> {
+    let changing_feature = feature.is_some() || no_feature;
+    if checks.is_empty() && !changing_feature {
+        bail!(
+            "task set requires --check, --feature, or --no-feature\n  maestro task set {id} --check \"...\"\n  maestro task set {id} --feature <feature-id>\n  maestro task set {id} --no-feature"
+        );
+    }
+
+    // Theme II cross-aggregate guard lives here in the interface layer so the
+    // task domain stays clear of the feature aggregate: a link may change only
+    // while both the current and target feature are non-terminal.
+    if changing_feature {
+        guard_feature_link(paths, id, feature.as_deref())?;
+    }
+
+    if !checks.is_empty() {
+        let task = task::set_checks(&paths.tasks_dir(), id, checks)?;
+        println!("updated {} checks", task.id);
+    }
+
+    if changing_feature {
+        let now = nanos_since_epoch_string();
+        let target = if no_feature { None } else { feature };
+        let task = task::set_feature(&paths.tasks_dir(), id, target, actor, &now)?;
+        match &task.feature_id {
+            Some(feature_id) => println!("updated {} -> feature {feature_id}", task.id),
+            None => println!("updated {} -> no feature", task.id),
+        }
+    }
+    Ok(())
+}
+
+fn guard_feature_link(paths: &MaestroPaths, id: &str, target: Option<&str>) -> Result<()> {
+    let task = task::load_task_record(&paths.tasks_dir(), id)?;
+    if let Some(current) = task.feature_id.as_deref() {
+        // A dangling current link (feature unreadable) is permissive so the
+        // task can be re-pointed or detached to repair it; only a resolved
+        // terminal feature freezes the link as history.
+        if let Some(status) = feature::show(paths, current).ok().map(|view| view.status) {
+            if is_terminal_feature(&status) {
+                bail!(
+                    "task {id} is linked to feature {current} ({}); its link is settled history and cannot change",
+                    feature::status_label(&status)
+                );
+            }
+        }
+    }
+    if let Some(target) = target {
+        let view = feature::show(paths, target).with_context(|| {
+            format!("target feature `{target}` not found; create it with `maestro feature new`")
+        })?;
+        if is_terminal_feature(&view.status) {
+            bail!(
+                "target feature {target} is {}; tasks cannot be attached to a terminal feature",
+                feature::status_label(&view.status)
+            );
+        }
+    }
+    Ok(())
+}
+
+fn is_terminal_feature(status: &FeatureStatus) -> bool {
+    matches!(status, FeatureStatus::Shipped | FeatureStatus::Cancelled)
 }
 
 fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {

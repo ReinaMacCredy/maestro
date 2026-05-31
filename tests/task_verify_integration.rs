@@ -68,6 +68,7 @@ fn sha256_prefixed_json(raw: &str) -> String {
 fn create_completed_task(repo: &Path, claim: &str) {
     for args in [
         vec!["task", "create", "Add CSV export"],
+        vec!["task", "set", "task-001", "--check", "CSV export verified"],
         vec!["task", "explore", "task-001"],
         vec!["task", "accept", "task-001"],
         vec!["task", "claim", "task-001"],
