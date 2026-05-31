@@ -52,7 +52,7 @@ fn root_help_lists_top_level_commands() {
             "hook",
             "watch",
             "verify",
-            "identity",
+            "version",
         ],
     );
 }

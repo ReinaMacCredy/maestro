@@ -19,12 +19,12 @@ mod task_id;
 pub mod uninstall;
 pub mod update;
 pub mod verify;
+pub mod version;
 pub mod watch;
 
 #[derive(Debug, Parser)]
 #[command(
     name = "maestro",
-    version = env!("CARGO_PKG_VERSION"),
     about = "Local-first agent harness CLI",
     arg_required_else_help = true
 )]
@@ -81,7 +81,7 @@ pub enum RootCommand {
     #[command(about = "Verify a task against its recorded proof")]
     Verify { id: Option<String> },
     #[command(about = "Print the maestro version and binary path")]
-    Identity,
+    Version,
 }
 
 #[derive(Debug, Args)]
@@ -522,11 +522,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::Watch(args) => watch::run(args),
         RootCommand::Verify { id } => verify::run(id),
-        RootCommand::Identity => {
-            println!("maestro {}", env!("CARGO_PKG_VERSION"));
-            println!("binary: {}", std::env::args().next().unwrap_or_default());
-            Ok(())
-        }
+        RootCommand::Version => version::run(),
     }
 }
 

@@ -1,5 +1,7 @@
 [package]
 name = "maestro"
+# Frozen placeholder. The real version is git-derived at build time
+# (0.0.<commit-epoch>-g<sha>) by build.rs and injected as MAESTRO_VERSION.
 version = "0.107.0"
 edition = "2021"
 

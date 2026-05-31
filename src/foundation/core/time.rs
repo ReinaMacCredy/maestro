@@ -65,13 +65,42 @@ pub fn parse_utc_timestamp(value: &str) -> Option<ParsedTimestamp> {
 }
 
 fn format_unix_timestamp(seconds: u64, nanos: u32) -> String {
+    let (year, month, day, hour, minute, second) = civil_parts(seconds);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{nanos:09}Z")
+}
+
+/// Format Unix epoch seconds as an RFC3339 UTC timestamp with millisecond precision
+/// (e.g. `2026-05-26T05:16:16.000Z`). Seconds-resolution input always renders `.000`.
+pub fn format_utc_seconds_rfc3339_millis(seconds: u64) -> String {
+    let (year, month, day, hour, minute, second) = civil_parts(seconds);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.000Z")
+}
+
+/// Decompose Unix epoch seconds into UTC civil parts `(year, month, day, hour, minute, second)`.
+fn civil_parts(seconds: u64) -> (i64, u32, u32, u64, u64, u64) {
     let days = (seconds / 86_400) as i64;
     let seconds_of_day = seconds % 86_400;
     let (year, month, day) = civil_from_days(days);
     let hour = seconds_of_day / 3_600;
     let minute = (seconds_of_day % 3_600) / 60;
     let second = seconds_of_day % 60;
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{nanos:09}Z")
+    (year, month, day, hour, minute, second)
+}
+
+/// Human relative age (e.g. `5d ago`) for a Unix-epoch-seconds instant in the past.
+/// Returns None only when the system clock is unavailable.
+pub fn relative_age_from_unix_seconds(then_seconds: i64) -> Option<String> {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs() as i64;
+    let elapsed = now.saturating_sub(then_seconds);
+    Some(if elapsed < 60 {
+        "less than 1m ago".to_string()
+    } else if elapsed < 3_600 {
+        format!("{}m ago", elapsed / 60)
+    } else if elapsed < 86_400 {
+        format!("{}h ago", elapsed / 3_600)
+    } else {
+        format!("{}d ago", elapsed / 86_400)
+    })
 }
 
 fn parse_seconds(value: &str) -> Option<(u32, u32)> {

@@ -38,7 +38,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         paths: &paths,
         executable_path: &executable_path,
         backup_timestamp: &backup_timestamp,
-        current_version: env!("CARGO_PKG_VERSION"),
+        current_version: env!("MAESTRO_VERSION"),
         check_only: args.check,
         force: args.force,
     }) {
@@ -91,7 +91,7 @@ pub fn run_auto_check() -> Result<()> {
         paths: &paths,
         executable_path: &executable_path,
         backup_timestamp: "",
-        current_version: env!("CARGO_PKG_VERSION"),
+        current_version: env!("MAESTRO_VERSION"),
         check_only: true,
         force: false,
     })?;
@@ -140,11 +140,10 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
                 out.push('\n');
                 out.push_str(&download_complete_line(release));
             }
-            out.push_str("Installing update...\n");
             if let Some(release) = release {
                 out.push_str(&colors.success(&format!(
                     "✓ Maestro updated to version {}",
-                    release_summary(release)
+                    release_summary_short(release)
                 )));
                 out.push('\n');
             } else {
@@ -401,8 +400,7 @@ mod tests {
             concat!(
                 "Updating to version 0.0.1779772576-g751b94...\n",
                 "Downloading update (25.35 MB/25.35 MB)\n",
-                "Installing update...\n",
-                "✓ Maestro updated to version 0.0.1779772576-g751b94 (released 2026-05-26T05:16:16.000Z, 1h ago)\n",
+                "✓ Maestro updated to version 0.0.1779772576-g751b94 (released 1h ago)\n",
             )
         );
     }
@@ -526,7 +524,6 @@ mod tests {
             concat!(
                 "\u{1b}[94mUpdating to version 0.0.1779772576-g751b94...\u{1b}[0m\n",
                 "Downloading update (25.35 MB/25.35 MB)\n",
-                "Installing update...\n",
                 "\u{1b}[32m✓ Maestro updated to version 0.0.1779772576-g751b94\u{1b}[0m\n",
             )
         );

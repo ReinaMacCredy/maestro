@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -10,7 +9,7 @@ use super::{
     ChecksumVerifier, DownloadedBinary, ReleaseInfo, Sha256Verifier, UpdateCheck, UpdateDownloader,
     UpdateFailure, UpdateRequest, UpdateUnavailable,
 };
-use crate::foundation::core::time::parse_utc_timestamp;
+use crate::foundation::core::time::{parse_utc_timestamp, relative_age_from_unix_seconds};
 
 const DEFAULT_RELEASE_REPO: &str = "ReinaMacCredy/maestro";
 
@@ -302,18 +301,7 @@ fn release_versions_match(release_version: &str, current_version: &str) -> bool 
 
 fn relative_age_from_rfc3339(value: &str) -> Option<String> {
     let released = (parse_utc_timestamp(value)?.nanos_since_epoch / 1_000_000_000) as i64;
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs() as i64;
-    let elapsed = now.saturating_sub(released);
-    if elapsed < 60 {
-        return Some("less than 1m ago".to_string());
-    }
-    if elapsed < 3_600 {
-        return Some(format!("{}m ago", elapsed / 60));
-    }
-    if elapsed < 86_400 {
-        return Some(format!("{}h ago", elapsed / 3_600));
-    }
-    Some(format!("{}d ago", elapsed / 86_400))
+    relative_age_from_unix_seconds(released)
 }
 
 #[cfg(test)]

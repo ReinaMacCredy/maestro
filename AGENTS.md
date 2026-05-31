@@ -89,17 +89,18 @@ Release verification uses the stricter release contract:
 cargo fmt -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test
-target/debug/maestro --version
+target/debug/maestro version
 ```
 
 Do not tag, publish, push, or create GitHub releases without explicit approval.
 
 ## NOTES
 
-- Version source is `Cargo.toml` (`package.version`); CLI versions render as
-  pure semver via `env!("CARGO_PKG_VERSION")`. Repo-tracked behavior changes
-  bump the version; docs-only do not. Release publishing requires manual
-  dispatch or a head commit named `chore(release): v<version>`.
+- Version is git-derived at build time: `0.0.<commit-epoch>-g<short-sha>`, computed
+  by `build.rs` and injected as `env!("MAESTRO_VERSION")` (Cargo.toml `version` is a
+  frozen placeholder). There is no version line to bump and no `--version` flag; read
+  it with `maestro version`. Releases publish ONLY on manual `workflow_dispatch`;
+  ordinary commits and merges never release.
 - If editing `embedded/skills/<name>/`, `embedded/hooks/record.sh`, or
   `embedded/harness/HARNESS.md`, bump its version marker and update
   `tests/resources_version_guard.rs`.
