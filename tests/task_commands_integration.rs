@@ -646,6 +646,26 @@ fn list_supports_basic_output_and_requested_filters() {
 }
 
 #[test]
+fn task_create_never_reissues_an_archived_id() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Live task"]),
+        &["task", "create", "Live task"],
+    );
+
+    // An archived task-005 still owns its id; the next create must skip past it
+    // (L6a union scan), not collide by reissuing 005 or 002.
+    fs::create_dir_all(repo.join(".maestro/archive/tasks/task-005"))
+        .expect("invariant: archive tasks dir should be creatable");
+
+    let created = stdout(&maestro(repo, &["task", "create", "Next task"]));
+    assert!(created.contains("task-006"), "expected task-006, got: {created}");
+    assert!(!repo.join(".maestro/tasks/task-005").exists());
+}
+
+#[test]
 fn list_hides_terminal_tasks_until_all_is_passed() {
     let temp = setup_repo();
     let repo = temp.path();

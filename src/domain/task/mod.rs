@@ -633,6 +633,17 @@ fn feature_link_is_settled(state: &TaskState) -> bool {
 }
 
 fn next_task_id(tasks_dir: &Path) -> Result<String> {
+    // L6a: an archived `task-NNN` still owns its id, so allocate above the max
+    // of the union of live + archived tasks — never reissue a freed id.
+    let mut max = max_task_number(tasks_dir)?;
+    if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir) {
+        max = max.max(max_task_number(&archive_tasks_dir)?);
+    }
+    Ok(format!("task-{:03}", max + 1))
+}
+
+/// Highest `task-NNN` number among the directory's entries (0 if dir absent).
+fn max_task_number(tasks_dir: &Path) -> Result<u32> {
     let mut max = 0_u32;
     if tasks_dir.is_dir() {
         for entry in fs::read_dir(tasks_dir)
@@ -651,7 +662,15 @@ fn next_task_id(tasks_dir: &Path) -> Result<String> {
             }
         }
     }
-    Ok(format!("task-{:03}", max + 1))
+    Ok(max)
+}
+
+/// `.maestro/tasks` → `.maestro/archive/tasks` (the archive sibling tree, §5.3).
+/// Derived from `tasks_dir` to keep `create_task`'s signature stable (D-P4-5).
+fn archive_tasks_sibling(tasks_dir: &Path) -> Option<PathBuf> {
+    tasks_dir
+        .parent()
+        .map(|maestro_dir| maestro_dir.join("archive").join("tasks"))
 }
 
 fn next_blocker_id(task: &TaskRecord) -> String {

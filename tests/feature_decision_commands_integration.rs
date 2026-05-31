@@ -339,3 +339,29 @@ fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
     )
     .expect("invariant: task yaml should be writable");
 }
+
+#[test]
+fn feature_create_refuses_a_slug_held_in_the_archive() {
+    let temp_dir = TestTempDir::new("maestro-feature-archive-slug");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    // An archived feature still owns its slug; `create` must not reissue it (L6a).
+    let archived = temp_dir
+        .path()
+        .join(".maestro/archive/features/csv-export");
+    ensure_dir(&archived).expect("invariant: archive feature dir should be creatable");
+    fs::write(
+        archived.join("feature.yaml"),
+        "schema_version: maestro.feature.v1\nid: csv-export\ntitle: CSV Export\nstatus: shipped\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+    )
+    .expect("invariant: archived feature yaml should be writable");
+
+    let args = ["feature", "new", "CSV Export"];
+    let stderr = assert_failure(maestro(&args, temp_dir.path()), &args);
+    assert!(stderr.contains("csv-export"));
+    assert!(stderr.contains("archive"));
+}

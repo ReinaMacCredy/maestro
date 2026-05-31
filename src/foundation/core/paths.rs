@@ -64,6 +64,24 @@ impl MaestroPaths {
         self.maestro_dir().join("runs")
     }
 
+    /// Return the archive root, a sibling of the live `tasks`/`features` trees.
+    ///
+    /// Archived items move under here so the live scans skip them for free
+    /// (§5.3). Created on-demand by the archive verbs, not by `init` (§5.6).
+    pub fn archive_dir(&self) -> PathBuf {
+        self.maestro_dir().join("archive")
+    }
+
+    /// Return the archived-tasks directory (`.maestro/archive/tasks`).
+    pub fn archive_tasks_dir(&self) -> PathBuf {
+        self.archive_dir().join("tasks")
+    }
+
+    /// Return the archived-features directory (`.maestro/archive/features`).
+    pub fn archive_features_dir(&self) -> PathBuf {
+        self.archive_dir().join("features")
+    }
+
     /// Return the backup artifact directory.
     pub fn backups_dir(&self) -> PathBuf {
         self.maestro_dir().join("backups")

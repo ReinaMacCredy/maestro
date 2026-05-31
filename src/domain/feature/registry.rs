@@ -196,6 +196,10 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
     if feature_yaml_path(paths, &id).exists() {
         bail!("feature {id} already exists");
     }
+    // L6a: an archived feature still owns its slug — refuse to reissue it.
+    if archived_feature_yaml_path(paths, &id).exists() {
+        bail!("feature {id} already exists in the archive; `maestro feature unarchive {id}` or choose a different title");
+    }
     let record = FeatureRecord::proposed(&id, title, &nanos_since_epoch_string());
     save_record(paths, &record)?;
     Ok(id)
@@ -714,6 +718,11 @@ fn feature_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
 
 fn feature_yaml_path(paths: &MaestroPaths, id: &str) -> PathBuf {
     feature_dir(paths, id).join("feature.yaml")
+}
+
+/// Path to a feature's record under the archive tree (`.maestro/archive/features/<id>/feature.yaml`).
+fn archived_feature_yaml_path(paths: &MaestroPaths, id: &str) -> PathBuf {
+    paths.archive_features_dir().join(id).join("feature.yaml")
 }
 
 fn amend_log_path(paths: &MaestroPaths, id: &str) -> PathBuf {
