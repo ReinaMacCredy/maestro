@@ -9,7 +9,7 @@ use support::TestTempDir;
 
 #[test]
 fn harness_markdown_matches_spec_section_14_protocol() {
-    assert_eq!(HARNESS_MD, include_str!("../resources/harness/HARNESS.md"));
+    assert_eq!(HARNESS_MD, include_str!("../embedded/harness/HARNESS.md"));
     assert!(HARNESS_MD.contains("# Maestro Harness Protocol"));
     assert!(HARNESS_MD.contains("Read MAESTRO_CURRENT_TASK env or `maestro task show`"));
     assert!(HARNESS_MD.contains("Run `maestro task verify`"));

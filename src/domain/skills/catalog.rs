@@ -27,7 +27,7 @@ pub struct SkillFile {
 
 /// The bundled skill trees embedded at build time. Each top-level entry is a
 /// skill directory (`SKILL.md` plus optional sibling files/folders).
-static SKILLS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/resources/skills");
+static SKILLS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/embedded/skills");
 
 /// Stable extraction order. `include_dir` does not document a directory
 /// iteration order, so the catalog is sorted by position here (unknown names

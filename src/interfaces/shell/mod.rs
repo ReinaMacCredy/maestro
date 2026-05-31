@@ -51,5 +51,5 @@ pub fn render_shell_init(shell: Shell) -> &'static str {
     }
 }
 
-const POSIX_INIT: &str = include_str!("../../../resources/shell/posix.sh");
-const FISH_INIT: &str = include_str!("../../../resources/shell/fish.fish");
+const POSIX_INIT: &str = include_str!("../../../embedded/shell/posix.sh");
+const FISH_INIT: &str = include_str!("../../../embedded/shell/fish.fish");

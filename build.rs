@@ -1,3 +1,3 @@
 fn main() {
-    println!("cargo:rerun-if-changed=resources/skills");
+    println!("cargo:rerun-if-changed=embedded/skills");
 }

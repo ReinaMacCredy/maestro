@@ -28,7 +28,7 @@ fn maestro_shell_init(shell: &str) -> String {
 fn shell_init_emits_bash_wrapper_that_updates_current_task_after_success() {
     let snippet = maestro_shell_init("bash");
 
-    assert_eq!(snippet, include_str!("../resources/shell/posix.sh"));
+    assert_eq!(snippet, include_str!("../embedded/shell/posix.sh"));
     assert!(snippet.contains("maestro() {"));
     assert!(snippet.contains("command maestro \"$@\""));
     assert!(snippet.contains("export MAESTRO_CURRENT_TASK=\"$3\""));
@@ -50,7 +50,7 @@ fn shell_init_emits_zsh_wrapper_using_posix_exports() {
 fn shell_init_emits_fish_wrapper_that_uses_fish_environment_syntax() {
     let snippet = maestro_shell_init("fish");
 
-    assert_eq!(snippet, include_str!("../resources/shell/fish.fish"));
+    assert_eq!(snippet, include_str!("../embedded/shell/fish.fish"));
     assert!(snippet.contains("function maestro"));
     assert!(snippet.contains("command maestro $argv"));
     assert!(snippet.contains("set -gx MAESTRO_CURRENT_TASK \"$argv[3]\""));

@@ -687,7 +687,7 @@ Current run behavior is owned by `src/domain/run/`:
 
 - `src/domain/run/event.rs`: accepted hook event contract (the single source
   for installed and recorded events, embedded from
-  `resources/hooks/events.yaml`), event aliases, unattributed session handling,
+  `embedded/hooks/events.yaml`), event aliases, unattributed session handling,
   and collision-resistant run directory encoding.
 - `src/domain/run/record.rs`: event normalization, commit snapshots for
   `SessionStart` and `Stop`, managed append to `events.jsonl`, and triggering
@@ -1789,7 +1789,7 @@ that artifact or a documented migration-only exception.
 ### Template And Resource Content Policy
 
 Current state: long human-facing resources are embedded into the binary from
-files under `resources/` with `include_str!`, and skill directory trees with
+files under `embedded/` with `include_str!`, and skill directory trees with
 `include_dir!`. Short generated templates and structured defaults still live in
 Rust serializers. Skills, the hook recorder script, and the harness protocol
 extract to `.maestro/` through one shared version-gated core in
@@ -1799,13 +1799,13 @@ differs, so user edits survive at an unchanged version.
 
 | Content | Current location | Current role |
 | --- | --- | --- |
-| Harness protocol Markdown | `resources/harness/HARNESS.md`, embedded by `src/domain/harness/templates.rs` | Carries a frontmatter `version:`; extracted to `.maestro/harness/HARNESS.md` by the shared version-gated core on init and `maestro update`. |
+| Harness protocol Markdown | `embedded/harness/HARNESS.md`, embedded by `src/domain/harness/templates.rs` | Carries a frontmatter `version:`; extracted to `.maestro/harness/HARNESS.md` by the shared version-gated core on init and `maestro update`. |
 | Default Harness YAML and backlog YAML | `src/domain/harness/templates.rs`, `src/domain/harness/schema.rs` | Structured defaults serialized from Rust structs. |
-| Catalog skills | `resources/skills/<name>/`, embedded by `src/domain/skills/catalog.rs` with `include_dir!` | Each skill directory tree (`SKILL.md` plus any sibling files) embedded in the binary. |
-| Hook event list | `resources/hooks/events.yaml`, embedded by `src/domain/run/event.rs` | Single source for installed and recorded hook events (and the recorder script name), read by Install through the Run contract. Embedded-only, never extracted. |
-| Hook recorder script | `resources/hooks/record.sh`, embedded by `src/domain/extraction/hook_script.rs` with `include_str!` | Editable recorder entry extracted to `.maestro/hooks/record.sh`; version-gated by its `# maestro:hook-version:` comment. The installed hook command runs this script, which `exec`s `maestro hook record`. |
-| Install mirror blocks | `src/domain/install/mirrors.rs`, `src/domain/install/hooks.rs` | Short managed blocks and hook JSON assembled by Install; the hook event list comes from `resources/hooks/events.yaml` via the Run contract. Each event's command wraps `.maestro/hooks/record.sh` per agent (`$CLAUDE_PROJECT_DIR` for Claude, `git rev-parse` for Codex). |
-| Shell init snippets | `resources/shell/posix.sh`, `resources/shell/fish.fish`, embedded by `src/interfaces/shell/mod.rs` | Bash/zsh/fish shell snippets returned by `maestro shell-init`. |
+| Catalog skills | `embedded/skills/<name>/`, embedded by `src/domain/skills/catalog.rs` with `include_dir!` | Each skill directory tree (`SKILL.md` plus any sibling files) embedded in the binary. |
+| Hook event list | `embedded/hooks/events.yaml`, embedded by `src/domain/run/event.rs` | Single source for installed and recorded hook events (and the recorder script name), read by Install through the Run contract. Embedded-only, never extracted. |
+| Hook recorder script | `embedded/hooks/record.sh`, embedded by `src/domain/extraction/hook_script.rs` with `include_str!` | Editable recorder entry extracted to `.maestro/hooks/record.sh`; version-gated by its `# maestro:hook-version:` comment. The installed hook command runs this script, which `exec`s `maestro hook record`. |
+| Install mirror blocks | `src/domain/install/mirrors.rs`, `src/domain/install/hooks.rs` | Short managed blocks and hook JSON assembled by Install; the hook event list comes from `embedded/hooks/events.yaml` via the Run contract. Each event's command wraps `.maestro/hooks/record.sh` per agent (`$CLAUDE_PROJECT_DIR` for Claude, `git rev-parse` for Codex). |
+| Shell init snippets | `embedded/shell/posix.sh`, `embedded/shell/fish.fish`, embedded by `src/interfaces/shell/mod.rs` | Bash/zsh/fish shell snippets returned by `maestro shell-init`. |
 | Decision Markdown template | `src/domain/decisions/template.rs` | Small generated decision file body. |
 | Task Markdown template | `src/domain/task/template.rs` | Small generated task body pointing to `acceptance.yaml`. |
 
@@ -1818,7 +1818,7 @@ checkout files at runtime.
 Recommended resource tree:
 
 ```text
-resources/
+embedded/
   harness/
     HARNESS.md
 
@@ -1877,18 +1877,18 @@ Authoring rules:
 
 Ownership rules:
 
-- Harness owns `resources/harness/HARNESS.md` and structured Harness defaults.
+- Harness owns `embedded/harness/HARNESS.md` and structured Harness defaults.
   Template changes affect new `maestro init` output by default. Existing
   repositories change only through explicit migration, update, force, or apply
   behavior.
-- Skills owns `resources/skills/*/SKILL.md` and extraction behavior.
+- Skills owns `embedded/skills/*/SKILL.md` and extraction behavior.
   Install may link or expose skills, but it does not own skill content.
 - Install owns short managed mirror blocks and hook config generation. If a
-  managed block grows into real prose, move it to `resources/install/`.
+  managed block grows into real prose, move it to `embedded/install/`.
 - Shell owns shell snippets. Keep them as resource files once they are more than
   tiny wrappers, and test each supported shell rendering path.
 - Decision and Task own their Markdown templates. They may stay in Rust while
-  tiny, but should move to `resources/templates/` once humans are expected to
+  tiny, but should move to `embedded/templates/` once humans are expected to
   edit wording or sections often.
 
 Bundled skill directory rules:
@@ -1928,7 +1928,7 @@ root without making Install understand skill internals.
 
 If a generated Rust registry is used to embed skill directories in the binary,
 the registry is generated output. The source of truth remains
-`resources/skills/<skill-name>/...`, and a drift check should fail when
+`embedded/skills/<skill-name>/...`, and a drift check should fail when
 generated metadata does not match resource files.
 
 Testing requirements:

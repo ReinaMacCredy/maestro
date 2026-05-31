@@ -18,19 +18,19 @@ const BUNDLED_SKILL_NAMES: [&str; 4] = [
 const BUNDLED_SKILL_RESOURCES: [(&str, &str); 4] = [
     (
         "maestro-task",
-        include_str!("../resources/skills/maestro-task/SKILL.md"),
+        include_str!("../embedded/skills/maestro-task/SKILL.md"),
     ),
     (
         "maestro-setup",
-        include_str!("../resources/skills/maestro-setup/SKILL.md"),
+        include_str!("../embedded/skills/maestro-setup/SKILL.md"),
     ),
     (
         "maestro-verify",
-        include_str!("../resources/skills/maestro-verify/SKILL.md"),
+        include_str!("../embedded/skills/maestro-verify/SKILL.md"),
     ),
     (
         "maestro-design",
-        include_str!("../resources/skills/maestro-design/SKILL.md"),
+        include_str!("../embedded/skills/maestro-design/SKILL.md"),
     ),
 ];
 

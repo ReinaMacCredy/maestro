@@ -7,9 +7,9 @@ use serde_json::Value;
 /// Single source for the lifecycle hook events Maestro installs and records,
 /// shared by the installer (`install/hooks.rs`) and the recorder
 /// (`is_accepted_event`). Editing the embedded file changes both.
-static HOOK_CONFIG_YAML: &str = include_str!("../../../resources/hooks/events.yaml");
+static HOOK_CONFIG_YAML: &str = include_str!("../../../embedded/hooks/events.yaml");
 
-/// Deserialized form of `resources/hooks/events.yaml`.
+/// Deserialized form of `embedded/hooks/events.yaml`.
 #[derive(Debug, Deserialize)]
 struct HookConfig {
     /// Events installed for every supported agent.
@@ -34,7 +34,7 @@ fn hook_config() -> &'static HookConfig {
     static CONFIG: OnceLock<HookConfig> = OnceLock::new();
     CONFIG.get_or_init(|| {
         serde_yaml::from_str(HOOK_CONFIG_YAML)
-            .expect("invariant: embedded resources/hooks/events.yaml is valid")
+            .expect("invariant: embedded/hooks/events.yaml is valid")
     })
 }
 

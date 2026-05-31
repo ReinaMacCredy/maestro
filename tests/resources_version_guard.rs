@@ -14,10 +14,10 @@ use maestro::foundation::core::hash::sha256_hex;
 
 /// The shipped hook recorder script (its `# maestro:hook-version:` comment is
 /// the version marker the recorder and installer gate on).
-const RECORD_SH: &str = include_str!("../resources/hooks/record.sh");
+const RECORD_SH: &str = include_str!("../embedded/hooks/record.sh");
 
 /// The shipped harness protocol (its frontmatter `version:` is the gate marker).
-const HARNESS_MD: &str = include_str!("../resources/harness/HARNESS.md");
+const HARNESS_MD: &str = include_str!("../embedded/harness/HARNESS.md");
 
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
 const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 6] = [

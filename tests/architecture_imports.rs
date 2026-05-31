@@ -56,15 +56,15 @@ const OPERATION_FACADES: &[&str] = &["improver", "init", "metrics", "migrate", "
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
         "src/domain/harness/templates.rs",
-        &["resources/harness/HARNESS.md"],
+        &["embedded/harness/HARNESS.md"],
     ),
-    ("src/domain/run/event.rs", &["resources/hooks/events.yaml"]),
+    ("src/domain/run/event.rs", &["embedded/hooks/events.yaml"]),
     (
         "src/domain/extraction/hook_script.rs",
-        &["resources/hooks/record.sh"],
+        &["embedded/hooks/record.sh"],
     ),
-    ("src/domain/skills/catalog.rs", &["resources/skills"]),
-    ("src/interfaces/shell/mod.rs", &["resources/shell/"]),
+    ("src/domain/skills/catalog.rs", &["embedded/skills"]),
+    ("src/interfaces/shell/mod.rs", &["embedded/shell/"]),
 ];
 
 #[test]
@@ -1756,7 +1756,7 @@ fn resource_embeds_stay_in_owning_modules() {
         let source = read_source_file(&file);
         for (line_number, line) in source.lines().enumerate() {
             let embeds_resource = line.contains("include_str!") || line.contains("include_dir!");
-            if !embeds_resource || !line.contains("resources/") {
+            if !embeds_resource || !line.contains("embedded/") {
                 continue;
             }
             if resource_embed_is_allowed(&file, line) {
@@ -1780,7 +1780,7 @@ fn resource_embeds_stay_in_owning_modules() {
 
 #[test]
 fn bundled_skill_resources_are_skill_directories_without_evals() {
-    let root = Path::new("resources/skills");
+    let root = Path::new("embedded/skills");
     let mut violations = Vec::new();
 
     for entry in sorted_dir_entries(root) {

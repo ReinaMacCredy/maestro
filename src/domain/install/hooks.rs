@@ -72,7 +72,7 @@ mod tests {
     /// the recorder silently drops. This locks the single-source installer ⊆
     /// recorder invariant by driving the installer's real output path
     /// (`hook_json`) for both flavors, so it keeps holding if per-agent events
-    /// are ever added to `resources/hooks/events.yaml`.
+    /// are ever added to `embedded/hooks/events.yaml`.
     #[test]
     fn installed_events_are_accepted_by_the_recorder() {
         for flavor in [HookConfigFlavor::Claude, HookConfigFlavor::Codex] {

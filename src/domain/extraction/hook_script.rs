@@ -18,7 +18,7 @@ use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
 use crate::foundation::core::paths::MaestroPaths;
 
 /// The bundled hook recorder script, embedded at build time.
-const RECORD_SH: &str = include_str!("../../../resources/hooks/record.sh");
+const RECORD_SH: &str = include_str!("../../../embedded/hooks/record.sh");
 
 /// Report name and on-disk filename for the bundled hook script.
 const RECORD_SH_NAME: &str = "record.sh";

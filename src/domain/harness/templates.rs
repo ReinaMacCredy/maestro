@@ -4,7 +4,7 @@ use crate::domain::harness::schema::{BacklogConfig, HarnessConfig};
 use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
 
 /// `HARNESS.md` content installed by `maestro init`.
-pub const HARNESS_MD: &str = include_str!("../../../resources/harness/HARNESS.md");
+pub const HARNESS_MD: &str = include_str!("../../../embedded/harness/HARNESS.md");
 
 /// Serialize the default harness config.
 pub fn harness_yml(config: &HarnessConfig) -> Result<String> {

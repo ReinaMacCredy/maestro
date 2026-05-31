@@ -5,7 +5,7 @@
 maestro/
 ├── src/                 # Rust crate: domain, operations, interfaces, foundation
 ├── tests/               # contract, adapter, runtime-flow, and safety tests
-├── resources/           # shipped Harness, hook, shell, and skill resources
+├── embedded/           # shipped Harness, hook, shell, and skill resources
 ├── .maestro/            # repo-local harness/task/run artifacts for this checkout
 ├── .claude/             # local Claude workflow and skill assets
 ├── ARCHITECTURE.md      # module ownership and target architecture
@@ -21,7 +21,7 @@ maestro/
 | Change task lifecycle or artifacts | `src/domain/task/` | Preserve optimistic concurrency, state history, blockers, acceptance lock. |
 | Change verification behavior | `src/domain/proof/`, `src/operations/task_verify/` | Proof writes reports; Task applies lifecycle outcomes. |
 | Change hook/event capture | `src/domain/run/`, `src/interfaces/hooks/` | Preserve normalized append, partial-line tolerance, symlink rejection. |
-| Change install mirrors or local agent files | `src/domain/install/`, `resources/`, root agent files | Do not duplicate Harness protocol into mirrors. |
+| Change install mirrors or local agent files | `src/domain/install/`, `embedded/`, root agent files | Do not duplicate Harness protocol into mirrors. |
 | Change update/release logic | `src/operations/update/`, `src/interfaces/cli/update.rs` | Passive checks must not mutate user-owned Harness files. |
 | Change shared path/schema/write helpers | `src/foundation/core/` | Treat as cross-cutting safety surface. |
 | Choose verification | `TESTING.md`, `tests/` | Start with the owning module row, then broaden only for public contracts. |
@@ -93,8 +93,8 @@ Do not tag, publish, push, or create GitHub releases without explicit approval.
   pure semver via `env!("CARGO_PKG_VERSION")`. Repo-tracked behavior changes
   bump the version; docs-only do not. Release publishing requires manual
   dispatch or a head commit named `chore(release): v<version>`.
-- If editing `resources/skills/<name>/`, `resources/hooks/record.sh`, or
-  `resources/harness/HARNESS.md`, bump its version marker and update
+- If editing `embedded/skills/<name>/`, `embedded/hooks/record.sh`, or
+  `embedded/harness/HARNESS.md`, bump its version marker and update
   `tests/resources_version_guard.rs`.
 - Docs-only edits still require reading back changed files and checking
   consistency with `ARCHITECTURE.md`, `TESTING.md`, and `MAINTENANCE.md`.
@@ -106,7 +106,7 @@ Parent:
 
 Children:
 - [.claude/AGENTS.md](.claude/AGENTS.md)
-- [resources/AGENTS.md](resources/AGENTS.md)
+- [embedded/AGENTS.md](embedded/AGENTS.md)
 - [src/AGENTS.md](src/AGENTS.md)
 - [src/domain/AGENTS.md](src/domain/AGENTS.md)
 - [src/domain/proof/AGENTS.md](src/domain/proof/AGENTS.md)
