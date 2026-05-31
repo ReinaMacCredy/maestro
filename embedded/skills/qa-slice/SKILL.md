@@ -65,8 +65,9 @@ blocks until every behavioral `[bl-NNN]` scenario from the baseline has a counti
 
 Append-only YAML at `.maestro/features/<id>/qa-slices.yaml`. The ship gate parses it; keep the shape
 exact. `scenarios` lists the baseline `[bl-NNN]` ids this slice replayed (bare `bl-001` or bracketed
-`[bl-001]` both match). `evidence` is the proof captured. A slice counts when `scenarios` and
-`evidence` are both non-empty.
+`[bl-001]` both match). Copy each id's digits verbatim from the baseline, including leading zeros:
+`bl-001` and `bl-1` are different ids and will not match. `evidence` is the proof captured. A slice
+counts when `scenarios` and `evidence` are both non-empty.
 
 ```yaml
 slices:

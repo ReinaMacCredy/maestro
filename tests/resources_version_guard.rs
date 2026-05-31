@@ -37,7 +37,7 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 8] = [
         "skill",
         "qa-slice",
         "1.0.0",
-        "290edd30b23d23cec714aaadf32e6303e9de5abb15588ab72339ccc5a0e24f04",
+        "48ffba5e83462c75ebc69f238e96e1356b5552d46e619ad219e49949df460063",
     ),
     (
         "skill",

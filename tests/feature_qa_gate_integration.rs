@@ -99,6 +99,16 @@ fn feature_qa_gates_via_cli() {
     assert!(stderr.contains("bl-001"), "ship should name the uncovered scenario: {stderr}");
     assert!(stderr.contains("coverage incomplete"));
 
+    // D count rule through the real YAML parse path: a slice that references the
+    // scenario but omits `evidence` (serde default → empty) does not count.
+    fs::write(
+        feature_dir(repo, "report-builder").join("qa-slices.yaml"),
+        "slices:\n  - scenarios: [\"bl-001\"]\n",
+    )
+    .expect("invariant: qa-slices.yaml should be writable");
+    let stderr = assert_failure(maestro(&ship, repo), &ship);
+    assert!(stderr.contains("bl-001"), "an evidence-less slice must not count: {stderr}");
+
     write_qa_slices(repo, "report-builder", &["bl-001"]);
     let dry = ["feature", "ship", "report-builder", "--dry-run"];
     let preview = stdout(maestro(&dry, repo), &dry);
