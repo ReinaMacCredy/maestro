@@ -11,7 +11,8 @@ use std::path::PathBuf;
 use anyhow::{bail, Result};
 
 use crate::domain::extraction::extract::{
-    apply_actions, file_action, folder_gate, read_existing, Action, ExtractMode, ExtractReport,
+    apply_actions, file_action, folder_gate, preview_folder, read_existing, Action, ExtractMode,
+    ExtractReport, FolderPreview,
 };
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
@@ -77,6 +78,22 @@ pub fn validate_hook_script(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Resu
     managed_path(paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     plan_hook_script(paths, RECORD_SH, mode)?;
     Ok(())
+}
+
+/// Preview the hook script's fate without writing files.
+pub fn preview_hook_script(
+    paths: &MaestroPaths,
+    mode: ExtractMode<'_>,
+) -> Result<Vec<FolderPreview>> {
+    let path = hook_file_path(paths, RECORD_SH_NAME)?;
+    let existing = read_existing(&path)?;
+    Ok(vec![preview_folder(
+        RECORD_SH_NAME,
+        mode,
+        existing.as_deref(),
+        RECORD_SH,
+        hook_script_version,
+    )])
 }
 
 /// Plan the single-file hook script write. The version gate keys on the

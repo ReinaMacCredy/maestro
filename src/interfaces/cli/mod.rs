@@ -13,6 +13,7 @@ pub mod mcp;
 pub mod metrics;
 pub mod query;
 pub mod shell_init;
+pub mod sync;
 pub mod task;
 mod task_id;
 pub mod uninstall;
@@ -37,6 +38,7 @@ pub enum RootCommand {
     Init(InitArgs),
     Install(AgentArgs),
     Update(UpdateArgs),
+    Sync(SyncArgs),
     Uninstall(AgentArgs),
     Doctor,
     ShellInit,
@@ -89,6 +91,13 @@ pub struct UpdateArgs {
     pub verbose: bool,
     #[arg(long)]
     pub force: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct SyncArgs {
+    /// Preview the resync without writing files.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -467,6 +476,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Init(args) => init::run(args),
         RootCommand::Install(args) => install::run(args),
         RootCommand::Update(args) => update::run(args),
+        RootCommand::Sync(args) => sync::run(args),
         RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),

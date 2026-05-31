@@ -12,13 +12,17 @@ pub(crate) mod hook_script;
 
 use anyhow::Result;
 
-use crate::domain::harness::extract::{extract_harness, validate_harness};
-use crate::domain::skills::extract::{extract_skills, validate_skills};
+use crate::domain::harness::extract::{extract_harness, preview_harness, validate_harness};
+use crate::domain::skills::extract::{extract_skills, preview_skills, validate_skills};
 use crate::foundation::core::paths::MaestroPaths;
 
-pub use extract::{rollback_writes, ExtractMode, ExtractReport, ResourceBackup, ResourceWrite};
+pub use extract::{
+    folder_decision, preview_folder, render_preview, rollback_writes, ExtractMode, ExtractReport,
+    FolderDecision, FolderPreview, ResourceBackup, ResourceWrite,
+};
 pub use hook_script::{
-    ensure_hook_script_exists, extract_hook_script, extract_hook_script_from, validate_hook_script,
+    ensure_hook_script_exists, extract_hook_script, extract_hook_script_from, preview_hook_script,
+    validate_hook_script,
 };
 
 /// Extract every bundled resource (skills, the hook script, then the harness
@@ -61,4 +65,14 @@ pub fn validate_all(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<()> {
     validate_hook_script(paths, mode)?;
     validate_harness(paths, mode)?;
     Ok(())
+}
+
+/// Preview the whole-folder fate of every bundled resource (skills, the hook
+/// script, then the harness) under `mode`, without writing files. Mirrors
+/// [`validate_all`]; drives `--dry-run` and the merge drift hint.
+pub fn preview_all(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<Vec<FolderPreview>> {
+    let mut previews = preview_skills(paths, mode)?;
+    previews.extend(preview_hook_script(paths, mode)?);
+    previews.extend(preview_harness(paths, mode)?);
+    Ok(previews)
 }

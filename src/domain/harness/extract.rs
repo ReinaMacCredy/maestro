@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::domain::extraction::extract::{
-    apply_actions, file_action, folder_gate, read_existing, Action,
+    apply_actions, file_action, folder_gate, preview_folder, read_existing, Action, FolderPreview,
 };
 use crate::domain::harness::templates::HARNESS_MD;
 use crate::domain::skills::catalog::frontmatter_version;
@@ -54,6 +54,19 @@ pub fn validate_harness(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<(
     managed_path(paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     plan_harness(paths, HARNESS_MD, mode)?;
     Ok(())
+}
+
+/// Preview the harness protocol's fate without writing files.
+pub fn preview_harness(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<Vec<FolderPreview>> {
+    let path = harness_file_path(paths, HARNESS_MD_NAME)?;
+    let existing = read_existing(&path)?;
+    Ok(vec![preview_folder(
+        HARNESS_MD_NAME,
+        mode,
+        existing.as_deref(),
+        HARNESS_MD,
+        frontmatter_version,
+    )])
 }
 
 /// Plan the single-file harness write. The version gate keys on the installed

@@ -105,6 +105,22 @@ pub(crate) enum FolderGate<'a> {
     },
 }
 
+/// The whole-folder fate of a bundled resource, independent of write-path
+/// concerns (backup operation label, timestamp). Single source of truth shared
+/// by [`folder_gate`] (the write path) and [`preview_folder`] (the read-only
+/// `--dry-run` path), so the two can never drift.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FolderDecision {
+    /// No installed anchor: a fresh install writes every file.
+    Create,
+    /// Preserve every installed file (matching version or `--merge`).
+    Skip,
+    /// Back up edited files and overwrite (version drift, `--force`).
+    Refresh,
+    /// `Create` mode but the anchor already exists: a hard conflict.
+    Conflict,
+}
+
 /// Decide the whole-folder fate from the installed anchor contents.
 ///
 /// `installed_anchor` is the on-disk anchor file (e.g. `SKILL.md`) when present;
@@ -113,6 +129,33 @@ pub(crate) enum FolderGate<'a> {
 /// harness, a `# maestro:hook-version:` comment for the hook script). Comparing
 /// those versions is what lets local edits survive across updates until the
 /// shipped version changes.
+pub fn folder_decision(
+    mode: ExtractMode<'_>,
+    installed_anchor: Option<&str>,
+    shipped_anchor: &str,
+    read_version: impl Fn(&str) -> Option<String>,
+) -> FolderDecision {
+    match (installed_anchor, mode) {
+        (None, _) => FolderDecision::Create,
+        (Some(_), ExtractMode::Merge) => FolderDecision::Skip,
+        (Some(_), ExtractMode::Force { .. }) => FolderDecision::Refresh,
+        (Some(installed), ExtractMode::Update { .. }) => {
+            // Version-gated: refresh only when the shipped version differs from
+            // the installed one, so local edits survive across updates until the
+            // shipped version changes. A missing installed version (None) differs
+            // from the shipped Some(..), migrating pre-version installs.
+            if read_version(installed) == read_version(shipped_anchor) {
+                FolderDecision::Skip
+            } else {
+                FolderDecision::Refresh
+            }
+        }
+        (Some(_), ExtractMode::Create) => FolderDecision::Conflict,
+    }
+}
+
+/// Resolve the folder gate for the write path: the [`folder_decision`] plus the
+/// backup operation label and timestamp that only matter when actually writing.
 pub(crate) fn folder_gate<'a>(
     mode: ExtractMode<'a>,
     installed_anchor: Option<&str>,
@@ -120,34 +163,110 @@ pub(crate) fn folder_gate<'a>(
     read_version: impl Fn(&str) -> Option<String>,
     anchor_path: &Path,
 ) -> Result<FolderGate<'a>> {
-    Ok(match (installed_anchor, mode) {
-        (None, _) => FolderGate::Create,
-        (Some(_), ExtractMode::Merge) => FolderGate::Skip,
-        (Some(_), ExtractMode::Force { backup_timestamp }) => FolderGate::Refresh {
-            operation: "init",
-            backup_timestamp,
-        },
-        (Some(installed), ExtractMode::Update { backup_timestamp }) => {
-            // Version-gated: refresh only when the shipped version differs from
-            // the installed one, so local edits survive across updates until the
-            // shipped version changes. A missing installed version (None) differs
-            // from the shipped Some(..), migrating pre-version installs.
-            if read_version(installed) == read_version(shipped_anchor) {
-                FolderGate::Skip
-            } else {
-                FolderGate::Refresh {
+    Ok(
+        match folder_decision(mode, installed_anchor, shipped_anchor, read_version) {
+            FolderDecision::Create => FolderGate::Create,
+            FolderDecision::Skip => FolderGate::Skip,
+            FolderDecision::Refresh => match mode {
+                ExtractMode::Force { backup_timestamp } => FolderGate::Refresh {
+                    operation: "init",
+                    backup_timestamp,
+                },
+                ExtractMode::Update { backup_timestamp } => FolderGate::Refresh {
                     operation: "update",
                     backup_timestamp,
+                },
+                // folder_decision yields Refresh only in Force/Update modes.
+                ExtractMode::Create | ExtractMode::Merge => {
+                    unreachable!("Refresh decision arises only in Force/Update modes")
                 }
-            }
-        }
-        (Some(_), ExtractMode::Create) => {
-            bail!(
+            },
+            FolderDecision::Conflict => bail!(
                 "{} already exists; use --merge to keep it or --force to overwrite with backup",
                 anchor_path.display()
-            );
+            ),
+        },
+    )
+}
+
+/// One folder's previewed fate plus the versions that drove it, for `--dry-run`.
+///
+/// Granularity is whole-folder, matching [`folder_decision`]: a `Skip` means the
+/// folder's version matches, not that zero files are written -- in Merge/Update
+/// mode `file_action` still creates a file missing from an otherwise-current
+/// folder. The preview reports the dominant per-folder decision, not a per-file
+/// write count.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FolderPreview {
+    /// Resource name, reusing the [`ResourceWrite`] vocabulary (a skill
+    /// directory name, `record.sh`, or `HARNESS.md`).
+    pub name: String,
+    /// The folder's fate under the previewed mode.
+    pub decision: FolderDecision,
+    /// Installed anchor version, if an anchor is present and carries one.
+    pub installed_version: Option<String>,
+    /// Bundled anchor version, if it carries one.
+    pub shipped_version: Option<String>,
+}
+
+/// Compute one [`FolderPreview`] from the same inputs as [`folder_gate`],
+/// without touching the filesystem beyond the `read_version` the caller already
+/// performed. Drives `sync --dry-run`, `init --dry-run`, and the merge drift hint.
+pub fn preview_folder(
+    name: impl Into<String>,
+    mode: ExtractMode<'_>,
+    installed_anchor: Option<&str>,
+    shipped_anchor: &str,
+    read_version: impl Fn(&str) -> Option<String>,
+) -> FolderPreview {
+    FolderPreview {
+        name: name.into(),
+        decision: folder_decision(mode, installed_anchor, shipped_anchor, &read_version),
+        installed_version: installed_anchor.and_then(|anchor| read_version(anchor)),
+        shipped_version: read_version(shipped_anchor),
+    }
+}
+
+impl FolderDecision {
+    /// Stable, machine-greppable verb for `--dry-run` output.
+    pub fn verb(self) -> &'static str {
+        match self {
+            FolderDecision::Create => "create",
+            FolderDecision::Skip => "skip",
+            FolderDecision::Refresh => "refresh",
+            FolderDecision::Conflict => "conflict",
         }
-    })
+    }
+}
+
+/// Render previews as aligned `<verb> <name> (<detail>)` lines, one per folder.
+/// The caller supplies the header (`maestro sync would refresh:` etc.); this
+/// renders only the body so `init` and `sync` share one format.
+pub fn render_preview(previews: &[FolderPreview]) -> String {
+    let mut out = String::new();
+    for preview in previews {
+        let detail = match preview.decision {
+            FolderDecision::Create => String::new(),
+            FolderDecision::Skip => preview
+                .shipped_version
+                .as_deref()
+                .map(|version| format!(" ({version})"))
+                .unwrap_or_default(),
+            FolderDecision::Refresh => {
+                let from = preview.installed_version.as_deref().unwrap_or("unversioned");
+                let to = preview.shipped_version.as_deref().unwrap_or("unversioned");
+                format!(" ({from} -> {to})")
+            }
+            FolderDecision::Conflict => " (already exists)".to_string(),
+        };
+        out.push_str(&format!(
+            "{:<8} {}{}\n",
+            preview.decision.verb(),
+            preview.name,
+            detail
+        ));
+    }
+    out
 }
 
 /// Resolve one file's write decision from a folder gate into a planned action.

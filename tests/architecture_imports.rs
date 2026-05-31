@@ -51,7 +51,7 @@ const DOMAIN_FACADES: &[&str] = &[
     "task",
 ];
 
-const OPERATION_FACADES: &[&str] = &["improver", "init", "metrics", "update"];
+const OPERATION_FACADES: &[&str] = &["improver", "init", "metrics", "sync", "update"];
 
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
@@ -1291,7 +1291,7 @@ fn transitional_public_surfaces_match_phase_policy() {
     );
     assert_public_modules(
         Path::new("src/operations/mod.rs"),
-        &["improver", "init", "metrics", "update"],
+        &["improver", "init", "metrics", "sync", "update"],
         &[],
     );
 }

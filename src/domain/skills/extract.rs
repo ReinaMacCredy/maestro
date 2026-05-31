@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::domain::extraction::extract::{
-    apply_actions, file_action, folder_gate, read_existing, Action,
+    apply_actions, file_action, folder_gate, preview_folder, read_existing, Action, FolderPreview,
 };
 use crate::domain::skills::catalog::{frontmatter_version, skills, Skill};
 use crate::foundation::core::fs::ensure_dir;
@@ -41,6 +41,23 @@ pub fn validate_skills(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<()
     managed_path(paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     plan_skills(paths, skills(), mode)?;
     Ok(())
+}
+
+/// Preview each bundled skill's whole-folder fate without writing files.
+pub fn preview_skills(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<Vec<FolderPreview>> {
+    let mut previews = Vec::new();
+    for skill in skills() {
+        let skill_md_path = skill_file_path(paths, skill.name, "SKILL.md")?;
+        let installed = read_existing(&skill_md_path)?;
+        previews.push(preview_folder(
+            skill.name,
+            mode,
+            installed.as_deref(),
+            skill.skill_md(),
+            frontmatter_version,
+        ));
+    }
+    Ok(previews)
 }
 
 fn plan_skills<'a>(
