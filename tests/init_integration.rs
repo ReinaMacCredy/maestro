@@ -7,8 +7,9 @@ use std::process::Command;
 
 use support::TestTempDir;
 
-const BUNDLED_SKILLS: [&str; 6] = [
+const BUNDLED_SKILLS: [&str; 7] = [
     "maestro-task",
+    "maestro-feature",
     "maestro-setup",
     "maestro-verify",
     "maestro-design",

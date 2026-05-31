@@ -20,12 +20,18 @@ const RECORD_SH: &str = include_str!("../embedded/hooks/record.sh");
 const HARNESS_MD: &str = include_str!("../embedded/harness/HARNESS.md");
 
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 8] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 9] = [
     (
         "skill",
         "maestro-task",
-        "1.1.0",
-        "b251b94d9febc749419c372f03ec918208c861bd148eca2ddaf1e6c7bc5c8581",
+        "1.2.0",
+        "02db171582b337ac2926e04e917331a0e8c7f7d1cfd85722ba5b451539bc902e",
+    ),
+    (
+        "skill",
+        "maestro-feature",
+        "1.0.0",
+        "fa73cfd2fcd086069d507bc9f53fac1be2515837f6ee4488f1268628df1127a3",
     ),
     (
         "skill",

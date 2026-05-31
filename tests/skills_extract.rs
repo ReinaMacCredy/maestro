@@ -8,8 +8,9 @@ use maestro::foundation::core::backup::backup_operation_timestamp;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
-const BUNDLED_SKILL_NAMES: [&str; 6] = [
+const BUNDLED_SKILL_NAMES: [&str; 7] = [
     "maestro-task",
+    "maestro-feature",
     "maestro-setup",
     "maestro-verify",
     "maestro-design",
@@ -17,10 +18,14 @@ const BUNDLED_SKILL_NAMES: [&str; 6] = [
     "qa-slice",
 ];
 
-const BUNDLED_SKILL_RESOURCES: [(&str, &str); 6] = [
+const BUNDLED_SKILL_RESOURCES: [(&str, &str); 7] = [
     (
         "maestro-task",
         include_str!("../embedded/skills/maestro-task/SKILL.md"),
+    ),
+    (
+        "maestro-feature",
+        include_str!("../embedded/skills/maestro-feature/SKILL.md"),
     ),
     (
         "maestro-setup",
@@ -308,7 +313,7 @@ fn extract_skills_update_preserves_local_edit_when_version_matches() {
 
     // Locally edit an installed skill while keeping the shipped version.
     let installed = paths.skills_dir().join("maestro-task").join("SKILL.md");
-    let edited = "---\nname: maestro-task\nversion: 1.1.0\n---\n\nlocal edit\n";
+    let edited = "---\nname: maestro-task\nversion: 1.2.0\n---\n\nlocal edit\n";
     fs::write(&installed, edited).expect("invariant: installed skill should be writable");
     let backup_timestamp =
         backup_operation_timestamp().expect("invariant: backup timestamp should be available");

@@ -1,14 +1,15 @@
 ---
 name: maestro-task
-version: 1.1.0
-description: Feature and task workflow layer for operating the Maestro harness.
+version: 1.2.0
+description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs. For the feature contract tasks deliver against, see the maestro-feature skill.
 ---
 
 # Maestro Task
 
 The full how-to for the Maestro task loop. `.maestro/harness/HARNESS.md` carries the
 always-loaded cheat-sheet; this skill is the on-demand reference for the rarer verbs,
-the evidence gate, and the gotchas.
+the evidence gate, and the gotchas. Tasks deliver against a feature contract; for the
+feature lifecycle (the accept and ship gates, amend, archive) see the `maestro-feature` skill.
 
 On activation, log the skill activation by piping a compact JSON payload to
 `maestro hook record` with `event_type` set to `skill_activation`, `skill_name` set to
