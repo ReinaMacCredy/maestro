@@ -34,8 +34,10 @@ fn init_operation_public_surface_resolves() {
     let run: fn(
         &maestro::operations::init::InitOptions,
     ) -> anyhow::Result<maestro::operations::init::InitOutcome> = maestro::operations::init::run;
-    let render: fn(&maestro::operations::init::InitPlan) -> String =
-        maestro::operations::init::render_dry_run;
+    let render: fn(
+        &maestro::operations::init::InitPlan,
+        &[maestro::domain::extraction::FolderPreview],
+    ) -> String = maestro::operations::init::render_dry_run;
 
     let _ = (run, render);
 }

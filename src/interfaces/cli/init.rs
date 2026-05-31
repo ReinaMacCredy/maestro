@@ -15,8 +15,8 @@ pub fn run(args: InitArgs) -> Result<()> {
         force: args.force,
     })?;
 
-    if let InitOutcome::DryRun(plan) = outcome {
-        print!("{}", init::render_dry_run(&plan));
+    if let InitOutcome::DryRun { plan, preview } = outcome {
+        print!("{}", init::render_dry_run(&plan, &preview));
     }
 
     Ok(())

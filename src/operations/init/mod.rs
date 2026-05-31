@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
 
-use crate::domain::extraction::{extract_all, validate_all, ExtractMode};
+use crate::domain::extraction::{
+    extract_all, preview_all, render_preview, validate_all, ExtractMode, FolderPreview,
+};
 use crate::domain::harness::schema::HarnessConfig;
 use crate::domain::harness::templates::{backlog_yaml, harness_yml};
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
@@ -28,8 +30,13 @@ pub struct InitOptions {
 pub enum InitOutcome {
     /// Init applied the artifact plan.
     Applied,
-    /// Init only planned the artifact tree.
-    DryRun(InitPlan),
+    /// Init only planned the artifact tree and previewed bundled extraction.
+    DryRun {
+        /// The startup directories and files init would create.
+        plan: InitPlan,
+        /// The whole-folder fate of every bundled resource under the chosen mode.
+        preview: Vec<FolderPreview>,
+    },
 }
 
 /// Coordinate startup artifact creation through owning domain contracts.
@@ -41,7 +48,11 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
     validate_plan_paths(&paths, &plan)?;
 
     if options.dry_run {
-        return Ok(InitOutcome::DryRun(plan));
+        // Preview bundled extraction under the same mode init would apply. The
+        // timestamp is a dummy: preview is read-only and never backs up or
+        // writes, so it never consults it.
+        let preview = preview_all(&paths, extract_mode(options, Some(""))?)?;
+        return Ok(InitOutcome::DryRun { plan, preview });
     }
 
     let backup_timestamp = if options.force {
@@ -136,8 +147,9 @@ impl InitPlan {
     }
 }
 
-/// Render the dry-run artifact tree.
-pub fn render_dry_run(plan: &InitPlan) -> String {
+/// Render the dry-run artifact tree, then the bundled-resource extraction
+/// preview (skills, the hook script, the harness) the same run would apply.
+pub fn render_dry_run(plan: &InitPlan, preview: &[FolderPreview]) -> String {
     let mut out = String::from("maestro init would create:\n");
     for directory in &plan.directories {
         out.push_str(&format!("dir  {}\n", directory.display()));
@@ -145,6 +157,7 @@ pub fn render_dry_run(plan: &InitPlan) -> String {
     for file in &plan.files {
         out.push_str(&format!("file {}\n", file.path.display()));
     }
+    out.push_str(&render_preview(preview));
     out
 }
 
