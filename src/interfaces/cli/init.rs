@@ -15,8 +15,17 @@ pub fn run(args: InitArgs) -> Result<()> {
         force: args.force,
     })?;
 
-    if let InitOutcome::DryRun { plan, preview } = outcome {
-        print!("{}", init::render_dry_run(&plan, &preview));
+    match outcome {
+        InitOutcome::DryRun { plan, preview } => {
+            print!("{}", init::render_dry_run(&plan, &preview));
+        }
+        InitOutcome::Applied { behind } if behind > 0 => {
+            let noun = if behind == 1 { "folder" } else { "folders" };
+            println!(
+                "{behind} {noun} behind this maestro version; run `maestro sync` to resync"
+            );
+        }
+        InitOutcome::Applied { .. } => {}
     }
 
     Ok(())

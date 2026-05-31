@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 
 use crate::domain::extraction::{
-    extract_all, preview_all, render_preview, validate_all, ExtractMode, FolderPreview,
+    extract_all, preview_all, render_preview, validate_all, ExtractMode, FolderDecision,
+    FolderPreview,
 };
 use crate::domain::harness::schema::HarnessConfig;
 use crate::domain::harness::templates::{backlog_yaml, harness_yml};
@@ -29,7 +30,12 @@ pub struct InitOptions {
 #[derive(Debug)]
 pub enum InitOutcome {
     /// Init applied the artifact plan.
-    Applied,
+    Applied {
+        /// Bundled folders that merge preserved but that are behind this
+        /// binary's shipped versions (resolvable with `maestro sync`). Always 0
+        /// outside merge mode, where Create/Force leave nothing drifted.
+        behind: usize,
+    },
     /// Init only planned the artifact tree and previewed bundled extraction.
     DryRun {
         /// The startup directories and files init would create.
@@ -71,7 +77,20 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
     }
     extract_all(&paths, extract_mode)?;
 
-    Ok(InitOutcome::Applied)
+    // Merge preserves existing folders without comparing versions, so a merged
+    // project can be left behind this binary's shipped resources. Surface that
+    // by counting the folders an Update-mode resync would refresh. Create/Force
+    // just wrote everything current, so only merge can leave drift.
+    let behind = if options.merge {
+        preview_all(&paths, ExtractMode::Update { backup_timestamp: "" })?
+            .iter()
+            .filter(|folder| folder.decision == FolderDecision::Refresh)
+            .count()
+    } else {
+        0
+    };
+
+    Ok(InitOutcome::Applied { behind })
 }
 
 fn init_repo_root() -> Result<PathBuf> {
