@@ -8,14 +8,16 @@ use maestro::foundation::core::backup::backup_operation_timestamp;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
-const BUNDLED_SKILL_NAMES: [&str; 4] = [
+const BUNDLED_SKILL_NAMES: [&str; 6] = [
     "maestro-task",
     "maestro-setup",
     "maestro-verify",
     "maestro-design",
+    "qa-baseline",
+    "qa-slice",
 ];
 
-const BUNDLED_SKILL_RESOURCES: [(&str, &str); 4] = [
+const BUNDLED_SKILL_RESOURCES: [(&str, &str); 6] = [
     (
         "maestro-task",
         include_str!("../embedded/skills/maestro-task/SKILL.md"),
@@ -32,10 +34,18 @@ const BUNDLED_SKILL_RESOURCES: [(&str, &str); 4] = [
         "maestro-design",
         include_str!("../embedded/skills/maestro-design/SKILL.md"),
     ),
+    (
+        "qa-baseline",
+        include_str!("../embedded/skills/qa-baseline/SKILL.md"),
+    ),
+    (
+        "qa-slice",
+        include_str!("../embedded/skills/qa-slice/SKILL.md"),
+    ),
 ];
 
 #[test]
-fn bundled_skill_list_is_exactly_the_four_v1_skills() {
+fn bundled_skill_list_is_exactly_the_shipped_skills() {
     let names = skills().iter().map(|skill| skill.name).collect::<Vec<_>>();
 
     assert_eq!(names, BUNDLED_SKILL_NAMES);

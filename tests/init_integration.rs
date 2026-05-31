@@ -7,11 +7,13 @@ use std::process::Command;
 
 use support::TestTempDir;
 
-const BUNDLED_SKILLS: [&str; 4] = [
+const BUNDLED_SKILLS: [&str; 6] = [
     "maestro-task",
     "maestro-setup",
     "maestro-verify",
     "maestro-design",
+    "qa-baseline",
+    "qa-slice",
 ];
 
 fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
