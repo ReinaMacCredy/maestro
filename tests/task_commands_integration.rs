@@ -762,3 +762,37 @@ fn list_hides_terminal_tasks_until_all_is_passed() {
     assert!(all_out.contains("task-002"));
     assert!(!all_out.contains("terminal task(s) hidden"));
 }
+
+#[test]
+fn set_on_a_settled_task_refuses_the_link_change_before_writing_checks() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    // task-001 is created (draft, no checks) then abandoned: settled, but never
+    // accepted so its acceptance stays unlocked — the state where set_checks
+    // would otherwise write before set_feature's settled guard fires.
+    assert_success(&maestro(repo, &["task", "create", "Dead end"]), &["task", "create", "Dead end"]);
+    assert_success(
+        &maestro(repo, &["task", "abandon", "task-001", "--reason", "scrapped"]),
+        &["task", "abandon", "task-001", "--reason", "scrapped"],
+    );
+
+    // A combined `--check --feature` set must fail fast on the settled task.
+    let args = &["task", "set", "task-001", "--check", "must not persist", "--feature", "billing"];
+    let set = maestro(repo, args);
+    assert_failure(&set, args);
+    assert!(stderr(&set).contains("settled history"));
+
+    // The refused set wrote no check: acceptance carries nothing from it.
+    let acceptance = task_yaml_path(repo, "task-001")
+        .parent()
+        .expect("invariant: task path should have a directory")
+        .join("acceptance.yaml");
+    if acceptance.exists() {
+        let raw = fs::read_to_string(&acceptance).expect("invariant: acceptance.yaml should be readable");
+        assert!(
+            !raw.contains("must not persist"),
+            "a refused set must not persist its checks: {raw}"
+        );
+    }
+}

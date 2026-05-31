@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 
-use crate::domain::feature::{self, FeatureStatus};
+use crate::domain::feature;
 use crate::domain::task;
 use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
@@ -188,12 +188,22 @@ fn set_task(
 
 fn guard_feature_link(paths: &MaestroPaths, id: &str, target: Option<&str>) -> Result<()> {
     let task = task::load_task_record(&paths.tasks_dir(), id)?;
+    // Fail fast before any write: a combined `--check --feature` set would
+    // otherwise persist the checks before set_feature's settled-state guard
+    // fires. A settled task's link is frozen history; this mirrors (and
+    // pre-empts) the authoritative domain guard in task::set_feature.
+    if !task.state.is_live() {
+        bail!(
+            "task {id} is {}; its feature link is settled history and cannot change",
+            task.state.as_str()
+        );
+    }
     if let Some(current) = task.feature_id.as_deref() {
         // A dangling current link (feature unreadable) is permissive so the
         // task can be re-pointed or detached to repair it; only a resolved
         // terminal feature freezes the link as history.
         if let Some(status) = feature::show(paths, current).ok().map(|view| view.status) {
-            if is_terminal_feature(&status) {
+            if status.is_terminal() {
                 bail!(
                     "task {id} is linked to feature {current} ({}); its link is settled history and cannot change",
                     feature::status_label(&status)
@@ -205,7 +215,7 @@ fn guard_feature_link(paths: &MaestroPaths, id: &str, target: Option<&str>) -> R
         let view = feature::show(paths, target).with_context(|| {
             format!("target feature `{target}` not found; create it with `maestro feature new`")
         })?;
-        if is_terminal_feature(&view.status) {
+        if view.status.is_terminal() {
             bail!(
                 "target feature {target} is {}; tasks cannot be attached to a terminal feature",
                 feature::status_label(&view.status)
@@ -213,10 +223,6 @@ fn guard_feature_link(paths: &MaestroPaths, id: &str, target: Option<&str>) -> R
         }
     }
     Ok(())
-}
-
-fn is_terminal_feature(status: &FeatureStatus) -> bool {
-    matches!(status, FeatureStatus::Shipped | FeatureStatus::Cancelled)
 }
 
 fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
