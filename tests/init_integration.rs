@@ -166,6 +166,46 @@ fn init_merge_accepts_yes_for_scripted_brownfield_runs() {
 }
 
 #[test]
+fn init_yes_is_idempotent_keeps_edits_and_restores_missing() {
+    let temp_dir = TestTempDir::new("maestro-init-test");
+    init_git_marker(temp_dir.path());
+
+    // First run scaffolds the full tree.
+    let first = maestro(&["init", "--yes"], temp_dir.path());
+    assert!(
+        first.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    // Locally customize a managed skill file, and delete a managed init file.
+    let skill = temp_dir
+        .path()
+        .join(".maestro/skills/maestro-task/SKILL.md");
+    fs::write(&skill, "custom skill\n").expect("invariant: skill should be writable");
+    let harness_yml = temp_dir.path().join(".maestro/harness/harness.yml");
+    fs::remove_file(&harness_yml).expect("invariant: harness.yml should be removable");
+
+    // Re-running `init --yes` is idempotent: exit 0, keep the local edit, and
+    // restore the missing managed file.
+    let second = maestro(&["init", "--yes"], temp_dir.path());
+    assert!(
+        second.status.success(),
+        "re-init --yes must be idempotent; stderr: {}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(&skill).expect("invariant: skill should remain readable"),
+        "custom skill\n",
+        "merge must preserve the local edit"
+    );
+    assert!(
+        harness_yml.is_file(),
+        "merge must restore the removed managed file"
+    );
+}
+
+#[test]
 fn init_force_overwrites_existing_file_with_backup() {
     let temp_dir = TestTempDir::new("maestro-init-test");
     init_git_marker(temp_dir.path());
@@ -313,7 +353,9 @@ fn init_preflights_bundled_skill_conflicts_before_writing_harness() {
     .expect("invariant: skill parent should be writable");
     fs::write(&skill, "custom skill\n").expect("invariant: skill should be writable");
 
-    let output = maestro(&["init", "--yes"], temp_dir.path());
+    // Bare `init` (Create mode) preflights the conflict; `--yes`/`--merge` would
+    // instead keep the existing skill and succeed (see the idempotency test).
+    let output = maestro(&["init"], temp_dir.path());
 
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("already exists"));

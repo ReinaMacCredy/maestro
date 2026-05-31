@@ -67,6 +67,10 @@ pub struct InitArgs {
     pub merge: bool,
     #[arg(long)]
     pub force: bool,
+    /// Assume yes for non-interactive/scripted runs: with no explicit mode,
+    /// behave like `--merge` (keep existing files, create only what is missing,
+    /// safe to re-run). Combines with `--merge`/`--force`; an explicit `--force`
+    /// still wins.
     #[arg(long)]
     pub yes: bool,
 }
