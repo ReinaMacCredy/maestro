@@ -1,0 +1,22 @@
+# >>> maestro >>>
+# Maestro local-only paths
+.maestro/runs/
+.maestro/backups/
+.maestro/install-lock.yaml
+.maestro/tasks/*/evidence/
+.maestro/tasks/*/local/
+
+# Local agent settings
+.claude/settings.local.json
+.codex/hooks.json
+# <<< maestro <<<
+
+# --- user-managed (outside the maestro block) ---
+
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# macOS / local noise
+.DS_Store
+.claude/scheduled_tasks.lock
