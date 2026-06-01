@@ -107,7 +107,7 @@ pub(crate) fn ship_qa_gaps(
 
     let Some(baseline) = baseline else {
         gaps.push(format!(
-            "qa-baseline missing (.maestro/features/{id}/baseline.md) — fix: run the qa-baseline skill, then: maestro feature ship {id}"
+            "qa-baseline missing (.maestro/features/{id}/baseline.md) — fix: write a Scenario Matrix of [bl-NNN]-tagged real scenarios (optional `amend_log_position:` frontmatter), or run the qa-baseline skill, then: maestro feature ship {id}"
         ));
         return gaps;
     };
@@ -142,7 +142,7 @@ pub(crate) fn ship_qa_gaps(
             .collect();
         if !uncovered.is_empty() {
             gaps.push(format!(
-                "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}; fix: run the qa-slice skill for each and record it (scenarios + evidence) in .maestro/features/{id}/qa-slices.yaml",
+                "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}; fix: add to .maestro/features/{id}/qa-slices.yaml a `slices:` entry per scenario with `scenarios: [bl-NNN]` and non-empty `evidence: [...]`, or run the qa-slice skill",
                 uncovered.len(),
                 uncovered.join(", ")
             ));

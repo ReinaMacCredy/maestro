@@ -26,9 +26,13 @@ pub fn run(args: QueryArgs) -> Result<()> {
             task_id,
             task_id_flag,
         } => {
-            let task_id = task_id
-                .or(task_id_flag)
-                .context("task id is required for `maestro query proof`")?;
+            let task_id = match (task_id, task_id_flag) {
+                (Some(positional), Some(flag)) if positional != flag => bail!(
+                    "conflicting task ids: positional `{positional}` and --task-id `{flag}`; pass just one"
+                ),
+                (Some(id), _) | (None, Some(id)) => id,
+                (None, None) => bail!("task id is required for `maestro query proof`"),
+            };
             let status = proof::proof_status(&paths, &task_id)?;
             print!("{}", proof::render_proof_status(&status));
             Ok(())
