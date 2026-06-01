@@ -1,7 +1,8 @@
 [package]
 name = "maestro"
-# Frozen placeholder. The real version is git-derived at build time
-# (0.0.<commit-epoch>-g<sha>) by build.rs and injected as MAESTRO_VERSION.
+# This full semver is the meaningful version line. build.rs carries it into the
+# git-derived runtime version (<major>.<minor>.<patch>.<commit-epoch>-g<sha>) and injects
+# it as MAESTRO_VERSION. Bump this to step the version line.
 version = "0.107.0"
 edition = "2024"
 

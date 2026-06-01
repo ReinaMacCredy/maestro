@@ -14,7 +14,7 @@ pub fn run() -> Result<()> {
 
 /// Build the version line: `<version> (released <rfc3339>, <age>)`, with the tail
 /// rendered from the version's own commit-epoch (no network). Falls back to the bare
-/// version for the non-git `0.0.0-gunknown` build, where there is no epoch to render.
+/// version for the non-git `<major>.<minor>.<patch>-gunknown` build, where there is no epoch to render.
 fn version_line(version: &str) -> String {
     let Some(epoch) = version_commit_epoch(version) else {
         return version.to_string();
@@ -26,11 +26,13 @@ fn version_line(version: &str) -> String {
     }
 }
 
-/// Extract the Unix-epoch-seconds patch from `0.0.<epoch>-g<sha>`. Returns None for the
-/// `0.0.0-gunknown` fallback (epoch 0) or any version without a numeric patch epoch.
+/// Extract the Unix-epoch-seconds component from `<major>.<minor>.<patch>.<epoch>-g<sha>`. The
+/// epoch is always the 4th dot-component, so the parse is independent of the semver prefix.
+/// Returns None for the `<major>.<minor>.<patch>-gunknown` fallback (no 4th component) or any
+/// version without a numeric epoch.
 fn version_commit_epoch(version: &str) -> Option<u64> {
-    let patch = version.split('.').nth(2)?;
-    let epoch = patch.split('-').next()?.parse::<u64>().ok()?;
+    let epoch = version.split('.').nth(3)?;
+    let epoch = epoch.split('-').next()?.parse::<u64>().ok()?;
     (epoch != 0).then_some(epoch)
 }
 
@@ -41,16 +43,26 @@ mod tests {
     #[test]
     fn parses_the_commit_epoch_from_an_amp_style_version() {
         assert_eq!(
-            version_commit_epoch("0.0.1779772576-g751b94"),
+            version_commit_epoch("0.107.0.1779772576-g751b94"),
             Some(1779772576)
         );
     }
 
     #[test]
+    fn parses_the_commit_epoch_regardless_of_the_semver_prefix() {
+        // The runtime scheme carries Cargo.toml's full semver (e.g. `0.107.0.`); the epoch
+        // is always the 4th dot-component, so the prefix must not shift the parse.
+        assert_eq!(
+            version_commit_epoch("9.9.9.1780323053-g0465a733"),
+            Some(1780323053)
+        );
+    }
+
+    #[test]
     fn renders_the_released_tail_with_full_iso_and_age() {
-        let line = version_line("0.0.1779772576-g751b94");
+        let line = version_line("0.107.0.1779772576-g751b94");
         assert!(
-            line.starts_with("0.0.1779772576-g751b94 (released 2026-05-26T05:16:16.000Z, "),
+            line.starts_with("0.107.0.1779772576-g751b94 (released 2026-05-26T05:16:16.000Z, "),
             "unexpected version line: {line}"
         );
         assert!(line.ends_with(" ago)"), "unexpected version line: {line}");
@@ -58,9 +70,9 @@ mod tests {
 
     #[test]
     fn fallback_version_renders_without_a_released_tail() {
-        // The non-git `0.0.0-gunknown` build has epoch 0 -> no `(released …)` tail,
-        // so it never prints the 1970-01-01 epoch.
-        assert_eq!(version_commit_epoch("0.0.0-gunknown"), None);
-        assert_eq!(version_line("0.0.0-gunknown"), "0.0.0-gunknown");
+        // The non-git `<major>.<minor>.<patch>-gunknown` build has no 4th component -> no
+        // `(released …)` tail, so it never prints a bogus 1970-01-01 epoch.
+        assert_eq!(version_commit_epoch("0.107.0-gunknown"), None);
+        assert_eq!(version_line("0.107.0-gunknown"), "0.107.0-gunknown");
     }
 }

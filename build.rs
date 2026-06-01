@@ -5,35 +5,50 @@ fn main() {
     emit_version();
 }
 
-/// Stamp the binary with an Amp-style version `0.0.<commit-epoch>-g<short-sha>`.
+/// Stamp the binary with an Amp-style version `<major>.<minor>.<patch>.<commit-epoch>-g<short-sha>`.
+///
+/// `<major>.<minor>.<patch>` is Cargo.toml's full semver (e.g. `0.107.0`), so bumping the
+/// crate version steps the line; the commit-epoch follows as a 4th dotted component.
 ///
 /// Precedence: an explicit `MAESTRO_VERSION` (the release workflow computes it once
 /// and passes it so the build and the git tag agree) > a value derived from git >
-/// a static `0.0.0-gunknown` for non-git builds (e.g. a source tarball).
+/// a static `<major>.<minor>.<patch>-gunknown` for non-git builds (e.g. a source tarball).
 fn emit_version() {
     println!("cargo:rerun-if-env-changed=MAESTRO_VERSION");
+    println!("cargo:rerun-if-env-changed=CARGO_PKG_VERSION");
     println!("cargo:rerun-if-changed=.git/HEAD");
     if let Some(ref_path) = git_head_ref_path() {
         println!("cargo:rerun-if-changed={ref_path}");
     }
 
-    let version = std::env::var("MAESTRO_VERSION")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(version_from_git);
+    let version = env_nonempty("MAESTRO_VERSION").unwrap_or_else(version_from_git);
     println!("cargo:rustc-env=MAESTRO_VERSION={version}");
 }
 
-/// Derive `0.0.<commit-epoch>-g<short-sha>` from git, matching Amp's version format.
-/// Falls back to `0.0.0-gunknown` when git is unavailable.
+/// Derive `<major>.<minor>.<patch>.<commit-epoch>-g<short-sha>` from git, matching Amp's
+/// format. Falls back to `<major>.<minor>.<patch>-gunknown` when git is unavailable.
 fn version_from_git() -> String {
+    let prefix = version_prefix();
     match (
         git(&["log", "-1", "--format=%ct"]),
         git(&["rev-parse", "--short", "HEAD"]),
     ) {
-        (Some(epoch), Some(sha)) => format!("0.0.{epoch}-g{sha}"),
-        _ => "0.0.0-gunknown".to_string(),
+        (Some(epoch), Some(sha)) => format!("{prefix}.{epoch}-g{sha}"),
+        _ => format!("{prefix}-gunknown"),
     }
+}
+
+/// Cargo.toml's full semver, e.g. crate `0.107.0`. Cargo sets `CARGO_PKG_VERSION` for
+/// build scripts; defaults to `0.0.0` if absent.
+fn version_prefix() -> String {
+    env_nonempty("CARGO_PKG_VERSION").unwrap_or_else(|| "0.0.0".to_string())
+}
+
+/// Read an env var, treating a blank or whitespace-only value as absent.
+fn env_nonempty(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 fn git(args: &[&str]) -> Option<String> {

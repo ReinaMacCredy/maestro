@@ -44,7 +44,9 @@ jobs:
           set -euo pipefail
           epoch="$(git log -1 --format=%ct)"
           sha="$(git rev-parse --short HEAD)"
-          version="0.0.${epoch}-g${sha}"
+          # Carry Cargo.toml's version verbatim, matching build.rs's CARGO_PKG_VERSION read.
+          prefix="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          version="${prefix:-0.0.0}.${epoch}-g${sha}"
           tag="v${version}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
