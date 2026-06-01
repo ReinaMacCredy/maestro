@@ -91,14 +91,15 @@ Verify with `maestro version` and `maestro doctor`.
 
 ## Let your agent set it up
 
-maestro is meant to be driven by your coding agent. The installer wires agent skills and
-hooks into your repo, so the agent learns the lifecycle and records its own work. Point your
-agent (Claude Code, Codex, or any CLI agent) at the repo and paste:
+maestro is meant to be driven by your coding agent. The installer wires agent skills and hooks
+into your repo — including a `maestro-setup` skill that tunes the harness to your build/test
+commands and conventions — so the agent learns the lifecycle and records its own work. Point
+your agent (Claude Code, Codex, or any CLI agent) at the repo and paste:
 
 ```
 Set up maestro in this repo: run `maestro init --yes`, then `maestro install --agent claude`
-(or `--agent codex`). Read the skills it extracts under `.maestro/skills/` and drive the
-feature and task lifecycle through the `maestro` CLI from now on.
+(or `--agent codex`). Then follow the maestro-setup skill it installs to tune the harness to
+this repo, and drive the feature and task lifecycle through the `maestro` CLI from there.
 ```
 
 ## Quickstart
