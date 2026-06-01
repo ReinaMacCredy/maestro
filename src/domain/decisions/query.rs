@@ -64,9 +64,9 @@ pub fn resolve_decision_path(decisions_dir: &Path, id: &str) -> Result<PathBuf> 
         .collect::<Vec<_>>();
 
     match matches.len() {
-        0 => bail!("decision {id} not found"),
+        0 => bail!("decision not found: {id}"),
         1 => Ok(matches[0].path.clone()),
-        _ => bail!("decision {id} is ambiguous"),
+        _ => bail!("decision id {id} is ambiguous"),
     }
 }
 
@@ -97,6 +97,17 @@ pub fn parse_decision_number(file_name: &str) -> Option<u32> {
 /// Return the id portion of a decision file name.
 pub fn decision_id(file_name: &str) -> &str {
     file_name.trim_end_matches(".md")
+}
+
+/// The canonical display id for a decision file: `decision-NNN` when the
+/// sequence number parses, else the raw slug for a malformed name. The list
+/// views use this so a copied id matches `created decision decision-NNN` and
+/// `decision show decision-NNN` rather than echoing the full slug (T8).
+pub fn decision_display_id(file_name: &str) -> String {
+    match parse_decision_number(file_name) {
+        Some(number) => format!("decision-{number:03}"),
+        None => decision_id(file_name).to_string(),
+    }
 }
 
 fn is_decision_file_name(file_name: &str) -> bool {

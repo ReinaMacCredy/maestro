@@ -1,6 +1,6 @@
 use std::fs;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
@@ -19,6 +19,11 @@ pub fn run(args: DecisionArgs) -> Result<()> {
 }
 
 fn new_decision(paths: &MaestroPaths, title: &str) -> Result<()> {
+    // An empty title slugifies to a malformed `decision-NNN-.md`; reject it at
+    // the boundary with a remedy rather than writing the husk (T2).
+    if title.trim().is_empty() {
+        bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
+    }
     let number = decisions::create(paths, title)?;
     println!("created decision decision-{number:03}");
     Ok(())
@@ -42,7 +47,7 @@ fn list_decisions(paths: &MaestroPaths) -> Result<()> {
     for entry in entries {
         println!(
             "{}\t{}",
-            decisions::decision_id(&entry.file_name),
+            decisions::decision_display_id(&entry.file_name),
             entry.file_name
         );
     }

@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use crate::domain::proof;
+use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::{EventArgs, EventCommand};
@@ -32,6 +33,10 @@ fn create_event(
         task_id,
         "--task-id is required or set MAESTRO_CURRENT_TASK",
     )?;
+    // A proof event must point at a real task; reject orphan refs so
+    // `event create --task-id task-999` fails loudly instead of logging a
+    // dangling event with exit 0 (T2).
+    task::load_task_record(&paths.tasks_dir(), &task_id)?;
     proof::record_claim(&paths, run, &task_id, message, payload, explicit_claims)?;
     println!("created task_proof event for run {run}");
     Ok(())

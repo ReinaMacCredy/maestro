@@ -379,7 +379,13 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         all_tasks.extend(load_all_tasks(&paths.archive_tasks_dir())?);
     }
     let shown = task::filter_tasks(all_tasks.clone(), &task_filter(&filters, filters.all));
-    print!("{}", task::render_task_list(&shown));
+    if shown.is_empty() {
+        // Match `harness list` / `decision list`: an empty result says so
+        // instead of leaving a bare header (T8).
+        println!("no tasks found");
+    } else {
+        print!("{}", task::render_task_list(&shown));
+    }
     if !filters.all {
         let with_terminal = task::filter_tasks(all_tasks, &task_filter(&filters, true));
         let hidden = with_terminal.len() - shown.len();

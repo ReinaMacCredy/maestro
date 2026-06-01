@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use crate::decisions::query::{decision_entries, decision_id};
+use crate::decisions::query::{decision_display_id, decision_entries};
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::run;
@@ -129,7 +129,7 @@ fn query_decisions(paths: &MaestroPaths) -> Result<()> {
         let title = decision_title(&entry.path)?;
         println!(
             "{}\t{}\t{}",
-            decision_id(&entry.file_name),
+            decision_display_id(&entry.file_name),
             entry.file_name,
             title
         );

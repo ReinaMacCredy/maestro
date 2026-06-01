@@ -320,6 +320,31 @@ fn decision_show_rejects_path_traversal_ids() {
 }
 
 #[test]
+fn decision_new_rejects_an_empty_title() {
+    let temp_dir = TestTempDir::new("maestro-decision-command-empty-title");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let stderr = assert_failure(
+        maestro(&["decision", "new", "   "], temp_dir.path()),
+        &["decision", "new", "   "],
+    );
+    assert!(stderr.contains("title cannot be empty"), "{stderr}");
+
+    // The boundary rejected it before any file was written; no husk left behind.
+    let decisions_dir = temp_dir.path().join(".maestro/decisions");
+    if decisions_dir.is_dir() {
+        let husk = fs::read_dir(&decisions_dir)
+            .expect("invariant: decisions dir should be listable")
+            .count();
+        assert_eq!(husk, 0, "no decision file should be written for an empty title");
+    }
+}
+
+#[test]
 fn feature_verbs_reject_path_traversal_ids() {
     let temp_dir = TestTempDir::new("maestro-feature-command-traversal-test");
     init_git_marker(temp_dir.path());

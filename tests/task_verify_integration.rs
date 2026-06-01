@@ -789,6 +789,31 @@ fn event_create_writes_task_proof_for_verification() {
 }
 
 #[test]
+fn event_create_rejects_an_unknown_task() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented event create proof");
+
+    // An explicit, non-existent task id must fail loudly rather than log a
+    // dangling proof event with exit 0 (T2).
+    let create = maestro(
+        repo,
+        &[
+            "event",
+            "create",
+            "--task-id",
+            "task-999",
+            "--message",
+            "orphan",
+            "--run",
+            "manual-test",
+        ],
+    );
+    assert_failure(&create, &["event", "create", "--task-id", "task-999"]);
+    assert!(stderr(&create).contains("task not found"), "{}", stderr(&create));
+}
+
+#[test]
 fn event_create_payload_can_back_current_task_claims() {
     let temp = setup_repo();
     let repo = temp.path();
