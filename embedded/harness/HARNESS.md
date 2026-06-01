@@ -1,5 +1,5 @@
 ---
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Maestro Harness Protocol
@@ -62,6 +62,17 @@ never batch-decide. Resume from the feature, not from memory.
     maestro feature set <id> --acceptance "<criterion>" --area "<surface>"
 
 Full method -> the maestro-design skill. Accept, tasks, ship, and notes.md mechanics -> the maestro-feature skill.
+
+## Harness self-improvement (on request)
+
+Maestro also surfaces recurring friction from the run log and task history as improvement
+proposals. This is passive - review it only when asked, never auto-act.
+
+    maestro harness list [--all]                   # backlog; --all adds the measured ledger
+    maestro harness apply <id>                     # accept -> spawns a standalone task (give it a --check, run the loop above)
+    maestro harness measure <id> [--force]         # re-run the detector to close the loop -> measured once the friction is gone
+
+Full method -> the maestro-task skill.
 
 ## If you are Claude Code
 - Read the task you're on with @file imports: `@.maestro/tasks/<id>/task.yaml` (state,

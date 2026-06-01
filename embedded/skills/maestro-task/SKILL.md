@@ -1,7 +1,7 @@
 ---
 name: maestro-task
-version: 1.2.0
-description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs. For the feature contract tasks deliver against, see the maestro-feature skill.
+version: 1.3.0
+description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs and the on-request harness self-improvement loop. For the feature contract tasks deliver against, see the maestro-feature skill.
 ---
 
 # Maestro Task
@@ -96,6 +96,28 @@ external ref; omit it for a human blocker. Open blockers stop both `claim` and `
 `verified`, so a finished task can still be rejected, abandoned, or superseded - and cannot
 be undone. Once a task is itself rejected, abandoned, or superseded, no further transition
 is allowed. Record `--by` as the id of the task that replaces this one.
+
+## Harness self-improvement (on request)
+
+Maestro also watches its own run log and task history and surfaces recurring friction as
+improvement proposals - a missing verification command, a recurring blocker, a decision
+worth re-recording. It is passive: review the backlog only when asked, and never act on a
+proposal without the human's say-so.
+
+State flow: `proposed -> accepted -> measured` (ineffective: `accepted -> proposed`;
+regressed: `measured -> proposed`)
+
+    maestro harness list [--all]       # backlog (proposed + accepted); --all adds the measured ledger
+    maestro harness show <id>          # one proposal: type, status, spawned task, history
+    maestro harness apply <id>         # proposed -> accepted; spawns a STANDALONE task to do the fix
+    maestro harness measure <id>       # re-run the detector to close the loop (gated; see below)
+
+`apply` spawns a *standalone* task (no feature), so it needs at least one `--check` before
+you can claim it - then run that task through the loop above. `measure` re-runs the
+originating detector: friction gone -> `measured`; still firing -> back to `proposed` (the
+fix was ineffective and the task link is cleared); a `measured` item whose friction later
+returns reopens to `proposed`. `measure` refuses unless the linked task is `verified` - pass
+`--force` to close it anyway.
 
 ## Defaults
 

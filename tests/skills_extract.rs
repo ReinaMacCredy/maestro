@@ -317,7 +317,7 @@ fn extract_skills_update_preserves_local_edit_when_version_matches() {
 
     // Locally edit an installed skill while keeping the shipped version.
     let installed = paths.skills_dir().join("maestro-task").join("SKILL.md");
-    let edited = "---\nname: maestro-task\nversion: 1.2.0\n---\n\nlocal edit\n";
+    let edited = "---\nname: maestro-task\nversion: 1.3.0\n---\n\nlocal edit\n";
     fs::write(&installed, edited).expect("invariant: installed skill should be writable");
     let backup_timestamp =
         backup_operation_timestamp().expect("invariant: backup timestamp should be available");
