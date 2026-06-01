@@ -180,21 +180,10 @@ printf '{{"tag_name":"v{}","published_at":"2026-05-26T05:16:16.000Z","assets":[{
 }
 
 #[test]
-fn update_reports_manager_commands_for_brew_and_cargo_installs() {
+fn update_reports_manager_commands_for_cargo_installs() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
-
-    let brew = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["update", "--check"])
-        .current_dir(temp_dir.path())
-        .env("MAESTRO_INSTALL_METHOD", "brew")
-        .output()
-        .expect("invariant: maestro update should run");
-    assert_success(&brew);
-    let stdout = String::from_utf8_lossy(&brew.stdout);
-    assert!(stdout.contains("Update unavailable for this install"));
-    assert!(stdout.contains("brew upgrade maestro"));
 
     let cargo = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(["update", "--check"])
@@ -205,9 +194,8 @@ fn update_reports_manager_commands_for_brew_and_cargo_installs() {
     assert_success(&cargo);
     let stdout = String::from_utf8_lossy(&cargo.stdout);
     assert!(stdout.contains("Update unavailable for this install"));
-    assert!(stdout.contains(
-        "cargo install --git https://github.com/ReinaMacCredy/maestro --locked --force"
-    ));
+    assert!(stdout
+        .contains("cargo install --git https://github.com/ReinaMacCredy/maestro --locked --force"));
 }
 
 #[test]

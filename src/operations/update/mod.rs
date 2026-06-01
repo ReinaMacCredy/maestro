@@ -88,8 +88,6 @@ pub enum BinaryStatus {
 pub enum UpdateUnavailable {
     /// This binary is not managed by Maestro's self-updater.
     LocalDevelopment,
-    /// This binary should be upgraded through Homebrew.
-    Homebrew,
     /// This binary should be upgraded through Cargo.
     Cargo,
     /// The latest release has no asset matching this platform.
@@ -102,8 +100,6 @@ impl fmt::Display for UpdateUnavailable {
             Self::LocalDevelopment => {
                 formatter.write_str("for this build: running from a local development binary")
             }
-            Self::Homebrew => formatter
-                .write_str("for this install: installed with Homebrew. Run `brew upgrade maestro`"),
             Self::Cargo => formatter.write_str(
                 "for this install: installed with Cargo. Run `cargo install --git https://github.com/ReinaMacCredy/maestro --locked --force`",
             ),
@@ -160,8 +156,6 @@ pub struct UpdateRequest {
 pub enum InstallMethod {
     /// A self-managed GitHub release binary, usually installed by curl.
     Curl,
-    /// A Homebrew-managed binary.
-    Homebrew,
     /// A Cargo-managed binary under a Cargo bin directory.
     Cargo,
     /// A local development binary from a Cargo target directory.
@@ -364,15 +358,6 @@ pub fn run_update(options: &UpdateOptions<'_>) -> Result<UpdateOutcome> {
                 &AtomicBinaryReplacer,
             )
         }
-        InstallMethod::Homebrew => {
-            let downloader = UnavailableDownloader::new(UpdateUnavailable::Homebrew);
-            run_update_with_seams(
-                options,
-                &downloader,
-                &Sha256Verifier::disabled(),
-                &AtomicBinaryReplacer,
-            )
-        }
         InstallMethod::Cargo => {
             let downloader = UnavailableDownloader::new(UpdateUnavailable::Cargo);
             run_update_with_seams(
@@ -399,7 +384,6 @@ pub fn detect_install_method(executable_path: &Path) -> InstallMethod {
     if let Ok(value) = std::env::var("MAESTRO_INSTALL_METHOD") {
         match value.trim().to_ascii_lowercase().as_str() {
             "curl" | "github" | "self" => return InstallMethod::Curl,
-            "brew" | "homebrew" => return InstallMethod::Homebrew,
             "cargo" => return InstallMethod::Cargo,
             "local" | "dev" | "development" => return InstallMethod::LocalDevelopment,
             _ => {}
@@ -412,9 +396,6 @@ pub fn detect_install_method(executable_path: &Path) -> InstallMethod {
     }
     if path.contains("/.cargo/bin/") {
         return InstallMethod::Cargo;
-    }
-    if path.contains("/Cellar/maestro/") || path.contains("/Homebrew/") {
-        return InstallMethod::Homebrew;
     }
     InstallMethod::Curl
 }
@@ -554,12 +535,6 @@ mod tests {
         assert_eq!(
             detect_install_method(std::path::Path::new("/Users/me/.cargo/bin/maestro")),
             InstallMethod::Cargo
-        );
-        assert_eq!(
-            detect_install_method(std::path::Path::new(
-                "/opt/homebrew/Cellar/maestro/1779772576/bin/maestro"
-            )),
-            InstallMethod::Homebrew
         );
         assert_eq!(
             detect_install_method(std::path::Path::new("/usr/local/bin/maestro")),
