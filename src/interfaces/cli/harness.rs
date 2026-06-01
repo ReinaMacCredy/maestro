@@ -11,33 +11,45 @@ pub fn run(args: HarnessArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
 
     match args.command {
-        HarnessCommand::List => list(&paths),
+        HarnessCommand::List { all } => list(&paths, all),
         HarnessCommand::Show { id } => show(&paths, &id),
         HarnessCommand::Apply { id } => apply(&paths, &id),
+        HarnessCommand::Measure { id, force } => measure(&paths, &id, force),
     }
 }
 
-fn list(paths: &MaestroPaths) -> Result<()> {
-    let backlog = harness::refresh(paths)?;
-    if backlog.items.is_empty() {
+fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
+    let (backlog, ready) = harness::refresh(paths)?;
+    let visible = backlog
+        .items
+        .iter()
+        .filter(|item| is_visible(item, all))
+        .collect::<Vec<_>>();
+    if visible.is_empty() {
         println!("no improvement proposals found");
         return Ok(());
     }
     println!("ID\tSTATUS\tTYPE\tTITLE");
-    for item in backlog.items {
+    for item in visible {
+        let hint = if ready.contains(&item.id) {
+            "\t(ready to measure)"
+        } else {
+            ""
+        };
         println!(
-            "{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}{}",
             item.id,
             field_or_default(&item.status, "proposed"),
             field_or_default(&item.item_type, "unknown"),
-            item.title
+            item.title,
+            hint
         );
     }
     Ok(())
 }
 
 fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let backlog = harness::refresh(paths)?;
+    let (backlog, _) = harness::refresh(paths)?;
     let item = find_item(&backlog, id)?;
     print_item(item);
     Ok(())
@@ -45,8 +57,27 @@ fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
 
 fn apply(paths: &MaestroPaths, id: &str) -> Result<()> {
     let item = harness::apply(paths, id)?;
-    println!("applied {}", item.id);
+    match &item.spawned_task {
+        Some(task) => println!("accepted {} (spawned {task})", item.id),
+        None => println!("accepted {}", item.id),
+    }
     Ok(())
+}
+
+fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<()> {
+    let item = harness::measure(paths, id, force)?;
+    println!(
+        "{} is now {}",
+        item.id,
+        field_or_default(&item.status, "proposed")
+    );
+    Ok(())
+}
+
+/// Default list shows the active set (proposed + accepted); `--all` adds the
+/// `measured` ledger.
+fn is_visible(item: &BacklogItem, all: bool) -> bool {
+    all || field_or_default(&item.status, "proposed") != "measured"
 }
 
 fn find_item<'a>(backlog: &'a BacklogConfig, id: &str) -> Result<&'a BacklogItem> {
@@ -66,10 +97,22 @@ fn print_item(item: &BacklogItem) {
     if !item.source.is_empty() {
         println!("source: {}", item.source);
     }
+    if let Some(task) = &item.spawned_task {
+        println!("spawned_task: {task}");
+    }
     if !item.evidence.is_empty() {
         println!("evidence:");
         for entry in &item.evidence {
             println!("- {entry}");
+        }
+    }
+    if !item.history.is_empty() {
+        println!("history:");
+        for entry in &item.history {
+            match &entry.task {
+                Some(task) => println!("- {} ({}) {}", entry.result, task, entry.at),
+                None => println!("- {} {}", entry.result, entry.at),
+            }
         }
     }
 }

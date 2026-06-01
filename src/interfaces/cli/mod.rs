@@ -433,9 +433,23 @@ pub struct HarnessArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum HarnessCommand {
-    List,
-    Show { id: String },
-    Apply { id: String },
+    List {
+        /// Include measured proposals (the completed-improvement ledger).
+        #[arg(long)]
+        all: bool,
+    },
+    Show {
+        id: String,
+    },
+    Apply {
+        id: String,
+    },
+    Measure {
+        id: String,
+        /// Measure even if the linked task is not verified.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Debug, Args)]

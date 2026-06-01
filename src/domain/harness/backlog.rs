@@ -43,15 +43,6 @@ pub fn refresh(paths: &MaestroPaths, proposals: Vec<BacklogItem>) -> Result<Back
     Ok(backlog)
 }
 
-/// Mark one existing backlog item as applied.
-pub fn mark_applied(backlog: &mut BacklogConfig, id: &str) -> Result<BacklogItem> {
-    let Some(item) = backlog.items.iter_mut().find(|item| item.id == id) else {
-        bail!("backlog item not found: {id}");
-    };
-    item.status = "applied".to_string();
-    Ok(item.clone())
-}
-
 /// Merge proposals into the backlog keyed on stable fingerprint and assign
 /// deterministic ids. Re-detecting a terminal `measured` state note reopens it
 /// (D6); a `proposed` note with no durable history that is no longer detected

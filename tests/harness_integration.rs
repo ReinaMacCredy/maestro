@@ -294,9 +294,11 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     assert!(!backlog.contains("api_key"));
 
     let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("applied hb-001"));
+    assert!(apply.contains("accepted hb-001"));
+    assert!(apply.contains("spawned task-"));
     let applied = run_success(repo, &["harness", "show", "hb-001"]);
-    assert!(applied.contains("status: applied"));
+    assert!(applied.contains("status: accepted"));
+    assert!(applied.contains("spawned_task: task-"));
 }
 
 #[test]
@@ -1603,4 +1605,165 @@ fn harness_refuses_symlinked_harness_backlog_paths() {
     );
     assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
     assert!(!external.path().join("backlog.yaml").exists());
+}
+
+fn write_harness_verify(repo: &Path, commands: &[&str]) {
+    let mut yaml = String::from(
+        "schema_version: maestro.harness.v1\nstack:\n  kind: generic\n  detected_by: []\n  verify:",
+    );
+    if commands.is_empty() {
+        yaml.push_str(" []\n");
+    } else {
+        yaml.push('\n');
+        for command in commands {
+            yaml.push_str(&format!("    - {command}\n"));
+        }
+    }
+    fs::write(repo.join(".maestro/harness/harness.yml"), yaml)
+        .expect("invariant: harness should be writable");
+}
+
+/// Set up a repo whose only proposal is a `missing_verification` note (hb-001).
+/// The note fires because task-001's report records `cargo clippy`, absent from the
+/// empty harness verify list. Adding `cargo clippy` to verify later silences it.
+fn setup_missing_verification_note(prefix: &str) -> TestTempDir {
+    let temp = setup_repo(prefix);
+    let repo = temp.path();
+    create_task(repo, "Reusable verification");
+    write_harness_verify(repo, &[]);
+    fs::write(
+        task_dir(repo, "task-001").join("verification.json"),
+        failed_verification_report_with_command(
+            "task-001",
+            "900",
+            "maestro.verification.v1",
+            "cargo clippy",
+        ),
+    )
+    .expect("invariant: verification report should be writable");
+    let list = run_success(repo, &["harness", "list"]);
+    assert!(list.contains("missing_verification"));
+    temp
+}
+
+#[test]
+fn harness_apply_spawns_task_and_rejects_reaccept() {
+    let temp = setup_missing_verification_note("maestro-harness-apply-spawn");
+    let repo = temp.path();
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("accepted hb-001"));
+    assert!(apply.contains("spawned task-002"));
+
+    // The spawned task is a real draft task.
+    let show_task = run_success(repo, &["task", "show", "task-002"]);
+    assert!(show_task.contains("Reusable verification"));
+
+    // Re-accepting is rejected; the task is already linked.
+    let reapply = maestro(repo, &["harness", "apply", "hb-001"]);
+    assert!(!reapply.status.success());
+    assert!(stderr(&reapply).contains("already accepted"));
+}
+
+#[test]
+fn harness_measure_closes_silent_state_note() {
+    let temp = setup_missing_verification_note("maestro-harness-measure-silent");
+    let repo = temp.path();
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("spawned task-002"));
+
+    // The linked task is verified and the friction is gone (command now in verify).
+    mark_verified(repo, "task-002", "general", "0", "100");
+    write_harness_verify(repo, &["cargo clippy"]);
+
+    // D7: an accepted state note whose detector is silent is flagged ready to measure.
+    let ready = run_success(repo, &["harness", "list"]);
+    assert!(ready.contains("ready to measure"));
+
+    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
+    assert!(measure.contains("hb-001 is now measured"));
+
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    assert!(show.contains("status: measured"));
+    assert!(show.contains("history:"));
+    assert!(show.contains("- measured"));
+
+    // A measured note is hidden by default and only shown under --all (D4).
+    let list = run_success(repo, &["harness", "list"]);
+    assert!(!list.contains("hb-001"));
+    let all = run_success(repo, &["harness", "list", "--all"]);
+    assert!(all.contains("hb-001"));
+}
+
+#[test]
+fn harness_measure_reverts_ineffective_state_note_and_relinks_on_reapply() {
+    let temp = setup_missing_verification_note("maestro-harness-measure-ineffective");
+    let repo = temp.path();
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("spawned task-002"));
+    mark_verified(repo, "task-002", "general", "0", "100");
+
+    // Friction persists (cargo clippy still absent from verify): the note reverts.
+    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
+    assert!(measure.contains("hb-001 is now proposed"));
+
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    assert!(show.contains("status: proposed"));
+    assert!(show.contains("- ineffective"));
+    assert!(!show.contains("spawned_task:"));
+
+    // The cleared link means a re-accept spawns a fresh task, never the closed one.
+    let reapply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(reapply.contains("spawned task-003"));
+}
+
+#[test]
+fn harness_measure_requires_verified_task_unless_forced() {
+    let temp = setup_missing_verification_note("maestro-harness-measure-gate");
+    let repo = temp.path();
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("spawned task-002"));
+
+    // The linked task is still a draft: measure is gated.
+    let gated = maestro(repo, &["harness", "measure", "hb-001"]);
+    assert!(!gated.status.success());
+    assert!(stderr(&gated).contains("not verified"));
+
+    // --force bypasses the gate.
+    let forced = run_success(repo, &["harness", "measure", "hb-001", "--force"]);
+    assert!(forced.contains("hb-001 is now"));
+}
+
+#[test]
+fn harness_measure_closes_behavioral_note_without_silence() {
+    let temp = setup_repo("maestro-harness-measure-behavioral");
+    let repo = temp.path();
+    create_task(repo, "First blocked task");
+    create_task(repo, "Second blocked task");
+    write_harness_verify(repo, &[]);
+    for id in ["task-001", "task-002"] {
+        assert_success(
+            &maestro(
+                repo,
+                &["task", "block", id, "--reason", "waiting for staging credentials"],
+            ),
+            &["task", "block", id, "--reason", "waiting for staging credentials"],
+        );
+    }
+
+    let list = run_success(repo, &["harness", "list"]);
+    assert!(list.contains("recurring_blocker"));
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("accepted hb-001"));
+    assert!(apply.contains("spawned task-003"));
+    mark_verified(repo, "task-003", "general", "0", "100");
+
+    // The blocker still emits, but behavioral notes close on the deliberate,
+    // verified-task measure with no silence check (D1).
+    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
+    assert!(measure.contains("hb-001 is now measured"));
 }

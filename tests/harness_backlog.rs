@@ -176,29 +176,6 @@ fn refresh_preserves_manual_missing_verification_evidence() {
 }
 
 #[test]
-fn mark_applied_changes_only_the_selected_item_status() {
-    let temp = TestTempDir::new("maestro-harness-backlog");
-    let paths = paths_for(&temp);
-    let mut backlog = backlog::refresh(
-        &paths,
-        vec![
-            proposal("one", "missing_skill", "Add skill one"),
-            proposal("two", "missing_skill", "Add skill two"),
-        ],
-    )
-    .expect("invariant: backlog refresh should succeed");
-
-    let applied = backlog::mark_applied(&mut backlog, "hb-001")
-        .expect("invariant: selected backlog item should exist");
-    backlog::save(&paths, &backlog).expect("invariant: updated backlog should save");
-    let reloaded = backlog::load(&paths).expect("invariant: backlog should reload");
-
-    assert_eq!(applied.status, "applied");
-    assert_eq!(reloaded.items[0].status, "applied");
-    assert_eq!(reloaded.items[1].status, "proposed");
-}
-
-#[test]
 fn refresh_does_not_apply_harness_config_changes() {
     let temp = TestTempDir::new("maestro-harness-backlog");
     let paths = paths_for(&temp);
