@@ -80,6 +80,39 @@ fn top_level_help_fills_descriptions_and_examples() {
 }
 
 #[test]
+fn root_about_strings_name_every_subcommand() {
+    // T7 regression: the group `about` lines must not omit subcommands.
+    assert_contains_all(
+        &maestro(&["--help"]),
+        &[
+            "Create, show, and list decision records in .maestro/decisions/",
+            "List, show, apply, and measure harness improvement suggestions",
+            "Query computed read models (matrix, friction, decisions, proof, backlog)",
+            "Run or inspect the MCP server (serve, stdin, tools, list)",
+        ],
+    );
+}
+
+#[test]
+fn version_flag_matches_the_version_subcommand() {
+    // S7: `--version`/`-V` now exists and prints the same version string as the
+    // `version` subcommand (which adds the release date and binary path).
+    let flag = maestro(&["--version"]);
+    assert!(
+        flag.starts_with("maestro "),
+        "unexpected --version output: {flag}"
+    );
+    let subcommand = maestro(&["version"]);
+    let flag_ver = flag.split_whitespace().nth(1).unwrap_or_default();
+    let sub_ver = subcommand.split_whitespace().nth(1).unwrap_or_default();
+    assert_eq!(
+        flag_ver, sub_ver,
+        "--version and the `version` subcommand disagree on the version string"
+    );
+    assert_eq!(maestro(&["-V"]), flag, "`-V` should match `--version`");
+}
+
+#[test]
 fn nested_help_lists_section_38_command_tree() {
     assert_contains_all(
         &maestro(&["init", "--help"]),
@@ -126,7 +159,10 @@ fn nested_help_lists_section_38_command_tree() {
         ],
     );
     assert_contains_all(&maestro(&["decision", "--help"]), &["new", "show", "list"]);
-    assert_contains_all(&maestro(&["harness", "--help"]), &["list", "show", "apply"]);
+    assert_contains_all(
+        &maestro(&["harness", "--help"]),
+        &["list", "show", "apply", "measure"],
+    );
     assert_contains_all(
         &maestro(&["query", "--help"]),
         &["matrix", "friction", "decisions", "backlog", "proof"],

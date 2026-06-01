@@ -25,6 +25,7 @@ pub mod watch;
 #[command(
     name = "maestro",
     about = "Local-first agent harness CLI",
+    version = env!("MAESTRO_VERSION"),
     arg_required_else_help = true
 )]
 pub struct Cli {
@@ -63,13 +64,13 @@ pub enum RootCommand {
     Event(EventArgs),
     #[command(about = "Manage features: the product contract and its lifecycle")]
     Feature(FeatureArgs),
-    #[command(about = "Create and list decision records in .maestro/decisions/")]
+    #[command(about = "Create, show, and list decision records in .maestro/decisions/")]
     Decision(DecisionArgs),
-    #[command(about = "List, show, and apply harness improvement suggestions")]
+    #[command(about = "List, show, apply, and measure harness improvement suggestions")]
     Harness(HarnessArgs),
-    #[command(about = "Query computed read models (matrix, friction, proof, backlog)")]
+    #[command(about = "Query computed read models (matrix, friction, decisions, proof, backlog)")]
     Query(QueryArgs),
-    #[command(about = "Run or inspect the MCP server (serve, tools, list)")]
+    #[command(about = "Run or inspect the MCP server (serve, stdin, tools, list)")]
     Mcp(McpArgs),
     #[command(about = "Hook entry points invoked by the agent harness")]
     Hook(HookArgs),
@@ -280,16 +281,17 @@ pub struct EventArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum EventCommand {
+    #[command(about = "Record a run event, optionally bound to a task and carrying claims")]
     Create {
-        #[arg(long)]
+        #[arg(long, help = "Bind the event to this task id")]
         task_id: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Human-readable event message")]
         message: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Raw JSON payload to attach to the event")]
         payload: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Completion claim recorded as task proof (repeatable)")]
         claim: Vec<String>,
-        #[arg(long, default_value = "manual")]
+        #[arg(long, default_value = "manual", help = "Run label grouping the event")]
         run: String,
     },
 }
@@ -420,8 +422,11 @@ pub struct DecisionArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum DecisionCommand {
+    #[command(about = "Create a decision record (-> decision-NN)")]
     New { title: String },
+    #[command(about = "Show a decision record by id (decision-NN or NN)")]
     Show { id: String },
+    #[command(about = "List decision records")]
     List,
 }
 
@@ -433,17 +438,21 @@ pub struct HarnessArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum HarnessCommand {
+    #[command(about = "List proposals (proposed + accepted; --all adds the measured ledger)")]
     List {
         /// Include measured proposals (the completed-improvement ledger).
         #[arg(long)]
         all: bool,
     },
+    #[command(about = "Show a proposal's detail and history")]
     Show {
         id: String,
     },
+    #[command(about = "Accept a proposal and spawn a linked task (-> accepted)")]
     Apply {
         id: String,
     },
+    #[command(about = "Re-run the detector to close or revert a proposal (-> measured)")]
     Measure {
         id: String,
         /// Measure even if the linked task is not verified.
@@ -460,10 +469,15 @@ pub struct QueryArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum QueryCommand {
+    #[command(about = "Show the feature x task matrix (FEATURE/TASK/STATE/PROOF/TITLE)")]
     Matrix,
+    #[command(about = "Summarize recorded run friction (events, prompts, corrections)")]
     Friction,
+    #[command(about = "List decision records (ID/FILE/TITLE)")]
     Decisions,
+    #[command(about = "List improvement backlog items (ID/TITLE)")]
     Backlog,
+    #[command(about = "Show a task's proof status")]
     Proof {
         task_id: Option<String>,
         #[arg(long = "task-id")]
@@ -479,10 +493,13 @@ pub struct McpArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum McpCommand {
-    #[command(alias = "stdio")]
+    #[command(alias = "stdio", about = "Run the MCP server over stdio")]
     Serve,
+    #[command(about = "Run the MCP server over stdio (same as serve)")]
     Stdin,
+    #[command(about = "List the MCP tool names maestro exposes")]
     Tools,
+    #[command(about = "List the MCP tool names maestro exposes (same as tools)")]
     List,
 }
 

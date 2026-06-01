@@ -99,9 +99,9 @@ Do not tag, publish, push, or create GitHub releases without explicit approval.
 - Version is git-derived at build time: `<major>.<minor>.<patch>.<commit-epoch>-g<short-sha>`,
   computed by `build.rs` and injected as `env!("MAESTRO_VERSION")`. The `<major>.<minor>.<patch>`
   prefix is Cargo.toml's `version` (the commit-epoch is appended as a 4th dotted component), so
-  bump Cargo.toml to step the version line. There is no `--version` flag; read it with
-  `maestro version`. Releases publish ONLY on manual `workflow_dispatch`; ordinary commits
-  and merges never release.
+  bump Cargo.toml to step the version line. `maestro --version`/`-V` prints the version string;
+  `maestro version` adds the release date and the running binary's path. Releases publish ONLY on
+  manual `workflow_dispatch`; ordinary commits and merges never release.
 - If editing `embedded/skills/<name>/`, `embedded/hooks/record.sh`, or
   `embedded/harness/HARNESS.md`, bump its version marker and update
   `tests/resources_version_guard.rs`.
