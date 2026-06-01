@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION};
@@ -116,6 +117,22 @@ impl BacklogConfig {
             schema_version: BACKLOG_SCHEMA_VERSION.to_string(),
             items: Vec::new(),
         }
+    }
+
+    /// Find a backlog item by id.
+    pub fn find(&self, id: &str) -> Result<&BacklogItem> {
+        self.items
+            .iter()
+            .find(|item| item.id == id)
+            .ok_or_else(|| anyhow!("backlog item not found: {id}"))
+    }
+
+    /// Find a backlog item by id for mutation.
+    pub fn find_mut(&mut self, id: &str) -> Result<&mut BacklogItem> {
+        self.items
+            .iter_mut()
+            .find(|item| item.id == id)
+            .ok_or_else(|| anyhow!("backlog item not found: {id}"))
     }
 }
 

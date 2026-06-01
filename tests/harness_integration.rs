@@ -1732,9 +1732,10 @@ fn harness_measure_requires_verified_task_unless_forced() {
     assert!(!gated.status.success());
     assert!(stderr(&gated).contains("not verified"));
 
-    // --force bypasses the gate.
+    // --force bypasses the gate, but not the verdict: the friction persists
+    // (cargo clippy still absent from verify), so the note reverts to proposed.
     let forced = run_success(repo, &["harness", "measure", "hb-001", "--force"]);
-    assert!(forced.contains("hb-001 is now"));
+    assert!(forced.contains("hb-001 is now proposed"));
 }
 
 #[test]
@@ -1748,9 +1749,21 @@ fn harness_measure_closes_behavioral_note_without_silence() {
         assert_success(
             &maestro(
                 repo,
-                &["task", "block", id, "--reason", "waiting for staging credentials"],
+                &[
+                    "task",
+                    "block",
+                    id,
+                    "--reason",
+                    "waiting for staging credentials",
+                ],
             ),
-            &["task", "block", id, "--reason", "waiting for staging credentials"],
+            &[
+                "task",
+                "block",
+                id,
+                "--reason",
+                "waiting for staging credentials",
+            ],
         );
     }
 

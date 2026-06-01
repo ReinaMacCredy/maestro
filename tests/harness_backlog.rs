@@ -3,7 +3,7 @@ mod support;
 use std::fs;
 
 use maestro::domain::harness::backlog;
-use maestro::domain::harness::schema::{BacklogConfig, BacklogItem};
+use maestro::domain::harness::schema::{BacklogConfig, BacklogItem, HistoryEntry};
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
@@ -81,6 +81,47 @@ fn refresh_preserves_existing_ids_and_uses_next_number() {
 
     assert_eq!(refreshed.items[0].id, "hb-007");
     assert_eq!(refreshed.items[1].id, "hb-008");
+}
+
+#[test]
+fn refresh_drops_undetected_proposed_note_without_history() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    let mut existing = BacklogConfig::empty();
+    let mut stale = proposal("stale", "missing_skill", "Add stale skill");
+    stale.id = "hb-005".to_string();
+    // proposed, no spawned task, no history: a pure evidence note with nothing durable.
+    existing.items.push(stale);
+    backlog::save(&paths, &existing).expect("invariant: existing backlog should save");
+
+    // A refresh that no longer detects it reconciles the ephemeral note away (D4).
+    let refreshed =
+        backlog::refresh(&paths, Vec::new()).expect("invariant: backlog refresh should succeed");
+
+    assert!(refreshed.items.is_empty());
+}
+
+#[test]
+fn refresh_keeps_undetected_proposed_note_with_history() {
+    let temp = TestTempDir::new("maestro-harness-backlog");
+    let paths = paths_for(&temp);
+    let mut existing = BacklogConfig::empty();
+    let mut durable = proposal("durable", "missing_skill", "Add durable skill");
+    durable.id = "hb-005".to_string();
+    // A prior measure-fail left history: durable, so D4 must NOT drop it even when undetected.
+    durable.history.push(HistoryEntry {
+        result: "ineffective".to_string(),
+        task: None,
+        at: "1970-01-01T00:00:00Z".to_string(),
+    });
+    existing.items.push(durable);
+    backlog::save(&paths, &existing).expect("invariant: existing backlog should save");
+
+    let refreshed =
+        backlog::refresh(&paths, Vec::new()).expect("invariant: backlog refresh should succeed");
+
+    assert_eq!(refreshed.items.len(), 1);
+    assert_eq!(refreshed.items[0].id, "hb-005");
 }
 
 #[test]

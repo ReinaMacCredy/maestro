@@ -38,21 +38,30 @@ fn ready_to_measure(item: &BacklogItem, fresh: &BTreeSet<String>) -> bool {
         && !fresh.contains(&item.fingerprint)
 }
 
+/// Run detection and merge fresh proposals into the loaded backlog without
+/// persisting, returning the backlog and the set of currently-detected
+/// fingerprints (used by the measure verdict). Re-derive runs on every command
+/// per SPEC §5.1, so apply and measure share this step.
+fn detect_and_merge(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)> {
+    let proposals = detect::detect(paths)?;
+    let fresh = proposals
+        .iter()
+        .map(|proposal| proposal.fingerprint.clone())
+        .collect::<BTreeSet<_>>();
+    let mut backlog = backlog::load(paths)?;
+    backlog::merge_proposals(&mut backlog, proposals);
+    Ok((backlog, fresh))
+}
+
 /// Accept a proposal (D0/A): spawn a linked task and record the link. Re-accepting
 /// is an error; the existing task is already linked. A measure that reverted the
 /// note to `proposed` clears the old link, so the next accept spawns a fresh task
 /// rather than silently reusing a closed one (impl-default (c)).
 pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
-    let proposals = detect::detect(paths)?;
-    let mut backlog = backlog::load(paths)?;
-    backlog::merge_proposals(&mut backlog, proposals);
+    let (mut backlog, _) = detect_and_merge(paths)?;
 
-    // Read what we need before the task-creation side effect borrows `backlog`.
-    let (status, title) = {
-        let item = find(&backlog, id)?;
-        (item.status.clone(), item.title.clone())
-    };
-    match status.as_str() {
+    let item = backlog.find_mut(id)?;
+    match item.status.as_str() {
         "accepted" => bail!("{id} is already accepted; its task is already linked"),
         "measured" => {
             bail!("{id} is already measured; run `maestro harness list` to re-derive it first")
@@ -60,6 +69,7 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
         _ => {}
     }
 
+    let title = item.title.clone();
     let task = task::create_task(
         &paths.tasks_dir(),
         &title,
@@ -68,8 +78,6 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
         None,
         &nanos_since_epoch_string(),
     )?;
-
-    let item = find_mut(&mut backlog, id)?;
     item.status = "accepted".to_string();
     item.spawned_task = Some(task.id.clone());
     item.history.push(HistoryEntry {
@@ -89,17 +97,11 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
 /// judgment (D1), with no silence check. Unless `force`, the linked task must be
 /// verified first (impl-default (d)).
 pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<BacklogItem> {
-    let proposals = detect::detect(paths)?;
-    let fresh = proposals
-        .iter()
-        .map(|proposal| proposal.fingerprint.clone())
-        .collect::<BTreeSet<_>>();
-    let mut backlog = backlog::load(paths)?;
-    backlog::merge_proposals(&mut backlog, proposals);
+    let (mut backlog, fresh) = detect_and_merge(paths)?;
 
     // Read identity + status before any gate or mutation.
     let (status, fingerprint, item_type, spawned_task) = {
-        let item = find(&backlog, id)?;
+        let item = backlog.find(id)?;
         (
             item.status.clone(),
             item.fingerprint.clone(),
@@ -129,7 +131,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<BacklogIte
     }
 
     let now = utc_now_timestamp();
-    let item = find_mut(&mut backlog, id)?;
+    let item = backlog.find_mut(id)?;
     if is_state_detector(&item_type) && fresh.contains(&fingerprint) {
         // Friction persists: the improvement was ineffective. Revert to proposed and
         // drop the link so the next accept spawns a fresh task (impl-default (c)).
@@ -151,20 +153,4 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<BacklogIte
     let measured = item.clone();
     backlog::save(paths, &backlog)?;
     Ok(measured)
-}
-
-fn find<'a>(backlog: &'a BacklogConfig, id: &str) -> Result<&'a BacklogItem> {
-    backlog
-        .items
-        .iter()
-        .find(|item| item.id == id)
-        .ok_or_else(|| anyhow::anyhow!("backlog item not found: {id}"))
-}
-
-fn find_mut<'a>(backlog: &'a mut BacklogConfig, id: &str) -> Result<&'a mut BacklogItem> {
-    backlog
-        .items
-        .iter_mut()
-        .find(|item| item.id == id)
-        .ok_or_else(|| anyhow::anyhow!("backlog item not found: {id}"))
 }

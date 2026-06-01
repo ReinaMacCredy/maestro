@@ -95,6 +95,9 @@ fn reopen_if_regressed(existing: &mut BacklogItem) {
             task: existing.spawned_task.clone(),
             at: utc_now_timestamp(),
         });
+        // Drop the link so the next accept spawns a fresh task (impl-default (c)),
+        // mirroring the D2 ineffective path. The old task stays in history.
+        existing.spawned_task = None;
     }
 }
 

@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::domain::harness::{BacklogConfig, BacklogItem};
+use crate::domain::harness::BacklogItem;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::{HarnessArgs, HarnessCommand};
 use crate::operations::harness;
@@ -50,8 +50,7 @@ fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
 
 fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
     let (backlog, _) = harness::refresh(paths)?;
-    let item = find_item(&backlog, id)?;
-    print_item(item);
+    print_item(backlog.find(id)?);
     Ok(())
 }
 
@@ -78,14 +77,6 @@ fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<()> {
 /// `measured` ledger.
 fn is_visible(item: &BacklogItem, all: bool) -> bool {
     all || field_or_default(&item.status, "proposed") != "measured"
-}
-
-fn find_item<'a>(backlog: &'a BacklogConfig, id: &str) -> Result<&'a BacklogItem> {
-    backlog
-        .items
-        .iter()
-        .find(|item| item.id == id)
-        .ok_or_else(|| anyhow::anyhow!("backlog item not found: {id}"))
 }
 
 fn print_item(item: &BacklogItem) {
