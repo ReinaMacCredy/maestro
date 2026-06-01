@@ -198,6 +198,85 @@ fn doctor_fails_on_blocker_cycles() {
 }
 
 #[test]
+fn doctor_and_task_doctor_flag_a_dangling_decision_blocker() {
+    let temp = setup_repo("maestro-doctor-dangling-decision");
+    let repo = temp.path();
+
+    run_success(repo, &["decision", "new", "Adopt CSV schema"]); // decision-001
+    for args in [
+        vec!["task", "create", "Valid decision blocker"],
+        vec!["task", "create", "Dangling decision blocker"],
+        vec![
+            "task", "block", "task-001", "--reason", "needs ADR", "--by", "decision-001",
+        ],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+
+    // A resolvable decision blocker does not trip the doctor.
+    assert_success(&maestro(repo, &["task", "doctor"]), &["task", "doctor"]);
+
+    assert_success(
+        &maestro(
+            repo,
+            &[
+                "task", "block", "task-002", "--reason", "needs ADR", "--by", "decision-999",
+            ],
+        ),
+        &["task", "block", "task-002", "--by", "decision-999"],
+    );
+
+    let task_doctor = maestro(repo, &["task", "doctor"]);
+    assert_failure(&task_doctor, &["task", "doctor"]);
+    assert!(
+        stderr(&task_doctor).contains("referencing missing decision decision-999"),
+        "{}",
+        stderr(&task_doctor)
+    );
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_failure(&doctor, &["doctor"]);
+    assert!(stderr(&doctor).contains("referencing missing decision"));
+}
+
+#[test]
+fn doctor_flags_a_deleted_installed_mirror() {
+    let temp = setup_repo("maestro-doctor-install-integrity");
+    let repo = temp.path();
+
+    // Init'd but no agent installed: no install check, doctor stays ok.
+    let pre = maestro(repo, &["doctor"]);
+    assert_success(&pre, &["doctor"]);
+    assert!(!stdout(&pre).contains("check install"));
+
+    assert_success(
+        &maestro(repo, &["install", "--agent", "claude"]),
+        &["install", "--agent", "claude"],
+    );
+    let installed = maestro(repo, &["doctor"]);
+    assert_success(&installed, &["doctor"]);
+    assert!(stdout(&installed).contains("check install: ok"));
+
+    // Deleting an owned mirror is caught.
+    fs::remove_file(repo.join("CLAUDE.md"))
+        .expect("invariant: installed CLAUDE.md should be removable");
+    let broken = maestro(repo, &["doctor"]);
+    assert_failure(&broken, &["doctor"]);
+    assert!(
+        stderr(&broken).contains("mirror is missing or broken"),
+        "{}",
+        stderr(&broken)
+    );
+
+    // Re-installing repairs it.
+    assert_success(
+        &maestro(repo, &["install", "--agent", "claude"]),
+        &["install", "--agent", "claude"],
+    );
+    assert_success(&maestro(repo, &["doctor"]), &["doctor"]);
+}
+
+#[test]
 fn doctor_counts_real_decisions_and_skips_symlinked_entries() {
     let temp = setup_repo("maestro-doctor-decision-symlink");
     let repo = temp.path();

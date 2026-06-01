@@ -2,6 +2,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions;
 use crate::domain::feature;
+use crate::domain::install::{InstallLock, InstallState, MirrorKind};
 use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::{
@@ -59,6 +60,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     check_features(paths, &mut checks, &mut errors);
     check_backlog(paths, &mut checks, &mut errors);
     check_decisions(paths, &mut checks, &mut errors);
+    check_install(paths, &mut checks, &mut errors);
 
     let task_report = task::check_blocker_graph(&paths.tasks_dir())?;
     if task_report.is_ok() {
@@ -147,6 +149,72 @@ fn check_decisions(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: 
             detail: format!("{} decision file(s)", entries.len()),
         }),
         Err(error) => errors.push(format!("{error:#}")),
+    }
+}
+
+/// Verify that the files an installed agent owns still exist on disk. A bare
+/// `init` with no integration installed has no committed agents, so this is a
+/// no-op there and `doctor` stays ok; once an agent is installed, a deleted
+/// CLAUDE.md / codex hook config / skill symlink / record.sh is reported as an
+/// error (T4).
+fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
+    let lock = match InstallLock::load(&paths.install_lock_file()) {
+        Ok(lock) => lock,
+        Err(error) => {
+            errors.push(error.to_string());
+            return;
+        }
+    };
+
+    let committed = lock
+        .agents
+        .iter()
+        .filter(|(_, install)| install.state == InstallState::Committed)
+        .collect::<Vec<_>>();
+    if committed.is_empty() {
+        // init'd but never installed (or only pending/removing): nothing to verify.
+        return;
+    }
+
+    let root = paths.repo_root();
+    let mut missing = 0_usize;
+    for (agent, install) in &committed {
+        for (relative, ownership) in &install.files {
+            let path = root.join(relative);
+            let intact = match ownership.kind {
+                // A managed symlink must exist and resolve to a live target.
+                MirrorKind::Symlink => {
+                    std::fs::symlink_metadata(&path).is_ok() && path.exists()
+                }
+                // Every other mirror lives inside a real file on disk.
+                _ => path.exists(),
+            };
+            if !intact {
+                errors.push(format!(
+                    "{agent} mirror is missing or broken: {relative}; run `maestro init` to repair"
+                ));
+                missing += 1;
+            }
+        }
+    }
+
+    // The hook recorder lives in the extraction manifest, not the lock, but
+    // install always extracts it and every installed hook entry runs it, so a
+    // committed agent implies it must be present.
+    let recorder = paths.hooks_dir().join("record.sh");
+    if !recorder.exists() {
+        errors.push(format!(
+            "hook recorder is missing: {}; run `maestro init` to repair",
+            recorder.display()
+        ));
+        missing += 1;
+    }
+
+    if missing == 0 {
+        checks.push(DoctorCheck {
+            name: "install",
+            detail: format!("{} agent(s) intact", committed.len()),
+        });
     }
 }
 

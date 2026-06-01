@@ -4,6 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crate::domain::decisions;
 use crate::domain::task::lookup::task_yaml_path_for_entry;
 use crate::domain::task::template::{BlockerKind, TaskRecord, load_task};
 
@@ -72,6 +73,11 @@ pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
     let mut edges: HashMap<String, Vec<String>> = HashMap::new();
     let mut errors = Vec::new();
 
+    // Decision blockers point at `.maestro/decisions`, the sibling of tasks_dir
+    // under `.maestro` (both are MaestroPaths children); resolving refs there
+    // surfaces a dangling `--by decision-NNN` like a missing task ref (T4).
+    let decisions_dir = tasks_dir.parent().map(|maestro| maestro.join("decisions"));
+
     for task in &tasks {
         for blocker in task
             .blockers
@@ -81,8 +87,21 @@ pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
             let Some(blocked_ref) = blocker.blocked_ref.as_ref() else {
                 continue;
             };
-            if blocked_ref.kind != BlockerKind::Task {
-                continue;
+            match blocked_ref.kind {
+                // External and human blockers are free-form by design and cannot be validated.
+                BlockerKind::External | BlockerKind::Human => continue,
+                BlockerKind::Decision => {
+                    if let Some(decisions_dir) = decisions_dir.as_deref()
+                        && decisions::resolve_decision_path(decisions_dir, &blocked_ref.id).is_err()
+                    {
+                        errors.push(format!(
+                            "{} has blocker {} referencing missing decision {}",
+                            task.id, blocker.id, blocked_ref.id
+                        ));
+                    }
+                    continue;
+                }
+                BlockerKind::Task => {}
             }
 
             if blocked_ref.id == task.id {
