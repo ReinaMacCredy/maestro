@@ -192,9 +192,13 @@ fn remove_mirrors_removes_only_owned_content() {
     let agents = fs::read_to_string(temp_dir.path().join("AGENTS.md"))
         .expect("invariant: AGENTS.md should be readable");
     assert_eq!(agents, "# User\n");
-    let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
-        .expect("invariant: hooks json should be readable");
-    assert_eq!(hooks, "{}\n");
+    // hooks.json was maestro-created (no pre-existing user file), so stripping the
+    // managed keys empties it to `{}`; uninstall removes that husk rather than
+    // leaving an empty object behind (T6.5).
+    assert!(
+        !temp_dir.path().join(".codex/hooks.json").exists(),
+        "maestro-created hooks.json husk should be removed on uninstall"
+    );
 }
 
 #[test]

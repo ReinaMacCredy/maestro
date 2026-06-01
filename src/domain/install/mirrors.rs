@@ -566,14 +566,35 @@ fn write_mirror_removal(
 ) -> Result<()> {
     backup_file_with_timestamp(paths, &removal.path, "uninstall", backup_timestamp)?;
 
-    write_string_atomic(&removal.path, &removal.next)
-        .with_context(|| format!("failed to uninstall mirror {}", removal.path.display()))?;
+    if is_empty_residue(&removal.next) {
+        // Stripping maestro's managed content emptied the file, which means
+        // maestro created it (a pre-existing user file leaves real residue, and
+        // its previous_values are restored into `next` first). Remove the husk
+        // instead of leaving a 0-byte file or bare `{}` behind (T6.5). The
+        // pre-write backup above preserves it; rollback recreates it from
+        // `removal.contents`.
+        fs::remove_file(&removal.path).with_context(|| {
+            format!("failed to remove emptied mirror {}", removal.path.display())
+        })?;
+    } else {
+        write_string_atomic(&removal.path, &removal.next)
+            .with_context(|| format!("failed to uninstall mirror {}", removal.path.display()))?;
+    }
     println!(
         "{}",
         unified_diff(&removal.relative_path, &removal.contents, &removal.next)
     );
 
     Ok(())
+}
+
+/// True when stripping maestro's managed content emptied the file: pure
+/// whitespace (text mirrors) or an empty JSON object (json mirrors). A file that
+/// reduces to this held only maestro's block, so uninstall removes it instead of
+/// leaving a husk; a real user file leaves non-empty residue and is preserved.
+fn is_empty_residue(next: &str) -> bool {
+    let trimmed = next.trim();
+    trimmed.is_empty() || trimmed == "{}"
 }
 
 fn rollback_mirror_removals(removals: &[MirrorRemoval]) -> Result<()> {
@@ -815,7 +836,12 @@ fn gitignore_block() -> &'static str {
 }
 
 fn codex_config_block() -> &'static str {
-    "# Maestro MCP config is installed in a later phase when `maestro mcp serve` exists."
+    "# Maestro ships an MCP server: `maestro mcp serve` (stdio).\n\
+     # Maestro does not wire it into Codex for you. To expose it, add an MCP\n\
+     # server entry pointing at that command, e.g.:\n\
+     #   [mcp_servers.maestro]\n\
+     #   command = \"maestro\"\n\
+     #   args = [\"mcp\", \"serve\"]"
 }
 
 fn previous_json_values(

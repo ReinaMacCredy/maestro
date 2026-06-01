@@ -16,7 +16,7 @@ use crate::domain::extraction::{
 };
 use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
 
 /// Shown when `sync` runs outside an initialized project.
 const NOT_INITIALIZED: &str = "no .maestro directory found here; run `maestro init` first";
@@ -46,6 +46,7 @@ pub enum SyncOutcome {
 /// edit-preserving; backs up drifted folders before overwriting them.
 pub fn run(options: &SyncOptions) -> Result<SyncOutcome> {
     let paths = sync_paths()?;
+    announce_repo_root(paths.repo_root());
 
     if options.dry_run {
         let preview = preview_all(
@@ -99,6 +100,18 @@ pub fn render(outcome: &SyncOutcome) -> String {
         SyncOutcome::DryRun(preview) => {
             let mut out = String::from("maestro sync would resync:\n");
             out.push_str(&render_preview(preview));
+            // Pre-warn that a refresh replaces the on-disk copy (any local edits
+            // included). The version gate skips matching folders, so an edited
+            // but current folder is never touched; only a version-behind folder
+            // refreshes, and sync backs the current copy up first (T6.s).
+            if preview
+                .iter()
+                .any(|folder| folder.decision == FolderDecision::Refresh)
+            {
+                out.push_str(
+                    "note: refresh overwrites the folder's current contents; your copy is backed up under .maestro/backups/ first\n",
+                );
+            }
             out
         }
         SyncOutcome::Applied { preview, report } => render_applied(preview, report),
@@ -148,4 +161,37 @@ fn count_decision(preview: &[FolderPreview], decision: FolderDecision) -> usize 
         .iter()
         .filter(|folder| folder.decision == decision)
         .count()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder(name: &str, decision: FolderDecision) -> FolderPreview {
+        FolderPreview {
+            name: name.to_string(),
+            decision,
+            installed_version: Some("1".to_string()),
+            shipped_version: Some("2".to_string()),
+        }
+    }
+
+    #[test]
+    fn dry_run_warns_before_a_refresh_overwrites() {
+        let outcome = SyncOutcome::DryRun(vec![
+            folder("a", FolderDecision::Skip),
+            folder("b", FolderDecision::Refresh),
+        ]);
+        let rendered = render(&outcome);
+        assert!(
+            rendered.contains("backed up under .maestro/backups/"),
+            "a refresh-bound dry-run should pre-warn about the overwrite: {rendered}"
+        );
+    }
+
+    #[test]
+    fn dry_run_is_quiet_when_nothing_refreshes() {
+        let outcome = SyncOutcome::DryRun(vec![folder("a", FolderDecision::Skip)]);
+        assert!(!render(&outcome).contains("backed up under"));
+    }
 }

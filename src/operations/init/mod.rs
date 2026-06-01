@@ -12,7 +12,7 @@ use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operati
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
-use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
 
 /// Options for one `maestro init` operation.
@@ -35,6 +35,8 @@ pub enum InitOutcome {
         /// binary's shipped versions (resolvable with `maestro sync`). Always 0
         /// outside merge mode, where Create/Force leave nothing drifted.
         behind: usize,
+        /// The repository root init operated on, for the success line (T6.1).
+        root: PathBuf,
     },
     /// Init only planned the artifact tree and previewed bundled extraction.
     DryRun {
@@ -48,6 +50,7 @@ pub enum InitOutcome {
 /// Coordinate startup artifact creation through owning domain contracts.
 pub fn run(options: &InitOptions) -> Result<InitOutcome> {
     let repo_root = init_repo_root()?;
+    announce_repo_root(&repo_root);
     let paths = MaestroPaths::new(repo_root);
     managed_path(&paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
     let plan = InitPlan::new(&paths)?;
@@ -59,6 +62,21 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
         // writes, so it never consults it.
         let preview = preview_all(&paths, extract_mode(options, Some(""))?)?;
         return Ok(InitOutcome::DryRun { plan, preview });
+    }
+
+    // Bare `init` (no --merge/--force) is strict-create. On an already-initialized
+    // repo it would otherwise bail per-file deep in extraction ("<...>/SKILL.md
+    // already exists"); pre-empt that with one clean repo-level message naming the
+    // two ways forward (T6.2). The anchor is the init-written harness.yml, not the
+    // `.maestro` directory created moments ago above.
+    if !options.merge
+        && !options.force
+        && paths.harness_dir().join("harness.yml").exists()
+    {
+        bail!(
+            "maestro is already initialized in {}; use --force to refresh or --merge to fill gaps",
+            paths.repo_root().display()
+        );
     }
 
     let backup_timestamp = if options.force {
@@ -95,7 +113,10 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
         0
     };
 
-    Ok(InitOutcome::Applied { behind })
+    Ok(InitOutcome::Applied {
+        behind,
+        root: paths.repo_root().to_path_buf(),
+    })
 }
 
 fn init_repo_root() -> Result<PathBuf> {

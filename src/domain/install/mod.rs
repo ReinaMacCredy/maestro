@@ -468,8 +468,11 @@ mod tests {
 
         let claude_path = root.join("CLAUDE.md");
         let error = uninstall_agent_with_finalizer(&paths, InstallAgent::Codex, |_path, _lock| {
-            fs::remove_file(&claude_path)
-                .expect("invariant: rollback conflict file should be removable");
+            // remove_mirrors already deleted the emptied CLAUDE.md husk maestro
+            // created (T6.5), so just plant a directory in its place: the mirror
+            // rollback's recreate then fails on CLAUDE.md first, forcing the
+            // compound-error path before it can re-apply managed keys to hooks.json.
+            let _ = fs::remove_file(&claude_path);
             fs::create_dir(&claude_path)
                 .expect("invariant: rollback conflict dir should be creatable");
             Err(anyhow!("simulated final lock failure"))

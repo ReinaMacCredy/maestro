@@ -119,3 +119,18 @@ pub fn discover_repo_root_from(start_dir: impl AsRef<Path>) -> Result<PathBuf> {
         }
     }
 }
+
+/// Announce, on stderr, the repository root a mutating command resolved to when
+/// it differs from the current working directory. Run from a nested subdirectory,
+/// maestro walks up to the enclosing repo and mutates it; echoing the root keeps
+/// that from being a silent footgun (T5). Stays silent when run from the root, so
+/// it never fires for callers (including tests) invoked at the repo top.
+pub fn announce_repo_root(root: &Path) {
+    let Ok(cwd) = env::current_dir() else {
+        return;
+    };
+    let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    if canonical(&cwd) != canonical(root) {
+        eprintln!("operating on {}", root.display());
+    }
+}

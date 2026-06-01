@@ -6,7 +6,7 @@ use anyhow::Result;
 
 use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::fs::read_to_string_if_exists;
-use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::interfaces::cli::UpdateArgs;
 use crate::operations::update;
@@ -28,6 +28,7 @@ impl std::error::Error for ReportedError {}
 /// Execute `maestro update`.
 pub fn run(args: UpdateArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
+    announce_repo_root(&repo_root);
     let paths = MaestroPaths::new(repo_root);
     let executable_path = env::current_exe()?;
     let backup_timestamp = backup_operation_timestamp()?;
