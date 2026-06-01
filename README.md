@@ -26,8 +26,8 @@ Everything is repo-local and reviewable in a diff.
 
 ## Lifecycle
 
-Features and tasks each walk an explicit, gated state machine. The agent drives the
-transitions through the CLI; the gates are enforced, not advisory.
+Features, tasks, and harness improvements each walk an explicit, gated state machine. The
+agent drives the transitions through the CLI; the gates are enforced, not advisory.
 
 A **feature** carries the product contract:
 
@@ -52,6 +52,7 @@ A **task** is a unit of work, gated by proof:
 ```mermaid
 stateDiagram-v2
     [*] --> draft: create
+    note right of draft : created directly, under a feature, or spawned by harness apply
     draft --> in_progress: claim
     in_progress --> needs_verification: complete
     needs_verification --> verified: verify
@@ -60,9 +61,51 @@ stateDiagram-v2
     verified --> [*]: archive
 ```
 
+The task is the shared unit of work: a feature spins off child tasks (`task create --feature`)
+and the harness spins off a standalone task (`harness apply`), both landing here in `draft`.
 `claim` fast-tracks the internal accept steps when the feature contract or task checks are
 present (a standalone task needs at least one `--check` first). `verify` is the evidence gate:
 it passes only when the claim is backed by recorded proof.
+
+A **harness improvement** is a self-improvement proposal the harness surfaces from the run log
+and task history; it walks its own lifecycle behind features and tasks:
+
+```mermaid
+stateDiagram-v2
+    [*] --> proposed: detector
+    proposed --> accepted: apply
+    accepted --> measured: measure (friction gone)
+    accepted --> proposed: measure (ineffective)
+    measured --> proposed: regressed
+```
+
+`apply` accepts a proposal and spawns a linked task, so the fix runs through the task lifecycle
+above. `measure` re-runs the originating detector to close the loop: it reaches `measured` only
+when the friction is actually gone, reverts to `proposed` if the fix was ineffective, and
+reopens a `measured` item if the friction later returns. `measure` requires the linked task
+verified unless `--force`.
+
+### How the three fit together
+
+Features and the harness are the two things that produce tasks, and both only reach their
+terminal state once those tasks are verified. The task lifecycle is the hub:
+
+```mermaid
+flowchart TB
+    subgraph feature [Feature]
+        F1[proposed] --> F2[ready] --> F3[in_progress] --> F4[shipped]
+    end
+    subgraph harness [Harness]
+        H1[proposed] --> H2[accepted] --> H3[measured]
+    end
+    subgraph task [Task]
+        T1[draft] --> T2[in_progress] --> T3[needs_verification] --> T4[verified]
+    end
+    F3 -->|"task create --feature"| T1
+    H2 -->|"apply spawns"| T1
+    T4 -->|"child tasks done + QA"| F4
+    T4 -->|"linked task verified"| H3
+```
 
 ## Install
 
@@ -112,7 +155,18 @@ maestro install --agent claude     # wire skills + hooks into CLAUDE.md/AGENTS.m
 maestro doctor                     # check the installation
 ```
 
-Run one unit of work through the lifecycle:
+The smallest loop is a single task. A standalone task (no feature) carries its own
+acceptance check, and closes once a recorded run backs its claim:
+
+```
+maestro task create "Patch null deref in parser"            # -> draft
+maestro task set task-001 --check "regression test passes"  # standalone tasks need their own check
+maestro task claim task-001                                 # -> in_progress
+maestro task complete task-001 --summary "guard the None case" --claim "cargo test parser passes"
+maestro task verify task-001                                # passes once a hook-recorded run backs the claim
+```
+
+For a larger change, wrap the work in a feature contract and spin off child tasks:
 
 ```
 maestro feature new "CSV export"                         # -> proposed
@@ -131,7 +185,33 @@ maestro feature ship csv-export --outcome "Shipped streaming CSV export"   # gat
 `maestro feature show <id>` and `maestro task show <id>` render the current state and the
 recorded reasoning at any point.
 
-## Highlights
+Periodically, let the harness propose improvements to itself and run them through the same
+task loop:
+
+```
+maestro harness list                       # what friction the run log surfaced
+maestro harness apply hb-001                # accept a proposal -> spawns a standalone task
+maestro task set task-003 --check "deflake the integration suite"   # standalone tasks need a check first
+maestro task claim task-003
+maestro task complete task-003 --summary "stabilized the suite" --claim "cargo test integration passes"
+maestro task verify task-003                # gated on the claim's recorded proof
+maestro harness measure hb-001              # close the loop once that task is verified
+```
+
+`harness apply` spawns a *standalone* task, so it needs a `--check` before you can claim it.
+`harness measure` will not mark the improvement `measured` until that linked task is verified
+(pass `--force` to close it anyway).
+
+### Suggested workflow
+
+The three lifecycles compose into one operating rhythm:
+
+1. **Design as a feature.** `feature new` then `feature set` to map the contract; lock the forks with `decision new`.
+2. **Spin off tasks.** `task create --feature <id>` for each slice, then run each through `claim -> complete -> verify` so "done" is backed by recorded proof.
+3. **Ship the feature.** `feature ship` once its child tasks are verified and QA coverage is green.
+4. **Improve the harness.** Periodically `harness list`; for each proposal worth doing, `harness apply` (spawns a task), close that task, then `harness measure` to confirm the friction is gone.
+
+Steps 1-3 build the product; step 4 sharpens the tool that builds it. All four route work through the same proof-gated task loop.
 
 ### Feature lifecycle
 
@@ -157,6 +237,15 @@ Coverage is checked, not asserted, so a green ship is a real signal.
 `maestro decision new "<the fork>"` records an architectural decision as a file under
 `.maestro/decisions/`, so the reasoning outlives any single agent session.
 
+### Harness self-improvement
+
+maestro watches its own run log and task history and proposes improvements to the harness
+itself (a missing verification command, a recurring blocker, a decision worth re-recording).
+`maestro harness list` shows the backlog; `maestro harness apply <id>` accepts a proposal and
+spawns a real task to do the work; `maestro harness measure <id>` closes the loop by re-running
+the detector, so an improvement is only marked `measured` when the friction it targeted is
+gone. It is passive: proposals are surfaced on demand, never acted on without you.
+
 ### Skills and hooks
 
 `maestro install` extracts agent skills (design, feature, task, verify, QA) into
@@ -176,6 +265,7 @@ Coverage is checked, not asserted, so a green ship is a real signal.
 | `task` | Create, claim, complete, verify, and query tasks |
 | `verify` | Verify a task against its recorded proof |
 | `decision` | Create and list decision records |
+| `harness` | List, show, apply, and measure self-improvement proposals |
 | `version` | Print the version and binary path |
 
 Run `maestro <command> --help` for the full surface.
