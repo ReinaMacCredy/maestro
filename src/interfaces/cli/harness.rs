@@ -20,6 +20,13 @@ pub fn run(args: HarnessArgs) -> Result<()> {
 
 fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
     let (backlog, ready) = harness::refresh(paths)?;
+    // Measured items are the only thing the default view hides; surface the count
+    // so they don't appear to have vanished (UX-3).
+    let hidden = backlog
+        .items
+        .iter()
+        .filter(|item| !is_visible(item, false))
+        .count();
     let visible = backlog
         .items
         .iter()
@@ -27,6 +34,9 @@ fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
         .collect::<Vec<_>>();
     if visible.is_empty() {
         println!("no improvement proposals found");
+        if !all && hidden > 0 {
+            println!("# {hidden} measured proposal(s) hidden; use --all to include");
+        }
         return Ok(());
     }
     println!("ID\tSTATUS\tTYPE\tTITLE");
@@ -45,6 +55,9 @@ fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
             hint
         );
     }
+    if !all && hidden > 0 {
+        println!("# {hidden} measured proposal(s) hidden; use --all to include");
+    }
     Ok(())
 }
 
@@ -57,19 +70,41 @@ fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
 fn apply(paths: &MaestroPaths, id: &str) -> Result<()> {
     let item = harness::apply(paths, id)?;
     match &item.spawned_task {
-        Some(task) => println!("accepted {} (spawned {task})", item.id),
+        Some(task) => {
+            println!("accepted {} (spawned {task})", item.id);
+            // The spawned task is standalone (no feature), so claim refuses it until
+            // it has a check; point at that step (UX-2).
+            println!(
+                "next: `maestro task set {task} --check \"...\"` then `maestro task claim {task}`"
+            );
+        }
         None => println!("accepted {}", item.id),
     }
     Ok(())
 }
 
 fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<()> {
-    let item = harness::measure(paths, id, force)?;
-    println!(
-        "{} is now {}",
-        item.id,
-        field_or_default(&item.status, "proposed")
-    );
+    let (item, friction_live) = harness::measure(paths, id, force)?;
+    let status = field_or_default(&item.status, "proposed");
+    if status == "proposed" {
+        // A state detector still emitting reverts instead of closing (D2); frame it
+        // as ineffective rather than a bare status line (T9.2).
+        println!(
+            "{} reverted to proposed: the improvement was ineffective (friction still detected); \
+             re-run `maestro harness apply {}` to try again",
+            item.id, item.id
+        );
+    } else {
+        println!("{} is now {status}", item.id);
+        if friction_live {
+            // Behavioral item closed by your judgment, not an automatic silence
+            // check, while its friction is still detected (T9).
+            println!(
+                "note: friction is still detected; this behavioral item was closed by judgment, \
+                 not by a silence check"
+            );
+        }
+    }
     Ok(())
 }
 

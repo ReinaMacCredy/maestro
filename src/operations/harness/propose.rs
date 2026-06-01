@@ -96,7 +96,12 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
 /// closes by human judgment — the deliberate measure on a verified task IS that
 /// judgment (D1), with no silence check. Unless `force`, the linked task must be
 /// verified first (impl-default (d)).
-pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<BacklogItem> {
+///
+/// Returns the resulting item plus whether the detector's friction is still live
+/// (currently emitting). The interface uses that flag to frame the verdict: a
+/// reverted state detector reads as "ineffective", and a behavioral item closed by
+/// judgment while still emitting gets a "friction still detected" warning (T9).
+pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogItem, bool)> {
     let (mut backlog, fresh) = detect_and_merge(paths)?;
 
     // Read identity + status before any gate or mutation.
@@ -115,6 +120,8 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<BacklogIte
         _ => bail!("{id} is not accepted yet; run `maestro harness apply {id}` before measuring"),
     }
 
+    let friction_live = fresh.contains(&fingerprint);
+
     if !force {
         match &spawned_task {
             Some(task_id) => {
@@ -132,7 +139,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<BacklogIte
 
     let now = utc_now_timestamp();
     let item = backlog.find_mut(id)?;
-    if is_state_detector(&item_type) && fresh.contains(&fingerprint) {
+    if is_state_detector(&item_type) && friction_live {
         // Friction persists: the improvement was ineffective. Revert to proposed and
         // drop the link so the next accept spawns a fresh task (impl-default (c)).
         item.history.push(HistoryEntry {
@@ -152,5 +159,5 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<BacklogIte
     }
     let measured = item.clone();
     backlog::save(paths, &backlog)?;
-    Ok(measured)
+    Ok((measured, friction_live))
 }

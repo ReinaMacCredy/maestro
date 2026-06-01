@@ -1672,6 +1672,8 @@ fn harness_measure_closes_silent_state_note() {
 
     let apply = run_success(repo, &["harness", "apply", "hb-001"]);
     assert!(apply.contains("spawned task-002"));
+    // apply points at the check-then-claim step the spawned standalone task needs (UX-2).
+    assert!(apply.contains("maestro task set task-002 --check"), "{apply}");
 
     // The linked task is verified and the friction is gone (command now in verify).
     mark_verified(repo, "task-002", "general", "0", "100");
@@ -1682,16 +1684,20 @@ fn harness_measure_closes_silent_state_note() {
     assert!(ready.contains("ready to measure"));
 
     let measure = run_success(repo, &["harness", "measure", "hb-001"]);
-    assert!(measure.contains("hb-001 is now measured"));
+    assert!(measure.contains("hb-001 is now measured"), "{measure}");
+    // A clean close (detector silent) carries no friction warning.
+    assert!(!measure.contains("friction is still detected"), "{measure}");
 
     let show = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(show.contains("status: measured"));
     assert!(show.contains("history:"));
     assert!(show.contains("- measured"));
 
-    // A measured note is hidden by default and only shown under --all (D4).
+    // A measured note is hidden by default and only shown under --all (D4); the
+    // default view says how many it hid so they don't seem to have vanished (UX-3).
     let list = run_success(repo, &["harness", "list"]);
     assert!(!list.contains("hb-001"));
+    assert!(list.contains("measured proposal(s) hidden"), "{list}");
     let all = run_success(repo, &["harness", "list", "--all"]);
     assert!(all.contains("hb-001"));
 }
@@ -1734,7 +1740,8 @@ fn harness_measure_reverts_ineffective_state_note_and_relinks_on_reapply() {
 
     // Friction persists (cargo clippy still absent from verify): the note reverts.
     let measure = run_success(repo, &["harness", "measure", "hb-001"]);
-    assert!(measure.contains("hb-001 is now proposed"));
+    assert!(measure.contains("hb-001 reverted to proposed"), "{measure}");
+    assert!(measure.contains("ineffective"), "{measure}");
 
     let show = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(show.contains("status: proposed"));
@@ -1762,7 +1769,7 @@ fn harness_measure_requires_verified_task_unless_forced() {
     // --force bypasses the gate, but not the verdict: the friction persists
     // (cargo clippy still absent from verify), so the note reverts to proposed.
     let forced = run_success(repo, &["harness", "measure", "hb-001", "--force"]);
-    assert!(forced.contains("hb-001 is now proposed"));
+    assert!(forced.contains("hb-001 reverted to proposed"), "{forced}");
 }
 
 #[test]
@@ -1803,7 +1810,9 @@ fn harness_measure_closes_behavioral_note_without_silence() {
     mark_verified(repo, "task-003", "general", "0", "100");
 
     // The blocker still emits, but behavioral notes close on the deliberate,
-    // verified-task measure with no silence check (D1).
+    // verified-task measure with no silence check (D1). The close is honest about
+    // the still-live friction (T9).
     let measure = run_success(repo, &["harness", "measure", "hb-001"]);
-    assert!(measure.contains("hb-001 is now measured"));
+    assert!(measure.contains("hb-001 is now measured"), "{measure}");
+    assert!(measure.contains("friction is still detected"), "{measure}");
 }
