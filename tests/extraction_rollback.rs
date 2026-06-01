@@ -3,7 +3,7 @@ mod support;
 use std::fs;
 use std::path::Path;
 
-use maestro::domain::extraction::{extract_all, ExtractMode};
+use maestro::domain::extraction::{ExtractMode, extract_all};
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 

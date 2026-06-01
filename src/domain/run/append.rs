@@ -1,4 +1,4 @@
-use std::ffi::{c_char, CString};
+use std::ffi::{CString, c_char};
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -8,8 +8,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-use crate::domain::run::event::{run_dir_name, UNATTRIBUTED_SESSION};
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::domain::run::event::{UNATTRIBUTED_SESSION, run_dir_name};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 const OPEN_EVENT_FILE_RETRIES: usize = 8;

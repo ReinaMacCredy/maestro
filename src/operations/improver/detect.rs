@@ -8,7 +8,7 @@ use crate::domain::harness::{BacklogItem, HarnessConfig};
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{self, TaskEntry};
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::operations::metrics;
 
@@ -253,11 +253,7 @@ fn decision_topics(markdown: &str) -> Vec<String> {
 
 fn normalize_decision_topic(line: &str) -> Option<String> {
     let topic = normalize_topic(line);
-    if topic.is_empty() {
-        None
-    } else {
-        Some(topic)
-    }
+    if topic.is_empty() { None } else { Some(topic) }
 }
 
 fn normalize_topic(value: &str) -> String {

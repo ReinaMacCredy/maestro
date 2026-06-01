@@ -1,18 +1,18 @@
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::extraction::{
-    extract_all, preview_all, render_preview, validate_all, ExtractMode, FolderDecision,
-    FolderPreview,
+    ExtractMode, FolderDecision, FolderPreview, extract_all, preview_all, render_preview,
+    validate_all,
 };
 use crate::domain::harness::schema::HarnessConfig;
 use crate::domain::harness::templates::{backlog_yaml, harness_yml};
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::ensure_dir;
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
 
 /// Options for one `maestro init` operation.
@@ -82,10 +82,15 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
     // by counting the folders an Update-mode resync would refresh. Create/Force
     // just wrote everything current, so only merge can leave drift.
     let behind = if options.merge {
-        preview_all(&paths, ExtractMode::Update { backup_timestamp: "" })?
-            .iter()
-            .filter(|folder| folder.decision == FolderDecision::Refresh)
-            .count()
+        preview_all(
+            &paths,
+            ExtractMode::Update {
+                backup_timestamp: "",
+            },
+        )?
+        .iter()
+        .filter(|folder| folder.decision == FolderDecision::Refresh)
+        .count()
     } else {
         0
     };

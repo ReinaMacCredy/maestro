@@ -168,11 +168,7 @@ fn verified_substatus(
 
 fn task_dir(paths: &MaestroPaths, task: &task::TaskRecord) -> Option<std::path::PathBuf> {
     let dir = paths.tasks_dir().join(task.directory_name());
-    if dir.is_dir() {
-        Some(dir)
-    } else {
-        None
-    }
+    if dir.is_dir() { Some(dir) } else { None }
 }
 
 fn normalized_interval(seconds: u64) -> u64 {

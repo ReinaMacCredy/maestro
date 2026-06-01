@@ -173,17 +173,11 @@ pub enum TaskCommand {
         no_feature: bool,
     },
     #[command(about = "Move a draft into exploring (-> exploring)")]
-    Explore {
-        id: String,
-    },
+    Explore { id: String },
     #[command(about = "Lock acceptance and mark the task ready (-> ready)")]
-    Accept {
-        id: String,
-    },
+    Accept { id: String },
     #[command(about = "Claim a ready, unblocked task to work on it (-> in_progress)")]
-    Claim {
-        id: String,
-    },
+    Claim { id: String },
     #[command(about = "Submit work for verification (-> needs_verification)")]
     Complete {
         id: String,
@@ -196,9 +190,7 @@ pub enum TaskCommand {
         claim: String,
     },
     #[command(about = "Run the evidence gate; on pass marks the task verified")]
-    Verify {
-        id: Option<String>,
-    },
+    Verify { id: Option<String> },
     #[command(about = "Record progress (summary and/or claims) without changing state")]
     Update {
         id: String,
@@ -242,9 +234,7 @@ pub enum TaskCommand {
         reason: String,
     },
     #[command(about = "Show a task's detail: state, claim, blockers")]
-    Show {
-        id: Option<String>,
-    },
+    Show { id: Option<String> },
     #[command(about = "List tasks, with optional filters")]
     List {
         #[arg(long)]
@@ -282,9 +272,7 @@ pub enum TaskCommand {
         dry_run: bool,
     },
     #[command(about = "Restore an archived task to the live scan")]
-    Unarchive {
-        id: String,
-    },
+    Unarchive { id: String },
 }
 
 #[derive(Debug, Args)]
@@ -346,7 +334,10 @@ pub enum FeatureCommand {
         description: Option<String>,
         #[arg(long, help = "Replace the raw request")]
         request: Option<String>,
-        #[arg(long = "type", help = "Replace the input type (e.g. bug_report, refactor)")]
+        #[arg(
+            long = "type",
+            help = "Replace the input type (e.g. bug_report, refactor)"
+        )]
         input_type: Option<String>,
     },
     #[command(about = "Accept a feature into ready, freezing its contract (-> ready; gated)")]
@@ -358,7 +349,10 @@ pub enum FeatureCommand {
     #[command(about = "Grow a frozen contract additively with an audit reason (ready/in_progress)")]
     Amend {
         id: String,
-        #[arg(long = "add-acceptance", help = "Acceptance criterion to add (repeatable)")]
+        #[arg(
+            long = "add-acceptance",
+            help = "Acceptance criterion to add (repeatable)"
+        )]
         add_acceptance: Vec<String>,
         #[arg(long = "add-area", help = "Affected area to add (repeatable)")]
         add_area: Vec<String>,
@@ -374,7 +368,10 @@ pub enum FeatureCommand {
     #[command(about = "Ship an in-progress feature (-> shipped; gated)")]
     Ship {
         id: String,
-        #[arg(long, help = "One-line outcome recorded on the feature, shown in `feature list --all`")]
+        #[arg(
+            long,
+            help = "One-line outcome recorded on the feature, shown in `feature list --all`"
+        )]
         outcome: Option<String>,
         #[arg(long, help = "Preview the ship gate without transitioning")]
         dry_run: bool,
@@ -391,7 +388,10 @@ pub enum FeatureCommand {
     Show { id: String },
     #[command(about = "List features with their statuses and task counts")]
     List {
-        #[arg(long, help = "Include terminal features (shipped, cancelled) and archived ones")]
+        #[arg(
+            long,
+            help = "Include terminal features (shipped, cancelled) and archived ones"
+        )]
         all: bool,
     },
     #[command(
@@ -400,15 +400,19 @@ pub enum FeatureCommand {
     Archive {
         #[arg(help = "Feature id to archive (omit when using --shipped)")]
         id: Option<String>,
-        #[arg(long, help = "Archive every shipped feature (mutually exclusive with <id>)")]
+        #[arg(
+            long,
+            help = "Archive every shipped feature (mutually exclusive with <id>)"
+        )]
         shipped: bool,
-        #[arg(long, help = "Preview the feature and child-task moves without archiving")]
+        #[arg(
+            long,
+            help = "Preview the feature and child-task moves without archiving"
+        )]
         dry_run: bool,
     },
     #[command(about = "Restore an archived feature and its archived child tasks")]
-    Unarchive {
-        id: String,
-    },
+    Unarchive { id: String },
 }
 
 #[derive(Debug, Args)]

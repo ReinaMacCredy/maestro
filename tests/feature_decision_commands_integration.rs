@@ -184,7 +184,10 @@ fn feature_cancel_via_cli_cascades_to_live_tasks() {
         "billing-csv-export",
     );
     stdout(
-        maestro(&["feature", "accept", "billing-csv-export"], temp_dir.path()),
+        maestro(
+            &["feature", "accept", "billing-csv-export"],
+            temp_dir.path(),
+        ),
         &["feature", "accept", "billing-csv-export"],
     );
     stdout(
@@ -391,16 +394,36 @@ fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
 /// Drive a fresh feature all the way to Shipped: new -> set -> baseline+slice ->
 /// accept -> start -> one verified child -> ship.
 fn ship_feature(root: &Path, title: &str, slug: &str, child: &str) {
-    stdout(maestro(&["feature", "new", title], root), &["feature", "new", title]);
-    let set_args = ["feature", "set", slug, "--acceptance", "works", "--area", "core"];
+    stdout(
+        maestro(&["feature", "new", title], root),
+        &["feature", "new", title],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        slug,
+        "--acceptance",
+        "works",
+        "--area",
+        "core",
+    ];
     stdout(maestro(&set_args, root), &set_args);
     let features_dir = root.join(".maestro/features");
     write_baseline(&features_dir, slug);
     write_qa_slice(&features_dir, slug);
-    stdout(maestro(&["feature", "accept", slug], root), &["feature", "accept", slug]);
-    stdout(maestro(&["feature", "start", slug], root), &["feature", "start", slug]);
+    stdout(
+        maestro(&["feature", "accept", slug], root),
+        &["feature", "accept", slug],
+    );
+    stdout(
+        maestro(&["feature", "start", slug], root),
+        &["feature", "start", slug],
+    );
     write_task(&root.join(".maestro/tasks"), child, slug, "verified");
-    stdout(maestro(&["feature", "ship", slug], root), &["feature", "ship", slug]);
+    stdout(
+        maestro(&["feature", "ship", slug], root),
+        &["feature", "ship", slug],
+    );
 }
 
 #[test]
@@ -413,9 +436,7 @@ fn feature_create_refuses_a_slug_held_in_the_archive() {
     );
 
     // An archived feature still owns its slug; `create` must not reissue it (L6a).
-    let archived = temp_dir
-        .path()
-        .join(".maestro/archive/features/csv-export");
+    let archived = temp_dir.path().join(".maestro/archive/features/csv-export");
     ensure_dir(&archived).expect("invariant: archive feature dir should be creatable");
     fs::write(
         archived.join("feature.yaml"),
@@ -444,7 +465,12 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
         &["feature", "new", "Billing CSV export"],
     );
     let set_args = [
-        "feature", "set", "billing-csv-export", "--acceptance", "exports a valid csv", "--area",
+        "feature",
+        "set",
+        "billing-csv-export",
+        "--acceptance",
+        "exports a valid csv",
+        "--area",
         "billing",
     ];
     stdout(maestro(&set_args, root), &set_args);
@@ -459,7 +485,10 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
 
     // A non-terminal feature cannot be archived.
     let in_progress = ["feature", "archive", "billing-csv-export"];
-    stdout(maestro(&["feature", "start", "billing-csv-export"], root), &["feature", "start", "billing-csv-export"]);
+    stdout(
+        maestro(&["feature", "start", "billing-csv-export"], root),
+        &["feature", "start", "billing-csv-export"],
+    );
     let not_terminal = assert_failure(maestro(&in_progress, root), &in_progress);
     assert!(not_terminal.contains("not terminal"));
 
@@ -489,10 +518,16 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     assert!(!tasks_dir.join("task-001").exists());
 
     // L6b: show falls through to the archive; list --all reads it.
-    let show = stdout(maestro(&["feature", "show", "billing-csv-export"], root), &["feature", "show", "billing-csv-export"]);
+    let show = stdout(
+        maestro(&["feature", "show", "billing-csv-export"], root),
+        &["feature", "show", "billing-csv-export"],
+    );
     assert!(show.contains("status: shipped"));
     assert!(show.contains("tasks_total: 2"));
-    let list_all = stdout(maestro(&["feature", "list", "--all"], root), &["feature", "list", "--all"]);
+    let list_all = stdout(
+        maestro(&["feature", "list", "--all"], root),
+        &["feature", "list", "--all"],
+    );
     assert!(list_all.contains("billing-csv-export"));
 
     // Idempotent: re-archiving is a no-op at exit 0.
@@ -505,7 +540,12 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let restored = stdout(maestro(&unarchive_args, root), &unarchive_args);
     assert!(restored.contains("unarchived feature billing-csv-export"));
     assert!(restored.contains("task-001"));
-    assert!(features_dir.join("billing-csv-export").join("baseline.md").is_file());
+    assert!(
+        features_dir
+            .join("billing-csv-export")
+            .join("baseline.md")
+            .is_file()
+    );
     assert!(tasks_dir.join("task-001").is_dir());
     assert!(!archived_feature.exists());
 }
@@ -525,13 +565,24 @@ fn feature_archive_skips_a_referenced_child_then_sweeps_it_on_rerun() {
         &["feature", "new", "Billing CSV export"],
     );
     let set_args = [
-        "feature", "set", "billing-csv-export", "--acceptance", "exports a valid csv", "--area",
+        "feature",
+        "set",
+        "billing-csv-export",
+        "--acceptance",
+        "exports a valid csv",
+        "--area",
         "billing",
     ];
     stdout(maestro(&set_args, root), &set_args);
     write_baseline(&root.join(".maestro/features"), "billing-csv-export");
-    stdout(maestro(&["feature", "accept", "billing-csv-export"], root), &["feature", "accept", "billing-csv-export"]);
-    stdout(maestro(&["feature", "start", "billing-csv-export"], root), &["feature", "start", "billing-csv-export"]);
+    stdout(
+        maestro(&["feature", "accept", "billing-csv-export"], root),
+        &["feature", "accept", "billing-csv-export"],
+    );
+    stdout(
+        maestro(&["feature", "start", "billing-csv-export"], root),
+        &["feature", "start", "billing-csv-export"],
+    );
 
     // Three live children; cancel abandons them so the feature is terminal with
     // terminal children (cheaper than the ship gate, exercises the same cascade).
@@ -539,12 +590,23 @@ fn feature_archive_skips_a_referenced_child_then_sweeps_it_on_rerun() {
     write_task(&tasks_dir, "task-001", "billing-csv-export", "in_progress");
     write_task(&tasks_dir, "task-002", "billing-csv-export", "in_progress");
     write_task(&tasks_dir, "task-003", "billing-csv-export", "in_progress");
-    let cancel_args = ["feature", "cancel", "billing-csv-export", "--reason", "scope dropped"];
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope dropped",
+    ];
     stdout(maestro(&cancel_args, root), &cancel_args);
 
     // A live task (task-004) blocked by the terminal child task-002 entangles it.
-    stdout(maestro(&["task", "create", "Holder"], root), &["task", "create", "Holder"]);
-    let block_args = ["task", "block", "task-004", "--reason", "needs 2", "--by", "task-002"];
+    stdout(
+        maestro(&["task", "create", "Holder"], root),
+        &["task", "create", "Holder"],
+    );
+    let block_args = [
+        "task", "block", "task-004", "--reason", "needs 2", "--by", "task-002",
+    ];
     stdout(maestro(&block_args, root), &block_args);
 
     // Archive: task-002 is skipped (live-referenced), the feature + task-001/003 move.
@@ -553,7 +615,10 @@ fn feature_archive_skips_a_referenced_child_then_sweeps_it_on_rerun() {
     assert!(first.contains("skipped"));
     assert!(first.contains("task-002"));
     assert!(first.contains("task-004"));
-    assert!(root.join(".maestro/archive/features/billing-csv-export/feature.yaml").is_file());
+    assert!(
+        root.join(".maestro/archive/features/billing-csv-export/feature.yaml")
+            .is_file()
+    );
     assert!(root.join(".maestro/archive/tasks/task-001").is_dir());
     assert!(root.join(".maestro/archive/tasks/task-003").is_dir());
     // The straggler stays in the live tree.
@@ -584,12 +649,29 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
     ship_feature(root, "Alpha export", "alpha-export", "task-001");
     ship_feature(root, "Beta export", "beta-export", "task-002");
 
-    stdout(maestro(&["feature", "new", "Gamma export"], root), &["feature", "new", "Gamma export"]);
-    let set_gamma = ["feature", "set", "gamma-export", "--acceptance", "works", "--area", "core"];
+    stdout(
+        maestro(&["feature", "new", "Gamma export"], root),
+        &["feature", "new", "Gamma export"],
+    );
+    let set_gamma = [
+        "feature",
+        "set",
+        "gamma-export",
+        "--acceptance",
+        "works",
+        "--area",
+        "core",
+    ];
     stdout(maestro(&set_gamma, root), &set_gamma);
     write_baseline(&root.join(".maestro/features"), "gamma-export");
-    stdout(maestro(&["feature", "accept", "gamma-export"], root), &["feature", "accept", "gamma-export"]);
-    stdout(maestro(&["feature", "start", "gamma-export"], root), &["feature", "start", "gamma-export"]);
+    stdout(
+        maestro(&["feature", "accept", "gamma-export"], root),
+        &["feature", "accept", "gamma-export"],
+    );
+    stdout(
+        maestro(&["feature", "start", "gamma-export"], root),
+        &["feature", "start", "gamma-export"],
+    );
 
     // --shipped archives both shipped features and their children; gamma stays live.
     let bulk = ["feature", "archive", "--shipped"];
@@ -604,7 +686,12 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
     assert!(root.join(".maestro/archive/tasks/task-001").is_dir());
     assert!(root.join(".maestro/archive/tasks/task-002").is_dir());
     // The in-progress feature is untouched and stays in the live tree.
-    assert!(features_dir.join("gamma-export").join("feature.yaml").is_file());
+    assert!(
+        features_dir
+            .join("gamma-export")
+            .join("feature.yaml")
+            .is_file()
+    );
     assert!(!root.join(".maestro/archive/features/gamma-export").exists());
 
     // Idempotent: no shipped features remain live.

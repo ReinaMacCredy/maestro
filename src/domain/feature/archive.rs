@@ -17,7 +17,7 @@
 
 use std::fs;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::feature::registry::{load_record_at, validate_feature_id};
 use crate::domain::task::{self, TaskState};
@@ -116,7 +116,11 @@ pub fn archive_feature(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<
         }
         ensure_dir(paths.archive_features_dir())?;
         fs::rename(&live_dir, &archive_dir).with_context(|| {
-            format!("failed to move {} to {}", live_dir.display(), archive_dir.display())
+            format!(
+                "failed to move {} to {}",
+                live_dir.display(),
+                archive_dir.display()
+            )
         })?;
     }
 
@@ -170,7 +174,11 @@ pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
         }
         ensure_dir(paths.features_dir())?;
         fs::rename(&archive_dir, &live_dir).with_context(|| {
-            format!("failed to move {} to {}", archive_dir.display(), live_dir.display())
+            format!(
+                "failed to move {} to {}",
+                archive_dir.display(),
+                live_dir.display()
+            )
         })?;
     }
 
@@ -196,7 +204,11 @@ fn archive_note(
         let verb = if dry_run { "would archive" } else { "archived" };
         parts.push(format!("{verb} feature {id}"));
     } else {
-        let tail = if dry_run { "; would sweep remaining child task(s)" } else { "" };
+        let tail = if dry_run {
+            "; would sweep remaining child task(s)"
+        } else {
+            ""
+        };
         parts.push(format!("feature {id} already archived{tail}"));
     }
     if !archived.is_empty() {

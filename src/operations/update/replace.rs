@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use super::{
-    update_request, BinaryReplacer, BinaryStatus, ChecksumVerifier, DownloadedBinary, ReleaseInfo,
-    UpdateDownloader, UpdateOptions, UpdateUnavailable,
+    BinaryReplacer, BinaryStatus, ChecksumVerifier, DownloadedBinary, ReleaseInfo,
+    UpdateDownloader, UpdateOptions, UpdateUnavailable, update_request,
 };
 use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
 use crate::foundation::core::safe_write::temp_sibling_path;

@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde::Deserialize;
 
 use crate::domain::feature::schema::{AmendEntry, AmendLog};
@@ -164,7 +164,12 @@ fn covered_ids(slices: &QaSliceLog) -> BTreeSet<String> {
         .slices
         .iter()
         .filter(|slice| !slice.scenarios.is_empty() && !slice.evidence.is_empty())
-        .flat_map(|slice| slice.scenarios.iter().filter_map(|raw| normalize_bl_id(raw)))
+        .flat_map(|slice| {
+            slice
+                .scenarios
+                .iter()
+                .filter_map(|raw| normalize_bl_id(raw))
+        })
         .collect()
 }
 
@@ -204,7 +209,11 @@ fn bracketed_bl_ids(contents: &str) -> BTreeSet<String> {
 /// Normalize a slice scenario reference (`bl-001` or `[bl-001]`) to its `bl-NNN`
 /// id, so baseline and slice ids match regardless of bracketing. None if no id.
 fn normalize_bl_id(raw: &str) -> Option<String> {
-    let trimmed = raw.trim().trim_start_matches('[').trim_end_matches(']').trim();
+    let trimmed = raw
+        .trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .trim();
     let digits = trimmed.strip_prefix("bl-")?;
     (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()))
         .then(|| format!("bl-{digits}"))
@@ -363,7 +372,10 @@ mod tests {
 
     #[test]
     fn frontmatter_position_parses_and_defaults() {
-        assert_eq!(parse_amend_log_position("---\namend_log_position: 3\n---\nbody"), 3);
+        assert_eq!(
+            parse_amend_log_position("---\namend_log_position: 3\n---\nbody"),
+            3
+        );
         assert_eq!(parse_amend_log_position("no frontmatter"), 0);
         assert_eq!(parse_amend_log_position("---\nother: 1\n---\n"), 0);
     }

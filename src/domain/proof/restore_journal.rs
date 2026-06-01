@@ -4,7 +4,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use super::attempts::{
@@ -14,7 +14,7 @@ use super::attempts::{
 use super::verify_task::VerificationReport;
 use crate::domain::task;
 use crate::foundation::core::safe_write::{restore_or_remove, write_string_atomic};
-use crate::foundation::core::schema::{classify, Compat, VERIFICATION_RESTORE_SCHEMA_VERSION};
+use crate::foundation::core::schema::{Compat, VERIFICATION_RESTORE_SCHEMA_VERSION, classify};
 
 const CANONICAL_REPORT_RESTORE_FILE: &str = "verification.json.restore";
 
@@ -186,8 +186,8 @@ mod tests {
     use super::super::attempts::{verification_path, write_task_report};
     use super::super::stale::StoredFreshness;
     use super::super::verify_task::{
-        verification_outcome_for_report, VerificationReport, VerificationStatus,
-        VerificationTaskSnapshot,
+        VerificationReport, VerificationStatus, VerificationTaskSnapshot,
+        verification_outcome_for_report,
     };
     use super::{recover_canonical_report_for_task, replace_task_report_preserving_previous};
     use crate::domain::task::{self, AcceptanceFile, TaskRecord};

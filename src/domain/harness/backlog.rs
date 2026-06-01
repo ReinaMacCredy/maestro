@@ -2,13 +2,13 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::harness::schema::{BacklogConfig, BacklogItem};
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{classify, Compat, BACKLOG_SCHEMA_VERSION};
+use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, Compat, classify};
 
 /// Load the Harness backlog, returning an empty V1 backlog when it does not exist.
 pub fn load(paths: &MaestroPaths) -> Result<BacklogConfig> {

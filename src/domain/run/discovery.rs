@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 use super::event::logical_session_id_from_run_path;

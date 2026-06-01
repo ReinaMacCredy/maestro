@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::{MetricsArgs, MetricsCommand};
 use crate::operations::metrics;
 

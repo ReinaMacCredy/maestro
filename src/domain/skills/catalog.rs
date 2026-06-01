@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use include_dir::{include_dir, Dir, File};
+use include_dir::{Dir, File, include_dir};
 use serde::Deserialize;
 
 /// A skill Maestro ships and refreshes, distinct from user-added skills under

@@ -3,7 +3,7 @@ mod support;
 use std::fs;
 use std::path::PathBuf;
 
-use maestro::domain::extraction::{extract_hook_script, extract_hook_script_from, ExtractMode};
+use maestro::domain::extraction::{ExtractMode, extract_hook_script, extract_hook_script_from};
 use maestro::foundation::core::backup::backup_operation_timestamp;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;

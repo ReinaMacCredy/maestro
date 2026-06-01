@@ -9,7 +9,7 @@ use super::verify_task::VerificationCommand;
 use crate::domain::harness::HarnessConfig;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 pub(super) fn run_verify_commands(paths: &MaestroPaths) -> Result<Vec<VerificationCommand>> {

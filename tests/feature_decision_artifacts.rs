@@ -3,7 +3,7 @@ mod support;
 use std::fs;
 
 use maestro::decisions::template::{decision_file_name, decision_markdown};
-use maestro::feature::query::{count_tasks_for_feature, FeatureTaskCounts};
+use maestro::feature::query::{FeatureTaskCounts, count_tasks_for_feature};
 use maestro::feature::schema::FeatureRecord;
 use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::paths::MaestroPaths;
@@ -14,7 +14,8 @@ fn created_feature_record_carries_v1_schema_version() {
     let temp_dir = TestTempDir::new("maestro-feature-schema");
     let paths = MaestroPaths::new(temp_dir.path());
 
-    maestro::feature::create(&paths, "Billing CSV export").expect("invariant: create should succeed");
+    maestro::feature::create(&paths, "Billing CSV export")
+        .expect("invariant: create should succeed");
 
     let yaml = fs::read_to_string(
         paths
@@ -73,8 +74,10 @@ fn decision_file_name_uses_padded_number_and_slug() {
 fn decision_markdown_matches_section_7_4_template() {
     let markdown = decision_markdown(1, "Use single HARNESS.md instead of three adapter files");
 
-    assert!(markdown
-        .starts_with("# decision-001: Use single HARNESS.md instead of three adapter files"));
+    assert!(
+        markdown
+            .starts_with("# decision-001: Use single HARNESS.md instead of three adapter files")
+    );
     assert!(markdown.contains("## Status\nAccepted"));
     assert!(markdown.contains("## Context\nWhy this decision exists."));
     assert!(markdown.contains("## Decision\nWhat we decided."));

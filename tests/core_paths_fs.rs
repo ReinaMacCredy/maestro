@@ -6,7 +6,7 @@ use std::sync::{Mutex, OnceLock};
 
 use maestro::foundation::core::error::MaestroError;
 use maestro::foundation::core::fs::{ensure_dir, ensure_parent_dir, read_to_string_if_exists};
-use maestro::foundation::core::paths::{discover_repo_root, discover_repo_root_from, MaestroPaths};
+use maestro::foundation::core::paths::{MaestroPaths, discover_repo_root, discover_repo_root_from};
 use maestro::foundation::core::safe_write::{write_atomic, write_string_atomic};
 use support::TestTempDir;
 

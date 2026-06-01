@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
-use crate::domain::extraction::{extract_all, rollback_writes, ExtractMode, ResourceBackup};
+use crate::domain::extraction::{ExtractMode, ResourceBackup, extract_all, rollback_writes};
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
-    classify, Compat, BACKLOG_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION,
+    BACKLOG_SCHEMA_VERSION, Compat, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION, classify,
 };
 
 pub use github_release::GitHubCurlDownloader;
@@ -524,7 +524,7 @@ fn read_schema_version(path: &Path) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{detect_install_method, InstallMethod};
+    use super::{InstallMethod, detect_install_method};
 
     #[test]
     fn detects_common_install_methods_from_path() {

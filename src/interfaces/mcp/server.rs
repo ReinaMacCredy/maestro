@@ -1,9 +1,9 @@
 use std::io::{self, BufRead, BufReader, Write};
 
-use anyhow::{bail, Context, Result};
-use serde_json::{json, Value};
+use anyhow::{Context, Result, bail};
+use serde_json::{Value, json};
 
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::mcp::tools::{call_tool, tool_definitions};
 
 /// Run the stdio MCP JSON-RPC server.

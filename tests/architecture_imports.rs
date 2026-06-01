@@ -1389,14 +1389,13 @@ fn assert_production_sources_use_operation_root_facade(operation_root: &str, lea
         for (line_number, import_statement) in crate_import_statements(&source) {
             if let Some(leaf) =
                 namespaced_deep_import_segment(&import_statement, "operations", operation_root)
+                && leaves.contains(&leaf)
             {
-                if leaves.contains(&leaf) {
-                    violations.push(format!(
-                        "{}:{} imports deep operation path operations::{operation_root}::{leaf}",
-                        file.display(),
-                        line_number
-                    ));
-                }
+                violations.push(format!(
+                    "{}:{} imports deep operation path operations::{operation_root}::{leaf}",
+                    file.display(),
+                    line_number
+                ));
             }
         }
     }

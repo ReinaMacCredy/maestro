@@ -22,11 +22,11 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::feature::qa;
 use crate::domain::feature::query::{
-    count_tasks_by_feature, count_tasks_for_feature, live_child_task_ids, FeatureTaskCounts,
+    FeatureTaskCounts, count_tasks_by_feature, count_tasks_for_feature, live_child_task_ids,
 };
 use crate::domain::feature::schema::{
     AmendAdditions, AmendEntry, AmendLog, FeatureRecord, FeatureStatus,
@@ -35,7 +35,7 @@ use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{classify, Compat, FEATURE_SCHEMA_VERSION};
+use crate::foundation::core::schema::{Compat, FEATURE_SCHEMA_VERSION, classify};
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::nanos_since_epoch_string;
 
@@ -202,7 +202,9 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
     }
     // L6a: an archived feature still owns its slug — refuse to reissue it.
     if archived_feature_yaml_path(paths, &id).exists() {
-        bail!("feature {id} already exists in the archive; `maestro feature unarchive {id}` or choose a different title");
+        bail!(
+            "feature {id} already exists in the archive; `maestro feature unarchive {id}` or choose a different title"
+        );
     }
     let record = FeatureRecord::proposed(&id, title, &nanos_since_epoch_string());
     save_record(paths, &record)?;
@@ -271,7 +273,11 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
     let mut record = load_record(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Accept) {
         Transition::NoOp => {
-            return Ok(no_op_report(id, record.status, format!("{id} is already ready")))
+            return Ok(no_op_report(
+                id,
+                record.status,
+                format!("{id} is already ready"),
+            ));
         }
         Transition::Illegal(message) => bail!(message),
         Transition::To(target) => target,
@@ -303,13 +309,19 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
                 record.affected_areas.len()
             )
         } else {
-            format!("would block accept {id} — contract incomplete:\n  {}", gaps.join("\n  "))
+            format!(
+                "would block accept {id} — contract incomplete:\n  {}",
+                gaps.join("\n  ")
+            )
         };
         return Ok(no_op_report(id, record.status, note));
     }
 
     if !gaps.is_empty() {
-        bail!("cannot accept {id} — contract incomplete:\n  {}", gaps.join("\n  "));
+        bail!(
+            "cannot accept {id} — contract incomplete:\n  {}",
+            gaps.join("\n  ")
+        );
     }
 
     let questions_note = if record.open_questions.is_empty() {
@@ -359,7 +371,10 @@ pub fn amend(
             "cannot amend {id} — not accepted; author the contract with `maestro feature set {id} --…` then `maestro feature accept {id}`"
         ),
         FeatureStatus::Shipped | FeatureStatus::Cancelled => {
-            bail!("cannot amend {id} — terminal (status: {})", record.status.as_str())
+            bail!(
+                "cannot amend {id} — terminal (status: {})",
+                record.status.as_str()
+            )
         }
     }
 
@@ -380,9 +395,13 @@ pub fn amend(
     }
 
     record.acceptance.extend(added.acceptance.iter().cloned());
-    record.affected_areas.extend(added.affected_areas.iter().cloned());
+    record
+        .affected_areas
+        .extend(added.affected_areas.iter().cloned());
     record.non_goals.extend(added.non_goals.iter().cloned());
-    record.open_questions.extend(added.open_questions.iter().cloned());
+    record
+        .open_questions
+        .extend(added.open_questions.iter().cloned());
     let now = nanos_since_epoch_string();
     record.updated_at = now.clone();
 
@@ -420,7 +439,11 @@ pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
     let mut record = load_record(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Start) {
         Transition::NoOp => {
-            return Ok(no_op_report(id, record.status, format!("{id} is already in_progress")))
+            return Ok(no_op_report(
+                id,
+                record.status,
+                format!("{id} is already in_progress"),
+            ));
         }
         Transition::Illegal(message) => bail!(message),
         Transition::To(target) => target,
@@ -456,7 +479,11 @@ pub fn ship(
     let mut record = load_record(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Ship) {
         Transition::NoOp => {
-            return Ok(no_op_report(id, record.status, format!("{id} is already shipped")))
+            return Ok(no_op_report(
+                id,
+                record.status,
+                format!("{id} is already shipped"),
+            ));
         }
         Transition::Illegal(message) => bail!(message),
         Transition::To(target) => target,
@@ -526,7 +553,7 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str) -> Result<CancelRepo
                 changed: false,
                 abandoned: Vec::new(),
                 note: format!("{id} is already cancelled"),
-            })
+            });
         }
         Transition::Illegal(message) => bail!(message),
         Transition::To(target) => target,
@@ -557,7 +584,11 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str) -> Result<CancelRepo
     let note = if live.is_empty() {
         format!("cancelled {id}; no child tasks affected")
     } else {
-        format!("cancelled {id}; abandoned {} child task(s): {}", live.len(), live.join(", "))
+        format!(
+            "cancelled {id}; abandoned {} child task(s): {}",
+            live.len(),
+            live.join(", ")
+        )
     };
     Ok(CancelReport {
         id: id.to_string(),
@@ -578,7 +609,10 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
     Ok(records
         .into_iter()
         .map(|record| {
-            let counts = counts_by_feature.get(&record.id).cloned().unwrap_or_default();
+            let counts = counts_by_feature
+                .get(&record.id)
+                .cloned()
+                .unwrap_or_default();
             view_from_record(record, counts)
         })
         .collect())
@@ -629,7 +663,10 @@ pub fn list_archived(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
         .iter()
         .map(|id| {
             let record = load_record_at(&archive_features_dir.join(id).join("feature.yaml"), id)?;
-            let counts = counts_by_feature.get(&record.id).cloned().unwrap_or_default();
+            let counts = counts_by_feature
+                .get(&record.id)
+                .cloned()
+                .unwrap_or_default();
             Ok(view_from_record(record, counts))
         })
         .collect()
@@ -695,39 +732,41 @@ fn legal_transition(id: &str, from: &FeatureStatus, verb: FeatureVerb) -> Transi
     match (verb, from) {
         (FeatureVerb::Accept, Proposed) => Transition::To(Ready),
         (FeatureVerb::Accept, Ready) => Transition::NoOp,
-        (FeatureVerb::Accept, InProgress) => {
-            Transition::Illegal(format!("cannot accept {id} — already past accept (status: in_progress)"))
-        }
-        (FeatureVerb::Accept, Shipped | Cancelled) => {
-            Transition::Illegal(format!("cannot accept {id} — terminal (status: {})", from.as_str()))
-        }
+        (FeatureVerb::Accept, InProgress) => Transition::Illegal(format!(
+            "cannot accept {id} — already past accept (status: in_progress)"
+        )),
+        (FeatureVerb::Accept, Shipped | Cancelled) => Transition::Illegal(format!(
+            "cannot accept {id} — terminal (status: {})",
+            from.as_str()
+        )),
 
         (FeatureVerb::Start, Ready) => Transition::To(InProgress),
         (FeatureVerb::Start, InProgress) => Transition::NoOp,
-        (FeatureVerb::Start, Proposed) => {
-            Transition::Illegal(format!("cannot start {id} — not accepted; run `maestro feature accept {id}` first"))
-        }
-        (FeatureVerb::Start, Shipped | Cancelled) => {
-            Transition::Illegal(format!("cannot start {id} — terminal (status: {})", from.as_str()))
-        }
+        (FeatureVerb::Start, Proposed) => Transition::Illegal(format!(
+            "cannot start {id} — not accepted; run `maestro feature accept {id}` first"
+        )),
+        (FeatureVerb::Start, Shipped | Cancelled) => Transition::Illegal(format!(
+            "cannot start {id} — terminal (status: {})",
+            from.as_str()
+        )),
 
         (FeatureVerb::Ship, InProgress) => Transition::To(Shipped),
         (FeatureVerb::Ship, Shipped) => Transition::NoOp,
         (FeatureVerb::Ship, Proposed) => Transition::Illegal(format!(
             "cannot ship {id} — not started; run `maestro feature accept {id}` then `maestro feature start {id}`"
         )),
-        (FeatureVerb::Ship, Ready) => {
-            Transition::Illegal(format!("cannot ship {id} — not started; run `maestro feature start {id}` first"))
-        }
+        (FeatureVerb::Ship, Ready) => Transition::Illegal(format!(
+            "cannot ship {id} — not started; run `maestro feature start {id}` first"
+        )),
         (FeatureVerb::Ship, Cancelled) => {
             Transition::Illegal(format!("cannot ship {id} — terminal (status: cancelled)"))
         }
 
         (FeatureVerb::Cancel, Proposed | Ready | InProgress) => Transition::To(Cancelled),
         (FeatureVerb::Cancel, Cancelled) => Transition::NoOp,
-        (FeatureVerb::Cancel, Shipped) => {
-            Transition::Illegal(format!("cannot cancel {id} — shipped features are terminal"))
-        }
+        (FeatureVerb::Cancel, Shipped) => Transition::Illegal(format!(
+            "cannot cancel {id} — shipped features are terminal"
+        )),
     }
 }
 

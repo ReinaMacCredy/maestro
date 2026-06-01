@@ -5,16 +5,15 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use super::attempts::{
-    latest_attempt_report, latest_attempt_report_for_command_read,
-    read_managed_report_file_for_command_read, read_managed_report_file_if_exists,
-    verification_path, verification_report_is_newer, VerificationReportRead,
-    VerificationReportSource,
+    VerificationReportRead, VerificationReportSource, latest_attempt_report,
+    latest_attempt_report_for_command_read, read_managed_report_file_for_command_read,
+    read_managed_report_file_if_exists, verification_path, verification_report_is_newer,
 };
 use super::restore_journal::recover_canonical_report_for_task;
-use super::stale::{stale_reasons, StaleReason};
+use super::stale::{StaleReason, stale_reasons};
 use super::verify_task::{
-    applied_receipt_for_report, freshness_inputs_for_task, load_task_by_id,
-    passed_binding_matches_report, VerificationReport, VerificationStatus,
+    VerificationReport, VerificationStatus, applied_receipt_for_report, freshness_inputs_for_task,
+    load_task_by_id, passed_binding_matches_report,
 };
 use crate::domain::task;
 use crate::foundation::core::git;
@@ -515,15 +514,14 @@ fn read_report_for_task(
     let canonical_path = verification_path(task_dir);
     match read_managed_report_file_if_exists(&canonical_path)? {
         Some(report) if report_reflected_in_task(task, &report) => {
-            if !canonical_report_can_short_circuit(&report) {
-                if let Some((attempt, path)) = latest_attempt_report(task_dir)? {
-                    if verification_report_is_newer(&attempt, &report) {
-                        return Ok(Some(SelectedReport {
-                            report: attempt,
-                            path,
-                        }));
-                    }
-                }
+            if !canonical_report_can_short_circuit(&report)
+                && let Some((attempt, path)) = latest_attempt_report(task_dir)?
+                && verification_report_is_newer(&attempt, &report)
+            {
+                return Ok(Some(SelectedReport {
+                    report: attempt,
+                    path,
+                }));
             }
             Ok(Some(SelectedReport {
                 report,

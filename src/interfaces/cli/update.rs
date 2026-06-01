@@ -6,7 +6,7 @@ use anyhow::Result;
 
 use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::fs::read_to_string_if_exists;
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::interfaces::cli::UpdateArgs;
 use crate::operations::update;
@@ -160,10 +160,8 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
         }
     }
 
-    if verbose {
-        if let update::BinaryStatus::Replaced { path, .. } = &outcome.binary_status {
-            out.push_str(&format!("Installed binary: {}\n", path.display()));
-        }
+    if verbose && let update::BinaryStatus::Replaced { path, .. } = &outcome.binary_status {
+        out.push_str(&format!("Installed binary: {}\n", path.display()));
     }
 
     if !outcome.schema_mismatches.is_empty() {
@@ -354,7 +352,7 @@ fn sentence(message: impl AsRef<str>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{auto_check_due, record_auto_check, render_failure, render_outcome, Colors};
+    use super::{Colors, auto_check_due, record_auto_check, render_failure, render_outcome};
     use crate::foundation::core::paths::MaestroPaths;
     use crate::operations::update;
 
@@ -539,8 +537,10 @@ mod tests {
         assert!(auto_check_due(&paths, 100).expect("invariant: fresh stamp should be due"));
         record_auto_check(&paths, 100).expect("invariant: stamp should write");
         assert!(!auto_check_due(&paths, 100 + 60).expect("invariant: recent stamp should skip"));
-        assert!(auto_check_due(&paths, 100 + 24 * 60 * 60)
-            .expect("invariant: day-old stamp should be due"));
+        assert!(
+            auto_check_due(&paths, 100 + 24 * 60 * 60)
+                .expect("invariant: day-old stamp should be due")
+        );
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

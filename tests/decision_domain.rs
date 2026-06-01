@@ -38,10 +38,12 @@ fn create_auto_increments_from_highest_existing() {
 
     assert_eq!(first, 1);
     assert_eq!(second, 2);
-    assert!(paths
-        .decisions_dir()
-        .join("decision-002-second-decision.md")
-        .is_file());
+    assert!(
+        paths
+            .decisions_dir()
+            .join("decision-002-second-decision.md")
+            .is_file()
+    );
 }
 
 #[test]

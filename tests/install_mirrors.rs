@@ -3,8 +3,8 @@ mod support;
 use std::fs;
 
 use maestro::domain::install::{
-    install_agent, mirror_plan, uninstall_agent, AgentInstall, FileOwnership, InstallAgent,
-    InstallLock, InstallState, MirrorKind,
+    AgentInstall, FileOwnership, InstallAgent, InstallLock, InstallState, MirrorKind,
+    install_agent, mirror_plan, uninstall_agent,
 };
 use maestro::foundation::core::error::MaestroError;
 use maestro::foundation::core::paths::MaestroPaths;
@@ -94,10 +94,12 @@ fn apply_mirrors_preserves_user_content_and_records_ownership() {
     assert!(claude.starts_with("# User\n"));
     assert!(claude.contains("<!-- maestro:start -->"));
     assert!(install.files.contains_key("CLAUDE.md"));
-    assert!(install.files["CLAUDE.md"]
-        .content_hash
-        .as_deref()
-        .is_some_and(|hash| hash.starts_with("sha256:")));
+    assert!(
+        install.files["CLAUDE.md"]
+            .content_hash
+            .as_deref()
+            .is_some_and(|hash| hash.starts_with("sha256:"))
+    );
     assert!(matches!(
         install.files[".claude/settings.local.json"].kind,
         MirrorKind::JsonManagedKeys
@@ -139,9 +141,11 @@ fn apply_mirrors_refuses_existing_user_skill_tree() {
     let error = install_agent(&paths, InstallAgent::Codex)
         .expect_err("existing user skill tree should make install fail");
 
-    assert!(error
-        .to_string()
-        .contains("refusing to overwrite existing .codex/skills"));
+    assert!(
+        error
+            .to_string()
+            .contains("refusing to overwrite existing .codex/skills")
+    );
     assert!(temp_dir.path().join(".codex/skills").is_dir());
     assert!(!temp_dir.path().join("AGENTS.md").exists());
 }

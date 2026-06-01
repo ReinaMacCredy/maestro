@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use super::verify_task::{ClaimCheck, EvidenceText, EVENT_PROOF_SOURCE_KIND};
+use super::verify_task::{ClaimCheck, EVENT_PROOF_SOURCE_KIND, EvidenceText};
 use crate::domain::run;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::EVENT_SCHEMA_VERSION;

@@ -8,14 +8,14 @@
 
 use std::path::PathBuf;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::domain::extraction::extract::{
-    apply_actions, file_action, folder_gate, preview_folder, read_existing, Action, ExtractMode,
-    ExtractReport, FolderPreview,
+    Action, ExtractMode, ExtractReport, FolderPreview, apply_actions, file_action, folder_gate,
+    preview_folder, read_existing,
 };
 use crate::foundation::core::fs::ensure_dir;
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 /// The bundled hook recorder script, embedded at build time.

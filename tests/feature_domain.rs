@@ -12,7 +12,8 @@ use support::TestTempDir;
 fn write_feature(paths: &MaestroPaths, id: &str, contents: &str) {
     let dir = paths.features_dir().join(id);
     ensure_dir(&dir).expect("invariant: feature dir should be creatable");
-    fs::write(dir.join("feature.yaml"), contents).expect("invariant: feature.yaml should be writable");
+    fs::write(dir.join("feature.yaml"), contents)
+        .expect("invariant: feature.yaml should be writable");
 }
 
 /// Write a minimal task.yaml carrying the fields the feature projection reads.
@@ -164,7 +165,8 @@ fn accept_dry_run_previews_without_transitioning() {
     let paths = MaestroPaths::new(temp.path());
 
     feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
-    let report = feature::accept(&paths, "billing-csv", true).expect("invariant: dry-run is exit 0");
+    let report =
+        feature::accept(&paths, "billing-csv", true).expect("invariant: dry-run is exit 0");
     assert!(!report.changed);
     assert!(report.note.contains("would block"));
 
@@ -182,7 +184,8 @@ fn full_lifecycle_new_set_accept_start_ship() {
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     let started = feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     assert_eq!(started.status, feature::FeatureStatus::InProgress);
-    let shipped = feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
+    let shipped =
+        feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
     assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
 }
 
@@ -199,7 +202,8 @@ fn illegal_transitions_name_the_gap() {
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     // ship before start
-    let error = feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
+    let error =
+        feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
     assert!(error.to_string().contains("not started"));
 }
 
@@ -213,7 +217,8 @@ fn completed_transitions_are_idempotent_no_ops() {
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
 
     // accept again: no-op at exit 0
-    let report = feature::accept(&paths, "billing-csv", false).expect("invariant: re-accept is a no-op");
+    let report =
+        feature::accept(&paths, "billing-csv", false).expect("invariant: re-accept is a no-op");
     assert!(!report.changed);
     assert!(report.note.contains("already ready"));
 }
@@ -229,12 +234,14 @@ fn ship_blocks_on_live_child_task() {
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
 
     write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
-    let error = feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
+    let error =
+        feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
     assert!(error.to_string().contains("task-001"));
 
     // A verified child does not block ship.
     write_task(&paths.tasks_dir(), "task-001", "billing-csv", "verified");
-    let shipped = feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship succeeds");
+    let shipped =
+        feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship succeeds");
     assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
 }
 
@@ -249,7 +256,8 @@ fn cancel_cascades_to_live_child_tasks() {
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
 
-    let report = feature::cancel(&paths, "billing-csv", "scope dropped").expect("invariant: cancel succeeds");
+    let report = feature::cancel(&paths, "billing-csv", "scope dropped")
+        .expect("invariant: cancel succeeds");
     assert!(report.changed);
     assert_eq!(report.abandoned, vec!["task-001".to_string()]);
 
@@ -298,7 +306,10 @@ fn amend_is_append_only_with_value_dedup() {
     )
     .expect("invariant: amend should succeed");
     assert!(report.changed);
-    assert_eq!(report.added.acceptance, vec!["handles empty rows".to_string()]);
+    assert_eq!(
+        report.added.acceptance,
+        vec!["handles empty rows".to_string()]
+    );
 
     // re-adding a present value is a no-op (safe retries)
     let report = feature::amend(
@@ -314,8 +325,13 @@ fn amend_is_append_only_with_value_dedup() {
     assert!(!report.changed);
 
     // the amend-log records the one genuine amend
-    let log_raw = fs::read_to_string(paths.features_dir().join("billing-csv").join("amend-log.yaml"))
-        .expect("invariant: amend-log should be readable");
+    let log_raw = fs::read_to_string(
+        paths
+            .features_dir()
+            .join("billing-csv")
+            .join("amend-log.yaml"),
+    )
+    .expect("invariant: amend-log should be readable");
     assert!(log_raw.contains("widen scope"));
     assert!(!log_raw.contains("retry"));
 }
@@ -383,10 +399,7 @@ fn tolerant_titles_degrade_to_empty_on_incompatible_record() {
     write_feature(&paths, "billing-csv", BAD_RECORD);
 
     let titles = feature::titles(&paths);
-    assert!(
-        titles.is_empty(),
-        "tolerant titles must skip a bad record"
-    );
+    assert!(titles.is_empty(), "tolerant titles must skip a bad record");
 }
 
 #[test]
@@ -464,7 +477,10 @@ fn status_label_renders_snake_case() {
         feature::status_label(&feature::FeatureStatus::Proposed),
         "proposed"
     );
-    assert_eq!(feature::status_label(&feature::FeatureStatus::Ready), "ready");
+    assert_eq!(
+        feature::status_label(&feature::FeatureStatus::Ready),
+        "ready"
+    );
     assert_eq!(
         feature::status_label(&feature::FeatureStatus::InProgress),
         "in_progress"

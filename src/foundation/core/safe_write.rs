@@ -5,7 +5,7 @@ use std::process;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
 

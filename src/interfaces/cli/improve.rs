@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::domain::harness::{BacklogConfig, BacklogItem};
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::{ImproveArgs, ImproveCommand};
 use crate::operations::improver;
 
@@ -75,9 +75,5 @@ fn print_item(item: &BacklogItem) {
 }
 
 fn field_or_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {
-    if value.is_empty() {
-        fallback
-    } else {
-        value
-    }
+    if value.is_empty() { fallback } else { value }
 }

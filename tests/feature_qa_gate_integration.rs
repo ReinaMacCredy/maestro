@@ -44,8 +44,19 @@ fn assert_failure(output: std::process::Output, args: &[&str]) -> String {
 fn init_and_author(repo: &Path, id: &str, title: &str) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
     stdout(maestro(&["init", "--yes"], repo), &["init"]);
-    stdout(maestro(&["feature", "new", title], repo), &["feature", "new"]);
-    let set = ["feature", "set", id, "--acceptance", "behaves", "--area", "reports"];
+    stdout(
+        maestro(&["feature", "new", title], repo),
+        &["feature", "new"],
+    );
+    let set = [
+        "feature",
+        "set",
+        id,
+        "--acceptance",
+        "behaves",
+        "--area",
+        "reports",
+    ];
     stdout(maestro(&set, repo), &set);
 }
 
@@ -86,17 +97,26 @@ fn feature_qa_gates_via_cli() {
     // F — accept blocks until a baseline is captured (before edits).
     let accept = ["feature", "accept", "report-builder"];
     let stderr = assert_failure(maestro(&accept, repo), &accept);
-    assert!(stderr.contains("qa-baseline"), "accept should name the missing baseline: {stderr}");
+    assert!(
+        stderr.contains("qa-baseline"),
+        "accept should name the missing baseline: {stderr}"
+    );
 
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
     let accepted = stdout(maestro(&accept, repo), &accept);
     assert!(accepted.contains("accepted report-builder"));
-    stdout(maestro(&["feature", "start", "report-builder"], repo), &["feature", "start"]);
+    stdout(
+        maestro(&["feature", "start", "report-builder"], repo),
+        &["feature", "start"],
+    );
 
     // Coverage — ship blocks while [bl-001] has no counting slice.
     let ship = ["feature", "ship", "report-builder"];
     let stderr = assert_failure(maestro(&ship, repo), &ship);
-    assert!(stderr.contains("bl-001"), "ship should name the uncovered scenario: {stderr}");
+    assert!(
+        stderr.contains("bl-001"),
+        "ship should name the uncovered scenario: {stderr}"
+    );
     assert!(stderr.contains("coverage incomplete"));
 
     // D count rule through the real YAML parse path: a slice that references the
@@ -107,26 +127,49 @@ fn feature_qa_gates_via_cli() {
     )
     .expect("invariant: qa-slices.yaml should be writable");
     let stderr = assert_failure(maestro(&ship, repo), &ship);
-    assert!(stderr.contains("bl-001"), "an evidence-less slice must not count: {stderr}");
+    assert!(
+        stderr.contains("bl-001"),
+        "an evidence-less slice must not count: {stderr}"
+    );
 
     write_qa_slices(repo, "report-builder", &["bl-001"]);
     let dry = ["feature", "ship", "report-builder", "--dry-run"];
     let preview = stdout(maestro(&dry, repo), &dry);
-    assert!(preview.contains("would ship"), "dry-run should pass once covered: {preview}");
+    assert!(
+        preview.contains("would ship"),
+        "dry-run should pass once covered: {preview}"
+    );
 
     // E freshness — a behavioral amend (new area) staleness-blocks ship; the gate
     // reads the amend-log.yaml that `feature amend` actually wrote.
-    let amend = ["feature", "amend", "report-builder", "--add-area", "exports", "--reason", "scope grew"];
+    let amend = [
+        "feature",
+        "amend",
+        "report-builder",
+        "--add-area",
+        "exports",
+        "--reason",
+        "scope grew",
+    ];
     stdout(maestro(&amend, repo), &amend);
     let stderr = assert_failure(maestro(&ship, repo), &ship);
-    assert!(stderr.contains("stale"), "behavioral amend should stale the baseline: {stderr}");
+    assert!(
+        stderr.contains("stale"),
+        "behavioral amend should stale the baseline: {stderr}"
+    );
 
     // Refresh the baseline past the amend and add the new scenario; coverage now
     // demands a slice for [bl-002].
     write_baseline(repo, "report-builder", 1, &["bl-001", "bl-002"]);
     let stderr = assert_failure(maestro(&ship, repo), &ship);
-    assert!(stderr.contains("bl-002"), "re-extended baseline needs a slice for the new scenario: {stderr}");
-    assert!(!stderr.contains("stale"), "freshness should clear once position is bumped: {stderr}");
+    assert!(
+        stderr.contains("bl-002"),
+        "re-extended baseline needs a slice for the new scenario: {stderr}"
+    );
+    assert!(
+        !stderr.contains("stale"),
+        "freshness should clear once position is bumped: {stderr}"
+    );
 
     write_qa_slices(repo, "report-builder", &["bl-001", "bl-002"]);
     let shipped = stdout(maestro(&ship, repo), &ship);
@@ -144,11 +187,22 @@ fn non_goal_amend_does_not_block_ship_via_cli() {
         maestro(&["feature", "accept", "report-builder"], repo),
         &["feature", "accept"],
     );
-    stdout(maestro(&["feature", "start", "report-builder"], repo), &["feature", "start"]);
+    stdout(
+        maestro(&["feature", "start", "report-builder"], repo),
+        &["feature", "start"],
+    );
     write_qa_slices(repo, "report-builder", &["bl-001"]);
 
     // A non-goal amend is not behavioral, so it must not stale the baseline.
-    let amend = ["feature", "amend", "report-builder", "--add-non-goal", "no pdf export", "--reason", "clarify scope"];
+    let amend = [
+        "feature",
+        "amend",
+        "report-builder",
+        "--add-non-goal",
+        "no pdf export",
+        "--reason",
+        "clarify scope",
+    ];
     stdout(maestro(&amend, repo), &amend);
 
     let ship = ["feature", "ship", "report-builder"];

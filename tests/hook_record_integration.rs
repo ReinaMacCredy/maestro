@@ -226,24 +226,30 @@ fn unsafe_session_ids_do_not_collide_after_sanitization() {
 
     assert_ne!(first, second);
     assert_ne!(first, literal_encoded);
-    assert!(maestro_record(
-        repo.path(),
-        r#"{"session_id":"alpha/beta","event_type":"UserPromptSubmit"}"#,
-    )
-    .status
-    .success());
-    assert!(maestro_record(
-        repo.path(),
-        r#"{"session_id":"alpha?beta","event_type":"UserPromptSubmit"}"#,
-    )
-    .status
-    .success());
-    assert!(maestro_record(
-        repo.path(),
-        r#"{"session_id":"alpha%2Fbeta","event_type":"UserPromptSubmit"}"#,
-    )
-    .status
-    .success());
+    assert!(
+        maestro_record(
+            repo.path(),
+            r#"{"session_id":"alpha/beta","event_type":"UserPromptSubmit"}"#,
+        )
+        .status
+        .success()
+    );
+    assert!(
+        maestro_record(
+            repo.path(),
+            r#"{"session_id":"alpha?beta","event_type":"UserPromptSubmit"}"#,
+        )
+        .status
+        .success()
+    );
+    assert!(
+        maestro_record(
+            repo.path(),
+            r#"{"session_id":"alpha%2Fbeta","event_type":"UserPromptSubmit"}"#,
+        )
+        .status
+        .success()
+    );
 
     assert_eq!(read_events(repo.path(), &first).len(), 1);
     assert_eq!(read_events(repo.path(), &second).len(), 1);
@@ -261,12 +267,14 @@ fn literal_unattributed_session_does_not_share_missing_session_bucket() {
             .status
             .success()
     );
-    assert!(maestro_record(
-        repo.path(),
-        r#"{"session_id":"unattributed","event_type":"UserPromptSubmit"}"#,
-    )
-    .status
-    .success());
+    assert!(
+        maestro_record(
+            repo.path(),
+            r#"{"session_id":"unattributed","event_type":"UserPromptSubmit"}"#,
+        )
+        .status
+        .success()
+    );
 
     assert_eq!(read_events(repo.path(), "unattributed").len(), 1);
     assert_eq!(read_events(repo.path(), &literal).len(), 1);
@@ -304,10 +312,12 @@ fn pre_tool_use_hashes_tool_input_without_persisting_raw_content() {
     let events = read_events(repo.path(), "session-privacy");
     assert_eq!(events[0]["event_type"], "PreToolUse");
     assert!(events[0].get("tool_input").is_none());
-    assert!(events[0]["tool_input_hash"]
-        .as_str()
-        .expect("invariant: tool_input_hash should be a string")
-        .starts_with("sha256:"));
+    assert!(
+        events[0]["tool_input_hash"]
+            .as_str()
+            .expect("invariant: tool_input_hash should be a string")
+            .starts_with("sha256:")
+    );
 }
 
 #[test]
@@ -433,9 +443,11 @@ fn concurrent_same_session_records_append_complete_json_lines() {
         .map(|line| serde_json::from_str::<Value>(line).expect("event line should be valid JSON"))
         .collect::<Vec<_>>();
     assert_eq!(events.len(), 12);
-    assert!(events
-        .iter()
-        .all(|event| event["event_type"] == "PostToolUse"));
+    assert!(
+        events
+            .iter()
+            .all(|event| event["event_type"] == "PostToolUse")
+    );
     let actual_tools = events
         .iter()
         .map(|event| {
@@ -490,8 +502,10 @@ fn hook_record_refuses_symlinked_run_artifacts_without_failing_adapter() {
 
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
-    assert!(!external
-        .path()
-        .join("session-symlink/events.jsonl")
-        .exists());
+    assert!(
+        !external
+            .path()
+            .join("session-symlink/events.jsonl")
+            .exists()
+    );
 }

@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::domain::task::blockers::has_unresolved_blockers;
 use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};

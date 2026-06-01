@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
-use serde_json::{json, Value};
+use anyhow::{Context, Result, bail};
+use serde_json::{Value, json};
 
 use crate::domain::task;
 use crate::foundation::core::paths::MaestroPaths;
@@ -19,23 +19,91 @@ pub struct ToolDefinition {
 /// Return all V1 Maestro MCP tool definitions.
 pub fn tool_definitions() -> Vec<ToolDefinition> {
     vec![
-        tool("maestro_status", "Returns high-level repo state: counts of tasks by state, current claimed_by per agent, current MAESTRO_CURRENT_TASK (if set).", json!({"type":"object","properties":{}})),
-        tool("maestro_task_list", "Lists tasks (terminal/done tasks hidden unless all=true). Filters: ready, blocked, blocked_by, blocks, feature_id, claimed_by, all.", json!({"type":"object","properties":{"ready":{"type":"boolean"},"blocked":{"type":"boolean"},"blocked_by":{"type":"string"},"blocks":{"type":"string"},"feature_id":{"type":"string"},"claimed_by":{"type":"string"},"all":{"type":"boolean"}}})),
-        tool("maestro_task_show", "Returns full task detail for one task id (or current).", json!({"type":"object","properties":{"id":{"type":"string"}}})),
-        tool("maestro_task_claim", "Claims a task; sets claimed_by; auto-progresses ready to in_progress.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
-        tool("maestro_task_complete", "Completes a task; in_progress to needs_verification; takes summary and one completion claim.", json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"claim":{"type":"string"},"claims":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":1}},"required":["id","summary"]})),
-        tool("maestro_task_block", "Adds a blocker to a task; takes reason and optional blocked_ref.", json!({"type":"object","properties":{"id":{"type":"string"},"reason":{"type":"string"},"blocked_ref":{"type":"string"}},"required":["id","reason"]})),
-        tool("maestro_task_unblock", "Resolves a blocker on a task.", json!({"type":"object","properties":{"id":{"type":"string"},"blocker":{"type":"string"}},"required":["id","blocker"]})),
-        tool("maestro_feature_list", "Lists features with their computed task counts and statuses (terminal features hidden unless all=true).", json!({"type":"object","properties":{"all":{"type":"boolean"}}})),
-        tool("maestro_feature_show", "Returns rich feature view computed at read time.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
-        tool("maestro_feature_start", "Starts a ready feature; ready to in_progress.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
-        tool("maestro_feature_ship", "Ships an in_progress feature; in_progress to shipped; enforces the ship gate.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
-        tool("maestro_decision_list", "Lists all decisions in .maestro/decisions/.", json!({"type":"object","properties":{}})),
-        tool("maestro_decision_new", "Creates a new decision file with the given title; opens template content.", json!({"type":"object","properties":{"title":{"type":"string"}},"required":["title"]})),
-        tool("maestro_verify", "Runs maestro task verify on a task; returns the verification result.", json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]})),
-        tool("maestro_query_matrix", "Returns the computed behavior to proof matrix.", json!({"type":"object","properties":{}})),
-        tool("maestro_metrics_summary", "Returns the computed metrics summary.", json!({"type":"object","properties":{}})),
-        tool("maestro_sync", "Resyncs bundled resources (skills, hook script, harness) to this binary's shipped versions. Offline and edit-preserving; set dry_run=true to preview without writing.", json!({"type":"object","properties":{"dry_run":{"type":"boolean"}}})),
+        tool(
+            "maestro_status",
+            "Returns high-level repo state: counts of tasks by state, current claimed_by per agent, current MAESTRO_CURRENT_TASK (if set).",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
+            "maestro_task_list",
+            "Lists tasks (terminal/done tasks hidden unless all=true). Filters: ready, blocked, blocked_by, blocks, feature_id, claimed_by, all.",
+            json!({"type":"object","properties":{"ready":{"type":"boolean"},"blocked":{"type":"boolean"},"blocked_by":{"type":"string"},"blocks":{"type":"string"},"feature_id":{"type":"string"},"claimed_by":{"type":"string"},"all":{"type":"boolean"}}}),
+        ),
+        tool(
+            "maestro_task_show",
+            "Returns full task detail for one task id (or current).",
+            json!({"type":"object","properties":{"id":{"type":"string"}}}),
+        ),
+        tool(
+            "maestro_task_claim",
+            "Claims a task; sets claimed_by; auto-progresses ready to in_progress.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_task_complete",
+            "Completes a task; in_progress to needs_verification; takes summary and one completion claim.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"claim":{"type":"string"},"claims":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":1}},"required":["id","summary"]}),
+        ),
+        tool(
+            "maestro_task_block",
+            "Adds a blocker to a task; takes reason and optional blocked_ref.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"reason":{"type":"string"},"blocked_ref":{"type":"string"}},"required":["id","reason"]}),
+        ),
+        tool(
+            "maestro_task_unblock",
+            "Resolves a blocker on a task.",
+            json!({"type":"object","properties":{"id":{"type":"string"},"blocker":{"type":"string"}},"required":["id","blocker"]}),
+        ),
+        tool(
+            "maestro_feature_list",
+            "Lists features with their computed task counts and statuses (terminal features hidden unless all=true).",
+            json!({"type":"object","properties":{"all":{"type":"boolean"}}}),
+        ),
+        tool(
+            "maestro_feature_show",
+            "Returns rich feature view computed at read time.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_feature_start",
+            "Starts a ready feature; ready to in_progress.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_feature_ship",
+            "Ships an in_progress feature; in_progress to shipped; enforces the ship gate.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_decision_list",
+            "Lists all decisions in .maestro/decisions/.",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
+            "maestro_decision_new",
+            "Creates a new decision file with the given title; opens template content.",
+            json!({"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}),
+        ),
+        tool(
+            "maestro_verify",
+            "Runs maestro task verify on a task; returns the verification result.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        ),
+        tool(
+            "maestro_query_matrix",
+            "Returns the computed behavior to proof matrix.",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
+            "maestro_metrics_summary",
+            "Returns the computed metrics summary.",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
+            "maestro_sync",
+            "Resyncs bundled resources (skills, hook script, harness) to this binary's shipped versions. Offline and edit-preserving; set dry_run=true to preview without writing.",
+            json!({"type":"object","properties":{"dry_run":{"type":"boolean"}}}),
+        ),
     ]
 }
 

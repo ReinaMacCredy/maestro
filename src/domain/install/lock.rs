@@ -11,7 +11,7 @@ use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{classify, Compat, INSTALL_LOCK_SCHEMA_VERSION};
+use crate::foundation::core::schema::{Compat, INSTALL_LOCK_SCHEMA_VERSION, classify};
 
 /// `.maestro/install-lock.yaml`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

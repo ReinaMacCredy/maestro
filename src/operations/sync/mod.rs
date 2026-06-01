@@ -8,15 +8,15 @@
 //! edit-preserving -- a folder whose installed version already matches is left
 //! untouched; a drifted folder is backed up before overwrite.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::domain::extraction::{
-    extract_all, preview_all, render_preview, ExtractMode, ExtractReport, FolderDecision,
-    FolderPreview,
+    ExtractMode, ExtractReport, FolderDecision, FolderPreview, extract_all, preview_all,
+    render_preview,
 };
 use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 
 /// Shown when `sync` runs outside an initialized project.
 const NOT_INITIALIZED: &str = "no .maestro directory found here; run `maestro init` first";
@@ -48,7 +48,12 @@ pub fn run(options: &SyncOptions) -> Result<SyncOutcome> {
     let paths = sync_paths()?;
 
     if options.dry_run {
-        let preview = preview_all(&paths, ExtractMode::Update { backup_timestamp: "" })?;
+        let preview = preview_all(
+            &paths,
+            ExtractMode::Update {
+                backup_timestamp: "",
+            },
+        )?;
         return Ok(SyncOutcome::DryRun(preview));
     }
 

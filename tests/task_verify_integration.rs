@@ -203,9 +203,11 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
     assert_eq!(verification["status"], "passed");
     assert_eq!(
         verification["task_snapshot"]["updated_at"],
-        serde_json::json!(task_before_verify["updated_at"]
-            .as_str()
-            .expect("invariant: task updated_at should be present"))
+        serde_json::json!(
+            task_before_verify["updated_at"]
+                .as_str()
+                .expect("invariant: task updated_at should be present")
+        )
     );
     assert_eq!(
         task["verification"]["applied_report"]["task_snapshot_updated_at"],
@@ -235,10 +237,12 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
     let latest_attempt: Value =
         serde_json::from_str(&latest_attempt).expect("invariant: latest attempt should parse");
     assert_eq!(latest_attempt["attempt_id"], verification["attempt_id"]);
-    assert!(verification["proof_sources"][0]["path"]
-        .as_str()
-        .expect("invariant: proof source path should be present")
-        .contains("events.jsonl"));
+    assert!(
+        verification["proof_sources"][0]["path"]
+            .as_str()
+            .expect("invariant: proof source path should be present")
+            .contains("events.jsonl")
+    );
 }
 
 #[test]
@@ -276,9 +280,11 @@ fn task_verify_passed_apply_failure_leaves_report_unapplied() {
     let err = stderr(&verify);
     assert!(err.contains("verification report was written but task outcome was not applied"));
     assert!(err.contains("task is locked"));
-    assert!(!task_dir(repo, "task-001")
-        .join("verification.json")
-        .exists());
+    assert!(
+        !task_dir(repo, "task-001")
+            .join("verification.json")
+            .exists()
+    );
     let task = task_yaml(repo, "task-001");
     assert_eq!(
         task["state"],
@@ -312,9 +318,11 @@ fn task_verify_failed_apply_failure_leaves_report_unapplied() {
     assert!(err.contains("verification failure: missing proof"));
     assert!(err.contains("verification report was written but task outcome was not applied"));
     assert!(err.contains("task is locked"));
-    assert!(!task_dir(repo, "task-001")
-        .join("verification.json")
-        .exists());
+    assert!(
+        !task_dir(repo, "task-001")
+            .join("verification.json")
+            .exists()
+    );
     assert_eq!(task_yaml(repo, "task-001"), before);
 
     let proof = maestro(repo, &["query", "proof", "task-001"]);
@@ -344,9 +352,11 @@ fn task_verify_stale_snapshot_writes_unapplied_report_without_marking_verified()
     let err = stderr(&verify);
     assert!(err.contains("verification report was written but task outcome was not applied"));
     assert!(err.contains("task was modified"));
-    assert!(!task_dir(repo, "task-001")
-        .join("verification.json")
-        .exists());
+    assert!(
+        !task_dir(repo, "task-001")
+            .join("verification.json")
+            .exists()
+    );
     let task = task_yaml(repo, "task-001");
     assert_eq!(
         task["state"],
@@ -428,12 +438,16 @@ fn failed_verification_demotes_previously_verified_task_through_task_verify() {
         YamlValue::String("needs_verification".to_string())
     );
     let task_after_failed_verify = task_yaml(repo, "task-001");
-    assert!(task_after_failed_verify["verification"]["verified_at"]
-        .as_str()
-        .is_none());
-    assert!(task_after_failed_verify["verification"]["verified_commit"]
-        .as_str()
-        .is_none());
+    assert!(
+        task_after_failed_verify["verification"]["verified_at"]
+            .as_str()
+            .is_none()
+    );
+    assert!(
+        task_after_failed_verify["verification"]["verified_commit"]
+            .as_str()
+            .is_none()
+    );
     assert_eq!(verification_json(repo, "task-001")["status"], "failed");
     let mut task = task_after_failed_verify;
     let history = task["state_history"]
@@ -572,9 +586,11 @@ fn task_verify_rejects_acceptance_symlink_created_by_harness_verify_command() {
     let err = stderr(&verify);
     assert!(err.contains("acceptance"));
     assert!(err.contains("symlink"));
-    assert!(!task_dir(repo, "task-001")
-        .join("verification.json")
-        .exists());
+    assert!(
+        !task_dir(repo, "task-001")
+            .join("verification.json")
+            .exists()
+    );
 }
 
 #[test]
@@ -597,9 +613,11 @@ fn task_verify_rejects_symlinked_verification_attempts_dir() {
     let err = stderr(&verify);
     assert!(err.contains("verification attempts"));
     assert!(err.contains("symlink"));
-    assert!(!task_dir(repo, "task-001")
-        .join("verification.json")
-        .exists());
+    assert!(
+        !task_dir(repo, "task-001")
+            .join("verification.json")
+            .exists()
+    );
     assert_eq!(
         fs::read_dir(external_attempts)
             .expect("invariant: external attempts dir should be readable")

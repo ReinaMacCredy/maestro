@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 /// One decision markdown file found under `.maestro/decisions`.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -178,7 +178,10 @@ fn metrics_summary_reads_tasks_and_run_evidence_without_cache() {
     create_task(repo, "In progress parser task");
     mark_verified(repo, "task-001", "billing", "100", "2380");
     assert_success(
-        &maestro(repo, &["task", "set", "task-002", "--check", "parser landed"]),
+        &maestro(
+            repo,
+            &["task", "set", "task-002", "--check", "parser landed"],
+        ),
         &["task", "set", "task-002", "--check", "parser landed"],
     );
     assert_success(
@@ -1095,8 +1098,10 @@ fn improve_fails_when_archived_attempt_candidate_is_symlink() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .contains("managed verification attempt path must not be a symlink"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("managed verification attempt path must not be a symlink")
+    );
 }
 
 #[test]
@@ -1117,8 +1122,10 @@ fn improve_fails_when_archived_attempt_candidate_is_directory() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .contains("managed verification attempt path must be a file"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("managed verification attempt path must be a file")
+    );
 }
 
 #[test]
@@ -1306,8 +1313,10 @@ fn improve_fails_when_canonical_proof_report_path_is_directory() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .contains("managed verification report path must be a file"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("managed verification report path must be a file")
+    );
 }
 
 #[test]
@@ -1330,8 +1339,10 @@ fn improve_fails_when_verification_attempts_path_is_file() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .contains("managed verification attempts path must be a directory"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("managed verification attempts path must be a directory")
+    );
 }
 
 #[test]
@@ -1371,25 +1382,33 @@ fn mcp_serve_lists_tools_and_calls_metrics_summary_over_stdio() {
         .as_array()
         .expect("invariant: tools/list should return an array");
     assert_eq!(tools.len(), 17);
-    assert!(tools
-        .iter()
-        .any(|tool| tool["name"] == "maestro_feature_start"));
-    assert!(tools
-        .iter()
-        .any(|tool| tool["name"] == "maestro_feature_ship"));
-    assert!(tools
-        .iter()
-        .any(|tool| tool["name"] == "maestro_task_claim"));
-    assert!(tools
-        .iter()
-        .any(|tool| tool["name"] == "maestro_metrics_summary"));
-    assert!(tools
-        .iter()
-        .any(|tool| tool["name"] == "maestro_sync"));
-    assert!(lines[2]["result"]["content"][0]["text"]
-        .as_str()
-        .expect("invariant: tool response should contain text")
-        .contains("Tasks: 1"));
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == "maestro_feature_start")
+    );
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == "maestro_feature_ship")
+    );
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == "maestro_task_claim")
+    );
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == "maestro_metrics_summary")
+    );
+    assert!(tools.iter().any(|tool| tool["name"] == "maestro_sync"));
+    assert!(
+        lines[2]["result"]["content"][0]["text"]
+            .as_str()
+            .expect("invariant: tool response should contain text")
+            .contains("Tasks: 1")
+    );
 }
 
 #[test]
@@ -1483,9 +1502,11 @@ fn mcp_serve_uses_content_length_framing() {
         .wait_with_output()
         .expect("invariant: mcp serve should return after stdin closes");
     assert_success(&output, &["mcp", "serve"]);
-    assert!(String::from_utf8(output.stdout.clone())
-        .expect("invariant: MCP output should be UTF-8")
-        .starts_with("Content-Length: "));
+    assert!(
+        String::from_utf8(output.stdout.clone())
+            .expect("invariant: MCP output should be UTF-8")
+            .starts_with("Content-Length: ")
+    );
     let frames = parse_mcp_frames(&output.stdout);
     assert_eq!(frames[0]["id"], 1);
 }
@@ -1516,11 +1537,13 @@ fn mcp_serve_accepts_newline_delimited_json_rpc() {
         .expect("invariant: mcp serve should return after stdin closes");
     assert_success(&output, &["mcp", "serve"]);
     let frames = parse_mcp_frames(&output.stdout);
-    assert!(frames[0]["result"]["tools"]
-        .as_array()
-        .expect("invariant: tools should be an array")
-        .iter()
-        .any(|tool| tool["name"] == "maestro_metrics_summary"));
+    assert!(
+        frames[0]["result"]["tools"]
+            .as_array()
+            .expect("invariant: tools should be an array")
+            .iter()
+            .any(|tool| tool["name"] == "maestro_metrics_summary")
+    );
 }
 
 #[test]
@@ -1549,11 +1572,13 @@ fn mcp_serve_accepts_list_method_alias() {
         .expect("invariant: mcp serve should return after stdin closes");
     assert_success(&output, &["mcp", "serve"]);
     let frames = parse_mcp_frames(&output.stdout);
-    assert!(frames[0]["result"]["tools"]
-        .as_array()
-        .expect("invariant: tools should be an array")
-        .iter()
-        .any(|tool| tool["name"] == "maestro_metrics_summary"));
+    assert!(
+        frames[0]["result"]["tools"]
+            .as_array()
+            .expect("invariant: tools should be an array")
+            .iter()
+            .any(|tool| tool["name"] == "maestro_metrics_summary")
+    );
 }
 
 #[test]
@@ -1590,18 +1615,24 @@ fn mcp_serve_reports_invalid_requests_without_running_tools() {
     let lines = parse_mcp_frames(&output.stdout);
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["error"]["code"], -32602);
-    assert!(lines[0]["error"]["message"]
-        .as_str()
-        .expect("invariant: error message should be a string")
-        .contains("missing tool name"));
-    assert!(lines[1]["error"]["message"]
-        .as_str()
-        .expect("invariant: error message should be a string")
-        .contains("unknown MCP tool"));
-    assert!(lines[2]["error"]["message"]
-        .as_str()
-        .expect("invariant: error message should be a string")
-        .contains("claims must contain exactly one claim"));
+    assert!(
+        lines[0]["error"]["message"]
+            .as_str()
+            .expect("invariant: error message should be a string")
+            .contains("missing tool name")
+    );
+    assert!(
+        lines[1]["error"]["message"]
+            .as_str()
+            .expect("invariant: error message should be a string")
+            .contains("unknown MCP tool")
+    );
+    assert!(
+        lines[2]["error"]["message"]
+            .as_str()
+            .expect("invariant: error message should be a string")
+            .contains("claims must contain exactly one claim")
+    );
 }
 
 #[test]

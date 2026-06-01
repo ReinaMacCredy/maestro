@@ -11,10 +11,10 @@ pub(crate) fn resolve_optional_task_id(
     if let Some(task_id) = explicit_id {
         return Ok(task_id);
     }
-    if let Ok(task_id) = std::env::var("MAESTRO_CURRENT_TASK") {
-        if !task_id.trim().is_empty() {
-            return Ok(task_id);
-        }
+    if let Ok(task_id) = std::env::var("MAESTRO_CURRENT_TASK")
+        && !task_id.trim().is_empty()
+    {
+        return Ok(task_id);
     }
     let tasks = task::load_task_records(&paths.tasks_dir())?;
     let open_tasks = tasks

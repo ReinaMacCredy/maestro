@@ -44,13 +44,13 @@ pub(crate) fn summarize_task_entries(
         *task_counts
             .entry(entry.task.state.as_str().to_string())
             .or_default() += 1;
-        if entry.task.state == TaskState::Verified {
-            if let Some(seconds) = task::verification_duration_seconds(
+        if entry.task.state == TaskState::Verified
+            && let Some(seconds) = task::verification_duration_seconds(
                 &entry.task.created_at,
                 &entry.task.verification,
-            ) {
-                verify_durations.push(seconds);
-            }
+            )
+        {
+            verify_durations.push(seconds);
         }
     }
 

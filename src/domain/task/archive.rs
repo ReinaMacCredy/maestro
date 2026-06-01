@@ -7,11 +7,11 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::task::doctor::load_task_records;
 use crate::domain::task::lookup::resolve_task_yaml_path;
-use crate::domain::task::template::{load_task, BlockerKind};
+use crate::domain::task::template::{BlockerKind, load_task};
 use crate::foundation::core::fs::ensure_dir;
 
 /// Archive `id`: move `tasks/<id>` → `archive/tasks/<id>` (§5.3).
@@ -65,7 +65,11 @@ pub fn archive_task(
     }
     ensure_dir(archive_tasks_dir)?;
     fs::rename(task_dir, &target).with_context(|| {
-        format!("failed to move {} to {}", task_dir.display(), target.display())
+        format!(
+            "failed to move {} to {}",
+            task_dir.display(),
+            target.display()
+        )
     })?;
     Ok(format!("archived {id}"))
 }
@@ -87,11 +91,18 @@ pub fn unarchive_task(tasks_dir: &Path, archive_tasks_dir: &Path, id: &str) -> R
     let (task, _) = load_task(&task_path)?;
     let target = tasks_dir.join(&dir_name);
     if target.exists() {
-        bail!("cannot unarchive {} — a live task already occupies that id", task.id);
+        bail!(
+            "cannot unarchive {} — a live task already occupies that id",
+            task.id
+        );
     }
     ensure_dir(tasks_dir)?;
     fs::rename(archived_dir, &target).with_context(|| {
-        format!("failed to move {} to {}", archived_dir.display(), target.display())
+        format!(
+            "failed to move {} to {}",
+            archived_dir.display(),
+            target.display()
+        )
     })?;
     Ok(format!("unarchived {}", task.id))
 }
@@ -124,5 +135,10 @@ fn dir_name(task_dir: &Path) -> Result<String> {
         .file_name()
         .and_then(|name| name.to_str())
         .map(str::to_string)
-        .with_context(|| format!("archive: cannot read directory name from {}", task_dir.display()))
+        .with_context(|| {
+            format!(
+                "archive: cannot read directory name from {}",
+                task_dir.display()
+            )
+        })
 }

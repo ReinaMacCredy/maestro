@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::extraction;
 use crate::domain::harness;
-use crate::domain::skills::symlink::{SkillSymlink, SKILLS_SYMLINK_TARGET};
+use crate::domain::skills::symlink::{SKILLS_SYMLINK_TARGET, SkillSymlink};
 use crate::foundation::core::paths::MaestroPaths;
 
 mod hooks;
@@ -12,7 +12,7 @@ mod lock;
 mod mirrors;
 
 pub use lock::{AgentInstall, FileOwnership, InstallLock, InstallState, MirrorKind};
-pub use mirrors::{mirror_plan, MirrorPlan};
+pub use mirrors::{MirrorPlan, mirror_plan};
 
 use lock::remove_lock_file;
 use mirrors::{prepare_mirrors, write_prepared_mirrors};
@@ -328,9 +328,11 @@ mod tests {
         })
         .expect_err("invariant: simulated final lock save failure should fail uninstall");
 
-        assert!(error
-            .to_string()
-            .contains("simulated final lock save failure"));
+        assert!(
+            error
+                .to_string()
+                .contains("simulated final lock save failure")
+        );
         assert_eq!(
             fs::read_to_string(&lock_path).expect("invariant: install lock should remain"),
             lock_before
@@ -369,9 +371,11 @@ mod tests {
         })
         .expect_err("invariant: simulated final lock remove failure should fail uninstall");
 
-        assert!(error
-            .to_string()
-            .contains("simulated final lock remove failure"));
+        assert!(
+            error
+                .to_string()
+                .contains("simulated final lock remove failure")
+        );
         assert_eq!(
             fs::read_to_string(&lock_path).expect("invariant: install lock should remain"),
             lock_before
@@ -484,9 +488,11 @@ mod tests {
         assert_eq!(interrupted.agents["codex"].state, InstallState::Removing);
         let restored_hooks = read_json(&hooks_path);
         assert!(restored_hooks.get("_maestro_managed_keys").is_none());
-        assert!(restored_hooks
-            .get("_maestro_previous_value_hashes")
-            .is_none());
+        assert!(
+            restored_hooks
+                .get("_maestro_previous_value_hashes")
+                .is_none()
+        );
         let original_hooks_json: serde_json::Value =
             serde_json::from_str(original_hooks).expect("invariant: original hooks should parse");
         assert_eq!(

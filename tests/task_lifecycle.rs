@@ -1,5 +1,5 @@
 use maestro::domain::task::{
-    has_unresolved_blockers, BlockerKind, TaskRecord, TaskState, TransitionDetails,
+    BlockerKind, TaskRecord, TaskState, TransitionDetails, has_unresolved_blockers,
 };
 use maestro::task::blockers::{add_blocker, resolve_blocker};
 use maestro::task::lifecycle::transition;

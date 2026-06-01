@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::foundation::core::fs::{create_directory_symlink, ensure_parent_dir};
-use crate::foundation::core::managed_path::{managed_path, managed_symlink_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path, managed_symlink_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Relative target used by agent skill mirrors.
@@ -70,9 +70,7 @@ fn inspect_destination(path: &Path, symlink: SkillSymlink) -> Result<Destination
             "refusing to overwrite existing {} because it is not the Maestro-managed skills symlink",
             symlink.relative_path
         ),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            Ok(DestinationState::Missing)
-        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(DestinationState::Missing),
         Err(error) => Err(error).with_context(|| format!("failed to inspect {}", path.display())),
     }
 }

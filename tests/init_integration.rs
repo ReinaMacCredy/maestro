@@ -128,39 +128,51 @@ fn init_creates_minimal_artifact_tree() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(temp_dir
-        .path()
-        .join(".maestro/harness/HARNESS.md")
-        .is_file());
+    assert!(
+        temp_dir
+            .path()
+            .join(".maestro/harness/HARNESS.md")
+            .is_file()
+    );
     assert!(temp_dir.path().join(".maestro/hooks/record.sh").is_file());
-    assert!(temp_dir
-        .path()
-        .join(".maestro/harness/harness.yml")
-        .is_file());
-    assert!(temp_dir
-        .path()
-        .join(".maestro/harness/backlog.yaml")
-        .is_file());
+    assert!(
+        temp_dir
+            .path()
+            .join(".maestro/harness/harness.yml")
+            .is_file()
+    );
+    assert!(
+        temp_dir
+            .path()
+            .join(".maestro/harness/backlog.yaml")
+            .is_file()
+    );
     assert!(temp_dir.path().join(".maestro/features").is_dir());
-    assert!(!temp_dir
-        .path()
-        .join(".maestro/features/features.yaml")
-        .exists());
+    assert!(
+        !temp_dir
+            .path()
+            .join(".maestro/features/features.yaml")
+            .exists()
+    );
     assert!(temp_dir.path().join(".maestro/decisions").is_dir());
     assert!(temp_dir.path().join(".maestro/skills").is_dir());
     for skill in BUNDLED_SKILLS {
-        assert!(temp_dir
-            .path()
-            .join(".maestro/skills")
-            .join(skill)
-            .join("SKILL.md")
-            .is_file());
+        assert!(
+            temp_dir
+                .path()
+                .join(".maestro/skills")
+                .join(skill)
+                .join("SKILL.md")
+                .is_file()
+        );
     }
     assert!(!temp_dir.path().join(".maestro/skill-index.yaml").exists());
-    assert!(!temp_dir
-        .path()
-        .join(".maestro/skills/skill-index.yaml")
-        .exists());
+    assert!(
+        !temp_dir
+            .path()
+            .join(".maestro/skills/skill-index.yaml")
+            .exists()
+    );
 
     let harness_yml = fs::read_to_string(temp_dir.path().join(".maestro/harness/harness.yml"))
         .expect("invariant: harness.yml should be readable");
@@ -386,10 +398,12 @@ fn init_bootstraps_empty_directory_without_git_marker() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(temp_dir
-        .path()
-        .join(".maestro/harness/HARNESS.md")
-        .is_file());
+    assert!(
+        temp_dir
+            .path()
+            .join(".maestro/harness/HARNESS.md")
+            .is_file()
+    );
     assert!(temp_dir.path().join(".maestro/features").is_dir());
 }
 
@@ -414,10 +428,12 @@ fn init_preflights_bundled_skill_conflicts_before_writing_harness() {
 
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("already exists"));
-    assert!(!temp_dir
-        .path()
-        .join(".maestro/harness/harness.yml")
-        .exists());
+    assert!(
+        !temp_dir
+            .path()
+            .join(".maestro/harness/harness.yml")
+            .exists()
+    );
     assert_eq!(
         fs::read_to_string(skill).expect("invariant: skill should remain readable"),
         "custom skill\n"

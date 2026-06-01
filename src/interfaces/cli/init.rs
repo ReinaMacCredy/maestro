@@ -21,9 +21,7 @@ pub fn run(args: InitArgs) -> Result<()> {
         }
         InitOutcome::Applied { behind } if behind > 0 => {
             let noun = if behind == 1 { "folder" } else { "folders" };
-            println!(
-                "{behind} {noun} behind this maestro version; run `maestro sync` to resync"
-            );
+            println!("{behind} {noun} behind this maestro version; run `maestro sync` to resync");
         }
         InitOutcome::Applied { .. } => {}
     }

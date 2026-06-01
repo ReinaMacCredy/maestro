@@ -17,8 +17,8 @@ use crate::domain::skills::extract::{extract_skills, preview_skills, validate_sk
 use crate::foundation::core::paths::MaestroPaths;
 
 pub use extract::{
-    folder_decision, preview_folder, render_preview, rollback_writes, ExtractMode, ExtractReport,
-    FolderDecision, FolderPreview, ResourceBackup, ResourceWrite,
+    ExtractMode, ExtractReport, FolderDecision, FolderPreview, ResourceBackup, ResourceWrite,
+    folder_decision, preview_folder, render_preview, rollback_writes,
 };
 pub use hook_script::{
     ensure_hook_script_exists, extract_hook_script, extract_hook_script_from, preview_hook_script,

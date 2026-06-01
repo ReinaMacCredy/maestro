@@ -1,10 +1,10 @@
 //! Verification command helpers for task proof flows.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::domain::proof;
 use crate::foundation::core::fs::ensure_dir;
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::operations::{self, TaskVerifyApplication};
 

@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -18,20 +18,20 @@ pub(crate) mod lifecycle;
 pub(crate) mod lookup;
 pub(crate) mod template;
 
-pub use archive::{archive_task, unarchive_task};
 pub(crate) use archive::live_task_referrer;
+pub use archive::{archive_task, unarchive_task};
 pub use blockers::has_unresolved_blockers;
 pub use display::{render_task, render_task_list};
 pub use doctor::{
-    check_blocker_graph, load_task_entries, load_task_records, render_report, TaskDoctorReport,
-    TaskEntry,
+    TaskDoctorReport, TaskEntry, check_blocker_graph, load_task_entries, load_task_records,
+    render_report,
 };
 pub use lifecycle::TransitionDetails;
-pub use template::{
-    task_markdown, AcceptanceFile, AppliedVerificationReceipt, Blocker, BlockerKind, BlockerRef,
-    BlockerSource, TaskRecord, TaskState, VerificationBinding,
-};
 pub(crate) use template::TaskSaveError;
+pub use template::{
+    AcceptanceFile, AppliedVerificationReceipt, Blocker, BlockerKind, BlockerRef, BlockerSource,
+    TaskRecord, TaskState, VerificationBinding, task_markdown,
+};
 
 /// Minimal Task projection for feature rollups.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -713,8 +713,8 @@ fn blocker_descriptor(target: BlockerTarget) -> (BlockerKind, Option<BlockerRef>
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_verification_outcome, AppliedVerificationReceipt, TaskRecord, TaskState,
-        VerificationBinding, VerificationOutcome, VerificationPassed,
+        AppliedVerificationReceipt, TaskRecord, TaskState, VerificationBinding,
+        VerificationOutcome, VerificationPassed, apply_verification_outcome,
     };
 
     #[test]

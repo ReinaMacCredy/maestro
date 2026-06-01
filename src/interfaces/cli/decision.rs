@@ -3,7 +3,7 @@ use std::fs;
 use anyhow::{Context, Result};
 
 use crate::domain::decisions;
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::{DecisionArgs, DecisionCommand};
 
 /// Execute `maestro decision`.

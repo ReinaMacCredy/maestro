@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::run::discovery::managed_run_evidence_files;
 use crate::domain::run::event::run_dir_name;
-use crate::domain::run::reader::{visit_open_event_log, RunEvent};
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::domain::run::reader::{RunEvent, visit_open_event_log};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{classify, Compat, RUN_EVIDENCE_SCHEMA_VERSION};
-use crate::foundation::core::time::{parse_utc_timestamp, ParsedTimestamp};
+use crate::foundation::core::schema::{Compat, RUN_EVIDENCE_SCHEMA_VERSION, classify};
+use crate::foundation::core::time::{ParsedTimestamp, parse_utc_timestamp};
 
 #[derive(Debug, Serialize)]
 struct RunEvidence {
@@ -135,10 +135,10 @@ impl RunEvidenceBuilder {
         if self.task_id.is_none() {
             self.task_id = event.task_id().map(str::to_string);
         }
-        if event.is_event_type("PostToolUse") {
-            if let Some(tool_name) = event.tool_name() {
-                *self.tools_used.entry(tool_name.to_string()).or_insert(0) += 1;
-            }
+        if event.is_event_type("PostToolUse")
+            && let Some(tool_name) = event.tool_name()
+        {
+            *self.tools_used.entry(tool_name.to_string()).or_insert(0) += 1;
         }
         if event.is_event_type("UserPromptSubmit") {
             self.prompts += 1;

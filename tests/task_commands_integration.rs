@@ -152,10 +152,12 @@ fn create_explore_accept_claim_complete_flow_updates_task_record() {
         .as_sequence()
         .expect("invariant: state_history should be an array");
     assert_eq!(history.len(), 5);
-    assert!(!doc["updated_at"]
-        .as_str()
-        .expect("invariant: updated_at should be a string")
-        .is_empty());
+    assert!(
+        !doc["updated_at"]
+            .as_str()
+            .expect("invariant: updated_at should be a string")
+            .is_empty()
+    );
 }
 
 #[test]
@@ -168,7 +170,10 @@ fn claim_from_draft_advances_to_in_progress() {
         &["task", "create", "Direct claim task"],
     );
     assert_success(
-        &maestro(repo, &["task", "set", "task-001", "--check", "direct claim check"]),
+        &maestro(
+            repo,
+            &["task", "set", "task-001", "--check", "direct claim check"],
+        ),
         &["task", "set", "task-001", "--check", "direct claim check"],
     );
     let claim = maestro(repo, &["task", "claim", "task-001"]);
@@ -274,7 +279,10 @@ fn blockers_terminal_transitions_and_claim_gate_behave_as_expected() {
         &["task", "create", "Task A"],
     );
     assert_success(
-        &maestro(repo, &["task", "set", "task-001", "--check", "task a check"]),
+        &maestro(
+            repo,
+            &["task", "set", "task-001", "--check", "task a check"],
+        ),
         &["task", "set", "task-001", "--check", "task a check"],
     );
     assert_success(
@@ -661,7 +669,10 @@ fn task_create_never_reissues_an_archived_id() {
         .expect("invariant: archive tasks dir should be creatable");
 
     let created = stdout(&maestro(repo, &["task", "create", "Next task"]));
-    assert!(created.contains("task-006"), "expected task-006, got: {created}");
+    assert!(
+        created.contains("task-006"),
+        "expected task-006, got: {created}"
+    );
     assert!(!repo.join(".maestro/tasks/task-005").exists());
 }
 
@@ -671,13 +682,19 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     let repo = temp.path();
 
     // task-001 stays live; archiving a live task is refused (only done tasks archive).
-    assert_success(&maestro(repo, &["task", "create", "Keeper"]), &["task", "create", "Keeper"]);
+    assert_success(
+        &maestro(repo, &["task", "create", "Keeper"]),
+        &["task", "create", "Keeper"],
+    );
     let live = maestro(repo, &["task", "archive", "task-001"]);
     assert_failure(&live, &["task", "archive", "task-001"]);
     assert!(stderr(&live).contains("not done"));
 
     // task-002 is abandoned (terminal) and thus archive-eligible.
-    assert_success(&maestro(repo, &["task", "create", "Done"]), &["task", "create", "Done"]);
+    assert_success(
+        &maestro(repo, &["task", "create", "Done"]),
+        &["task", "create", "Done"],
+    );
     assert_success(
         &maestro(repo, &["task", "abandon", "task-002", "--reason", "nope"]),
         &["task", "abandon", "task-002", "--reason", "nope"],
@@ -686,8 +703,15 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     // L6c: a live task (task-001) blocked by task-002 makes the archive refuse,
     // naming the referrer.
     assert_success(
-        &maestro(repo, &["task", "block", "task-001", "--reason", "needs 2", "--by", "task-002"]),
-        &["task", "block", "task-001", "--reason", "needs 2", "--by", "task-002"],
+        &maestro(
+            repo,
+            &[
+                "task", "block", "task-001", "--reason", "needs 2", "--by", "task-002",
+            ],
+        ),
+        &[
+            "task", "block", "task-001", "--reason", "needs 2", "--by", "task-002",
+        ],
     );
     let referenced = maestro(repo, &["task", "archive", "task-002"]);
     assert_failure(&referenced, &["task", "archive", "task-002"]);
@@ -695,12 +719,18 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
 
     // Clearing the blocker unblocks the archive.
     assert_success(
-        &maestro(repo, &["task", "unblock", "task-001", "--blocker", "blk-001"]),
+        &maestro(
+            repo,
+            &["task", "unblock", "task-001", "--blocker", "blk-001"],
+        ),
         &["task", "unblock", "task-001", "--blocker", "blk-001"],
     );
 
     // --dry-run previews without moving.
-    let preview = stdout(&maestro(repo, &["task", "archive", "task-002", "--dry-run"]));
+    let preview = stdout(&maestro(
+        repo,
+        &["task", "archive", "task-002", "--dry-run"],
+    ));
     assert!(preview.contains("would archive task-002"));
     assert!(repo.join(".maestro/tasks/task-002-done").exists());
 
@@ -741,7 +771,10 @@ fn list_hides_terminal_tasks_until_all_is_passed() {
         &["task", "create", "Done task"],
     );
     assert_success(
-        &maestro(repo, &["task", "abandon", "task-002", "--reason", "not needed"]),
+        &maestro(
+            repo,
+            &["task", "abandon", "task-002", "--reason", "not needed"],
+        ),
         &["task", "abandon", "task-002", "--reason", "not needed"],
     );
 
@@ -771,14 +804,28 @@ fn set_on_a_settled_task_refuses_the_link_change_before_writing_checks() {
     // task-001 is created (draft, no checks) then abandoned: settled, but never
     // accepted so its acceptance stays unlocked — the state where set_checks
     // would otherwise write before set_feature's settled guard fires.
-    assert_success(&maestro(repo, &["task", "create", "Dead end"]), &["task", "create", "Dead end"]);
     assert_success(
-        &maestro(repo, &["task", "abandon", "task-001", "--reason", "scrapped"]),
+        &maestro(repo, &["task", "create", "Dead end"]),
+        &["task", "create", "Dead end"],
+    );
+    assert_success(
+        &maestro(
+            repo,
+            &["task", "abandon", "task-001", "--reason", "scrapped"],
+        ),
         &["task", "abandon", "task-001", "--reason", "scrapped"],
     );
 
     // A combined `--check --feature` set must fail fast on the settled task.
-    let args = &["task", "set", "task-001", "--check", "must not persist", "--feature", "billing"];
+    let args = &[
+        "task",
+        "set",
+        "task-001",
+        "--check",
+        "must not persist",
+        "--feature",
+        "billing",
+    ];
     let set = maestro(repo, args);
     assert_failure(&set, args);
     assert!(stderr(&set).contains("settled history"));
@@ -789,7 +836,8 @@ fn set_on_a_settled_task_refuses_the_link_change_before_writing_checks() {
         .expect("invariant: task path should have a directory")
         .join("acceptance.yaml");
     if acceptance.exists() {
-        let raw = fs::read_to_string(&acceptance).expect("invariant: acceptance.yaml should be readable");
+        let raw =
+            fs::read_to_string(&acceptance).expect("invariant: acceptance.yaml should be readable");
         assert!(
             !raw.contains("must not persist"),
             "a refused set must not persist its checks: {raw}"

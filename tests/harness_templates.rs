@@ -3,8 +3,8 @@ mod support;
 use std::fs;
 
 use maestro::foundation::core::paths::MaestroPaths;
-use maestro::harness::schema::{detect_stack, HarnessConfig, StackKind};
-use maestro::harness::templates::{backlog_yaml, harness_yml, HARNESS_MD};
+use maestro::harness::schema::{HarnessConfig, StackKind, detect_stack};
+use maestro::harness::templates::{HARNESS_MD, backlog_yaml, harness_yml};
 use support::TestTempDir;
 
 #[test]

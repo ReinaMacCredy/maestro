@@ -30,10 +30,10 @@ pub fn ensure_dir(path: impl AsRef<Path>) -> Result<()> {
 pub fn ensure_parent_dir(path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
 
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            ensure_dir(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        ensure_dir(parent)?;
     }
 
     Ok(())

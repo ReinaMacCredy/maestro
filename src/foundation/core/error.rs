@@ -6,9 +6,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum MaestroError {
     /// No supported repository marker was found while walking ancestors.
-    #[error(
-        "failed to discover repository root from {start}: no .maestro or .git directory found"
-    )]
+    #[error("failed to discover repository root from {start}: no .maestro or .git directory found")]
     RepoRootNotFound {
         /// Directory where discovery started.
         start: PathBuf,
@@ -47,7 +45,9 @@ pub enum MaestroError {
     },
 
     /// A backup or install operation name is not safe as a path segment.
-    #[error("operation name must be a non-empty slug using only ASCII letters, digits, '-' or '_': {operation}")]
+    #[error(
+        "operation name must be a non-empty slug using only ASCII letters, digits, '-' or '_': {operation}"
+    )]
     InvalidOperationName {
         /// Invalid operation name.
         operation: String,

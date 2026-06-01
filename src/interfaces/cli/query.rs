@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::decisions::query::{decision_entries, decision_id};
 use crate::domain::feature;
@@ -10,8 +10,8 @@ use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task;
 use crate::foundation::core::git;
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
-use crate::foundation::core::schema::{classify, Compat, BACKLOG_SCHEMA_VERSION};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, Compat, classify};
 use crate::harness::schema::BacklogConfig;
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::operations::metrics;

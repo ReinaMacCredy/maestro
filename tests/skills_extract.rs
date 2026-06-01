@@ -2,8 +2,8 @@ mod support;
 
 use std::fs;
 
-use maestro::domain::skills::catalog::{skills, Skill, SkillFile};
-use maestro::domain::skills::extract::{extract_skills, extract_skills_from, ExtractMode};
+use maestro::domain::skills::catalog::{Skill, SkillFile, skills};
+use maestro::domain::skills::extract::{ExtractMode, extract_skills, extract_skills_from};
 use maestro::foundation::core::backup::backup_operation_timestamp;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
@@ -141,10 +141,12 @@ fn extract_bundled_skills_rejects_symlinked_maestro_root() {
         .expect_err("invariant: symlinked maestro root should be rejected");
 
     assert!(error.to_string().contains("symlink"));
-    assert!(!external
-        .path()
-        .join("skills/maestro-task/SKILL.md")
-        .exists());
+    assert!(
+        !external
+            .path()
+            .join("skills/maestro-task/SKILL.md")
+            .exists()
+    );
 }
 
 #[test]
@@ -298,10 +300,12 @@ fn extract_bundled_skills_update_skips_unchanged_bundled_files() {
     .expect("invariant: update extraction should succeed");
 
     assert!(report.backups.is_empty());
-    assert!(!paths
-        .backups_dir()
-        .join(format!("{backup_timestamp}-update"))
-        .exists());
+    assert!(
+        !paths
+            .backups_dir()
+            .join(format!("{backup_timestamp}-update"))
+            .exists()
+    );
 }
 
 #[test]
@@ -555,9 +559,11 @@ fn extract_skills_from_rolls_back_a_partial_multi_file_write() {
 
     let error = extract_skills_from(&paths, std::slice::from_ref(&skill), ExtractMode::Create)
         .expect_err("invariant: writing a file under a path already taken by a file should fail");
-    assert!(error
-        .to_string()
-        .contains("failed to write bundled resource"));
+    assert!(
+        error
+            .to_string()
+            .contains("failed to write bundled resource")
+    );
 
     // Rollback removed the files this extraction had already written.
     let skill_dir = paths.skills_dir().join("synthetic");

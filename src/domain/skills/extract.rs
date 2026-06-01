@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::domain::extraction::extract::{
-    apply_actions, file_action, folder_gate, preview_folder, read_existing, Action, FolderPreview,
+    Action, FolderPreview, apply_actions, file_action, folder_gate, preview_folder, read_existing,
 };
-use crate::domain::skills::catalog::{frontmatter_version, skills, Skill};
+use crate::domain::skills::catalog::{Skill, frontmatter_version, skills};
 use crate::foundation::core::fs::ensure_dir;
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 pub use crate::domain::extraction::extract::{ExtractMode, ExtractReport};

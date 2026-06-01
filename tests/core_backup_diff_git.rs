@@ -149,9 +149,11 @@ fn git_helpers_report_head_and_dirty_state() {
         .expect("invariant: tracked file should be writable");
     commit_all(&repository, "initial");
 
-    assert!(head(temp_dir.path())
-        .expect("invariant: git head should load")
-        .is_some());
+    assert!(
+        head(temp_dir.path())
+            .expect("invariant: git head should load")
+            .is_some()
+    );
     assert!(!dirty(temp_dir.path()).expect("invariant: git status should load"));
 
     fs::write(temp_dir.path().join("untracked.txt"), "second\n")

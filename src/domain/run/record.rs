@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::domain::run::append::append_normalized_event;
 use crate::domain::run::event::{
-    is_accepted_event, normalized_event_type, string_field, UNATTRIBUTED_SESSION,
+    UNATTRIBUTED_SESSION, is_accepted_event, normalized_event_type, string_field,
 };
 use crate::domain::run::evidence::write_evidence_for_session;
 use crate::foundation::core::git;

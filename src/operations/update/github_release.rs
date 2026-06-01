@@ -186,10 +186,10 @@ fn require_sha256_digest(asset: &GithubAsset) -> Result<&str> {
 }
 
 fn release_repo() -> String {
-    if let Ok(repo) = std::env::var("MAESTRO_RELEASE_REPO") {
-        if !repo.trim().is_empty() {
-            return repo;
-        }
+    if let Ok(repo) = std::env::var("MAESTRO_RELEASE_REPO")
+        && !repo.trim().is_empty()
+    {
+        return repo;
     }
     DEFAULT_RELEASE_REPO.to_string()
 }
@@ -306,7 +306,7 @@ fn relative_age_from_rfc3339(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{release_versions_match, select_platform_asset, GithubAsset};
+    use super::{GithubAsset, release_versions_match, select_platform_asset};
 
     #[test]
     fn selects_current_platform_maestro_asset() {

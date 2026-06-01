@@ -1,12 +1,12 @@
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::feature;
 use crate::domain::task;
 use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::nanos_since_epoch_string;
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::verify;
@@ -115,18 +115,13 @@ pub fn run(args: TaskArgs) -> Result<()> {
         TaskCommand::Watch { id, interval } => watch_tasks(&paths, id, interval),
         TaskCommand::Doctor => doctor_tasks(&paths),
         TaskCommand::Archive { id, dry_run } => {
-            let note = task::archive_task(
-                &paths.tasks_dir(),
-                &paths.archive_tasks_dir(),
-                &id,
-                dry_run,
-            )?;
+            let note =
+                task::archive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id, dry_run)?;
             println!("{note}");
             Ok(())
         }
         TaskCommand::Unarchive { id } => {
-            let note =
-                task::unarchive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id)?;
+            let note = task::unarchive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id)?;
             println!("{note}");
             Ok(())
         }
@@ -202,13 +197,13 @@ fn guard_feature_link(paths: &MaestroPaths, id: &str, target: Option<&str>) -> R
         // A dangling current link (feature unreadable) is permissive so the
         // task can be re-pointed or detached to repair it; only a resolved
         // terminal feature freezes the link as history.
-        if let Some(status) = feature::show(paths, current).ok().map(|view| view.status) {
-            if status.is_terminal() {
-                bail!(
-                    "task {id} is linked to feature {current} ({}); its link is settled history and cannot change",
-                    feature::status_label(&status)
-                );
-            }
+        if let Some(status) = feature::show(paths, current).ok().map(|view| view.status)
+            && status.is_terminal()
+        {
+            bail!(
+                "task {id} is linked to feature {current} ({}); its link is settled history and cannot change",
+                feature::status_label(&status)
+            );
         }
     }
     if let Some(target) = target {
@@ -325,8 +320,9 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
     // historical reference to an archived task still renders.
     let task = match task::load_task_record(&paths.tasks_dir(), &task_id) {
         Ok(task) => task,
-        Err(live_err) => task::load_task_record(&paths.archive_tasks_dir(), &task_id)
-            .map_err(|_| live_err)?,
+        Err(live_err) => {
+            task::load_task_record(&paths.archive_tasks_dir(), &task_id).map_err(|_| live_err)?
+        }
     };
     print!("{}", task::render_task(&task));
     Ok(())

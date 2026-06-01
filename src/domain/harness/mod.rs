@@ -3,9 +3,9 @@ pub mod extract;
 pub mod schema;
 pub mod templates;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
-use crate::foundation::core::managed_path::{managed_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 pub use schema::{BacklogConfig, BacklogItem, HarnessConfig, StackConfig, StackKind};

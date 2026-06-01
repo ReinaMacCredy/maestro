@@ -1,7 +1,7 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::domain::feature::{self, ContractAdditions, ContractEdits};
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand};
 
 /// Execute `maestro feature`.
@@ -33,7 +33,9 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 input_type,
             },
         ),
-        FeatureCommand::Accept { id, dry_run } => print_note(feature::accept(&paths, &id, dry_run)?.note),
+        FeatureCommand::Accept { id, dry_run } => {
+            print_note(feature::accept(&paths, &id, dry_run)?.note)
+        }
         FeatureCommand::Amend {
             id,
             add_acceptance,
@@ -53,15 +55,21 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             &reason,
         ),
         FeatureCommand::Start { id } => print_note(feature::start(&paths, &id)?.note),
-        FeatureCommand::Ship { id, outcome, dry_run } => {
-            print_note(feature::ship(&paths, &id, outcome, dry_run)?.note)
+        FeatureCommand::Ship {
+            id,
+            outcome,
+            dry_run,
+        } => print_note(feature::ship(&paths, &id, outcome, dry_run)?.note),
+        FeatureCommand::Cancel { id, reason } => {
+            print_note(feature::cancel(&paths, &id, &reason)?.note)
         }
-        FeatureCommand::Cancel { id, reason } => print_note(feature::cancel(&paths, &id, &reason)?.note),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
         FeatureCommand::List { all } => list_features(&paths, all),
-        FeatureCommand::Archive { id, shipped, dry_run } => {
-            archive_features(&paths, id, shipped, dry_run)
-        }
+        FeatureCommand::Archive {
+            id,
+            shipped,
+            dry_run,
+        } => archive_features(&paths, id, shipped, dry_run),
         FeatureCommand::Unarchive { id } => print_note(feature::unarchive_feature(&paths, &id)?),
     }
 }
@@ -106,7 +114,11 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
     }
 
     let verb = if dry_run { "would archive" } else { "archived" };
-    println!("# {verb} {} of {} shipped feature(s)", shipped.len() - failures.len(), shipped.len());
+    println!(
+        "# {verb} {} of {} shipped feature(s)",
+        shipped.len() - failures.len(),
+        shipped.len()
+    );
 
     if !failures.is_empty() {
         bail!(
@@ -198,7 +210,10 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
 
 fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     let views = feature::list(paths)?;
-    let hidden = views.iter().filter(|view| view.status.is_terminal()).count();
+    let hidden = views
+        .iter()
+        .filter(|view| view.status.is_terminal())
+        .count();
     let shown: Vec<_> = if all {
         // L6b: --all also reads the archive sibling tree.
         let mut all_views = views;

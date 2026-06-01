@@ -1,6 +1,6 @@
 mod support;
 
-use maestro::domain::task::{task_markdown, AcceptanceFile, TaskRecord};
+use maestro::domain::task::{AcceptanceFile, TaskRecord, task_markdown};
 use maestro::task::template::{load_task, save_task_with_snapshot, write_task_artifacts};
 use support::TestTempDir;
 

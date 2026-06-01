@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::domain::task::template::{Blocker, BlockerKind, BlockerRef, BlockerSource, TaskRecord};
 

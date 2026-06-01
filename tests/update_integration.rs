@@ -6,13 +6,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{env, fs};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use maestro::domain::skills::catalog::skills;
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::operations::update::{
-    detect_schema_mismatches, run_update_with_seams, AtomicBinaryReplacer, BinaryReplacer,
-    ChecksumVerifier, DownloadedBinary, ReleaseInfo, Sha256Verifier, UpdateDownloader,
-    UpdateOptions, UpdateRequest,
+    AtomicBinaryReplacer, BinaryReplacer, ChecksumVerifier, DownloadedBinary, ReleaseInfo,
+    Sha256Verifier, UpdateDownloader, UpdateOptions, UpdateRequest, detect_schema_mismatches,
+    run_update_with_seams,
 };
 use support::TestTempDir;
 
@@ -110,8 +110,11 @@ fn update_accepts_check_verbose_and_force_flags_without_writing() {
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
     assert!(stdout.contains("Checking for updates..."));
-    assert!(stdout
-        .contains("Update unavailable for this build: running from a local development binary."));
+    assert!(
+        stdout.contains(
+            "Update unavailable for this build: running from a local development binary."
+        )
+    );
     assert!(
         paths.maestro_dir().join("update/nested/candidate").exists(),
         "--check must not clean or write update staging artifacts"
@@ -194,8 +197,11 @@ fn update_reports_manager_commands_for_cargo_installs() {
     assert_success(&cargo);
     let stdout = String::from_utf8_lossy(&cargo.stdout);
     assert!(stdout.contains("Update unavailable for this install"));
-    assert!(stdout
-        .contains("cargo install --git https://github.com/ReinaMacCredy/maestro --locked --force"));
+    assert!(
+        stdout.contains(
+            "cargo install --git https://github.com/ReinaMacCredy/maestro --locked --force"
+        )
+    );
 }
 
 #[test]
@@ -380,9 +386,11 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
     )
     .expect_err("invariant: failing replacer should fail update");
 
-    assert!(error
-        .to_string()
-        .contains("could not replace the current binary"));
+    assert!(
+        error
+            .to_string()
+            .contains("could not replace the current binary")
+    );
     assert_eq!(
         fs::read_to_string(executable_path)
             .expect("invariant: current binary should still be readable"),
@@ -433,9 +441,11 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
     )
     .expect_err("invariant: failing replacer should fail update");
 
-    assert!(error
-        .to_string()
-        .contains("could not replace the current binary"));
+    assert!(
+        error
+            .to_string()
+            .contains("could not replace the current binary")
+    );
     assert_eq!(
         fs::read_to_string(skill_path).expect("invariant: edited skill should remain readable"),
         "edited bundled skill\n"

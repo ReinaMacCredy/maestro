@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::domain::install;
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::{Agent, AgentArgs};
 
 /// Execute `maestro install --agent`.

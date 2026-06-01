@@ -2,11 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Error, Result};
+use anyhow::{Context, Error, Result, bail};
 use serde_json::{Map, Value};
 
 use crate::domain::skills::symlink::{
-    create_skill_symlink, validate_skill_symlink_destination, SkillSymlink,
+    SkillSymlink, create_skill_symlink, validate_skill_symlink_destination,
 };
 use crate::foundation::core::backup::{backup_file_with_timestamp, backup_operation_timestamp};
 use crate::foundation::core::diff::unified_diff;
@@ -15,16 +15,16 @@ use crate::foundation::core::fs::{
 };
 use crate::foundation::core::hash::sha256_prefixed;
 use crate::foundation::core::managed_blocks::{
-    find_block, remove_managed_block, upsert_managed_block, upsert_managed_json_keys,
-    ManagedBlockFormat,
+    ManagedBlockFormat, find_block, remove_managed_block, upsert_managed_block,
+    upsert_managed_json_keys,
 };
-use crate::foundation::core::managed_path::{managed_path, managed_symlink_path, SymlinkPolicy};
+use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path, managed_symlink_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::{restore_or_remove, write_string_atomic};
 
 use super::hooks::ManagedHookConfig;
 use super::lock::{AgentInstall, FileOwnership, MirrorKind};
-use super::{ensure_uninstallable_install, skill_symlink_for_agent, InstallAgent};
+use super::{InstallAgent, ensure_uninstallable_install, skill_symlink_for_agent};
 
 const JSON_PREVIOUS_VALUE_HASHES: &str = "_maestro_previous_value_hashes";
 
@@ -950,11 +950,11 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use anyhow::{bail, Result};
+    use anyhow::{Result, bail};
 
     use super::{
-        rollback_mirror_removals, write_prepared_mirrors_with_effects, MirrorEffects,
-        MirrorRemoval, MirrorUpdate, PreparedMirrors,
+        MirrorEffects, MirrorRemoval, MirrorUpdate, PreparedMirrors, rollback_mirror_removals,
+        write_prepared_mirrors_with_effects,
     };
     use crate::domain::install::AgentInstall;
     use crate::domain::skills::symlink::SkillSymlink;

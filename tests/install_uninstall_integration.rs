@@ -7,7 +7,7 @@ use maestro::domain::install::{
     AgentInstall, FileOwnership, InstallAgent, InstallLock, InstallState, MirrorKind,
 };
 use maestro::foundation::core::hash::sha256_prefixed;
-use maestro::foundation::core::managed_blocks::{remove_managed_block, ManagedBlockFormat};
+use maestro::foundation::core::managed_blocks::{ManagedBlockFormat, remove_managed_block};
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
@@ -55,10 +55,12 @@ fn install_claude_writes_managed_mirrors_and_lock() {
     assert!(claude.contains("# User"));
     assert!(claude.contains("<!-- maestro:start -->"));
     assert!(temp_dir.path().join(".maestro/install-lock.yaml").is_file());
-    assert!(temp_dir
-        .path()
-        .join(".claude/settings.local.json")
-        .is_file());
+    assert!(
+        temp_dir
+            .path()
+            .join(".claude/settings.local.json")
+            .is_file()
+    );
 }
 
 #[test]
@@ -811,8 +813,10 @@ fn reinstall_does_not_bless_forged_json_restore_snapshot() {
 
     let reinstall = maestro(&["install", "--agent", "codex"], temp_dir.path());
     assert!(!reinstall.status.success());
-    assert!(String::from_utf8_lossy(&reinstall.stderr)
-        .contains("managed JSON restore metadata does not match install lock"));
+    assert!(
+        String::from_utf8_lossy(&reinstall.stderr)
+            .contains("managed JSON restore metadata does not match install lock")
+    );
     let hooks = fs::read_to_string(temp_dir.path().join(".codex/hooks.json"))
         .expect("invariant: hooks json should be readable");
     assert!(!hooks.contains("forged"));

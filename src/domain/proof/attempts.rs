@@ -4,13 +4,13 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
-use serde_json::{json, Value};
+use anyhow::{Context, Result, bail};
+use serde_json::{Value, json};
 
 use super::verify_task::VerificationReport;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{classify, Compat, VERIFICATION_SCHEMA_VERSION};
+use crate::foundation::core::schema::{Compat, VERIFICATION_SCHEMA_VERSION, classify};
 use crate::foundation::core::time::parse_utc_timestamp;
 
 pub(super) const LATEST_ATTEMPT_REPORT_FILE: &str = "latest.json";
@@ -531,8 +531,8 @@ mod tests {
         VerificationReport, VerificationStatus, VerificationTaskSnapshot,
     };
     use super::{
-        latest_attempt_report, latest_attempt_report_for_command_read, verification_attempts_dir,
-        VerificationReportRead,
+        VerificationReportRead, latest_attempt_report, latest_attempt_report_for_command_read,
+        verification_attempts_dir,
     };
     use crate::foundation::core::schema::VERIFICATION_SCHEMA_VERSION;
 
@@ -626,9 +626,11 @@ mod tests {
 
         let error = latest_attempt_report(&task_dir)
             .expect_err("invariant: strict selector should report malformed attempts");
-        assert!(error
-            .to_string()
-            .contains("malformed verification attempt report"));
+        assert!(
+            error
+                .to_string()
+                .contains("malformed verification attempt report")
+        );
 
         let command_read = latest_attempt_report_for_command_read(&task_dir)
             .expect("invariant: command-read selector should not fail");
@@ -654,9 +656,11 @@ mod tests {
 
         let error = latest_attempt_report(&task_dir)
             .expect_err("invariant: strict selector should report malformed attempts");
-        assert!(error
-            .to_string()
-            .contains("malformed verification attempt report"));
+        assert!(
+            error
+                .to_string()
+                .contains("malformed verification attempt report")
+        );
 
         let command_read = latest_attempt_report_for_command_read(&task_dir)
             .expect("invariant: command-read selector should not fail");
@@ -679,9 +683,11 @@ mod tests {
 
         let error = latest_attempt_report(&task_dir)
             .expect_err("invariant: status selector should report malformed attempts");
-        assert!(error
-            .to_string()
-            .contains("malformed verification attempt report"));
+        assert!(
+            error
+                .to_string()
+                .contains("malformed verification attempt report")
+        );
 
         let command_read = latest_attempt_report_for_command_read(&task_dir)
             .expect("invariant: command-read selector should not fail");

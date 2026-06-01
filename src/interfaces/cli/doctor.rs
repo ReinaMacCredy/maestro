@@ -1,11 +1,11 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::task;
-use crate::foundation::core::paths::{discover_repo_root, MaestroPaths};
+use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::{
-    classify, Compat, BACKLOG_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION,
+    BACKLOG_SCHEMA_VERSION, Compat, HARNESS_SCHEMA_VERSION, classify,
 };
 use crate::harness::schema::{BacklogConfig, HarnessConfig};
 
