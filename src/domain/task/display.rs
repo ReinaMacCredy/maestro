@@ -1,5 +1,5 @@
 use crate::domain::task::blockers::has_unresolved_blockers;
-use crate::domain::task::template::TaskRecord;
+use crate::domain::task::template::{TaskRecord, TaskState};
 
 /// Render one task for `maestro task show`.
 pub fn render_task(task: &TaskRecord) -> String {
@@ -7,6 +7,16 @@ pub fn render_task(task: &TaskRecord) -> String {
     out.push_str(&format!("id: {}\n", task.id));
     out.push_str(&format!("title: {}\n", task.title));
     out.push_str(&format!("state: {}\n", state_label(task)));
+    if task.state == TaskState::Superseded
+        && let Some(by) = task
+            .state_history
+            .iter()
+            .rev()
+            .find(|entry| entry.state == TaskState::Superseded)
+            .and_then(|entry| entry.to.as_deref())
+    {
+        out.push_str(&format!("superseded_by: {by}\n"));
+    }
     if let Some(feature_id) = task.feature_id.as_deref() {
         out.push_str(&format!("feature: {feature_id}\n"));
     }

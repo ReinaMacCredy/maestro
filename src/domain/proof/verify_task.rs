@@ -376,19 +376,29 @@ fn failures_for(
 
     if task.state != TaskState::NeedsVerification && task.state != TaskState::Verified {
         failures.push(format!(
-            "task is {}, expected needs_verification",
-            task.state.as_str()
+            "task is {}, expected needs_verification; submit it first with `maestro task complete {} --summary \"...\" --claim \"...\"`",
+            task.state.as_str(),
+            task.id
         ));
     }
     if claims.is_empty() {
-        failures.push("no completion claims found in task history".to_string());
+        failures.push(format!(
+            "no completion claims found in task history; record one with `maestro task complete {} --claim \"...\"`",
+            task.id
+        ));
     }
     if evidence.is_empty() {
-        failures.push("missing proof: no task events or proof artifacts found".to_string());
+        failures.push(format!(
+            "missing proof: no task events or proof artifacts found; hooks record proof during agent runs, or add one with `maestro event create --task-id {} --claim \"...\"`",
+            task.id
+        ));
     }
 
     for check in claim_checks.iter().filter(|check| !check.matched) {
-        failures.push(format!("claim not backed by events/proof: {}", check.claim));
+        failures.push(format!(
+            "claim not backed by events/proof: {}; record matching proof with `maestro event create --task-id {} --claim \"{}\"`",
+            check.claim, task.id, check.claim
+        ));
     }
     for command in commands.iter().filter(|command| command.exit_code != 0) {
         failures.push(format!(

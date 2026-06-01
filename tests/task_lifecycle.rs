@@ -53,7 +53,9 @@ fn ready_to_in_progress_requires_locked_acceptance_and_no_blockers() {
         TransitionDetails::default(),
     )
     .expect_err("invariant: unlocked acceptance should block claim");
-    assert!(error.to_string().contains("acceptance must be locked"));
+    let message = error.to_string();
+    assert!(message.contains("acceptance is not locked"), "{message}");
+    assert!(message.contains("maestro task accept"), "{message}");
 
     task.acceptance_locked = true;
     add_blocker(
@@ -155,5 +157,7 @@ fn generic_lifecycle_cannot_mark_verified() {
     )
     .expect_err("invariant: verification subsystem owns verified transition");
 
-    assert!(error.to_string().contains("verification subsystem"));
+    let message = error.to_string();
+    assert!(message.contains("maestro task verify"), "{message}");
+    assert!(message.contains("cannot be set directly"), "{message}");
 }

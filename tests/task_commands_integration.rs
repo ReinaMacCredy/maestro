@@ -92,6 +92,12 @@ fn create_explore_accept_claim_complete_flow_updates_task_record() {
     let temp = setup_repo();
     let repo = temp.path();
 
+    // The task links to a real feature; `create --feature` now rejects a dangling ref.
+    assert_success(
+        &maestro(repo, &["feature", "new", "Billing CSV"]),
+        &["feature", "new", "Billing CSV"],
+    );
+
     let create = maestro(
         repo,
         &[
@@ -496,6 +502,16 @@ fn list_supports_basic_output_and_requested_filters() {
     let temp = setup_repo();
     let repo = temp.path();
 
+    // The tasks link to real features; `create --feature` now rejects a dangling ref.
+    assert_success(
+        &maestro(repo, &["feature", "new", "Billing CSV"]),
+        &["feature", "new", "Billing CSV"],
+    );
+    assert_success(
+        &maestro(repo, &["feature", "new", "Other"]),
+        &["feature", "new", "Other"],
+    );
+
     assert_success(
         &maestro(
             repo,
@@ -601,7 +617,9 @@ fn list_supports_basic_output_and_requested_filters() {
     assert_success(&watch, &["task", "list", "--watch", "--interval", "0"]);
     let watch_out = stdout(&watch);
     assert!(watch_out.contains("scheduler: 1 agents active"));
-    assert!(watch_out.contains("billing-csv"));
+    // The watch groups by the feature's human title (resolved from the registry),
+    // falling back to the raw id only for dangling refs — now that the feature exists.
+    assert!(watch_out.contains("Billing CSV"));
     assert!(watch_out.contains("~ Task A"));
     assert!(watch_out.contains("in-progress (maestro)"));
     assert!(watch_out.contains("! Task B"));

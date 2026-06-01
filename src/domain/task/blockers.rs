@@ -32,7 +32,19 @@ pub fn resolve_blocker(task: &mut TaskRecord, blocker_id: &str, resolved_at: Str
         .iter_mut()
         .find(|blocker| blocker.id == blocker_id)
     else {
-        bail!("blocker not found: {blocker_id}");
+        let open: Vec<&str> = task
+            .blockers
+            .iter()
+            .filter(|blocker| blocker.resolved_at.is_none())
+            .map(|blocker| blocker.id.as_str())
+            .collect();
+        if open.is_empty() {
+            bail!("blocker not found: {blocker_id}; task {} has no open blockers", task.id);
+        }
+        bail!(
+            "blocker not found: {blocker_id}; pass an open blocker's blk- id: {}",
+            open.join(", ")
+        );
     };
 
     blocker.resolved_at = Some(resolved_at.clone());

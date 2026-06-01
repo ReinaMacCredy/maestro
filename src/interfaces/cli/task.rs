@@ -42,17 +42,24 @@ pub fn run(args: TaskArgs) -> Result<()> {
         ),
         TaskCommand::Accept { id } => accept_task(&paths, &id, &actor),
         TaskCommand::Claim { id } => claim_task(&paths, &id, &actor),
-        TaskCommand::Complete { id, summary, claim } => transition_task(
-            &paths,
-            &id,
-            TaskState::NeedsVerification,
-            &actor,
-            TransitionDetails {
-                summary: Some(summary),
-                claims: vec![claim],
-                ..TransitionDetails::default()
-            },
-        ),
+        TaskCommand::Complete { id, summary, claim } => {
+            if claim.trim().is_empty() {
+                bail!(
+                    "`--claim` must not be empty; pass the proof to verify against, e.g. --claim \"cargo test passes\""
+                );
+            }
+            transition_task(
+                &paths,
+                &id,
+                TaskState::NeedsVerification,
+                &actor,
+                TransitionDetails {
+                    summary: Some(summary),
+                    claims: vec![claim],
+                    ..TransitionDetails::default()
+                },
+            )
+        }
         TaskCommand::Verify { id } => {
             let id = resolve_optional_task_id(
                 &paths,
@@ -135,6 +142,9 @@ fn create_task(
     lane: Option<String>,
     risk: Option<String>,
 ) -> Result<()> {
+    if let Some(target) = feature.as_deref() {
+        guard_feature_target(paths, target)?;
+    }
     let now = nanos_since_epoch_string();
     let task = task::create_task(&paths.tasks_dir(), title, feature, lane, risk, &now)?;
 
@@ -165,7 +175,12 @@ fn set_task(
     }
 
     if !checks.is_empty() {
-        let task = task::set_checks(&paths.tasks_dir(), id, checks)?;
+        let (task, replaced) = task::set_checks(&paths.tasks_dir(), id, checks)?;
+        if replaced > 0 {
+            println!(
+                "note: replaced {replaced} existing check(s); `--check` replaces the whole list, so re-pass any you want to keep"
+            );
+        }
         println!("updated {} checks", task.id);
     }
 
@@ -207,15 +222,23 @@ fn guard_feature_link(paths: &MaestroPaths, id: &str, target: Option<&str>) -> R
         }
     }
     if let Some(target) = target {
-        let view = feature::show(paths, target).with_context(|| {
-            format!("target feature `{target}` not found; create it with `maestro feature new`")
-        })?;
-        if view.status.is_terminal() {
-            bail!(
-                "target feature {target} is {}; tasks cannot be attached to a terminal feature",
-                feature::status_label(&view.status)
-            );
-        }
+        guard_feature_target(paths, target)?;
+    }
+    Ok(())
+}
+
+/// Validate that a feature-link TARGET exists and is non-terminal. Shared by
+/// `task create --feature` and `task set --feature` so neither can persist a
+/// dangling or settled link.
+fn guard_feature_target(paths: &MaestroPaths, target: &str) -> Result<()> {
+    let view = feature::show(paths, target).with_context(|| {
+        format!("target feature `{target}` not found; create it with `maestro feature new`")
+    })?;
+    if view.status.is_terminal() {
+        bail!(
+            "target feature {target} is {}; tasks cannot be attached to a terminal feature",
+            feature::status_label(&view.status)
+        );
     }
     Ok(())
 }
@@ -224,13 +247,16 @@ fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let now = nanos_since_epoch_string();
     let task = task::accept_task(&paths.tasks_dir(), id, actor, &now)?;
 
-    println!("accepted {}", task.id);
+    println!("accepted {} -> {}", task.id, task.state.as_str());
     Ok(())
 }
 
 fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let now = nanos_since_epoch_string();
-    let task = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
+    let (task, auto_accepted) = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
+    if auto_accepted {
+        println!("auto-accepted {} (draft -> ready, acceptance locked)", task.id);
+    }
     println!("updated {} -> {}", task.id, task.state.as_str());
     Ok(())
 }

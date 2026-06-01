@@ -58,7 +58,11 @@ fn validate_transition(task: &TaskRecord, to: &TaskState) -> Result<()> {
     if is_terminal(&task.state)
         && !(task.state == TaskState::Verified && *to == TaskState::Superseded)
     {
-        bail!("terminal task state cannot transition");
+        bail!(
+            "task {} is in terminal state {}; terminal tasks cannot transition",
+            task.id,
+            task.state.as_str()
+        );
     }
 
     match (&task.state, to) {
@@ -66,29 +70,60 @@ fn validate_transition(task: &TaskRecord, to: &TaskState) -> Result<()> {
         (TaskState::Exploring, TaskState::Ready) => validate_ready(task),
         (TaskState::Ready, TaskState::InProgress) => {
             if !task.acceptance_locked {
-                bail!("acceptance must be locked before claim");
+                bail!(
+                    "task {} acceptance is not locked; run `maestro task accept {}` before claiming",
+                    task.id,
+                    task.id
+                );
             }
             if has_unresolved_blockers(task) {
-                bail!("task has unresolved blockers");
+                bail!("{}", blockers_remedy(task));
             }
             Ok(())
         }
         (TaskState::InProgress, TaskState::NeedsVerification) => {
             if has_unresolved_blockers(task) {
-                bail!("task has unresolved blockers");
+                bail!("{}", blockers_remedy(task));
             }
             Ok(())
         }
         (TaskState::NeedsVerification, TaskState::Verified) => {
-            bail!("verified transition is owned by verification subsystem")
+            bail!(
+                "the verified transition is owned by `maestro task verify {}`; it cannot be set directly",
+                task.id
+            )
         }
         (_, TaskState::Rejected | TaskState::Abandoned | TaskState::Superseded) => Ok(()),
+        (TaskState::Draft, TaskState::Ready) => bail!(
+            "cannot accept task {} directly from draft; run `maestro task explore {}` first, then `maestro task accept {}`",
+            task.id,
+            task.id,
+            task.id
+        ),
         _ => bail!(
-            "cannot transition task from {} to {}",
+            "cannot transition task {} from {} to {}",
+            task.id,
             task.state.as_str(),
             to.as_str()
         ),
     }
+}
+
+/// Error text for a claim/complete blocked by unresolved blockers: names them
+/// and the verb to clear them.
+fn blockers_remedy(task: &TaskRecord) -> String {
+    let open: Vec<&str> = task
+        .blockers
+        .iter()
+        .filter(|blocker| blocker.resolved_at.is_none())
+        .map(|blocker| blocker.id.as_str())
+        .collect();
+    format!(
+        "task {} has unresolved blockers ({}); resolve them with `maestro task unblock {} --blocker <blk-id>`",
+        task.id,
+        open.join(", "),
+        task.id
+    )
 }
 
 fn validate_ready(task: &TaskRecord) -> Result<()> {

@@ -276,8 +276,18 @@ pub fn accept_task(
 }
 
 /// Claim a task, auto-accepting draft tasks using the existing CLI behavior.
-pub fn claim_task(tasks_dir: &Path, id: &str, actor: &str, claimed_at: &str) -> Result<TaskRecord> {
+///
+/// Returns the updated task and whether it was fast-tracked from `draft`
+/// (auto-accepted + acceptance locked) so the caller can surface that step
+/// instead of silently jumping straight to `in_progress`.
+pub fn claim_task(
+    tasks_dir: &Path,
+    id: &str,
+    actor: &str,
+    claimed_at: &str,
+) -> Result<(TaskRecord, bool)> {
     let (mut task, snapshot, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    let fast_tracked = task.state == TaskState::Draft;
     if task.state == TaskState::Draft {
         ensure_standalone_has_checks(&task, &task_dir)?;
         lifecycle::transition(
@@ -317,7 +327,7 @@ pub fn claim_task(tasks_dir: &Path, id: &str, actor: &str, claimed_at: &str) -> 
         TransitionDetails::default(),
     )?;
     template::save_task_with_snapshot(&task, &snapshot)?;
-    Ok(task)
+    Ok((task, fast_tracked))
 }
 
 /// Author a task's execution `checks` (C1), replacing the current list.
@@ -325,7 +335,10 @@ pub fn claim_task(tasks_dir: &Path, id: &str, actor: &str, claimed_at: &str) -> 
 /// Refuses once acceptance is locked: the contract freezes at `accept`, so
 /// re-authoring afterwards would silently move goalposts under a verified
 /// binding. Replace-per-field semantics make a repeated call idempotent.
-pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<TaskRecord> {
+///
+/// Returns the updated task and the number of checks that were replaced, so the
+/// caller can warn when a repeat call silently drops earlier checks.
+pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<(TaskRecord, usize)> {
     let handle = load_task_for_update(tasks_dir, id)?;
     if handle.task().acceptance_locked {
         bail!(
@@ -335,10 +348,11 @@ pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<Tas
     }
     let path = handle.task_dir().join("acceptance.yaml");
     let mut acceptance = read_acceptance_or_new(&path, &handle.task().id)?;
+    let replaced = acceptance.checks.len();
     acceptance.checks = checks;
     write_string_atomic(&path, &serde_yaml::to_string(&acceptance)?)
         .with_context(|| format!("failed to write {}", path.display()))?;
-    Ok(handle.task().clone())
+    Ok((handle.task().clone(), replaced))
 }
 
 /// Attach, move, or detach a task's `feature_id` (Theme II Q-II-2/3).
