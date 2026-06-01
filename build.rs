@@ -24,17 +24,14 @@ fn emit_version() {
     println!("cargo:rustc-env=MAESTRO_VERSION={version}");
 }
 
-/// Derive `0.0.<commit-epoch>-g<short-sha>` from git, appending `-dirty` when tracked
-/// files have uncommitted changes. Falls back to `0.0.0-gunknown` when git is unavailable.
+/// Derive `0.0.<commit-epoch>-g<short-sha>` from git, matching Amp's version format.
+/// Falls back to `0.0.0-gunknown` when git is unavailable.
 fn version_from_git() -> String {
     match (
         git(&["log", "-1", "--format=%ct"]),
         git(&["rev-parse", "--short", "HEAD"]),
     ) {
-        (Some(epoch), Some(sha)) => {
-            let dirty = if git_tree_is_dirty() { "-dirty" } else { "" };
-            format!("0.0.{epoch}-g{sha}{dirty}")
-        }
+        (Some(epoch), Some(sha)) => format!("0.0.{epoch}-g{sha}"),
         _ => "0.0.0-gunknown".to_string(),
     }
 }
@@ -46,17 +43,6 @@ fn git(args: &[&str]) -> Option<String> {
     }
     let value = String::from_utf8(output.stdout).ok()?.trim().to_string();
     (!value.is_empty()).then_some(value)
-}
-
-/// True when tracked files have uncommitted changes. Untracked files are ignored
-/// (matching `git describe --dirty`) so cargo's own `.cargo-ok` marker in a
-/// `cargo install --git` checkout, or stray local files, don't taint the version.
-fn git_tree_is_dirty() -> bool {
-    Command::new("git")
-        .args(["status", "--porcelain", "--untracked-files=no"])
-        .output()
-        .map(|output| !output.stdout.is_empty())
-        .unwrap_or(false)
 }
 
 /// Resolve `.git/HEAD`'s symbolic ref (e.g. `refs/heads/main`) so the build re-runs
