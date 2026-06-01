@@ -374,6 +374,8 @@ pub enum FeatureCommand {
     #[command(about = "Ship an in-progress feature (-> shipped; gated)")]
     Ship {
         id: String,
+        #[arg(long, help = "One-line outcome recorded on the feature, shown in `feature list --all`")]
+        outcome: Option<String>,
         #[arg(long, help = "Preview the ship gate without transitioning")]
         dry_run: bool,
     },

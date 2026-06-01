@@ -42,6 +42,9 @@ pub struct FeatureRecord {
     /// Explicit non-goals.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub non_goals: Vec<String>,
+    /// One-line shipped outcome, set at `ship --outcome`. Write-once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
 }
 
 impl FeatureRecord {
@@ -61,6 +64,7 @@ impl FeatureRecord {
             open_questions: Vec::new(),
             acceptance: Vec::new(),
             non_goals: Vec::new(),
+            outcome: None,
         }
     }
 }

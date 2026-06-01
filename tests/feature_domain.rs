@@ -182,7 +182,7 @@ fn full_lifecycle_new_set_accept_start_ship() {
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     let started = feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     assert_eq!(started.status, feature::FeatureStatus::InProgress);
-    let shipped = feature::ship(&paths, "billing-csv", false).expect("invariant: ship should succeed");
+    let shipped = feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
     assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
 }
 
@@ -199,7 +199,7 @@ fn illegal_transitions_name_the_gap() {
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     // ship before start
-    let error = feature::ship(&paths, "billing-csv", false).expect_err("invariant: ship must block");
+    let error = feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
     assert!(error.to_string().contains("not started"));
 }
 
@@ -229,12 +229,12 @@ fn ship_blocks_on_live_child_task() {
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
 
     write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
-    let error = feature::ship(&paths, "billing-csv", false).expect_err("invariant: ship must block");
+    let error = feature::ship(&paths, "billing-csv", None, false).expect_err("invariant: ship must block");
     assert!(error.to_string().contains("task-001"));
 
     // A verified child does not block ship.
     write_task(&paths.tasks_dir(), "task-001", "billing-csv", "verified");
-    let shipped = feature::ship(&paths, "billing-csv", false).expect("invariant: ship succeeds");
+    let shipped = feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship succeeds");
     assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
 }
 
@@ -270,7 +270,7 @@ fn cannot_cancel_a_shipped_feature() {
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
-    feature::ship(&paths, "billing-csv", false).expect("invariant: ship should succeed");
+    feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
 
     let error = feature::cancel(&paths, "billing-csv", "too late")
         .expect_err("invariant: shipped features cannot be cancelled");

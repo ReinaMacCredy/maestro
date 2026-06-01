@@ -1,5 +1,5 @@
 ---
-version: 1.1.0
+version: 1.2.0
 ---
 
 # Maestro Harness Protocol
@@ -44,6 +44,24 @@ When stuck:
     maestro task unblock <id> --blocker blk-NN     # use the blocker's own blk- id, not the target
 
 Terminal verbs (reject / abandon / supersede), plus doctor and watch -> see the maestro-task skill.
+
+## Design work (the brainstorm loop)
+
+Before a cluster of tasks exists, design lands as a feature. Map the problem from the real
+code first, then walk the open questions one at a time: lock each as a decision plus a note,
+never batch-decide. Resume from the feature, not from memory.
+
+    maestro feature new "<topic>"                  # topic = feature (proposed); scaffolds notes.md
+    maestro feature set <id> --description "<problem>" --question "<q>" ...   # map: problem + open questions
+    # walk ONE open question at a time; on each lock:
+    maestro decision new "<the locked fork>"       # record the locked fork
+    #   then append the reasoning to .maestro/features/<id>/notes.md as you decide,
+    #   and re-issue --question with the remaining list (set replaces the field)
+    maestro feature show <id>                      # resume point: open questions + notes so far
+    # decisions locked -> you now know the contract; author it:
+    maestro feature set <id> --acceptance "<criterion>" --area "<surface>"
+
+Full method -> the maestro-design skill. Accept, tasks, ship, and notes.md mechanics -> the maestro-feature skill.
 
 ## If you are Claude Code
 - Read the task you're on with @file imports: `@.maestro/tasks/<id>/task.yaml` (state,

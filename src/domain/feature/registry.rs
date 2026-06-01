@@ -71,6 +71,10 @@ pub struct FeatureView {
     pub non_goals: Vec<String>,
     /// Open questions (non-blocking).
     pub open_questions: Vec<String>,
+    /// One-line shipped outcome, set at `ship --outcome`.
+    pub outcome: Option<String>,
+    /// Design notes (`notes.md`), read on demand by `show`. None elsewhere.
+    pub notes: Option<String>,
 }
 
 /// Found-vs-expected schema diagnostic for the feature store, reported as data
@@ -202,6 +206,13 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
     }
     let record = FeatureRecord::proposed(&id, title, &nanos_since_epoch_string());
     save_record(paths, &record)?;
+    // D7: scaffold notes.md so the running design log has a self-documenting home.
+    let notes_path = feature_dir(paths, &id).join("notes.md");
+    let notes = format!(
+        "# {title}\n\nDesign notes: the running reasoning behind this feature's contract and\ndecisions. Append one `YYYY-MM-DD  <note>` line at the moment you decide.\nFree-form prose, read by no gate.\n"
+    );
+    write_string_atomic(&notes_path, &notes)
+        .with_context(|| format!("failed to write {}", notes_path.display()))?;
     Ok(id)
 }
 
@@ -436,7 +447,12 @@ pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
 ///
 /// Errors when the feature is not found, the source state is illegal, or
 /// (non-dry-run) a live child task blocks ship.
-pub fn ship(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<TransitionReport> {
+pub fn ship(
+    paths: &MaestroPaths,
+    id: &str,
+    outcome: Option<String>,
+    dry_run: bool,
+) -> Result<TransitionReport> {
     let mut record = load_record(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Ship) {
         Transition::NoOp => {
@@ -478,6 +494,9 @@ pub fn ship(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<TransitionR
 
     record.status = target.clone();
     record.updated_at = nanos_since_epoch_string();
+    if let Some(line) = outcome {
+        record.outcome = Some(line);
+    }
     save_record(paths, &record)?;
     Ok(TransitionReport {
         id: id.to_string(),
@@ -574,7 +593,10 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
 pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let record = load_record(paths, id)?;
     let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
-    Ok(view_from_record(record, counts))
+    let notes = read_notes_at(&feature_dir(paths, id))?;
+    let mut view = view_from_record(record, counts);
+    view.notes = notes;
+    Ok(view)
 }
 
 /// Show one archived feature (L6b read-fallthrough), counting its archived
@@ -588,7 +610,10 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
 pub fn show_archived(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let record = load_record_at(&archived_feature_yaml_path(paths, id), id)?;
     let counts = count_tasks_for_feature(&paths.archive_tasks_dir(), &record.id)?;
-    Ok(view_from_record(record, counts))
+    let notes = read_notes_at(&paths.archive_features_dir().join(id))?;
+    let mut view = view_from_record(record, counts);
+    view.notes = notes;
+    Ok(view)
 }
 
 /// List every archived feature joined with its archived task counts (L6b,
@@ -742,11 +767,23 @@ fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> Feature
         affected_areas: record.affected_areas,
         non_goals: record.non_goals,
         open_questions: record.open_questions,
+        outcome: record.outcome,
+        // notes.md is read on demand by `show`, not on the list path.
+        notes: None,
     }
 }
 
 fn feature_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
     paths.features_dir().join(id)
+}
+
+/// Read a feature's design notes (`notes.md`) from its directory, if present
+/// and non-empty. `show`/`show_archived` overlay this onto the view; the list
+/// path leaves `notes` as None to avoid per-row I/O.
+fn read_notes_at(dir: &Path) -> Result<Option<String>> {
+    Ok(read_to_string_if_exists(dir.join("notes.md"))?
+        .map(|s| s.trim_end().to_string())
+        .filter(|s| !s.is_empty()))
 }
 
 fn feature_yaml_path(paths: &MaestroPaths, id: &str) -> PathBuf {

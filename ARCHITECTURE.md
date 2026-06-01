@@ -559,6 +559,8 @@ rollups.
 
 - `.maestro/features/features.yaml`.
 - `maestro.feature.v1` registry and record schema.
+- the per-feature design log `notes.md` (scaffolded on create, rendered by `show`) and the
+  record's one-line `outcome` field (set at `ship --outcome`).
 - feature id generation from a title.
 - feature creation and duplicate-id checks.
 - feature status transitions.

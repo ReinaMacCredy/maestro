@@ -30,8 +30,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 9] = [
     (
         "skill",
         "maestro-feature",
-        "1.0.0",
-        "fa73cfd2fcd086069d507bc9f53fac1be2515837f6ee4488f1268628df1127a3",
+        "1.1.0",
+        "f0574e19d1745a1fa8ee87f870c192b0259eab2ce77b34770ec2154c74d7842f",
     ),
     (
         "skill",
@@ -60,8 +60,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 9] = [
     (
         "skill",
         "maestro-design",
-        "1.0.0",
-        "76aec1db895d719f6d44ab73bc9fffbcda55b80841ed1d4ed53de2fabdea7a3b",
+        "1.1.0",
+        "1ef5a2c400f628caa15d40be0f25e27e074bf027c5046242008d7ef405658cd7",
     ),
     (
         "hook",
@@ -72,8 +72,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 9] = [
     (
         "harness",
         "HARNESS.md",
-        "1.1.0",
-        "bca30da6c7f2298fc6f18b0fc8787ff728e5a80f86f6c02a9d80cdf74affae4a",
+        "1.2.0",
+        "7463e671b921ddb7006269b6536097eb746de4a92485d50bb5b1eddc333ede7e",
     ),
 ];
 

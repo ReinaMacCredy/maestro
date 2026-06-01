@@ -53,7 +53,9 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             &reason,
         ),
         FeatureCommand::Start { id } => print_note(feature::start(&paths, &id)?.note),
-        FeatureCommand::Ship { id, dry_run } => print_note(feature::ship(&paths, &id, dry_run)?.note),
+        FeatureCommand::Ship { id, outcome, dry_run } => {
+            print_note(feature::ship(&paths, &id, outcome, dry_run)?.note)
+        }
         FeatureCommand::Cancel { id, reason } => print_note(feature::cancel(&paths, &id, &reason)?.note),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
         FeatureCommand::List { all } => list_features(&paths, all),
@@ -177,10 +179,19 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     if let Some(input_type) = view.input_type.as_deref() {
         println!("input_type: {input_type}");
     }
+    if let Some(outcome) = view.outcome.as_deref() {
+        println!("outcome: {outcome}");
+    }
     print_list("acceptance", &view.acceptance);
     print_list("affected_areas", &view.affected_areas);
     print_list("non_goals", &view.non_goals);
     print_list("open_questions", &view.open_questions);
+    if let Some(notes) = view.notes.as_deref() {
+        println!("notes:");
+        for line in notes.lines() {
+            println!("  {line}");
+        }
+    }
 
     Ok(())
 }
@@ -204,13 +215,17 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
         println!("no features found");
     } else {
         for view in &shown {
+            let title = match view.outcome.as_deref() {
+                Some(outcome) => format!("{} -- {outcome}", view.title),
+                None => view.title.clone(),
+            };
             println!(
                 "{}\t{}\ttasks={}\tverified={}\t{}",
                 view.id,
                 feature::status_label(&view.status),
                 view.counts.total,
                 view.counts.verified,
-                view.title
+                title
             );
         }
     }

@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.0.0
+version: 1.1.0
 description: Feature lifecycle layer for Maestro — the guarded five-state machine (proposed -> ready -> in_progress -> shipped/cancelled), its accept and ship gates, append-only amend, and feature/child-task archival.
 ---
 
@@ -23,8 +23,9 @@ feature, or need to read a feature's contract and task rollup (`show` / `list`).
 ## When NOT to use
 
 - Do not hand-edit `.maestro/features/<id>/feature.yaml`, `baseline.md`, `qa-slices.yaml`, or
-  `amend-log.yaml`. The verbs enforce the transition guards and append the audit trail;
-  editing the files bypasses both.
+  `amend-log.yaml`. The verbs enforce the transition guards and append the audit trail; editing
+  the files bypasses both. `notes.md` is the exception - it has no managing verb and is yours to
+  append to freely (see "The design notes" below).
 - Do not use `set` to change an accepted contract - `set` is proposed-only and errors once
   the contract is frozen. Grow a frozen contract with `amend` (append-only, audited).
 - Do not skip states. `start` on a proposed feature errors and tells you to `accept` first;
@@ -42,7 +43,8 @@ non-terminal state). `shipped` and `cancelled` are terminal.
     maestro feature accept <id>                            # proposed -> ready; the accept gate (below); FREEZES the contract + baseline
     maestro feature start <id>                             # ready -> in_progress
     maestro feature amend <id> --add-acceptance "<…>" --reason "<why>"       # grow a frozen contract (ready/in_progress; append-only)
-    maestro feature ship <id>                              # in_progress -> shipped; the ship gate (below)
+    maestro feature ship <id> --outcome "<one line>"   # in_progress -> shipped; the ship gate (below);
+                                                        # --outcome records the result shown in `feature list --all`
     maestro feature cancel <id> --reason "<why>"           # any non-terminal -> cancelled; abandons live child tasks
     maestro feature show <id>                              # status, full contract, task counts
     maestro feature list [--all]                           # active features; --all adds terminal + archived
@@ -50,6 +52,15 @@ non-terminal state). `shipped` and `cancelled` are terminal.
 `set` is replace-per-field and repeatable: `--acceptance --area --non-goal --question
 --description --request --type`; each repeated flag replaces that whole list. Both `accept`
 and `ship` take `--dry-run` to preview the gate at exit 0 without transitioning.
+
+## The design notes (`notes.md`)
+
+`maestro feature new` scaffolds `.maestro/features/<id>/notes.md`. Unlike the verb-managed files
+above, this one is yours to write: append your design reasoning as you go (off-spec decisions,
+deviations, tradeoffs, gotchas) as one `YYYY-MM-DD  <note>` line at the moment you decide. It is
+free-form prose, read by no gate; `maestro feature show` renders it, and `feature archive` carries
+it with the feature. It is the running record behind the feature's contract and its Decision
+records. To drive a design session that fills it, see the maestro-design skill.
 
 ## The accept gate (freezes the contract)
 

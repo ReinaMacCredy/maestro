@@ -65,6 +65,9 @@ fn feature_guarded_lifecycle_via_cli() {
         &["feature", "show", "billing-csv-export"],
     );
     assert!(show_output.contains("status: proposed"));
+    // `feature new` scaffolds notes.md; `show` renders it.
+    assert!(show_output.contains("notes:"));
+    assert!(show_output.contains("Design notes:"));
 
     // accept blocks on an incomplete contract, naming the gaps.
     let accept_args = ["feature", "accept", "billing-csv-export"];
@@ -109,7 +112,13 @@ fn feature_guarded_lifecycle_via_cli() {
     write_task(&tasks_dir, "task-002", "billing-csv-export", "verified");
     write_task(&tasks_dir, "task-003", "billing-csv-export", "in_progress");
 
-    let ship_args = ["feature", "ship", "billing-csv-export"];
+    let ship_args = [
+        "feature",
+        "ship",
+        "billing-csv-export",
+        "--outcome",
+        "csv export shipped",
+    ];
     let ship_stderr = assert_failure(maestro(&ship_args, temp_dir.path()), &ship_args);
     assert!(ship_stderr.contains("task-003"));
 
@@ -123,6 +132,8 @@ fn feature_guarded_lifecycle_via_cli() {
         &["feature", "show", "billing-csv-export"],
     );
     assert!(show_after_ship.contains("status: shipped"));
+    // ship --outcome records the one-line result; show renders it.
+    assert!(show_after_ship.contains("outcome: csv export shipped"));
 
     // A shipped feature is terminal, so the default list hides it behind a hint.
     let list_output = stdout(
@@ -141,6 +152,8 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(list_all.contains("shipped"));
     assert!(list_all.contains("tasks=3"));
     assert!(list_all.contains("verified=3"));
+    // the outcome rides the title column in `list --all`.
+    assert!(list_all.contains("csv export shipped"));
 }
 
 #[test]
