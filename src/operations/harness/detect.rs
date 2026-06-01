@@ -48,6 +48,7 @@ fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogIte
             proposal(
                 session.clone(),
                 "recurring_intervention",
+                &session,
                 "Reduce repeated correction prompts",
                 vec![format!(
                     "{session} had {} correction-like user prompts",
@@ -76,6 +77,7 @@ fn detect_missing_checks(paths: &MaestroPaths, entries: &[TaskEntry]) -> Result<
             proposals.push(proposal(
                 entry.task.id.clone(),
                 "missing_verification",
+                &entry.task.id,
                 format!("Add reusable verification for {}", entry.task.title),
                 missing
                     .into_iter()
@@ -114,6 +116,7 @@ fn detect_recurring_blockers(entries: &[TaskEntry]) -> Vec<BacklogItem> {
             proposal(
                 "blockers".to_string(),
                 "recurring_blocker",
+                &reason,
                 format!("Reduce recurring blocker: {reason}"),
                 vec![format!(
                     "same blocker pattern appeared in {} tasks: {}",
@@ -154,6 +157,7 @@ fn detect_missing_skills(entries: &[TaskEntry]) -> Vec<BacklogItem> {
                 Some(proposal(
                     domain.clone(),
                     "missing_skill",
+                    &domain,
                     format!("Add skill support for {domain} work"),
                     vec![format!(
                         "{domain} median verification time was {} min versus {} min overall",
@@ -205,6 +209,7 @@ fn detect_rediscovered_decisions(
             proposal(
                 "decisions".to_string(),
                 "rediscovered_decision",
+                &topic,
                 format!("Record decision about {topic}"),
                 vec![format!(
                     "{topic} was discussed in {} tasks: {}",
@@ -283,16 +288,22 @@ fn median(values: &[u64]) -> Option<u64> {
 fn proposal(
     source: String,
     item_type: impl Into<String>,
+    subject: impl AsRef<str>,
     title: impl Into<String>,
     evidence: Vec<String>,
 ) -> BacklogItem {
+    let item_type = item_type.into();
+    let fingerprint = format!("{item_type}:{}", subject.as_ref());
     BacklogItem {
         id: String::new(),
+        fingerprint,
         source,
-        item_type: item_type.into(),
+        item_type,
         title: title.into(),
         priority: "medium".to_string(),
         status: "proposed".to_string(),
         evidence,
+        spawned_task: None,
+        history: Vec::new(),
     }
 }

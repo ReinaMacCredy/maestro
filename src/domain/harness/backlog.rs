@@ -4,11 +4,12 @@ use std::io::ErrorKind;
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::harness::schema::{BacklogConfig, BacklogItem};
+use crate::domain::harness::schema::{BacklogConfig, BacklogItem, HistoryEntry, is_state_detector};
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, Compat, classify};
+use crate::foundation::core::time::utc_now_timestamp;
 
 /// Load the Harness backlog, returning an empty V1 backlog when it does not exist.
 pub fn load(paths: &MaestroPaths) -> Result<BacklogConfig> {
@@ -51,39 +52,68 @@ pub fn mark_applied(backlog: &mut BacklogConfig, id: &str) -> Result<BacklogItem
     Ok(item.clone())
 }
 
-/// Merge proposals by stable source/type/title key and assign deterministic ids.
+/// Merge proposals into the backlog keyed on stable fingerprint and assign
+/// deterministic ids. Re-detecting a terminal `measured` state note reopens it
+/// (D6); a `proposed` note with no durable history that is no longer detected
+/// is reconciled away (D4).
 pub fn merge_proposals(backlog: &mut BacklogConfig, mut proposals: Vec<BacklogItem>) {
     sanitize_existing_generated_evidence(backlog);
-    let mut keys = backlog
+    let fresh_fingerprints = proposals
+        .iter()
+        .map(|proposal| proposal.fingerprint.clone())
+        .collect::<BTreeSet<_>>();
+    let mut fingerprints = backlog
         .items
         .iter()
-        .map(proposal_key)
+        .map(|item| item.fingerprint.clone())
         .collect::<BTreeSet<_>>();
     let mut next = next_backlog_number(&backlog.items);
-    proposals.sort_by_key(proposal_key);
+    proposals.sort_by(|a, b| a.fingerprint.cmp(&b.fingerprint));
 
     for mut proposal in proposals {
-        let key = proposal_key(&proposal);
-        if keys.contains(&key) {
+        let fingerprint = proposal.fingerprint.clone();
+        if !fingerprint.is_empty() && fingerprints.contains(&fingerprint) {
             if let Some(existing) = backlog
                 .items
                 .iter_mut()
-                .find(|item| proposal_key(item) == key)
+                .find(|item| item.fingerprint == fingerprint)
             {
+                reopen_if_regressed(existing);
                 refresh_existing_evidence(existing, &proposal);
             }
             continue;
         }
         proposal.id = format!("hb-{next:03}");
         next += 1;
-        keys.insert(key);
+        fingerprints.insert(fingerprint);
         backlog.items.push(proposal);
+    }
+
+    backlog
+        .items
+        .retain(|item| !is_ephemeral_reconcilable(item, &fresh_fingerprints));
+}
+
+/// D6: a re-detected, terminal `measured` state note flips back to `proposed`
+/// and logs the regression. Behavioral notes are kept as-is.
+fn reopen_if_regressed(existing: &mut BacklogItem) {
+    if existing.status == "measured" && is_state_detector(&existing.item_type) {
+        existing.status = "proposed".to_string();
+        existing.history.push(HistoryEntry {
+            result: "regressed".to_string(),
+            task: existing.spawned_task.clone(),
+            at: utc_now_timestamp(),
+        });
     }
 }
 
-/// Return the stable duplicate-detection key for a backlog proposal.
-pub fn proposal_key(item: &BacklogItem) -> String {
-    format!("{}\t{}\t{}", item.source, item.item_type, item.title)
+/// D4: drop a `proposed` note with no durable history that the current
+/// detection run no longer produces. Durable = a spawned task or any history.
+fn is_ephemeral_reconcilable(item: &BacklogItem, fresh_fingerprints: &BTreeSet<String>) -> bool {
+    item.status == "proposed"
+        && item.spawned_task.is_none()
+        && item.history.is_empty()
+        && !fresh_fingerprints.contains(&item.fingerprint)
 }
 
 fn refresh_existing_evidence(existing: &mut BacklogItem, proposal: &BacklogItem) {

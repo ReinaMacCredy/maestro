@@ -16,12 +16,15 @@ fn paths_for(temp: &TestTempDir) -> MaestroPaths {
 fn proposal(source: &str, item_type: &str, title: &str) -> BacklogItem {
     BacklogItem {
         id: String::new(),
+        fingerprint: format!("{item_type}:{source}"),
         source: source.to_string(),
         item_type: item_type.to_string(),
         title: title.to_string(),
         priority: "medium".to_string(),
         status: "proposed".to_string(),
         evidence: vec![format!("{source} evidence")],
+        spawned_task: None,
+        history: Vec::new(),
     }
 }
 
@@ -65,6 +68,8 @@ fn refresh_preserves_existing_ids_and_uses_next_number() {
     let mut existing = BacklogConfig::empty();
     let mut existing_item = proposal("existing", "recurring_blocker", "Fix existing blocker");
     existing_item.id = "hb-007".to_string();
+    // accepted so D4 ephemeral reconcile keeps it when the fresh run no longer detects it.
+    existing_item.status = "accepted".to_string();
     existing.items.push(existing_item);
     backlog::save(&paths, &existing).expect("invariant: existing backlog should save");
 
@@ -122,6 +127,8 @@ fn refresh_sanitizes_orphaned_legacy_missing_verification_evidence() {
         "Add legacy verification",
     );
     existing_item.id = "hb-003".to_string();
+    // accepted (durable) so D4 reconcile keeps the orphan; evidence is still scrubbed in place.
+    existing_item.status = "accepted".to_string();
     existing_item.evidence = vec![
         "manual note: keep this context".to_string(),
         "verification.attempts/api_key=top_secret.json used `api_key='top secret' cargo test` outside harness.yml"
@@ -153,6 +160,8 @@ fn refresh_preserves_manual_missing_verification_evidence() {
         "Add manual verification",
     );
     existing_item.id = "hb-003".to_string();
+    // accepted (durable) so D4 reconcile keeps the orphan and the manual note survives.
+    existing_item.status = "accepted".to_string();
     existing_item.evidence = vec!["manual note: keep this context".to_string()];
     existing.items.push(existing_item);
     backlog::save(&paths, &existing).expect("invariant: existing backlog should save");

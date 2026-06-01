@@ -505,6 +505,7 @@ fn harness_refreshes_existing_backlog_evidence_to_safe_labels() {
             "schema_version: maestro.backlog.v1\n",
             "items:\n",
             "  - id: hb-001\n",
+            "    fingerprint: missing_verification:task-001\n",
             "    source: task-001\n",
             "    type: missing_verification\n",
             "    title: Add reusable verification for Refresh stale backlog evidence\n",
@@ -544,7 +545,7 @@ fn harness_scrubs_orphaned_legacy_missing_verification_evidence() {
             "    type: missing_verification\n",
             "    title: Add stale verification\n",
             "    priority: medium\n",
-            "    status: proposed\n",
+            "    status: accepted\n",
             "    evidence:\n",
             "      - \"manual note: keep this context\"\n",
             "      - verification.attempts/api_key=top_secret.json used `api_key='top secret' cargo test` outside harness.yml\n"

@@ -52,6 +52,9 @@ pub struct BacklogConfig {
 pub struct BacklogItem {
     /// Stable proposal id.
     pub id: String,
+    /// Stable identity `{type}:{subject}`; merge keys on this, not the mutable title.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fingerprint: String,
     /// Detection source, usually a task id, session id, or aggregate bucket.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source: String,
@@ -63,12 +66,37 @@ pub struct BacklogItem {
     /// Proposal priority.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub priority: String,
-    /// Proposal status, for example `proposed` or `applied`.
+    /// Proposal status: `proposed`, `accepted`, or `measured`.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub status: String,
     /// Evidence snippets supporting the proposal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub evidence: Vec<String>,
+    /// Task spawned when this proposal was accepted (`apply`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spawned_task: Option<String>,
+    /// Append-only lifecycle log (accepted, ineffective, measured, regressed).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<HistoryEntry>,
+}
+
+/// One append-only lifecycle record on a [`BacklogItem`].
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct HistoryEntry {
+    /// Outcome: `accepted`, `ineffective`, `measured`, or `regressed`.
+    pub result: String,
+    /// Linked task for the record, when one applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
+    /// Human-facing UTC timestamp of the record.
+    pub at: String,
+}
+
+/// State detectors emit notes whose silence reliably means the friction is fixed,
+/// so they can be auto-measured, auto-reopened on regression, and hinted as ready.
+/// All other detectors are behavioral and need a human-judgment `measure`.
+pub fn is_state_detector(item_type: &str) -> bool {
+    matches!(item_type, "missing_verification" | "rediscovered_decision")
 }
 
 impl HarnessConfig {
