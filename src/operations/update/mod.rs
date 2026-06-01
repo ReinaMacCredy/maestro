@@ -105,7 +105,7 @@ impl fmt::Display for UpdateUnavailable {
             Self::Homebrew => formatter
                 .write_str("for this install: installed with Homebrew. Run `brew upgrade maestro`"),
             Self::Cargo => formatter.write_str(
-                "for this install: installed with Cargo. Run `cargo install --locked --force maestro`",
+                "for this install: installed with Cargo. Run `cargo install --git https://github.com/ReinaMacCredy/maestro --locked --force`",
             ),
             Self::NoPlatformAsset { hint } => {
                 write!(formatter, "because no GitHub release asset matches {hint}")

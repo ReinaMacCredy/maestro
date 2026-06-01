@@ -205,7 +205,9 @@ fn update_reports_manager_commands_for_brew_and_cargo_installs() {
     assert_success(&cargo);
     let stdout = String::from_utf8_lossy(&cargo.stdout);
     assert!(stdout.contains("Update unavailable for this install"));
-    assert!(stdout.contains("cargo install --locked --force maestro"));
+    assert!(stdout.contains(
+        "cargo install --git https://github.com/ReinaMacCredy/maestro --locked --force"
+    ));
 }
 
 #[test]
