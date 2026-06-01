@@ -34,6 +34,7 @@ main() {
   curl -fsSL "$checksum_url" -o "$TMP_CHECKSUM"
   verify_checksum "$TMP_BIN" "$TMP_CHECKSUM" "$asset"
   chmod +x "$TMP_BIN"
+  remove_shadowing_maestros
   mv "$TMP_BIN" "$TARGET_BIN"
 
   if "$TARGET_BIN" version >/dev/null 2>&1; then
@@ -53,6 +54,43 @@ main() {
     warn "$INSTALL_DIR is not in your PATH"
     echo "    Add: export PATH=\"$INSTALL_DIR:\$PATH\""
   fi
+}
+
+# Q3 PATH hygiene: a maestro in a PATH dir *before* the install dir would
+# shadow the freshly installed binary. Remove only those so the new install
+# wins; warn, don't fail, when a path needs elevated permissions. A maestro at
+# or after the install dir already loses to the new binary and is left alone --
+# this keeps the blast radius to binaries that actually break the install (an
+# unrelated tool named `maestro`, or a dev's `~/.cargo/bin/maestro`, sitting
+# later on PATH is untouched). The binary is removed outright, not backed up:
+# it is freely re-downloadable, and the "never delete" guarantee covers user
+# data (MIGRATE.md), not the binary. If the install dir is not on PATH, the new
+# binary can't win regardless (main() warns about that), so remove nothing.
+remove_shadowing_maestros() {
+  local dir candidate IFS=:
+  # First confirm the install dir is on PATH; if it is not, the new binary can't
+  # win regardless, so removing other maestros would only orphan the user.
+  local on_path=0
+  for dir in $PATH; do
+    [ -n "$dir" ] || continue
+    if [ "$dir" -ef "$INSTALL_DIR" ]; then on_path=1; break; fi
+  done
+  [ "$on_path" = 1 ] || return 0
+
+  for dir in $PATH; do
+    [ -n "$dir" ] || continue
+    # Stop at the install dir: only earlier PATH entries can shadow it.
+    if [ "$dir" -ef "$INSTALL_DIR" ]; then return 0; fi
+    candidate="$dir/maestro"
+    [ -f "$candidate" ] || continue
+    if [ "$candidate" -ef "$TARGET_BIN" ]; then continue; fi
+    if rm -f "$candidate" 2>/dev/null; then
+      warn "Removed shadowing maestro: $candidate"
+    else
+      warn "Another maestro on PATH at $candidate blocks this install and could not be removed."
+      echo "    Remove it manually: sudo rm \"$candidate\""
+    fi
+  done
 }
 
 build_download_url() {
