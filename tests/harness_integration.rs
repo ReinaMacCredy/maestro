@@ -1697,6 +1697,33 @@ fn harness_measure_closes_silent_state_note() {
 }
 
 #[test]
+fn harness_regression_reopens_measured_state_note_and_clears_link() {
+    let temp = setup_missing_verification_note("maestro-harness-regress");
+    let repo = temp.path();
+
+    // Accept, verify the task, silence the friction, and measure to `measured`.
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("spawned task-002"));
+    mark_verified(repo, "task-002", "general", "0", "100");
+    write_harness_verify(repo, &["cargo clippy"]);
+    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
+    assert!(measure.contains("hb-001 is now measured"));
+
+    // Friction returns (command dropped from verify again): re-deriving reopens the
+    // measured state note (D6) and pulls it back into the active set.
+    write_harness_verify(repo, &[]);
+    let list = run_success(repo, &["harness", "list"]);
+    assert!(list.contains("hb-001"));
+
+    // The note is `proposed` again with a `regressed` record, and the old link is
+    // cleared so the next accept spawns a fresh task (impl-default (c)).
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    assert!(show.contains("status: proposed"));
+    assert!(show.contains("- regressed"));
+    assert!(!show.contains("spawned_task:"));
+}
+
+#[test]
 fn harness_measure_reverts_ineffective_state_note_and_relinks_on_reapply() {
     let temp = setup_missing_verification_note("maestro-harness-measure-ineffective");
     let repo = temp.path();
