@@ -256,13 +256,24 @@ fn cancel_cascades_to_live_child_tasks() {
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
 
-    let report = feature::cancel(&paths, "billing-csv", "scope dropped")
+    // Dry-run previews the cascade without mutating the feature or its children.
+    let preview = feature::cancel(&paths, "billing-csv", "scope dropped", true)
+        .expect("invariant: dry-run cancel succeeds");
+    assert!(!preview.changed);
+    assert_eq!(preview.abandoned, vec!["task-001".to_string()]);
+    assert!(preview.note.contains("would cancel"));
+    let still_live = feature::show(&paths, "billing-csv").expect("invariant: show should succeed");
+    assert_eq!(still_live.status, feature::FeatureStatus::InProgress);
+
+    let report = feature::cancel(&paths, "billing-csv", "scope dropped", false)
         .expect("invariant: cancel succeeds");
     assert!(report.changed);
     assert_eq!(report.abandoned, vec!["task-001".to_string()]);
 
     let view = feature::show(&paths, "billing-csv").expect("invariant: show should succeed");
     assert_eq!(view.status, feature::FeatureStatus::Cancelled);
+    // The audited reason is persisted on the feature record.
+    assert_eq!(view.cancel_reason.as_deref(), Some("scope dropped"));
     // The child task is now abandoned.
     let task_raw = fs::read_to_string(paths.tasks_dir().join("task-001").join("task.yaml"))
         .expect("invariant: child task should be readable");
@@ -280,7 +291,7 @@ fn cannot_cancel_a_shipped_feature() {
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
 
-    let error = feature::cancel(&paths, "billing-csv", "too late")
+    let error = feature::cancel(&paths, "billing-csv", "too late", false)
         .expect_err("invariant: shipped features cannot be cancelled");
     assert!(error.to_string().contains("terminal"));
 }

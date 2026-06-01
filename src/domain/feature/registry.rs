@@ -73,6 +73,8 @@ pub struct FeatureView {
     pub open_questions: Vec<String>,
     /// One-line shipped outcome, set at `ship --outcome`.
     pub outcome: Option<String>,
+    /// Operator reason recorded at `cancel --reason`.
+    pub cancel_reason: Option<String>,
     /// Design notes (`notes.md`), read on demand by `show`. None elsewhere.
     pub notes: Option<String>,
 }
@@ -479,11 +481,14 @@ pub fn ship(
     let mut record = load_record(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Ship) {
         Transition::NoOp => {
-            return Ok(no_op_report(
-                id,
-                record.status,
-                format!("{id} is already shipped"),
-            ));
+            // The outcome is set once, at ship. On an already-shipped no-op a new
+            // `--outcome` cannot be recorded; say so rather than dropping it silently.
+            let note = if outcome.is_some() {
+                format!("{id} is already shipped; --outcome not recorded (it is set once, at ship)")
+            } else {
+                format!("{id} is already shipped")
+            };
+            return Ok(no_op_report(id, record.status, note));
         }
         Transition::Illegal(message) => bail!(message),
         Transition::To(target) => target,
@@ -544,7 +549,7 @@ pub fn ship(
 ///
 /// Errors when the feature is not found, it is already terminal (Shipped), or a
 /// child task cannot be abandoned.
-pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str) -> Result<CancelReport> {
+pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Result<CancelReport> {
     let mut record = load_record(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Cancel) {
         Transition::NoOp => {
@@ -560,6 +565,27 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str) -> Result<CancelRepo
     };
 
     let live = live_child_task_ids(&paths.tasks_dir(), &record.id)?;
+
+    // `--dry-run` previews exactly which child tasks the cascade would abandon,
+    // mirroring accept/ship/archive, before any irreversible mutation.
+    if dry_run {
+        let note = if live.is_empty() {
+            format!("would cancel {id} (→ cancelled); no child tasks affected")
+        } else {
+            format!(
+                "would cancel {id} (→ cancelled); would abandon {} child task(s): {}",
+                live.len(),
+                live.join(", ")
+            )
+        };
+        return Ok(CancelReport {
+            id: id.to_string(),
+            changed: false,
+            abandoned: live,
+            note,
+        });
+    }
+
     let now = nanos_since_epoch_string();
     let summary = format!("feature cancelled: {reason}");
     for task_id in &live {
@@ -578,6 +604,7 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str) -> Result<CancelRepo
     }
 
     record.status = target;
+    record.cancel_reason = Some(reason.to_string());
     record.updated_at = nanos_since_epoch_string();
     save_record(paths, &record)?;
 
@@ -807,6 +834,7 @@ fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> Feature
         non_goals: record.non_goals,
         open_questions: record.open_questions,
         outcome: record.outcome,
+        cancel_reason: record.cancel_reason,
         // notes.md is read on demand by `show`, not on the list path.
         notes: None,
     }

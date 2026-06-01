@@ -60,9 +60,11 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             outcome,
             dry_run,
         } => print_note(feature::ship(&paths, &id, outcome, dry_run)?.note),
-        FeatureCommand::Cancel { id, reason } => {
-            print_note(feature::cancel(&paths, &id, &reason)?.note)
-        }
+        FeatureCommand::Cancel {
+            id,
+            reason,
+            dry_run,
+        } => cancel_feature(&paths, &id, &reason, dry_run),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
         FeatureCommand::List { all } => list_features(&paths, all),
         FeatureCommand::Archive {
@@ -144,7 +146,7 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
     }
     let view = feature::set(paths, id, edits)?;
     println!(
-        "set {id}; acceptance={}, areas={}, non_goals={}, questions={}",
+        "set {id} (replace-per-field); acceptance={}, areas={}, non_goals={}, questions={}",
         view.acceptance.len(),
         view.affected_areas.len(),
         view.non_goals.len(),
@@ -159,12 +161,22 @@ fn amend_feature(
     additions: ContractAdditions,
     reason: &str,
 ) -> Result<()> {
+    if reason.trim().is_empty() {
+        bail!("`--reason` must not be empty; record why the contract is growing (it is audited)");
+    }
     if additions.is_empty() {
         bail!(
             "no values to amend\n  maestro feature amend {id} --add-acceptance \"<criterion>\" --reason \"<why>\"\n  add-flags: --add-acceptance --add-area --add-non-goal --add-question"
         );
     }
     print_note(feature::amend(paths, id, additions, reason)?.note)
+}
+
+fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Result<()> {
+    if reason.trim().is_empty() {
+        bail!("`--reason` must not be empty; record why the feature is being cancelled (it is audited)");
+    }
+    print_note(feature::cancel(paths, id, reason, dry_run)?.note)
 }
 
 fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
@@ -193,6 +205,9 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     }
     if let Some(outcome) = view.outcome.as_deref() {
         println!("outcome: {outcome}");
+    }
+    if let Some(cancel_reason) = view.cancel_reason.as_deref() {
+        println!("cancel_reason: {cancel_reason}");
     }
     print_list("acceptance", &view.acceptance);
     print_list("affected_areas", &view.affected_areas);

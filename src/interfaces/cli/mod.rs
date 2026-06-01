@@ -382,6 +382,8 @@ pub enum FeatureCommand {
         id: String,
         #[arg(long, help = "Why the feature is being cancelled (required, audited)")]
         reason: String,
+        #[arg(long, help = "Preview the cancel and the child tasks it would abandon")]
+        dry_run: bool,
     },
     #[command(about = "Show a feature's status, full contract, and task counts")]
     Show { id: String },

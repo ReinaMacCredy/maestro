@@ -45,6 +45,9 @@ pub struct FeatureRecord {
     /// One-line shipped outcome, set at `ship --outcome`. Write-once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome: Option<String>,
+    /// Operator reason recorded at `cancel --reason`, kept for the audit trail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancel_reason: Option<String>,
 }
 
 impl FeatureRecord {
@@ -65,6 +68,7 @@ impl FeatureRecord {
             acceptance: Vec::new(),
             non_goals: Vec::new(),
             outcome: None,
+            cancel_reason: None,
         }
     }
 }
