@@ -67,8 +67,9 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
     // Bare `init` (no --merge/--force) is strict-create. On an already-initialized
     // repo it would otherwise bail per-file deep in extraction ("<...>/SKILL.md
     // already exists"); pre-empt that with one clean repo-level message naming the
-    // two ways forward (T6.2). The anchor is the init-written harness.yml, not the
-    // `.maestro` directory created moments ago above.
+    // two ways forward (T6.2). The anchor is the init-written harness.yml -- the
+    // completed-init marker -- not mere `.maestro` existence, which a partial or
+    // interrupted init could leave behind.
     if !options.merge
         && !options.force
         && paths.harness_dir().join("harness.yml").exists()

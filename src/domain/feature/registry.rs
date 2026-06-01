@@ -299,7 +299,7 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
     // F — a captured behavior baseline is a precondition of accept (before edits).
     if !qa::baseline_present(&feature_dir(paths, id))? {
         gaps.push(format!(
-            "qa-baseline (.maestro/features/{id}/baseline.md missing) — fix: capture behavior before edits as a Scenario Matrix of [bl-NNN]-tagged scenarios, e.g. via the qa-baseline skill"
+            "qa-baseline (.maestro/features/{id}/baseline.md missing) — fix: capture current behavior before edits via the qa-baseline skill (a non-empty baseline.md); tagging scenarios [bl-NNN] now satisfies the ship gate later"
         ));
     }
 
