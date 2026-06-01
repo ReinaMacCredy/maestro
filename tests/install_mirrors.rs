@@ -230,11 +230,11 @@ fn install_lock_round_trips_agent_ownership() {
     let mut install = AgentInstall::new("2026-05-25T10:00:00Z".to_string());
     install.insert(
         "CLAUDE.md",
-        FileOwnership::text(MirrorKind::MarkdownManagedBlock, "managed"),
+        FileOwnership::text(MirrorKind::MarkdownManagedBlock, "managed", false),
     );
     install.insert(
         ".claude/settings.local.json",
-        FileOwnership::json_keys(vec!["hooks".to_string()], Default::default()),
+        FileOwnership::json_keys(vec!["hooks".to_string()], Default::default(), false),
     );
     lock.set_agent(InstallAgent::Claude, install);
 

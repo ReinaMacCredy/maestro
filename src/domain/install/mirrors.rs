@@ -101,6 +101,9 @@ struct MirrorRemoval {
     path: PathBuf,
     contents: String,
     next: String,
+    /// True when maestro created this file (carried from the install lock). Gates
+    /// husk removal: only a created-fresh file may be deleted when emptied.
+    created_fresh: bool,
 }
 
 #[derive(Debug)]
@@ -179,7 +182,8 @@ pub(crate) fn prepare_mirrors(
             BTreeMap::new()
         };
         let contents = contents_for_existing(&plan, existing.as_deref(), &previous_values)?;
-        let ownership = ownership_for_plan(&plan, &contents, previous_values)?;
+        let ownership =
+            ownership_for_plan(&plan, &contents, previous_values, existing.is_none())?;
         install.insert(plan.relative_path.clone(), ownership);
 
         updates.push(MirrorUpdate {
@@ -328,6 +332,7 @@ fn ownership_for_plan(
     plan: &MirrorPlan,
     contents: &str,
     previous_values: BTreeMap<String, Value>,
+    created_fresh: bool,
 ) -> Result<FileOwnership> {
     match plan.kind {
         MirrorKind::MarkdownManagedBlock
@@ -335,10 +340,12 @@ fn ownership_for_plan(
         | MirrorKind::TomlSection => Ok(FileOwnership::text(
             plan.kind.clone(),
             text_ownership_content(&plan.kind, contents)?,
+            created_fresh,
         )),
         MirrorKind::JsonManagedKeys => Ok(FileOwnership::json_keys(
             plan.managed_keys.clone(),
             previous_values,
+            created_fresh,
         )),
         MirrorKind::Symlink => {
             unreachable!("symlink mirrors are not written by text mirror planner")
@@ -454,6 +461,7 @@ pub(crate) fn remove_mirrors(
             path,
             contents,
             next,
+            created_fresh: ownership.created_fresh,
         });
     }
 
@@ -566,24 +574,28 @@ fn write_mirror_removal(
 ) -> Result<()> {
     backup_file_with_timestamp(paths, &removal.path, "uninstall", backup_timestamp)?;
 
-    if is_empty_residue(&removal.next) {
-        // Stripping maestro's managed content emptied the file, which means
-        // maestro created it (a pre-existing user file leaves real residue, and
-        // its previous_values are restored into `next` first). Remove the husk
-        // instead of leaving a 0-byte file or bare `{}` behind (T6.5). The
-        // pre-write backup above preserves it; rollback recreates it from
-        // `removal.contents`.
+    if is_empty_residue(&removal.next) && removal.created_fresh {
+        // Stripping maestro's managed content left no user content behind, AND
+        // maestro created this file at install (it did not pre-exist). Remove the
+        // husk instead of leaving a 0-byte file or bare `{}` behind (T6.5). A file
+        // the user already had is never deleted here, even when its residue is
+        // empty (e.g. a pre-existing empty `{}` settings file): that falls to the
+        // `else` branch, which restores it. This honors the locked husk-safety
+        // rule -- delete only what maestro created fresh, preserve pre-existing.
         fs::remove_file(&removal.path).with_context(|| {
             format!("failed to remove emptied mirror {}", removal.path.display())
         })?;
+        // The file is gone; printing a `contents -> {}` diff would tell an
+        // agent the file now holds `{}`. Announce the removal instead.
+        println!("removed {}", removal.relative_path);
     } else {
         write_string_atomic(&removal.path, &removal.next)
             .with_context(|| format!("failed to uninstall mirror {}", removal.path.display()))?;
+        println!(
+            "{}",
+            unified_diff(&removal.relative_path, &removal.contents, &removal.next)
+        );
     }
-    println!(
-        "{}",
-        unified_diff(&removal.relative_path, &removal.contents, &removal.next)
-    );
 
     Ok(())
 }
@@ -1001,6 +1013,7 @@ mod tests {
             path: path.clone(),
             contents: "original\n".to_string(),
             next: "removed\n".to_string(),
+            created_fresh: false,
         };
 
         rollback_mirror_removals(&[removal]).expect("invariant: rollback should succeed");

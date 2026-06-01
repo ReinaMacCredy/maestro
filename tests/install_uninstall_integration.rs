@@ -347,6 +347,42 @@ fn uninstall_claude_removes_owned_hooks_and_preserves_user_json_keys() {
 }
 
 #[test]
+fn uninstall_preserves_user_precreated_empty_json_instead_of_deleting_it() {
+    // The user owned an empty `.claude/settings.local.json` (`{}`) before install.
+    // maestro adds its hooks key, then uninstall strips it back to `{}`. The
+    // residue is empty, but the file was NOT created by maestro, so uninstall must
+    // restore it rather than delete the husk -- otherwise a routine uninstall
+    // silently removes a file the user owned (the locked husk-safety rule).
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+    fs::create_dir_all(temp_dir.path().join(".claude"))
+        .expect("invariant: claude config dir should be creatable");
+    let settings_path = temp_dir.path().join(".claude/settings.local.json");
+    fs::write(&settings_path, "{}\n").expect("invariant: empty settings should be writable");
+
+    let install = maestro(&["install", "--agent", "claude"], temp_dir.path());
+    assert!(install.status.success());
+    let uninstall = maestro(&["uninstall", "--agent", "claude"], temp_dir.path());
+
+    assert!(
+        uninstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+    assert!(
+        settings_path.is_file(),
+        "user's pre-existing settings.local.json must survive uninstall, not be husk-deleted"
+    );
+    let settings =
+        fs::read_to_string(&settings_path).expect("invariant: settings json should be readable");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&settings)
+            .expect("invariant: restored settings should parse"),
+        serde_json::json!({})
+    );
+}
+
+#[test]
 fn uninstall_without_lock_does_not_remove_hook_config() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());
@@ -441,7 +477,7 @@ fn reinstall_replaces_pending_install_lock_and_commits_recovered_state() {
     install.mark_pending();
     install.insert(
         "AGENTS.md",
-        FileOwnership::text(MirrorKind::MarkdownManagedBlock, "interrupted\n"),
+        FileOwnership::text(MirrorKind::MarkdownManagedBlock, "interrupted\n", false),
     );
     lock.set_agent(InstallAgent::Codex, install);
     lock.save(&lock_path)
@@ -570,7 +606,7 @@ fn uninstall_refuses_pending_install_lock_and_leaves_files_untouched() {
     install.mark_pending();
     install.insert(
         "AGENTS.md",
-        FileOwnership::text(MirrorKind::MarkdownManagedBlock, "pending-owned\n"),
+        FileOwnership::text(MirrorKind::MarkdownManagedBlock, "pending-owned\n", false),
     );
     lock.set_agent(InstallAgent::Codex, install);
     lock.save(&lock_path)

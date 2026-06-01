@@ -61,9 +61,19 @@ pub struct FileOwnership {
     /// User-owned JSON values replaced during install, restored during uninstall.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub previous_values: BTreeMap<String, Value>,
+    /// True when maestro created this file (it did not exist at install). Only a
+    /// created-fresh file may be removed when uninstall empties it; a pre-existing
+    /// file the user owned is preserved even when its residue is empty. Absent in
+    /// older locks, which deserialize to `false` (the preserve-safe default).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub created_fresh: bool,
     /// Optional symlink target.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 /// Install lock file kinds.
@@ -162,23 +172,31 @@ impl AgentInstall {
 
 impl FileOwnership {
     /// Text mirror ownership for a Maestro-owned managed block or section.
-    pub fn text(kind: MirrorKind, content: &str) -> Self {
+    /// `created_fresh` is true when the file did not exist before install.
+    pub fn text(kind: MirrorKind, content: &str, created_fresh: bool) -> Self {
         Self {
             kind,
             content_hash: Some(content_hash(content)),
             managed_keys: Vec::new(),
             previous_values: BTreeMap::new(),
+            created_fresh,
             target: None,
         }
     }
 
-    /// JSON managed keys ownership.
-    pub fn json_keys(keys: Vec<String>, previous_values: BTreeMap<String, Value>) -> Self {
+    /// JSON managed keys ownership. `created_fresh` is true when the file did not
+    /// exist before install.
+    pub fn json_keys(
+        keys: Vec<String>,
+        previous_values: BTreeMap<String, Value>,
+        created_fresh: bool,
+    ) -> Self {
         Self {
             kind: MirrorKind::JsonManagedKeys,
             content_hash: None,
             managed_keys: keys,
             previous_values,
+            created_fresh,
             target: None,
         }
     }
@@ -190,6 +208,7 @@ impl FileOwnership {
             content_hash: None,
             managed_keys: Vec::new(),
             previous_values: BTreeMap::new(),
+            created_fresh: false,
             target: Some(target.into()),
         }
     }
