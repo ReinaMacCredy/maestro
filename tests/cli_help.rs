@@ -45,9 +45,8 @@ fn root_help_lists_top_level_commands() {
             "event",
             "feature",
             "decision",
-            "improve",
+            "harness",
             "query",
-            "metrics",
             "mcp",
             "hook",
             "watch",
@@ -127,13 +126,12 @@ fn nested_help_lists_section_38_command_tree() {
         ],
     );
     assert_contains_all(&maestro(&["decision", "--help"]), &["new", "show", "list"]);
-    assert_contains_all(&maestro(&["improve", "--help"]), &["list", "show", "apply"]);
+    assert_contains_all(&maestro(&["harness", "--help"]), &["list", "show", "apply"]);
     assert_contains_all(
         &maestro(&["query", "--help"]),
         &["matrix", "friction", "decisions", "backlog", "proof"],
     );
     assert_contains_all(&maestro(&["query", "proof", "--help"]), &["--task-id"]);
-    assert_contains_all(&maestro(&["metrics", "--help"]), &["summary"]);
     assert_contains_all(
         &maestro(&["mcp", "--help"]),
         &["serve", "stdin", "tools", "list"],

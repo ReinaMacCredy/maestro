@@ -10,7 +10,8 @@ use crate::domain::run;
 use crate::domain::task::{self, TaskEntry};
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::operations::metrics;
+
+use super::looks_like_correction;
 
 /// Detect rule-based harness improvement proposals without LLM calls.
 pub fn detect(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
@@ -30,7 +31,7 @@ fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogIte
         let event = record.event();
         if event.is_event_type("UserPromptSubmit") {
             let text = event.prompt_text().unwrap_or_default();
-            if metrics::looks_like_correction(text) {
+            if looks_like_correction(text) {
                 corrections_by_session
                     .entry(record.session_id().to_string())
                     .or_default()

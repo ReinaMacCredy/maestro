@@ -2,23 +2,23 @@ use anyhow::Result;
 
 use crate::domain::harness::{BacklogConfig, BacklogItem};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::interfaces::cli::{ImproveArgs, ImproveCommand};
-use crate::operations::improver;
+use crate::interfaces::cli::{HarnessArgs, HarnessCommand};
+use crate::operations::harness;
 
-/// Execute `maestro improve`.
-pub fn run(args: ImproveArgs) -> Result<()> {
+/// Execute `maestro harness`.
+pub fn run(args: HarnessArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
 
     match args.command {
-        ImproveCommand::List => list(&paths),
-        ImproveCommand::Show { id } => show(&paths, &id),
-        ImproveCommand::Apply { id } => apply(&paths, &id),
+        HarnessCommand::List => list(&paths),
+        HarnessCommand::Show { id } => show(&paths, &id),
+        HarnessCommand::Apply { id } => apply(&paths, &id),
     }
 }
 
 fn list(paths: &MaestroPaths) -> Result<()> {
-    let backlog = improver::refresh(paths)?;
+    let backlog = harness::refresh(paths)?;
     if backlog.items.is_empty() {
         println!("no improvement proposals found");
         return Ok(());
@@ -37,14 +37,14 @@ fn list(paths: &MaestroPaths) -> Result<()> {
 }
 
 fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let backlog = improver::refresh(paths)?;
+    let backlog = harness::refresh(paths)?;
     let item = find_item(&backlog, id)?;
     print_item(item);
     Ok(())
 }
 
 fn apply(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let item = improver::apply(paths, id)?;
+    let item = harness::apply(paths, id)?;
     println!("applied {}", item.id);
     Ok(())
 }

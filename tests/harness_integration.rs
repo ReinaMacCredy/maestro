@@ -170,81 +170,7 @@ fn mark_verified(repo: &Path, id: &str, domain: &str, created_at: &str, verified
 }
 
 #[test]
-fn metrics_summary_reads_tasks_and_run_evidence_without_cache() {
-    let temp = setup_repo("maestro-metrics-summary");
-    let repo = temp.path();
-
-    create_task(repo, "Verified export task");
-    create_task(repo, "In progress parser task");
-    mark_verified(repo, "task-001", "billing", "100", "2380");
-    assert_success(
-        &maestro(
-            repo,
-            &["task", "set", "task-002", "--check", "parser landed"],
-        ),
-        &["task", "set", "task-002", "--check", "parser landed"],
-    );
-    assert_success(
-        &maestro(repo, &["task", "explore", "task-002"]),
-        &["task", "explore", "task-002"],
-    );
-    assert_success(
-        &maestro(repo, &["task", "accept", "task-002"]),
-        &["task", "accept", "task-002"],
-    );
-    assert_success(
-        &maestro(repo, &["task", "claim", "task-002"]),
-        &["task", "claim", "task-002"],
-    );
-
-    let run_dir = repo.join(".maestro/runs/session-metrics");
-    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
-    fs::write(
-        run_dir.join("run_evidence.yaml"),
-        concat!(
-            "schema_version: maestro.run_evidence.v1\n",
-            "session_id: session-metrics\n",
-            "agent: codex_cli\n",
-            "task_id: task-001\n",
-            "duration_seconds: 2460\n",
-            "human_interventions: 2\n"
-        ),
-    )
-    .expect("invariant: run evidence should be writable");
-    let bad_run_dir = repo.join(".maestro/runs/session-bad");
-    fs::create_dir_all(&bad_run_dir).expect("invariant: bad run dir should be creatable");
-    fs::write(bad_run_dir.join("run_evidence.yaml"), "not: [valid")
-        .expect("invariant: bad run evidence should be writable");
-
-    let out = run_success(repo, &["metrics", "summary"]);
-    assert!(out.contains("Tasks: 2 (1 verified, 0 needs_verification, 1 in_progress)"));
-    assert!(out.contains("Avg time-to-verify: 38 min"));
-    assert!(out.contains("codex_cli: 1 tasks, 41 min avg"));
-    assert!(out.contains("Interventions: 1.0 per task"));
-    assert!(out.contains("Skipped run evidence: 1"));
-    assert!(!repo.join(".maestro/cache").exists());
-}
-
-#[test]
-fn metrics_summary_treats_numeric_task_timestamps_as_epoch_units() {
-    let temp = setup_repo("maestro-metrics-timestamp-units");
-    let repo = temp.path();
-
-    create_task(repo, "Nanosecond timestamp task");
-    mark_verified(
-        repo,
-        "task-001",
-        "billing",
-        "1700000000000000000",
-        "1700001380000000000",
-    );
-
-    let out = run_success(repo, &["metrics", "summary"]);
-    assert!(out.contains("Avg time-to-verify: 23 min"));
-}
-
-#[test]
-fn improve_detects_all_rule_based_backlog_proposals_and_applies_one() {
+fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     let temp = setup_repo("maestro-improve-rules");
     let repo = temp.path();
 
@@ -351,14 +277,14 @@ fn improve_detects_all_rule_based_backlog_proposals_and_applies_one() {
     assert!(friction.contains("user_prompts: 4"));
     assert!(friction.contains("corrections: 3"));
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("recurring_intervention"));
     assert!(out.contains("missing_verification"));
     assert!(out.contains("recurring_blocker"));
     assert!(out.contains("missing_skill"));
     assert!(out.contains("rediscovered_decision"));
 
-    let show = run_success(repo, &["improve", "show", "hb-001"]);
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(show.contains("status: proposed"));
     assert!(show.contains("evidence:"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -367,14 +293,14 @@ fn improve_detects_all_rule_based_backlog_proposals_and_applies_one() {
     assert!(!backlog.contains("top secret"));
     assert!(!backlog.contains("api_key"));
 
-    let apply = run_success(repo, &["improve", "apply", "hb-001"]);
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
     assert!(apply.contains("applied hb-001"));
-    let applied = run_success(repo, &["improve", "show", "hb-001"]);
+    let applied = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(applied.contains("status: applied"));
 }
 
 #[test]
-fn improve_uses_proof_owned_verification_report_reader() {
+fn harness_uses_proof_owned_verification_report_reader() {
     let temp = setup_repo("maestro-improve-proof-reader");
     let repo = temp.path();
     create_task(repo, "Verify proof reader contract");
@@ -393,7 +319,7 @@ fn improve_uses_proof_owned_verification_report_reader() {
     )
     .expect("invariant: verification report symlink should be creatable");
 
-    let output = maestro(repo, &["improve", "list"]);
+    let output = maestro(repo, &["harness", "list"]);
     assert!(
         !output.status.success(),
         "improve list should reject symlinked Proof reports\nstdout:\n{}\nstderr:\n{}",
@@ -404,7 +330,7 @@ fn improve_uses_proof_owned_verification_report_reader() {
 }
 
 #[test]
-fn improve_tolerates_legacy_string_verification_commands() {
+fn harness_tolerates_legacy_string_verification_commands() {
     let temp = setup_repo("maestro-improve-legacy-proof-commands");
     let repo = temp.path();
     create_task(repo, "Verify legacy proof commands");
@@ -449,13 +375,13 @@ fn improve_tolerates_legacy_string_verification_commands() {
     );
     assert!(stderr(&proof).contains("failed to parse"));
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Verify legacy proof commands"));
 }
 
 #[test]
-fn improve_accepts_legacy_command_object_forms_without_allowing_bare_strings() {
+fn harness_accepts_legacy_command_object_forms_without_allowing_bare_strings() {
     let temp = setup_repo("maestro-improve-legacy-command-objects");
     let repo = temp.path();
     create_task(repo, "Verify legacy command objects");
@@ -486,7 +412,7 @@ fn improve_accepts_legacy_command_object_forms_without_allowing_bare_strings() {
     let proof = maestro(repo, &["query", "proof", "task-001"]);
     assert_success(&proof, &["query", "proof", "task-001"]);
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Verify legacy command objects"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -496,7 +422,7 @@ fn improve_accepts_legacy_command_object_forms_without_allowing_bare_strings() {
 }
 
 #[test]
-fn improve_exactly_matches_sensitive_harness_commands_without_displaying_them() {
+fn harness_exactly_matches_sensitive_harness_commands_without_displaying_them() {
     let temp = setup_repo("maestro-improve-exact-sensitive-command-match");
     let repo = temp.path();
     create_task(repo, "Verify exact sensitive command matching");
@@ -540,7 +466,7 @@ fn improve_exactly_matches_sensitive_harness_commands_without_displaying_them() 
     )
     .expect("invariant: verification report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(!out.contains("missing_verification"));
     assert!(!out.contains("Add reusable verification for Verify exact sensitive command matching"));
     assert!(!out.contains("top secret"));
@@ -548,7 +474,7 @@ fn improve_exactly_matches_sensitive_harness_commands_without_displaying_them() 
 }
 
 #[test]
-fn improve_refreshes_existing_backlog_evidence_to_safe_labels() {
+fn harness_refreshes_existing_backlog_evidence_to_safe_labels() {
     let temp = setup_repo("maestro-improve-refresh-safe-evidence");
     let repo = temp.path();
     create_task(repo, "Refresh stale backlog evidence");
@@ -591,7 +517,7 @@ fn improve_refreshes_existing_backlog_evidence_to_safe_labels() {
     )
     .expect("invariant: backlog should be writable");
 
-    let show = run_success(repo, &["improve", "show", "hb-001"]);
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(show.contains("manual note: keep this context"));
     assert!(show.contains("verification.json used verification command 1 outside harness.yml"));
     assert!(!show.contains("top secret"));
@@ -605,7 +531,7 @@ fn improve_refreshes_existing_backlog_evidence_to_safe_labels() {
 }
 
 #[test]
-fn improve_scrubs_orphaned_legacy_missing_verification_evidence() {
+fn harness_scrubs_orphaned_legacy_missing_verification_evidence() {
     let temp = setup_repo("maestro-improve-scrub-orphan-evidence");
     let repo = temp.path();
     fs::write(
@@ -626,7 +552,7 @@ fn improve_scrubs_orphaned_legacy_missing_verification_evidence() {
     )
     .expect("invariant: backlog should be writable");
 
-    let show = run_success(repo, &["improve", "show", "hb-001"]);
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(show.contains("manual note: keep this context"));
     assert!(show.contains(
         "verification.attempts/archived attempt used verification command 1 outside harness.yml"
@@ -644,7 +570,7 @@ fn improve_scrubs_orphaned_legacy_missing_verification_evidence() {
 }
 
 #[test]
-fn improve_does_not_recover_canonical_proof_reports_while_detecting() {
+fn harness_does_not_recover_canonical_proof_reports_while_detecting() {
     let temp = setup_repo("maestro-improve-proof-read-only");
     let repo = temp.path();
     create_task(repo, "Preserve proof restore journal");
@@ -687,7 +613,7 @@ fn improve_does_not_recover_canonical_proof_reports_while_detecting() {
     fs::write(&canonical_path, canonical).expect("invariant: canonical report should be writable");
     fs::write(&journal_path, journal).expect("invariant: restore journal should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert_eq!(
         fs::read_to_string(&canonical_path).expect("invariant: canonical report should read"),
@@ -700,7 +626,7 @@ fn improve_does_not_recover_canonical_proof_reports_while_detecting() {
 }
 
 #[test]
-fn improve_reads_latest_attempt_report_commands_without_canonical_report() {
+fn harness_reads_latest_attempt_report_commands_without_canonical_report() {
     let temp = setup_repo("maestro-improve-proof-latest-attempt");
     let repo = temp.path();
     create_task(repo, "Verify latest attempt reader");
@@ -739,7 +665,7 @@ fn improve_reads_latest_attempt_report_commands_without_canonical_report() {
     )
     .expect("invariant: latest attempt report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Verify latest attempt reader"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -752,7 +678,7 @@ fn improve_reads_latest_attempt_report_commands_without_canonical_report() {
 }
 
 #[test]
-fn improve_uses_latest_attempt_when_canonical_report_is_malformed() {
+fn harness_uses_latest_attempt_when_canonical_report_is_malformed() {
     let temp = setup_repo("maestro-improve-proof-canonical-malformed-attempt-valid");
     let repo = temp.path();
     create_task(repo, "Canonical malformed attempt valid");
@@ -769,7 +695,7 @@ fn improve_uses_latest_attempt_when_canonical_report_is_malformed() {
     )
     .expect("invariant: latest attempt report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Canonical malformed attempt valid"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -780,7 +706,7 @@ fn improve_uses_latest_attempt_when_canonical_report_is_malformed() {
 }
 
 #[test]
-fn improve_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
+fn harness_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
     let temp = setup_repo("maestro-improve-proof-stale-canonical-malformed-attempt");
     let repo = temp.path();
     create_task(repo, "Stale canonical malformed attempt");
@@ -811,7 +737,7 @@ fn improve_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
     fs::write(attempts_dir.join("latest.json"), "{not-json")
         .expect("invariant: malformed attempt should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(
         out.contains("no improvement proposals found"),
         "expected malformed attempts to suppress stale canonical evidence, got:\n{out}"
@@ -820,7 +746,7 @@ fn improve_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
 }
 
 #[test]
-fn improve_uses_archived_attempt_when_latest_marker_is_malformed() {
+fn harness_uses_archived_attempt_when_latest_marker_is_malformed() {
     let temp = setup_repo("maestro-improve-proof-latest-malformed-archived-valid");
     let repo = temp.path();
     create_task(repo, "Latest malformed archived valid");
@@ -836,7 +762,7 @@ fn improve_uses_archived_attempt_when_latest_marker_is_malformed() {
     )
     .expect("invariant: archived attempt report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Latest malformed archived valid"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -848,7 +774,7 @@ fn improve_uses_archived_attempt_when_latest_marker_is_malformed() {
 }
 
 #[test]
-fn improve_uses_older_archived_attempt_when_newer_archive_is_malformed() {
+fn harness_uses_older_archived_attempt_when_newer_archive_is_malformed() {
     let temp = setup_repo("maestro-improve-proof-newer-archive-malformed");
     let repo = temp.path();
     create_task(repo, "Newer archive malformed older valid");
@@ -866,7 +792,7 @@ fn improve_uses_older_archived_attempt_when_newer_archive_is_malformed() {
     fs::write(attempts_dir.join("zz-malformed-attempt.json"), "{not-json")
         .expect("invariant: newer malformed attempt report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Newer archive malformed older valid"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -879,7 +805,7 @@ fn improve_uses_older_archived_attempt_when_newer_archive_is_malformed() {
 }
 
 #[test]
-fn improve_uses_newer_archived_attempt_when_latest_marker_is_stale() {
+fn harness_uses_newer_archived_attempt_when_latest_marker_is_stale() {
     let temp = setup_repo("maestro-improve-proof-stale-marker-newer-archive");
     let repo = temp.path();
     create_task(repo, "Stale marker newer archive");
@@ -920,7 +846,7 @@ fn improve_uses_newer_archived_attempt_when_latest_marker_is_stale() {
     )
     .expect("invariant: newer archived attempt report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Stale marker newer archive"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -932,7 +858,7 @@ fn improve_uses_newer_archived_attempt_when_latest_marker_is_stale() {
 }
 
 #[test]
-fn improve_and_query_use_newer_attempt_over_legacy_failed_canonical() {
+fn harness_and_query_use_newer_attempt_over_legacy_failed_canonical() {
     let temp = setup_repo("maestro-improve-proof-legacy-failed-canonical-newer-attempt");
     let repo = temp.path();
     create_task(repo, "Legacy failed canonical newer attempt");
@@ -978,7 +904,7 @@ fn improve_and_query_use_newer_attempt_over_legacy_failed_canonical() {
     assert!(proof.contains("verification.attempts/latest.json"));
     assert!(proof.contains("verified_at: 1000"));
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Legacy failed canonical newer attempt"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -990,7 +916,7 @@ fn improve_and_query_use_newer_attempt_over_legacy_failed_canonical() {
 }
 
 #[test]
-fn improve_ignores_atomic_temp_attempt_siblings() {
+fn harness_ignores_atomic_temp_attempt_siblings() {
     let temp = setup_repo("maestro-improve-proof-temp-attempt-sibling");
     let repo = temp.path();
     create_task(repo, "Ignore temp attempt sibling");
@@ -1031,7 +957,7 @@ fn improve_ignores_atomic_temp_attempt_siblings() {
     )
     .expect("invariant: temp attempt sibling should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
     assert!(
@@ -1042,7 +968,7 @@ fn improve_ignores_atomic_temp_attempt_siblings() {
 }
 
 #[test]
-fn improve_hides_secret_like_archived_attempt_file_names() {
+fn harness_hides_secret_like_archived_attempt_file_names() {
     let temp = setup_repo("maestro-improve-proof-secret-archive-name");
     let repo = temp.path();
     create_task(repo, "Secret archive name");
@@ -1058,7 +984,7 @@ fn improve_hides_secret_like_archived_attempt_file_names() {
     )
     .expect("invariant: archived attempt report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
@@ -1071,7 +997,7 @@ fn improve_hides_secret_like_archived_attempt_file_names() {
 
 #[cfg(unix)]
 #[test]
-fn improve_fails_when_archived_attempt_candidate_is_symlink() {
+fn harness_fails_when_archived_attempt_candidate_is_symlink() {
     let temp = setup_repo("maestro-improve-proof-archived-symlink");
     let repo = temp.path();
     create_task(repo, "Symlink archived attempt");
@@ -1091,7 +1017,7 @@ fn improve_fails_when_archived_attempt_candidate_is_symlink() {
     )
     .expect("invariant: attempt symlink should be creatable");
 
-    let output = maestro(repo, &["improve", "list"]);
+    let output = maestro(repo, &["harness", "list"]);
     assert!(
         !output.status.success(),
         "improve list should reject symlinked archived attempts\nstdout:\n{}\nstderr:\n{}",
@@ -1105,7 +1031,7 @@ fn improve_fails_when_archived_attempt_candidate_is_symlink() {
 }
 
 #[test]
-fn improve_fails_when_archived_attempt_candidate_is_directory() {
+fn harness_fails_when_archived_attempt_candidate_is_directory() {
     let temp = setup_repo("maestro-improve-proof-archived-directory");
     let repo = temp.path();
     create_task(repo, "Directory archived attempt");
@@ -1115,7 +1041,7 @@ fn improve_fails_when_archived_attempt_candidate_is_directory() {
     fs::create_dir_all(attempts_dir.join("zz-directory.json"))
         .expect("invariant: attempt directory should be creatable");
 
-    let output = maestro(repo, &["improve", "list"]);
+    let output = maestro(repo, &["harness", "list"]);
     assert!(
         !output.status.success(),
         "improve list should reject archived attempt directories\nstdout:\n{}\nstderr:\n{}",
@@ -1129,7 +1055,7 @@ fn improve_fails_when_archived_attempt_candidate_is_directory() {
 }
 
 #[test]
-fn improve_distinguishes_multiple_missing_verification_commands_safely() {
+fn harness_distinguishes_multiple_missing_verification_commands_safely() {
     let temp = setup_repo("maestro-improve-proof-multiple-safe-labels");
     let repo = temp.path();
     create_task(repo, "Multiple command labels");
@@ -1158,7 +1084,7 @@ fn improve_distinguishes_multiple_missing_verification_commands_safely() {
     )
     .expect("invariant: report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
@@ -1171,7 +1097,7 @@ fn improve_distinguishes_multiple_missing_verification_commands_safely() {
 }
 
 #[test]
-fn improve_skips_malformed_proof_reports_and_continues_scanning() {
+fn harness_skips_malformed_proof_reports_and_continues_scanning() {
     let temp = setup_repo("maestro-improve-proof-malformed");
     let repo = temp.path();
     create_task(repo, "Malformed proof report");
@@ -1213,14 +1139,14 @@ fn improve_skips_malformed_proof_reports_and_continues_scanning() {
     )
     .expect("invariant: healthy report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Healthy proof report"));
     assert!(!out.contains("Malformed proof report"));
 }
 
 #[test]
-fn improve_skips_malformed_latest_attempt_reports_and_continues_scanning() {
+fn harness_skips_malformed_latest_attempt_reports_and_continues_scanning() {
     let temp = setup_repo("maestro-improve-proof-malformed-attempt");
     let repo = temp.path();
     create_task(repo, "Malformed attempt report");
@@ -1265,14 +1191,14 @@ fn improve_skips_malformed_latest_attempt_reports_and_continues_scanning() {
     )
     .expect("invariant: healthy attempt should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Healthy attempt report"));
     assert!(!out.contains("Malformed attempt report"));
 }
 
 #[test]
-fn improve_skips_schema_mismatched_proof_reports_and_continues_scanning() {
+fn harness_skips_schema_mismatched_proof_reports_and_continues_scanning() {
     let temp = setup_repo("maestro-improve-proof-schema-mismatch");
     let repo = temp.path();
     create_task(repo, "Schema mismatched proof report");
@@ -1290,14 +1216,14 @@ fn improve_skips_schema_mismatched_proof_reports_and_continues_scanning() {
     )
     .expect("invariant: healthy report should be writable");
 
-    let out = run_success(repo, &["improve", "list"]);
+    let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Healthy proof report"));
     assert!(!out.contains("Schema mismatched proof report"));
 }
 
 #[test]
-fn improve_fails_when_canonical_proof_report_path_is_directory() {
+fn harness_fails_when_canonical_proof_report_path_is_directory() {
     let temp = setup_repo("maestro-improve-proof-report-directory");
     let repo = temp.path();
     create_task(repo, "Directory proof report");
@@ -1306,7 +1232,7 @@ fn improve_fails_when_canonical_proof_report_path_is_directory() {
     fs::create_dir(task_dir(repo, "task-001").join("verification.json"))
         .expect("invariant: proof report directory should be creatable");
 
-    let output = maestro(repo, &["improve", "list"]);
+    let output = maestro(repo, &["harness", "list"]);
     assert!(
         !output.status.success(),
         "improve list should reject proof report directories\nstdout:\n{}\nstderr:\n{}",
@@ -1320,7 +1246,7 @@ fn improve_fails_when_canonical_proof_report_path_is_directory() {
 }
 
 #[test]
-fn improve_fails_when_verification_attempts_path_is_file() {
+fn harness_fails_when_verification_attempts_path_is_file() {
     let temp = setup_repo("maestro-improve-proof-attempts-file");
     let repo = temp.path();
     create_task(repo, "Attempts file proof report");
@@ -1332,7 +1258,7 @@ fn improve_fails_when_verification_attempts_path_is_file() {
     )
     .expect("invariant: attempts file should be writable");
 
-    let output = maestro(repo, &["improve", "list"]);
+    let output = maestro(repo, &["harness", "list"]);
     assert!(
         !output.status.success(),
         "improve list should reject attempts files\nstdout:\n{}\nstderr:\n{}",
@@ -1346,7 +1272,7 @@ fn improve_fails_when_verification_attempts_path_is_file() {
 }
 
 #[test]
-fn mcp_serve_lists_tools_and_calls_metrics_summary_over_stdio() {
+fn mcp_serve_lists_tools_and_calls_status_over_stdio() {
     let temp = setup_repo("maestro-mcp-serve");
     let repo = temp.path();
     create_task(repo, "MCP visible task");
@@ -1367,7 +1293,7 @@ fn mcp_serve_lists_tools_and_calls_metrics_summary_over_stdio() {
         .write_all(&mcp_frames(&[
             r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
             r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
-            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_metrics_summary","arguments":{}}}"#,
+            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"maestro_status","arguments":{}}}"#,
         ]))
         .expect("invariant: MCP requests should be writable");
     drop(child.stdin.take());
@@ -1381,7 +1307,7 @@ fn mcp_serve_lists_tools_and_calls_metrics_summary_over_stdio() {
     let tools = lines[1]["result"]["tools"]
         .as_array()
         .expect("invariant: tools/list should return an array");
-    assert_eq!(tools.len(), 17);
+    assert_eq!(tools.len(), 16);
     assert!(
         tools
             .iter()
@@ -1397,11 +1323,7 @@ fn mcp_serve_lists_tools_and_calls_metrics_summary_over_stdio() {
             .iter()
             .any(|tool| tool["name"] == "maestro_task_claim")
     );
-    assert!(
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "maestro_metrics_summary")
-    );
+    assert!(tools.iter().any(|tool| tool["name"] == "maestro_status"));
     assert!(tools.iter().any(|tool| tool["name"] == "maestro_sync"));
     assert!(
         lines[2]["result"]["content"][0]["text"]
@@ -1418,7 +1340,7 @@ fn mcp_tool_aliases_list_available_tools() {
 
     for args in [["mcp", "tools"], ["mcp", "list"]] {
         let output = run_success(repo, &args);
-        assert!(output.contains("maestro_metrics_summary"));
+        assert!(output.contains("maestro_status"));
         assert!(output.contains("maestro_task_list"));
     }
 }
@@ -1453,7 +1375,7 @@ fn mcp_serve_handles_json_rpc_batches_over_stdio_frames() {
             "[",
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}},",
             "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}},",
-            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"maestro_metrics_summary\",\"arguments\":{}}}",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"maestro_status\",\"arguments\":{}}}",
             "]"
         )]))
         .expect("invariant: MCP requests should be writable");
@@ -1542,7 +1464,7 @@ fn mcp_serve_accepts_newline_delimited_json_rpc() {
             .as_array()
             .expect("invariant: tools should be an array")
             .iter()
-            .any(|tool| tool["name"] == "maestro_metrics_summary")
+            .any(|tool| tool["name"] == "maestro_status")
     );
 }
 
@@ -1577,7 +1499,7 @@ fn mcp_serve_accepts_list_method_alias() {
             .as_array()
             .expect("invariant: tools should be an array")
             .iter()
-            .any(|tool| tool["name"] == "maestro_metrics_summary")
+            .any(|tool| tool["name"] == "maestro_status")
     );
 }
 
@@ -1636,7 +1558,7 @@ fn mcp_serve_reports_invalid_requests_without_running_tools() {
 }
 
 #[test]
-fn improve_show_preserves_legacy_minimal_backlog_items() {
+fn harness_show_preserves_legacy_minimal_backlog_items() {
     let temp = setup_repo("maestro-improve-legacy");
     let repo = temp.path();
     fs::write(
@@ -1650,19 +1572,19 @@ fn improve_show_preserves_legacy_minimal_backlog_items() {
     )
     .expect("invariant: legacy backlog should be writable");
 
-    let list = run_success(repo, &["improve", "list"]);
+    let list = run_success(repo, &["harness", "list"]);
     assert!(list.contains("hb-legacy"));
     assert!(list.contains("proposed"));
     assert!(list.contains("unknown"));
 
-    let show = run_success(repo, &["improve", "show", "hb-legacy"]);
+    let show = run_success(repo, &["harness", "show", "hb-legacy"]);
     assert!(show.contains("status: proposed"));
     assert!(show.contains("type: unknown"));
     assert!(show.contains("priority: medium"));
 }
 
 #[test]
-fn improve_refuses_symlinked_harness_backlog_paths() {
+fn harness_refuses_symlinked_harness_backlog_paths() {
     let temp = setup_repo("maestro-improve-symlink");
     let repo = temp.path();
     let external = TestTempDir::new("maestro-improve-external");
@@ -1671,7 +1593,7 @@ fn improve_refuses_symlinked_harness_backlog_paths() {
     unix_fs::symlink(external.path(), repo.join(".maestro/harness"))
         .expect("invariant: symlink should be creatable");
 
-    let output = maestro(repo, &["improve", "list"]);
+    let output = maestro(repo, &["harness", "list"]);
     assert!(
         !output.status.success(),
         "improve list should reject symlinked harness path\nstdout:\n{}\nstderr:\n{}",

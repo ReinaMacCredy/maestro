@@ -6,7 +6,6 @@ use serde_json::{Value, json};
 
 use crate::domain::task;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::operations::metrics;
 
 /// MCP tool metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -95,11 +94,6 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
             json!({"type":"object","properties":{}}),
         ),
         tool(
-            "maestro_metrics_summary",
-            "Returns the computed metrics summary.",
-            json!({"type":"object","properties":{}}),
-        ),
-        tool(
             "maestro_sync",
             "Resyncs bundled resources (skills, hook script, harness) to this binary's shipped versions. Offline and edit-preserving; set dry_run=true to preview without writing.",
             json!({"type":"object","properties":{"dry_run":{"type":"boolean"}}}),
@@ -125,7 +119,6 @@ pub fn call_tool(paths: &MaestroPaths, name: &str, arguments: &Value) -> Result<
         "maestro_decision_new" => cli(required_args(arguments, &["decision", "new"], &["title"])?),
         "maestro_verify" => cli(required_args(arguments, &["task", "verify"], &["id"])?),
         "maestro_query_matrix" => cli(vec!["query".to_string(), "matrix".to_string()]),
-        "maestro_metrics_summary" => Ok(metrics::render_summary(&metrics::summarize(paths)?)),
         "maestro_sync" => sync_tool(arguments),
         _ => bail!("unknown MCP tool: {name}"),
     }
@@ -141,15 +134,26 @@ fn tool(name: &'static str, description: &'static str, input_schema: Value) -> T
 
 fn status(paths: &MaestroPaths) -> Result<String> {
     let tasks = task::load_task_entries(&paths.tasks_dir())?;
-    let summary = metrics::summarize_task_entries(paths, &tasks)?;
+    let total = tasks.len();
+    let mut verified = 0_usize;
+    let mut needs_verification = 0_usize;
+    let mut in_progress = 0_usize;
     let mut claimed = BTreeMap::<String, Vec<String>>::new();
     for entry in tasks {
+        match entry.task.state.as_str() {
+            "verified" => verified += 1,
+            "needs_verification" => needs_verification += 1,
+            "in_progress" => in_progress += 1,
+            _ => {}
+        }
         if let Some(agent) = entry.task.claimed_by {
             claimed.entry(agent).or_default().push(entry.task.id);
         }
     }
 
-    let mut out = metrics::render_summary(&summary);
+    let mut out = format!(
+        "Tasks: {total} ({verified} verified, {needs_verification} needs_verification, {in_progress} in_progress)\n"
+    );
     match std::env::var("MAESTRO_CURRENT_TASK") {
         Ok(task_id) => out.push_str(&format!("Current task: {task_id}\n")),
         Err(_) => out.push_str("Current task: <none>\n"),

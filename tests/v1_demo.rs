@@ -51,7 +51,7 @@ fn parse_mcp_frame(bytes: &[u8]) -> Value {
 }
 
 #[test]
-fn v1_demo_runs_core_flow_watch_metrics_query_and_mcp() {
+fn v1_demo_runs_core_flow_watch_query_and_mcp() {
     let temp = TestTempDir::new("maestro-v1-demo");
     let repo = temp.path();
     fs::create_dir(repo.join(".git")).expect("invariant: git marker should be creatable");
@@ -94,10 +94,6 @@ fn v1_demo_runs_core_flow_watch_metrics_query_and_mcp() {
     assert!(watch.contains("Demo task"));
     assert!(watch.contains("verified"));
 
-    let metrics = run(repo, &["metrics", "summary"]);
-    assert!(metrics.contains("Tasks: 1"));
-    assert!(metrics.contains("verified"));
-
     let proof = run(repo, &["query", "proof", "task-001"]);
     assert!(proof.contains("proof task-001: accepted"));
 
@@ -128,7 +124,7 @@ fn v1_demo_runs_core_flow_watch_metrics_query_and_mcp() {
             .as_array()
             .expect("invariant: tools should be an array")
             .iter()
-            .any(|tool| tool["name"] == "maestro_metrics_summary")
+            .any(|tool| tool["name"] == "maestro_status")
     );
 
     let help = run(repo, &["--help"]);

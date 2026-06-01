@@ -25,7 +25,7 @@ const INTERFACE_SCAN_ROOTS: &[&str] = &["src/interfaces"];
 const PRODUCTION_SCAN_ROOTS: &[&str] = &["src"];
 const CLI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[
     ("src/interfaces/cli/doctor.rs", &["harness"]),
-    ("src/interfaces/cli/improve.rs", &["harness"]),
+    ("src/interfaces/cli/harness.rs", &["harness"]),
     ("src/interfaces/cli/init.rs", &[]),
     ("src/interfaces/cli/query.rs", &["decisions", "harness"]),
     ("src/interfaces/cli/task.rs", &[]),
@@ -51,7 +51,7 @@ const DOMAIN_FACADES: &[&str] = &[
     "task",
 ];
 
-const OPERATION_FACADES: &[&str] = &["improver", "init", "metrics", "sync", "update"];
+const OPERATION_FACADES: &[&str] = &["harness", "init", "sync", "update"];
 
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
@@ -132,7 +132,6 @@ fn selected_compatibility_smoke_paths_resolve() {
         |path: &Path| maestro::task::lookup::valid_task_yaml_path(path);
     let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
     let _ = std::any::type_name::<maestro::domain::proof::ProofStatusKind>();
-    let _ = std::any::type_name::<maestro::operations::metrics::MetricsSummary>();
 
     let _legacy_task_watch_render: fn(
         &maestro::foundation::core::paths::MaestroPaths,
@@ -585,54 +584,57 @@ fn update_operation_owns_implementation() {
 }
 
 #[test]
-fn improver_operation_owns_implementation() {
-    for leaf in ["detect.rs", "propose.rs"] {
+fn harness_operation_owns_implementation() {
+    for leaf in ["detect.rs", "friction.rs", "propose.rs"] {
         assert!(
-            Path::new(&format!("src/operations/improver/{leaf}")).is_file(),
-            "Improver implementation should live under src/operations/improver"
+            Path::new(&format!("src/operations/harness/{leaf}")).is_file(),
+            "Harness implementation should live under src/operations/harness"
         );
         assert!(
-            !Path::new(&format!("src/improver/{leaf}")).exists(),
-            "legacy src/improver should not own implementation file {leaf}"
+            !Path::new(&format!("src/harness/{leaf}")).exists(),
+            "legacy src/harness should not own implementation file {leaf}"
         );
     }
 
-    let operations_facade = read_source_file(Path::new("src/operations/improver/mod.rs"));
+    let operations_facade = read_source_file(Path::new("src/operations/harness/mod.rs"));
     for item in [
         "mod detect;",
+        "mod friction;",
         "mod propose;",
         "pub use detect::detect;",
+        "pub use friction::looks_like_correction;",
         "pub use propose::{apply, refresh};",
     ] {
         assert!(
             operations_facade.contains(item),
-            "operations/improver facade should expose {item}"
+            "operations/harness facade should expose {item}"
         );
     }
     assert_eq!(
         public_modules(&operations_facade),
         BTreeSet::new(),
-        "operations/improver should keep leaf modules private"
+        "operations/harness should keep leaf modules private"
     );
     assert_eq!(
         public_reexport_item_names(&operations_facade),
         BTreeSet::from([
             "apply".to_string(),
             "detect".to_string(),
+            "looks_like_correction".to_string(),
             "refresh".to_string(),
         ]),
-        "operations/improver should expose only deliberate root facade symbols"
+        "operations/harness should expose only deliberate root facade symbols"
     );
 
-    let improve_adapter = read_source_file(Path::new("src/interfaces/cli/improve.rs"));
+    let harness_adapter = read_source_file(Path::new("src/interfaces/cli/harness.rs"));
     assert!(
-        improve_adapter.contains("use crate::operations::improver;"),
-        "CLI Improve adapter should call operations::improver"
+        harness_adapter.contains("use crate::operations::harness;"),
+        "CLI Harness adapter should call operations::harness"
     );
-    let improver_detect = read_source_file(Path::new("src/operations/improver/detect.rs"));
+    let harness_detect = read_source_file(Path::new("src/operations/harness/detect.rs"));
     assert!(
-        improver_detect.contains("use crate::domain::proof;"),
-        "Improver detection should read Proof-owned data through the Proof facade"
+        harness_detect.contains("use crate::domain::proof;"),
+        "Harness detection should read Proof-owned data through the Proof facade"
     );
     for forbidden in [
         "join(\"verification.json\")",
@@ -642,80 +644,14 @@ fn improver_operation_owns_implementation() {
         "crate::verification",
     ] {
         assert!(
-            !improver_detect.contains(forbidden),
-            "Improver detection should not bypass the Proof facade with {forbidden}"
+            !harness_detect.contains(forbidden),
+            "Harness detection should not bypass the Proof facade with {forbidden}"
         );
     }
-    assert_production_sources_use_operation_instead_of_legacy_shim("improver");
-    assert_production_sources_use_operation_root_facade("improver", &["detect", "propose"]);
-}
-
-#[test]
-fn metrics_operation_owns_implementation() {
-    for leaf in ["friction.rs", "summary.rs"] {
-        assert!(
-            Path::new(&format!("src/operations/metrics/{leaf}")).is_file(),
-            "Metrics implementation should live under src/operations/metrics"
-        );
-        assert!(
-            !Path::new(&format!("src/metrics/{leaf}")).exists(),
-            "legacy src/metrics should not own implementation file {leaf}"
-        );
-    }
-
-    let operations_facade = read_source_file(Path::new("src/operations/metrics/mod.rs"));
-    for item in [
-        "mod friction;",
-        "mod summary;",
-        "pub use friction::looks_like_correction;",
-        "pub use summary::{",
-        "render_summary",
-        "summarize",
-        "MetricsSummary",
-    ] {
-        assert!(
-            operations_facade.contains(item),
-            "operations/metrics facade should expose {item}"
-        );
-    }
-    assert_eq!(
-        public_modules(&operations_facade),
-        BTreeSet::new(),
-        "operations/metrics should keep leaf modules private"
+    assert_production_sources_use_operation_root_facade(
+        "harness",
+        &["detect", "friction", "propose"],
     );
-    assert_eq!(
-        public_reexport_item_names(&operations_facade),
-        BTreeSet::from([
-            "AgentSummary".to_string(),
-            "MetricsSummary".to_string(),
-            "RunEvidenceLoad".to_string(),
-            "RunEvidenceRecord".to_string(),
-            "load_run_evidence".to_string(),
-            "looks_like_correction".to_string(),
-            "render_summary".to_string(),
-            "summarize".to_string(),
-            "task_verification_durations".to_string(),
-        ]),
-        "operations/metrics should expose only deliberate root facade symbols"
-    );
-    assert!(
-        operations_facade.contains("pub(crate) use summary::summarize_task_entries;"),
-        "operations/metrics should keep summarize_task_entries crate-visible for MCP status"
-    );
-
-    for adapter in [
-        "src/interfaces/cli/metrics.rs",
-        "src/interfaces/cli/query.rs",
-        "src/interfaces/mcp/tools.rs",
-    ] {
-        let source = read_source_file(Path::new(adapter));
-        assert!(
-            source.contains("use crate::operations::metrics;"),
-            "{adapter} should call operations::metrics"
-        );
-    }
-    assert_production_sources_use_operation_instead_of_legacy_shim("metrics");
-    assert_production_sources_use_operation_root_facade("metrics", &["friction", "summary"]);
 }
 
 #[test]
@@ -1291,7 +1227,7 @@ fn transitional_public_surfaces_match_phase_policy() {
     );
     assert_public_modules(
         Path::new("src/operations/mod.rs"),
-        &["improver", "init", "metrics", "sync", "update"],
+        &["harness", "init", "sync", "update"],
         &[],
     );
 }
@@ -2614,18 +2550,18 @@ fn protected_import_parser_catches_grouped_imports_and_root_aliases() {
         Some("relative deep path under src/interfaces".to_string())
     );
     assert_eq!(
-        protected_interface_import("use crate::operations::metrics::summary::MetricsSummary;"),
-        Some("operations::metrics::summary".to_string())
+        protected_interface_import("use crate::operations::harness::propose::apply;"),
+        Some("operations::harness::propose".to_string())
     );
     assert_eq!(
-        protected_interface_import("use crate::operations::metrics::{self as metrics_ops};"),
-        Some("operations::metrics root alias".to_string())
+        protected_interface_import("use crate::operations::harness::{self as harness_ops};"),
+        Some("operations::harness root alias".to_string())
     );
     assert_eq!(
         protected_interface_path_reference(
-            "fn render() { crate::operations::metrics::summary::summarize(); }"
+            "fn render() { crate::operations::harness::propose::apply(); }"
         ),
-        Some("operations::metrics::summary".to_string())
+        Some("operations::harness::propose".to_string())
     );
     assert_eq!(
         protected_interface_path_reference("fn run() { feature::run(args); }"),

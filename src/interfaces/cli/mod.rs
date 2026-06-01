@@ -5,12 +5,11 @@ pub mod decision;
 pub mod doctor;
 pub mod event;
 pub mod feature;
+pub mod harness;
 pub mod hook;
-pub mod improve;
 pub mod init;
 pub mod install;
 pub mod mcp;
-pub mod metrics;
 pub mod query;
 pub mod shell_init;
 pub mod sync;
@@ -66,12 +65,10 @@ pub enum RootCommand {
     Feature(FeatureArgs),
     #[command(about = "Create and list decision records in .maestro/decisions/")]
     Decision(DecisionArgs),
-    #[command(about = "List, show, and apply improvement suggestions")]
-    Improve(ImproveArgs),
+    #[command(about = "List, show, and apply harness improvement suggestions")]
+    Harness(HarnessArgs),
     #[command(about = "Query computed read models (matrix, friction, proof, backlog)")]
     Query(QueryArgs),
-    #[command(about = "Show computed metrics summaries")]
-    Metrics(MetricsArgs),
     #[command(about = "Run or inspect the MCP server (serve, tools, list)")]
     Mcp(McpArgs),
     #[command(about = "Hook entry points invoked by the agent harness")]
@@ -429,13 +426,13 @@ pub enum DecisionCommand {
 }
 
 #[derive(Debug, Args)]
-pub struct ImproveArgs {
+pub struct HarnessArgs {
     #[command(subcommand)]
-    pub command: ImproveCommand,
+    pub command: HarnessCommand,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum ImproveCommand {
+pub enum HarnessCommand {
     List,
     Show { id: String },
     Apply { id: String },
@@ -458,17 +455,6 @@ pub enum QueryCommand {
         #[arg(long = "task-id")]
         task_id_flag: Option<String>,
     },
-}
-
-#[derive(Debug, Args)]
-pub struct MetricsArgs {
-    #[command(subcommand)]
-    pub command: MetricsCommand,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum MetricsCommand {
-    Summary,
 }
 
 #[derive(Debug, Args)]
@@ -521,9 +507,8 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Decision(args) => decision::run(args),
-        RootCommand::Improve(args) => improve::run(args),
+        RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
-        RootCommand::Metrics(args) => metrics::run(args),
         RootCommand::Mcp(args) => mcp::run(args),
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::Watch(args) => watch::run(args),

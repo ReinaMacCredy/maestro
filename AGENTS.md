@@ -41,7 +41,7 @@ maestro/
 | `Cli` | struct | `src/interfaces/cli/mod.rs` | Root clap parser for the binary. |
 | `RootCommand` | enum | `src/interfaces/cli/mod.rs` | Public CLI command surface. |
 | `domain` | module | `src/domain/mod.rs` | Durable concepts: Harness, Task, Feature, Decision, Run, Proof, Install. |
-| `operations` | module | `src/operations/mod.rs` | Cross-domain workflows: init, task verify, update, sync, metrics, improve. |
+| `operations` | module | `src/operations/mod.rs` | Cross-domain workflows: init, task verify, update, sync, harness. |
 | `foundation::core` | module | `src/foundation/core/` | Paths, schema constants, safe writes, backups, managed blocks, hashes. |
 
 ## CONVENTIONS

@@ -3,9 +3,8 @@
 //! Concrete operation modules own orchestration that crosses domain aggregates,
 //! while legacy operation-like roots stay re-exported during the migration.
 
-pub mod improver;
+pub mod harness;
 pub mod init;
-pub mod metrics;
 pub mod sync;
 pub mod update;
 

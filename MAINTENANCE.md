@@ -124,12 +124,12 @@ compatibility checks or transition work until the legacy path is removed.
 MCP tools now read through the canonical domain and operation facades, with no
 remaining legacy source-read alias imports.
 
-Init orchestration lives under `src/operations/init`, metrics projections live
-under `src/operations/metrics`, and rule-based improvement proposal refresh
-lives under `src/operations/improver`. New production callers should use those
-operation root facades. The `operations/improver` and `operations/metrics`
-leaf files are private implementation details; the legacy `crate::improver` and
-`crate::metrics` roots have been removed.
+Init orchestration lives under `src/operations/init`, and rule-based harness
+improvement proposal refresh lives under `src/operations/harness`. New
+production callers should use those operation root facades. The
+`operations/harness` leaf files are private implementation details; the legacy
+`crate::improver` and `crate::metrics` roots, and the former metrics projection
+subsystem, have been removed.
 
 Hook command adapter code lives under `src/interfaces/hooks`, and `crate::hooks`
 remains a compatibility re-export. New interface-layer references should prefer
