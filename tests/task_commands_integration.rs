@@ -839,6 +839,44 @@ fn list_hides_terminal_tasks_until_all_is_passed() {
 }
 
 #[test]
+fn list_all_marks_archived_rows_distinct_from_live_terminal() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    // task-001: abandoned but left live (a live-terminal row).
+    // task-002: abandoned then archived (an archived row, same terminal state).
+    for title in ["Live terminal", "To archive"] {
+        assert_success(
+            &maestro(repo, &["task", "create", title]),
+            &["task", "create", title],
+        );
+    }
+    for id in ["task-001", "task-002"] {
+        assert_success(
+            &maestro(repo, &["task", "abandon", id, "--reason", "done"]),
+            &["task", "abandon", id, "--reason", "done"],
+        );
+    }
+    assert_success(
+        &maestro(repo, &["task", "archive", "task-002"]),
+        &["task", "archive", "task-002"],
+    );
+
+    // Under --all both terminal rows appear, but only the archived one is marked
+    // so an archived task is distinguishable from a live-terminal one (#3).
+    let all_out = stdout(&maestro(repo, &["task", "list", "--all"]));
+    let row = |id: &str| {
+        all_out
+            .lines()
+            .find(|l| l.starts_with(id))
+            .unwrap_or_else(|| panic!("{id} row present in --all output:\n{all_out}"))
+            .to_string()
+    };
+    assert!(!row("task-001").contains("(archived)"), "{}", row("task-001"));
+    assert!(row("task-002").contains("(archived)"), "{}", row("task-002"));
+}
+
+#[test]
 fn set_on_a_settled_task_refuses_the_link_change_before_writing_checks() {
     let temp = setup_repo();
     let repo = temp.path();

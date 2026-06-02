@@ -49,8 +49,11 @@ pub mod display {
         crate::domain::task::render_task(task, checks)
     }
 
-    pub fn render_task_list(tasks: &[TaskRecord]) -> String {
-        crate::domain::task::render_task_list(tasks)
+    pub fn render_task_list(
+        tasks: &[TaskRecord],
+        archived_ids: &std::collections::BTreeSet<String>,
+    ) -> String {
+        crate::domain::task::render_task_list(tasks, archived_ids)
     }
 }
 

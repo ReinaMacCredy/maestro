@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::domain::task::blockers::has_unresolved_blockers;
 use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
 use crate::foundation::core::time::render_timestamp;
@@ -112,17 +114,18 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     out
 }
 
-/// Render a compact list for `maestro task list`.
-pub fn render_task_list(tasks: &[TaskRecord]) -> String {
+/// Render a compact list for `maestro task list`. Ids in `archived_ids` are
+/// marked `(archived)` so `--all` distinguishes an archived row from a
+/// live-terminal one sharing the same state (e.g. both `rejected`).
+pub fn render_task_list(tasks: &[TaskRecord], archived_ids: &BTreeSet<String>) -> String {
     let mut out = String::new();
     out.push_str("ID\tSTATE\tTITLE\n");
     for task in tasks {
-        out.push_str(&format!(
-            "{}\t{}\t{}\n",
-            task.id,
-            state_label(task),
-            task.title
-        ));
+        let mut state = state_label(task);
+        if archived_ids.contains(&task.id) {
+            state.push_str(" (archived)");
+        }
+        out.push_str(&format!("{}\t{}\t{}\n", task.id, state, task.title));
     }
     out
 }
@@ -133,5 +136,28 @@ fn state_label(task: &TaskRecord) -> String {
         format!("{base} / blocked")
     } else {
         base.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_task_list_marks_only_archived_ids() {
+        let live = TaskRecord::draft("task-001", "Live", "2026-06-02T00:00:00Z");
+        let archived = TaskRecord::draft("task-002", "Archived", "2026-06-02T00:00:00Z");
+        let archived_ids = BTreeSet::from(["task-002".to_string()]);
+
+        let out = render_task_list(&[live, archived], &archived_ids);
+        let row = |id: &str| {
+            out.lines()
+                .find(|l| l.starts_with(id))
+                .unwrap_or_else(|| panic!("{id} row present"))
+                .to_string()
+        };
+
+        assert!(!row("task-001").contains("(archived)"));
+        assert!(row("task-002").contains("(archived)"));
     }
 }

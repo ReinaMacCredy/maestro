@@ -114,8 +114,10 @@ fn selected_compatibility_smoke_paths_resolve() {
         |tasks_dir: &Path, id: &str| maestro::task::lookup::load_task_with_snapshot(tasks_dir, id);
     let _legacy_render_task: fn(&maestro::task::template::TaskRecord, &[String]) -> String =
         maestro::task::display::render_task;
-    let _legacy_render_task_list: fn(&[maestro::task::template::TaskRecord]) -> String =
-        maestro::task::display::render_task_list;
+    let _legacy_render_task_list: fn(
+        &[maestro::task::template::TaskRecord],
+        &std::collections::BTreeSet<String>,
+    ) -> String = maestro::task::display::render_task_list;
     let _legacy_load_task_records =
         |tasks_dir: &Path| maestro::task::doctor::load_task_records(tasks_dir);
     let _legacy_load_task_entries =

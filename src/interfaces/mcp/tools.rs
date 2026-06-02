@@ -172,8 +172,11 @@ fn status(paths: &MaestroPaths) -> Result<String> {
 fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     let all = bool_arg(arguments, "all");
     let mut tasks = task::load_task_records(&paths.tasks_dir())?;
+    let mut archived_ids = std::collections::BTreeSet::new();
     if all {
-        tasks.extend(task::load_task_records(&paths.archive_tasks_dir())?);
+        let archived = task::load_task_records(&paths.archive_tasks_dir())?;
+        archived_ids.extend(archived.iter().map(|t| t.id.clone()));
+        tasks.extend(archived);
     }
     let filter = |include_terminal| task::TaskFilter {
         ready: bool_arg(arguments, "ready"),
@@ -185,7 +188,7 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         include_terminal,
     };
     let shown = task::filter_tasks(tasks.clone(), &filter(all));
-    let mut out = task::render_task_list(&shown);
+    let mut out = task::render_task_list(&shown, &archived_ids);
     if !all {
         let hidden = task::filter_tasks(tasks, &filter(true)).len() - shown.len();
         if hidden > 0 {

@@ -262,7 +262,7 @@ pub enum TaskCommand {
         ready: bool,
         #[arg(
             long,
-            help = "Include terminal/done tasks (verified, rejected, abandoned, superseded)"
+            help = "Include terminal/done tasks (verified, rejected, abandoned, superseded) and archived ones"
         )]
         all: bool,
         #[arg(long)]

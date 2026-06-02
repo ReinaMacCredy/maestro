@@ -420,8 +420,11 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
     // Bare list scans the live tree only (P2 hot path); `--all` also reads the
     // archive (§5.4 / §5.7b), so the hidden-count hint stays live-tree only.
     let mut all_tasks = load_all_tasks(&paths.tasks_dir())?;
+    let mut archived_ids = std::collections::BTreeSet::new();
     if filters.all {
-        all_tasks.extend(load_all_tasks(&paths.archive_tasks_dir())?);
+        let archived = load_all_tasks(&paths.archive_tasks_dir())?;
+        archived_ids.extend(archived.iter().map(|t| t.id.clone()));
+        all_tasks.extend(archived);
     }
     let shown = task::filter_tasks(all_tasks.clone(), &task_filter(&filters, filters.all));
     if shown.is_empty() {
@@ -429,7 +432,7 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         // instead of leaving a bare header (T8).
         println!("no tasks found");
     } else {
-        print!("{}", task::render_task_list(&shown));
+        print!("{}", task::render_task_list(&shown, &archived_ids));
     }
     if !filters.all {
         let with_terminal = task::filter_tasks(all_tasks, &task_filter(&filters, true));
