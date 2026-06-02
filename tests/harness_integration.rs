@@ -1855,3 +1855,84 @@ fn harness_apply_on_a_measured_behavioral_item_does_not_point_at_the_dead_end_re
     // The re-derive remedy is a dead end for behavioral items; it must be gone.
     assert!(!err.contains("harness list"), "{err}");
 }
+
+#[test]
+fn harness_apply_on_a_measured_state_detector_explains_auto_reopen_not_a_dead_end() {
+    let temp = setup_repo("maestro-harness-apply-measured-state");
+    let repo = temp.path();
+    // A measured state-detector note whose friction is gone: a fresh repo
+    // re-derives no missing_verification, so detect_and_merge leaves it measured.
+    // (A live-friction state detector would have been reopened to proposed first,
+    // so this arm is only reachable when the friction is already gone.)
+    fs::write(
+        repo.join(".maestro/harness/backlog.yaml"),
+        concat!(
+            "schema_version: maestro.backlog.v1\n",
+            "items:\n",
+            "  - id: hb-001\n",
+            "    fingerprint: missing_verification:cargo clippy\n",
+            "    source: reports\n",
+            "    type: missing_verification\n",
+            "    title: Missing verification for cargo clippy\n",
+            "    priority: medium\n",
+            "    status: measured\n",
+        ),
+    )
+    .expect("invariant: backlog should be writable");
+
+    let apply = maestro(repo, &["harness", "apply", "hb-001"]);
+    assert!(!apply.status.success());
+    let err = stderr(&apply);
+    assert!(err.contains("already measured"), "{err}");
+    assert!(err.contains("reopens automatically if it recurs"), "{err}");
+    assert!(err.contains("nothing to apply now"), "{err}");
+    // A state detector reopens on recurrence, so it must NOT claim it never will;
+    // and re-deriving now is a dead end, so the harness-list remedy must be gone.
+    assert!(!err.contains("re-detection will not reopen it"), "{err}");
+    assert!(!err.contains("harness list"), "{err}");
+}
+
+#[test]
+fn harness_list_withholds_ready_to_measure_until_linked_task_verified() {
+    let temp = setup_missing_verification_note("maestro-harness-ready-gate");
+    let repo = temp.path();
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("spawned task-002"));
+
+    // Silence the detector so the state-note is otherwise ready to measure, but
+    // leave the linked task an unverified draft.
+    write_harness_verify(repo, &["cargo clippy"]);
+
+    // The no-force measure gate refuses an unverified task, so the hint must not
+    // promise it (R12): a silent detector alone is not "ready to measure".
+    let not_ready = run_success(repo, &["harness", "list"]);
+    assert!(not_ready.contains("hb-001"), "{not_ready}");
+    assert!(!not_ready.contains("ready to measure"), "{not_ready}");
+
+    // Once the linked task is verified, the gate would pass and the hint appears.
+    mark_verified(repo, "task-002", "general", "0", "100");
+    let ready = run_success(repo, &["harness", "list"]);
+    assert!(ready.contains("ready to measure"), "{ready}");
+}
+
+#[test]
+fn harness_measure_names_force_when_the_linked_task_vanished() {
+    let temp = setup_missing_verification_note("maestro-harness-measure-vanished");
+    let repo = temp.path();
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("spawned task-002"));
+
+    // The linked task is deleted out from under the note (archived or removed).
+    fs::remove_dir_all(task_dir(repo, "task-002"))
+        .expect("invariant: spawned task dir should be removable");
+
+    // The no-force measure can no longer load the task; instead of leaking a bare
+    // "not found", it names the --force escape hatch (R23).
+    let gated = maestro(repo, &["harness", "measure", "hb-001"]);
+    assert!(!gated.status.success());
+    let err = stderr(&gated);
+    assert!(err.contains("could not be loaded"), "{err}");
+    assert!(err.contains("use --force to measure anyway"), "{err}");
+}

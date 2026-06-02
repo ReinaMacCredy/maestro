@@ -31,7 +31,7 @@ pub fn refresh(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)
     let ready = backlog
         .items
         .iter()
-        .filter(|item| ready_to_measure(item, &fresh))
+        .filter(|item| ready_to_measure(item, &fresh) && linked_task_verified(paths, item))
         .map(|item| item.id.clone())
         .collect();
     Ok((backlog, ready))
@@ -43,6 +43,17 @@ fn ready_to_measure(item: &BacklogItem, fresh: &BTreeSet<String>) -> bool {
     item.status == "accepted"
         && is_state_detector(&item.item_type)
         && !fresh.contains(&item.fingerprint)
+}
+
+/// True when the note's linked task exists and is verified -- the precondition the
+/// no-force `measure` enforces below. The hint must not promise a measure the gate
+/// would refuse, so a missing link or an unverified/absent task withholds it.
+fn linked_task_verified(paths: &MaestroPaths, item: &BacklogItem) -> bool {
+    let Some(task_id) = &item.spawned_task else {
+        return false;
+    };
+    task::load_task_record(&paths.tasks_dir(), task_id)
+        .is_ok_and(|record| record.state == TaskState::Verified)
 }
 
 /// Run detection and merge fresh proposals into the loaded backlog without
@@ -70,12 +81,14 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
     let item = backlog.find_mut(id)?;
     match item.status.as_str() {
         "accepted" => bail!("{id} is already accepted; its task is already linked"),
-        // Only state detectors reopen on re-detection (reopen_if_regressed), so
-        // the re-derive remedy is real for them and a dead end for behavioral
-        // items, whose measured state is terminal.
-        "measured" if is_state_detector(&item.item_type) => {
-            bail!("{id} is already measured; run `maestro harness list` to re-derive it first")
-        }
+        // detect_and_merge above reopens a measured state detector to `proposed`
+        // whenever its friction is live (reopen_if_regressed), so reaching this
+        // state-detector arm means the friction is already gone -- it reopens on
+        // its own if it recurs, with nothing to apply now. A behavioral item's
+        // measured state is terminal and never reopens.
+        "measured" if is_state_detector(&item.item_type) => bail!(
+            "{id} is already measured; its friction is resolved and it reopens automatically if it recurs -- nothing to apply now"
+        ),
         "measured" => bail!(
             "{id} is already measured; a measured {} item is closed and re-detection will not reopen it",
             item.item_type
@@ -139,7 +152,11 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
     if !force {
         match &spawned_task {
             Some(task_id) => {
-                let record = task::load_task_record(&paths.tasks_dir(), task_id)?;
+                let Ok(record) = task::load_task_record(&paths.tasks_dir(), task_id) else {
+                    bail!(
+                        "linked task {task_id} could not be loaded; use --force to measure anyway"
+                    );
+                };
                 if record.state != TaskState::Verified {
                     bail!(
                         "linked task {task_id} is not verified (state: {}); use --force to measure anyway",
