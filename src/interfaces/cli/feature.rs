@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 
 use crate::domain::feature::{self, ContractAdditions, ContractEdits};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::time::format_utc_seconds_rfc3339_millis;
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand};
 
 /// Execute `maestro feature`.
@@ -179,6 +180,18 @@ fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -
     print_note(feature::cancel(paths, id, reason, dry_run)?.note)
 }
 
+/// Render a persisted nanos-since-epoch string as a human-readable RFC3339 UTC
+/// timestamp (seconds resolution). `feature show` is a human-facing detail view,
+/// unlike the machine-facing `query` read-models, so a bare 19-digit nanos value
+/// reads as noise here. Falls back to the raw value if it is not a parseable
+/// instant (e.g. an old or hand-forged record), so display never fails.
+fn render_timestamp(nanos: &str) -> String {
+    match nanos.trim().parse::<u64>() {
+        Ok(nanos) => format_utc_seconds_rfc3339_millis(nanos / 1_000_000_000),
+        Err(_) => nanos.to_string(),
+    }
+}
+
 fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     // L6b: reads cross the boundary — fall through to the archive so a
     // historical reference to an archived feature still renders.
@@ -192,8 +205,8 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     println!("status: {}", feature::status_label(&view.status));
     println!("tasks_total: {}", view.counts.total);
     println!("tasks_verified: {}", view.counts.verified);
-    println!("created_at: {}", view.created_at);
-    println!("updated_at: {}", view.updated_at);
+    println!("created_at: {}", render_timestamp(&view.created_at));
+    println!("updated_at: {}", render_timestamp(&view.updated_at));
     if let Some(description) = view.description.as_deref() {
         println!("description: {description}");
     }
