@@ -727,6 +727,12 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
     let both = ["feature", "archive", "alpha-export", "--shipped"];
     let err = assert_failure(maestro(&both, root), &both);
     assert!(err.contains("not both"));
+
+    // Neither an id nor --shipped: the remedy must not claim "not both".
+    let neither = ["feature", "archive"];
+    let err = assert_failure(maestro(&neither, root), &neither);
+    assert!(err.contains("provide a feature id or --shipped"));
+    assert!(!err.contains("not both"));
 }
 
 #[test]

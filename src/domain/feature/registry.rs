@@ -521,7 +521,14 @@ pub fn ship(
 
     if dry_run {
         let note = if gaps.is_empty() {
-            format!("would ship {id} (-> shipped); no live child tasks, qa-baseline proven")
+            // gaps empty implies a baseline exists (a missing one is itself a gap); a
+            // baseline with no scenarios cleared the gate by skipping, not proving.
+            let qa = if baseline.as_ref().is_some_and(|b| b.scenario_ids.is_empty()) {
+                "qa-baseline skipped (no behavioral scenarios)"
+            } else {
+                "qa-baseline proven"
+            };
+            format!("would ship {id} (-> shipped); no live child tasks, {qa}")
         } else {
             format!("would block ship {id}:\n  {}", gaps.join("\n  "))
         };

@@ -129,11 +129,11 @@ impl AgentArgs {
 
 #[derive(Debug, Args)]
 pub struct UpdateArgs {
-    #[arg(long)]
+    #[arg(long, help = "Check for an update without downloading or installing it")]
     pub check: bool,
-    #[arg(long)]
+    #[arg(long, help = "Show extra detail, including the installed binary path")]
     pub verbose: bool,
-    #[arg(long)]
+    #[arg(long, help = "Reinstall even when already on the latest version")]
     pub force: bool,
 }
 
@@ -441,7 +441,7 @@ pub struct DecisionArgs {
 pub enum DecisionCommand {
     #[command(about = "Create a decision record (-> decision-NN)")]
     New { title: String },
-    #[command(about = "Show a decision record by id (decision-NN or NN)")]
+    #[command(about = "Show a decision record by id (decision-NN)")]
     Show { id: String },
     #[command(about = "List decision records")]
     List,

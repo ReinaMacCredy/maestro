@@ -43,7 +43,7 @@ pub fn archive_task(
 
     if task.state.is_live() {
         bail!(
-            "cannot archive {id} — not done (state: {}); reject, abandon, or verify it first",
+            "cannot archive {id} — not done (state: {}); reject, abandon, supersede, or verify it first",
             task.state.as_str()
         );
     }

@@ -87,8 +87,11 @@ fn archive_features(
     match (id, shipped) {
         (Some(id), false) => print_note(feature::archive_feature(paths, &id, dry_run)?),
         (None, true) => archive_shipped(paths, dry_run),
-        (Some(_), true) | (None, false) => bail!(
+        (Some(_), true) => bail!(
             "provide a feature id or --shipped, not both\n  maestro feature archive <id>\n  maestro feature archive --shipped"
+        ),
+        (None, false) => bail!(
+            "provide a feature id or --shipped\n  maestro feature archive <id>\n  maestro feature archive --shipped"
         ),
     }
 }
