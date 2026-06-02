@@ -64,15 +64,21 @@ fn create_increments_past_a_seeded_gap() {
 }
 
 #[test]
-fn create_does_not_validate_empty_title() {
+fn create_rejects_empty_slug_title() {
     let temp = TestTempDir::new("maestro-decision-empty");
     let paths = MaestroPaths::new(temp.path());
 
-    let number =
-        decisions::create(&paths, "   ").expect("invariant: empty title must silently slugify");
-    assert_eq!(number, 1);
+    // A whitespace/non-ASCII title slugifies to empty, which would write a
+    // malformed `decision-NNN-.md` husk; create rejects it instead (matching
+    // `feature new`).
+    let err = decisions::create(&paths, "   ").expect_err("empty-slug title must be rejected");
     assert!(
-        paths.decisions_dir().join("decision-001-.md").is_file(),
-        "empty title slugifies to an empty slug, matching the un-validated baseline"
+        err.to_string()
+            .contains("at least one ASCII letter or digit"),
+        "{err}"
+    );
+    assert!(
+        !paths.decisions_dir().join("decision-001-.md").is_file(),
+        "no husk file must be written"
     );
 }

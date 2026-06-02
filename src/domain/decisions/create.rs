@@ -8,25 +8,28 @@
 
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions::query::{decision_entries, parse_decision_number};
 use crate::domain::decisions::template::{decision_file_name, decision_markdown};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::slug::slugify_ascii;
 
 /// Create a decision markdown file from a title, allocating the next sequence
 /// number and persisting the section 7.4 template. Returns the assigned number.
 ///
-/// The title is slugified without validation, matching the established baseline
-/// for human-authored ADRs.
-///
 /// # Errors
 ///
-/// Errors when the decisions directory cannot be created, the existing files
-/// cannot be listed, or the new file cannot be written.
+/// Errors when the title has no ASCII slug content (which would write a
+/// malformed `decision-NNN-.md` husk), when the decisions directory cannot be
+/// created, the existing files cannot be listed, or the new file cannot be
+/// written.
 pub fn create(paths: &MaestroPaths, title: &str) -> Result<u32> {
+    if slugify_ascii(title).is_empty() {
+        bail!("decision title must contain at least one ASCII letter or digit");
+    }
     let decisions_dir = paths.decisions_dir();
     ensure_dir(&decisions_dir)?;
     let number = next_decision_number(&decisions_dir)?;
