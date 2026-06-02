@@ -862,3 +862,32 @@ fn set_on_a_settled_task_refuses_the_link_change_before_writing_checks() {
         );
     }
 }
+
+#[test]
+fn set_check_rejects_an_empty_value_so_it_cannot_satisfy_the_acceptance_gate() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Empty-check probe"]),
+        &["task", "create", "Empty-check probe"],
+    );
+
+    // A `--check ''` whose value is empty must be refused: stored verbatim it
+    // would have list length 1 and so satisfy the standalone >=1-check
+    // acceptance gate while carrying no contract.
+    let args = &["task", "set", "task-001", "--check", ""];
+    let set = maestro(repo, args);
+    assert_failure(&set, args);
+    assert!(stderr(&set).contains("check cannot be empty"));
+
+    // The refused set wrote nothing, so the standalone-checks gate still
+    // refuses accept — the empty check never satisfies it.
+    assert_success(
+        &maestro(repo, &["task", "explore", "task-001"]),
+        &["task", "explore", "task-001"],
+    );
+    let accept = maestro(repo, &["task", "accept", "task-001"]);
+    assert_failure(&accept, &["task", "accept", "task-001"]);
+    assert!(stderr(&accept).contains("has no checks"));
+}

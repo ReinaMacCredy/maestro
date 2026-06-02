@@ -346,11 +346,25 @@ pub fn claim_task(
 ///
 /// Returns the updated task and the number of checks that were replaced, so the
 /// caller can warn when a repeat call silently drops earlier checks.
+///
+/// # Errors
+///
+/// Refuses an empty or whitespace-only check: it would otherwise satisfy the
+/// `ensure_standalone_has_checks` gate by list length while carrying no
+/// contract, letting a standalone task be accepted with a meaningless
+/// acceptance criterion. Also refuses once acceptance is locked.
 pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<(TaskRecord, usize)> {
     let handle = load_task_for_update(tasks_dir, id)?;
     if handle.task().acceptance_locked {
         bail!(
             "task {} acceptance is locked; checks cannot be changed after accept",
+            handle.task().id
+        );
+    }
+    if checks.iter().any(|check| check.trim().is_empty()) {
+        bail!(
+            "task {} check cannot be empty; e.g. `maestro task set {} --check \"build passes\"`",
+            handle.task().id,
             handle.task().id
         );
     }
