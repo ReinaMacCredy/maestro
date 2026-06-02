@@ -446,6 +446,21 @@ detected or acted on in the background. `maestro harness list` surfaces the back
 `maestro harness apply <id>` accepts a proposal and spawns a real task to do the work, and
 `maestro harness measure <id>` records the outcome.
 
+The loop, end to end: your run log and task history feed the detectors; a recurring friction
+becomes a `proposed` item; `apply` accepts it and spins off a linked task; you close that task
+through the normal proof loop; and `measure` confirms the outcome.
+
+```mermaid
+flowchart LR
+    H[run log + task history] --> D{detectors}
+    D -->|"friction recurs"| P[proposed]
+    P -->|"harness apply"| A[accepted: spawns a linked task]
+    A -->|"task closed by proof"| M[harness measure]
+    M -->|"friction gone / judged fixed"| V[measured]
+    M -->|"fix ineffective"| P
+    V -.->|"friction returns"| P
+```
+
 **What it catches.** Five detectors run, in two classes. **State detectors** read current repo
 state, so their silence reliably means the friction is fixed — `measure` re-runs them and
 closes the item automatically once they fall silent. **Behavioral detectors** are drawn from
@@ -466,8 +481,64 @@ as it moves `proposed -> accepted -> measured`. `measure` sends an ineffective f
 `proposed`, and reopens a `measured` *state* item to `proposed` if its friction later returns (a
 regression). `measure` requires the linked task verified unless you pass `--force`.
 
-See the [Suggested workflow](#4-improve-the-harness--maestros-self-improvement) for a full,
-real-output run.
+**What it looks like.** A fresh repo proposes nothing. Here two tasks hit the same blocker —
+`maestro task block task-001 --reason "staging credentials missing"` and the same on
+`task-002` — which is the recurring friction the `recurring_blocker` detector watches for. This
+transcript is real output from the current binary:
+
+```
+$ maestro harness list
+no improvement proposals found
+
+# after the two blockers, the detector has something to surface:
+$ maestro harness list
+ID	STATUS	TYPE	TITLE
+hb-001	proposed	recurring_blocker	Reduce recurring blocker: staging credentials missing
+
+# accept it — maestro spawns a standalone task to carry the fix, and tells you the next step:
+$ maestro harness apply hb-001
+accepted hb-001 (spawned task-003)
+next: `maestro task set task-003 --check "..."` then `maestro task claim task-003`
+
+# show reveals the evidence, the fingerprint's spawned task, and the append-only history:
+$ maestro harness show hb-001
+id: hb-001
+title: Reduce recurring blocker: staging credentials missing
+type: recurring_blocker
+status: accepted
+priority: medium
+source: blockers
+spawned_task: task-003
+evidence:
+- same blocker pattern appeared in 2 tasks: task-001, task-002
+history:
+- accepted (task-003) 2026-06-02T16:13:36.670896000Z
+
+# close task-003 through the proof loop (set --check, claim, complete --claim, record proof):
+$ maestro task verify task-003
+verification passed for task-003 (1 claim(s), 1 proof source(s))
+
+# with the linked task verified, close the loop — no --force needed:
+$ maestro harness measure hb-001
+hb-001 is now measured
+note: friction is still detected; this behavioral item was closed by judgment, not by a silence check
+
+# measured items leave the default list; the ledger lives under --all:
+$ maestro harness list
+no improvement proposals found
+# 1 measured proposal(s) hidden; use --all to include
+$ maestro harness list --all
+ID	STATUS	TYPE	TITLE
+hb-001	measured	recurring_blocker	Reduce recurring blocker: staging credentials missing
+```
+
+That closing `note` is the honest part: `recurring_blocker` is a behavioral detector, so
+`measure` closes it on your judgment rather than claiming the historical signal vanished. A
+state detector (`missing_verification`, `rediscovered_decision`) would instead be re-run and
+only reach `measured` once it actually fell silent.
+
+The [Suggested workflow](#4-improve-the-harness--maestros-self-improvement) walks this same loop
+in context, alongside the feature and task flows.
 
 ### Skills and hooks
 
