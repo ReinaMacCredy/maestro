@@ -306,7 +306,7 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
     if dry_run {
         let note = if gaps.is_empty() {
             format!(
-                "would accept {id} (→ ready); contract complete (acceptance={}, areas={})",
+                "would accept {id} (-> ready); contract complete (acceptance={}, areas={})",
                 record.acceptance.len(),
                 record.affected_areas.len()
             )
@@ -335,7 +335,7 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
         )
     };
     let summary = format!(
-        "accepted {id} (→ ready); contract frozen (acceptance={}, areas={}){}",
+        "accepted {id} (-> ready); contract frozen (acceptance={}, areas={}){}",
         record.acceptance.len(),
         record.affected_areas.len(),
         questions_note
@@ -457,7 +457,7 @@ pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
         id: id.to_string(),
         status: target,
         changed: true,
-        note: format!("started {id} (→ in_progress)"),
+        note: format!("started {id} (-> in_progress)"),
     })
 }
 
@@ -513,7 +513,7 @@ pub fn ship(
 
     if dry_run {
         let note = if gaps.is_empty() {
-            format!("would ship {id} (→ shipped); no live child tasks, qa-baseline proven")
+            format!("would ship {id} (-> shipped); no live child tasks, qa-baseline proven")
         } else {
             format!("would block ship {id}:\n  {}", gaps.join("\n  "))
         };
@@ -534,7 +534,7 @@ pub fn ship(
         id: id.to_string(),
         status: target,
         changed: true,
-        note: format!("shipped {id} (→ shipped)"),
+        note: format!("shipped {id} (-> shipped)"),
     })
 }
 
@@ -570,10 +570,10 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Re
     // mirroring accept/ship/archive, before any irreversible mutation.
     if dry_run {
         let note = if live.is_empty() {
-            format!("would cancel {id} (→ cancelled); no child tasks affected")
+            format!("would cancel {id} (-> cancelled); no child tasks affected")
         } else {
             format!(
-                "would cancel {id} (→ cancelled); would abandon {} child task(s): {}",
+                "would cancel {id} (-> cancelled); would abandon {} child task(s): {}",
                 live.len(),
                 live.join(", ")
             )
