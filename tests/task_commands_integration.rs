@@ -433,6 +433,25 @@ fn show_uses_maestro_current_task_when_no_id_is_provided() {
 }
 
 #[test]
+fn show_treats_empty_current_task_env_as_unset() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Task A"]),
+        &["task", "create", "Task A"],
+    );
+
+    // An empty MAESTRO_CURRENT_TASK must give the "id required" remedy, not fall
+    // through to a confusing "invalid task id" / "task not found".
+    let show = maestro_with_env(repo, &["task", "show"], &[("MAESTRO_CURRENT_TASK", "")]);
+    assert_failure(&show, &["task", "show"]);
+    let err = stderr(&show);
+    assert!(err.contains("task id is required"), "got: {err}");
+    assert!(!err.contains("invalid task id"), "got: {err}");
+}
+
+#[test]
 fn task_id_prefix_lookup_rejects_ambiguous_matches() {
     let temp = setup_repo();
     let repo = temp.path();

@@ -337,10 +337,16 @@ fn update_task(
 }
 
 fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
+    // Mirror the env handling in resolve_optional_task_id (treat empty as unset,
+    // no leaked VarError chain) but keep `show` strict: no single-task auto-detect.
     let task_id = match id {
         Some(id) => id,
-        None => std::env::var("MAESTRO_CURRENT_TASK")
-            .context("task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`")?,
+        None => match std::env::var("MAESTRO_CURRENT_TASK") {
+            Ok(id) if !id.trim().is_empty() => id,
+            _ => bail!(
+                "task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`"
+            ),
+        },
     };
     // L6b: reads cross the boundary — fall through to the archive so a
     // historical reference to an archived task still renders. Track which tree
