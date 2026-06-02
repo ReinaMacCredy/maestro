@@ -123,6 +123,11 @@ resolve_asset_name() {
     *) fail "Unsupported architecture: $(uname -m). Release installs support amd64 and arm64." ;;
   esac
 
+  # No prebuilt binary is published for Intel macOS (darwin-amd64); build from source.
+  if [ "$os" = "darwin" ] && [ "$arch" = "amd64" ]; then
+    fail "No prebuilt binary for Intel macOS (darwin-amd64). Install from source: cargo install --git https://github.com/ReinaMacCredy/maestro --locked"
+  fi
+
   printf "maestro-%s-%s" "$os" "$arch"
 }
 

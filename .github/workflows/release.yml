@@ -89,8 +89,6 @@ jobs:
             asset: maestro-linux-arm64
           - runner: macos-15
             asset: maestro-darwin-arm64
-          - runner: macos-13
-            asset: maestro-darwin-amd64
     env:
       # build.rs uses this verbatim (precedence step 1) so every binary and the git
       # tag carry the SAME version computed once in the gate job.
@@ -146,7 +144,6 @@ jobs:
           for asset in \
             maestro-linux-amd64 \
             maestro-linux-arm64 \
-            maestro-darwin-amd64 \
             maestro-darwin-arm64; do
             test -s "$asset" || { echo "::error::missing asset $asset"; exit 1; }
             # Generated from inside dist/ so field 2 is the BARE asset name, which is
