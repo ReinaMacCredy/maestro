@@ -929,3 +929,35 @@ fn task_update_rejects_an_empty_claim_so_no_blank_proof_is_recorded() {
     // The refused update appended no history entry.
     assert_eq!(history_len(repo), before);
 }
+
+#[test]
+fn task_block_is_refused_on_a_done_task_so_no_open_blocker_is_baked_in() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Abandoned probe"]),
+        &["task", "create", "Abandoned probe"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "abandon", "task-001", "--reason", "scrapped"]),
+        &["task", "abandon", "task-001", "--reason", "scrapped"],
+    );
+
+    // Block alone must not bypass the terminal guard the 5 sibling verbs honor:
+    // a finished task cannot take an open blocker (e.g. "abandoned / blocked").
+    let args = &[
+        "task", "block", "task-001", "--reason", "needs dep", "--by", "task-002",
+    ];
+    let block = maestro(repo, args);
+    assert_failure(&block, args);
+    assert!(stderr(&block).contains("cannot block task-001 — done"));
+
+    // No blocker was written onto the done task.
+    let doc = task_yaml(repo, "task-001");
+    let blockers = doc["blockers"].as_sequence();
+    assert!(
+        blockers.map(|b| b.is_empty()).unwrap_or(true),
+        "a refused block must not persist a blocker: {doc:?}"
+    );
+}

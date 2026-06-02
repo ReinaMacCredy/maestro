@@ -474,6 +474,12 @@ pub fn block_task(
     blocked_at: &str,
 ) -> Result<(TaskRecord, String)> {
     let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    if !task.state.is_live() {
+        bail!(
+            "cannot block {id} — done (state: {}); a finished task cannot take a blocker",
+            task.state.as_str()
+        );
+    }
     let blocker_id = next_blocker_id(&task);
     let (kind, blocked_ref, title) = blocker_descriptor(target);
     blockers::add_blocker(
