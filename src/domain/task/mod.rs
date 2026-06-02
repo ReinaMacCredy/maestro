@@ -450,6 +450,15 @@ pub fn supersede_task(
 ) -> Result<TaskRecord> {
     let (replacement, _, _) = lookup::load_task_with_snapshot(tasks_dir, by)
         .with_context(|| format!("supersede target `{by}` was not found"))?;
+    // Compare canonical ids, not the raw args: lookup resolves id-prefixes, so
+    // `supersede task-001 --by task-1` could otherwise self-supersede unnoticed.
+    let (target, _, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    if replacement.id == target.id {
+        bail!(
+            "cannot supersede {} by itself; `--by` must name a different task",
+            target.id
+        );
+    }
     transition_task(
         tasks_dir,
         id,

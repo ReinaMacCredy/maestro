@@ -961,3 +961,27 @@ fn task_block_is_refused_on_a_done_task_so_no_open_blocker_is_baked_in() {
         "a refused block must not persist a blocker: {doc:?}"
     );
 }
+
+#[test]
+fn task_supersede_by_itself_is_refused_so_no_self_reference_is_recorded() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Self-supersede probe"]),
+        &["task", "create", "Self-supersede probe"],
+    );
+
+    // `--by` naming the task itself would record a corrupt superseded_by: self.
+    let args = &[
+        "task", "supersede", "task-001", "--by", "task-001", "--reason", "oops",
+    ];
+    let supersede = maestro(repo, args);
+    assert_failure(&supersede, args);
+    assert!(stderr(&supersede).contains("cannot supersede task-001 by itself"));
+
+    // The task stays in its prior state with no superseded_by ref.
+    let doc = task_yaml(repo, "task-001");
+    assert_eq!(doc["state"], Value::String("draft".to_string()));
+    assert!(doc.get("superseded_by").is_none() || doc["superseded_by"].is_null());
+}
