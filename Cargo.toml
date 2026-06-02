@@ -1,0 +1,32 @@
+[package]
+name = "maestro"
+# This full semver is the meaningful version line. build.rs carries it into the
+# git-derived runtime version (<major>.<minor>.<patch>.<commit-epoch>-g<sha>) and injects
+# it as MAESTRO_VERSION. Bump this to step the version line.
+version = "0.107.0"
+edition = "2024"
+license = "MIT"
+
+[[bin]]
+name = "maestro"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.5", features = ["derive"] }
+git2 = "0.20"
+include_dir = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.11"
+similar = "2"
+thiserror = "2"
+
+# Codify the zero-warning gate (`cargo clippy --all-targets -- -D warnings`) so a
+# plain `cargo build`/`cargo clippy` enforces it without the flag.
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = "deny"

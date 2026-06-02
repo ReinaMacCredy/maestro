@@ -1,0 +1,9 @@
+schema_version: maestro.harness.v1
+stack:
+  kind: rust
+  detected_by:
+  - Cargo.toml
+  verify:
+  - cargo build
+  - cargo test
+  - cargo clippy -- -D warnings

@@ -1,80 +1,25 @@
-node_modules/
-dist/
-.DS_Store
-*.log
-
-# IDE
-.vscode/
-!.vscode/settings.json
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-Thumbs.db
-.Spotlight-V100
-.Trashes
-
-# Environment
-.env
-.env.*
-!.env.example
-
-# Generated
-*.tsbuildinfo
-*.bun-build
-coverage/
-tmp/
-/hooks/
-
-# bv (beads viewer) local config and caches
-.bv/
-
-# agentMemory generated files
-retrieval-index.json
-feedback.jsonl
-
-# Runtime data
-.maestro/handoffs/
-.maestro/launches/
-# Ignore mission runtime state but keep the markdown sidecars
-# (`<slug>.md`) tracked — they're shareable design intent per
-# the maestro-mission skill. Negations only re-include when the
-# parent dir is not excluded, so glob the contents, not the dir.
-.maestro/missions/*
-!.maestro/missions/*.md
-!.maestro/missions/.gitkeep
-.maestro/tasks/local-history/
-.maestro/tasks/batches/
-# Derived dashboard refreshed on every task mutation; not authoritative state.
-.maestro/tasks/NOW.md
-
-# Claude plans
-.claude/plans/
-
-# Claude Code agent worktrees: transient scratch space for parallel agents
-.claude/worktrees/
-**/.claude/worktrees/
-
-# The Desktop App for Maestro is still under development.
-/apps/
-.gitnexus
-
-# Bootstrap/reference assets (not needed in repo)
-.factory/
-
-# Maestro runtime state
-.maestro/sessions/
-.maestro/policies/.pending-loosenings.json
-# Verdict store — derived, like evidence (re-computable from contract+diff+evidence)
-.maestro/verdicts/
-# Run-state — derived per-task execution counters (retries, wall-clock, tokens)
+# >>> maestro >>>
+# Maestro local-only paths
 .maestro/runs/
-# L2 versioned contract mirror — derived from .maestro/tasks/contracts/ (canonical L1 store)
-.maestro/contracts/
-# Phase 6 swarm run state — per-run tmpdir map, not durable
-.maestro/scenarios/
+.maestro/backups/
+.maestro/install-lock.yaml
+.maestro/tasks/*/evidence/
+.maestro/tasks/*/local/
 
-# Local test/reference files
-harness-engineering-course.html
+# Local agent settings
+.claude/settings.local.json
+.codex/hooks.json
+# <<< maestro <<<
+
+# --- user-managed (outside the maestro block) ---
+
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Maestro local cache (not covered by the managed block above)
+.maestro/update-check
+
+# macOS / local noise
+.DS_Store
+.claude/scheduled_tasks.lock

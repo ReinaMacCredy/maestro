@@ -1,0 +1,50 @@
+schema_version: maestro.task.v1
+id: task-001
+slug: add-csv-export
+title: Add CSV export
+lane: normal
+risk: medium
+state: needs_verification
+acceptance_locked: true
+claimed_by: maestro
+claimed_at: '1779758770600445000'
+state_history:
+- state: draft
+  at: '1779758770490442000'
+  by: maestro
+- state: exploring
+  at: '1779758770550607000'
+  by: maestro
+- state: ready
+  at: '1779758770571109000'
+  by: maestro
+- state: in_progress
+  at: '1779758770600445000'
+  by: maestro
+- state: needs_verification
+  at: '1779758770640267000'
+  by: maestro
+  summary: done
+  claims:
+  - ''
+- state: needs_verification
+  at: '1779758770660353000'
+  by: maestro
+  summary: 'verification failed: no completion claims found in task history'
+  open_items:
+  - no completion claims found in task history
+- state: needs_verification
+  at: '1779782259169824000'
+  by: maestro
+  summary: 'verification failed: no completion claims found in task history'
+  open_items:
+  - no completion claims found in task history
+- state: needs_verification
+  at: '1779868092886845000'
+  by: maestro
+  summary: 'verification failed: no completion claims found in task history'
+  open_items:
+  - no completion claims found in task history
+verification: {}
+created_at: '1779758770490442000'
+updated_at: '1779868092886845000'

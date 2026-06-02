@@ -2,192 +2,33 @@ name: CI
 
 on:
   push:
-    branches:
-      - "**"
+    branches: [main, rewrite-maestro-in-rust]
   pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-      - converted_to_draft
-  workflow_dispatch:
-  workflow_call:
-    inputs:
-      ref:
-        description: Optional ref to validate when called by another workflow.
-        required: false
-        type: string
+
+# A PR-branch push fires both `push` and `pull_request`; dedupe per ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || inputs.ref || github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  preflight:
-    name: Preflight
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+  check:
+    name: fmt + clippy + test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      docs_only: ${{ steps.detect.outputs.docs_only }}
-      github_changed: ${{ steps.detect.outputs.github_changed }}
-      full_ci: ${{ steps.detect.outputs.full_ci }}
-      skills_changed: ${{ steps.detect.outputs.skills_changed }}
-      release_changed: ${{ steps.detect.outputs.release_changed }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.ref }}
-          fetch-depth: 0
-          fetch-tags: false
           persist-credentials: false
-      - name: Detect Maestro changes
-        id: detect
-        uses: ./.github/actions/detect-maestro-changes
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          base-sha: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
-          head-sha: HEAD
-          fallback-base-ref: ${{ github.event.pull_request.base.ref || 'main' }}
-
-  workflow-sanity:
-    name: Workflow Sanity
-    needs: preflight
-    if: needs.preflight.outputs.github_changed == 'true'
-    uses: ./.github/workflows/workflow-sanity.yml
-    with:
-      ref: ${{ inputs.ref || github.ref }}
-    permissions:
-      contents: read
-
-  feature-boundaries:
-    name: Feature Boundaries
-    needs: preflight
-    if: needs.preflight.outputs.full_ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Check feature boundaries
-        run: bun run check:boundaries
-
-  agent-spec:
-    name: Agent Spec
-    needs: preflight
-    if: needs.preflight.outputs.full_ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Check agent-facing templates
-        run: bun run check:agent-spec
-
-  skill-template-drift:
-    name: Skill Template Drift
-    needs: preflight
-    if: needs.preflight.outputs.full_ci == 'true' || needs.preflight.outputs.skills_changed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Check bundled skills
-        run: bun run check:bundled-skills
-
-  build-linux:
-    name: Build Linux
-    needs:
-      - preflight
-      - feature-boundaries
-      - agent-spec
-      - skill-template-drift
-    if: always() && needs.preflight.outputs.full_ci == 'true' && needs.feature-boundaries.result == 'success' && needs.agent-spec.result == 'success' && needs.skill-template-drift.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Build compiled binary
-        run: bun run build
-      - name: Verify compiled binary version
-        run: ./dist/maestro --version
-      - name: Smoke-test Mission Control renderer
-        run: ./dist/maestro mission-control --render-check --size 120x40
-
-  test-linux:
-    name: Test Linux
-    needs:
-      - preflight
-      - feature-boundaries
-      - agent-spec
-      - skill-template-drift
-    if: always() && needs.preflight.outputs.full_ci == 'true' && needs.feature-boundaries.result == 'success' && needs.agent-spec.result == 'success' && needs.skill-template-drift.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Run test suite
-        run: bun run test
-
-  windows-smoke:
-    name: Windows Smoke
-    needs:
-      - preflight
-      - agent-spec
-    if: always() && needs.preflight.outputs.full_ci == 'true' && needs.agent-spec.result == 'success'
-    runs-on: windows-latest
-    timeout-minutes: 25
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Build compiled binary
-        run: bun run build
-      - name: Verify compiled binary version
-        run: ./dist/maestro.exe --version
-      - name: Smoke-test Mission Control renderer
-        run: ./dist/maestro.exe mission-control --render-check --size 120x40
-
-  typecheck-advisory:
-    name: Advisory Typecheck
-    needs: preflight
-    if: needs.preflight.outputs.full_ci == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Run typecheck
-        id: typecheck
-        continue-on-error: true
-        run: bun run typecheck
-      - name: Report advisory result
-        if: always()
-        run: |
-          if [ "${{ steps.typecheck.outcome }}" = "failure" ]; then
-            echo "::warning title=Advisory typecheck::bun run typecheck is still failing on this branch. This lane stays non-blocking while the existing TypeScript debt is reduced."
-          else
-            echo "Typecheck passed."
-          fi
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        run: cargo test

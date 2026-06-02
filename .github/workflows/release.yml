@@ -1,177 +1,130 @@
 name: Release
 
+# Manual only (SPEC-ci-cd D1/D7 + SPEC-install V3). A human dispatches; CI stamps
+# HEAD's commit-time version, builds the 4 native binaries, and publishes. Ordinary
+# pushes/merges never release. Re-dispatching on the same commit re-derives the same
+# version/tag and is a no-op (existence check below).
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      release_notes:
+        description: >-
+          Optional release notes body. Leave blank to auto-generate from commits
+          (--generate-notes). Set it for the FIRST Rust release, whose auto-diff would
+          otherwise span the entire TS->Rust rewrite (SPEC-ci-cd D4).
+        required: false
+        type: string
+
+# Never cancel a half-done release (opposite of ci.yml).
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  release-gate:
-    name: Determine Release Eligibility
+  gate:
+    name: Version + gate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     outputs:
-      should_release: ${{ steps.gate.outputs.should_release }}
-      tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      should_release: ${{ steps.version.outputs.should_release }}
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - name: Resolve release version
+      - name: Compute version + check existence
         id: version
-        run: |
-          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Check release trigger
-        id: gate
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          EXPECTED_RELEASE_SUBJECT: "chore(release): v${{ steps.version.outputs.version }}"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "Manual release run requested."
+          epoch="$(git log -1 --format=%ct)"
+          sha="$(git rev-parse --short HEAD)"
+          # Carry Cargo.toml's version verbatim, matching build.rs's CARGO_PKG_VERSION read.
+          prefix="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          version="${prefix:-0.0.0}.${epoch}-g${sha}"
+          tag="v${version}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Computed version: $version (tag $tag)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::notice::Release $tag already exists -> idempotent no-op, skipping."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
             echo "should_release=true" >> "$GITHUB_OUTPUT"
-            exit 0
           fi
-
-          HEAD_COMMIT_SUBJECT="$(git log -1 --pretty=%s)"
-          if [ "$HEAD_COMMIT_SUBJECT" = "$EXPECTED_RELEASE_SUBJECT" ]; then
-            echo "Release commit detected on main."
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "Non-release commit detected; skipping publish jobs."
-          echo "should_release=false" >> "$GITHUB_OUTPUT"
-
-  verify:
-    name: Verify Release Candidate
-    needs: release-gate
-    if: needs.release-gate.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.version.outputs.should_release == 'true'
         with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Check feature boundaries
-        run: bun run check:boundaries
-      - name: Check agent-facing templates
-        run: bun run check:agent-spec
-      - name: Check bundled skills
-        run: bun run check:bundled-skills
-      - name: Run test suite
-        run: bun run test
-      - name: Build compiled binary
-        run: bun run build
-      - name: Verify compiled binary version
-        env:
-          EXPECTED_VERSION: ${{ needs.release-gate.outputs.version }}
-        run: |
-          set -euo pipefail
-          version="$(./dist/maestro --version)"
-          echo "$version"
-          if [[ "$version" != "$EXPECTED_VERSION"* ]]; then
-            echo "::error::Expected binary version to start with $EXPECTED_VERSION, got $version"
-            exit 1
-          fi
-      - name: Smoke-test Mission Control renderer
-        run: ./dist/maestro mission-control --render-check --size 120x40
-      - name: Hot-path smoke
-        run: bun scripts/smoke.ts ./dist/maestro
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        if: steps.version.outputs.should_release == 'true'
+      - name: Format
+        if: steps.version.outputs.should_release == 'true'
+        run: cargo fmt --check
+      - name: Clippy
+        if: steps.version.outputs.should_release == 'true'
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        if: steps.version.outputs.should_release == 'true'
+        run: cargo test
 
-  install-smoke:
-    name: Install Smoke
-    needs:
-      - release-gate
-      - verify
-    if: needs.release-gate.outputs.should_release == 'true'
-    uses: ./.github/workflows/install-smoke.yml
-    with:
-      ref: ${{ github.sha }}
-    permissions:
-      contents: read
-
-  build-assets:
+  build:
     name: Build ${{ matrix.asset }}
-    needs:
-      - release-gate
-      - verify
-      - install-smoke
-    if: needs.release-gate.outputs.should_release == 'true'
+    needs: gate
+    if: needs.gate.outputs.should_release == 'true'
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
-            asset: maestro-linux-x64
-            src: maestro
+            asset: maestro-linux-amd64
           - runner: ubuntu-24.04-arm
             asset: maestro-linux-arm64
-            src: maestro
-          - runner: macos-15-intel
-            asset: maestro-darwin-x64
-            src: maestro
           - runner: macos-15
             asset: maestro-darwin-arm64
-            src: maestro
-          - runner: windows-latest
-            asset: maestro-windows-x64.exe
-            src: maestro.exe
-    defaults:
-      run:
-        shell: bash
+          - runner: macos-13
+            asset: maestro-darwin-amd64
+    env:
+      # build.rs uses this verbatim (precedence step 1) so every binary and the git
+      # tag carry the SAME version computed once in the gate job.
+      MAESTRO_VERSION: ${{ needs.gate.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup-maestro-env
-      - name: Check agent-facing templates
-        run: bun run check:agent-spec
-      - name: Build release asset
-        run: bun scripts/build.ts
-      - name: Verify built asset version
-        env:
-          EXPECTED_VERSION: ${{ needs.release-gate.outputs.version }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --locked
+      - name: Verify binary version
         run: |
           set -euo pipefail
-          version="$(./dist/${{ matrix.src }} --version)"
-          echo "$version"
-          if [[ "$version" != "$EXPECTED_VERSION"* ]]; then
-            echo "::error::Expected binary version to start with $EXPECTED_VERSION, got $version"
-            exit 1
-          fi
-      - name: Stage named release asset
-        run: cp "dist/${{ matrix.src }}" "dist/${{ matrix.asset }}"
-      - name: Upload release asset
+          out="$(./target/release/maestro version)"
+          echo "$out"
+          case "$out" in
+            *"$MAESTRO_VERSION"*) echo "version ok: contains $MAESTRO_VERSION" ;;
+            *) echo "::error::binary version output does not contain $MAESTRO_VERSION"; exit 1 ;;
+          esac
+      - name: Stage named asset
+        run: mv target/release/maestro "${{ matrix.asset }}"
+      - name: Upload asset artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset }}
-          path: dist/${{ matrix.asset }}
+          path: ${{ matrix.asset }}
           if-no-files-found: error
 
-  release:
-    name: Publish Release
-    needs:
-      - release-gate
-      - build-assets
-    if: needs.release-gate.outputs.should_release == 'true'
+  publish:
+    name: Publish release
+    needs: [gate, build]
+    if: needs.gate.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -179,39 +132,63 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - uses: ./.github/actions/setup-maestro-env
       - name: Download built assets
         uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: maestro-*
           merge-multiple: true
-      - name: Verify expected release asset set
+      - name: Verify full asset set + generate checksums
         run: |
           set -euo pipefail
-          expected=(
-            maestro-linux-x64
-            maestro-linux-arm64
-            maestro-darwin-x64
-            maestro-darwin-arm64
-            maestro-windows-x64.exe
-          )
-          for asset in "${expected[@]}"; do
-            test -s "dist/$asset"
+          cd dist
+          for asset in \
+            maestro-linux-amd64 \
+            maestro-linux-arm64 \
+            maestro-darwin-amd64 \
+            maestro-darwin-arm64; do
+            test -s "$asset" || { echo "::error::missing asset $asset"; exit 1; }
+            # Generated from inside dist/ so field 2 is the BARE asset name, which is
+            # what install.sh's verify_checksum awk requires ($2 == asset).
+            sha256sum "$asset" > "$asset.sha256"
           done
-      - name: Build release notes
-        env:
-          VERSION: ${{ needs.release-gate.outputs.version }}
-        run: bun scripts/release-notes.ts --version "$VERSION" --output RELEASE_NOTES.md
-      - name: Create GitHub Release
+          ls -l
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.release-gate.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
           TARGET_SHA: ${{ github.sha }}
         run: |
-          gh release create "$TAG_NAME" \
+          set -euo pipefail
+          # Defensive idempotency re-check: if the gate's existence check transiently
+          # false-negated and the release actually exists, skip create -- don't error,
+          # so the failure cleanup below can't delete a legitimate pre-existing release.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::release $TAG already exists -> skipping create (idempotent)"
+            exit 0
+          fi
+          notes_args=()
+          if [ -n "${RELEASE_NOTES:-}" ]; then
+            notes_args=(--notes "$RELEASE_NOTES")
+          else
+            notes_args=(--generate-notes)
+          fi
+          # Release creation is the LAST step: assets are built + verified first, so a
+          # failure here is the only partial-state window, closed by the cleanup below.
+          # --latest is explicit: the tag's `-g<sha>` suffix is semver-prerelease-shaped,
+          # and install.sh defaults to releases/latest/download -- without it the
+          # `curl | bash` path could 404 despite every asset uploading fine.
+          gh release create "$TAG" \
             --target "$TARGET_SHA" \
-            --notes-file RELEASE_NOTES.md \
+            --title "$TAG" \
+            --latest \
+            "${notes_args[@]}" \
             dist/*
+      - name: Clean up partial release on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.gate.outputs.tag }}
+        run: gh release delete "$TAG" --cleanup-tag --yes || true

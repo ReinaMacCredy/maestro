@@ -1,4 +1,0 @@
-interface:
-  display_name: "CLI for Agents"
-  short_description: "Design agent-safe automation-friendly CLIs"
-  default_prompt: "Use $cli-for-agents to design or review this CLI for reliable headless agent use."
