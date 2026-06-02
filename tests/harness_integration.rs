@@ -182,6 +182,12 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     for index in 3..=7 {
         mark_verified(repo, &format!("task-{index:03}"), "general", "0", "100");
     }
+    // Two live tasks share a blocker reason to trip recurring_blocker. They are
+    // separate from the verified tasks above because a done task cannot take a
+    // blocker, and keeping them unverified leaves the verification-duration
+    // medians that drive missing_skill untouched.
+    create_task(repo, "Task 8");
+    create_task(repo, "Task 9");
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -217,7 +223,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
             &[
                 "task",
                 "block",
-                "task-004",
+                "task-008",
                 "--reason",
                 "waiting for staging credentials",
             ],
@@ -225,7 +231,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
         &[
             "task",
             "block",
-            "task-004",
+            "task-008",
             "--reason",
             "waiting for staging credentials",
         ],
@@ -236,7 +242,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
             &[
                 "task",
                 "block",
-                "task-005",
+                "task-009",
                 "--reason",
                 "waiting for staging credentials",
             ],
@@ -244,7 +250,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
         &[
             "task",
             "block",
-            "task-005",
+            "task-009",
             "--reason",
             "waiting for staging credentials",
         ],
