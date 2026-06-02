@@ -109,10 +109,10 @@ pub struct InitArgs {
 #[derive(Debug, Args)]
 pub struct AgentArgs {
     /// Agent to target as a positional, e.g. `maestro install claude` (defaults to codex).
-    #[arg(value_enum)]
+    #[arg(value_enum, value_name = "AGENT")]
     pub agent_positional: Option<Agent>,
     /// Agent as a flag, e.g. `maestro install --agent claude`; cannot be combined with the positional.
-    #[arg(long = "agent", value_enum, conflicts_with = "agent_positional")]
+    #[arg(long = "agent", value_enum, value_name = "AGENT", conflicts_with = "agent_positional")]
     pub agent_flag: Option<Agent>,
 }
 
