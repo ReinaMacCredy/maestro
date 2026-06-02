@@ -893,7 +893,7 @@ fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
 pub(crate) fn load_record_at(path: &Path, id: &str) -> Result<FeatureRecord> {
     validate_feature_id(id)?;
     let Some(contents) = read_to_string_if_exists(path)? else {
-        bail!("feature {id} not found");
+        bail!("feature not found: {id}");
     };
     let record: FeatureRecord = serde_yaml::from_str(&contents)
         .with_context(|| format!("failed to parse {}", path.display()))?;
