@@ -15,6 +15,11 @@ pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
 
     let prefix = format!("{id}-");
     let mut matches = Vec::new();
+    // A missing tasks dir (fresh repo) has no entries to match: report the id, not
+    // a raw ENOENT path. Mirrors load_task_entries, which guards its read the same way.
+    if !tasks_dir.is_dir() {
+        bail!("task not found: {id}");
+    }
     for entry in fs::read_dir(tasks_dir)
         .with_context(|| format!("failed to read {}", tasks_dir.display()))?
     {
@@ -97,4 +102,27 @@ pub fn load_task_with_snapshot(
         .context("task path is missing parent directory")?;
     let (task, snapshot) = load_task(&task_path)?;
     Ok((task, snapshot, task_dir))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_tasks_dir_reports_not_found_not_a_raw_io_error() {
+        // No tasks dir yet (fresh repo). The `task` CLI ensure_dir's it, but the
+        // domain lookup must not leak an ENOENT path for callers that do not.
+        let dir = Path::new("/nonexistent/maestro/tasks");
+        let err = resolve_task_yaml_path(dir, "task-001")
+            .expect_err("a missing tasks dir must not resolve to a path");
+        let message = err.to_string();
+        assert!(
+            message.contains("task not found: task-001"),
+            "expected a clean not-found, got: {message}"
+        );
+        assert!(
+            !message.contains("failed to read"),
+            "must not leak the raw read_dir error: {message}"
+        );
+    }
 }
