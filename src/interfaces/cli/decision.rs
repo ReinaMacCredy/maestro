@@ -25,7 +25,11 @@ fn new_decision(paths: &MaestroPaths, title: &str) -> Result<()> {
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
     let number = decisions::create(paths, title)?;
+    let file_name = decisions::decision_file_name(number, title);
     println!("created decision decision-{number:03}");
+    println!(
+        "# template at .maestro/decisions/{file_name} — fill in Context / Decision / Alternatives"
+    );
     Ok(())
 }
 
