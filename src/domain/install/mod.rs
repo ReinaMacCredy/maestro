@@ -62,9 +62,16 @@ where
     let lock_path = paths.install_lock_file();
     let mut lock = InstallLock::load(&lock_path)?;
     let previous_install = lock.agents.get(agent.key()).cloned();
+    let sibling_created_fresh = lock.paths_created_fresh_by_other_agents(agent);
     let previous_lock = lock.clone();
     let previous_lock_existed = lock_path.exists();
-    let prepared = prepare_mirrors(paths, agent, timestamp()?, previous_install.as_ref())?;
+    let prepared = prepare_mirrors(
+        paths,
+        agent,
+        timestamp()?,
+        previous_install.as_ref(),
+        &sibling_created_fresh,
+    )?;
 
     let mut pending_install = prepared.install.clone();
     pending_install.mark_pending();

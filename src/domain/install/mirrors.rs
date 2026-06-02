@@ -168,6 +168,7 @@ pub(crate) fn prepare_mirrors(
     agent: InstallAgent,
     installed_at: String,
     previous_install: Option<&AgentInstall>,
+    sibling_created_fresh: &BTreeSet<String>,
 ) -> Result<PreparedMirrors> {
     let mut install = AgentInstall::new(installed_at);
     let backup_timestamp = backup_operation_timestamp()?;
@@ -186,12 +187,15 @@ pub(crate) fn prepare_mirrors(
         // nothing, which decides whether uninstall may delete an emptied residue.
         // On re-install the file already exists, so recomputing it from disk would
         // flip a maestro-created file to "pre-existing" and leave a husk behind.
-        // Carry the prior lock's verdict forward when there is one.
+        // Carry the prior lock's verdict forward when there is one; otherwise a
+        // file maestro created under another agent (a shared mirror this agent is
+        // installing into second) is still maestro-created, so inherit that
+        // sibling verdict rather than reading it as pre-existing.
         let created_fresh = match previous_install.and_then(|previous| {
             previous.files.get(&plan.relative_path)
         }) {
             Some(ownership) => ownership.created_fresh,
-            None => existing.is_none(),
+            None => existing.is_none() || sibling_created_fresh.contains(&plan.relative_path),
         };
         let ownership =
             ownership_for_plan(&plan, &contents, previous_values, created_fresh)?;

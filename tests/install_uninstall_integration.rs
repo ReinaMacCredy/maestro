@@ -512,6 +512,48 @@ fn reinstall_then_uninstall_removes_a_maestro_created_file_instead_of_leaving_a_
 }
 
 #[test]
+fn two_agent_uninstall_removes_shared_mirror_husks() {
+    // claude creates CLAUDE.md/AGENTS.md/.gitignore fresh; codex then installs
+    // into the same shared mirrors and would record them as pre-existing (they now
+    // exist on disk). Uninstalling both agents must not leave 0-byte husks: the
+    // created-fresh verdict is inherited across agents, so the final uninstall
+    // removes maestro's own emptied residue instead of preserving a husk.
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let shared = ["CLAUDE.md", "AGENTS.md", ".gitignore"];
+    for agent in ["claude", "codex"] {
+        let install = maestro(&["install", "--agent", agent], temp_dir.path());
+        assert!(
+            install.status.success(),
+            "install {agent} stderr: {}",
+            String::from_utf8_lossy(&install.stderr)
+        );
+    }
+    for name in shared {
+        assert!(
+            temp_dir.path().join(name).is_file(),
+            "{name} should exist while both agents are installed"
+        );
+    }
+
+    for agent in ["claude", "codex"] {
+        let uninstall = maestro(&["uninstall", "--agent", agent], temp_dir.path());
+        assert!(
+            uninstall.status.success(),
+            "uninstall {agent} stderr: {}",
+            String::from_utf8_lossy(&uninstall.stderr)
+        );
+    }
+    for name in shared {
+        assert!(
+            !temp_dir.path().join(name).exists(),
+            "maestro-created {name} must be removed after both agents uninstall, not left as an empty husk"
+        );
+    }
+}
+
+#[test]
 fn reinstall_replaces_pending_install_lock_and_commits_recovered_state() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());

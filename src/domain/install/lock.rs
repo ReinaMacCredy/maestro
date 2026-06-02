@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
@@ -136,6 +136,25 @@ impl InstallLock {
     /// Remove ownership for one agent.
     pub fn remove_agent(&mut self, agent: InstallAgent) {
         self.agents.remove(agent.key());
+    }
+
+    /// Relative paths another agent already recorded as created-fresh. A second
+    /// agent installing into a shared mirror inherits this verdict so a later
+    /// uninstall removes the emptied file instead of leaving a husk: by the time
+    /// the second agent uninstalls, the first agent's lock entry (and its
+    /// created-fresh record) is already gone.
+    pub fn paths_created_fresh_by_other_agents(&self, agent: InstallAgent) -> BTreeSet<String> {
+        self.agents
+            .iter()
+            .filter(|(key, _)| key.as_str() != agent.key())
+            .flat_map(|(_, install)| {
+                install
+                    .files
+                    .iter()
+                    .filter(|(_, ownership)| ownership.created_fresh)
+                    .map(|(path, _)| path.clone())
+            })
+            .collect()
     }
 }
 
