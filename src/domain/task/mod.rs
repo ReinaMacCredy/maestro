@@ -369,6 +369,13 @@ pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<(Ta
             handle.task().id
         );
     }
+    if lifecycle::is_terminal(&handle.task().state) {
+        bail!(
+            "task {} is {}; its checks are settled history and cannot change",
+            handle.task().id,
+            handle.task().state.as_str()
+        );
+    }
     if checks.iter().any(|check| check.trim().is_empty()) {
         bail!(
             "task {} check cannot be empty; e.g. `maestro task set {} --check \"build passes\"`",

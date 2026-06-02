@@ -752,7 +752,12 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     );
     let referenced = maestro(repo, &["task", "archive", "task-002"]);
     assert_failure(&referenced, &["task", "archive", "task-002"]);
-    assert!(stderr(&referenced).contains("task-001"));
+    let referenced_err = stderr(&referenced);
+    assert!(referenced_err.contains("task-001"));
+    // The remedy is the working one (unblock the referrer); the dead "archive the
+    // referrer first" detour is gone -- a live referrer can never be archived.
+    assert!(referenced_err.contains("maestro task unblock task-001"));
+    assert!(!referenced_err.contains("archive task-001 first"));
 
     // Clearing the blocker unblocks the archive.
     assert_success(
@@ -943,6 +948,65 @@ fn accept_on_a_terminal_task_reports_the_terminal_state_not_a_dead_end_add_check
     assert!(
         !message.contains("has no checks"),
         "accept on a terminal task must not hand the dead-end add-check remedy: {message}"
+    );
+}
+
+#[test]
+fn set_check_rejects_a_terminal_task_whose_checks_are_settled_history() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Doomed"]),
+        &["task", "create", "Doomed"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "reject", "task-001", "--reason", "out of scope"]),
+        &["task", "reject", "task-001", "--reason", "out of scope"],
+    );
+
+    // A rejected task is terminal but never accepted (acceptance_locked is false),
+    // so it slips past the lock guard. Editing its checks must still be refused --
+    // they are settled history.
+    let args = &["task", "set", "task-001", "--check", "too late"];
+    let set = maestro(repo, args);
+    assert_failure(&set, args);
+    let message = stderr(&set);
+    assert!(
+        message.contains("settled history"),
+        "expected the terminal settled-history guard, got: {message}"
+    );
+}
+
+#[test]
+fn complete_on_a_pre_claim_task_points_at_claim_not_a_dead_end() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    for args in [
+        vec!["task", "create", "Ship it"],
+        vec!["task", "explore", "task-001"],
+        vec!["task", "set", "task-001", "--check", "build passes"],
+        vec!["task", "accept", "task-001"],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+
+    // task-001 is ready but never claimed. Completing it must point at `claim` (the
+    // get-to-in_progress verb), not the generic "cannot transition" dead end.
+    let complete_args = &[
+        "task", "complete", "task-001", "--summary", "did it", "--claim", "build passes",
+    ];
+    let complete = maestro(repo, complete_args);
+    assert_failure(&complete, complete_args);
+    let message = stderr(&complete);
+    assert!(
+        message.contains("maestro task claim task-001"),
+        "expected the claim remedy, got: {message}"
+    );
+    assert!(
+        !message.contains("cannot transition"),
+        "expected the actionable claim remedy, not the generic catch-all: {message}"
     );
 }
 

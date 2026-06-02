@@ -161,6 +161,9 @@ fn doctor_and_task_doctor_fail_on_bad_blocker_graph() {
     let task_doctor = maestro(repo, &["task", "doctor"]);
     assert_failure(&task_doctor, &["task", "doctor"]);
     assert!(stderr(&task_doctor).contains("self-blocking blocker"));
+    // The report names the remedy so doctor does not just say "wrong" without "what now".
+    assert!(stderr(&task_doctor).contains("maestro task unblock"));
+    assert!(stderr(&task_doctor).contains("can instead be archived"));
 }
 
 #[test]

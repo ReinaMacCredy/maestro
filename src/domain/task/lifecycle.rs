@@ -87,6 +87,15 @@ fn validate_transition(task: &TaskRecord, to: &TaskState) -> Result<()> {
             }
             Ok(())
         }
+        (
+            TaskState::Draft | TaskState::Exploring | TaskState::Ready,
+            TaskState::NeedsVerification,
+        ) => bail!(
+            "task {} is {}; run `maestro task claim {}` to start work before completing it",
+            task.id,
+            task.state.as_str(),
+            task.id
+        ),
         (TaskState::NeedsVerification, TaskState::Verified) => {
             bail!(
                 "the verified transition is owned by `maestro task verify {}`; it cannot be set directly",
@@ -139,7 +148,7 @@ fn validate_ready(task: &TaskRecord) -> Result<()> {
     }
 }
 
-fn is_terminal(state: &TaskState) -> bool {
+pub(crate) fn is_terminal(state: &TaskState) -> bool {
     matches!(
         state,
         TaskState::Rejected | TaskState::Abandoned | TaskState::Superseded

@@ -49,7 +49,7 @@ pub fn archive_task(
     }
     if let Some(referrer) = live_task_referrer(tasks_dir, id)? {
         bail!(
-            "cannot archive {id} — {referrer} is blocked by it; resolve the blocker or archive {referrer} first"
+            "cannot archive {id} — {referrer} is blocked by it; run `maestro task unblock {referrer} --blocker <blocker-id>` first (see `maestro task show {referrer}` for the blocker id)"
         );
     }
 

@@ -157,6 +157,10 @@ pub fn render_report(report: &TaskDoctorReport) -> String {
         "task doctor found {} error(s)\n",
         report.errors.len()
     ));
+    out.push_str(
+        "fix: clear a blocker with `maestro task unblock <id> --blocker <blocker-id>`; \
+         a terminal task can instead be archived to drop it from the graph\n",
+    );
     out
 }
 
