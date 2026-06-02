@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use crate::decisions::query::{decision_display_id, decision_entries};
+use crate::decisions::query::{decision_display_id, decision_entries, decision_title};
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::run;
@@ -213,15 +213,4 @@ fn task_state_label(state: &task::TaskState, blocked: bool) -> &'static str {
         return "blocked";
     }
     state.as_str()
-}
-
-fn decision_title(path: &Path) -> Result<String> {
-    let raw =
-        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let title = raw
-        .lines()
-        .find_map(|line| line.strip_prefix("# "))
-        .and_then(|heading| heading.split_once(": ").map(|(_, title)| title.to_string()))
-        .unwrap_or_else(|| "<untitled>".to_string());
-    Ok(title)
 }

@@ -110,6 +110,20 @@ pub fn decision_display_id(file_name: &str) -> String {
     }
 }
 
+/// The title from a decision file's `# decision-NNN: Title` heading, or
+/// `<untitled>` when the heading is missing or malformed. Shared by the
+/// `query decisions` and `decision list` views so both render the same column.
+pub fn decision_title(path: &Path) -> Result<String> {
+    let raw =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let title = raw
+        .lines()
+        .find_map(|line| line.strip_prefix("# "))
+        .and_then(|heading| heading.split_once(": ").map(|(_, title)| title.to_string()))
+        .unwrap_or_else(|| "<untitled>".to_string());
+    Ok(title)
+}
+
 fn is_decision_file_name(file_name: &str) -> bool {
     file_name.starts_with("decision-") && file_name.ends_with(".md")
 }

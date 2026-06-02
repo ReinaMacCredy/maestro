@@ -48,11 +48,13 @@ fn list_decisions(paths: &MaestroPaths) -> Result<()> {
         return Ok(());
     }
 
+    println!("ID\tFILE\tTITLE");
     for entry in entries {
         println!(
-            "{}\t{}",
+            "{}\t{}\t{}",
             decisions::decision_display_id(&entry.file_name),
-            entry.file_name
+            entry.file_name,
+            decisions::decision_title(&entry.path)?
         );
     }
 
