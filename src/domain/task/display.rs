@@ -1,6 +1,6 @@
 use crate::domain::task::blockers::has_unresolved_blockers;
 use crate::domain::task::template::{TaskRecord, TaskState};
-use crate::foundation::core::time::format_utc_seconds_rfc3339_millis;
+use crate::foundation::core::time::render_timestamp;
 
 /// Render one task for `maestro task show`. `checks` is the task's acceptance
 /// contract, read by the caller from the sibling `acceptance.yaml`.
@@ -104,16 +104,6 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
         }
     }
     out
-}
-
-/// Render a persisted nanos-since-epoch string as a human-readable RFC3339 UTC
-/// timestamp, falling back to the raw value when it is not a parseable instant
-/// (an already-formatted or hand-forged field), so display never fails.
-fn render_timestamp(value: &str) -> String {
-    match value.trim().parse::<u64>() {
-        Ok(nanos) => format_utc_seconds_rfc3339_millis(nanos / 1_000_000_000),
-        Err(_) => value.to_string(),
-    }
 }
 
 /// Render a compact list for `maestro task list`.

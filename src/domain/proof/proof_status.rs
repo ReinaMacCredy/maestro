@@ -18,6 +18,7 @@ use super::verify_task::{
 use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::time::render_timestamp;
 
 /// Derived status for a task's persisted proof.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -332,7 +333,7 @@ pub fn render_proof_status(status: &ProofStatus) -> String {
         return out;
     };
 
-    out.push_str(&format!("verified_at: {verified_at}\n"));
+    out.push_str(&format!("verified_at: {}\n", render_timestamp(verified_at)));
     out.push_str(&format!(
         "commit: {}\n",
         status.verified_commit.as_deref().unwrap_or("<none>")

@@ -911,7 +911,8 @@ fn harness_and_query_use_newer_attempt_over_legacy_failed_canonical() {
 
     let proof = run_success(repo, &["query", "proof", "task-001"]);
     assert!(proof.contains("verification.attempts/latest.json"));
-    assert!(proof.contains("verified_at: 1000"));
+    // verified_at renders the nanos string as a human RFC3339 instant (1000ns -> epoch).
+    assert!(proof.contains("verified_at: 1970-01-01T00:00:00.000Z"));
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));

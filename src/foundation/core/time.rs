@@ -76,6 +76,16 @@ pub fn format_utc_seconds_rfc3339_millis(seconds: u64) -> String {
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.000Z")
 }
 
+/// Render a persisted nanos-since-epoch string as a human RFC3339 UTC timestamp.
+/// Falls back to the raw value when it does not parse as nanoseconds, so a
+/// hand-edited or legacy field is shown verbatim rather than mangled.
+pub fn render_timestamp(value: &str) -> String {
+    match value.trim().parse::<u64>() {
+        Ok(nanos) => format_utc_seconds_rfc3339_millis(nanos / 1_000_000_000),
+        Err(_) => value.to_string(),
+    }
+}
+
 /// Decompose Unix epoch seconds into UTC civil parts `(year, month, day, hour, minute, second)`.
 fn civil_parts(seconds: u64) -> (i64, u32, u32, u64, u64, u64) {
     let days = (seconds / 86_400) as i64;
