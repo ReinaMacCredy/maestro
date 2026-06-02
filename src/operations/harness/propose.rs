@@ -45,6 +45,16 @@ fn ready_to_measure(item: &BacklogItem, fresh: &BTreeSet<String>) -> bool {
         && !fresh.contains(&item.fingerprint)
 }
 
+/// Load a note's linked task from the live tree, falling back to the archive so a
+/// verified spawned task that was archived (normal terminal cleanup) still resolves
+/// -- matching how `query proof` and `task show` read across the boundary. The
+/// `(ready to measure)` hint and the `measure` gate share this so they never
+/// disagree about whether a closed task can be measured.
+fn load_linked_task(paths: &MaestroPaths, task_id: &str) -> Result<task::TaskRecord> {
+    task::load_task_record(&paths.tasks_dir(), task_id)
+        .or_else(|_| task::load_task_record(&paths.archive_tasks_dir(), task_id))
+}
+
 /// True when the note's linked task exists and is verified -- the precondition the
 /// no-force `measure` enforces below. The hint must not promise a measure the gate
 /// would refuse, so a missing link or an unverified/absent task withholds it.
@@ -52,8 +62,7 @@ fn linked_task_verified(paths: &MaestroPaths, item: &BacklogItem) -> bool {
     let Some(task_id) = &item.spawned_task else {
         return false;
     };
-    task::load_task_record(&paths.tasks_dir(), task_id)
-        .is_ok_and(|record| record.state == TaskState::Verified)
+    load_linked_task(paths, task_id).is_ok_and(|record| record.state == TaskState::Verified)
 }
 
 /// Run detection and merge fresh proposals into the loaded backlog without
@@ -152,7 +161,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
     if !force {
         match &spawned_task {
             Some(task_id) => {
-                let Ok(record) = task::load_task_record(&paths.tasks_dir(), task_id) else {
+                let Ok(record) = load_linked_task(paths, task_id) else {
                     bail!(
                         "linked task {task_id} could not be loaded; use --force to measure anyway"
                     );

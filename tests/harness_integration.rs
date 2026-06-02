@@ -1710,6 +1710,38 @@ fn harness_measure_closes_silent_state_note() {
 }
 
 #[test]
+fn harness_measure_resolves_a_linked_task_through_the_archive() {
+    // S2-7: archiving a verified spawned task is normal terminal cleanup. The
+    // measure gate and the "ready to measure" hint read only the live tree, so
+    // archiving used to flip a measurable proposal to "could not be loaded; use
+    // --force". Both must resolve the linked task through the archive, like
+    // query proof / task show.
+    let temp = setup_missing_verification_note("maestro-harness-measure-archived");
+    let repo = temp.path();
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("spawned task-002"));
+
+    mark_verified(repo, "task-002", "general", "0", "100");
+    write_harness_verify(repo, &["cargo clippy"]);
+
+    // Archive the verified spawned task (normal terminal cleanup).
+    run_success(repo, &["task", "archive", "task-002"]);
+
+    // The hint still flags it ready to measure: hint and gate agree across the
+    // archive boundary.
+    let ready = run_success(repo, &["harness", "list"]);
+    assert!(ready.contains("ready to measure"), "{ready}");
+
+    // measure succeeds via the archive fallback, not the --force escape hatch.
+    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
+    assert!(measure.contains("hb-001 is now measured"), "{measure}");
+
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    assert!(show.contains("status: measured"), "{show}");
+}
+
+#[test]
 fn harness_regression_reopens_measured_state_note_and_clears_link() {
     let temp = setup_missing_verification_note("maestro-harness-regress");
     let repo = temp.path();
