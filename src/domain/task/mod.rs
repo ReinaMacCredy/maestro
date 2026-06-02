@@ -522,6 +522,11 @@ pub fn unblock_task(
 }
 
 /// Append a non-transition Task state-history update.
+///
+/// # Errors
+///
+/// Returns an error when a `--claim` value is empty/whitespace: a claim is the
+/// proof a later `task verify` checks against, so a blank one is meaningless.
 pub fn update_task_history(
     tasks_dir: &Path,
     id: &str,
@@ -529,6 +534,11 @@ pub fn update_task_history(
     updated_at: &str,
     details: TransitionDetails,
 ) -> Result<TaskRecord> {
+    if details.claims.iter().any(|claim| claim.trim().is_empty()) {
+        bail!(
+            "`--claim` must not be empty; pass the proof to verify against, e.g. --claim \"cargo test passes\""
+        );
+    }
     let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     lifecycle::append_history(&mut task, actor, updated_at, details);
     template::save_task_with_snapshot(&task, &snapshot)?;

@@ -49,16 +49,32 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     {
         out.push_str(&format!("summary: {summary}\n"));
     }
-    if let Some(claims) = task
+    if let Some(entry) = task
         .state_history
         .iter()
         .rev()
-        .map(|entry| &entry.claims)
-        .find(|claims| !claims.is_empty())
+        .find(|entry| !entry.claims.is_empty())
     {
+        // Claims recorded after `verified_at` were not part of what `task verify`
+        // proved; flag them so a post-verification claim cannot masquerade as
+        // verified while the task still reads `verified`.
+        let recorded_after_verification = match (
+            task.verification
+                .verified_at
+                .as_deref()
+                .and_then(|value| value.trim().parse::<u64>().ok()),
+            entry.at.trim().parse::<u64>().ok(),
+        ) {
+            (Some(verified_at), Some(entry_at)) => entry_at > verified_at,
+            _ => false,
+        };
         out.push_str("claims:\n");
-        for claim in claims {
-            out.push_str(&format!("- {claim}\n"));
+        for claim in &entry.claims {
+            if recorded_after_verification {
+                out.push_str(&format!("- {claim} (unverified)\n"));
+            } else {
+                out.push_str(&format!("- {claim}\n"));
+            }
         }
     }
 

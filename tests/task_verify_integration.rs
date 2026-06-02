@@ -466,6 +466,41 @@ fn failed_verification_demotes_previously_verified_task_through_task_verify() {
 }
 
 #[test]
+fn task_show_flags_a_claim_added_after_verification_as_unverified() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    write_event(repo, "task-001", "implemented CSV export");
+    assert_success(
+        &maestro(repo, &["task", "verify", "task-001"]),
+        &["task", "verify", "task-001"],
+    );
+
+    // Before any post-verification update, the proven claim renders plain.
+    let before = maestro(repo, &["task", "show", "task-001"]);
+    assert_success(&before, &["task", "show", "task-001"]);
+    let before_out = stdout(&before);
+    assert!(before_out.contains("- implemented CSV export"));
+    assert!(!before_out.contains("(unverified)"));
+
+    // Recording a new claim on a verified task is still allowed (it is the
+    // re-verification path), but `task show` must not let it masquerade as
+    // proven while the task still reads `verified`.
+    assert_success(
+        &maestro(
+            repo,
+            &["task", "update", "task-001", "--claim", "unproven follow-up"],
+        ),
+        &["task", "update", "task-001", "--claim", "unproven follow-up"],
+    );
+    let after = maestro(repo, &["task", "show", "task-001"]);
+    assert_success(&after, &["task", "show", "task-001"]);
+    let after_out = stdout(&after);
+    assert!(after_out.contains("state: verified"));
+    assert!(after_out.contains("- unproven follow-up (unverified)"));
+}
+
+#[test]
 fn legacy_failed_verification_without_receipt_still_reports_failed() {
     let temp = setup_repo();
     let repo = temp.path();

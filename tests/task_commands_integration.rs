@@ -891,3 +891,41 @@ fn set_check_rejects_an_empty_value_so_it_cannot_satisfy_the_acceptance_gate() {
     assert_failure(&accept, &["task", "accept", "task-001"]);
     assert!(stderr(&accept).contains("has no checks"));
 }
+
+#[test]
+fn task_update_rejects_an_empty_claim_so_no_blank_proof_is_recorded() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Empty-claim probe"]),
+        &["task", "create", "Empty-claim probe"],
+    );
+    // Claiming a draft fast-tracks through accept, which needs a check.
+    assert_success(
+        &maestro(repo, &["task", "set", "task-001", "--check", "builds"]),
+        &["task", "set", "task-001", "--check", "builds"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "claim", "task-001"]),
+        &["task", "claim", "task-001"],
+    );
+
+    let history_len = |repo: &Path| {
+        task_yaml(repo, "task-001")["state_history"]
+            .as_sequence()
+            .expect("invariant: state_history should be an array")
+            .len()
+    };
+    let before = history_len(repo);
+
+    // A `--claim ''` is meaningless: a claim is the proof a later `task verify`
+    // checks against, so a blank one must be refused and nothing recorded.
+    let args = &["task", "update", "task-001", "--claim", ""];
+    let update = maestro(repo, args);
+    assert_failure(&update, args);
+    assert!(stderr(&update).contains("`--claim` must not be empty"));
+
+    // The refused update appended no history entry.
+    assert_eq!(history_len(repo), before);
+}
