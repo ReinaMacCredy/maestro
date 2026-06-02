@@ -231,10 +231,13 @@ maestro harness measure hb-001              # close the loop once that task is v
 
 The three lifecycles compose into one operating rhythm:
 
-1. **Design as a feature.** `feature new` then `feature set` to map the contract; lock the forks with `decision new`.
-2. **Spin off tasks.** `task create --feature <id>` for each slice, then run each through `claim -> complete -> verify` so "done" is backed by recorded proof.
-3. **Ship the feature.** `feature ship` once its child tasks are verified and QA coverage is green.
-4. **Improve the harness.** Periodically `harness list`; for each proposal worth doing, `harness apply` (spawns a task), close that task, then `harness measure` to confirm the friction is gone.
+1. **Design as a feature.** `feature new` then `feature set` to map the contract (acceptance, affected areas, non-goals, open questions); lock the forks with `decision new`. `feature accept` freezes the contract into `ready` (it first requires a captured behavior baseline), then `feature start` moves it to `in_progress`.
+2. **Spin off tasks, each closed by proof.** `task create --feature <id>` for each slice — feature-linked tasks inherit the feature's contract, while a standalone task needs its own `--check` first. Then drive every task through the same gated loop:
+   - `task claim` takes a ready task; `task complete --summary "..." --claim "..."` submits the work and states what proves it.
+   - That proof is recorded automatically by the installed hooks as the agent runs its tools; by hand it is `maestro event create --task-id <id> --claim "<same text>"`.
+   - `task verify` passes only once the claim is backed by that recorded proof, so a `verified` task is always evidence you can open.
+3. **Ship the feature once QA is proven.** A feature ships only when it has no live child tasks *and* its QA coverage is green: every `[bl-NNN]` scenario in the baseline must be matched by a slice in `qa-slices.yaml` carrying non-empty evidence. With coverage in place, `feature ship --outcome "..."` closes it. Coverage is checked, not asserted, so a green ship is a real signal.
+4. **Improve the harness.** Periodically `harness list` (proposals surface only once enough run history accrues to spot friction); for each proposal worth doing, `harness apply` (spawns a standalone task), close that task through the loop above, then `harness measure` to confirm the friction is gone.
 
 Steps 1-3 build the product; step 4 sharpens the tool that builds it. All four route work through the same proof-gated task loop.
 
