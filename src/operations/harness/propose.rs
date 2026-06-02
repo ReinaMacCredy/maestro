@@ -10,6 +10,13 @@ use crate::foundation::core::time::{nanos_since_epoch_string, utc_now_timestamp}
 
 use super::detect;
 
+/// Read the persisted backlog for display through the operations facade. A
+/// missing backlog file reads as an empty backlog, so a fresh repo reports
+/// cleanly instead of leaking a `failed to read` IO error to the interface.
+pub fn load_backlog(paths: &MaestroPaths) -> Result<BacklogConfig> {
+    backlog::load(paths)
+}
+
 /// Refresh rule-based proposals into the backlog and return the full backlog
 /// alongside the ids that are ready to measure (D7). The hint is derived from the
 /// current detection run and never persisted, so the interface stays a pure

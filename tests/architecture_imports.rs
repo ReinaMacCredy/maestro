@@ -603,7 +603,7 @@ fn harness_operation_owns_implementation() {
         "mod propose;",
         "pub use detect::detect;",
         "pub use friction::looks_like_correction;",
-        "pub use propose::{apply, measure, refresh};",
+        "pub use propose::{apply, load_backlog, measure, refresh};",
     ] {
         assert!(
             operations_facade.contains(item),
@@ -620,6 +620,7 @@ fn harness_operation_owns_implementation() {
         BTreeSet::from([
             "apply".to_string(),
             "detect".to_string(),
+            "load_backlog".to_string(),
             "looks_like_correction".to_string(),
             "measure".to_string(),
             "refresh".to_string(),

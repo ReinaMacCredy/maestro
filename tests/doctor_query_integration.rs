@@ -305,6 +305,26 @@ fn doctor_counts_real_decisions_and_skips_symlinked_entries() {
 }
 
 #[test]
+fn query_backlog_reports_empty_state_when_the_backlog_file_is_absent() {
+    // R29/R22: a repo with no harness backlog (deleted, or never extracted)
+    // must read as an empty backlog, not leak a raw ENOENT + absolute path.
+    let temp = setup_repo("maestro-query-backlog-absent");
+    let repo = temp.path();
+    fs::remove_file(repo.join(".maestro/harness/backlog.yaml"))
+        .expect("invariant: the scaffolded backlog should exist before removal");
+
+    let backlog = run_success(repo, &["query", "backlog"]);
+    assert!(
+        backlog.contains("no backlog items found"),
+        "absent backlog should report the empty state, got:\n{backlog}"
+    );
+    assert!(
+        !backlog.contains("failed to read") && !backlog.contains("os error"),
+        "absent backlog must not leak a raw io error:\n{backlog}"
+    );
+}
+
+#[test]
 fn query_views_scan_current_artifacts_without_writing_cache_files() {
     let temp = setup_repo("maestro-query-views");
     let repo = temp.path();

@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 
 use crate::decisions::query::{decision_display_id, decision_entries, decision_title};
 use crate::domain::feature;
@@ -11,8 +10,6 @@ use crate::domain::run;
 use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, Compat, classify};
-use crate::harness::schema::BacklogConfig;
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::operations::harness;
 
@@ -142,8 +139,7 @@ fn query_decisions(paths: &MaestroPaths) -> Result<()> {
 }
 
 fn query_backlog(paths: &MaestroPaths) -> Result<()> {
-    let path = paths.harness_dir().join("backlog.yaml");
-    let backlog = load_backlog(&path)?;
+    let backlog = harness::load_backlog(paths)?;
     if backlog.items.is_empty() {
         println!("no backlog items found");
         return Ok(());
@@ -181,22 +177,6 @@ fn matrix_row(
         proof: proof_label(paths, task, task_dir, current_commit)?,
         title: task.title.clone(),
     })
-}
-
-fn load_backlog(path: &Path) -> Result<BacklogConfig> {
-    let raw =
-        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let backlog: BacklogConfig = serde_yaml::from_str(&raw)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) != Compat::Exact {
-        bail!(
-            "schema mismatch for {}: expected {}, found {}",
-            path.display(),
-            BACKLOG_SCHEMA_VERSION,
-            backlog.schema_version
-        );
-    }
-    Ok(backlog)
 }
 
 fn proof_label(
