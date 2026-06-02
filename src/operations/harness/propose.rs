@@ -63,9 +63,16 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
     let item = backlog.find_mut(id)?;
     match item.status.as_str() {
         "accepted" => bail!("{id} is already accepted; its task is already linked"),
-        "measured" => {
+        // Only state detectors reopen on re-detection (reopen_if_regressed), so
+        // the re-derive remedy is real for them and a dead end for behavioral
+        // items, whose measured state is terminal.
+        "measured" if is_state_detector(&item.item_type) => {
             bail!("{id} is already measured; run `maestro harness list` to re-derive it first")
         }
+        "measured" => bail!(
+            "{id} is already measured; a measured {} item is closed and re-detection will not reopen it",
+            item.item_type
+        ),
         _ => {}
     }
 

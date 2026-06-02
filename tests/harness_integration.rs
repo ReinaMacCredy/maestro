@@ -1816,3 +1816,35 @@ fn harness_measure_closes_behavioral_note_without_silence() {
     assert!(measure.contains("hb-001 is now measured"), "{measure}");
     assert!(measure.contains("friction is still detected"), "{measure}");
 }
+
+#[test]
+fn harness_apply_on_a_measured_behavioral_item_does_not_point_at_the_dead_end_rederive() {
+    let temp = setup_repo("maestro-harness-apply-measured-behavioral");
+    let repo = temp.path();
+    // A measured behavioral note (recurring_blocker is not a state detector, so
+    // re-detection never reopens it). A fresh repo re-derives no recurring
+    // blocker, so this item survives detect_and_merge unchanged.
+    fs::write(
+        repo.join(".maestro/harness/backlog.yaml"),
+        concat!(
+            "schema_version: maestro.backlog.v1\n",
+            "items:\n",
+            "  - id: hb-001\n",
+            "    fingerprint: recurring_blocker:waiting-on-api\n",
+            "    source: aggregate\n",
+            "    type: recurring_blocker\n",
+            "    title: Recurring blocker waiting-on-api across tasks\n",
+            "    priority: medium\n",
+            "    status: measured\n",
+        ),
+    )
+    .expect("invariant: backlog should be writable");
+
+    let apply = maestro(repo, &["harness", "apply", "hb-001"]);
+    assert!(!apply.status.success());
+    let err = stderr(&apply);
+    assert!(err.contains("already measured"), "{err}");
+    assert!(err.contains("re-detection will not reopen it"), "{err}");
+    // The re-derive remedy is a dead end for behavioral items; it must be gone.
+    assert!(!err.contains("harness list"), "{err}");
+}
