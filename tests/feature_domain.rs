@@ -142,6 +142,57 @@ fn set_replaces_per_field_and_is_proposed_only() {
 }
 
 #[test]
+fn set_rejects_a_blank_contract_value_so_it_cannot_satisfy_the_accept_gate() {
+    let temp = TestTempDir::new("maestro-feature-set-blank");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    // A `--acceptance ""` (or whitespace) would store a `[""]` that satisfies the
+    // length-only accept gate while carrying no contract; it must be refused, like
+    // the sibling `task set --check ""`.
+    for value in ["", "   "] {
+        let error = feature::set(
+            &paths,
+            "billing-csv",
+            ContractEdits {
+                acceptance: Some(vec![value.to_string()]),
+                ..Default::default()
+            },
+        )
+        .expect_err("invariant: a blank acceptance value must be rejected");
+        assert!(
+            error.to_string().contains("must not be empty or whitespace"),
+            "unexpected error: {error}"
+        );
+    }
+}
+
+#[test]
+fn amend_rejects_a_blank_addition_value() {
+    let temp = TestTempDir::new("maestro-feature-amend-blank");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    author_contract(&paths, "billing-csv");
+    feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
+
+    let error = feature::amend(
+        &paths,
+        "billing-csv",
+        ContractAdditions {
+            acceptance: vec!["   ".to_string()],
+            ..Default::default()
+        },
+        "real reason",
+    )
+    .expect_err("invariant: a blank amend value must be rejected");
+    assert!(
+        error.to_string().contains("must not be empty or whitespace"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
 fn accept_gate_requires_acceptance_and_areas() {
     let temp = TestTempDir::new("maestro-feature-accept-gate");
     let paths = MaestroPaths::new(temp.path());

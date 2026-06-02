@@ -71,7 +71,14 @@ pub fn run(args: TaskArgs) -> Result<()> {
         TaskCommand::Update { id, summary, claim } => {
             update_task(&paths, &id, summary, claim, &actor)
         }
-        TaskCommand::Block { id, reason, by } => block_task(&paths, &id, &reason, by, &actor),
+        TaskCommand::Block { id, reason, by } => {
+            if reason.trim().is_empty() {
+                bail!(
+                    "`--reason` must not be empty; say why the task is blocked, e.g. --reason \"waiting on task-002\""
+                );
+            }
+            block_task(&paths, &id, &reason, by, &actor)
+        }
         TaskCommand::Unblock { id, blocker } => unblock_task(&paths, &id, &blocker, &actor),
         TaskCommand::Reject { id, reason } => transition_task(
             &paths,

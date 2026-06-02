@@ -79,6 +79,9 @@ pub fn create_task(
     risk: Option<String>,
     created_at: &str,
 ) -> Result<TaskRecord> {
+    if title.trim().is_empty() {
+        bail!("task title must not be empty");
+    }
     let id = next_task_id(tasks_dir)?;
     let mut task = TaskRecord::draft(&id, title, created_at);
     task.feature_id = feature;

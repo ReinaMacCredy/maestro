@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 use crate::domain::proof;
 use crate::domain::task;
@@ -33,6 +33,11 @@ fn create_event(
         task_id,
         "--task-id is required or set MAESTRO_CURRENT_TASK",
     )?;
+    if explicit_claims.iter().any(|claim| claim.trim().is_empty()) {
+        bail!(
+            "`--claim` must not be empty; pass the proof to verify against, e.g. --claim \"cargo test passes\""
+        );
+    }
     // A proof event must point at a real task; reject orphan refs so
     // `event create --task-id task-999` fails loudly instead of logging a
     // dangling event with exit 0 (T2).

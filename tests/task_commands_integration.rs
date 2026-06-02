@@ -947,6 +947,74 @@ fn accept_on_a_terminal_task_reports_the_terminal_state_not_a_dead_end_add_check
 }
 
 #[test]
+fn task_create_rejects_an_empty_or_whitespace_title() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    // Sibling create verbs (feature new / decision new) reject a blank title;
+    // task create must too, instead of writing a task with a meaningless label.
+    for title in ["", "   "] {
+        let create = maestro(repo, &["task", "create", title]);
+        assert_failure(&create, &["task", "create", title]);
+        assert!(
+            stderr(&create).contains("title must not be empty"),
+            "unexpected error for {title:?}: {}",
+            stderr(&create)
+        );
+    }
+}
+
+#[test]
+fn task_block_rejects_an_empty_or_whitespace_reason() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "blocked"]),
+        &["task", "create", "blocked"],
+    );
+    // The sibling claim/check/complete verbs all reject a blank value; block must
+    // too, rather than persist a dangling-colon blank-reason blocker.
+    for reason in ["", "   "] {
+        let block = maestro(
+            repo,
+            &["task", "block", "task-001", "--reason", reason, "--by", "task-002"],
+        );
+        assert_failure(&block, &["task", "block", "--reason", reason]);
+        assert!(
+            stderr(&block).contains("`--reason` must not be empty"),
+            "unexpected error for {reason:?}: {}",
+            stderr(&block)
+        );
+    }
+}
+
+#[test]
+fn event_create_rejects_an_empty_or_whitespace_claim() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "proofed"]),
+        &["task", "create", "proofed"],
+    );
+    // `task complete --claim ""`/`task update --claim ""` are both refused; the
+    // event verb that records the same proof artifact must not accept a blank one.
+    for claim in ["", "   "] {
+        let event = maestro(
+            repo,
+            &["event", "create", "--task-id", "task-001", "--claim", claim],
+        );
+        assert_failure(&event, &["event", "create", "--claim", claim]);
+        assert!(
+            stderr(&event).contains("`--claim` must not be empty"),
+            "unexpected error for {claim:?}: {}",
+            stderr(&event)
+        );
+    }
+}
+
+#[test]
 fn task_update_rejects_an_empty_claim_so_no_blank_proof_is_recorded() {
     let temp = setup_repo();
     let repo = temp.path();

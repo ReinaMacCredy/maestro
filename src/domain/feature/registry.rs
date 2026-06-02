@@ -220,6 +220,16 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
     Ok(id)
 }
 
+/// Refuse a blank contract value so a vacuous `[""]` cannot satisfy the accept
+/// gate (which checks list length only) while carrying no real contract,
+/// matching the empty-value guards on the sibling task verbs.
+fn ensure_no_blank_values(field: &str, values: &[String]) -> Result<()> {
+    if values.iter().any(|value| value.trim().is_empty()) {
+        bail!("feature {field} values must not be empty or whitespace");
+    }
+    Ok(())
+}
+
 /// Author a Proposed feature's contract (declarative replace-per-field).
 ///
 /// # Errors
@@ -241,6 +251,16 @@ pub fn set(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<Featu
             "cannot edit {id} — terminal (status: {})",
             record.status.as_str()
         ),
+    }
+    for (field, values) in [
+        ("acceptance", edits.acceptance.as_deref()),
+        ("affected_areas", edits.affected_areas.as_deref()),
+        ("non_goals", edits.non_goals.as_deref()),
+        ("open_questions", edits.open_questions.as_deref()),
+    ] {
+        if let Some(values) = values {
+            ensure_no_blank_values(field, values)?;
+        }
     }
     if let Some(value) = edits.acceptance {
         record.acceptance = value;
@@ -386,6 +406,15 @@ pub fn amend(
                 record.status.as_str()
             )
         }
+    }
+
+    for (field, values) in [
+        ("acceptance", &additions.acceptance),
+        ("affected_areas", &additions.affected_areas),
+        ("non_goals", &additions.non_goals),
+        ("open_questions", &additions.open_questions),
+    ] {
+        ensure_no_blank_values(field, values)?;
     }
 
     let added = AmendAdditions {
