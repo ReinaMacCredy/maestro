@@ -100,6 +100,11 @@ fn validate_transition(task: &TaskRecord, to: &TaskState) -> Result<()> {
             task.id,
             task.id
         ),
+        (current, target) if current == target => bail!(
+            "task {} is already {}",
+            task.id,
+            task.state.as_str()
+        ),
         _ => bail!(
             "cannot transition task {} from {} to {}",
             task.id,
