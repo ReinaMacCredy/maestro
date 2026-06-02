@@ -468,6 +468,50 @@ fn reinstall_preserves_json_restore_snapshot() {
 }
 
 #[test]
+fn reinstall_then_uninstall_removes_a_maestro_created_file_instead_of_leaving_a_husk() {
+    // maestro creates CLAUDE.md and .claude/settings.local.json fresh (the user
+    // pre-created neither). A second install must not flip their created_fresh
+    // verdict to "pre-existing" just because they now exist on disk, or uninstall
+    // would strip them to empty residue and leave the husks behind.
+    let temp_dir = TestTempDir::new("maestro-install-cli-test");
+    init_repo(temp_dir.path());
+
+    let first = maestro(&["install", "--agent", "claude"], temp_dir.path());
+    assert!(
+        first.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let second = maestro(&["install", "--agent", "claude"], temp_dir.path());
+    assert!(
+        second.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+
+    let claude_md = temp_dir.path().join("CLAUDE.md");
+    let settings = temp_dir.path().join(".claude/settings.local.json");
+    assert!(claude_md.is_file());
+    assert!(settings.is_file());
+
+    let uninstall = maestro(&["uninstall", "--agent", "claude"], temp_dir.path());
+    assert!(
+        uninstall.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+
+    assert!(
+        !claude_md.exists(),
+        "maestro-created CLAUDE.md must be removed after uninstall, not left as an empty husk"
+    );
+    assert!(
+        !settings.exists(),
+        "maestro-created settings.local.json must be removed after uninstall, not left as a {{}} husk"
+    );
+}
+
+#[test]
 fn reinstall_replaces_pending_install_lock_and_commits_recovered_state() {
     let temp_dir = TestTempDir::new("maestro-install-cli-test");
     init_repo(temp_dir.path());

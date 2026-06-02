@@ -182,8 +182,19 @@ pub(crate) fn prepare_mirrors(
             BTreeMap::new()
         };
         let contents = contents_for_existing(&plan, existing.as_deref(), &previous_values)?;
+        // `created_fresh` is sticky: it records that maestro created the file from
+        // nothing, which decides whether uninstall may delete an emptied residue.
+        // On re-install the file already exists, so recomputing it from disk would
+        // flip a maestro-created file to "pre-existing" and leave a husk behind.
+        // Carry the prior lock's verdict forward when there is one.
+        let created_fresh = match previous_install.and_then(|previous| {
+            previous.files.get(&plan.relative_path)
+        }) {
+            Some(ownership) => ownership.created_fresh,
+            None => existing.is_none(),
+        };
         let ownership =
-            ownership_for_plan(&plan, &contents, previous_values, existing.is_none())?;
+            ownership_for_plan(&plan, &contents, previous_values, created_fresh)?;
         install.insert(plan.relative_path.clone(), ownership);
 
         updates.push(MirrorUpdate {
