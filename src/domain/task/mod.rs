@@ -264,7 +264,11 @@ pub fn accept_task(
     accepted_at: &str,
 ) -> Result<TaskRecord> {
     let (mut task, snapshot, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
-    ensure_standalone_has_checks(&task, &task_dir)?;
+    // Validate the state transition before the content gate: a terminal or
+    // not-yet-explored task cannot become ready no matter how many checks it has,
+    // so its add-check remedy would be a dead end. Letting `transition` speak
+    // first surfaces the real blocker (terminal / explore-first). For a valid
+    // exploring->ready accept the transition passes and the checks gate fires.
     task.acceptance_locked = true;
     lifecycle::transition(
         &mut task,
@@ -273,6 +277,7 @@ pub fn accept_task(
         accepted_at,
         TransitionDetails::default(),
     )?;
+    ensure_standalone_has_checks(&task, &task_dir)?;
     template::save_task_with_snapshot(&task, &snapshot)?;
     lock_acceptance(
         task_dir.join("acceptance.yaml"),

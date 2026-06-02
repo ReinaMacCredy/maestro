@@ -912,6 +912,41 @@ fn set_check_rejects_an_empty_value_so_it_cannot_satisfy_the_acceptance_gate() {
 }
 
 #[test]
+fn accept_on_a_terminal_task_reports_the_terminal_state_not_a_dead_end_add_check_remedy() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Doomed standalone"]),
+        &["task", "create", "Doomed standalone"],
+    );
+    assert_success(
+        &maestro(
+            repo,
+            &["task", "reject", "task-001", "--reason", "out of scope"],
+        ),
+        &["task", "reject", "task-001", "--reason", "out of scope"],
+    );
+
+    // The task is terminal (rejected) and has no checks. accept must surface the
+    // real, actionable blocker -- a terminal task cannot transition -- not the
+    // add-check remedy, which is a dead end: adding a check still cannot move a
+    // terminal task to ready, so the state gate must be evaluated before the
+    // content gate.
+    let accept = maestro(repo, &["task", "accept", "task-001"]);
+    assert_failure(&accept, &["task", "accept", "task-001"]);
+    let message = stderr(&accept);
+    assert!(
+        message.contains("terminal state"),
+        "expected the terminal-state error, got: {message}"
+    );
+    assert!(
+        !message.contains("has no checks"),
+        "accept on a terminal task must not hand the dead-end add-check remedy: {message}"
+    );
+}
+
+#[test]
 fn task_update_rejects_an_empty_claim_so_no_blank_proof_is_recorded() {
     let temp = setup_repo();
     let repo = temp.path();
