@@ -231,8 +231,9 @@ maestro harness measure hb-001              # close the loop once that task is v
 
 The three lifecycles compose into one operating rhythm. The [Quickstart](#quickstart) above is the
 terse command path; this section narrates it — the agent prompt you hand off for each flow, and what
-the run actually looks like, gates and all. Every transcript below is real output from the current
-binary.
+the run actually looks like, gates and all. `maestro install` puts the matching skills in your repo
+(design, feature, task, verify, QA), so each prompt below hands off to the skill that owns that flow
+rather than spelling out every verb. Every transcript below is real output from the current binary.
 
 #### From a high-level idea to a shipped product
 
@@ -240,9 +241,10 @@ One feature, start to finish: a raw idea becomes a frozen contract, the work is 
 and it ships only once QA covers the baseline. This is the prompt you paste into a fresh agent session:
 
 > We want to add rate limiting to the public API: requests over a key's limit should get an HTTP 429.
-> Set it up as a maestro feature — map the contract, capture a behavior baseline, record the
-> fixed-window-vs-token-bucket decision, then drive it to shipped through proof-gated tasks. Don't skip
-> the gates.
+> Set it up as a maestro feature, driving each step through its skill — `maestro-design` to map the
+> contract and record the fixed-window-vs-token-bucket decision, `qa-baseline` to capture a behavior
+> baseline, then `maestro-task` and `maestro-verify` to drive it to shipped through proof-gated tasks,
+> and `qa-slice` for the ship gate. Don't skip the gates.
 
 How it looks end to end (the `baseline.md` and `qa-slices.yaml` file bodies are in flows 1 and 3 below,
 and copy-paste-ready in the Quickstart):
@@ -294,10 +296,11 @@ questions); `decision new` records each fork as a durable file. `feature accept`
 into `ready` — but only once you have captured a behavior baseline — and `feature start` moves it to
 `in_progress`.
 
-*Prompt:* "Set up <idea> as a maestro feature: `feature new`, then `feature set` with the acceptance
-criteria, affected areas, non-goals, and open questions. Record each fork with `decision new`. Write a
-behavior baseline of `[bl-NNN]` scenarios to `.maestro/features/<id>/baseline.md`, then `feature accept`
-and `feature start`."
+*Prompt:* "Follow the `maestro-design` skill to set up <idea> as a maestro feature: `feature new`, then
+`feature set` with the acceptance criteria, affected areas, non-goals, and open questions, recording
+each fork with `decision new`. Capture the `[bl-NNN]` behavior baseline at
+`.maestro/features/<id>/baseline.md` with the `qa-baseline` skill, then `feature accept` and
+`feature start`."
 
 The gate: `accept` refuses until a baseline exists, and names the file it wants.
 
@@ -315,10 +318,10 @@ task needs its own `--check` first. Then drive every task through the same gated
 runs its tools; by hand it is `maestro event create --task-id <id> --claim "<same text>"`) →
 `task verify`. A `verified` task is always evidence you can open.
 
-*Prompt:* "For each slice of <feature>, `task create --feature <id>`, claim it, do the work, then
-`task complete` with a `--claim` stating what proves it. The installed hooks record that proof as you
-run your tools; then `task verify` to gate the task on it. Use the same wording in the claim and the
-proof."
+*Prompt:* "Follow the `maestro-task` skill: for each slice of <feature>, `task create --feature <id>`,
+claim it, do the work, then `task complete` with a `--claim` stating what proves it. The installed
+hooks record that proof as you run your tools; then use the `maestro-verify` skill and `task verify` to
+gate the task on it. Use the same wording in the claim and the proof."
 
 The gate: `verify` refuses until the claim is backed by recorded proof — and prints the exact command
 to record it.
@@ -336,7 +339,7 @@ A feature ships only when it has no live child tasks *and* its QA coverage is gr
 scenario in the baseline must be matched by a slice in `qa-slices.yaml` carrying non-empty evidence.
 Coverage is checked, not asserted, so a green ship is a real signal.
 
-*Prompt:* "Map every `[bl-NNN]` baseline scenario of <feature> to a slice in
+*Prompt:* "With the `qa-slice` skill, map every `[bl-NNN]` baseline scenario of <feature> to a slice in
 `.maestro/features/<id>/qa-slices.yaml` with the test that proves it as `evidence`. Then
 `feature ship --outcome "..."`. Verify the gate passes; don't `--force` it."
 
@@ -361,9 +364,10 @@ verified with a command that is not in your reusable harness stack (`missing_ver
 domain whose tasks take far longer to verify than the rest (`missing_skill`); a topic rediscovered
 across tasks with no decision on record (`rediscovered_decision`).
 
-*Prompt:* "Run `maestro harness list`. For each proposal worth doing, `harness apply <id>` to spawn the
-fix task, close that task through the proof loop (`set --check`, claim, complete `--claim`, record
-proof, `verify`), then `harness measure <id>` to record the outcome."
+*Prompt:* "Follow the `maestro-task` skill's harness loop: run `maestro harness list`, and for each
+proposal worth doing, `harness apply <id>` to spawn the fix task, close that task through the proof
+loop (`set --check`, claim, complete `--claim`, record proof, `verify`), then `harness measure <id>`
+to record the outcome."
 
 A fresh repo has no history, so nothing is proposed. Here two tasks hit the same blocker — that *is* the
 recurring friction — and the detector turns it into a tracked proposal:
