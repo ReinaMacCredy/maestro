@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
 use crate::domain::extraction::{
-    ExtractMode, ResourceBackup, ResourceWrite, extract_all, rollback_writes,
+    ExtractMode, ExtractReport, ResourceBackup, ResourceWrite, extract_all, rollback_writes,
 };
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
@@ -55,6 +55,10 @@ pub struct UpdateOutcome {
     pub resource_writes: Vec<ResourceWrite>,
     /// On-disk schema versions that differ from this binary.
     pub schema_mismatches: Vec<SchemaMismatch>,
+    /// True when no `.maestro` exists, so bundled-resource extraction was skipped:
+    /// `update` upgrades the binary but must not scaffold a partial repo. Signals
+    /// the renderer to point the user at `maestro init`.
+    pub repo_uninitialized: bool,
 }
 
 /// Human-facing release metadata for update status output.
@@ -419,20 +423,30 @@ pub fn run_update_with_seams(
             resource_backups: Vec::new(),
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
+            repo_uninitialized: false,
         });
     }
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
-    let extract_report = match extract_all(
-        options.paths,
-        ExtractMode::Update {
-            backup_timestamp: options.backup_timestamp,
-        },
-    ) {
-        Ok(report) => report,
-        Err(error) => {
-            cleanup_prepared_binary(&binary_candidate);
-            return Err(error);
+    // A never-init'd repo has no `.maestro`: upgrade the binary but do NOT extract
+    // bundled resources, which would write skills/hooks without the structural
+    // files `init` lays down, leaving a repo `doctor` immediately calls broken. The
+    // renderer points the user at `maestro init` instead.
+    let repo_uninitialized = !options.paths.maestro_dir().exists();
+    let extract_report = if repo_uninitialized {
+        ExtractReport::default()
+    } else {
+        match extract_all(
+            options.paths,
+            ExtractMode::Update {
+                backup_timestamp: options.backup_timestamp,
+            },
+        ) {
+            Ok(report) => report,
+            Err(error) => {
+                cleanup_prepared_binary(&binary_candidate);
+                return Err(error);
+            }
         }
     };
     let prepared_release = prepared_release(&binary_candidate);
@@ -454,6 +468,7 @@ pub fn run_update_with_seams(
         resource_backups: extract_report.backups,
         resource_writes: extract_report.writes,
         schema_mismatches,
+        repo_uninitialized,
     })
 }
 

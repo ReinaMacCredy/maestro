@@ -560,6 +560,31 @@ fn detect_schema_mismatches_reports_advisory_mismatches_without_erroring() {
 }
 
 #[test]
+fn update_in_a_never_initialized_repo_does_not_scaffold_and_points_at_init() {
+    // S2-2: a never-init'd repo has no .maestro. `update` upgrades the binary but
+    // must not write a partial scaffold doctor would call broken, nor claim it
+    // "restored" files that never existed; it points the user at `maestro init`.
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+
+    let update = maestro(&["update"], temp_dir.path());
+    assert_success(&update);
+    let stdout = String::from_utf8_lossy(&update.stdout);
+    assert!(
+        stdout.contains("run `maestro init`"),
+        "a never-init'd repo should be pointed at init: {stdout}"
+    );
+    assert!(
+        !stdout.contains("missing files restored"),
+        "must not claim restored files in a never-init'd repo: {stdout}"
+    );
+    assert!(
+        !temp_dir.path().join(".maestro").exists(),
+        "update must not scaffold .maestro in a never-init'd repo"
+    );
+}
+
+#[test]
 fn cli_download_failure_omits_duplicate_anyhow_error_tail() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_remote(temp_dir.path());

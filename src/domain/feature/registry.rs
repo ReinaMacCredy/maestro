@@ -781,7 +781,7 @@ pub fn diagnose(paths: &MaestroPaths) -> FeatureDiagnostic {
     } else {
         scan_records_strict(paths)
             .map(|records| records.len())
-            .map_err(|error| error.to_string())
+            .map_err(|error| format!("{error:#}"))
     };
     FeatureDiagnostic {
         expected: FEATURE_SCHEMA_VERSION,

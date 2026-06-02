@@ -1364,3 +1364,84 @@ fn read_verbs_do_not_scaffold_the_tasks_dir_but_create_still_does() {
         "`task create` must still create .maestro/tasks on first write"
     );
 }
+
+#[test]
+fn task_show_marks_an_archived_task_and_leaves_a_live_one_unmarked() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Doomed"]),
+        &["task", "create", "Doomed"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "reject", "task-001", "--reason", "out of scope"]),
+        &["task", "reject", "task-001"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "archive", "task-001"]),
+        &["task", "archive", "task-001"],
+    );
+
+    // task show reads through the archive so a historical id still renders; it must
+    // disclose the archived state (like feature show) so it is not mistaken for live.
+    let archived = maestro(repo, &["task", "show", "task-001"]);
+    assert_success(&archived, &["task", "show", "task-001"]);
+    assert!(
+        stdout(&archived).contains("archived: true"),
+        "an archived task show must mark it: {}",
+        stdout(&archived)
+    );
+
+    // A live task must NOT carry the marker, so it really distinguishes the trees.
+    assert_success(
+        &maestro(repo, &["task", "create", "Live one"]),
+        &["task", "create", "Live one"],
+    );
+    let live = maestro(repo, &["task", "show", "task-002"]);
+    assert_success(&live, &["task", "show", "task-002"]);
+    assert!(
+        !stdout(&live).contains("archived: true"),
+        "a live task show must not be marked archived: {}",
+        stdout(&live)
+    );
+}
+
+#[test]
+fn forward_verbs_on_a_verified_task_point_at_a_follow_up_not_a_bare_dead_end() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    for args in [
+        vec!["task", "create", "Done deal"],
+        vec!["task", "set", "task-001", "--check", "build passes"],
+        vec!["task", "explore", "task-001"],
+        vec!["task", "accept", "task-001"],
+        vec!["task", "claim", "task-001"],
+        vec!["task", "complete", "task-001", "--summary", "did it", "--claim", "build passes"],
+        vec!["event", "create", "--task-id", "task-001", "--claim", "build passes"],
+        vec!["task", "verify", "task-001"],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+
+    // Verified is a settled success terminus; a forward verb (claim/complete) means
+    // new work, so the error must point at a follow-up task, not the bare
+    // "cannot transition" catch-all dead end.
+    for verb in [
+        vec!["task", "claim", "task-001"],
+        vec!["task", "complete", "task-001", "--summary", "more", "--claim", "x"],
+    ] {
+        let out = maestro(repo, &verb);
+        assert_failure(&out, &verb);
+        let message = stderr(&out);
+        assert!(
+            message.contains("maestro task create"),
+            "expected the follow-up remedy for {verb:?}: {message}"
+        );
+        assert!(
+            !message.contains("cannot transition"),
+            "must not be the bare catch-all for {verb:?}: {message}"
+        );
+    }
+}

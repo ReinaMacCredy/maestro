@@ -175,6 +175,44 @@ fn doctor_words_missing_resources_uniformly_with_the_init_merge_repair() {
 }
 
 #[test]
+fn doctor_collects_a_corrupt_task_error_without_aborting_the_rest_of_the_report() {
+    // S2-3: a single malformed task.yaml used to abort the whole report via `?`,
+    // suppressing every other check. It must now be collected like the other
+    // corrupt-artifact diagnostics, and surface its full serde cause.
+    let temp = setup_repo("maestro-doctor-corrupt-task");
+    let repo = temp.path();
+    assert_success(
+        &maestro(repo, &["task", "create", "probe"]),
+        &["task", "create", "probe"],
+    );
+
+    let tasks_dir = repo.join(".maestro/tasks");
+    let task_dir = fs::read_dir(&tasks_dir)
+        .expect("invariant: tasks dir should exist after create")
+        .next()
+        .expect("invariant: one task dir should exist")
+        .expect("invariant: readable dir entry")
+        .path();
+    fs::write(task_dir.join("task.yaml"), "state:\n  - [unbalanced\n")
+        .expect("invariant: task.yaml should be writable");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_failure(&doctor, &["doctor"]);
+    // The report was not aborted: the other checks still ran and printed.
+    assert!(
+        stdout(&doctor).contains("check harness: ok"),
+        "a corrupt task must not suppress the other doctor checks:\n{}",
+        stdout(&doctor)
+    );
+    // The corrupt-task error carries its full parse cause, not a bare "failed to parse".
+    assert!(
+        stderr(&doctor).contains("invalid type"),
+        "the corrupt-task error should carry its serde cause:\n{}",
+        stderr(&doctor)
+    );
+}
+
+#[test]
 fn doctor_and_task_doctor_fail_on_bad_blocker_graph() {
     let temp = setup_repo("maestro-doctor-bad-blockers");
     let repo = temp.path();

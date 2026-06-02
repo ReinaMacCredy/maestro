@@ -62,14 +62,16 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     check_decisions(paths, &mut checks, &mut errors);
     check_install(paths, &mut checks, &mut errors);
 
-    let task_report = task::check_blocker_graph(&paths.tasks_dir())?;
-    if task_report.is_ok() {
-        checks.push(DoctorCheck {
+    // Collect a corrupt-task error into the report rather than aborting via `?`: a
+    // single malformed task.yaml must not suppress every other doctor check, and
+    // its full cause should surface like the other corrupt-artifact diagnostics.
+    match task::check_blocker_graph(&paths.tasks_dir()) {
+        Ok(task_report) if task_report.is_ok() => checks.push(DoctorCheck {
             name: "task-blockers",
             detail: format!("{} tasks scanned", task_report.tasks_scanned),
-        });
-    } else {
-        errors.extend(task_report.errors);
+        }),
+        Ok(task_report) => errors.extend(task_report.errors),
+        Err(error) => errors.push(format!("{error:#}")),
     }
 
     Ok(DoctorReport { checks, errors })
@@ -105,7 +107,7 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             HARNESS_SCHEMA_VERSION,
             &config.schema_version,
         )),
-        Err(error) => errors.push(error.to_string()),
+        Err(error) => errors.push(format!("{error:#}")),
     }
 }
 
@@ -148,7 +150,7 @@ fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             BACKLOG_SCHEMA_VERSION,
             &backlog.schema_version,
         )),
-        Err(error) => errors.push(error.to_string()),
+        Err(error) => errors.push(format!("{error:#}")),
     }
 }
 
@@ -190,7 +192,9 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
     let lock = match InstallLock::load(&paths.install_lock_file()) {
         Ok(lock) => lock,
         Err(error) => {
-            errors.push(error.to_string());
+            // Surface the full parse cause for a corrupt install lock, matching the
+            // other corrupt-artifact diagnostics; a missing lock is handled upstream.
+            errors.push(format!("{error:#}"));
             return;
         }
     };

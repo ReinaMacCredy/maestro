@@ -154,6 +154,12 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
         }
     }
 
+    if outcome.repo_uninitialized {
+        out.push_str(
+            "No `.maestro` here; run `maestro init` to set up this repo (bundled resources were not extracted).\n",
+        );
+    }
+
     // A created file (no `previous`) has no backup, so it is otherwise invisible
     // here -- the very gap that made a Cargo/local `update` look like a no-op while
     // it silently restored a deleted bundled resource. Edited files already surface
@@ -390,6 +396,7 @@ mod tests {
             resource_backups: Vec::new(),
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
+            repo_uninitialized: false,
         };
 
         assert_eq!(
@@ -413,6 +420,7 @@ mod tests {
             resource_backups: Vec::new(),
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
+            repo_uninitialized: false,
         };
 
         assert_eq!(
@@ -439,6 +447,7 @@ mod tests {
             resource_backups: Vec::new(),
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
+            repo_uninitialized: false,
         };
 
         assert_eq!(
@@ -462,6 +471,7 @@ mod tests {
             resource_backups: Vec::new(),
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
+            repo_uninitialized: false,
         };
 
         assert_eq!(
@@ -540,6 +550,7 @@ mod tests {
             resource_backups: Vec::new(),
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
+            repo_uninitialized: false,
         };
 
         assert_eq!(

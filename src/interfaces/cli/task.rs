@@ -381,16 +381,21 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
     // L6b: reads cross the boundary — fall through to the archive so a
     // historical reference to an archived task still renders. Track which tree
     // resolved so the acceptance checks load from the same place.
-    let (task, tasks_dir) = match task::load_task_record(&paths.tasks_dir(), &task_id) {
-        Ok(task) => (task, paths.tasks_dir()),
+    let (task, tasks_dir, archived) = match task::load_task_record(&paths.tasks_dir(), &task_id) {
+        Ok(task) => (task, paths.tasks_dir(), false),
         Err(live_err) => {
             let archive_dir = paths.archive_tasks_dir();
             let task = task::load_task_record(&archive_dir, &task_id).map_err(|_| live_err)?;
-            (task, archive_dir)
+            (task, archive_dir, true)
         }
     };
     let checks = task::load_task_checks(&tasks_dir, &task)?;
     print!("{}", task::render_task(&task, &checks));
+    // Disclose an archive-resolved view so a user cannot mistake an archived task
+    // for a live one (mirrors `feature show`'s `archived: true` marker).
+    if archived {
+        println!("archived: true");
+    }
     Ok(())
 }
 
