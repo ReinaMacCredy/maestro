@@ -154,6 +154,22 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
         }
     }
 
+    // A created file (no `previous`) has no backup, so it is otherwise invisible
+    // here -- the very gap that made a Cargo/local `update` look like a no-op while
+    // it silently restored a deleted bundled resource. Edited files already surface
+    // via the backup block below.
+    let restored: Vec<_> = outcome
+        .resource_writes
+        .iter()
+        .filter(|write| write.previous.is_none())
+        .collect();
+    if !restored.is_empty() {
+        out.push_str("Bundled resources re-extracted; missing files restored:\n");
+        for write in restored {
+            out.push_str(&format!("{} -> {}\n", write.name, write.path.display()));
+        }
+    }
+
     if !outcome.resource_backups.is_empty() {
         out.push_str("Bundled resources re-extracted; edited files backed up:\n");
         for backup in &outcome.resource_backups {
@@ -369,6 +385,7 @@ mod tests {
                 },
             },
             resource_backups: Vec::new(),
+            resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 
@@ -391,6 +408,7 @@ mod tests {
                 }),
             },
             resource_backups: Vec::new(),
+            resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 
@@ -416,6 +434,7 @@ mod tests {
                 },
             },
             resource_backups: Vec::new(),
+            resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 
@@ -438,6 +457,7 @@ mod tests {
                 current_version: "0.0.1779700000-gabc123".to_string(),
             },
             resource_backups: Vec::new(),
+            resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 
@@ -515,6 +535,7 @@ mod tests {
                 }),
             },
             resource_backups: Vec::new(),
+            resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
         };
 

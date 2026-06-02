@@ -69,6 +69,44 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
 }
 
 #[test]
+fn update_reports_restored_missing_bundled_resources() {
+    // R17: a deleted bundled file is re-extracted as a *created* write (no backup),
+    // which used to be invisible -- update reported only "Update unavailable" while
+    // silently restoring it. The restore must now be named.
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+
+    let skill = skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-task")
+        .expect("invariant: maestro-task should be bundled");
+    let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
+    fs::remove_file(&skill_path).expect("invariant: bundled skill should be removable");
+
+    let update = maestro(&["update"], temp_dir.path());
+
+    assert_success(&update);
+    let stdout = String::from_utf8_lossy(&update.stdout);
+    assert!(stdout.contains("Update unavailable for this build"));
+    assert!(
+        stdout.contains("missing files restored"),
+        "a silently re-created bundled file must be reported:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(skill.name),
+        "the restored file should be named:\n{stdout}"
+    );
+    // The restore actually happened, and a created file produces no backup noise.
+    assert_eq!(
+        fs::read_to_string(&skill_path).expect("invariant: skill should be restored"),
+        skill.skill_md()
+    );
+    assert!(!stdout.contains("edited files backed up"));
+}
+
+#[test]
 fn unavailable_update_cleans_stale_stage_directory() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());

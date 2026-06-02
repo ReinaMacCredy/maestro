@@ -9,7 +9,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 
-use crate::domain::extraction::{ExtractMode, ResourceBackup, extract_all, rollback_writes};
+use crate::domain::extraction::{
+    ExtractMode, ResourceBackup, ResourceWrite, extract_all, rollback_writes,
+};
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
@@ -47,6 +49,10 @@ pub struct UpdateOutcome {
     pub binary_status: BinaryStatus,
     /// Edited bundled resources backed up before overwrite.
     pub resource_backups: Vec<ResourceBackup>,
+    /// Bundled resources (re-)written during extraction; `previous: None` marks a
+    /// file that did not exist before, so it has no backup and would otherwise be
+    /// invisible in the outcome.
+    pub resource_writes: Vec<ResourceWrite>,
     /// On-disk schema versions that differ from this binary.
     pub schema_mismatches: Vec<SchemaMismatch>,
 }
@@ -411,6 +417,7 @@ pub fn run_update_with_seams(
         return Ok(UpdateOutcome {
             binary_status: check_binary_update(options, downloader)?,
             resource_backups: Vec::new(),
+            resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
         });
     }
@@ -445,6 +452,7 @@ pub fn run_update_with_seams(
     Ok(UpdateOutcome {
         binary_status,
         resource_backups: extract_report.backups,
+        resource_writes: extract_report.writes,
         schema_mismatches,
     })
 }
