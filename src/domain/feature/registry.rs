@@ -228,11 +228,19 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
 /// past `Proposed`).
 pub fn set(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<FeatureView> {
     let mut record = load_record(paths, id)?;
-    if record.status != FeatureStatus::Proposed {
-        bail!(
+    match record.status {
+        FeatureStatus::Proposed => {}
+        // Recommend amend only where it actually works (Ready / InProgress);
+        // on a terminal feature amend dead-ends too, so don't send the user
+        // down a path with no exit.
+        FeatureStatus::Ready | FeatureStatus::InProgress => bail!(
             "cannot edit {id} — contract frozen at accept (status: {}); grow it with `maestro feature amend {id} --add-acceptance \"…\" --reason \"…\"`",
             record.status.as_str()
-        );
+        ),
+        FeatureStatus::Shipped | FeatureStatus::Cancelled => bail!(
+            "cannot edit {id} — terminal (status: {})",
+            record.status.as_str()
+        ),
     }
     if let Some(value) = edits.acceptance {
         record.acceptance = value;

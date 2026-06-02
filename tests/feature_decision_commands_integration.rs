@@ -728,3 +728,40 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
     let err = assert_failure(maestro(&both, root), &both);
     assert!(err.contains("not both"));
 }
+
+#[test]
+fn feature_set_on_a_terminal_feature_does_not_recommend_the_dead_end_amend() {
+    let temp_dir = TestTempDir::new("maestro-feature-set-terminal-test");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], temp_dir.path()),
+        &["feature", "new", "Billing CSV export"],
+    );
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope dropped",
+    ];
+    stdout(maestro(&cancel_args, temp_dir.path()), &cancel_args);
+
+    // On a terminal feature, `set` must not point at `amend`: amend dead-ends on
+    // terminal too, so recommending it leaves no path forward.
+    let set_args = [
+        "feature",
+        "set",
+        "billing-csv-export",
+        "--acceptance",
+        "exports a valid csv",
+        "--area",
+        "billing",
+    ];
+    let err = assert_failure(maestro(&set_args, temp_dir.path()), &set_args);
+    assert!(err.contains("terminal (status: cancelled)"));
+    assert!(!err.contains("feature amend"));
+}
