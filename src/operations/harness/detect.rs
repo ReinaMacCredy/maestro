@@ -8,6 +8,7 @@ use crate::domain::harness::{BacklogItem, HarnessConfig};
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{self, TaskEntry};
+use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -228,7 +229,7 @@ fn harness_verify_commands(paths: &MaestroPaths) -> Result<BTreeSet<String>> {
         ".maestro/harness/harness.yml",
         SymlinkPolicy::RejectAllComponents,
     )?;
-    let Ok(raw) = fs::read_to_string(&path) else {
+    let Some(raw) = read_to_string_if_exists(&path)? else {
         return Ok(BTreeSet::new());
     };
     let config: HarnessConfig = serde_yaml::from_str(&raw)

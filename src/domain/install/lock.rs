@@ -195,7 +195,7 @@ impl FileOwnership {
     pub fn text(kind: MirrorKind, content: &str, created_fresh: bool) -> Self {
         Self {
             kind,
-            content_hash: Some(content_hash(content)),
+            content_hash: Some(strong_content_hash(content)),
             managed_keys: Vec::new(),
             previous_values: BTreeMap::new(),
             created_fresh,
@@ -257,10 +257,6 @@ impl FileOwnership {
 
         content_hash == strong_content_hash(content)
     }
-}
-
-fn content_hash(content: &str) -> String {
-    strong_content_hash(content)
 }
 
 fn strong_content_hash(content: &str) -> String {

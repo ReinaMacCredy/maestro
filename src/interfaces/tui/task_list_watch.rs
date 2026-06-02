@@ -118,7 +118,7 @@ fn task_substatus(
         ));
     }
     if task.state == task::TaskState::NeedsVerification {
-        return needs_verification_substatus(paths, task, current_commit);
+        return needs_verification_substatus(paths, task);
     }
     if task.state == task::TaskState::Verified {
         return verified_substatus(paths, task, current_commit);
@@ -126,15 +126,10 @@ fn task_substatus(
     Ok(task.state.as_str().to_string())
 }
 
-fn needs_verification_substatus(
-    paths: &MaestroPaths,
-    task: &task::TaskRecord,
-    current_commit: Option<String>,
-) -> Result<String> {
+fn needs_verification_substatus(paths: &MaestroPaths, task: &task::TaskRecord) -> Result<String> {
     let Some(task_dir) = task_dir(paths, task) else {
         return Ok("needs_verification".to_string());
     };
-    let _ = current_commit;
     let kind = proof::needs_verification_proof_status_kind_for_task(task, &task_dir)?;
     match kind {
         proof::ProofStatusKind::Failed => Ok("needs_verification (last verify failed)".to_string()),

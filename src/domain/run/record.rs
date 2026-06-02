@@ -2,9 +2,7 @@ use anyhow::{Context, Result};
 use serde_json::{Map, Value, json};
 
 use crate::domain::run::append::append_normalized_event;
-use crate::domain::run::event::{
-    UNATTRIBUTED_SESSION, is_accepted_event, normalized_event_type, string_field,
-};
+use crate::domain::run::event::{is_accepted_event, normalized_event_type, string_field};
 use crate::domain::run::evidence::write_evidence_for_session;
 use crate::foundation::core::git;
 use crate::foundation::core::hash::sha256_prefixed;
@@ -31,10 +29,16 @@ pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<Record
     attach_commit_snapshot(paths, &mut event);
     append_normalized_event(paths, &event)?;
     if is_stop_event(&event) {
+        // A Stop with no session id must read back the same run bucket
+        // `append_normalized_event` just wrote to. Append maps a missing session
+        // to the `unattributed` dir, and `run_dir_name("")` resolves to that
+        // same dir; passing the `UNATTRIBUTED_SESSION` string here instead would
+        // be treated as a real session and encode to `%75nattributed`, so
+        // evidence would look in the wrong directory and find no events.
         let session_id = event
             .get("session_id")
             .and_then(Value::as_str)
-            .unwrap_or(UNATTRIBUTED_SESSION);
+            .unwrap_or("");
         write_evidence_for_session(paths, session_id).context("failed to write run evidence")?;
     }
     Ok(RecordOutcome::Recorded)

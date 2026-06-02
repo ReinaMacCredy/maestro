@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
+use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::parse_utc_timestamp;
 
@@ -679,13 +680,10 @@ fn lock_acceptance(path: PathBuf, task_id: &str, actor: &str, locked_at: &str) -
 /// it is absent (a freshly created task always has one, so this only guards a
 /// hand-deleted artifact).
 fn read_acceptance_or_new(path: &Path, task_id: &str) -> Result<AcceptanceFile> {
-    if path.exists() {
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
-        serde_yaml::from_str::<AcceptanceFile>(&content)
-            .with_context(|| format!("failed to parse {}", path.display()))
-    } else {
-        Ok(AcceptanceFile::new(task_id, Vec::new()))
+    match read_to_string_if_exists(path)? {
+        Some(content) => serde_yaml::from_str::<AcceptanceFile>(&content)
+            .with_context(|| format!("failed to parse {}", path.display())),
+        None => Ok(AcceptanceFile::new(task_id, Vec::new())),
     }
 }
 

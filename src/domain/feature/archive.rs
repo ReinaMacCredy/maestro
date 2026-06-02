@@ -195,7 +195,7 @@ fn archive_note(
     skipped: &[(String, String)],
 ) -> String {
     // True no-op: feature already archived and nothing left to sweep.
-    if !dry_run && !feature_live && archived.is_empty() && skipped.is_empty() {
+    if !feature_live && archived.is_empty() && skipped.is_empty() {
         return format!("already archived: {id}");
     }
 

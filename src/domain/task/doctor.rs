@@ -65,11 +65,7 @@ pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
 /// Check unresolved task blocker references for missing nodes, self-blocks, and cycles.
 pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
     let tasks = load_task_records(tasks_dir)?;
-    let by_id: HashMap<String, TaskRecord> = tasks
-        .iter()
-        .cloned()
-        .map(|task| (task.id.clone(), task))
-        .collect();
+    let task_ids: HashSet<String> = tasks.iter().map(|task| task.id.clone()).collect();
     let mut edges: HashMap<String, Vec<String>> = HashMap::new();
     let mut errors = Vec::new();
 
@@ -110,7 +106,7 @@ pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
                     task.id, blocker.id
                 ));
             }
-            if !by_id.contains_key(&blocked_ref.id) {
+            if !task_ids.contains(&blocked_ref.id) {
                 errors.push(format!(
                     "{} has blocker {} referencing missing task {}",
                     task.id, blocker.id, blocked_ref.id

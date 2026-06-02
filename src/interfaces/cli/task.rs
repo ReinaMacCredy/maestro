@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use anyhow::{Context, Result, bail};
 
 use crate::domain::feature;
@@ -419,10 +417,10 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
 
     // Bare list scans the live tree only (P2 hot path); `--all` also reads the
     // archive (§5.4 / §5.7b), so the hidden-count hint stays live-tree only.
-    let mut all_tasks = load_all_tasks(&paths.tasks_dir())?;
+    let mut all_tasks = task::load_task_records(&paths.tasks_dir())?;
     let mut archived_ids = std::collections::BTreeSet::new();
     if filters.all {
-        let archived = load_all_tasks(&paths.archive_tasks_dir())?;
+        let archived = task::load_task_records(&paths.archive_tasks_dir())?;
         archived_ids.extend(archived.iter().map(|t| t.id.clone()));
         all_tasks.extend(archived);
     }
@@ -460,7 +458,7 @@ fn task_filter(filters: &TaskListFilters, include_terminal: bool) -> task::TaskF
 
 fn watch_tasks(paths: &MaestroPaths, id: Option<String>, interval: Option<u64>) -> Result<()> {
     task_list_watch::run(paths, interval.unwrap_or(2), || {
-        let mut tasks = load_all_tasks(&paths.tasks_dir())?;
+        let mut tasks = task::load_task_records(&paths.tasks_dir())?;
         if let Some(id) = id.as_deref() {
             tasks.retain(|task| task.id == id);
         }
@@ -472,7 +470,7 @@ fn watch_tasks(paths: &MaestroPaths, id: Option<String>, interval: Option<u64>) 
 /// every state (including terminal): the watch is a live monitor where seeing a
 /// task reach `verified` is the point, mirroring `task watch <id>`.
 fn filtered_tasks(paths: &MaestroPaths, filters: &TaskListFilters) -> Result<Vec<TaskRecord>> {
-    let tasks = load_all_tasks(&paths.tasks_dir())?;
+    let tasks = task::load_task_records(&paths.tasks_dir())?;
     Ok(task::filter_tasks(tasks, &task_filter(filters, true)))
 }
 
@@ -488,10 +486,6 @@ fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {
         eprintln!("{line}");
     }
     bail!("task doctor found {} error(s)", report.errors.len())
-}
-
-fn load_all_tasks(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
-    task::load_task_records(tasks_dir)
 }
 
 fn blocker_target(by: Option<String>) -> BlockerTarget {

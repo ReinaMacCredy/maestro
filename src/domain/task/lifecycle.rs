@@ -55,9 +55,7 @@ pub struct TransitionDetails {
 }
 
 fn validate_transition(task: &TaskRecord, to: &TaskState) -> Result<()> {
-    if is_terminal(&task.state)
-        && !(task.state == TaskState::Verified && *to == TaskState::Superseded)
-    {
+    if is_terminal(&task.state) {
         bail!(
             "task {} is in terminal state {}; terminal tasks cannot transition",
             task.id,

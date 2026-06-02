@@ -77,7 +77,7 @@ pub(crate) fn baseline_present(feature_dir: &Path) -> Result<bool> {
 /// `"missing"` (fail-closed, matching `read_baseline`). Called only on the gate-fail
 /// path, where a usable baseline never reaches it.
 pub(crate) fn baseline_absence(feature_dir: &Path) -> &'static str {
-    match read_to_string_if_exists(&feature_dir.join("baseline.md")) {
+    match read_to_string_if_exists(feature_dir.join("baseline.md")) {
         Ok(Some(text)) if text.trim().is_empty() => "empty",
         _ => "missing",
     }

@@ -42,8 +42,8 @@ fn shell_init_emits_zsh_wrapper_using_posix_exports() {
 
     assert!(snippet.contains("Maestro shell integration for bash/zsh"));
     assert!(snippet.contains("local __maestro_status"));
-    assert!(snippet.contains("[ \"$1\" = \"task\" ] && [ \"$2\" = \"claim\" ]"));
-    assert!(snippet.contains("[ \"$1\" = \"task\" ] && [ \"$2\" = \"complete\" ]"));
+    assert!(snippet.contains("[ \"${1-}\" = \"task\" ] && [ \"${2-}\" = \"claim\" ]"));
+    assert!(snippet.contains("[ \"${1-}\" = \"task\" ] && [ \"${2-}\" = \"complete\" ]"));
 }
 
 #[test]
@@ -202,6 +202,11 @@ fn assert_wrapper_output(shell: &str, output: std::process::Output) {
 const POSIX_WRAPPER_TEST: &str = r#"
 set -u
 eval "$MAESTRO_SNIPPET"
+# Regression: under `set -u` the wrapper inspects $1/$2 after running the
+# binary, so a call with too few args must not trip `unbound variable` (which
+# would abort this script before the assertions below).
+maestro
+maestro task
 maestro task claim task-123
 claim_status=$?
 claim_current=${MAESTRO_CURRENT_TASK-}

@@ -8,12 +8,12 @@
 //! policy plus the write/rollback mechanics; each resource family supplies its
 //! own planner that names the anchor file and the version reader.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
 use crate::foundation::core::backup::backup_file_with_timestamp;
+use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::{restore_or_remove, write_atomic};
 
@@ -316,13 +316,7 @@ pub(crate) fn file_action<'a>(
 
 /// Read an existing file's contents, returning `None` when it is absent.
 pub(crate) fn read_existing(path: &Path) -> Result<Option<String>> {
-    if path.exists() {
-        Ok(Some(fs::read_to_string(path).with_context(|| {
-            format!("failed to read bundled resource {}", path.display())
-        })?))
-    } else {
-        Ok(None)
-    }
+    read_to_string_if_exists(path)
 }
 
 /// Apply planned writes, backing up edited files first and rolling back on error.

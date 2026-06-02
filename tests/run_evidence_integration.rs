@@ -248,6 +248,26 @@ fn evidence_generation_ignores_partial_trailing_event_line() {
     assert!(evidence["tools_used"]["Bash"].is_null());
 }
 
+#[test]
+fn stop_record_writes_run_evidence_when_session_id_is_absent() {
+    // A hook payload with no session_id lands in the raw `unattributed` run
+    // bucket (a real session literally named "unattributed" is disambiguated to
+    // `%75nattributed`). The append path and the Stop evidence path must agree on
+    // that directory, or the Stop record fails to find its own event log and
+    // silently writes no evidence.
+    let repo = init_repo();
+    record_event(
+        repo.path(),
+        r#"{"event_type":"SessionStart","agent":"codex"}"#,
+    );
+    record_event(repo.path(), r#"{"event_type":"Stop"}"#);
+
+    let evidence = run_evidence(repo.path(), "unattributed");
+    assert_eq!(evidence["schema_version"], "maestro.run_evidence.v1");
+    assert_eq!(evidence["session_id"], "");
+    assert_eq!(evidence["agent"], "codex");
+}
+
 #[cfg(unix)]
 #[test]
 fn managed_run_discovery_ignores_symlinked_run_paths() {

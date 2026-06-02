@@ -140,10 +140,10 @@ fn status(paths: &MaestroPaths) -> Result<String> {
     let mut in_progress = 0_usize;
     let mut claimed = BTreeMap::<String, Vec<String>>::new();
     for entry in tasks {
-        match entry.task.state.as_str() {
-            "verified" => verified += 1,
-            "needs_verification" => needs_verification += 1,
-            "in_progress" => in_progress += 1,
+        match &entry.task.state {
+            task::TaskState::Verified => verified += 1,
+            task::TaskState::NeedsVerification => needs_verification += 1,
+            task::TaskState::InProgress => in_progress += 1,
             _ => {}
         }
         if let Some(agent) = entry.task.claimed_by {
