@@ -47,6 +47,9 @@ pub fn resolve_blocker(task: &mut TaskRecord, blocker_id: &str, resolved_at: Str
         );
     };
 
+    if blocker.resolved_at.is_some() {
+        bail!("blocker {blocker_id} is already resolved");
+    }
     blocker.resolved_at = Some(resolved_at.clone());
     task.updated_at = resolved_at;
     Ok(())

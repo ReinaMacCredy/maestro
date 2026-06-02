@@ -985,3 +985,58 @@ fn task_supersede_by_itself_is_refused_so_no_self_reference_is_recorded() {
     assert_eq!(doc["state"], Value::String("draft".to_string()));
     assert!(doc.get("superseded_by").is_none() || doc["superseded_by"].is_null());
 }
+
+#[test]
+fn task_unblock_is_refused_on_an_already_resolved_blocker() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Double-unblock probe"]),
+        &["task", "create", "Double-unblock probe"],
+    );
+    assert_success(
+        &maestro(
+            repo,
+            &["task", "block", "task-001", "--reason", "waiting", "--by", "task-999"],
+        ),
+        &["task", "block", "task-001", "--reason", "waiting", "--by", "task-999"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "unblock", "task-001", "--blocker", "blk-001"]),
+        &["task", "unblock", "task-001", "--blocker", "blk-001"],
+    );
+
+    // Capture the resolved state after the first (legitimate) unblock.
+    let after_first = task_yaml(repo, "task-001");
+    let resolved_at = after_first["blockers"][0]["resolved_at"]
+        .as_str()
+        .expect("invariant: first unblock should set resolved_at")
+        .to_string();
+    let history_len = after_first["state_history"]
+        .as_sequence()
+        .expect("invariant: state_history should be an array")
+        .len();
+
+    // A second unblock of the same blocker must be refused, not silently
+    // overwrite the original resolved_at or append a duplicate history entry.
+    let args = &["task", "unblock", "task-001", "--blocker", "blk-001"];
+    let second = maestro(repo, args);
+    assert_failure(&second, args);
+    assert!(stderr(&second).contains("blocker blk-001 is already resolved"));
+
+    let after_second = task_yaml(repo, "task-001");
+    assert_eq!(
+        after_second["blockers"][0]["resolved_at"].as_str(),
+        Some(resolved_at.as_str()),
+        "the original resolved_at must be preserved"
+    );
+    assert_eq!(
+        after_second["state_history"]
+            .as_sequence()
+            .expect("invariant: state_history should be an array")
+            .len(),
+        history_len,
+        "a refused unblock must not append history"
+    );
+}
