@@ -16,6 +16,17 @@ fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
 
+fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests")
+}
+
 fn assert_success(output: &std::process::Output, args: &[&str]) {
     assert!(
         output.status.success(),
@@ -458,6 +469,60 @@ fn query_matrix_ignores_symlinked_task_dirs() {
     let matrix = run_success(repo, &["query", "matrix"]);
     assert!(!matrix.contains("task-999"));
     assert!(!matrix.contains("forged"));
+}
+
+#[test]
+fn query_proof_reads_an_archived_task_through_the_archive_fallback() {
+    let temp = setup_repo("maestro-query-proof-archived");
+    let repo = temp.path();
+
+    // A terminal, archived task still owns its proof; `query proof` is a read and
+    // must fall through to the archive tree instead of erroring "not found".
+    for args in [
+        vec!["task", "create", "Retired task"],
+        vec!["task", "abandon", "task-001", "--reason", "superseded"],
+        vec!["task", "archive", "task-001"],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+    assert!(repo.join(".maestro/archive/tasks").exists());
+    assert!(!repo.join(".maestro/tasks/task-001-retired-task").exists());
+
+    let proof = run_success(repo, &["query", "proof", "task-001"]);
+    assert!(proof.contains("proof task-001:"));
+}
+
+#[test]
+fn query_proof_honors_maestro_current_task_like_task_show() {
+    let temp = setup_repo("maestro-query-proof-env");
+    let repo = temp.path();
+    create_verified_task_with_proof(repo);
+
+    // With no positional id, `query proof` reads MAESTRO_CURRENT_TASK (strict, no
+    // single-task auto-detect), mirroring the sibling read view `task show`.
+    let from_env = maestro_with_env(
+        repo,
+        &["query", "proof"],
+        &[("MAESTRO_CURRENT_TASK", "task-001")],
+    );
+    assert_success(&from_env, &["query", "proof"]);
+    assert!(stdout(&from_env).contains("proof task-001: accepted"));
+
+    // An empty env value gives the "id required or set MAESTRO_CURRENT_TASK"
+    // remedy, not a fall-through.
+    let blank = maestro_with_env(repo, &["query", "proof"], &[("MAESTRO_CURRENT_TASK", "")]);
+    assert_failure(&blank, &["query", "proof"]);
+    assert!(stderr(&blank).contains("MAESTRO_CURRENT_TASK"));
+}
+
+#[test]
+fn query_matrix_reports_an_empty_state_line_when_no_features_or_tasks_exist() {
+    let temp = setup_repo("maestro-query-matrix-empty");
+    let repo = temp.path();
+
+    let matrix = run_success(repo, &["query", "matrix"]);
+    assert!(matrix.contains("no features or tasks found"));
+    assert!(!matrix.contains("FEATURE\tTASK"));
 }
 
 fn maestro_files(repo: &Path) -> BTreeSet<PathBuf> {

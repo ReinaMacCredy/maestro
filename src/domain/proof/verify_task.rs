@@ -245,8 +245,17 @@ impl TaskVerification {
 }
 
 /// Load a task by id or id prefix directory name.
+///
+/// L6b: a proof read crosses the live/archive boundary, so an archived task's
+/// proof status still resolves (matching `task show`). Only `proof_status` reads
+/// through here; the verify transition uses a separate path, so archived tasks
+/// stay immutable.
 pub fn load_task_by_id(paths: &MaestroPaths, task_id: &str) -> Result<LoadedTask> {
-    let handle = task::load_task_for_update(&paths.tasks_dir(), task_id)?;
+    let handle = match task::load_task_for_update(&paths.tasks_dir(), task_id) {
+        Ok(handle) => handle,
+        Err(live_err) => task::load_task_for_update(&paths.archive_tasks_dir(), task_id)
+            .map_err(|_| live_err)?,
+    };
 
     Ok(LoadedTask {
         task: handle.task().clone(),

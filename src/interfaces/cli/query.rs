@@ -23,12 +23,23 @@ pub fn run(args: QueryArgs) -> Result<()> {
             task_id,
             task_id_flag,
         } => {
-            let task_id = match (task_id, task_id_flag) {
+            let explicit = match (task_id, task_id_flag) {
                 (Some(positional), Some(flag)) if positional != flag => bail!(
                     "conflicting task ids: positional `{positional}` and --task-id `{flag}`; pass just one"
                 ),
-                (Some(id), _) | (None, Some(id)) => id,
-                (None, None) => bail!("task id is required for `maestro query proof`"),
+                (Some(id), _) | (None, Some(id)) => Some(id),
+                (None, None) => None,
+            };
+            // Honor MAESTRO_CURRENT_TASK like the sibling read view `task show`
+            // (strict: no single-task auto-detect), and name it in the remedy.
+            let task_id = match explicit {
+                Some(id) => id,
+                None => match std::env::var("MAESTRO_CURRENT_TASK") {
+                    Ok(id) if !id.trim().is_empty() => id,
+                    _ => bail!(
+                        "task id is required or set MAESTRO_CURRENT_TASK for `maestro query proof`"
+                    ),
+                },
             };
             let status = proof::proof_status(&paths, &task_id)?;
             print!("{}", proof::render_proof_status(&status));
@@ -54,6 +65,11 @@ fn query_matrix(paths: &MaestroPaths) -> Result<()> {
             .cmp(&right.feature_id)
             .then(left.id.cmp(&right.id))
     });
+
+    if task_rows.is_empty() && features.is_empty() {
+        println!("no features or tasks found");
+        return Ok(());
+    }
 
     println!("FEATURE\tTASK\tSTATE\tPROOF\tTITLE");
     let mut features_with_tasks = std::collections::HashSet::new();
