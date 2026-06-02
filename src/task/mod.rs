@@ -45,8 +45,8 @@ pub mod blockers {
 pub mod display {
     use crate::domain::task::TaskRecord;
 
-    pub fn render_task(task: &TaskRecord) -> String {
-        crate::domain::task::render_task(task)
+    pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
+        crate::domain::task::render_task(task, checks)
     }
 
     pub fn render_task_list(tasks: &[TaskRecord]) -> String {

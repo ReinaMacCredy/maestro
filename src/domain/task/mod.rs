@@ -99,6 +99,14 @@ pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     Ok(task)
 }
 
+/// Read a task's acceptance checks for display, deriving the sibling
+/// `acceptance.yaml` from the task's own directory. Empty when the task has
+/// none (or its acceptance file was hand-deleted).
+pub fn load_task_checks(tasks_dir: &Path, task: &TaskRecord) -> Result<Vec<String>> {
+    let path = tasks_dir.join(task.directory_name()).join("acceptance.yaml");
+    Ok(read_acceptance_or_new(&path, &task.id)?.checks)
+}
+
 /// Filters applied to a task listing by the CLI and MCP surfaces.
 #[derive(Default)]
 pub struct TaskFilter {

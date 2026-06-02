@@ -343,14 +343,18 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
             .context("task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`")?,
     };
     // L6b: reads cross the boundary — fall through to the archive so a
-    // historical reference to an archived task still renders.
-    let task = match task::load_task_record(&paths.tasks_dir(), &task_id) {
-        Ok(task) => task,
+    // historical reference to an archived task still renders. Track which tree
+    // resolved so the acceptance checks load from the same place.
+    let (task, tasks_dir) = match task::load_task_record(&paths.tasks_dir(), &task_id) {
+        Ok(task) => (task, paths.tasks_dir()),
         Err(live_err) => {
-            task::load_task_record(&paths.archive_tasks_dir(), &task_id).map_err(|_| live_err)?
+            let archive_dir = paths.archive_tasks_dir();
+            let task = task::load_task_record(&archive_dir, &task_id).map_err(|_| live_err)?;
+            (task, archive_dir)
         }
     };
-    print!("{}", task::render_task(&task));
+    let checks = task::load_task_checks(&tasks_dir, &task)?;
+    print!("{}", task::render_task(&task, &checks));
     Ok(())
 }
 
