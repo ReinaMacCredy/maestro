@@ -439,15 +439,35 @@ Coverage is checked, not asserted, so a green ship is a real signal.
 
 ### Harness self-improvement
 
-maestro watches its own run log and task history and proposes improvements to the harness
-itself when the same friction recurs (a recurring blocker, repeated correction prompts, a
-non-reusable verification command, a slow work domain, a decision worth recording).
-`maestro harness list` shows the backlog; `maestro harness apply <id>` accepts a proposal and
-spawns a real task to do the work; `maestro harness measure <id>` records the outcome. For the
-state-based detectors it re-runs the check and only marks `measured` once the friction is gone;
-behavioral items it closes by your judgment on a verified task, and says so. It is passive:
-proposals are surfaced on demand, never acted on without you. See the
-[Suggested workflow](#4-improve-the-harness--maestros-self-improvement) for a full run.
+The harness is the part of maestro that improves the tool you build with, through the same
+proof loop the product work uses. It watches its own run log and task history and proposes a
+fix when the same friction *recurs*. It is rule-based — no LLM calls — and passive: nothing is
+detected or acted on in the background. `maestro harness list` surfaces the backlog on demand,
+`maestro harness apply <id>` accepts a proposal and spawns a real task to do the work, and
+`maestro harness measure <id>` records the outcome.
+
+**What it catches.** Five detectors run, in two classes. **State detectors** read current repo
+state, so their silence reliably means the friction is fixed — `measure` re-runs them and
+closes the item automatically once they fall silent. **Behavioral detectors** are drawn from
+history, so `measure` closes them on your judgment that you fixed the root cause, and says so
+rather than pretending the signal vanished.
+
+| Detector | Class | What it catches | Fires when |
+| --- | --- | --- | --- |
+| `missing_verification` | state | a task verified with a command not in your reusable `harness.yml` stack | a verified task uses such a command |
+| `rediscovered_decision` | state | a topic worked across tasks with no decision on record | 2+ tasks, no matching decision |
+| `recurring_blocker` | behavioral | the same blocker reason hit by more than one task | 2+ tasks, same reason |
+| `recurring_intervention` | behavioral | a session full of correction-like prompts | 3+ in one session |
+| `missing_skill` | behavioral | a work domain far slower to verify than the rest | 2+ tasks, domain median > 2x overall |
+
+**Identity and lifecycle.** Each proposal carries a stable fingerprint — `<detector>:<subject>`
+— so re-running detection never piles up duplicates: the same friction stays one tracked item
+as it moves `proposed -> accepted -> measured`. `measure` sends an ineffective fix back to
+`proposed`, and reopens a `measured` *state* item to `proposed` if its friction later returns (a
+regression). `measure` requires the linked task verified unless you pass `--force`.
+
+See the [Suggested workflow](#4-improve-the-harness--maestros-self-improvement) for a full,
+real-output run.
 
 ### Skills and hooks
 
