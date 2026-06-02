@@ -191,7 +191,7 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             };
             if !intact {
                 errors.push(format!(
-                    "{agent} mirror is missing or broken: {relative}; run `maestro init` to repair"
+                    "{agent} mirror is missing or broken: {relative}; run `maestro install --agent {agent}` to repair"
                 ));
                 missing += 1;
             }
@@ -204,7 +204,7 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
     let recorder = paths.hooks_dir().join("record.sh");
     if !recorder.exists() {
         errors.push(format!(
-            "hook recorder is missing: {}; run `maestro init` to repair",
+            "hook recorder is missing: {}; run `maestro init --merge` to repair",
             recorder.display()
         ));
         missing += 1;
