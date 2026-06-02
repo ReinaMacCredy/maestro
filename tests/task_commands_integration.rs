@@ -1226,3 +1226,35 @@ fn task_unblock_is_refused_on_an_already_resolved_blocker() {
         "a refused unblock must not append history"
     );
 }
+
+#[test]
+fn read_verbs_do_not_scaffold_the_tasks_dir_but_create_still_does() {
+    // R30: a pure inspect (`task list`/`task doctor`) must leave disk untouched,
+    // matching feature/decision/query; only a mutator (`create`) may scaffold.
+    let temp = setup_repo();
+    let repo = temp.path();
+    let tasks_dir = repo.join(".maestro/tasks");
+    assert!(!tasks_dir.exists(), "setup must start without a tasks dir");
+
+    let list = maestro(repo, &["task", "list"]);
+    assert_success(&list, &["task", "list"]);
+    assert!(stdout(&list).contains("no tasks found"));
+    assert!(
+        !tasks_dir.exists(),
+        "`task list` must not scaffold .maestro/tasks"
+    );
+
+    let doctor = maestro(repo, &["task", "doctor"]);
+    assert_success(&doctor, &["task", "doctor"]);
+    assert!(
+        !tasks_dir.exists(),
+        "`task doctor` must not scaffold .maestro/tasks"
+    );
+
+    let create = maestro(repo, &["task", "create", "first task"]);
+    assert_success(&create, &["task", "create"]);
+    assert!(
+        tasks_dir.exists(),
+        "`task create` must still create .maestro/tasks on first write"
+    );
+}

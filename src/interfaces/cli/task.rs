@@ -5,7 +5,6 @@ use anyhow::{Context, Result, bail};
 use crate::domain::feature;
 use crate::domain::task;
 use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
-use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::nanos_since_epoch_string;
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
@@ -17,7 +16,10 @@ use crate::interfaces::tui::task_list_watch;
 pub fn run(args: TaskArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
-    ensure_dir(paths.tasks_dir())?;
+    // Read verbs (list/show/doctor) must not scaffold: a pure inspect should leave
+    // disk untouched, matching feature/decision/query. The sole first-write mutator,
+    // `create`, ensures `.maestro/tasks` itself via write_task_artifacts; every other
+    // mutator loads an existing task, and archive/unarchive ensure their own targets.
     let actor = super::actor();
 
     match args.command {
