@@ -5,6 +5,7 @@ name = "maestro"
 # it as MAESTRO_VERSION. Bump this to step the version line.
 version = "0.107.0"
 edition = "2024"
+license = "MIT"
 
 [[bin]]
 name = "maestro"
