@@ -132,6 +132,39 @@ fn doctor_reports_ok_for_initialized_phase_three_artifacts() {
 }
 
 #[test]
+fn doctor_words_missing_resources_uniformly_with_the_init_merge_repair() {
+    // R31: a deleted harness.yml/backlog.yaml must read "is missing" (like the dir
+    // checks), carry the working `init --merge` repair, and never leak the internal
+    // "failed to read" io phrasing -- one vocabulary across the missing-resource class.
+    let temp = setup_repo("maestro-doctor-missing");
+    let repo = temp.path();
+    fs::remove_file(repo.join(".maestro/harness/harness.yml"))
+        .expect("invariant: scaffolded harness.yml should exist");
+    fs::remove_file(repo.join(".maestro/harness/backlog.yaml"))
+        .expect("invariant: scaffolded backlog.yaml should exist");
+    fs::remove_dir_all(repo.join(".maestro/features"))
+        .expect("invariant: scaffolded features dir should exist");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_failure(&doctor, &["doctor"]);
+    let err = stderr(&doctor);
+
+    assert!(
+        !err.contains("failed to read"),
+        "missing resources must not leak the io phrasing:\n{err}"
+    );
+    for path in ["harness.yml", "backlog.yaml", "features"] {
+        assert!(err.contains(path), "doctor should name {path} as missing:\n{err}");
+    }
+    assert_eq!(
+        err.matches("is missing; run `maestro init --merge` to repair")
+            .count(),
+        3,
+        "every missing resource should carry the uniform repair hint:\n{err}"
+    );
+}
+
+#[test]
 fn doctor_and_task_doctor_fail_on_bad_blocker_graph() {
     let temp = setup_repo("maestro-doctor-bad-blockers");
     let repo = temp.path();

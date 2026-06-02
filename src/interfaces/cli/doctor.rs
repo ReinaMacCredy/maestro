@@ -53,7 +53,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
             detail: ".maestro present".to_string(),
         });
     } else {
-        errors.push(format!("{} is missing", paths.maestro_dir().display()));
+        errors.push(missing_resource(&paths.maestro_dir()));
     }
 
     check_harness(paths, &mut checks, &mut errors);
@@ -75,8 +75,24 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     Ok(DoctorReport { checks, errors })
 }
 
+/// One vocabulary for every "a scaffolded resource is gone" error: the `{path}
+/// is missing` phrasing the directory checks already use, plus the repair the
+/// recorder check already names. `init --merge` restores any deleted piece
+/// (verified: harness.yml, backlog.yaml, the features/decisions dirs, and a
+/// fully-removed `.maestro`), so the hint is honest at every site.
+fn missing_resource(path: &std::path::Path) -> String {
+    format!(
+        "{} is missing; run `maestro init --merge` to repair",
+        path.display()
+    )
+}
+
 fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     let path = paths.harness_dir().join("harness.yml");
+    if !path.exists() {
+        errors.push(missing_resource(&path));
+        return;
+    }
     match read_yaml::<HarnessConfig>(&path) {
         Ok(config) if classify(&config.schema_version, HARNESS_SCHEMA_VERSION) == Compat::Exact => {
             checks.push(DoctorCheck {
@@ -94,6 +110,15 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
 }
 
 fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
+    // diagnose returns "{dir} is missing" for an absent dir and a scan error for a
+    // present-but-corrupt one; only the former is `init --merge`-repairable, so
+    // catch the missing dir here (mirroring check_decisions) and leave scan errors
+    // to surface unchanged.
+    let dir = paths.features_dir();
+    if !dir.is_dir() {
+        errors.push(missing_resource(&dir));
+        return;
+    }
     match feature::diagnose(paths).found {
         Ok(count) => checks.push(DoctorCheck {
             name: "features",
@@ -105,6 +130,10 @@ fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &
 
 fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     let path = paths.harness_dir().join("backlog.yaml");
+    if !path.exists() {
+        errors.push(missing_resource(&path));
+        return;
+    }
     match read_yaml::<BacklogConfig>(&path) {
         Ok(backlog)
             if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) == Compat::Exact =>
@@ -139,7 +168,7 @@ fn schema_diagnostic(path: &std::path::Path, expected: &str, found: &str) -> Str
 fn check_decisions(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     let dir = paths.decisions_dir();
     if !dir.is_dir() {
-        errors.push(format!("{} is missing", dir.display()));
+        errors.push(missing_resource(&dir));
         return;
     }
 
