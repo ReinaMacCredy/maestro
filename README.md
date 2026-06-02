@@ -163,7 +163,11 @@ maestro task create "Patch null deref in parser"            # -> draft
 maestro task set task-001 --check "regression test passes"  # standalone tasks need their own check
 maestro task claim task-001                                 # -> in_progress
 maestro task complete task-001 --summary "guard the None case" --claim "cargo test parser passes"
-maestro task verify task-001                                # passes once a hook-recorded run backs the claim
+
+# verify is gated on recorded proof. During a real agent run the installed hooks
+# record that proof automatically from your tool runs; by hand, record it explicitly:
+maestro event create --task-id task-001 --claim "cargo test parser passes"
+maestro task verify task-001                                # passes once the claim is backed by recorded proof
 ```
 
 For a larger change, wrap the work in a feature contract and spin off child tasks:
@@ -171,22 +175,42 @@ For a larger change, wrap the work in a feature contract and spin off child task
 ```
 maestro feature new "CSV export"                         # -> proposed
 maestro feature set csv-export --acceptance "Export a report to CSV" --area "src/export"
-maestro feature accept csv-export                        # freeze the contract -> ready (gated)
+
+# accept is gated on a captured behavior baseline. The qa-baseline skill writes this
+# for you during an agent run; by hand it is just a non-empty file of [bl-NNN] scenarios:
+cat > .maestro/features/csv-export/baseline.md <<'EOF'
+# Behavior baseline: CSV export
+
+## Scenario Matrix
+- [bl-001] Exporting an empty report yields a header-only CSV file.
+EOF
+
+maestro feature accept csv-export                        # freeze the contract -> ready
 maestro feature start csv-export                         # -> in_progress
 
-maestro task create "Implement CSV writer" --feature csv-export
+maestro task create "Implement CSV writer" --feature csv-export   # inherits the feature's contract; no --check
 maestro task claim task-001
 maestro task complete task-001 --summary "wrote csv writer" --claim "cargo test export passes"
-maestro task verify task-001                             # checks the claim against recorded proof
+maestro event create --task-id task-001 --claim "cargo test export passes"   # hooks record this in an agent run
+maestro task verify task-001
 
-maestro feature ship csv-export --outcome "Shipped streaming CSV export"   # gated on QA coverage
+# ship is gated on QA coverage: every [bl-NNN] baseline scenario needs a proven slice.
+# The qa-slice skill writes this for you; by hand it maps each scenario to its evidence:
+cat > .maestro/features/csv-export/qa-slices.yaml <<'EOF'
+slices:
+  - scenarios: ["bl-001"]
+    evidence: ["cargo test export::empty_report_header_only passes"]
+EOF
+
+maestro feature ship csv-export --outcome "Shipped streaming CSV export"   # -> shipped
 ```
 
 `maestro feature show <id>` and `maestro task show <id>` render the current state and the
 recorded reasoning at any point.
 
-Periodically, let the harness propose improvements to itself and run them through the same
-task loop:
+maestro surfaces improvement proposals once it has enough run history to spot friction, so a
+fresh repo shows none (`harness list` -> "no improvement proposals found"). The `hb-001` below
+is illustrative; once the backlog has a real entry, run it through the same task loop:
 
 ```
 maestro harness list                       # what friction the run log surfaced
@@ -194,6 +218,7 @@ maestro harness apply hb-001                # accept a proposal -> spawns a stan
 maestro task set task-003 --check "deflake the integration suite"   # standalone tasks need a check first
 maestro task claim task-003
 maestro task complete task-003 --summary "stabilized the suite" --claim "cargo test integration passes"
+maestro event create --task-id task-003 --claim "cargo test integration passes"   # proof (hooks do this live)
 maestro task verify task-003                # gated on the claim's recorded proof
 maestro harness measure hb-001              # close the loop once that task is verified
 ```
