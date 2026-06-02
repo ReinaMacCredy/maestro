@@ -108,8 +108,23 @@ pub struct InitArgs {
 
 #[derive(Debug, Args)]
 pub struct AgentArgs {
-    #[arg(long, value_enum, default_value = "codex")]
-    pub agent: Agent,
+    /// Agent to target as a positional, e.g. `maestro install claude` (defaults to codex).
+    #[arg(value_enum)]
+    pub agent_positional: Option<Agent>,
+    /// Agent as a flag, e.g. `maestro install --agent claude`; cannot be combined with the positional.
+    #[arg(long = "agent", value_enum, conflicts_with = "agent_positional")]
+    pub agent_flag: Option<Agent>,
+}
+
+impl AgentArgs {
+    /// Resolve the selected agent from either the positional or `--agent` flag,
+    /// defaulting to codex. clap rejects supplying both, so at most one is set.
+    pub fn agent(&self) -> Agent {
+        self.agent_positional
+            .clone()
+            .or_else(|| self.agent_flag.clone())
+            .unwrap_or(Agent::Codex)
+    }
 }
 
 #[derive(Debug, Args)]
