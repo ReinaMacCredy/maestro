@@ -97,7 +97,7 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
         Ok(config) if classify(&config.schema_version, HARNESS_SCHEMA_VERSION) == Compat::Exact => {
             checks.push(DoctorCheck {
                 name: "harness",
-                detail: path.display().to_string(),
+                detail: format!("schema {}", config.schema_version),
             })
         }
         Ok(config) => errors.push(schema_diagnostic(

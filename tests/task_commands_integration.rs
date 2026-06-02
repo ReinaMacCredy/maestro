@@ -979,6 +979,40 @@ fn set_check_rejects_a_terminal_task_whose_checks_are_settled_history() {
 }
 
 #[test]
+fn set_check_on_a_previously_accepted_terminal_task_reports_settled_history_not_the_lock() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    // Drive the task to accepted (acceptance_locked = true), then reject it: it is
+    // now terminal AND acceptance-locked. Editing its checks must report the
+    // terminal settled-history reason, not "acceptance is locked ... after accept",
+    // which would falsely imply the block is tied to a still-active accepted
+    // contract. The terminal guard must be evaluated before the lock guard.
+    for args in [
+        vec!["task", "create", "Was accepted"],
+        vec!["task", "explore", "task-001"],
+        vec!["task", "set", "task-001", "--check", "build passes"],
+        vec!["task", "accept", "task-001"],
+        vec!["task", "reject", "task-001", "--reason", "out of scope"],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+
+    let args = &["task", "set", "task-001", "--check", "too late"];
+    let set = maestro(repo, args);
+    assert_failure(&set, args);
+    let message = stderr(&set);
+    assert!(
+        message.contains("settled history"),
+        "expected the terminal settled-history guard, got: {message}"
+    );
+    assert!(
+        !message.contains("acceptance is locked"),
+        "a terminal task must not report the acceptance lock (the terminal reason is the accurate one): {message}"
+    );
+}
+
+#[test]
 fn complete_on_a_pre_claim_task_points_at_claim_not_a_dead_end() {
     let temp = setup_repo();
     let repo = temp.path();
@@ -1051,6 +1085,78 @@ fn task_block_rejects_an_empty_or_whitespace_reason() {
             stderr(&block)
         );
     }
+}
+
+#[test]
+fn task_reject_abandon_supersede_reject_an_empty_or_whitespace_reason() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    // `block --reason` already guards blank; reject/abandon/supersede are its
+    // missed peers -- terminal, audited transitions where a blank reason would
+    // leave a permanent, un-amendable record with no explanation. The guard fires
+    // before any state change, so the draft tasks survive both iterations.
+    for args in [
+        vec!["task", "create", "reject target"],
+        vec!["task", "create", "abandon target"],
+        vec!["task", "create", "supersede target"],
+        vec!["task", "create", "supersede by"],
+    ] {
+        assert_success(&maestro(repo, &args), &args);
+    }
+
+    for reason in ["", "   "] {
+        let reject = maestro(repo, &["task", "reject", "task-001", "--reason", reason]);
+        assert_failure(&reject, &["task", "reject", "--reason", reason]);
+        assert!(
+            stderr(&reject).contains("`--reason` must not be empty"),
+            "reject {reason:?}: {}",
+            stderr(&reject)
+        );
+
+        let abandon = maestro(repo, &["task", "abandon", "task-002", "--reason", reason]);
+        assert_failure(&abandon, &["task", "abandon", "--reason", reason]);
+        assert!(
+            stderr(&abandon).contains("`--reason` must not be empty"),
+            "abandon {reason:?}: {}",
+            stderr(&abandon)
+        );
+
+        let supersede = maestro(
+            repo,
+            &["task", "supersede", "task-003", "--by", "task-004", "--reason", reason],
+        );
+        assert_failure(&supersede, &["task", "supersede", "--reason", reason]);
+        assert!(
+            stderr(&supersede).contains("`--reason` must not be empty"),
+            "supersede {reason:?}: {}",
+            stderr(&supersede)
+        );
+    }
+}
+
+#[test]
+fn task_update_with_no_fields_shows_worked_examples_like_task_set() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    assert_success(
+        &maestro(repo, &["task", "create", "needs an update"]),
+        &["task", "create", "needs an update"],
+    );
+
+    // `task set` teaches the exact invocation on its no-args error; `task update`,
+    // its sibling, must too rather than dead-end with a bare one-liner.
+    let update = maestro(repo, &["task", "update", "task-001"]);
+    assert_failure(&update, &["task", "update", "task-001"]);
+    let message = stderr(&update);
+    assert!(
+        message.contains("maestro task update task-001 --summary"),
+        "expected a worked --summary example: {message}"
+    );
+    assert!(
+        message.contains("maestro task update task-001 --claim"),
+        "expected a worked --claim example: {message}"
+    );
 }
 
 #[test]

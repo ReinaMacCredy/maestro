@@ -512,6 +512,12 @@ fn schema_mismatch_reports_incompatible_and_does_not_mutate_harness_files() {
     let stdout = String::from_utf8_lossy(&update.stdout);
     assert!(stdout.contains("schema mismatch detected"));
     assert!(stdout.contains("incompatible"));
+    // The mismatch report must name an actionable remedy, not dead-end after
+    // declaring the artifact incompatible.
+    assert!(
+        stdout.contains("no in-place migration"),
+        "the schema-mismatch report must name a remedy: {stdout}"
+    );
     assert_files_unchanged(&before);
 }
 

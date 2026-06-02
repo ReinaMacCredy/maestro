@@ -82,27 +82,46 @@ pub fn run(args: TaskArgs) -> Result<()> {
             block_task(&paths, &id, &reason, by, &actor)
         }
         TaskCommand::Unblock { id, blocker } => unblock_task(&paths, &id, &blocker, &actor),
-        TaskCommand::Reject { id, reason } => transition_task(
-            &paths,
-            &id,
-            TaskState::Rejected,
-            &actor,
-            TransitionDetails {
-                summary: Some(reason),
-                ..TransitionDetails::default()
-            },
-        ),
-        TaskCommand::Abandon { id, reason } => transition_task(
-            &paths,
-            &id,
-            TaskState::Abandoned,
-            &actor,
-            TransitionDetails {
-                summary: Some(reason),
-                ..TransitionDetails::default()
-            },
-        ),
+        TaskCommand::Reject { id, reason } => {
+            if reason.trim().is_empty() {
+                bail!(
+                    "`--reason` must not be empty; say why the task is rejected, e.g. --reason \"out of scope\""
+                );
+            }
+            transition_task(
+                &paths,
+                &id,
+                TaskState::Rejected,
+                &actor,
+                TransitionDetails {
+                    summary: Some(reason),
+                    ..TransitionDetails::default()
+                },
+            )
+        }
+        TaskCommand::Abandon { id, reason } => {
+            if reason.trim().is_empty() {
+                bail!(
+                    "`--reason` must not be empty; say why the task is abandoned, e.g. --reason \"no longer needed\""
+                );
+            }
+            transition_task(
+                &paths,
+                &id,
+                TaskState::Abandoned,
+                &actor,
+                TransitionDetails {
+                    summary: Some(reason),
+                    ..TransitionDetails::default()
+                },
+            )
+        }
         TaskCommand::Supersede { id, by, reason } => {
+            if reason.trim().is_empty() {
+                bail!(
+                    "`--reason` must not be empty; say why the task is superseded, e.g. --reason \"merged into task-003\""
+                );
+            }
             supersede_task(&paths, &id, &by, &reason, &actor)
         }
         TaskCommand::Show { id } => show_task(&paths, id),
@@ -327,7 +346,9 @@ fn update_task(
     actor: &str,
 ) -> Result<()> {
     if summary.is_none() && claims.is_empty() {
-        bail!("task update requires --summary or --claim");
+        bail!(
+            "task update requires --summary or --claim\n  maestro task update {id} --summary \"...\"\n  maestro task update {id} --claim \"...\""
+        );
     }
     let now = nanos_since_epoch_string();
     let task = task::update_task_history(

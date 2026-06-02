@@ -125,6 +125,16 @@ fn doctor_reports_ok_for_initialized_phase_three_artifacts() {
     let out = stdout(&doctor);
 
     assert!(out.contains("check harness: ok"));
+    // The harness ok line prints a stable schema descriptor like its sibling checks
+    // (counts/states), not the machine's absolute harness.yml path.
+    assert!(
+        out.contains("check harness: ok (schema "),
+        "harness ok should print a schema descriptor, not a path: {out}"
+    );
+    assert!(
+        !out.contains(&repo.display().to_string()),
+        "doctor must not leak the absolute repo path on a healthy repo: {out}"
+    );
     assert!(out.contains("check features: ok"));
     assert!(out.contains("check backlog: ok"));
     assert!(out.contains("check task-blockers: ok"));

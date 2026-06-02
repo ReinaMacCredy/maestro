@@ -194,6 +194,9 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
             ));
             out.push('\n');
         }
+        out.push_str(
+            "There is no in-place migration: remove the listed file(s) and re-run `maestro init --merge` (or `maestro install` for the install lock) to recreate them at the current schema, or use a maestro version matching the existing schema.\n",
+        );
     }
     out
 }
