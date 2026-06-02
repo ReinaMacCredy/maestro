@@ -325,9 +325,11 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
         ));
     }
     // F — a captured behavior baseline is a precondition of accept (before edits).
-    if !qa::baseline_present(&feature_dir(paths, id))? {
+    let feat_dir = feature_dir(paths, id);
+    if !qa::baseline_present(&feat_dir)? {
         gaps.push(format!(
-            "qa-baseline (.maestro/features/{id}/baseline.md missing) — fix: capture current behavior before edits via the qa-baseline skill (a non-empty baseline.md); tagging scenarios [bl-NNN] now satisfies the ship gate later"
+            "qa-baseline (.maestro/features/{id}/baseline.md {}) — fix: capture current behavior before edits via the qa-baseline skill (a non-empty baseline.md); tagging scenarios [bl-NNN] now satisfies the ship gate later",
+            qa::baseline_absence(&feat_dir)
         ));
     }
 
@@ -546,7 +548,20 @@ pub fn ship(
     let baseline = qa::read_baseline(&feat_dir)?;
     let slices = qa::read_qa_slices(&feat_dir)?;
     let amend_log = load_amend_log(paths, id)?;
-    gaps.extend(qa::ship_qa_gaps(id, baseline.as_ref(), &slices, &amend_log));
+    // Classify absent-vs-empty only when there is no usable baseline (the only path
+    // that consumes the word); a present baseline skips the extra read.
+    let absence = if baseline.is_none() {
+        qa::baseline_absence(&feat_dir)
+    } else {
+        "missing"
+    };
+    gaps.extend(qa::ship_qa_gaps(
+        id,
+        baseline.as_ref(),
+        absence,
+        &slices,
+        &amend_log,
+    ));
 
     if dry_run {
         let note = if gaps.is_empty() {

@@ -177,6 +177,32 @@ fn feature_qa_gates_via_cli() {
 }
 
 #[test]
+fn accept_words_a_blank_baseline_as_empty_not_missing() {
+    let temp = TestTempDir::new("maestro-qa-empty-baseline-test");
+    let repo = temp.path();
+    init_and_author(repo, "report-builder", "Report builder");
+
+    // A present-but-whitespace baseline.md: read_baseline collapses it to None like
+    // an absent file, but the gate must distinguish the two in its remedy wording.
+    fs::write(
+        feature_dir(repo, "report-builder").join("baseline.md"),
+        "   \n\n",
+    )
+    .expect("invariant: baseline.md should be writable");
+
+    let accept = ["feature", "accept", "report-builder"];
+    let stderr = assert_failure(maestro(&accept, repo), &accept);
+    assert!(
+        stderr.contains("qa-baseline") && stderr.contains("empty"),
+        "a blank baseline should read 'empty', not 'missing': {stderr}"
+    );
+    assert!(
+        !stderr.contains("baseline.md missing"),
+        "a present-but-blank file must not be reported as missing: {stderr}"
+    );
+}
+
+#[test]
 fn non_goal_amend_does_not_block_ship_via_cli() {
     let temp = TestTempDir::new("maestro-qa-nongoal-test");
     let repo = temp.path();

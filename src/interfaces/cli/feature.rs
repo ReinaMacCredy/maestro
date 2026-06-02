@@ -198,15 +198,32 @@ fn render_timestamp(nanos: &str) -> String {
 fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     // L6b: reads cross the boundary — fall through to the archive so a
     // historical reference to an archived feature still renders.
-    let view = match feature::show(paths, id) {
-        Ok(view) => view,
-        Err(live_err) => feature::show_archived(paths, id).map_err(|_| live_err)?,
+    let (view, archived) = match feature::show(paths, id) {
+        Ok(view) => (view, false),
+        Err(live_err) => (feature::show_archived(paths, id).map_err(|_| live_err)?, true),
     };
 
     println!("id: {}", view.id);
     println!("title: {}", view.title);
     println!("status: {}", feature::status_label(&view.status));
-    println!("tasks_total: {}", view.counts.total);
+    if archived {
+        println!("archived: true");
+    }
+    // An archived view counts only the archive tree; an L6c-skipped child stays live,
+    // so disclose the live referrers it omits rather than reporting a misleading total.
+    let live_unarchived = if archived {
+        feature::query::count_tasks_for_feature(&paths.tasks_dir(), id)?.total
+    } else {
+        0
+    };
+    if live_unarchived > 0 {
+        println!(
+            "tasks_total: {} ({live_unarchived} live task(s) not archived)",
+            view.counts.total
+        );
+    } else {
+        println!("tasks_total: {}", view.counts.total);
+    }
     println!("tasks_verified: {}", view.counts.verified);
     println!("created_at: {}", render_timestamp(&view.created_at));
     println!("updated_at: {}", render_timestamp(&view.updated_at));

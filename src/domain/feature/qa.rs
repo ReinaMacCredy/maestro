@@ -72,6 +72,17 @@ pub(crate) fn baseline_present(feature_dir: &Path) -> Result<bool> {
     Ok(read_baseline(feature_dir)?.is_some())
 }
 
+/// Why a baseline is unusable, so the accept/ship gates word the remedy precisely:
+/// a present-but-blank file reads `"empty"`, anything else (absent, or an IO error)
+/// `"missing"` (fail-closed, matching `read_baseline`). Called only on the gate-fail
+/// path, where a usable baseline never reaches it.
+pub(crate) fn baseline_absence(feature_dir: &Path) -> &'static str {
+    match read_to_string_if_exists(&feature_dir.join("baseline.md")) {
+        Ok(Some(text)) if text.trim().is_empty() => "empty",
+        _ => "missing",
+    }
+}
+
 /// Read `qa-slices.yaml`, returning an empty log when absent. A parse failure is
 /// an actionable error naming the path and the expected shape (not an opaque bail).
 pub(crate) fn read_qa_slices(feature_dir: &Path) -> Result<QaSliceLog> {
@@ -100,6 +111,7 @@ pub(crate) fn read_qa_slices(feature_dir: &Path) -> Result<QaSliceLog> {
 pub(crate) fn ship_qa_gaps(
     id: &str,
     baseline: Option<&Baseline>,
+    absence: &str,
     slices: &QaSliceLog,
     amend_log: &AmendLog,
 ) -> Vec<String> {
@@ -107,7 +119,7 @@ pub(crate) fn ship_qa_gaps(
 
     let Some(baseline) = baseline else {
         gaps.push(format!(
-            "qa-baseline missing (.maestro/features/{id}/baseline.md) — fix: write a Scenario Matrix of [bl-NNN]-tagged real scenarios (optional `amend_log_position:` frontmatter), or run the qa-baseline skill, then: maestro feature ship {id}"
+            "qa-baseline {absence} (.maestro/features/{id}/baseline.md) — fix: write a Scenario Matrix of [bl-NNN]-tagged real scenarios (optional `amend_log_position:` frontmatter), or run the qa-baseline skill, then: maestro feature ship {id}"
         ));
         return gaps;
     };
@@ -257,9 +269,17 @@ mod tests {
 
     #[test]
     fn missing_baseline_blocks_and_short_circuits() {
-        let gaps = ship_qa_gaps("demo", None, &QaSliceLog::default(), &log(vec![]));
+        let gaps = ship_qa_gaps("demo", None, "missing", &QaSliceLog::default(), &log(vec![]));
         assert_eq!(gaps.len(), 1);
         assert!(gaps[0].contains("qa-baseline missing"));
+    }
+
+    #[test]
+    fn empty_baseline_words_the_gap_as_empty_not_missing() {
+        let gaps = ship_qa_gaps("demo", None, "empty", &QaSliceLog::default(), &log(vec![]));
+        assert_eq!(gaps.len(), 1);
+        assert!(gaps[0].contains("qa-baseline empty"));
+        assert!(!gaps[0].contains("qa-baseline missing"));
     }
 
     #[test]
@@ -268,7 +288,7 @@ mod tests {
         let slices = QaSliceLog {
             slices: vec![slice(&["bl-001", "bl-002"], &["test passed"])],
         };
-        assert!(ship_qa_gaps("demo", Some(&b), &slices, &log(vec![])).is_empty());
+        assert!(ship_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![])).is_empty());
     }
 
     #[test]
@@ -278,7 +298,7 @@ mod tests {
         let slices = QaSliceLog {
             slices: vec![slice(&["bl-001"], &["proof"])],
         };
-        let gaps = ship_qa_gaps("demo", Some(&b), &slices, &log(vec![]));
+        let gaps = ship_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![]));
         assert_eq!(gaps.len(), 1);
         assert!(gaps[0].contains("bl-002"));
         assert!(gaps[0].contains("bl-003"));
@@ -291,7 +311,7 @@ mod tests {
         let slices = QaSliceLog {
             slices: vec![slice(&["bl-001"], &[])],
         };
-        let gaps = ship_qa_gaps("demo", Some(&b), &slices, &log(vec![]));
+        let gaps = ship_qa_gaps("demo", Some(&b), "missing", &slices, &log(vec![]));
         assert!(gaps.iter().any(|g| g.contains("bl-001")));
     }
 
@@ -299,7 +319,10 @@ mod tests {
     fn no_behavioral_surface_ships_with_no_slices() {
         // QA C: zero [bl-NNN] declares no behavioral surface.
         let b = baseline(0, &[]);
-        assert!(ship_qa_gaps("demo", Some(&b), &QaSliceLog::default(), &log(vec![])).is_empty());
+        assert!(
+            ship_qa_gaps("demo", Some(&b), "missing", &QaSliceLog::default(), &log(vec![]))
+                .is_empty()
+        );
     }
 
     #[test]
@@ -308,7 +331,7 @@ mod tests {
         // still blocks (the baseline now needs a scenario).
         let b = baseline(0, &[]);
         let amend = log(vec![entry(&[], &["src/new.rs"])]);
-        let gaps = ship_qa_gaps("demo", Some(&b), &QaSliceLog::default(), &amend);
+        let gaps = ship_qa_gaps("demo", Some(&b), "missing", &QaSliceLog::default(), &amend);
         assert_eq!(gaps.len(), 1);
         assert!(gaps[0].contains("stale"));
     }
@@ -327,7 +350,7 @@ mod tests {
                 ..Default::default()
             },
         }]);
-        assert!(ship_qa_gaps("demo", Some(&b), &slices, &amend).is_empty());
+        assert!(ship_qa_gaps("demo", Some(&b), "missing", &slices, &amend).is_empty());
     }
 
     #[test]
@@ -338,7 +361,7 @@ mod tests {
             slices: vec![slice(&["bl-001"], &["proof"])],
         };
         let amend = log(vec![entry(&["new criterion"], &[])]);
-        assert!(ship_qa_gaps("demo", Some(&b), &slices, &amend).is_empty());
+        assert!(ship_qa_gaps("demo", Some(&b), "missing", &slices, &amend).is_empty());
     }
 
     #[test]
@@ -348,7 +371,7 @@ mod tests {
             slices: vec![slice(&["bl-001"], &["proof"])],
         };
         let amend = log(vec![entry(&["new criterion"], &[])]);
-        let gaps = ship_qa_gaps("demo", Some(&b), &slices, &amend);
+        let gaps = ship_qa_gaps("demo", Some(&b), "missing", &slices, &amend);
         assert!(gaps.iter().any(|g| g.contains("stale")));
     }
 

@@ -549,6 +549,10 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     );
     assert!(show.contains("status: shipped"));
     assert!(show.contains("tasks_total: 2"));
+    // L6b: the read-fallthrough discloses it is an archive view (R26).
+    assert!(show.contains("archived: true"));
+    // A full cascade left nothing live, so the count is complete and unannotated.
+    assert!(!show.contains("not archived"));
     let list_all = stdout(
         maestro(&["feature", "list", "--all"], root),
         &["feature", "list", "--all"],
@@ -649,6 +653,16 @@ fn feature_archive_skips_a_referenced_child_then_sweeps_it_on_rerun() {
     // The straggler stays in the live tree.
     assert!(tasks_dir.join("task-002").is_dir());
     assert!(!root.join(".maestro/archive/tasks/task-002").exists());
+
+    // R25/R26: an archived show discloses it is the archive view, and its
+    // archive-tree count (task-001+task-003) annotates the straggler it omits
+    // (task-002 still live) instead of reporting a misleading total.
+    let show = stdout(
+        maestro(&["feature", "show", "billing-csv-export"], root),
+        &["feature", "show", "billing-csv-export"],
+    );
+    assert!(show.contains("archived: true"));
+    assert!(show.contains("tasks_total: 2 (1 live task(s) not archived)"));
 
     // Clear the reference, then re-run: task-002 sweeps even though the feature
     // dir already moved (the child sweep is unconditional).
