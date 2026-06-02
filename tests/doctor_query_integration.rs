@@ -164,7 +164,10 @@ fn doctor_words_missing_resources_uniformly_with_the_init_merge_repair() {
         "missing resources must not leak the io phrasing:\n{err}"
     );
     for path in ["harness.yml", "backlog.yaml", "features"] {
-        assert!(err.contains(path), "doctor should name {path} as missing:\n{err}");
+        assert!(
+            err.contains(path),
+            "doctor should name {path} as missing:\n{err}"
+        );
     }
     assert_eq!(
         err.matches("is missing; run `maestro init --merge` to repair")
@@ -302,7 +305,13 @@ fn doctor_and_task_doctor_flag_a_dangling_decision_blocker() {
         vec!["task", "create", "Valid decision blocker"],
         vec!["task", "create", "Dangling decision blocker"],
         vec![
-            "task", "block", "task-001", "--reason", "needs ADR", "--by", "decision-001",
+            "task",
+            "block",
+            "task-001",
+            "--reason",
+            "needs ADR",
+            "--by",
+            "decision-001",
         ],
     ] {
         assert_success(&maestro(repo, &args), &args);
@@ -315,7 +324,13 @@ fn doctor_and_task_doctor_flag_a_dangling_decision_blocker() {
         &maestro(
             repo,
             &[
-                "task", "block", "task-002", "--reason", "needs ADR", "--by", "decision-999",
+                "task",
+                "block",
+                "task-002",
+                "--reason",
+                "needs ADR",
+                "--by",
+                "decision-999",
             ],
         ),
         &["task", "block", "task-002", "--by", "decision-999"],

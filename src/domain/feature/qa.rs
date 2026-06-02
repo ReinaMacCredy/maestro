@@ -269,7 +269,13 @@ mod tests {
 
     #[test]
     fn missing_baseline_blocks_and_short_circuits() {
-        let gaps = ship_qa_gaps("demo", None, "missing", &QaSliceLog::default(), &log(vec![]));
+        let gaps = ship_qa_gaps(
+            "demo",
+            None,
+            "missing",
+            &QaSliceLog::default(),
+            &log(vec![]),
+        );
         assert_eq!(gaps.len(), 1);
         assert!(gaps[0].contains("qa-baseline missing"));
     }
@@ -320,8 +326,14 @@ mod tests {
         // QA C: zero [bl-NNN] declares no behavioral surface.
         let b = baseline(0, &[]);
         assert!(
-            ship_qa_gaps("demo", Some(&b), "missing", &QaSliceLog::default(), &log(vec![]))
-                .is_empty()
+            ship_qa_gaps(
+                "demo",
+                Some(&b),
+                "missing",
+                &QaSliceLog::default(),
+                &log(vec![])
+            )
+            .is_empty()
         );
     }
 

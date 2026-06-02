@@ -161,7 +161,9 @@ fn set_rejects_a_blank_contract_value_so_it_cannot_satisfy_the_accept_gate() {
         )
         .expect_err("invariant: a blank acceptance value must be rejected");
         assert!(
-            error.to_string().contains("must not be empty or whitespace"),
+            error
+                .to_string()
+                .contains("must not be empty or whitespace"),
             "unexpected error: {error}"
         );
     }
@@ -187,7 +189,9 @@ fn amend_rejects_a_blank_addition_value() {
     )
     .expect_err("invariant: a blank amend value must be rejected");
     assert!(
-        error.to_string().contains("must not be empty or whitespace"),
+        error
+            .to_string()
+            .contains("must not be empty or whitespace"),
         "unexpected error: {error}"
     );
 }

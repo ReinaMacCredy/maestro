@@ -489,9 +489,21 @@ fn task_show_flags_a_claim_added_after_verification_as_unverified() {
     assert_success(
         &maestro(
             repo,
-            &["task", "update", "task-001", "--claim", "unproven follow-up"],
+            &[
+                "task",
+                "update",
+                "task-001",
+                "--claim",
+                "unproven follow-up",
+            ],
         ),
-        &["task", "update", "task-001", "--claim", "unproven follow-up"],
+        &[
+            "task",
+            "update",
+            "task-001",
+            "--claim",
+            "unproven follow-up",
+        ],
     );
     let after = maestro(repo, &["task", "show", "task-001"]);
     assert_success(&after, &["task", "show", "task-001"]);
@@ -849,7 +861,11 @@ fn event_create_rejects_an_unknown_task() {
         ],
     );
     assert_failure(&create, &["event", "create", "--task-id", "task-999"]);
-    assert!(stderr(&create).contains("task not found"), "{}", stderr(&create));
+    assert!(
+        stderr(&create).contains("task not found"),
+        "{}",
+        stderr(&create)
+    );
 }
 
 #[test]

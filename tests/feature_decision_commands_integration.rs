@@ -340,7 +340,10 @@ fn decision_new_rejects_an_empty_title() {
         let husk = fs::read_dir(&decisions_dir)
             .expect("invariant: decisions dir should be listable")
             .count();
-        assert_eq!(husk, 0, "no decision file should be written for an empty title");
+        assert_eq!(
+            husk, 0,
+            "no decision file should be written for an empty title"
+        );
     }
 }
 

@@ -178,7 +178,9 @@ fn amend_feature(
 
 fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Result<()> {
     if reason.trim().is_empty() {
-        bail!("`--reason` must not be empty; record why the feature is being cancelled (it is audited)");
+        bail!(
+            "`--reason` must not be empty; record why the feature is being cancelled (it is audited)"
+        );
     }
     print_note(feature::cancel(paths, id, reason, dry_run)?.note)
 }
@@ -188,7 +190,10 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     // historical reference to an archived feature still renders.
     let (view, archived) = match feature::show(paths, id) {
         Ok(view) => (view, false),
-        Err(live_err) => (feature::show_archived(paths, id).map_err(|_| live_err)?, true),
+        Err(live_err) => (
+            feature::show_archived(paths, id).map_err(|_| live_err)?,
+            true,
+        ),
     };
 
     println!("id: {}", view.id);

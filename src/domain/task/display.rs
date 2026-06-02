@@ -27,8 +27,14 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     if let Some(claimed_by) = task.claimed_by.as_deref() {
         out.push_str(&format!("claimed_by: {claimed_by}\n"));
     }
-    out.push_str(&format!("created_at: {}\n", render_timestamp(&task.created_at)));
-    out.push_str(&format!("updated_at: {}\n", render_timestamp(&task.updated_at)));
+    out.push_str(&format!(
+        "created_at: {}\n",
+        render_timestamp(&task.created_at)
+    ));
+    out.push_str(&format!(
+        "updated_at: {}\n",
+        render_timestamp(&task.updated_at)
+    ));
 
     out.push_str("checks:\n");
     if checks.is_empty() {
@@ -60,12 +66,11 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
         .verified_at
         .as_deref()
         .and_then(|value| value.trim().parse::<u64>().ok());
-    let is_post_verification = |entry: &StateHistoryEntry| {
-        match (verified_at_ns, entry.at.trim().parse::<u64>().ok()) {
+    let is_post_verification =
+        |entry: &StateHistoryEntry| match (verified_at_ns, entry.at.trim().parse::<u64>().ok()) {
             (Some(verified_at), Some(entry_at)) => entry_at > verified_at,
             _ => false,
-        }
-    };
+        };
     let verified_claims = task
         .state_history
         .iter()

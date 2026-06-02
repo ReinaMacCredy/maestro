@@ -281,7 +281,10 @@ fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let now = nanos_since_epoch_string();
     let (task, auto_accepted) = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
     if auto_accepted {
-        println!("auto-accepted {} (draft -> ready, acceptance locked)", task.id);
+        println!(
+            "auto-accepted {} (draft -> ready, acceptance locked)",
+            task.id
+        );
     }
     println!("updated {} -> {}", task.id, task.state.as_str());
     Ok(())
@@ -371,9 +374,7 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
         Some(id) => id,
         None => match std::env::var("MAESTRO_CURRENT_TASK") {
             Ok(id) if !id.trim().is_empty() => id,
-            _ => bail!(
-                "task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`"
-            ),
+            _ => bail!("task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`"),
         },
     };
     // L6b: reads cross the boundary — fall through to the archive so a

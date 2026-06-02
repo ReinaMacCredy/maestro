@@ -39,7 +39,10 @@ pub fn resolve_blocker(task: &mut TaskRecord, blocker_id: &str, resolved_at: Str
             .map(|blocker| blocker.id.as_str())
             .collect();
         if open.is_empty() {
-            bail!("blocker not found: {blocker_id}; task {} has no open blockers", task.id);
+            bail!(
+                "blocker not found: {blocker_id}; task {} has no open blockers",
+                task.id
+            );
         }
         bail!(
             "blocker not found: {blocker_id}; pass an open blocker's blk- id: {}",

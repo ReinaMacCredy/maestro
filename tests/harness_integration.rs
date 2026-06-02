@@ -1680,7 +1680,10 @@ fn harness_measure_closes_silent_state_note() {
     let apply = run_success(repo, &["harness", "apply", "hb-001"]);
     assert!(apply.contains("spawned task-002"));
     // apply points at the check-then-claim step the spawned standalone task needs (UX-2).
-    assert!(apply.contains("maestro task set task-002 --check"), "{apply}");
+    assert!(
+        apply.contains("maestro task set task-002 --check"),
+        "{apply}"
+    );
 
     // The linked task is verified and the friction is gone (command now in verify).
     mark_verified(repo, "task-002", "general", "0", "100");

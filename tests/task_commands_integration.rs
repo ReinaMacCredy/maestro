@@ -872,8 +872,16 @@ fn list_all_marks_archived_rows_distinct_from_live_terminal() {
             .unwrap_or_else(|| panic!("{id} row present in --all output:\n{all_out}"))
             .to_string()
     };
-    assert!(!row("task-001").contains("(archived)"), "{}", row("task-001"));
-    assert!(row("task-002").contains("(archived)"), "{}", row("task-002"));
+    assert!(
+        !row("task-001").contains("(archived)"),
+        "{}",
+        row("task-001")
+    );
+    assert!(
+        row("task-002").contains("(archived)"),
+        "{}",
+        row("task-002")
+    );
 }
 
 #[test]
@@ -999,7 +1007,10 @@ fn set_check_rejects_a_terminal_task_whose_checks_are_settled_history() {
         &["task", "create", "Doomed"],
     );
     assert_success(
-        &maestro(repo, &["task", "reject", "task-001", "--reason", "out of scope"]),
+        &maestro(
+            repo,
+            &["task", "reject", "task-001", "--reason", "out of scope"],
+        ),
         &["task", "reject", "task-001", "--reason", "out of scope"],
     );
 
@@ -1067,7 +1078,13 @@ fn complete_on_a_pre_claim_task_points_at_claim_not_a_dead_end() {
     // task-001 is ready but never claimed. Completing it must point at `claim` (the
     // get-to-in_progress verb), not the generic "cannot transition" dead end.
     let complete_args = &[
-        "task", "complete", "task-001", "--summary", "did it", "--claim", "build passes",
+        "task",
+        "complete",
+        "task-001",
+        "--summary",
+        "did it",
+        "--claim",
+        "build passes",
     ];
     let complete = maestro(repo, complete_args);
     assert_failure(&complete, complete_args);
@@ -1114,7 +1131,9 @@ fn task_block_rejects_an_empty_or_whitespace_reason() {
     for reason in ["", "   "] {
         let block = maestro(
             repo,
-            &["task", "block", "task-001", "--reason", reason, "--by", "task-002"],
+            &[
+                "task", "block", "task-001", "--reason", reason, "--by", "task-002",
+            ],
         );
         assert_failure(&block, &["task", "block", "--reason", reason]);
         assert!(
@@ -1162,7 +1181,15 @@ fn task_reject_abandon_supersede_reject_an_empty_or_whitespace_reason() {
 
         let supersede = maestro(
             repo,
-            &["task", "supersede", "task-003", "--by", "task-004", "--reason", reason],
+            &[
+                "task",
+                "supersede",
+                "task-003",
+                "--by",
+                "task-004",
+                "--reason",
+                reason,
+            ],
         );
         assert_failure(&supersede, &["task", "supersede", "--reason", reason]);
         assert!(
@@ -1270,14 +1297,23 @@ fn task_block_is_refused_on_a_done_task_so_no_open_blocker_is_baked_in() {
         &["task", "create", "Abandoned probe"],
     );
     assert_success(
-        &maestro(repo, &["task", "abandon", "task-001", "--reason", "scrapped"]),
+        &maestro(
+            repo,
+            &["task", "abandon", "task-001", "--reason", "scrapped"],
+        ),
         &["task", "abandon", "task-001", "--reason", "scrapped"],
     );
 
     // Block alone must not bypass the terminal guard the 5 sibling verbs honor:
     // a finished task cannot take an open blocker (e.g. "abandoned / blocked").
     let args = &[
-        "task", "block", "task-001", "--reason", "needs dep", "--by", "task-002",
+        "task",
+        "block",
+        "task-001",
+        "--reason",
+        "needs dep",
+        "--by",
+        "task-002",
     ];
     let block = maestro(repo, args);
     assert_failure(&block, args);
@@ -1304,7 +1340,13 @@ fn task_supersede_by_itself_is_refused_so_no_self_reference_is_recorded() {
 
     // `--by` naming the task itself would record a corrupt superseded_by: self.
     let args = &[
-        "task", "supersede", "task-001", "--by", "task-001", "--reason", "oops",
+        "task",
+        "supersede",
+        "task-001",
+        "--by",
+        "task-001",
+        "--reason",
+        "oops",
     ];
     let supersede = maestro(repo, args);
     assert_failure(&supersede, args);
@@ -1328,12 +1370,19 @@ fn task_unblock_is_refused_on_an_already_resolved_blocker() {
     assert_success(
         &maestro(
             repo,
-            &["task", "block", "task-001", "--reason", "waiting", "--by", "task-999"],
+            &[
+                "task", "block", "task-001", "--reason", "waiting", "--by", "task-999",
+            ],
         ),
-        &["task", "block", "task-001", "--reason", "waiting", "--by", "task-999"],
+        &[
+            "task", "block", "task-001", "--reason", "waiting", "--by", "task-999",
+        ],
     );
     assert_success(
-        &maestro(repo, &["task", "unblock", "task-001", "--blocker", "blk-001"]),
+        &maestro(
+            repo,
+            &["task", "unblock", "task-001", "--blocker", "blk-001"],
+        ),
         &["task", "unblock", "task-001", "--blocker", "blk-001"],
     );
 
@@ -1413,7 +1462,10 @@ fn task_show_marks_an_archived_task_and_leaves_a_live_one_unmarked() {
         &["task", "create", "Doomed"],
     );
     assert_success(
-        &maestro(repo, &["task", "reject", "task-001", "--reason", "out of scope"]),
+        &maestro(
+            repo,
+            &["task", "reject", "task-001", "--reason", "out of scope"],
+        ),
         &["task", "reject", "task-001"],
     );
     assert_success(
@@ -1456,8 +1508,23 @@ fn forward_verbs_on_a_verified_task_point_at_a_follow_up_not_a_bare_dead_end() {
         vec!["task", "explore", "task-001"],
         vec!["task", "accept", "task-001"],
         vec!["task", "claim", "task-001"],
-        vec!["task", "complete", "task-001", "--summary", "did it", "--claim", "build passes"],
-        vec!["event", "create", "--task-id", "task-001", "--claim", "build passes"],
+        vec![
+            "task",
+            "complete",
+            "task-001",
+            "--summary",
+            "did it",
+            "--claim",
+            "build passes",
+        ],
+        vec![
+            "event",
+            "create",
+            "--task-id",
+            "task-001",
+            "--claim",
+            "build passes",
+        ],
         vec!["task", "verify", "task-001"],
     ] {
         assert_success(&maestro(repo, &args), &args);
@@ -1468,7 +1535,15 @@ fn forward_verbs_on_a_verified_task_point_at_a_follow_up_not_a_bare_dead_end() {
     // "cannot transition" catch-all dead end.
     for verb in [
         vec!["task", "claim", "task-001"],
-        vec!["task", "complete", "task-001", "--summary", "more", "--claim", "x"],
+        vec![
+            "task",
+            "complete",
+            "task-001",
+            "--summary",
+            "more",
+            "--claim",
+            "x",
+        ],
     ] {
         let out = maestro(repo, &verb);
         assert_failure(&out, &verb);

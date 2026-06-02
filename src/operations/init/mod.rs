@@ -70,10 +70,7 @@ pub fn run(options: &InitOptions) -> Result<InitOutcome> {
     // two ways forward (T6.2). The anchor is the init-written harness.yml -- the
     // completed-init marker -- not mere `.maestro` existence, which a partial or
     // interrupted init could leave behind.
-    if !options.merge
-        && !options.force
-        && paths.harness_dir().join("harness.yml").exists()
-    {
+    if !options.merge && !options.force && paths.harness_dir().join("harness.yml").exists() {
         bail!(
             "maestro is already initialized in {}; use --force to refresh or --merge to fill gaps",
             paths.repo_root().display()

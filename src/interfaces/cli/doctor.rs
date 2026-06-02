@@ -216,9 +216,7 @@ fn check_install(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
             let path = root.join(relative);
             let intact = match ownership.kind {
                 // A managed symlink must exist and resolve to a live target.
-                MirrorKind::Symlink => {
-                    std::fs::symlink_metadata(&path).is_ok() && path.exists()
-                }
+                MirrorKind::Symlink => std::fs::symlink_metadata(&path).is_ok() && path.exists(),
                 // Every other mirror lives inside a real file on disk.
                 _ => path.exists(),
             };

@@ -191,14 +191,12 @@ pub(crate) fn prepare_mirrors(
         // file maestro created under another agent (a shared mirror this agent is
         // installing into second) is still maestro-created, so inherit that
         // sibling verdict rather than reading it as pre-existing.
-        let created_fresh = match previous_install.and_then(|previous| {
-            previous.files.get(&plan.relative_path)
-        }) {
-            Some(ownership) => ownership.created_fresh,
-            None => existing.is_none() || sibling_created_fresh.contains(&plan.relative_path),
-        };
-        let ownership =
-            ownership_for_plan(&plan, &contents, previous_values, created_fresh)?;
+        let created_fresh =
+            match previous_install.and_then(|previous| previous.files.get(&plan.relative_path)) {
+                Some(ownership) => ownership.created_fresh,
+                None => existing.is_none() || sibling_created_fresh.contains(&plan.relative_path),
+            };
+        let ownership = ownership_for_plan(&plan, &contents, previous_values, created_fresh)?;
         install.insert(plan.relative_path.clone(), ownership);
 
         updates.push(MirrorUpdate {

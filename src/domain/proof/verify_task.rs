@@ -253,8 +253,9 @@ impl TaskVerification {
 pub fn load_task_by_id(paths: &MaestroPaths, task_id: &str) -> Result<LoadedTask> {
     let handle = match task::load_task_for_update(&paths.tasks_dir(), task_id) {
         Ok(handle) => handle,
-        Err(live_err) => task::load_task_for_update(&paths.archive_tasks_dir(), task_id)
-            .map_err(|_| live_err)?,
+        Err(live_err) => {
+            task::load_task_for_update(&paths.archive_tasks_dir(), task_id).map_err(|_| live_err)?
+        }
     };
 
     Ok(LoadedTask {

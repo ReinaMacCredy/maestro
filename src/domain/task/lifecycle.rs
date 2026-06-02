@@ -107,11 +107,9 @@ fn validate_transition(task: &TaskRecord, to: &TaskState) -> Result<()> {
             task.id,
             task.id
         ),
-        (current, target) if current == target => bail!(
-            "task {} is already {}",
-            task.id,
-            task.state.as_str()
-        ),
+        (current, target) if current == target => {
+            bail!("task {} is already {}", task.id, task.state.as_str())
+        }
         // Verified is a settled success terminus (not is_terminal, so it falls
         // through here). reject/supersede above can still close it; a forward verb
         // means the user wants new work, so point at a follow-up task rather than

@@ -112,7 +112,12 @@ pub struct AgentArgs {
     #[arg(value_enum, value_name = "AGENT")]
     pub agent_positional: Option<Agent>,
     /// Agent as a flag, e.g. `--agent claude`; cannot be combined with the positional.
-    #[arg(long = "agent", value_enum, value_name = "AGENT", conflicts_with = "agent_positional")]
+    #[arg(
+        long = "agent",
+        value_enum,
+        value_name = "AGENT",
+        conflicts_with = "agent_positional"
+    )]
     pub agent_flag: Option<Agent>,
 }
 
@@ -129,7 +134,10 @@ impl AgentArgs {
 
 #[derive(Debug, Args)]
 pub struct UpdateArgs {
-    #[arg(long, help = "Check for an update without downloading or installing it")]
+    #[arg(
+        long,
+        help = "Check for an update without downloading or installing it"
+    )]
     pub check: bool,
     #[arg(long, help = "Show extra detail, including the installed binary path")]
     pub verbose: bool,
@@ -462,13 +470,9 @@ pub enum HarnessCommand {
         all: bool,
     },
     #[command(about = "Show a proposal's detail and history")]
-    Show {
-        id: String,
-    },
+    Show { id: String },
     #[command(about = "Accept a proposal and spawn a linked task (-> accepted)")]
-    Apply {
-        id: String,
-    },
+    Apply { id: String },
     #[command(about = "Re-run the detector to close or revert a proposal (-> measured)")]
     Measure {
         id: String,
