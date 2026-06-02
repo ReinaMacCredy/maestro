@@ -1,5 +1,5 @@
 use crate::domain::task::blockers::has_unresolved_blockers;
-use crate::domain::task::template::{TaskRecord, TaskState};
+use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
 use crate::foundation::core::time::render_timestamp;
 
 /// Render one task for `maestro task show`. `checks` is the task's acceptance
@@ -49,32 +49,38 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     {
         out.push_str(&format!("summary: {summary}\n"));
     }
-    if let Some(entry) = task
+    // Claims recorded after `verified_at` were not part of what `task verify`
+    // proved. Show the verified completion's claims AND any later ones, marking
+    // the latter `(unverified)`, so a post-verification `update --claim` can
+    // neither masquerade as verified nor hide what verification actually proved.
+    let verified_at_ns = task
+        .verification
+        .verified_at
+        .as_deref()
+        .and_then(|value| value.trim().parse::<u64>().ok());
+    let is_post_verification = |entry: &StateHistoryEntry| {
+        match (verified_at_ns, entry.at.trim().parse::<u64>().ok()) {
+            (Some(verified_at), Some(entry_at)) => entry_at > verified_at,
+            _ => false,
+        }
+    };
+    let verified_claims = task
         .state_history
         .iter()
         .rev()
-        .find(|entry| !entry.claims.is_empty())
-    {
-        // Claims recorded after `verified_at` were not part of what `task verify`
-        // proved; flag them so a post-verification claim cannot masquerade as
-        // verified while the task still reads `verified`.
-        let recorded_after_verification = match (
-            task.verification
-                .verified_at
-                .as_deref()
-                .and_then(|value| value.trim().parse::<u64>().ok()),
-            entry.at.trim().parse::<u64>().ok(),
-        ) {
-            (Some(verified_at), Some(entry_at)) => entry_at > verified_at,
-            _ => false,
-        };
+        .find(|entry| !entry.claims.is_empty() && !is_post_verification(entry));
+    let unverified_claims = task
+        .state_history
+        .iter()
+        .rev()
+        .find(|entry| !entry.claims.is_empty() && is_post_verification(entry));
+    if verified_claims.is_some() || unverified_claims.is_some() {
         out.push_str("claims:\n");
-        for claim in &entry.claims {
-            if recorded_after_verification {
-                out.push_str(&format!("- {claim} (unverified)\n"));
-            } else {
-                out.push_str(&format!("- {claim}\n"));
-            }
+        for claim in verified_claims.iter().flat_map(|entry| &entry.claims) {
+            out.push_str(&format!("- {claim}\n"));
+        }
+        for claim in unverified_claims.iter().flat_map(|entry| &entry.claims) {
+            out.push_str(&format!("- {claim} (unverified)\n"));
         }
     }
 

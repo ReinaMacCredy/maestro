@@ -498,6 +498,10 @@ fn task_show_flags_a_claim_added_after_verification_as_unverified() {
     let after_out = stdout(&after);
     assert!(after_out.contains("state: verified"));
     assert!(after_out.contains("- unproven follow-up (unverified)"));
+    // The verified claim must not vanish when a later claim is added: a reader
+    // still needs to see what verification actually proved.
+    assert!(after_out.contains("- implemented CSV export"));
+    assert!(!after_out.contains("- implemented CSV export (unverified)"));
 }
 
 #[test]
