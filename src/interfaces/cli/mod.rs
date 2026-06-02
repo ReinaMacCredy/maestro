@@ -108,10 +108,10 @@ pub struct InitArgs {
 
 #[derive(Debug, Args)]
 pub struct AgentArgs {
-    /// Agent to target as a positional, e.g. `maestro install claude` (defaults to codex).
+    /// Agent to target as a positional, e.g. `claude` (defaults to codex).
     #[arg(value_enum, value_name = "AGENT")]
     pub agent_positional: Option<Agent>,
-    /// Agent as a flag, e.g. `maestro install --agent claude`; cannot be combined with the positional.
+    /// Agent as a flag, e.g. `--agent claude`; cannot be combined with the positional.
     #[arg(long = "agent", value_enum, value_name = "AGENT", conflicts_with = "agent_positional")]
     pub agent_flag: Option<Agent>,
 }
@@ -497,7 +497,7 @@ pub enum QueryCommand {
     #[command(about = "Show a task's proof status")]
     Proof {
         task_id: Option<String>,
-        #[arg(long = "task-id")]
+        #[arg(long = "task-id", value_name = "TASK_ID")]
         task_id_flag: Option<String>,
     },
 }

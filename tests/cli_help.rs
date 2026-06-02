@@ -175,3 +175,21 @@ fn nested_help_lists_section_38_command_tree() {
     assert_contains_all(&maestro(&["hook", "--help"]), &["record"]);
     assert_contains_all(&maestro(&["watch", "--help"]), &["snapshot"]);
 }
+
+#[test]
+fn nested_help_hides_internal_names_and_sibling_examples() {
+    // R27: the `--task-id` flag must show a clean value placeholder, not the
+    // raw field identifier (`TASK_ID_FLAG`) clap derives by default.
+    let proof = maestro(&["query", "proof", "--help"]);
+    assert!(
+        !proof.contains("TASK_ID_FLAG"),
+        "query proof --help leaked the internal field name TASK_ID_FLAG\n{proof}"
+    );
+    // R28: `uninstall` shares AgentArgs with `install`; its help must not point
+    // the reader at `maestro install` invocations.
+    let uninstall = maestro(&["uninstall", "--help"]);
+    assert!(
+        !uninstall.contains("maestro install"),
+        "uninstall --help showed a `maestro install` example\n{uninstall}"
+    );
+}
