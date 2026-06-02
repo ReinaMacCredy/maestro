@@ -394,6 +394,17 @@ pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<(Ta
     }
     let path = handle.task_dir().join("acceptance.yaml");
     let mut acceptance = read_acceptance_or_new(&path, &handle.task().id)?;
+    // Re-check the freshly read acceptance file's own lock marker, not just the
+    // task.yaml snapshot loaded above: a concurrent `accept`/claim can freeze the
+    // contract between that load and this write. `lock_acceptance` records the
+    // freeze as `locked_by`/`locked_at` in this file, so honoring it here closes
+    // the race where set_checks would otherwise clobber an already-frozen contract.
+    if acceptance.locked_by.is_some() {
+        bail!(
+            "task {} acceptance is locked; checks cannot be changed after accept",
+            handle.task().id
+        );
+    }
     let replaced = acceptance.checks.len();
     acceptance.checks = checks;
     write_string_atomic(&path, &serde_yaml::to_string(&acceptance)?)

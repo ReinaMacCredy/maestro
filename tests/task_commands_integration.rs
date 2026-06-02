@@ -1062,6 +1062,55 @@ fn set_check_on_a_previously_accepted_terminal_task_reports_settled_history_not_
 }
 
 #[test]
+fn set_check_honors_an_on_disk_acceptance_lock_even_when_the_task_snapshot_is_stale() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Race probe"]),
+        &["task", "create", "Race probe"],
+    );
+
+    // Simulate the accept/set_checks race: a concurrent `accept` freezes the
+    // contract on disk (writes locked_by into acceptance.yaml) AFTER a racing
+    // `set_checks` has already loaded an unlocked task.yaml snapshot. The task
+    // stays draft (acceptance_locked = false), so the snapshot guard does not
+    // fire; only re-reading the acceptance file's own lock marker catches it.
+    let acceptance = task_yaml_path(repo, "task-001")
+        .parent()
+        .expect("invariant: task path should have a directory")
+        .join("acceptance.yaml");
+    fs::write(
+        &acceptance,
+        "schema_version: maestro.acceptance.v1\ntask: task-001\nchecks: []\nlocked_by: maestro\nlocked_at: now\n",
+    )
+    .expect("invariant: acceptance.yaml should be writable");
+
+    let args = &[
+        "task",
+        "set",
+        "task-001",
+        "--check",
+        "must not clobber the frozen contract",
+    ];
+    let set = maestro(repo, args);
+    assert_failure(&set, args);
+    assert!(
+        stderr(&set).contains("acceptance is locked"),
+        "set_checks must refuse to overwrite a contract already frozen on disk: {}",
+        stderr(&set)
+    );
+
+    // The refused set left the frozen contract intact (no clobber).
+    let raw =
+        fs::read_to_string(&acceptance).expect("invariant: acceptance.yaml should be readable");
+    assert!(
+        raw.contains("locked_by: maestro") && !raw.contains("must not clobber"),
+        "the frozen contract must survive the refused set: {raw}"
+    );
+}
+
+#[test]
 fn complete_on_a_pre_claim_task_points_at_claim_not_a_dead_end() {
     let temp = setup_repo();
     let repo = temp.path();
