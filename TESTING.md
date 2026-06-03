@@ -32,6 +32,18 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+For a full local closeout that also proves realistic CLI workflows against the
+built binary, run:
+
+```sh
+scripts/verify-all.sh
+```
+
+This runs the standard Rust gates, builds `target/debug/maestro`, then exercises
+isolated greenfield and brownfield temp projects under `/private/tmp`. Use
+`scripts/verify-all.sh --workflows-only` only during local script iteration,
+not as the final closeout gate.
+
 When public Rust docs, public item comments, or intra-doc links change, also
 run:
 
