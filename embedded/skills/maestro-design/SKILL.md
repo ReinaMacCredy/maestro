@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.1.0
+version: 1.2.0
 description: Use when the work is design or brainstorming rather than implementation - turning a rough idea into decided design-of-record before any task is built. Covers mapping the problem from the real code, walking open questions one decision at a time, and locking each fork as a Decision record with running reasoning in the feature's notes.md. Reach for it on design, architecture, brainstorm, or spec-authoring requests in a Maestro repo.
 ---
 
@@ -44,6 +44,30 @@ On activation, log the skill activation by piping a compact JSON payload to
    builds it.
 9. **On ship, capture the outcome and ask before archiving.** `maestro feature ship <id> --outcome
    "<one line>"`, then `maestro feature archive <id>` only when you mean to retire it.
+
+## Taste forks: generate-and-filter (tournament variant)
+
+Use when an open question is taste-based - naming, UX wording, API shape,
+report structure - where comparing concrete options beats reasoning to one,
+and a single context window would bias toward its own first idea.
+
+1. Write the rubric BEFORE generating: 3-5 observable criteria drawn from
+   the feature's description and acceptance lines, not invented on the fly.
+   Append it to notes.md - the rubric is part of the reasoning record.
+2. Spawn N generators (3-5), fresh context each, one option apiece, from
+   deliberately different angles (minimal / user-first / consistency-first).
+   Each returns one concrete option: the name, the wording, the sketch.
+3. Filter: a fresh judge scores options against the rubric and dedupes
+   near-identical ones. Discard weak options - don't iterate them.
+4. Tournament variant, when options are many or scores cluster: judge
+   pairwise (A vs B, fresh judge per match) instead of absolute scoring -
+   comparative judgment is more reliable. Bracket until one survives.
+5. Lock the survivor like any other fork: `maestro decision new "<the
+   locked fork>"`, reasoning to notes.md including one line per losing
+   option on why it lost, and drop the answered --question.
+
+Generators explore; the Decision record stays the only durable output.
+Never message a running generator with another generator's option.
 
 For the feature lifecycle and notes.md mechanics see the maestro-feature skill; for the task loop
 see maestro-task.

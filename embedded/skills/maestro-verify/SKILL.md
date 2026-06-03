@@ -1,6 +1,6 @@
 ---
 name: maestro-verify
-version: 1.2.0
+version: 1.3.0
 description: Verification protocol for Maestro tasks and feature work.
 ---
 
@@ -36,6 +36,29 @@ or when a feature QA gate asks for baseline or slice evidence.
   record proof using `maestro event create --task-id <id> --claim "<claim>"`.
 - Stale proof: rerun the smallest falsifying checks, then rerun
   `maestro task verify <id>`.
+
+## Adversarial fan-out (contested or high-stakes verification)
+
+Use when a task failed verify twice, the task is high-risk, or you are about
+to ship a feature on top of many verified tasks.
+
+1. The rubric is `acceptance.yaml` - the locked checks, plus the task's
+   completion claims. Never invent a softer rubric.
+2. Spawn one fresh verifier per claim or check. Give each ONLY the claim,
+   the acceptance check, and the repo - never the worker's reasoning or the
+   conversation. Prompt it to REFUTE: "default to refuted if uncertain."
+   Each verifier reports exactly one verdict line:
+   `upheld|refuted: <check> - <observed evidence>`.
+3. Verdicts land durably, not in conversation:
+   - upheld -> record the verdict line as evidence:
+     `maestro event create --task-id <id> --claim "<verdict line>"`
+   - refuted (reproducibly) -> block the task with the refutation:
+     `maestro task block <id> --reason "adversarial verifier refuted: <what>"`
+     and send it back to work. Do NOT run `task verify` over a refutation.
+4. All upheld -> `maestro task verify <id>` as normal.
+
+Never message a running verifier mid-task - isolation is the point; new
+information goes into a fresh verifier.
 
 ## Feature QA
 

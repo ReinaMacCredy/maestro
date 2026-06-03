@@ -1,5 +1,5 @@
 ---
-version: 1.4.0
+version: 1.5.0
 ---
 
 # Maestro Harness Protocol
@@ -74,6 +74,21 @@ proposals. This is passive - review it only when asked, never auto-act.
     maestro harness measure <id> [--force]         # re-run the detector to close the loop -> measured once the friction is gone
 
 Full method -> the maestro-task skill.
+
+## Orchestration (when work can fan out)
+
+Parallel sub-agents pay off when contexts must stay clean or work is
+independent. The recipes live in the skills; this is the menu:
+
+    2+ independent ready tasks on a feature  -> feature fan-out      (maestro-feature)
+    contested / high-stakes verification     -> adversarial fan-out  (maestro-verify)
+    taste-based design fork (naming, UX)     -> generate-and-filter  (maestro-design)
+    unstructured backlog to triage           -> intake triage        (maestro-task)
+    unknown amount of work                   -> loop until done      (maestro-task)
+
+Results land through the verbs (task / decision / event), never only in the
+conversation. Claude Code: author a Workflow script. Codex: spawn parallel
+sub-agents directly (multi_agent_v1; worktree threads when files overlap).
 
 ## If you are Claude Code
 - Read the task you're on with @file imports: `@.maestro/tasks/<id>/task.yaml` (state,

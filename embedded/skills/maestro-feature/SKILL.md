@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.1.0
+version: 1.2.0
 description: Feature lifecycle layer for Maestro — the guarded five-state machine (proposed -> ready -> in_progress -> shipped/cancelled), its accept and ship gates, append-only amend, and feature/child-task archival.
 ---
 
@@ -61,6 +61,29 @@ deviations, tradeoffs, gotchas) as one `YYYY-MM-DD  <note>` line at the moment y
 free-form prose, read by no gate; `maestro feature show` renders it, and `feature archive` carries
 it with the feature. It is the running record behind the feature's contract and its Decision
 records. To drive a design session that fills it, see the maestro-design skill.
+
+## Feature fan-out (parallel child tasks)
+
+Use when an in_progress feature has 2+ ready tasks that are independent -
+no blocker edges between them and no overlapping files in their checks.
+
+1. Confirm independence first: `maestro task list --ready`, then read each
+   task's acceptance.yaml. Tasks that write the same files are NOT
+   independent - serialize them, or isolate each agent in its own worktree.
+2. Spawn one sub-agent per task, fresh context each. Each sub-agent owns its
+   task end to end: `task claim <id>` -> work -> `task update --claim` as it
+   goes -> `task complete --summary --claim --proof`. Sub-agents edit; they
+   never stage, commit, or touch another task's files.
+3. The conductor stays out of the edits: collect completions, run
+   `maestro task verify <id>` per task (adversarial fan-out from the
+   maestro-verify skill for high-risk ones), and commit per verified task.
+4. The ship gate is the synthesis barrier: `maestro feature ship` refuses
+   while any child is live, the baseline is stale, or slices are missing -
+   run qa-slice, then `ship --outcome "<one line>"`.
+
+Tasks that could touch the same files: isolate each agent in its own git
+worktree (mechanics per agent: the harness orchestration menu). A sub-agent
+freed up early can be redirected to the next ready task mid-flight.
 
 ## The accept gate (freezes the contract)
 

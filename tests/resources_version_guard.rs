@@ -24,14 +24,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 9] = [
     (
         "skill",
         "maestro-task",
-        "1.3.0",
-        "6bf73b34cb17db8191f7d62118f0674d8c5d8e9a9faece26fe39a5e3c516144f",
+        "1.4.0",
+        "0fd22866fc1f9f825fbbfbe7e65dad31164c0da66b7fbe660839fa84793b7cfe",
     ),
     (
         "skill",
         "maestro-feature",
-        "1.1.0",
-        "f0574e19d1745a1fa8ee87f870c192b0259eab2ce77b34770ec2154c74d7842f",
+        "1.2.0",
+        "a8b6f563781257738b5fe311f81aeb1c6a08577b7844797444517fc295f30acb",
     ),
     (
         "skill",
@@ -54,14 +54,14 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 9] = [
     (
         "skill",
         "maestro-verify",
-        "1.2.0",
-        "f82bae4106c3eec4809793596cb70de0c00867c1f4302d95b2ad378f956b31a9",
+        "1.3.0",
+        "ea4c9cf902b141f73b521e0b8d1a97a4d6045f4d72b747ea9ee1d73a68a911f7",
     ),
     (
         "skill",
         "maestro-design",
-        "1.1.0",
-        "1ef5a2c400f628caa15d40be0f25e27e074bf027c5046242008d7ef405658cd7",
+        "1.2.0",
+        "351399860ff26d513aa22cb8735080cf0ee0b1aed5839e12a2788516b2c2a70b",
     ),
     (
         "hook",
@@ -72,8 +72,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 9] = [
     (
         "harness",
         "HARNESS.md",
-        "1.4.0",
-        "e57e884d433611e7b3918a6e976b57e2580821030a2e3b9c486368188074493d",
+        "1.5.0",
+        "b3175b3eef3397524273be8b02d17d130dfe3dbc5e0cb98859093332bdcf8b64",
     ),
 ];
 
