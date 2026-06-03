@@ -12,6 +12,7 @@ pub mod install;
 pub mod mcp;
 pub mod query;
 pub mod shell_init;
+pub mod status;
 pub mod sync;
 pub mod task;
 mod task_id;
@@ -58,6 +59,11 @@ pub enum RootCommand {
     Doctor,
     #[command(about = "Print the shell init snippet for maestro")]
     ShellInit,
+    #[command(
+        about = "Show the repo's current agent handoff and next action",
+        after_help = "Examples:\n  maestro status\n  maestro status --json"
+    )]
+    Status(StatusArgs),
     #[command(about = "Manage tasks: create, claim, complete, verify, and query")]
     Task(TaskArgs),
     #[command(about = "Record run events from the agent harness")]
@@ -164,6 +170,12 @@ pub struct TaskArgs {
     pub command: TaskCommand,
 }
 
+#[derive(Debug, Args)]
+pub struct StatusArgs {
+    #[arg(long, help = "Print machine-readable status JSON")]
+    pub json: bool,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum TaskCommand {
     #[command(about = "Create a task (-> draft)")]
@@ -175,6 +187,11 @@ pub enum TaskCommand {
         lane: Option<String>,
         #[arg(long)]
         risk: Option<String>,
+        #[arg(
+            long = "check",
+            help = "Acceptance check (repeatable); seeds the task's verify+ contract"
+        )]
+        check: Vec<String>,
     },
     #[command(about = "Author task checks or change its feature link")]
     Set {
@@ -209,9 +226,19 @@ pub enum TaskCommand {
             help = "Completion claim; hook-backed tool proof uses '<tool> <tool_input_hash>'"
         )]
         claim: String,
+        #[arg(
+            long,
+            help = "Observed proof text to record before automatic verification"
+        )]
+        proof: Option<String>,
     },
     #[command(about = "Run the evidence gate; on pass marks the task verified")]
     Verify { id: Option<String> },
+    #[command(about = "Print the next task action for the current repo")]
+    Next {
+        #[arg(long, help = "Print machine-readable next-action JSON")]
+        json: bool,
+    },
     #[command(about = "Record progress (summary and/or claims) without changing state")]
     Update {
         id: String,
@@ -555,6 +582,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
+        RootCommand::Status(args) => status::run(args),
         RootCommand::Task(args) => task::run(args),
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),

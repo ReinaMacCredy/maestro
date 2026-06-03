@@ -77,17 +77,10 @@ fn v1_demo_runs_core_flow_watch_query_and_mcp() {
             "done",
             "--claim",
             "implemented demo task",
+            "--proof",
+            "implemented demo task",
         ],
     );
-
-    let run_dir = repo.join(".maestro/runs/demo-session");
-    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
-    fs::write(
-        run_dir.join("events.jsonl"),
-        "{\"task_id\":\"task-001\",\"kind\":\"proof\",\"message\":\"implemented demo task\"}\n",
-    )
-    .expect("invariant: proof event should be writable");
-    run(repo, &["task", "verify", "task-001"]);
 
     let watch = run(repo, &["task", "list", "--watch", "--interval", "1"]);
     assert!(watch.contains("scheduler:"));
@@ -128,7 +121,7 @@ fn v1_demo_runs_core_flow_watch_query_and_mcp() {
     );
 
     let help = run(repo, &["--help"]);
-    for dropped in ["mission", "verdict", "handoff", "policy", "workflow"] {
+    for dropped in ["mission", "verdict", "policy", "workflow"] {
         assert!(!help.contains(dropped), "help should not expose {dropped}");
     }
 }

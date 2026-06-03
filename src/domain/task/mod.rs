@@ -78,10 +78,14 @@ pub fn create_task(
     feature: Option<String>,
     lane: Option<String>,
     risk: Option<String>,
+    checks: Vec<String>,
     created_at: &str,
 ) -> Result<TaskRecord> {
     if title.trim().is_empty() {
         bail!("task title must not be empty");
+    }
+    if checks.iter().any(|check| check.trim().is_empty()) {
+        bail!("task check cannot be empty; pass an observable verify+ check");
     }
     let id = next_task_id(tasks_dir)?;
     let mut task = TaskRecord::draft(&id, title, created_at);
@@ -92,7 +96,7 @@ pub fn create_task(
     if let Some(risk) = risk {
         task.risk = Some(risk);
     }
-    let acceptance = AcceptanceFile::new(&id, Vec::new());
+    let acceptance = AcceptanceFile::new(&id, checks);
     template::write_task_artifacts(tasks_dir, &task, &acceptance)?;
     Ok(task)
 }
@@ -294,42 +298,15 @@ pub fn accept_task(
     Ok(task)
 }
 
-/// Claim a task, auto-accepting draft tasks using the existing CLI behavior.
-///
-/// Returns the updated task and whether it was fast-tracked from `draft`
-/// (auto-accepted + acceptance locked) so the caller can surface that step
-/// instead of silently jumping straight to `in_progress`.
-pub fn claim_task(
-    tasks_dir: &Path,
-    id: &str,
-    actor: &str,
-    claimed_at: &str,
-) -> Result<(TaskRecord, bool)> {
-    let (mut task, snapshot, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
-    let fast_tracked = task.state == TaskState::Draft;
+/// Claim a ready task.
+pub fn claim_task(tasks_dir: &Path, id: &str, actor: &str, claimed_at: &str) -> Result<TaskRecord> {
+    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     if task.state == TaskState::Draft {
-        ensure_standalone_has_checks(&task, &task_dir)?;
-        lifecycle::transition(
-            &mut task,
-            TaskState::Exploring,
-            actor,
-            claimed_at,
-            TransitionDetails::default(),
-        )?;
-        task.acceptance_locked = true;
-        lifecycle::transition(
-            &mut task,
-            TaskState::Ready,
-            actor,
-            claimed_at,
-            TransitionDetails::default(),
-        )?;
-        lock_acceptance(
-            task_dir.join("acceptance.yaml"),
-            &task.id,
-            actor,
-            claimed_at,
-        )?;
+        bail!(
+            "task {} is draft; run `maestro task explore {}` before claiming",
+            task.id,
+            task.id
+        );
     }
     if task.state == TaskState::Exploring {
         bail!(
@@ -346,7 +323,7 @@ pub fn claim_task(
         TransitionDetails::default(),
     )?;
     template::save_task_with_snapshot(&task, &snapshot)?;
-    Ok((task, fast_tracked))
+    Ok(task)
 }
 
 /// Author a task's execution `checks` (C1), replacing the current list.

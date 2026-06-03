@@ -59,18 +59,10 @@ fn phase3_core_verbs_demo_path_runs_end_to_end() {
             "export shipped",
             "--claim",
             "implemented CSV export",
+            "--proof",
+            "implemented CSV export",
         ],
     );
-
-    let run_dir = repo.join(".maestro/runs/run-001");
-    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
-    fs::write(
-        run_dir.join("events.jsonl"),
-        "{\"task_id\":\"task-001\",\"kind\":\"proof\",\"message\":\"implemented CSV export\"}\n",
-    )
-    .expect("invariant: events should be writable");
-
-    run(repo, &["task", "verify", "task-001"]);
     run(repo, &["decision", "new", "Use computed query views"]);
 
     let task_show = stdout(run(repo, &["task", "show", "task-001"]));

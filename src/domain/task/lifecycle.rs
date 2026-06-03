@@ -145,7 +145,7 @@ fn blockers_remedy(task: &TaskRecord) -> String {
 }
 
 fn validate_ready(task: &TaskRecord) -> Result<()> {
-    if task.lane.as_deref() == Some("tiny") || task.acceptance_locked {
+    if task.acceptance_locked {
         Ok(())
     } else {
         bail!("acceptance must exist and be locked before ready")

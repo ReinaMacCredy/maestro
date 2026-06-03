@@ -1,10 +1,12 @@
 use anyhow::{Context, Result, bail};
 
 use crate::domain::feature;
+use crate::domain::proof;
 use crate::domain::task;
 use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::nanos_since_epoch_string;
+use crate::interfaces::cli::status;
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::verify;
 use crate::interfaces::cli::{TaskArgs, TaskCommand};
@@ -26,39 +28,29 @@ pub fn run(args: TaskArgs) -> Result<()> {
             feature,
             lane,
             risk,
-        } => create_task(&paths, &title, feature, lane, risk),
+            check,
+        } => create_task(&paths, &title, feature, lane, risk, check),
         TaskCommand::Set {
             id,
             check,
             feature,
             no_feature,
         } => set_task(&paths, &id, check, feature, no_feature, &actor),
-        TaskCommand::Explore { id } => transition_task(
-            &paths,
-            &id,
-            TaskState::Exploring,
-            &actor,
-            TransitionDetails::default(),
-        ),
+        TaskCommand::Explore { id } => explore_task(&paths, &id, &actor),
         TaskCommand::Accept { id } => accept_task(&paths, &id, &actor),
         TaskCommand::Claim { id } => claim_task(&paths, &id, &actor),
-        TaskCommand::Complete { id, summary, claim } => {
+        TaskCommand::Complete {
+            id,
+            summary,
+            claim,
+            proof,
+        } => {
             if claim.trim().is_empty() {
                 bail!(
                     "`--claim` must not be empty; pass the proof to verify against, e.g. --claim \"cargo test passes\""
                 );
             }
-            transition_task(
-                &paths,
-                &id,
-                TaskState::NeedsVerification,
-                &actor,
-                TransitionDetails {
-                    summary: Some(summary),
-                    claims: vec![claim],
-                    ..TransitionDetails::default()
-                },
-            )
+            complete_task(&paths, &id, summary, claim, proof, &actor)
         }
         TaskCommand::Verify { id } => {
             let id = resolve_optional_task_id(
@@ -68,6 +60,7 @@ pub fn run(args: TaskArgs) -> Result<()> {
             )?;
             verify::run_for_task(&paths, &id, &actor)
         }
+        TaskCommand::Next { json } => status::run_task_next(&paths, json),
         TaskCommand::Update { id, summary, claim } => {
             update_task(&paths, &id, summary, claim, &actor)
         }
@@ -82,43 +75,23 @@ pub fn run(args: TaskArgs) -> Result<()> {
         TaskCommand::Unblock { id, blocker } => unblock_task(&paths, &id, &blocker, &actor),
         TaskCommand::Reject { id, reason } => {
             if reason.trim().is_empty() {
-                bail!(
-                    "`--reason` must not be empty; say why the task is rejected, e.g. --reason \"out of scope\""
-                );
+                bail!(task_terminal_reason_required(&id, "reject", "rejected"));
             }
-            transition_task(
-                &paths,
-                &id,
-                TaskState::Rejected,
-                &actor,
-                TransitionDetails {
-                    summary: Some(reason),
-                    ..TransitionDetails::default()
-                },
-            )
+            terminal_task(&paths, &id, TaskState::Rejected, reason, None, &actor)
         }
         TaskCommand::Abandon { id, reason } => {
             if reason.trim().is_empty() {
-                bail!(
-                    "`--reason` must not be empty; say why the task is abandoned, e.g. --reason \"no longer needed\""
-                );
+                bail!(task_terminal_reason_required(&id, "abandon", "abandoned"));
             }
-            transition_task(
-                &paths,
-                &id,
-                TaskState::Abandoned,
-                &actor,
-                TransitionDetails {
-                    summary: Some(reason),
-                    ..TransitionDetails::default()
-                },
-            )
+            terminal_task(&paths, &id, TaskState::Abandoned, reason, None, &actor)
         }
         TaskCommand::Supersede { id, by, reason } => {
             if reason.trim().is_empty() {
-                bail!(
-                    "`--reason` must not be empty; say why the task is superseded, e.g. --reason \"merged into task-003\""
-                );
+                bail!(task_terminal_reason_required(
+                    &id,
+                    "supersede",
+                    "superseded"
+                ));
             }
             supersede_task(&paths, &id, &by, &reason, &actor)
         }
@@ -148,14 +121,27 @@ pub fn run(args: TaskArgs) -> Result<()> {
         TaskCommand::Watch { id, interval } => watch_tasks(&paths, id, interval),
         TaskCommand::Doctor => doctor_tasks(&paths),
         TaskCommand::Archive { id, dry_run } => {
-            let note =
-                task::archive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id, dry_run)?;
-            println!("{note}");
+            let note = match task::archive_task(
+                &paths.tasks_dir(),
+                &paths.archive_tasks_dir(),
+                &id,
+                dry_run,
+            ) {
+                Ok(note) => note,
+                Err(error) => bail!("{}", task_archive_error_message(&id, &error.to_string())),
+            };
+            print_task_archive_note(&id, &note);
             Ok(())
         }
         TaskCommand::Unarchive { id } => {
-            let note = task::unarchive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id)?;
-            println!("{note}");
+            let note =
+                match task::unarchive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id) {
+                    Ok(note) => note,
+                    Err(error) => {
+                        bail!("{}", task_unarchive_error_message(&id, &error.to_string()))
+                    }
+                };
+            print_task_unarchive_note(&id, &note);
             Ok(())
         }
     }
@@ -167,14 +153,16 @@ fn create_task(
     feature: Option<String>,
     lane: Option<String>,
     risk: Option<String>,
+    checks: Vec<String>,
 ) -> Result<()> {
     if let Some(target) = feature.as_deref() {
         guard_feature_target(paths, target)?;
     }
     let now = nanos_since_epoch_string();
-    let task = task::create_task(&paths.tasks_dir(), title, feature, lane, risk, &now)?;
+    let task = task::create_task(&paths.tasks_dir(), title, feature, lane, risk, checks, &now)?;
 
-    println!("created {}", task.id);
+    let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
+    print_task_create_handoff(&task, &checks);
     Ok(())
 }
 
@@ -208,6 +196,9 @@ fn set_task(
             );
         }
         println!("updated {} checks", task.id);
+        let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
+        print_verify_block(&task, &checks);
+        print_task_next_for_state(&task, &checks);
     }
 
     if changing_feature {
@@ -272,35 +263,108 @@ fn guard_feature_target(paths: &MaestroPaths, target: &str) -> Result<()> {
 fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let now = nanos_since_epoch_string();
     let task = task::accept_task(&paths.tasks_dir(), id, actor, &now)?;
+    let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
 
     println!("accepted {} -> {}", task.id, task.state.as_str());
+    print_verify_block(&task, &checks);
+    println!("acceptance: locked");
+    println!("next: maestro task claim {}", task.id);
     Ok(())
 }
 
 fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
-    let now = nanos_since_epoch_string();
-    let (task, auto_accepted) = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
-    if auto_accepted {
-        println!(
-            "auto-accepted {} (draft -> ready, acceptance locked)",
-            task.id
-        );
+    if let Ok(task) = task::load_task_record(&paths.tasks_dir(), id)
+        && matches!(task.state, TaskState::Draft | TaskState::Exploring)
+    {
+        let checks = task::load_task_checks(&paths.tasks_dir(), &task).unwrap_or_default();
+        bail!("{}", claim_not_ready_message(&task, &checks));
     }
+    let now = nanos_since_epoch_string();
+    let task = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
+    let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     println!("updated {} -> {}", task.id, task.state.as_str());
+    print_verify_block(&task, &checks);
+    println!(
+        "next: maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
+        task.id
+    );
     Ok(())
 }
 
-fn transition_task(
+fn explore_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
+    let task = transition_task_record(
+        paths,
+        id,
+        TaskState::Exploring,
+        actor,
+        TransitionDetails::default(),
+    )?;
+    let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
+    println!("updated {} -> {}", task.id, task.state.as_str());
+    print_verify_block(&task, &checks);
+    print_task_next_for_state(&task, &checks);
+    Ok(())
+}
+
+fn complete_task(
+    paths: &MaestroPaths,
+    id: &str,
+    summary: String,
+    claim: String,
+    proof_text: Option<String>,
+    actor: &str,
+) -> Result<()> {
+    let task = transition_task_record(
+        paths,
+        id,
+        TaskState::NeedsVerification,
+        actor,
+        TransitionDetails {
+            summary: Some(summary),
+            claims: vec![claim],
+            ..TransitionDetails::default()
+        },
+    )?;
+    println!("completed {} -> {}", task.id, task.state.as_str());
+    if let Some(proof_text) = proof_text {
+        if proof_text.trim().is_empty() {
+            bail!("`--proof` must not be empty; pass observed evidence text");
+        }
+        proof::record_claim(
+            paths,
+            "task-complete",
+            &task.id,
+            Some(proof_text.clone()),
+            None,
+            Vec::new(),
+        )?;
+        println!("auto: recorded task_proof event");
+        println!("  proof: {proof_text}");
+    }
+    println!("auto: maestro task verify {}", task.id);
+    match verify::run_for_task(paths, &task.id, actor) {
+        Ok(()) => {
+            print_task_complete_next(paths, &task)?;
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!("task remains: needs_verification");
+            eprintln!("next: maestro query proof {}", task.id);
+            eprintln!("then: fix proof and run maestro task verify {}", task.id);
+            Err(error)
+        }
+    }
+}
+
+fn transition_task_record(
     paths: &MaestroPaths,
     id: &str,
     to: TaskState,
     actor: &str,
     details: TransitionDetails,
-) -> Result<()> {
+) -> Result<TaskRecord> {
     let now = nanos_since_epoch_string();
-    let task = task::transition_task(&paths.tasks_dir(), id, to, actor, &now, details)?;
-    println!("updated {} -> {}", task.id, task.state.as_str());
-    Ok(())
+    task::transition_task(&paths.tasks_dir(), id, to, actor, &now, details)
 }
 
 fn supersede_task(
@@ -311,9 +375,305 @@ fn supersede_task(
     actor: &str,
 ) -> Result<()> {
     let now = nanos_since_epoch_string();
-    let task = task::supersede_task(&paths.tasks_dir(), id, by, reason, actor, &now)?;
-    println!("updated {} -> {}", task.id, task.state.as_str());
+    let task = match task::supersede_task(&paths.tasks_dir(), id, by, reason, actor, &now) {
+        Ok(task) => task,
+        Err(error) => bail!(
+            "{}",
+            task_terminal_error_message(id, Some(by), &error.to_string())
+        ),
+    };
+    print_terminal_receipt(&task, reason, Some(by));
     Ok(())
+}
+
+fn terminal_task(
+    paths: &MaestroPaths,
+    id: &str,
+    to: TaskState,
+    reason: String,
+    replacement: Option<&str>,
+    actor: &str,
+) -> Result<()> {
+    let task = match transition_task_record(
+        paths,
+        id,
+        to,
+        actor,
+        TransitionDetails {
+            summary: Some(reason.clone()),
+            to: replacement.map(str::to_string),
+            ..TransitionDetails::default()
+        },
+    ) {
+        Ok(task) => task,
+        Err(error) => bail!(
+            "{}",
+            task_terminal_error_message(id, replacement, &error.to_string())
+        ),
+    };
+    print_terminal_receipt(&task, &reason, replacement);
+    Ok(())
+}
+
+fn print_task_create_handoff(task: &TaskRecord, checks: &[String]) {
+    println!("created {} ({})", task.id, task.state.as_str());
+    if let Some(feature_id) = task.feature_id.as_deref() {
+        println!("feature: {feature_id}");
+    }
+    print_verify_block(task, checks);
+    print_task_next_for_state(task, checks);
+}
+
+fn print_verify_block(task: &TaskRecord, checks: &[String]) {
+    if !checks.is_empty() {
+        println!("verify+ locked:");
+        println!("  checks: {}", checks.len());
+        if task.feature_id.is_some() {
+            println!("  feature gate: qa-baseline + qa-slice at feature accept/ship");
+        }
+        return;
+    }
+
+    if task.feature_id.is_some() {
+        println!("verify+:");
+        println!("  task check: optional for feature-linked tasks");
+        println!("  feature gate: qa-baseline + qa-slice at feature accept/ship");
+    } else {
+        println!("verify+ missing:");
+        println!(
+            "  next: maestro task set {} --check \"<observable result>\"",
+            task.id
+        );
+    }
+}
+
+fn print_task_next_for_state(task: &TaskRecord, checks: &[String]) {
+    let has_verify_contract = task.feature_id.is_some() || !checks.is_empty();
+    match task.state {
+        TaskState::Draft if has_verify_contract => {
+            println!("next: maestro task explore {}", task.id);
+        }
+        TaskState::Draft => {}
+        TaskState::Exploring if has_verify_contract => {
+            println!("next: maestro task accept {}", task.id);
+        }
+        TaskState::Exploring => {}
+        TaskState::Ready => println!("next: maestro task claim {}", task.id),
+        TaskState::InProgress => println!(
+            "next: maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
+            task.id
+        ),
+        TaskState::NeedsVerification => println!("next: maestro task verify {}", task.id),
+        TaskState::Verified
+        | TaskState::Rejected
+        | TaskState::Abandoned
+        | TaskState::Superseded => println!("next: maestro status"),
+    }
+}
+
+fn print_task_complete_next(paths: &MaestroPaths, task: &TaskRecord) -> Result<()> {
+    let refreshed = task::load_task_record(&paths.tasks_dir(), &task.id)?;
+    println!("verification passed for {}", refreshed.id);
+    if let Some(feature_id) = refreshed.feature_id.as_deref() {
+        println!("feature: {feature_id}");
+        println!("next: maestro feature status {feature_id}");
+    } else {
+        println!("next: maestro status");
+    }
+    Ok(())
+}
+
+fn claim_not_ready_message(task: &TaskRecord, checks: &[String]) -> String {
+    let mut lines = vec![
+        format!("blocked: task {} is not ready to claim", task.id),
+        format!("state: {}", task.state.as_str()),
+    ];
+    match task.state {
+        TaskState::Draft => {
+            if task.feature_id.is_none() && checks.is_empty() {
+                lines.push(format!(
+                    "next: maestro task set {} --check \"<observable result>\"",
+                    task.id
+                ));
+                lines.push(format!("then: maestro task explore {}", task.id));
+            } else {
+                lines.push(format!("next: maestro task explore {}", task.id));
+            }
+        }
+        TaskState::Exploring => {
+            if task.feature_id.is_none() && checks.is_empty() {
+                lines.push(format!(
+                    "next: maestro task set {} --check \"<observable result>\"",
+                    task.id
+                ));
+            }
+            lines.push(format!("next: maestro task accept {}", task.id));
+        }
+        _ => lines.push(format!("next: maestro task show {}", task.id)),
+    }
+    lines.push("exit: 1".to_string());
+    lines.join("\n")
+}
+
+fn task_terminal_reason_required(id: &str, verb: &str, state: &str) -> String {
+    format!(
+        "blocked: task {verb} needs an audited reason\nreason: --reason is empty\nrun: maestro task {verb} {id} --reason \"<why this task is {state}>\""
+    )
+}
+
+fn task_terminal_error_message(id: &str, replacement: Option<&str>, error: &str) -> String {
+    if error.contains("terminal state") {
+        return format!(
+            "blocked: {id} is already terminal\nstate: {}\ninspect: maestro task show {id}\nnext: maestro status\noptional: maestro task archive {id}",
+            parse_terminal_state(error).unwrap_or("unknown")
+        );
+    }
+    if error.contains("supersede target") {
+        let target = replacement.unwrap_or("<replacement-task-id>");
+        return format!(
+            "blocked: supersede target not found\ntask: {id}\ntarget: {target}\ninspect: maestro task show {id}\nnext: maestro task list\nretry: maestro task supersede {id} --by <replacement-task-id> --reason \"<reason>\""
+        );
+    }
+    if error.contains("by itself") {
+        return format!(
+            "blocked: cannot supersede {id} by itself\nreason: --by must name a different task\ninspect: maestro task show {id}\nretry: maestro task supersede {id} --by <replacement-task-id> --reason \"<reason>\""
+        );
+    }
+    error.to_string()
+}
+
+fn parse_terminal_state(error: &str) -> Option<&str> {
+    let state = error
+        .split_once("terminal state ")?
+        .1
+        .split_once(';')?
+        .0
+        .trim();
+    (!state.is_empty()).then_some(state)
+}
+
+fn print_terminal_receipt(task: &TaskRecord, reason: &str, replacement: Option<&str>) {
+    println!(
+        "{} {} (-> {})",
+        terminal_verb(task),
+        task.id,
+        task.state.as_str()
+    );
+    println!("terminal receipt:");
+    println!("  reason: {reason}");
+    if let Some(replacement) = replacement {
+        println!("  replacement: {replacement}");
+    }
+    println!("inspect: maestro task show {}", task.id);
+    println!("next: maestro status");
+    println!("optional: maestro task archive {}", task.id);
+}
+
+fn terminal_verb(task: &TaskRecord) -> &'static str {
+    match task.state {
+        TaskState::Rejected => "rejected",
+        TaskState::Abandoned => "abandoned",
+        TaskState::Superseded => "superseded",
+        _ => "closed",
+    }
+}
+
+fn print_task_archive_note(id: &str, note: &str) {
+    if note.starts_with("would archive ") {
+        println!("dry-run: would archive {id}");
+        println!("from: .maestro/tasks/<task-dir>");
+        println!("to: .maestro/archive/tasks/<task-dir>");
+        println!("writes: none");
+        println!("retry: maestro task archive {id}");
+    } else if note.starts_with("already archived: ") {
+        println!("already archived: {id}");
+        println!("live list: hidden");
+        println!("inspect: maestro task show {id}");
+        println!("next: maestro task list --all");
+    } else if note.starts_with("archived ") {
+        println!("archived {id}");
+        println!("moved: .maestro/tasks/<task-dir> -> .maestro/archive/tasks/<task-dir>");
+        println!("live list: hidden");
+        println!("inspect: maestro task show {id}");
+        println!("undo: maestro task unarchive {id}");
+    } else {
+        println!("{note}");
+    }
+}
+
+fn print_task_unarchive_note(id: &str, note: &str) {
+    if note.starts_with("already live: ") {
+        println!("already live: {id}");
+        println!("inspect: maestro task show {id}");
+        println!("next: maestro task list");
+    } else if note.starts_with("unarchived ") {
+        println!("unarchived {id}");
+        println!("moved: .maestro/archive/tasks/<task-dir> -> .maestro/tasks/<task-dir>");
+        println!("live list: visible");
+        println!("inspect: maestro task show {id}");
+        println!("optional: maestro task archive {id}");
+    } else {
+        println!("{note}");
+    }
+}
+
+fn task_archive_error_message(id: &str, error: &str) -> String {
+    if error.contains("not done") {
+        return format!(
+            "blocked: task is not done\n\
+             task: {id}\n\
+             reason: {error}\n\
+             inspect: maestro task show {id}\n\
+             finish first: maestro task complete {id} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"\n\
+             or close: maestro task reject {id} --reason \"<reason>\""
+        );
+    }
+    if error.contains("blocked by it") {
+        return format!(
+            "blocked: live task still references this task\n\
+             task: {id}\n\
+             reason: {error}\n\
+             inspect: maestro task show {id}\n\
+             fix: clear the live blocker named above\n\
+             retry: maestro task archive {id}"
+        );
+    }
+    if error.contains("task not found") {
+        return format!(
+            "blocked: task not found\n\
+             task: {id}\n\
+             next: maestro task list --all"
+        );
+    }
+    if error.contains("archived copy already exists") {
+        return format!(
+            "blocked: archived copy already exists\n\
+             task: {id}\n\
+             inspect: maestro task show {id}\n\
+             next: maestro task list --all"
+        );
+    }
+    error.to_string()
+}
+
+fn task_unarchive_error_message(id: &str, error: &str) -> String {
+    if error.contains("archived task not found") {
+        return format!(
+            "blocked: archived task not found\n\
+             task: {id}\n\
+             next: maestro task list --all"
+        );
+    }
+    if error.contains("live task already occupies") {
+        return format!(
+            "blocked: live task already occupies this id\n\
+             task: {id}\n\
+             inspect live: maestro task show {id}\n\
+             archive live first: maestro task archive {id}\n\
+             retry: maestro task unarchive {id}"
+        );
+    }
+    error.to_string()
 }
 
 fn block_task(

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use serde_json::Value;
-use serde_yaml::Value as YamlValue;
+use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use sha2::{Digest, Sha256};
 use support::TestTempDir;
 
@@ -72,19 +72,40 @@ fn create_completed_task(repo: &Path, claim: &str) {
         vec!["task", "explore", "task-001"],
         vec!["task", "accept", "task-001"],
         vec!["task", "claim", "task-001"],
-        vec![
-            "task",
-            "complete",
-            "task-001",
-            "--summary",
-            "done",
-            "--claim",
-            claim,
-        ],
     ] {
         let output = maestro(repo, &args);
         assert_success(&output, &args);
     }
+
+    let mut task = task_yaml(repo, "task-001");
+    task["state"] = YamlValue::String("needs_verification".to_string());
+    task["updated_at"] = YamlValue::String("test-complete".to_string());
+    let mut entry = YamlMapping::new();
+    entry.insert(
+        YamlValue::String("state".to_string()),
+        YamlValue::String("needs_verification".to_string()),
+    );
+    entry.insert(
+        YamlValue::String("at".to_string()),
+        YamlValue::String("test-complete".to_string()),
+    );
+    entry.insert(
+        YamlValue::String("by".to_string()),
+        YamlValue::String("maestro".to_string()),
+    );
+    entry.insert(
+        YamlValue::String("summary".to_string()),
+        YamlValue::String("done".to_string()),
+    );
+    entry.insert(
+        YamlValue::String("claims".to_string()),
+        YamlValue::Sequence(vec![YamlValue::String(claim.to_string())]),
+    );
+    task["state_history"]
+        .as_sequence_mut()
+        .expect("invariant: state_history should be editable")
+        .push(YamlValue::Mapping(entry));
+    write_task_yaml(repo, "task-001", &task);
 }
 
 fn task_dir(repo: &Path, id: &str) -> PathBuf {

@@ -126,6 +126,8 @@ fn feature_guarded_lifecycle_via_cli() {
     write_task(&tasks_dir, "task-003", "billing-csv-export", "verified");
     let ship_output = stdout(maestro(&ship_args, temp_dir.path()), &ship_args);
     assert!(ship_output.contains("shipped billing-csv-export"));
+    assert!(ship_output.contains("ship receipt:"));
+    assert!(ship_output.contains("next: maestro status"));
 
     let show_after_ship = stdout(
         maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
@@ -534,6 +536,8 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     assert!(archived.contains("archived feature billing-csv-export"));
     assert!(archived.contains("task-001"));
     assert!(archived.contains("task-002"));
+    assert!(archived.contains("archive receipt:"));
+    assert!(archived.contains("undo: maestro feature unarchive billing-csv-export"));
 
     // The feature dir + QA artifacts moved into the archive sibling tree.
     let archived_feature = root.join(".maestro/archive/features/billing-csv-export");
@@ -572,6 +576,8 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let restored = stdout(maestro(&unarchive_args, root), &unarchive_args);
     assert!(restored.contains("unarchived feature billing-csv-export"));
     assert!(restored.contains("task-001"));
+    assert!(restored.contains("restore receipt:"));
+    assert!(restored.contains("next: maestro status"));
     assert!(
         features_dir
             .join("billing-csv-export")
@@ -629,7 +635,9 @@ fn feature_archive_skips_a_referenced_child_then_sweeps_it_on_rerun() {
         "--reason",
         "scope dropped",
     ];
-    stdout(maestro(&cancel_args, root), &cancel_args);
+    let cancelled = stdout(maestro(&cancel_args, root), &cancel_args);
+    assert!(cancelled.contains("cancel receipt:"));
+    assert!(cancelled.contains("next: maestro status"));
 
     // A live task (task-004) blocked by the terminal child task-002 entangles it.
     stdout(

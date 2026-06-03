@@ -140,6 +140,8 @@ fn create_explore_accept_claim_complete_flow_updates_task_record() {
             "done",
             "--claim",
             "implemented CSV export",
+            "--proof",
+            "implemented CSV export",
         ],
     ] {
         let out = maestro(repo, &args);
@@ -147,17 +149,14 @@ fn create_explore_accept_claim_complete_flow_updates_task_record() {
     }
 
     let doc = task_yaml(repo, "task-001");
-    assert_eq!(
-        doc["state"],
-        Value::String("needs_verification".to_string())
-    );
+    assert_eq!(doc["state"], Value::String("verified".to_string()));
     assert_eq!(doc["claimed_by"], Value::String("maestro".to_string()));
     assert_eq!(doc["acceptance_locked"], Value::Bool(true));
     assert_eq!(doc["feature_id"], Value::String("billing-csv".to_string()));
     let history = doc["state_history"]
         .as_sequence()
         .expect("invariant: state_history should be an array");
-    assert_eq!(history.len(), 5);
+    assert_eq!(history.len(), 6);
     assert!(
         !doc["updated_at"]
             .as_str()
@@ -167,7 +166,7 @@ fn create_explore_accept_claim_complete_flow_updates_task_record() {
 }
 
 #[test]
-fn claim_from_draft_advances_to_in_progress() {
+fn claim_from_draft_is_blocked_with_the_explicit_ready_path() {
     let temp = setup_repo();
     let repo = temp.path();
 
@@ -183,15 +182,14 @@ fn claim_from_draft_advances_to_in_progress() {
         &["task", "set", "task-001", "--check", "direct claim check"],
     );
     let claim = maestro(repo, &["task", "claim", "task-001"]);
-    assert_success(&claim, &["task", "claim", "task-001"]);
+    assert_failure(&claim, &["task", "claim", "task-001"]);
+    let message = stderr(&claim);
+    assert!(message.contains("blocked: task task-001 is not ready to claim"));
+    assert!(message.contains("next: maestro task explore task-001"));
 
     let task = task_yaml(repo, "task-001");
-    assert_eq!(task["state"], Value::String("in_progress".to_string()));
-    assert_eq!(task["acceptance_locked"], Value::Bool(true));
-    let history = task["state_history"]
-        .as_sequence()
-        .expect("invariant: state_history should be present");
-    assert_eq!(history.len(), 4);
+    assert_eq!(task["state"], Value::String("draft".to_string()));
+    assert_eq!(task["acceptance_locked"], Value::Bool(false));
 }
 
 #[test]
@@ -572,7 +570,8 @@ fn list_supports_basic_output_and_requested_filters() {
     let all = maestro(repo, &["task", "list"]);
     assert_success(&all, &["task", "list"]);
     let all_out = stdout(&all);
-    assert!(all_out.contains("ID\tSTATE\tTITLE"));
+    assert!(all_out.contains("ID\tSTATE\tNEXT\tINSPECT\tTITLE"));
+    assert!(all_out.contains("maestro task show task-001"));
     assert!(all_out.contains("task-001"));
     assert!(all_out.contains("task-002"));
     assert!(all_out.contains("task-003"));
@@ -726,6 +725,8 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     let live = maestro(repo, &["task", "archive", "task-001"]);
     assert_failure(&live, &["task", "archive", "task-001"]);
     assert!(stderr(&live).contains("not done"));
+    assert!(stderr(&live).contains("blocked: task is not done"));
+    assert!(stderr(&live).contains("finish first: maestro task complete task-001"));
 
     // task-002 is abandoned (terminal) and thus archive-eligible.
     assert_success(
@@ -753,6 +754,7 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     let referenced = maestro(repo, &["task", "archive", "task-002"]);
     assert_failure(&referenced, &["task", "archive", "task-002"]);
     let referenced_err = stderr(&referenced);
+    assert!(referenced_err.contains("blocked: live task still references this task"));
     assert!(referenced_err.contains("task-001"));
     // The remedy is the working one (unblock the referrer); the dead "archive the
     // referrer first" detour is gone -- a live referrer can never be archived.
@@ -774,11 +776,13 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
         &["task", "archive", "task-002", "--dry-run"],
     ));
     assert!(preview.contains("would archive task-002"));
+    assert!(preview.contains("writes: none"));
     assert!(repo.join(".maestro/tasks/task-002-done").exists());
 
     // The real archive moves it to the sibling tree.
     let archived = stdout(&maestro(repo, &["task", "archive", "task-002"]));
     assert!(archived.contains("archived task-002"));
+    assert!(archived.contains("undo: maestro task unarchive task-002"));
     assert!(!repo.join(".maestro/tasks/task-002-done").exists());
     assert!(repo.join(".maestro/archive/tasks/task-002-done").exists());
 
@@ -795,6 +799,7 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     // unarchive restores it to the live tree.
     let restored = stdout(&maestro(repo, &["task", "unarchive", "task-002"]));
     assert!(restored.contains("unarchived task-002"));
+    assert!(restored.contains("optional: maestro task archive task-002"));
     assert!(repo.join(".maestro/tasks/task-002-done").exists());
     assert!(!repo.join(".maestro/archive/tasks/task-002-done").exists());
 }
@@ -1215,7 +1220,8 @@ fn task_reject_abandon_supersede_reject_an_empty_or_whitespace_reason() {
         let reject = maestro(repo, &["task", "reject", "task-001", "--reason", reason]);
         assert_failure(&reject, &["task", "reject", "--reason", reason]);
         assert!(
-            stderr(&reject).contains("`--reason` must not be empty"),
+            stderr(&reject).contains("needs an audited reason")
+                && stderr(&reject).contains("reason: --reason is empty"),
             "reject {reason:?}: {}",
             stderr(&reject)
         );
@@ -1223,7 +1229,8 @@ fn task_reject_abandon_supersede_reject_an_empty_or_whitespace_reason() {
         let abandon = maestro(repo, &["task", "abandon", "task-002", "--reason", reason]);
         assert_failure(&abandon, &["task", "abandon", "--reason", reason]);
         assert!(
-            stderr(&abandon).contains("`--reason` must not be empty"),
+            stderr(&abandon).contains("needs an audited reason")
+                && stderr(&abandon).contains("reason: --reason is empty"),
             "abandon {reason:?}: {}",
             stderr(&abandon)
         );
@@ -1242,7 +1249,8 @@ fn task_reject_abandon_supersede_reject_an_empty_or_whitespace_reason() {
         );
         assert_failure(&supersede, &["task", "supersede", "--reason", reason]);
         assert!(
-            stderr(&supersede).contains("`--reason` must not be empty"),
+            stderr(&supersede).contains("needs an audited reason")
+                && stderr(&supersede).contains("reason: --reason is empty"),
             "supersede {reason:?}: {}",
             stderr(&supersede)
         );
@@ -1307,10 +1315,17 @@ fn task_update_rejects_an_empty_claim_so_no_blank_proof_is_recorded() {
         &maestro(repo, &["task", "create", "Empty-claim probe"]),
         &["task", "create", "Empty-claim probe"],
     );
-    // Claiming a draft fast-tracks through accept, which needs a check.
     assert_success(
         &maestro(repo, &["task", "set", "task-001", "--check", "builds"]),
         &["task", "set", "task-001", "--check", "builds"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "explore", "task-001"]),
+        &["task", "explore", "task-001"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "accept", "task-001"]),
+        &["task", "accept", "task-001"],
     );
     assert_success(
         &maestro(repo, &["task", "claim", "task-001"]),
@@ -1565,16 +1580,9 @@ fn forward_verbs_on_a_verified_task_point_at_a_follow_up_not_a_bare_dead_end() {
             "did it",
             "--claim",
             "build passes",
-        ],
-        vec![
-            "event",
-            "create",
-            "--task-id",
-            "task-001",
-            "--claim",
+            "--proof",
             "build passes",
         ],
-        vec!["task", "verify", "task-001"],
     ] {
         assert_success(&maestro(repo, &args), &args);
     }

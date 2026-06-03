@@ -124,13 +124,20 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
 /// live-terminal one sharing the same state (e.g. both `rejected`).
 pub fn render_task_list(tasks: &[TaskRecord], archived_ids: &BTreeSet<String>) -> String {
     let mut out = String::new();
-    out.push_str("ID\tSTATE\tTITLE\n");
+    out.push_str("ID\tSTATE\tNEXT\tINSPECT\tTITLE\n");
     for task in tasks {
         let mut state = state_label(task);
         if archived_ids.contains(&task.id) {
             state.push_str(" (archived)");
         }
-        out.push_str(&format!("{}\t{}\t{}\n", task.id, state, task.title));
+        out.push_str(&format!(
+            "{}\t{}\t{}\tmaestro task show {}\t{}\n",
+            task.id,
+            state,
+            compact_next(task),
+            task.id,
+            task.title
+        ));
     }
     out
 }
@@ -141,6 +148,23 @@ fn state_label(task: &TaskRecord) -> String {
         format!("{base} / blocked")
     } else {
         base.to_string()
+    }
+}
+
+fn compact_next(task: &TaskRecord) -> &'static str {
+    if has_unresolved_blockers(task) {
+        return "inspect_blocker";
+    }
+    match task.state {
+        TaskState::Draft => "explore",
+        TaskState::Exploring => "accept",
+        TaskState::Ready => "claim",
+        TaskState::InProgress => "complete",
+        TaskState::NeedsVerification => "verify",
+        TaskState::Verified
+        | TaskState::Rejected
+        | TaskState::Abandoned
+        | TaskState::Superseded => "status",
     }
 }
 

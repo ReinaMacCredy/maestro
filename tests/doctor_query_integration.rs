@@ -92,6 +92,8 @@ fn create_verified_task_with_proof(repo: &Path) {
             "done",
             "--claim",
             "implemented CSV export",
+            "--proof",
+            "implemented CSV export",
         ],
     ] {
         assert_success(&maestro(repo, &args), &args);
@@ -101,17 +103,9 @@ fn create_verified_task_with_proof(repo: &Path) {
     fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
     fs::write(
         run_dir.join("events.jsonl"),
-        concat!(
-            "{\"task_id\":\"task-001\",\"kind\":\"proof\",\"message\":\"implemented CSV export\"}\n",
-            "{\"kind\":\"UserPromptSubmit\",\"message\":\"actually, check the blocker graph\"}\n"
-        ),
+        "{\"kind\":\"UserPromptSubmit\",\"message\":\"actually, check the blocker graph\"}\n",
     )
     .expect("invariant: events should be writable");
-
-    assert_success(
-        &maestro(repo, &["task", "verify", "task-001"]),
-        &["task", "verify", "task-001"],
-    );
 }
 
 #[test]

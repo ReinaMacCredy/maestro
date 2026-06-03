@@ -112,6 +112,7 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
         None,
         None,
         None,
+        Vec::new(),
         &nanos_since_epoch_string(),
     )?;
     item.status = "accepted".to_string();

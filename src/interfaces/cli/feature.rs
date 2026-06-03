@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 
-use crate::domain::feature::{self, ContractAdditions, ContractEdits};
+use crate::domain::feature::{self, ContractAdditions, ContractEdits, FeatureStatus};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::render_timestamp;
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand};
@@ -60,7 +60,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             id,
             outcome,
             dry_run,
-        } => print_note(feature::ship(&paths, &id, outcome, dry_run)?.note),
+        } => ship_feature(&paths, &id, outcome, dry_run),
         FeatureCommand::Cancel {
             id,
             reason,
@@ -73,7 +73,11 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             shipped,
             dry_run,
         } => archive_features(&paths, id, shipped, dry_run),
-        FeatureCommand::Unarchive { id } => print_note(feature::unarchive_feature(&paths, &id)?),
+        FeatureCommand::Unarchive { id } => {
+            let note = feature::unarchive_feature(&paths, &id)?;
+            print_feature_unarchive_note(&id, &note);
+            Ok(())
+        }
     }
 }
 
@@ -85,7 +89,11 @@ fn archive_features(
     dry_run: bool,
 ) -> Result<()> {
     match (id, shipped) {
-        (Some(id), false) => print_note(feature::archive_feature(paths, &id, dry_run)?),
+        (Some(id), false) => {
+            let note = feature::archive_feature(paths, &id, dry_run)?;
+            print_feature_archive_note(&id, &note, dry_run);
+            Ok(())
+        }
         (None, true) => archive_shipped(paths, dry_run),
         (Some(_), true) => bail!(
             "provide a feature id or --shipped, not both\n  maestro feature archive <id>\n  maestro feature archive --shipped"
@@ -133,6 +141,7 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
             failures.join("\n  ")
         );
     }
+    println!("next: maestro status");
     Ok(())
 }
 
@@ -182,7 +191,87 @@ fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -
             "`--reason` must not be empty; record why the feature is being cancelled (it is audited)"
         );
     }
-    print_note(feature::cancel(paths, id, reason, dry_run)?.note)
+    let report = feature::cancel(paths, id, reason, dry_run)?;
+    println!("{}", report.note);
+    println!("cancel receipt:");
+    println!("  feature: {}", report.id);
+    println!("  abandoned_tasks: {}", report.abandoned.len());
+    if dry_run {
+        println!("writes: none");
+        println!("retry: maestro feature cancel {id} --reason \"<reason>\"");
+    } else if report.changed {
+        println!("inspect: maestro feature show {}", report.id);
+        println!("next: maestro status");
+        println!("optional: maestro feature archive {}", report.id);
+    } else {
+        println!("inspect: maestro feature show {}", report.id);
+        println!("next: maestro status");
+    }
+    Ok(())
+}
+
+fn ship_feature(
+    paths: &MaestroPaths,
+    id: &str,
+    outcome: Option<String>,
+    dry_run: bool,
+) -> Result<()> {
+    let report = feature::ship(paths, id, outcome, dry_run)?;
+    println!("{}", report.note);
+    if dry_run {
+        println!("ship preview:");
+        println!("  feature: {}", report.id);
+        println!("  target: shipped");
+        println!("writes: none");
+        println!(
+            "retry: maestro feature ship {} --outcome \"<outcome>\"",
+            report.id
+        );
+    } else if report.changed && report.status == FeatureStatus::Shipped {
+        println!("ship receipt:");
+        println!("  feature: {}", report.id);
+        println!("  status: shipped");
+        println!("inspect: maestro feature show {}", report.id);
+        println!("next: maestro status");
+        println!("optional: maestro feature archive {}", report.id);
+    } else {
+        println!("inspect: maestro feature show {}", report.id);
+        println!("next: maestro status");
+    }
+    Ok(())
+}
+
+fn print_feature_archive_note(id: &str, note: &str, dry_run: bool) {
+    println!("{note}");
+    if dry_run {
+        println!("archive preview:");
+        println!("  feature: {id}");
+        println!("writes: none");
+        println!("retry: maestro feature archive {id}");
+    } else if note.starts_with("already archived") {
+        println!("inspect: maestro feature show {id}");
+        println!("next: maestro status");
+    } else {
+        println!("archive receipt:");
+        println!("  feature: {id}");
+        println!("inspect: maestro feature show {id}");
+        println!("next: maestro status");
+        println!("undo: maestro feature unarchive {id}");
+    }
+}
+
+fn print_feature_unarchive_note(id: &str, note: &str) {
+    println!("{note}");
+    if note.starts_with("already live") {
+        println!("inspect: maestro feature show {id}");
+        println!("next: maestro status");
+    } else {
+        println!("restore receipt:");
+        println!("  feature: {id}");
+        println!("inspect: maestro feature show {id}");
+        println!("next: maestro status");
+        println!("optional: maestro feature archive {id}");
+    }
 }
 
 fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
