@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.2.0
+version: 1.3.0
 description: Use when the work is design or brainstorming rather than implementation - turning a rough idea into decided design-of-record before any task is built. Covers mapping the problem from the real code, walking open questions one decision at a time, and locking each fork as a Decision record with running reasoning in the feature's notes.md. Reach for it on design, architecture, brainstorm, or spec-authoring requests in a Maestro repo.
 ---
 
@@ -69,5 +69,11 @@ and a single context window would bias toward its own first idea.
 Generators explore; the Decision record stays the only durable output.
 Never message a running generator with another generator's option.
 
-For the feature lifecycle and notes.md mechanics see the maestro-feature skill; for the task loop
-see maestro-task.
+## Hand-off
+
+[maestro-design] -> maestro-feature -> maestro-task -> maestro-verify -> feature ship
+
+Next: decisions locked + contract authored -> the `maestro-feature` skill (`feature accept`;
+the gate also needs a `qa-baseline` baseline).
+Related: `maestro-task` (the loop that builds the decided design), `maestro-verify` (the
+evidence gate those tasks must pass).

@@ -1,6 +1,6 @@
 ---
 name: maestro-verify
-version: 1.3.0
+version: 1.4.0
 description: Verification protocol for Maestro tasks and feature work.
 ---
 
@@ -77,6 +77,16 @@ information goes into a fresh verifier.
   blocked feature command.
 - If verification cannot run, state the blocker and the remaining risk instead
   of marking the work complete.
+
+## Hand-off
+
+maestro-design -> maestro-feature -> maestro-task -> [maestro-verify] -> feature ship
+
+Next: task verified, more children live -> back to the `maestro-task` skill;
+all children verified -> the `maestro-feature` skill (`qa-slice`, then
+`feature ship --outcome "<one line>"`).
+Related: `qa-baseline` / `qa-slice` (the gate artifacts this skill's Feature QA section
+drives), `maestro-feature` (the ship gate).
 
 On activation, log the skill activation by piping a compact JSON payload to
 `maestro hook record` with `event_type` set to `skill_activation`, `skill_name` set to

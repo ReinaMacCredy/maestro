@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.2.0
+version: 1.3.0
 description: Feature lifecycle layer for Maestro — the guarded five-state machine (proposed -> ready -> in_progress -> shipped/cancelled), its accept and ship gates, append-only amend, and feature/child-task archival.
 ---
 
@@ -144,3 +144,14 @@ archive boundary, so a historical reference still resolves.
 Prefer the CLI verbs for every durable change - they keep the contract, the audit log, and
 the QA artifacts intact. Read the frozen contract with `feature show` before you act; it is
 fixed once `accept` runs and grows only by `amend`.
+
+## Hand-off
+
+maestro-design -> [maestro-feature] -> maestro-task -> maestro-verify -> [feature ship]
+
+Next: just accepted -> the `maestro-task` skill (`task create --feature <id>`);
+children all verified -> the `qa-slice` skill, then `ship --outcome "<one line>"`;
+just shipped -> `feature archive`.
+Related: `maestro-design` (fills notes.md and decides the contract), `maestro-verify`
+(proves the child tasks), `qa-baseline` / `qa-slice` (the artifacts the accept/ship
+gates check).

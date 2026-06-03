@@ -1,6 +1,6 @@
 ---
 name: maestro-task
-version: 1.4.0
+version: 1.5.0
 description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs and the on-request harness self-improvement loop. For the feature contract tasks deliver against, see the maestro-feature skill.
 ---
 
@@ -158,3 +158,11 @@ returns reopens to `proposed`. `measure` refuses unless the linked task is `veri
 
 Prefer the CLI verbs for every durable change - they keep state history and proof intact.
 Read the locked `acceptance.yaml` before you act; those checks are fixed once `accept` runs.
+
+## Hand-off
+
+maestro-design -> maestro-feature -> [maestro-task] -> maestro-verify -> feature ship
+
+Next: task completed -> the `maestro-verify` skill (the evidence gate).
+Related: `maestro-feature` (the contract this task delivers against), `qa-baseline` /
+`qa-slice` (the QA artifacts the feature gates check).
