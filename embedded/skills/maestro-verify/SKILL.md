@@ -1,14 +1,21 @@
 ---
 name: maestro-verify
-version: 1.1.0
+version: 1.2.0
 description: Verification protocol for Maestro tasks and feature work.
 ---
 
 # Maestro Verify
 
-Use this skill when proving a task or feature is complete.
+## Goal
 
-## Task Runbook
+Prove the current task or feature with recorded evidence that Maestro can verify.
+
+## When To Use
+
+Use this skill when a task is in progress, needs verification, has failed proof,
+or when a feature QA gate asks for baseline or slice evidence.
+
+## Steps
 
 1. Start with `maestro status` or `maestro task next`.
 2. Inspect the task with `maestro task show <id>` and read its locked
@@ -21,6 +28,15 @@ Use this skill when proving a task or feature is complete.
 5. If verification fails, run `maestro query proof <id>`, repair the proof or
    claim, then rerun `maestro task verify <id>`.
 
+## If Verification Fails
+
+- Missing claim: complete the task with the exact observable claim that was
+  proven.
+- Missing proof: add observed proof with `maestro task complete --proof` or
+  record proof using `maestro event create --task-id <id> --claim "<claim>"`.
+- Stale proof: rerun the smallest falsifying checks, then rerun
+  `maestro task verify <id>`.
+
 ## Feature QA
 
 - Feature accept gates on `qa-baseline` writing
@@ -30,8 +46,14 @@ Use this skill when proving a task or feature is complete.
 - Do not mark a feature shipped until `maestro feature ship <id> --outcome "..."`
   passes without QA blockers.
 
-If verification cannot run, state the blocker and the remaining risk instead of
-marking the work complete.
+## Done
+
+- Verified task: report the pass and the next command printed by Maestro.
+- Blocked task: record the blocker or state the missing evidence and stop.
+- Feature QA: write the requested baseline or slice artifact, then rerun the
+  blocked feature command.
+- If verification cannot run, state the blocker and the remaining risk instead
+  of marking the work complete.
 
 On activation, log the skill activation by piping a compact JSON payload to
 `maestro hook record` with `event_type` set to `skill_activation`, `skill_name` set to

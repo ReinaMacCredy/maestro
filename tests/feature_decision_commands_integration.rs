@@ -542,7 +542,8 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     assert!(archived.contains("task-001"));
     assert!(archived.contains("task-002"));
     assert!(archived.contains("archive receipt:"));
-    assert!(archived.contains("undo: maestro feature unarchive billing-csv-export"));
+    assert!(archived.contains("child tasks: 2 archived"));
+    assert!(archived.contains("restore: maestro feature unarchive billing-csv-export"));
 
     // The feature dir + QA artifacts moved into the archive sibling tree.
     let archived_feature = root.join(".maestro/archive/features/billing-csv-export");
@@ -731,9 +732,11 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
     // --shipped archives both shipped features and their children; gamma stays live.
     let bulk = ["feature", "archive", "--shipped"];
     let out = stdout(maestro(&bulk, root), &bulk);
-    assert!(out.contains("archived feature alpha-export"));
-    assert!(out.contains("archived feature beta-export"));
-    assert!(out.contains("archived 2 of 2 shipped feature(s)"));
+    assert!(out.contains("archived shipped features"));
+    assert!(out.contains("archive summary:"));
+    assert!(out.contains("features: 2 archived"));
+    assert!(out.contains("child tasks: 2 archived"));
+    assert!(out.contains("next: maestro status"));
 
     let features_dir = root.join(".maestro/features");
     assert!(root.join(".maestro/archive/features/alpha-export").is_dir());

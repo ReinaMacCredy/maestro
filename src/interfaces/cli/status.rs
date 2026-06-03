@@ -9,6 +9,8 @@ use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::StatusArgs;
 
+const STATUS_TASK_ROW_LIMIT: usize = 5;
+
 pub fn run(args: StatusArgs) -> Result<()> {
     let repo_root = match discover_repo_root() {
         Ok(repo_root) => repo_root,
@@ -58,10 +60,18 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         for warning in &report.warnings {
             println!("warning: {}", warning.message);
         }
-        println!("next: maestro init --yes");
+        println!("next:");
+        println!("- preview setup: maestro init --dry-run");
+        println!("- initialize: maestro init --yes");
         return Ok(());
     }
 
+    if !report.warnings.is_empty() {
+        for warning in &report.warnings {
+            println!("warning: {}", warning.message);
+        }
+        println!();
+    }
     println!("maestro status");
     println!("repo: {}", report.repo);
     println!(
@@ -76,9 +86,6 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         report.features.active,
         report.ready_to_ship_features.len()
     );
-    for warning in &report.warnings {
-        println!("warning: {}", warning.message);
-    }
     if let Some(action) = &report.next_action {
         print_next_action(action);
     } else {
@@ -87,10 +94,26 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     if !report.task_rows.is_empty() {
         println!("ACTIONS");
         println!("NEXT\tTASK\tSTATE\tINSPECT\tTITLE");
-        for row in &report.task_rows {
+        for row in report.task_rows.iter().take(STATUS_TASK_ROW_LIMIT) {
             println!(
                 "{}\t{}\t{}\t{}\t{}",
                 row.next, row.id, row.state, row.inspect, row.title
+            );
+        }
+        if report.task_rows.len() > STATUS_TASK_ROW_LIMIT {
+            println!(
+                "... {} more active task(s); run maestro task list",
+                report.task_rows.len() - STATUS_TASK_ROW_LIMIT
+            );
+        }
+    }
+    if !report.active_features.is_empty() {
+        println!("ACTIVE FEATURES");
+        println!("FEATURE\tSTATE\tNEXT\tINSPECT\tTITLE");
+        for row in &report.active_features {
+            println!(
+                "{}\t{}\t{}\t{}\t{}",
+                row.id, row.state, row.next, row.inspect, row.title
             );
         }
     }
@@ -98,8 +121,8 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         println!("FEATURES READY TO SHIP");
         for feature in &report.ready_to_ship_features {
             println!(
-                "{}\tverified={}/{}\trun: maestro feature ship {} --outcome \"<outcome>\"",
-                feature.id, feature.verified, feature.total, feature.id
+                "{}\tverified={}/{}\ttemplate: {}",
+                feature.id, feature.verified, feature.total, feature.next_action.command.display
             );
         }
     }
@@ -107,6 +130,12 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
 }
 
 fn print_task_next(report: &StatusReport) {
+    if !report.warnings.is_empty() {
+        for warning in &report.warnings {
+            println!("warning: {}", warning.message);
+        }
+        println!();
+    }
     if let Some(action) = &report.next_action {
         print_next_action(action);
         return;
@@ -119,7 +148,17 @@ fn print_task_next(report: &StatusReport) {
 }
 
 fn print_next_action(action: &NextAction) {
-    println!("next: {}", action.command);
+    if action.requires_input {
+        println!("template: {}", action.command.display);
+    } else {
+        println!("run: {}", action.command.display);
+    }
+    if !action.command.requires_input.is_empty() {
+        println!("required input:");
+        for input in &action.command.requires_input {
+            println!("- {}: {}", input.name, input.description);
+        }
+    }
     if let Some(task_id) = action.task_id.as_deref() {
         println!("task: {task_id}");
     }
@@ -153,6 +192,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         Ok(id) if !id.trim().is_empty() => match task::load_task_record(&paths.tasks_dir(), &id) {
             Ok(task) if task.state.is_live() => {
                 current_task = Some(task.id.clone());
+                current_feature = task.feature_id.clone();
                 task_action(paths, &task)?
             }
             Ok(task) => {
@@ -177,12 +217,6 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         _ => None,
     };
 
-    if let Ok(feature_id) = env::var("MAESTRO_CURRENT_FEATURE")
-        && !feature_id.trim().is_empty()
-    {
-        current_feature = Some(feature_id);
-    }
-
     let mut rows = Vec::new();
     for task in &live_tasks {
         rows.push(TaskRowJson {
@@ -199,6 +233,10 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         None => choose_next_task_action(paths, &live_tasks)?,
     };
     let ready_to_ship_features = ready_to_ship_features(&features);
+    let active_features = active_feature_rows(&features);
+    let sections = StatusSectionsJson {
+        ready_to_ship: ready_to_ship_features.clone(),
+    };
 
     Ok(StatusReport {
         schema: "maestro.status.v1".to_string(),
@@ -215,6 +253,8 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         tasks: TaskSummaryJson::from_tasks(&tasks),
         features: FeatureSummaryJson::from_features(&features),
         task_rows: rows,
+        active_features,
+        sections,
         ready_to_ship_features,
     })
 }
@@ -259,66 +299,43 @@ fn task_action(paths: &MaestroPaths, task: &TaskRecord) -> Result<Option<NextAct
         TaskState::NeedsVerification => NextAction::task(
             "proof_recovery",
             task,
-            format!("maestro query proof {}", task.id),
-            true,
-            false,
+            runnable_command(["maestro", "query", "proof", task.id.as_str()]),
             "verification needs proof recovery",
         ),
         TaskState::Ready => NextAction::task(
             "claim_task",
             task,
-            format!("maestro task claim {}", task.id),
-            true,
-            false,
+            runnable_command(["maestro", "task", "claim", task.id.as_str()]),
             "ready task is unclaimed",
         ),
         TaskState::InProgress => NextAction::task(
             "complete_task",
             task,
-            format!(
-                "maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
-                task.id
-            ),
-            false,
-            true,
+            task_complete_template(&task.id),
             "claimed task needs completion proof",
         ),
         TaskState::Draft if !has_verify_contract => NextAction::task(
             "add_task_check",
             task,
-            format!(
-                "maestro task set {} --check \"<observable result>\"",
-                task.id
-            ),
-            false,
-            true,
+            task_check_template(&task.id),
             "standalone task needs a verify+ check",
         ),
         TaskState::Draft => NextAction::task(
             "explore_task",
             task,
-            format!("maestro task explore {}", task.id),
-            true,
-            false,
+            runnable_command(["maestro", "task", "explore", task.id.as_str()]),
             "draft task has a verify+ path",
         ),
         TaskState::Exploring if !has_verify_contract => NextAction::task(
             "add_task_check",
             task,
-            format!(
-                "maestro task set {} --check \"<observable result>\"",
-                task.id
-            ),
-            false,
-            true,
+            task_check_template(&task.id),
             "standalone task needs a verify+ check before accept",
         ),
         TaskState::Exploring => NextAction::task(
             "accept_task",
             task,
-            format!("maestro task accept {}", task.id),
-            true,
-            false,
+            runnable_command(["maestro", "task", "accept", task.id.as_str()]),
             "explored task can lock acceptance",
         ),
         TaskState::Verified
@@ -335,9 +352,7 @@ fn blocked_action(task: &TaskRecord) -> NextAction {
     NextAction::task(
         "inspect_blocker",
         task,
-        format!("maestro task show {}", task.id),
-        true,
-        false,
+        runnable_command(["maestro", "task", "show", task.id.as_str()]),
         "task has unresolved blockers",
     )
 }
@@ -363,12 +378,41 @@ fn ready_to_ship_features(features: &[feature::FeatureView]) -> Vec<ReadyFeature
         .filter(|view| view.counts.total > 0 && view.counts.total == view.counts.verified)
         .map(|view| ReadyFeatureJson {
             id: view.id.clone(),
+            feature_id: view.id.clone(),
             title: view.title.clone(),
             total: view.counts.total,
             verified: view.counts.verified,
-            command: format!("maestro feature ship {} --outcome \"<outcome>\"", view.id),
+            next_action: NextAction::feature_ship(view),
         })
         .collect()
+}
+
+fn active_feature_rows(features: &[feature::FeatureView]) -> Vec<FeatureRowJson> {
+    features
+        .iter()
+        .filter(|view| !view.status.is_terminal())
+        .map(|view| FeatureRowJson {
+            id: view.id.clone(),
+            state: feature::status_label(&view.status).to_string(),
+            title: view.title.clone(),
+            next: status_feature_next_label(view).to_string(),
+            inspect: format!("maestro feature show {}", view.id),
+        })
+        .collect()
+}
+
+fn status_feature_next_label(view: &feature::FeatureView) -> &'static str {
+    match view.status {
+        FeatureStatus::Proposed => "template: set_contract",
+        FeatureStatus::Ready => "run: start_feature",
+        FeatureStatus::InProgress
+            if view.counts.total > 0 && view.counts.total == view.counts.verified =>
+        {
+            "template: ship_feature"
+        }
+        FeatureStatus::InProgress => "run: resolve_tasks",
+        FeatureStatus::Shipped | FeatureStatus::Cancelled => "run: archive_feature",
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -383,7 +427,14 @@ struct StatusReport {
     tasks: TaskSummaryJson,
     features: FeatureSummaryJson,
     task_rows: Vec<TaskRowJson>,
+    active_features: Vec<FeatureRowJson>,
+    sections: StatusSectionsJson,
     ready_to_ship_features: Vec<ReadyFeatureJson>,
+}
+
+#[derive(Clone, Debug, Default, Serialize)]
+struct StatusSectionsJson {
+    ready_to_ship: Vec<ReadyFeatureJson>,
 }
 
 impl StatusReport {
@@ -398,21 +449,16 @@ impl StatusReport {
                 code: "not_initialized".to_string(),
                 message: reason,
             }],
-            next_action: Some(NextAction {
-                kind: "init_maestro".to_string(),
-                scope: "repo".to_string(),
-                task_id: None,
-                feature_id: None,
-                title: None,
-                command: "maestro init --yes".to_string(),
-                runnable: true,
-                requires_input: false,
-                reason: "maestro is not initialized in this repo".to_string(),
-                inspect: None,
-            }),
+            next_action: Some(NextAction::repo(
+                "init_maestro",
+                runnable_command(["maestro", "init", "--yes"]),
+                "maestro is not initialized in this repo",
+            )),
             tasks: TaskSummaryJson::default(),
             features: FeatureSummaryJson::default(),
             task_rows: Vec::new(),
+            active_features: Vec::new(),
+            sections: StatusSectionsJson::default(),
             ready_to_ship_features: Vec::new(),
         }
     }
@@ -423,19 +469,42 @@ struct TaskNextJson {
     schema: String,
     status: String,
     next_action: Option<NextAction>,
+    broader_actions: Vec<BroaderActionJson>,
     warnings: Vec<WarningJson>,
     summary: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct BroaderActionJson {
+    kind: String,
+    feature_id: String,
+    summary: String,
+    inspect: String,
+}
+
+impl From<&ReadyFeatureJson> for BroaderActionJson {
+    fn from(feature: &ReadyFeatureJson) -> Self {
+        Self {
+            kind: "feature_ready_to_ship".to_string(),
+            feature_id: feature.id.clone(),
+            summary: "ready-to-ship feature available in status".to_string(),
+            inspect: format!("maestro feature show {}", feature.id),
+        }
+    }
+}
+
 impl From<&StatusReport> for TaskNextJson {
     fn from(report: &StatusReport) -> Self {
-        let mut warnings = report.warnings.clone();
-        if report.next_action.is_none() && !report.ready_to_ship_features.is_empty() {
-            warnings.push(WarningJson {
-                code: "broader_actions_available".to_string(),
-                message: "broader repo action available; run maestro status".to_string(),
-            });
-        }
+        let warnings = report.warnings.clone();
+        let broader_actions = if report.next_action.is_none() {
+            report
+                .ready_to_ship_features
+                .iter()
+                .map(BroaderActionJson::from)
+                .collect()
+        } else {
+            Vec::new()
+        };
         Self {
             schema: "maestro.task_next.v1".to_string(),
             status: if report.next_action.is_some() {
@@ -444,6 +513,7 @@ impl From<&StatusReport> for TaskNextJson {
                 "no_action".to_string()
             },
             next_action: report.next_action.clone(),
+            broader_actions,
             warnings,
             summary: if report.next_action.is_some() {
                 "task action available".to_string()
@@ -461,7 +531,7 @@ struct NextAction {
     task_id: Option<String>,
     feature_id: Option<String>,
     title: Option<String>,
-    command: String,
+    command: CommandJson,
     runnable: bool,
     requires_input: bool,
     reason: String,
@@ -469,14 +539,9 @@ struct NextAction {
 }
 
 impl NextAction {
-    fn task(
-        kind: &str,
-        task: &TaskRecord,
-        command: String,
-        runnable: bool,
-        requires_input: bool,
-        reason: &str,
-    ) -> Self {
+    fn task(kind: &str, task: &TaskRecord, command: CommandJson, reason: &str) -> Self {
+        let runnable = command.argv.is_some();
+        let requires_input = !command.requires_input.is_empty();
         Self {
             kind: kind.to_string(),
             scope: "task".to_string(),
@@ -489,6 +554,169 @@ impl NextAction {
             reason: reason.to_string(),
             inspect: Some(format!("maestro task show {}", task.id)),
         }
+    }
+
+    fn repo(kind: &str, command: CommandJson, reason: &str) -> Self {
+        let runnable = command.argv.is_some();
+        let requires_input = !command.requires_input.is_empty();
+        Self {
+            kind: kind.to_string(),
+            scope: "repo".to_string(),
+            task_id: None,
+            feature_id: None,
+            title: None,
+            command,
+            runnable,
+            requires_input,
+            reason: reason.to_string(),
+            inspect: None,
+        }
+    }
+
+    fn feature_ship(view: &feature::FeatureView) -> Self {
+        let command = feature_ship_template(&view.id);
+        let runnable = command.argv.is_some();
+        let requires_input = !command.requires_input.is_empty();
+        Self {
+            kind: "feature_ship".to_string(),
+            scope: "feature".to_string(),
+            task_id: None,
+            feature_id: Some(view.id.clone()),
+            title: Some(view.title.clone()),
+            command,
+            runnable,
+            requires_input,
+            reason: "feature has no open child task work".to_string(),
+            inspect: Some(format!("maestro feature show {}", view.id)),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct CommandJson {
+    display: String,
+    argv: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    argv_template: Option<Vec<String>>,
+    requires_input: Vec<RequiredInputJson>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RequiredInputJson {
+    name: String,
+    flag: String,
+    placeholder: String,
+    description: String,
+}
+
+fn runnable_command<const N: usize>(parts: [&str; N]) -> CommandJson {
+    CommandJson {
+        display: parts.join(" "),
+        argv: Some(parts.iter().map(|part| (*part).to_string()).collect()),
+        argv_template: None,
+        requires_input: Vec::new(),
+    }
+}
+
+fn task_check_template(task_id: &str) -> CommandJson {
+    template_command(
+        format!("maestro task set {task_id} --check \"<observable result>\""),
+        vec![
+            "maestro",
+            "task",
+            "set",
+            task_id,
+            "--check",
+            "<observable result>",
+        ],
+        vec![required_input(
+            "observable_result",
+            "--check",
+            "<observable result>",
+            "observable acceptance check text",
+        )],
+    )
+}
+
+fn task_complete_template(task_id: &str) -> CommandJson {
+    template_command(
+        format!(
+            "maestro task complete {task_id} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\""
+        ),
+        vec![
+            "maestro",
+            "task",
+            "complete",
+            task_id,
+            "--summary",
+            "<summary>",
+            "--claim",
+            "<claim>",
+            "--proof",
+            "<observed evidence>",
+        ],
+        vec![
+            required_input("summary", "--summary", "<summary>", "what changed"),
+            required_input("claim", "--claim", "<claim>", "observable completion claim"),
+            required_input(
+                "proof",
+                "--proof",
+                "<observed evidence>",
+                "observed proof text",
+            ),
+        ],
+    )
+}
+
+fn feature_ship_template(feature_id: &str) -> CommandJson {
+    template_command(
+        format!("maestro feature ship {feature_id} --outcome \"<outcome>\""),
+        vec![
+            "maestro",
+            "feature",
+            "ship",
+            feature_id,
+            "--outcome",
+            "<outcome>",
+        ],
+        vec![required_input(
+            "outcome",
+            "--outcome",
+            "<outcome>",
+            "shipping outcome text",
+        )],
+    )
+}
+
+fn template_command(
+    display: String,
+    argv_template: Vec<&str>,
+    inputs: Vec<RequiredInputJson>,
+) -> CommandJson {
+    CommandJson {
+        display,
+        argv: None,
+        argv_template: Some(
+            argv_template
+                .into_iter()
+                .map(|part| part.to_string())
+                .collect(),
+        ),
+        requires_input: inputs,
+    }
+}
+
+fn required_input(
+    name: &str,
+    flag: &str,
+    placeholder: &str,
+    description: &str,
+) -> RequiredInputJson {
+    RequiredInputJson {
+        name: name.to_string(),
+        flag: flag.to_string(),
+        placeholder: placeholder.to_string(),
+        description: description.to_string(),
     }
 }
 
@@ -571,10 +799,20 @@ struct TaskRowJson {
 }
 
 #[derive(Clone, Debug, Serialize)]
+struct FeatureRowJson {
+    id: String,
+    state: String,
+    title: String,
+    next: String,
+    inspect: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 struct ReadyFeatureJson {
     id: String,
+    feature_id: String,
     title: String,
     total: usize,
     verified: usize,
-    command: String,
+    next_action: NextAction,
 }

@@ -99,6 +99,10 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     if let Some(commit) = task.verification.verified_commit.as_deref() {
         out.push_str(&format!("verified_commit: {commit}\n"));
     }
+    if task.state == TaskState::NeedsVerification {
+        out.push_str("proof: needs attention\n");
+        out.push_str(&format!("next: maestro query proof {}\n", task.id));
+    }
 
     out.push_str("blockers:\n");
     if task.blockers.is_empty() {
@@ -207,5 +211,16 @@ mod tests {
         let out = render_task_list_with_missing_checks(&[task], &BTreeSet::new(), &missing);
 
         assert!(out.contains("template: add_check"), "{out}");
+    }
+
+    #[test]
+    fn render_task_show_points_needs_verification_at_query_proof() {
+        let mut task = TaskRecord::draft("task-001", "Needs proof", "2026-06-02T00:00:00Z");
+        task.state = TaskState::NeedsVerification;
+
+        let out = render_task(&task, &["observable check".to_string()]);
+
+        assert!(out.contains("proof: needs attention"), "{out}");
+        assert!(out.contains("next: maestro query proof task-001"), "{out}");
     }
 }

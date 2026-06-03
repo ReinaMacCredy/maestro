@@ -166,7 +166,7 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-setup")
         .expect("invariant: maestro-setup should be bundled")
         .skill_md();
-    assert!(setup.contains("version: 1.1.0"));
+    assert!(setup.contains("version: 1.2.0"));
     assert!(setup.contains("maestro status"));
     assert!(setup.contains("maestro init --dry-run"));
     assert!(setup.contains("maestro install --agent codex"));
@@ -177,7 +177,7 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-verify")
         .expect("invariant: maestro-verify should be bundled")
         .skill_md();
-    assert!(verify.contains("version: 1.1.0"));
+    assert!(verify.contains("version: 1.2.0"));
     assert!(verify.contains("maestro task next"));
     assert!(verify.contains("--proof \"<observed evidence>\""));
     assert!(verify.contains("maestro query proof <id>"));

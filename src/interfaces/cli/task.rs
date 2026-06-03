@@ -267,7 +267,7 @@ fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
 
     println!("accepted {} -> {}", task.id, task.state.as_str());
     print_verify_block(&task, &checks);
-    println!("acceptance: locked");
+    println!("acceptance locked");
     println!("next: maestro task claim {}", task.id);
     Ok(())
 }
@@ -284,8 +284,9 @@ fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     println!("updated {} -> {}", task.id, task.state.as_str());
     print_verify_block(&task, &checks);
+    println!("finish with proof:");
     println!(
-        "next: maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
+        "  maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
         task.id
     );
     Ok(())
@@ -343,10 +344,7 @@ fn complete_task(
     }
     println!("auto: maestro task verify {}", task.id);
     match verify::run_for_task(paths, &task.id, actor) {
-        Ok(()) => {
-            print_task_complete_next(paths, &task)?;
-            Ok(())
-        }
+        Ok(()) => Ok(()),
         Err(error) => {
             eprintln!("task remains: needs_verification");
             eprintln!("next: maestro query proof {}", task.id);
@@ -435,7 +433,7 @@ fn print_verify_block(task: &TaskRecord, checks: &[String]) {
     }
 
     if task.feature_id.is_some() {
-        println!("verify+:");
+        println!("verify+ inherited from feature:");
         println!("  task check: optional for feature-linked tasks");
         println!("  feature gate: qa-baseline + qa-slice at feature accept/ship");
     } else {
@@ -459,28 +457,19 @@ fn print_task_next_for_state(task: &TaskRecord, checks: &[String]) {
         }
         TaskState::Exploring => {}
         TaskState::Ready => println!("next: maestro task claim {}", task.id),
-        TaskState::InProgress => println!(
-            "next: maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
-            task.id
-        ),
+        TaskState::InProgress => {
+            println!("finish with proof:");
+            println!(
+                "  maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
+                task.id
+            );
+        }
         TaskState::NeedsVerification => println!("next: maestro task verify {}", task.id),
         TaskState::Verified
         | TaskState::Rejected
         | TaskState::Abandoned
         | TaskState::Superseded => println!("next: maestro status"),
     }
-}
-
-fn print_task_complete_next(paths: &MaestroPaths, task: &TaskRecord) -> Result<()> {
-    let refreshed = task::load_task_record(&paths.tasks_dir(), &task.id)?;
-    println!("verification passed for {}", refreshed.id);
-    if let Some(feature_id) = refreshed.feature_id.as_deref() {
-        println!("feature: {feature_id}");
-        println!("next: maestro feature show {feature_id}");
-    } else {
-        println!("next: maestro status");
-    }
-    Ok(())
 }
 
 fn claim_not_ready_message(task: &TaskRecord, checks: &[String]) -> String {
@@ -580,22 +569,24 @@ fn terminal_verb(task: &TaskRecord) -> &'static str {
 
 fn print_task_archive_note(id: &str, note: &str) {
     if note.starts_with("would archive ") {
-        println!("dry-run: would archive {id}");
-        println!("from: .maestro/tasks/<task-dir>");
-        println!("to: .maestro/archive/tasks/<task-dir>");
+        println!("dry-run: would archive {id} (live -> archive)");
+        println!("archive receipt preview:");
+        println!("  live path: .maestro/tasks/<task-dir>");
+        println!("  archive path: .maestro/archive/tasks/<task-dir>");
         println!("writes: none");
-        println!("retry: maestro task archive {id}");
+        println!("run: maestro task archive {id}");
     } else if note.starts_with("already archived: ") {
-        println!("already archived: {id}");
-        println!("live list: hidden");
+        println!("unchanged: {id} already archived");
         println!("inspect: maestro task show {id}");
-        println!("next: maestro task list --all");
+        println!("next: maestro status");
+        println!("restore: maestro task unarchive {id}");
     } else if note.starts_with("archived ") {
-        println!("archived {id}");
-        println!("moved: .maestro/tasks/<task-dir> -> .maestro/archive/tasks/<task-dir>");
-        println!("live list: hidden");
+        println!("archived {id} (live -> archive)");
+        println!("archive receipt:");
+        println!("  archive path: .maestro/archive/tasks/<task-dir>");
         println!("inspect: maestro task show {id}");
-        println!("undo: maestro task unarchive {id}");
+        println!("next: maestro status");
+        println!("restore: maestro task unarchive {id}");
     } else {
         println!("{note}");
     }
@@ -603,15 +594,17 @@ fn print_task_archive_note(id: &str, note: &str) {
 
 fn print_task_unarchive_note(id: &str, note: &str) {
     if note.starts_with("already live: ") {
-        println!("already live: {id}");
+        println!("unchanged: {id} already live");
         println!("inspect: maestro task show {id}");
-        println!("next: maestro task list");
+        println!("next: maestro status");
+        println!("archive: maestro task archive {id}");
     } else if note.starts_with("unarchived ") {
-        println!("unarchived {id}");
-        println!("moved: .maestro/archive/tasks/<task-dir> -> .maestro/tasks/<task-dir>");
-        println!("live list: visible");
+        println!("unarchived {id} (archive -> live)");
+        println!("restore receipt:");
+        println!("  live path: .maestro/tasks/<task-dir>");
         println!("inspect: maestro task show {id}");
-        println!("optional: maestro task archive {id}");
+        println!("next: maestro status");
+        println!("archive again: maestro task archive {id}");
     } else {
         println!("{note}");
     }

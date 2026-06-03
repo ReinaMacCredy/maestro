@@ -73,11 +73,16 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             shipped,
             dry_run,
         } => archive_features(&paths, id, shipped, dry_run),
-        FeatureCommand::Unarchive { id } => {
-            let note = feature::unarchive_feature(&paths, &id)?;
-            print_feature_unarchive_note(&id, &note);
-            Ok(())
-        }
+        FeatureCommand::Unarchive { id } => match feature::unarchive_feature(&paths, &id) {
+            Ok(note) => {
+                print_feature_unarchive_note(&id, &note);
+                Ok(())
+            }
+            Err(error) => bail!(
+                "{}",
+                feature_unarchive_error_message(&id, &error.to_string())
+            ),
+        },
     }
 }
 
@@ -89,11 +94,13 @@ fn archive_features(
     dry_run: bool,
 ) -> Result<()> {
     match (id, shipped) {
-        (Some(id), false) => {
-            let note = feature::archive_feature(paths, &id, dry_run)?;
-            print_feature_archive_note(&id, &note, dry_run);
-            Ok(())
-        }
+        (Some(id), false) => match feature::archive_feature(paths, &id, dry_run) {
+            Ok(note) => {
+                print_feature_archive_note(&id, &note, dry_run);
+                Ok(())
+            }
+            Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
+        },
         (None, true) => archive_shipped(paths, dry_run),
         (Some(_), true) => bail!(
             "provide a feature id or --shipped, not both\n  maestro feature archive <id>\n  maestro feature archive --shipped"
@@ -120,28 +127,52 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
     }
 
     let mut failures = Vec::new();
+    let mut archived = 0usize;
+    let mut child_tasks = 0usize;
+    let mut skipped = 0usize;
     for id in &shipped {
         match feature::archive_feature(paths, id, dry_run) {
-            Ok(note) => println!("{note}"),
+            Ok(note) => {
+                archived += 1;
+                child_tasks += feature_child_count(&note);
+                skipped += feature_skipped_count(&note);
+            }
             Err(err) => failures.push(format!("{id}: {err:#}")),
         }
     }
 
-    let verb = if dry_run { "would archive" } else { "archived" };
-    println!(
-        "# {verb} {} of {} shipped feature(s)",
-        shipped.len() - failures.len(),
-        shipped.len()
-    );
+    if dry_run {
+        println!("dry-run: would archive shipped features");
+    } else {
+        println!("archived shipped features");
+    }
+    println!("archive summary:");
+    let feature_verb = if dry_run { "would archive" } else { "archived" };
+    let task_verb = if dry_run { "would archive" } else { "archived" };
+    println!("  features: {archived} {feature_verb}");
+    println!("  child tasks: {child_tasks} {task_verb}");
+    println!("  skipped: {skipped}");
+    println!("  failed: {}", failures.len());
 
     if !failures.is_empty() {
+        println!("failed:");
+        for failure in &failures {
+            println!("  - {failure}");
+        }
+        println!("next:");
+        println!("  retry: maestro feature archive --shipped");
         bail!(
             "{} shipped feature(s) failed to archive (re-run to retry):\n  {}",
             failures.len(),
             failures.join("\n  ")
         );
     }
-    println!("next: maestro status");
+    if dry_run {
+        println!("writes: none");
+        println!("run: maestro feature archive --shipped");
+    } else {
+        println!("next: maestro status");
+    }
     Ok(())
 }
 
@@ -188,10 +219,16 @@ fn amend_feature(
 fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Result<()> {
     if reason.trim().is_empty() {
         bail!(
-            "`--reason` must not be empty; record why the feature is being cancelled (it is audited)"
+            "blocked: feature cancel needs an audited reason\nreason: --reason is empty\nrun: maestro feature cancel {id} --reason \"<why this feature is being cancelled>\""
         );
     }
-    let report = feature::cancel(paths, id, reason, dry_run)?;
+    let report = match feature::cancel(paths, id, reason, dry_run) {
+        Ok(report) => report,
+        Err(error) => bail!(
+            "{}",
+            feature_cancel_error_message(id, reason, &error.to_string())
+        ),
+    };
     println!("{}", report.note);
     println!("cancel receipt:");
     println!("  feature: {}", report.id);
@@ -243,35 +280,108 @@ fn ship_feature(
 
 fn print_feature_archive_note(id: &str, note: &str, dry_run: bool) {
     println!("{note}");
+    let child_tasks = feature_child_count(note);
+    let skipped = feature_skipped_count(note);
     if dry_run {
-        println!("archive preview:");
+        println!("archive receipt preview:");
         println!("  feature: {id}");
+        println!("  child tasks: {child_tasks} would archive");
+        println!("  skipped: {skipped}");
         println!("writes: none");
-        println!("retry: maestro feature archive {id}");
+        println!("run: maestro feature archive {id}");
     } else if note.starts_with("already archived") {
         println!("inspect: maestro feature show {id}");
         println!("next: maestro status");
     } else {
         println!("archive receipt:");
         println!("  feature: {id}");
+        println!("  child tasks: {child_tasks} archived");
+        println!("  skipped: {skipped}");
         println!("inspect: maestro feature show {id}");
         println!("next: maestro status");
-        println!("undo: maestro feature unarchive {id}");
+        println!("restore: maestro feature unarchive {id}");
     }
 }
 
 fn print_feature_unarchive_note(id: &str, note: &str) {
     println!("{note}");
+    let child_tasks = count_before_marker(note, " child task(s)").unwrap_or(0);
     if note.starts_with("already live") {
         println!("inspect: maestro feature show {id}");
         println!("next: maestro status");
     } else {
         println!("restore receipt:");
         println!("  feature: {id}");
+        println!("  child tasks: {child_tasks} restored");
         println!("inspect: maestro feature show {id}");
         println!("next: maestro status");
         println!("optional: maestro feature archive {id}");
     }
+}
+
+fn feature_archive_error_message(id: &str, error: &str) -> String {
+    if error.contains("not terminal") {
+        return format!(
+            "cannot archive {id}:\n  not terminal\nnext:\n  ship: maestro feature ship {id} --outcome \"<outcome>\"\n  or cancel: maestro feature cancel {id} --reason \"<reason>\""
+        );
+    }
+    if error.contains("live child task") {
+        return format!(
+            "cannot archive {id}:\n  live child tasks\nnext:\n  inspect: maestro feature show {id}\n  retry: maestro feature archive {id}"
+        );
+    }
+    if error.contains("feature not found") {
+        return format!(
+            "cannot archive {id}:\n  feature not found\nnext:\n  list features: maestro feature list --all"
+        );
+    }
+    if error.contains("archived copy already exists") {
+        return format!(
+            "cannot archive {id}:\n  archived copy already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/features/{id}\nnext:\n  resolve the duplicate archive, then retry: maestro feature archive {id}"
+        );
+    }
+    error.to_string()
+}
+
+fn feature_unarchive_error_message(id: &str, error: &str) -> String {
+    if error.contains("archived feature not found") {
+        return format!(
+            "cannot unarchive {id}:\n  archived feature not found\nnext:\n  list archived features: maestro feature list --all"
+        );
+    }
+    if error.contains("live feature already occupies") {
+        return format!(
+            "cannot unarchive {id}:\n  live feature already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/features/{id}\nnext:\n  resolve the live feature conflict, then retry: maestro feature unarchive {id}"
+        );
+    }
+    error.to_string()
+}
+
+fn feature_cancel_error_message(id: &str, reason: &str, error: &str) -> String {
+    if error.contains("shipped features are terminal") || error.contains("terminal") {
+        return format!(
+            "blocked: cannot cancel {id}\nreason: shipped features are terminal\ninspect: maestro feature show {id}\nnext: maestro feature archive {id}"
+        );
+    }
+    if error.contains("failed to abandon child task") {
+        return format!(
+            "blocked: cancel cascade failed\nfeature: {id}\nreason: {error}\ninspect: maestro feature show {id}\nretry: maestro feature cancel {id} --reason \"{reason}\""
+        );
+    }
+    error.to_string()
+}
+
+fn feature_child_count(note: &str) -> usize {
+    count_before_marker(note, " child task(s)").unwrap_or(0)
+}
+
+fn feature_skipped_count(note: &str) -> usize {
+    count_before_marker(note, " live-referenced child task(s)").unwrap_or(0)
+}
+
+fn count_before_marker(note: &str, marker: &str) -> Option<usize> {
+    let prefix = note.split(marker).next()?;
+    prefix.split_whitespace().last()?.parse().ok()
 }
 
 fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {

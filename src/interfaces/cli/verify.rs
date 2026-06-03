@@ -3,6 +3,7 @@
 use anyhow::{Result, bail};
 
 use crate::domain::proof;
+use crate::domain::{feature, task};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
@@ -37,17 +38,20 @@ pub(super) fn run_for_task(paths: &MaestroPaths, id: &str, actor: &str) -> Resul
             );
         }
     }
-    render_applied_verification(result.verification())
+    render_applied_verification(paths, result.verification())
 }
 
-fn render_applied_verification(verification: &proof::TaskVerification) -> Result<()> {
+fn render_applied_verification(
+    paths: &MaestroPaths,
+    verification: &proof::TaskVerification,
+) -> Result<()> {
     match verification.status {
         proof::TaskVerificationStatus::Passed => {
             println!(
                 "verification passed for {} ({} claim(s), {} proof source(s))",
                 verification.task_id, verification.claim_count, verification.proof_source_count
             );
-            Ok(())
+            render_verified_handoff(paths, &verification.task_id)
         }
         proof::TaskVerificationStatus::Failed => {
             for failure in &verification.failures {
@@ -56,4 +60,41 @@ fn render_applied_verification(verification: &proof::TaskVerification) -> Result
             bail!("verification failed for {}", verification.task_id)
         }
     }
+}
+
+pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Result<()> {
+    let task = task::load_task_record(&paths.tasks_dir(), task_id)?;
+    println!("task verified: {}", task.id);
+    if let Some(feature_id) = task.feature_id.as_deref() {
+        println!("feature: {feature_id}");
+        let features = feature::list(paths)?;
+        if let Some(view) = features.iter().find(|view| view.id == feature_id) {
+            if view.status == feature::FeatureStatus::InProgress
+                && view.counts.total > 0
+                && view.counts.total == view.counts.verified
+            {
+                println!("feature ready:");
+                println!(
+                    "  {feature_id} tasks: {}/{} verified",
+                    view.counts.verified, view.counts.total
+                );
+                println!("template: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+                println!("required input:");
+                println!("- outcome: shipping outcome text");
+            } else {
+                println!("feature progress:");
+                println!(
+                    "  {feature_id} tasks: {}/{} verified",
+                    view.counts.verified, view.counts.total
+                );
+                println!("next: maestro feature show {feature_id}");
+            }
+        } else {
+            println!("next: maestro status");
+        }
+    } else {
+        println!("next: maestro status");
+        println!("inspect: maestro task show {}", task.id);
+    }
+    Ok(())
 }

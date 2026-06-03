@@ -782,7 +782,8 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     // The real archive moves it to the sibling tree.
     let archived = stdout(&maestro(repo, &["task", "archive", "task-002"]));
     assert!(archived.contains("archived task-002"));
-    assert!(archived.contains("undo: maestro task unarchive task-002"));
+    assert!(archived.contains("restore: maestro task unarchive task-002"));
+    assert!(archived.contains("next: maestro status"));
     assert!(!repo.join(".maestro/tasks/task-002-done").exists());
     assert!(repo.join(".maestro/archive/tasks/task-002-done").exists());
 
@@ -799,7 +800,8 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     // unarchive restores it to the live tree.
     let restored = stdout(&maestro(repo, &["task", "unarchive", "task-002"]));
     assert!(restored.contains("unarchived task-002"));
-    assert!(restored.contains("optional: maestro task archive task-002"));
+    assert!(restored.contains("archive again: maestro task archive task-002"));
+    assert!(restored.contains("next: maestro status"));
     assert!(repo.join(".maestro/tasks/task-002-done").exists());
     assert!(!repo.join(".maestro/archive/tasks/task-002-done").exists());
 }
