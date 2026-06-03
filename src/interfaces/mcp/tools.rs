@@ -188,7 +188,12 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         include_terminal,
     };
     let shown = task::filter_tasks(tasks.clone(), &filter(all));
-    let mut out = task::render_task_list(&shown, &archived_ids);
+    let missing_verify_contract_ids = missing_verify_contract_ids(paths, &shown, &archived_ids)?;
+    let mut out = task::render_task_list_with_missing_checks(
+        &shown,
+        &archived_ids,
+        &missing_verify_contract_ids,
+    );
     if !all {
         let hidden = task::filter_tasks(tasks, &filter(true)).len() - shown.len();
         if hidden > 0 {
@@ -198,6 +203,33 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         }
     }
     Ok(out)
+}
+
+fn missing_verify_contract_ids(
+    paths: &MaestroPaths,
+    tasks: &[task::TaskRecord],
+    archived_ids: &std::collections::BTreeSet<String>,
+) -> Result<std::collections::BTreeSet<String>> {
+    let mut missing = std::collections::BTreeSet::new();
+    for task in tasks {
+        if task.feature_id.is_some()
+            || !matches!(
+                task.state,
+                task::TaskState::Draft | task::TaskState::Exploring
+            )
+        {
+            continue;
+        }
+        let tasks_dir = if archived_ids.contains(&task.id) {
+            paths.archive_tasks_dir()
+        } else {
+            paths.tasks_dir()
+        };
+        if task::load_task_checks(&tasks_dir, task)?.is_empty() {
+            missing.insert(task.id.clone());
+        }
+    }
+    Ok(missing)
 }
 
 fn sync_tool(arguments: &Value) -> Result<String> {

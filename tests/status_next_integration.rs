@@ -174,7 +174,24 @@ fn task_create_check_handoff_and_list_columns_are_actionable() {
     let list = run(repo, &["task", "list"]);
     assert!(list.contains("NEXT"));
     assert!(list.contains("INSPECT"));
+    assert!(list.contains("run: explore"));
     assert!(list.contains("maestro task show task-001"));
+}
+
+#[test]
+fn task_list_next_column_uses_verify_contract_state_not_only_lifecycle_state() {
+    let temp = setup_repo("maestro-list-missing-check");
+    let repo = temp.path();
+
+    run(repo, &["task", "create", "Update README"]);
+
+    let list = run(repo, &["task", "list"]);
+    assert!(list.contains("template: add_check"), "{list}");
+    assert!(list.contains("maestro task show task-001"), "{list}");
+    assert!(
+        !list.contains("task-001\tdraft\trun: explore"),
+        "standalone draft without checks must not point at explore first: {list}"
+    );
 }
 
 #[test]
@@ -216,5 +233,50 @@ fn complete_with_proof_records_proof_and_auto_verifies() {
     assert_eq!(
         task_yaml(repo, "task-001")["state"],
         YamlValue::String("verified".to_string())
+    );
+}
+
+#[test]
+fn feature_linked_complete_handoff_uses_existing_feature_command() {
+    let temp = setup_repo("maestro-feature-linked-complete-next");
+    let repo = temp.path();
+
+    run(repo, &["feature", "new", "CSV export"]);
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Implement CSV writer",
+            "--feature",
+            "csv-export",
+        ],
+    );
+    run(repo, &["task", "explore", "task-001"]);
+    run(repo, &["task", "accept", "task-001"]);
+    run(repo, &["task", "claim", "task-001"]);
+    let complete = run(
+        repo,
+        &[
+            "task",
+            "complete",
+            "task-001",
+            "--summary",
+            "done",
+            "--claim",
+            "CSV writer works",
+            "--proof",
+            "CSV writer works",
+        ],
+    );
+
+    assert!(complete.contains("feature: csv-export"), "{complete}");
+    assert!(
+        complete.contains("next: maestro feature show csv-export"),
+        "{complete}"
+    );
+    assert!(
+        !complete.contains("maestro feature status"),
+        "feature status is not a command: {complete}"
     );
 }

@@ -123,6 +123,14 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
 /// marked `(archived)` so `--all` distinguishes an archived row from a
 /// live-terminal one sharing the same state (e.g. both `rejected`).
 pub fn render_task_list(tasks: &[TaskRecord], archived_ids: &BTreeSet<String>) -> String {
+    render_task_list_with_missing_checks(tasks, archived_ids, &BTreeSet::new())
+}
+
+pub fn render_task_list_with_missing_checks(
+    tasks: &[TaskRecord],
+    archived_ids: &BTreeSet<String>,
+    missing_verify_contract_ids: &BTreeSet<String>,
+) -> String {
     let mut out = String::new();
     out.push_str("ID\tSTATE\tNEXT\tINSPECT\tTITLE\n");
     for task in tasks {
@@ -134,7 +142,7 @@ pub fn render_task_list(tasks: &[TaskRecord], archived_ids: &BTreeSet<String>) -
             "{}\t{}\t{}\tmaestro task show {}\t{}\n",
             task.id,
             state,
-            compact_next(task),
+            compact_next(task, missing_verify_contract_ids.contains(&task.id)),
             task.id,
             task.title
         ));
@@ -151,20 +159,21 @@ fn state_label(task: &TaskRecord) -> String {
     }
 }
 
-fn compact_next(task: &TaskRecord) -> &'static str {
+fn compact_next(task: &TaskRecord, missing_verify_contract: bool) -> &'static str {
     if has_unresolved_blockers(task) {
-        return "inspect_blocker";
+        return "run: inspect_blocker";
     }
     match task.state {
-        TaskState::Draft => "explore",
-        TaskState::Exploring => "accept",
-        TaskState::Ready => "claim",
-        TaskState::InProgress => "complete",
-        TaskState::NeedsVerification => "verify",
+        TaskState::Draft | TaskState::Exploring if missing_verify_contract => "template: add_check",
+        TaskState::Draft => "run: explore",
+        TaskState::Exploring => "run: accept",
+        TaskState::Ready => "run: claim",
+        TaskState::InProgress => "template: complete",
+        TaskState::NeedsVerification => "run: verify",
         TaskState::Verified
         | TaskState::Rejected
         | TaskState::Abandoned
-        | TaskState::Superseded => "status",
+        | TaskState::Superseded => "run: status",
     }
 }
 
@@ -188,5 +197,15 @@ mod tests {
 
         assert!(!row("task-001").contains("(archived)"));
         assert!(row("task-002").contains("(archived)"));
+    }
+
+    #[test]
+    fn render_task_list_marks_missing_verify_contract_as_template_action() {
+        let task = TaskRecord::draft("task-001", "Needs check", "2026-06-02T00:00:00Z");
+        let missing = BTreeSet::from(["task-001".to_string()]);
+
+        let out = render_task_list_with_missing_checks(&[task], &BTreeSet::new(), &missing);
+
+        assert!(out.contains("template: add_check"), "{out}");
     }
 }

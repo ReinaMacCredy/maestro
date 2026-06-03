@@ -22,7 +22,7 @@ pub(crate) mod template;
 pub(crate) use archive::live_task_referrer;
 pub use archive::{archive_task, unarchive_task};
 pub use blockers::has_unresolved_blockers;
-pub use display::{render_task, render_task_list};
+pub use display::{render_task, render_task_list, render_task_list_with_missing_checks};
 pub use doctor::{
     TaskDoctorReport, TaskEntry, check_blocker_graph, load_task_entries, load_task_records,
     render_report,

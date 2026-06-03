@@ -476,7 +476,7 @@ fn print_task_complete_next(paths: &MaestroPaths, task: &TaskRecord) -> Result<(
     println!("verification passed for {}", refreshed.id);
     if let Some(feature_id) = refreshed.feature_id.as_deref() {
         println!("feature: {feature_id}");
-        println!("next: maestro feature status {feature_id}");
+        println!("next: maestro feature show {feature_id}");
     } else {
         println!("next: maestro status");
     }
@@ -791,7 +791,16 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         // instead of leaving a bare header (T8).
         println!("no tasks found");
     } else {
-        print!("{}", task::render_task_list(&shown, &archived_ids));
+        let missing_verify_contract_ids =
+            missing_verify_contract_ids(paths, &shown, &archived_ids)?;
+        print!(
+            "{}",
+            task::render_task_list_with_missing_checks(
+                &shown,
+                &archived_ids,
+                &missing_verify_contract_ids,
+            )
+        );
     }
     if !filters.all {
         let with_terminal = task::filter_tasks(all_tasks, &task_filter(&filters, true));
@@ -801,6 +810,30 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn missing_verify_contract_ids(
+    paths: &MaestroPaths,
+    tasks: &[TaskRecord],
+    archived_ids: &std::collections::BTreeSet<String>,
+) -> Result<std::collections::BTreeSet<String>> {
+    let mut missing = std::collections::BTreeSet::new();
+    for task in tasks {
+        if task.feature_id.is_some()
+            || !matches!(task.state, TaskState::Draft | TaskState::Exploring)
+        {
+            continue;
+        }
+        let tasks_dir = if archived_ids.contains(&task.id) {
+            paths.archive_tasks_dir()
+        } else {
+            paths.tasks_dir()
+        };
+        if task::load_task_checks(&tasks_dir, task)?.is_empty() {
+            missing.insert(task.id.clone());
+        }
+    }
+    Ok(missing)
 }
 
 /// Build a [`task::TaskFilter`] from the CLI flags, choosing whether terminal

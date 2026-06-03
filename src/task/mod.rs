@@ -55,6 +55,18 @@ pub mod display {
     ) -> String {
         crate::domain::task::render_task_list(tasks, archived_ids)
     }
+
+    pub fn render_task_list_with_missing_checks(
+        tasks: &[TaskRecord],
+        archived_ids: &std::collections::BTreeSet<String>,
+        missing_verify_contract_ids: &std::collections::BTreeSet<String>,
+    ) -> String {
+        crate::domain::task::render_task_list_with_missing_checks(
+            tasks,
+            archived_ids,
+            missing_verify_contract_ids,
+        )
+    }
 }
 
 pub mod doctor {
