@@ -54,8 +54,10 @@ fi
 
 LOG="$ARTIFACT_ROOT/logs"
 PASS_FILE="$ARTIFACT_ROOT/passes.txt"
+REQUIRED_FILE="$ARTIFACT_ROOT/required-passes.txt"
 mkdir -p "$LOG"
 : > "$PASS_FILE"
+: > "$REQUIRED_FILE"
 
 fail() {
   local message="$1"
@@ -196,6 +198,162 @@ parse_first_blocker_id() {
   blocker="$(grep -o 'blk-[A-Za-z0-9_-]*' "$LOG/$label.out" | head -n 1 || true)"
   [[ -n "$blocker" ]] || fail "$label did not expose a blocker id"
   printf '%s\n' "$blocker"
+}
+
+seed_required_passes() {
+  if [[ "$RUN_GATES" -eq 1 ]]; then
+    cat >> "$REQUIRED_FILE" <<'EOF'
+cargo-check
+cargo-fmt
+cargo-clippy
+cargo-test
+EOF
+  else
+    cat >> "$REQUIRED_FILE" <<'EOF'
+cargo-gates-skipped
+EOF
+  fi
+
+  cat >> "$REQUIRED_FILE" <<'EOF'
+cargo-build
+green-version
+green-root-help
+green-update-help
+green-uninstall-help
+green-hook-record-help
+green-init-dry
+green-init
+green-install-codex
+green-install-claude
+green-sync-dry
+green-doctor
+green-status-json
+green-shell-init
+green-mcp-tools
+green-watch-snapshot
+green-task-create
+green-task-next-json
+green-task-explore
+green-task-accept
+green-task-claim
+green-task-update
+green-task-complete
+green-task-verify
+green-query-proof
+green-manual-create
+green-manual-explore
+green-manual-accept
+green-manual-claim
+green-manual-complete-fail
+green-event-create
+green-manual-verify
+green-query-friction
+green-decision-new
+green-decision-show
+green-query-decisions
+green-feature-new
+green-feature-set
+green-feature-accept-block
+green-feature-accept
+green-feature-start
+green-feature-task-create
+green-feature-task-explore
+green-feature-task-accept
+green-feature-task-claim
+green-feature-task-complete
+green-feature-ship-block
+green-feature-ship-dry
+green-feature-ship
+green-query-matrix
+green-harness-list
+green-query-backlog
+green-task-doctor
+green-task-archive
+green-task-unarchive
+green-feature-archive
+green-feature-unarchive
+green-uninstall-codex
+green-uninstall-claude
+brown-init
+brown-install-codex
+brown-sync
+brown-task-create
+brown-task-block
+brown-task-show-blocked
+brown-current-status
+brown-task-unblock
+brown-task-set
+brown-task-explore
+brown-task-accept
+brown-task-claim
+brown-task-complete
+brown-reject-create
+brown-reject
+brown-reject-archive
+brown-reject-unarchive
+brown-replacement-create
+brown-old-create
+brown-supersede
+brown-feature-new
+brown-feature-set
+brown-feature-accept
+brown-feature-amend
+brown-feature-start
+brown-feature-child
+brown-feature-cancel-dry
+brown-feature-cancel
+brown-feature-archive
+brown-feature-unarchive
+brown-init-dry-existing
+brown-doctor
+brown-status
+brown-status-json
+brown-task-list-all
+brown-feature-list-all
+brown-query-matrix
+brown-query-friction
+brown-mcp-list
+brown-watch-snapshot
+EOF
+}
+
+audit_required_passes() {
+  local required_sorted="$ARTIFACT_ROOT/required-passes.sorted"
+  local passed_sorted="$ARTIFACT_ROOT/passes.sorted"
+  local missing unexpected required_count pass_count
+
+  sort "$REQUIRED_FILE" | uniq -d > "$ARTIFACT_ROOT/required-duplicates.txt"
+  if [[ -s "$ARTIFACT_ROOT/required-duplicates.txt" ]]; then
+    cat "$ARTIFACT_ROOT/required-duplicates.txt" >&2
+    fail "coverage manifest has duplicate labels"
+  fi
+
+  sort "$PASS_FILE" | uniq -d > "$ARTIFACT_ROOT/pass-duplicates.txt"
+  if [[ -s "$ARTIFACT_ROOT/pass-duplicates.txt" ]]; then
+    cat "$ARTIFACT_ROOT/pass-duplicates.txt" >&2
+    fail "coverage run emitted duplicate pass labels"
+  fi
+
+  sort -u "$REQUIRED_FILE" > "$required_sorted"
+  sort -u "$PASS_FILE" > "$passed_sorted"
+
+  missing="$(comm -23 "$required_sorted" "$passed_sorted" || true)"
+  if [[ -n "$missing" ]]; then
+    echo "missing required pass labels:" >&2
+    printf '%s\n' "$missing" >&2
+    fail "coverage audit failed"
+  fi
+
+  unexpected="$(comm -13 "$required_sorted" "$passed_sorted" || true)"
+  if [[ -n "$unexpected" ]]; then
+    echo "unexpected pass labels:" >&2
+    printf '%s\n' "$unexpected" >&2
+    fail "coverage audit failed"
+  fi
+
+  required_count="$(wc -l < "$required_sorted" | tr -d ' ')"
+  pass_count="$(wc -l < "$passed_sorted" | tr -d ' ')"
+  printf '\nCOVERAGE_AUDIT_PASS required=%s observed=%s\n' "$required_count" "$pass_count"
 }
 
 run_cargo_gates() {
@@ -400,6 +558,7 @@ main() {
   printf 'repo: %s\n' "$ROOT"
   printf 'artifact root: %s\n' "$ARTIFACT_ROOT"
   printf 'logs: %s\n' "$LOG"
+  seed_required_passes
 
   if [[ "$RUN_GATES" -eq 1 ]]; then
     run_cargo_gates
@@ -411,6 +570,7 @@ main() {
   build_binary
   run_greenfield_workflow
   run_brownfield_workflow
+  audit_required_passes
 
   printf '\nALL_MAESTRO_VERIFY_PASS\n'
   printf 'passes: %s\n' "$(wc -l < "$PASS_FILE" | tr -d ' ')"

@@ -40,9 +40,10 @@ scripts/verify-all.sh
 ```
 
 This runs the standard Rust gates, builds `target/debug/maestro`, then exercises
-isolated greenfield and brownfield temp projects under `/private/tmp`. Use
-`scripts/verify-all.sh --workflows-only` only during local script iteration,
-not as the final closeout gate.
+isolated greenfield and brownfield temp projects under `/private/tmp`. It prints
+one `PASS <label>` line per gate and fails the final coverage audit if any
+required label did not run. Use `scripts/verify-all.sh --workflows-only` only
+during local script iteration, not as the final closeout gate.
 
 When public Rust docs, public item comments, or intra-doc links change, also
 run:
