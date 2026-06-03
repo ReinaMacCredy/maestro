@@ -74,6 +74,9 @@ fn feature_guarded_lifecycle_via_cli() {
     let accept_stderr = assert_failure(maestro(&accept_args, temp_dir.path()), &accept_args);
     assert!(accept_stderr.contains("acceptance"));
     assert!(accept_stderr.contains("affected_areas"));
+    assert!(accept_stderr.contains("skill: qa-baseline"));
+    assert!(accept_stderr.contains("target: .maestro/features/billing-csv-export/baseline.md"));
+    assert!(accept_stderr.contains("retry: maestro feature accept billing-csv-export"));
 
     // author the contract, then accept freezes it.
     let set_args = [
@@ -152,8 +155,10 @@ fn feature_guarded_lifecycle_via_cli() {
     );
     assert!(list_all.contains("billing-csv-export"));
     assert!(list_all.contains("shipped"));
-    assert!(list_all.contains("tasks=3"));
-    assert!(list_all.contains("verified=3"));
+    assert!(list_all.contains("NEXT"));
+    assert!(list_all.contains("INSPECT"));
+    assert!(list_all.contains("maestro feature show billing-csv-export"));
+    assert!(list_all.contains("\t3\t3\t"));
     // the outcome rides the title column in `list --all`.
     assert!(list_all.contains("csv export shipped"));
 }

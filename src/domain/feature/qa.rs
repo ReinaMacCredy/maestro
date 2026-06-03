@@ -119,8 +119,8 @@ pub(crate) fn ship_qa_gaps(
 
     let Some(baseline) = baseline else {
         gaps.push(format!(
-            "qa-baseline {absence} (.maestro/features/{id}/baseline.md) — fix: write a Scenario Matrix of [bl-NNN]-tagged real scenarios (optional `amend_log_position:` frontmatter), or run the qa-baseline skill, then: maestro feature ship {id}"
-        ));
+              "qa-baseline {absence} (.maestro/features/{id}/baseline.md)\n    skill: qa-baseline\n    target: .maestro/features/{id}/baseline.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
+          ));
         return gaps;
     };
 
@@ -138,8 +138,8 @@ pub(crate) fn ship_qa_gaps(
         .count();
     if behavioral_after > 0 {
         gaps.push(format!(
-            "qa-baseline stale — {behavioral_after} behavioral amend(s) since capture; fix: re-run the qa-baseline skill, extend the Scenario Matrix, and set amend_log_position: {len}"
-        ));
+              "qa-baseline stale — {behavioral_after} behavioral amend(s) since capture; set amend_log_position: {len}\n    skill: qa-baseline\n    target: .maestro/features/{id}/baseline.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
+          ));
     }
 
     // E.2 coverage — every behavioral scenario needs a counting slice (subsumes
@@ -154,10 +154,10 @@ pub(crate) fn ship_qa_gaps(
             .collect();
         if !uncovered.is_empty() {
             gaps.push(format!(
-                "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}; fix: add to .maestro/features/{id}/qa-slices.yaml a `slices:` entry per scenario with `scenarios: [bl-NNN]` and non-empty `evidence: [...]`, or run the qa-slice skill",
-                uncovered.len(),
-                uncovered.join(", ")
-            ));
+                  "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}\n    skill: qa-slice\n    target: .maestro/features/{id}/qa-slices.yaml\n    retry: maestro feature ship {id} --outcome \"<outcome>\"",
+                  uncovered.len(),
+                  uncovered.join(", ")
+              ));
         }
     }
 

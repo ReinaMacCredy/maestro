@@ -101,6 +101,15 @@ fn feature_qa_gates_via_cli() {
         stderr.contains("qa-baseline"),
         "accept should name the missing baseline: {stderr}"
     );
+    assert!(stderr.contains("skill: qa-baseline"), "{stderr}");
+    assert!(
+        stderr.contains("target: .maestro/features/report-builder/baseline.md"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("retry: maestro feature accept report-builder"),
+        "{stderr}"
+    );
 
     write_baseline(repo, "report-builder", 0, &["bl-001"]);
     let accepted = stdout(maestro(&accept, repo), &accept);
@@ -118,6 +127,15 @@ fn feature_qa_gates_via_cli() {
         "ship should name the uncovered scenario: {stderr}"
     );
     assert!(stderr.contains("coverage incomplete"));
+    assert!(stderr.contains("skill: qa-slice"), "{stderr}");
+    assert!(
+        stderr.contains("target: .maestro/features/report-builder/qa-slices.yaml"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("retry: maestro feature ship report-builder --outcome \"<outcome>\""),
+        "{stderr}"
+    );
 
     // D count rule through the real YAML parse path: a slice that references the
     // scenario but omits `evidence` (serde default → empty) does not count.
@@ -157,6 +175,7 @@ fn feature_qa_gates_via_cli() {
         stderr.contains("stale"),
         "behavioral amend should stale the baseline: {stderr}"
     );
+    assert!(stderr.contains("skill: qa-baseline"), "{stderr}");
 
     // Refresh the baseline past the amend and add the new scenario; coverage now
     // demands a slice for [bl-002].

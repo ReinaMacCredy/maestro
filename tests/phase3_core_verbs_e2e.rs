@@ -70,8 +70,10 @@ fn phase3_core_verbs_demo_path_runs_end_to_end() {
 
     let feature_list = stdout(run(repo, &["feature", "list"]));
     assert!(feature_list.contains("billing-csv-export"));
-    assert!(feature_list.contains("tasks=1"));
-    assert!(feature_list.contains("verified=1"));
+    assert!(feature_list.contains("NEXT"));
+    assert!(feature_list.contains("INSPECT"));
+    assert!(feature_list.contains("maestro feature show billing-csv-export"));
+    assert!(feature_list.contains("\t1\t1\t"));
 
     let decision_list = stdout(run(repo, &["decision", "list"]));
     assert!(decision_list.contains("decision-001-use-computed-query-views.md"));
@@ -91,6 +93,7 @@ fn phase3_core_verbs_demo_path_runs_end_to_end() {
 
     let doctor = stdout(run(repo, &["doctor"]));
     assert!(doctor.contains("doctor: ok"));
+    assert!(doctor.contains("next: maestro install --agent codex"));
 }
 
 fn run(repo: &Path, args: &[&str]) -> std::process::Output {

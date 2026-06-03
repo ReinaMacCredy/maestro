@@ -11,8 +11,10 @@ use support::TestTempDir;
 fn harness_markdown_matches_spec_section_14_protocol() {
     assert_eq!(HARNESS_MD, include_str!("../embedded/harness/HARNESS.md"));
     assert!(HARNESS_MD.contains("# Maestro Harness Protocol"));
-    assert!(HARNESS_MD.contains("Read MAESTRO_CURRENT_TASK env or `maestro task show`"));
-    assert!(HARNESS_MD.contains("Run `maestro task verify`"));
+    assert!(HARNESS_MD.contains("Start with `maestro status`"));
+    assert!(HARNESS_MD.contains("maestro task next"));
+    assert!(HARNESS_MD.contains("--proof \"<observed evidence>\""));
+    assert!(HARNESS_MD.contains("maestro query proof <id>"));
     assert!(HARNESS_MD.contains("## If you are Claude Code"));
     assert!(HARNESS_MD.contains("## If you are Codex CLI"));
 }

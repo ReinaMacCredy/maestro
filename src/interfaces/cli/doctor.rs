@@ -22,6 +22,7 @@ pub fn run() -> Result<()> {
 
     if report.errors.is_empty() {
         println!("doctor: ok");
+        print_ok_handoff(&report);
         return Ok(());
     }
 
@@ -29,6 +30,15 @@ pub fn run() -> Result<()> {
         eprintln!("error: {error}");
     }
     bail!("doctor found {} error(s)", report.errors.len())
+}
+
+fn print_ok_handoff(report: &DoctorReport) {
+    if report.checks.iter().any(|check| check.name == "install") {
+        println!("next: maestro status");
+    } else {
+        println!("next: maestro install --agent codex");
+        println!("then: maestro status");
+    }
 }
 
 #[derive(Debug)]

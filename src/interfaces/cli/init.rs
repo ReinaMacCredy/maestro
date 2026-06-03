@@ -21,6 +21,7 @@ pub fn run(args: InitArgs) -> Result<()> {
         }
         InitOutcome::Applied { behind, root } => {
             println!("initialized maestro in {}", root.display());
+            print_post_init_handoff();
             if behind > 0 {
                 let noun = if behind == 1 { "folder" } else { "folders" };
                 println!(
@@ -31,4 +32,12 @@ pub fn run(args: InitArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_post_init_handoff() {
+    println!("next:");
+    println!("  check setup: maestro doctor");
+    println!("  wire agent: maestro install --agent codex");
+    println!("  resume: maestro status");
+    println!("  tune harness: use the maestro-setup skill");
 }

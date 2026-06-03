@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.0.0
+version: 1.1.0
 description: Initial setup and harness tuning protocol for a Maestro-enabled repository.
 ---
 
@@ -8,9 +8,24 @@ description: Initial setup and harness tuning protocol for a Maestro-enabled rep
 
 Use this skill after `maestro init` to tune the repository harness.
 
-Inspect the repo structure, build and test commands, existing agent instructions, and current
-workflow constraints. Update harness guidance only from verified repository evidence, and keep
-setup changes small enough for future agents to trust and maintain.
+## Runbook
+
+1. Start with `maestro status`. If the repo is not initialized, run
+   `maestro init --dry-run`, then `maestro init --yes`.
+2. Run `maestro doctor`. If no agent integration is installed, run
+   `maestro install --agent codex` unless the user asked for a different agent.
+3. Inspect the repo structure, build and test commands, existing agent
+   instructions, and current workflow constraints.
+4. Update harness guidance only from verified repository evidence. Keep changes
+   small enough for future agents to trust and maintain.
+5. Run `maestro doctor` again, then `maestro status` to confirm the handoff.
+
+## Safety
+
+- `maestro init --dry-run` writes nothing.
+- `maestro init --yes` keeps existing files and creates what is missing.
+- Use `maestro init --force` only when a deliberate refresh is needed; it backs
+  up existing managed files first.
 
 On activation, log the skill activation by piping a compact JSON payload to
 `maestro hook record` with `event_type` set to `skill_activation`, `skill_name` set to

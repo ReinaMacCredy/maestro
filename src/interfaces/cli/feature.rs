@@ -359,15 +359,18 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     if shown.is_empty() {
         println!("no features found");
     } else {
+        println!("ID\tSTATE\tNEXT\tINSPECT\tTASKS\tVERIFIED\tTITLE");
         for view in &shown {
             let title = match view.outcome.as_deref() {
                 Some(outcome) => format!("{} -- {outcome}", view.title),
                 None => view.title.clone(),
             };
             println!(
-                "{}\t{}\ttasks={}\tverified={}\t{}",
+                "{}\t{}\t{}\tmaestro feature show {}\t{}\t{}\t{}",
                 view.id,
                 feature::status_label(&view.status),
+                feature_next_label(view),
+                view.id,
                 view.counts.total,
                 view.counts.verified,
                 title
@@ -380,6 +383,20 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn feature_next_label(view: &feature::FeatureView) -> &'static str {
+    match view.status {
+        FeatureStatus::Proposed => "template: set_contract",
+        FeatureStatus::Ready => "run: start_feature",
+        FeatureStatus::InProgress
+            if view.counts.total > 0 && view.counts.total == view.counts.verified =>
+        {
+            "template: ship_feature"
+        }
+        FeatureStatus::InProgress => "run: resolve_tasks",
+        FeatureStatus::Shipped | FeatureStatus::Cancelled => "run: archive_feature",
+    }
 }
 
 fn print_note(note: String) -> Result<()> {

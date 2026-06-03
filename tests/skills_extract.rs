@@ -159,6 +159,32 @@ fn bundled_skill_contents_include_activation_logging_instruction() {
     }
 }
 
+#[test]
+fn thin_bundled_skills_include_operational_runbooks() {
+    let setup = skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-setup")
+        .expect("invariant: maestro-setup should be bundled")
+        .skill_md();
+    assert!(setup.contains("version: 1.1.0"));
+    assert!(setup.contains("maestro status"));
+    assert!(setup.contains("maestro init --dry-run"));
+    assert!(setup.contains("maestro install --agent codex"));
+    assert!(setup.contains("maestro init --yes` keeps existing files"));
+
+    let verify = skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-verify")
+        .expect("invariant: maestro-verify should be bundled")
+        .skill_md();
+    assert!(verify.contains("version: 1.1.0"));
+    assert!(verify.contains("maestro task next"));
+    assert!(verify.contains("--proof \"<observed evidence>\""));
+    assert!(verify.contains("maestro query proof <id>"));
+    assert!(verify.contains("qa-baseline"));
+    assert!(verify.contains("qa-slice"));
+}
+
 #[cfg(unix)]
 #[test]
 fn extract_bundled_skills_rejects_symlinked_skill_parent() {

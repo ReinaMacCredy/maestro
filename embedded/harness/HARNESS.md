@@ -1,5 +1,5 @@
 ---
-version: 1.3.0
+version: 1.4.0
 ---
 
 # Maestro Harness Protocol
@@ -8,11 +8,11 @@ You are an agent (Claude, Codex, or future) working in a repo that
 uses Maestro. Follow these rules.
 
 ## Shared protocol (all agents)
-1. Read MAESTRO_CURRENT_TASK env or `maestro task show` to know which task you're on.
+1. Start with `maestro status`; honor MAESTRO_CURRENT_TASK env or `maestro task show <id>` when a current task is set.
 2. Read acceptance.yaml - those criteria are locked.
 3. Use the skills active for this task.
-4. Run `maestro task verify` when implementation is complete.
-5. Hooks auto-record your tool calls to .maestro/runs/<session_id>/events.jsonl across all six lifecycle events (SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, Stop). `maestro task verify` matches your `--claim` values against that recorded evidence, so every claim must name a real action you took - an empty or unbacked claim fails verification.
+4. Complete tasks with `maestro task complete <id> --summary "<what>" --claim "<claim>" --proof "<observed evidence>"`; Maestro records the proof and auto-runs verification.
+5. Hooks auto-record your tool calls to .maestro/runs/<session_id>/events.jsonl across all six lifecycle events (SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, Stop). Verification matches your `--claim` values against recorded or inline proof, so every claim must name a real action you took - an empty or unbacked claim fails verification.
 
 ## Task commands (the loop)
 
@@ -21,13 +21,14 @@ State flow: draft -> exploring -> ready -> in_progress -> needs_verification -> 
 
 Orient and find work:
 
-    maestro query matrix                          # task x state x proof overview
+    maestro status                                # repo handoff and next action
+    maestro task next                             # one best task action
     maestro task list --ready                     # claimable work (ready + unblocked)
-    maestro task show <id>                         # task detail: state, claim, blockers (or set MAESTRO_CURRENT_TASK)
+    maestro task show <id>                        # task detail: state, claim, blockers
 
 Make a task claimable (intake):
 
-    maestro task create "<title>" [--feature F --risk R]   # -> draft
+    maestro task create "<title>" [--feature F --risk R --check "<observable result>"]   # -> draft
     maestro task explore <id>                      # -> exploring
     maestro task accept <id>                       # locks acceptance -> ready
 
@@ -35,8 +36,8 @@ Execute:
 
     maestro task claim <id>                        # -> in_progress
     maestro task update <id> --claim "<evidence>"  # record progress as you work
-    maestro task complete <id> --summary "<what>" --claim "<evidence>"   # -> needs_verification
-    maestro task verify <id>                       # GATE: claims must be backed by recorded events/proof -> verified
+    maestro task complete <id> --summary "<what>" --claim "<evidence>" --proof "<observed evidence>"   # auto-verifies
+    maestro query proof <id>                       # recovery path when verification fails
 
 When stuck:
 

@@ -328,9 +328,9 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
     let feat_dir = feature_dir(paths, id);
     if !qa::baseline_present(&feat_dir)? {
         gaps.push(format!(
-            "qa-baseline (.maestro/features/{id}/baseline.md {}) — fix: capture current behavior before edits via the qa-baseline skill (a non-empty baseline.md); tagging scenarios [bl-NNN] now satisfies the ship gate later",
-            qa::baseline_absence(&feat_dir)
-        ));
+              "qa-baseline (.maestro/features/{id}/baseline.md {})\n    skill: qa-baseline\n    target: .maestro/features/{id}/baseline.md\n    retry: maestro feature accept {id}",
+              qa::baseline_absence(&feat_dir)
+          ));
     }
 
     if dry_run {

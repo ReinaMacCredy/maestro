@@ -201,6 +201,13 @@ pub fn render_dry_run(plan: &InitPlan, preview: &[FolderPreview]) -> String {
         out.push_str(&format!("file {}\n", file.path.display()));
     }
     out.push_str(&render_preview(preview));
+    out.push_str("after init:\n");
+    out.push_str("  run: maestro init --yes\n");
+    out.push_str("  check setup: maestro doctor\n");
+    out.push_str("  resume: maestro status\n");
+    out.push_str(
+        "safety: dry-run writes nothing; --yes keeps existing files; --force backs up first\n",
+    );
     out
 }
 

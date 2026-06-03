@@ -133,6 +133,8 @@ fn doctor_reports_ok_for_initialized_phase_three_artifacts() {
     assert!(out.contains("check backlog: ok"));
     assert!(out.contains("check task-blockers: ok"));
     assert!(out.contains("doctor: ok"));
+    assert!(out.contains("next: maestro install --agent codex"));
+    assert!(out.contains("then: maestro status"));
 }
 
 #[test]

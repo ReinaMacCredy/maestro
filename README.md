@@ -142,7 +142,8 @@ your agent (Claude Code, Codex, or any CLI agent) at the repo and paste:
 ```
 Set up maestro in this repo: run `maestro init --yes`, then `maestro install --agent claude`
 (or `--agent codex`). Then follow the maestro-setup skill it installs to tune the harness to
-this repo, and drive the feature and task lifecycle through the `maestro` CLI from there.
+this repo. Start each session with `maestro status`, then drive the feature and task lifecycle
+through the `maestro` CLI from there.
 ```
 
 ## Quickstart
@@ -153,22 +154,24 @@ Scaffold the repo and install the agent integration:
 maestro init --yes                 # create .maestro/ and extract bundled skills/hooks
 maestro install --agent claude     # wire skills + hooks into CLAUDE.md/AGENTS.md (or --agent codex)
 maestro doctor                     # check the installation
+maestro status                     # resume with the next agent action
 ```
 
 The smallest loop is a single task. A standalone task (no feature) carries its own
 acceptance check, and closes once a recorded run backs its claim:
 
 ```
-maestro task create "Patch null deref in parser"            # -> draft
-maestro task set task-001 --check "regression test passes"  # standalone tasks need their own check
-maestro task claim task-001                                 # -> in_progress
-maestro task complete task-001 --summary "guard the None case" --claim "cargo test parser passes"
-
-# verify is gated on recorded proof. During a real agent run the installed hooks
-# record that proof automatically from your tool runs; by hand, record it explicitly:
-maestro event create --task-id task-001 --claim "cargo test parser passes"
-maestro task verify task-001                                # passes once the claim is backed by recorded proof
+maestro task create "Patch null deref in parser" --check "regression test passes"  # -> draft
+maestro task explore task-001                                # -> exploring
+maestro task accept task-001                                 # locks the check -> ready
+maestro task claim task-001                                  # -> in_progress
+maestro task complete task-001 --summary "guard the None case" \
+  --claim "cargo test parser passes" --proof "observed: cargo test parser passes"
 ```
+
+`task complete` records the inline proof and runs `task verify` automatically. If the
+proof is missing or stale, the task stays in `needs_verification`; run
+`maestro query proof <id>` for the repair path.
 
 For a larger change, wrap the work in a feature contract and spin off child tasks:
 
@@ -189,10 +192,11 @@ maestro feature accept csv-export                        # freeze the contract -
 maestro feature start csv-export                         # -> in_progress
 
 maestro task create "Implement CSV writer" --feature csv-export   # inherits the feature's contract; no --check
+maestro task explore task-001
+maestro task accept task-001
 maestro task claim task-001
-maestro task complete task-001 --summary "wrote csv writer" --claim "cargo test export passes"
-maestro event create --task-id task-001 --claim "cargo test export passes"   # hooks record this in an agent run
-maestro task verify task-001
+maestro task complete task-001 --summary "wrote csv writer" \
+  --claim "cargo test export passes" --proof "observed: cargo test export passes"
 
 # ship is gated on QA coverage: every [bl-NNN] baseline scenario needs a proven slice.
 # The qa-slice skill writes this for you; by hand it maps each scenario to its evidence:
@@ -216,10 +220,11 @@ is illustrative; once the backlog has a real entry, run it through the same task
 maestro harness list                       # what friction the run log surfaced
 maestro harness apply hb-001                # accept a proposal -> spawns a standalone task
 maestro task set task-003 --check "deflake the integration suite"   # standalone tasks need a check first
+maestro task explore task-003
+maestro task accept task-003
 maestro task claim task-003
-maestro task complete task-003 --summary "stabilized the suite" --claim "cargo test integration passes"
-maestro event create --task-id task-003 --claim "cargo test integration passes"   # proof (hooks do this live)
-maestro task verify task-003                # gated on the claim's recorded proof
+maestro task complete task-003 --summary "stabilized the suite" \
+  --claim "cargo test integration passes" --proof "observed: cargo test integration passes"
 maestro harness measure hb-001              # close the loop once that task is verified
 ```
 
@@ -265,25 +270,26 @@ created decision decision-001
 
 # (write .maestro/features/api-rate-limiting/baseline.md first — see flow 1) — accept then succeeds:
 $ maestro feature accept api-rate-limiting
-accepted api-rate-limiting (→ ready); contract frozen (acceptance=2, areas=1); note: 1 open question(s) carried (non-blocking)
+accepted api-rate-limiting (-> ready); contract frozen (acceptance=2, areas=1); note: 1 open question(s) carried (non-blocking)
 $ maestro feature start api-rate-limiting
-started api-rate-limiting (→ in_progress)
+started api-rate-limiting (-> in_progress)
 
 $ maestro task create "Add fixed-window counter middleware" --feature api-rate-limiting
-created task-001
+created task-001 (draft)
+$ maestro task explore task-001
+updated task-001 -> exploring
+$ maestro task accept task-001
+accepted task-001 -> ready
 $ maestro task claim task-001
-auto-accepted task-001 (draft -> ready, acceptance locked)
 updated task-001 -> in_progress
-$ maestro task complete task-001 --summary "fixed-window counter in the request middleware" --claim "cargo test ratelimit passes"
-updated task-001 -> needs_verification
-$ maestro event create --task-id task-001 --claim "cargo test ratelimit passes"   # hooks do this live
-created task_proof event for run manual
-$ maestro task verify task-001
+$ maestro task complete task-001 --summary "fixed-window counter in the request middleware" --claim "cargo test ratelimit passes" --proof "observed: cargo test ratelimit passes"
+auto: recorded task_proof event for task-001
+auto: maestro task verify task-001
 verification passed for task-001 (1 claim(s), 1 proof source(s))
 
 # (write .maestro/features/api-rate-limiting/qa-slices.yaml first — see flow 3) — ship then succeeds:
 $ maestro feature ship api-rate-limiting --outcome "Shipped fixed-window rate limiting"
-shipped api-rate-limiting (→ shipped)
+shipped api-rate-limiting (-> shipped)
 ```
 
 The same journey, flow by flow — each leads with the gate that blocks you until the evidence exists,
@@ -307,21 +313,24 @@ The gate: `accept` refuses until a baseline exists, and names the file it wants.
 ```
 $ maestro feature accept api-rate-limiting
 Error: cannot accept api-rate-limiting — contract incomplete:
-  qa-baseline (.maestro/features/api-rate-limiting/baseline.md missing) — fix: capture current behavior before edits via the qa-baseline skill (a non-empty baseline.md); tagging scenarios [bl-NNN] now satisfies the ship gate later
+  qa-baseline (.maestro/features/api-rate-limiting/baseline.md missing)
+      skill: qa-baseline
+      target: .maestro/features/api-rate-limiting/baseline.md
+      retry: maestro feature accept api-rate-limiting
 ```
 
 #### 2. Spin off tasks, each closed by proof
 
 `task create --feature <id>` per slice — feature-linked tasks inherit the contract, while a standalone
-task needs its own `--check` first. Then drive every task through the same gated loop: `task claim` →
-`task complete --summary "..." --claim "..."` → the proof (the installed hooks record it as the agent
-runs its tools; by hand it is `maestro event create --task-id <id> --claim "<same text>"`) →
-`task verify`. A `verified` task is always evidence you can open.
+task needs its own `--check` first. Then drive every task through the same gated loop:
+`task explore` -> `task accept` -> `task claim` -> `task complete --summary "..." --claim "..."
+--proof "..."`. Completion records the inline proof and runs `task verify`; a `verified` task is
+always evidence you can open.
 
 *Prompt:* "Follow the `maestro-task` skill: for each slice of <feature>, `task create --feature <id>`,
-claim it, do the work, then `task complete` with a `--claim` stating what proves it. The installed
-hooks record that proof as you run your tools; then use the `maestro-verify` skill and `task verify` to
-gate the task on it. Use the same wording in the claim and the proof."
+explore, accept, claim it, do the work, then `task complete` with a `--claim` stating what proves it
+and `--proof` containing the observed evidence. Use the `maestro-verify` skill and `maestro query proof`
+if verification fails."
 
 The gate: `verify` refuses until the claim is backed by recorded proof — and prints the exact command
 to record it.
@@ -348,7 +357,10 @@ The gate: `ship` refuses while any baseline scenario lacks a covering slice, and
 ```
 $ maestro feature ship api-rate-limiting --outcome "Shipped fixed-window rate limiting"
 Error: cannot ship api-rate-limiting:
-  qa-slice coverage incomplete — 2 baseline scenario(s) without a counting slice: bl-001, bl-002; fix: add to .maestro/features/api-rate-limiting/qa-slices.yaml a `slices:` entry per scenario with `scenarios: [bl-NNN]` and non-empty `evidence: [...]`, or run the qa-slice skill
+  qa-slice coverage incomplete — 2 baseline scenario(s) without a counting slice: bl-001, bl-002
+      skill: qa-slice
+      target: .maestro/features/api-rate-limiting/qa-slices.yaml
+      retry: maestro feature ship api-rate-limiting --outcome "<outcome>"
 ```
 
 #### 4. Improve the harness — maestro's self-improvement
@@ -387,19 +399,20 @@ hb-001	proposed	recurring_blocker	Reduce recurring blocker: staging credentials 
 
 $ maestro harness apply hb-001                 # accept → spawns a standalone task
 accepted hb-001 (spawned task-003)
-next: `maestro task set task-003 --check "..."` then `maestro task claim task-003`
+next: `maestro task set task-003 --check "..."` then `maestro task explore task-003`
 
 # close the spawned (standalone) task through the proof loop
 $ maestro task set task-003 --check "staging credentials documented in onboarding"
 updated task-003 checks
+$ maestro task explore task-003
+updated task-003 -> exploring
+$ maestro task accept task-003
+accepted task-003 -> ready
 $ maestro task claim task-003
-auto-accepted task-003 (draft -> ready, acceptance locked)
 updated task-003 -> in_progress
-$ maestro task complete task-003 --summary "added staging creds to onboarding" --claim "onboarding doc lists staging creds"
-updated task-003 -> needs_verification
-$ maestro event create --task-id task-003 --claim "onboarding doc lists staging creds"
-created task_proof event for run manual
-$ maestro task verify task-003
+$ maestro task complete task-003 --summary "added staging creds to onboarding" --claim "onboarding doc lists staging creds" --proof "observed: onboarding doc lists staging creds"
+auto: recorded task_proof event for task-003
+auto: maestro task verify task-003
 verification passed for task-003 (1 claim(s), 1 proof source(s))
 
 $ maestro harness measure hb-001
@@ -498,7 +511,7 @@ hb-001	proposed	recurring_blocker	Reduce recurring blocker: staging credentials 
 # accept it — maestro spawns a standalone task to carry the fix, and tells you the next step:
 $ maestro harness apply hb-001
 accepted hb-001 (spawned task-003)
-next: `maestro task set task-003 --check "..."` then `maestro task claim task-003`
+next: `maestro task set task-003 --check "..."` then `maestro task explore task-003`
 
 # show reveals the evidence, the fingerprint's spawned task, and the append-only history:
 $ maestro harness show hb-001
@@ -514,7 +527,7 @@ evidence:
 history:
 - accepted (task-003) 2026-06-02T16:13:36.670896000Z
 
-# close task-003 through the proof loop (set --check, claim, complete --claim, record proof):
+# close task-003 through the proof loop (set --check, explore, accept, claim, complete with --proof):
 $ maestro task verify task-003
 verification passed for task-003 (1 claim(s), 1 proof source(s))
 

@@ -52,6 +52,9 @@ fn init_dry_run_prints_tree_without_writing() {
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
     assert!(stdout.contains("maestro init would create:"));
+    assert!(stdout.contains("after init:"));
+    assert!(stdout.contains("resume: maestro status"));
+    assert!(stdout.contains("safety: dry-run writes nothing"));
     // HARNESS.md is now extraction-owned (like skills and the hook script), so it
     // is no longer enumerated in the InitPlan dry-run; harness.yml still is.
     assert!(stdout.contains(".maestro/harness/harness.yml"));
@@ -72,6 +75,7 @@ fn init_dry_run_previews_bundled_extraction() {
     assert!(stdout.contains("create   maestro-task"), "{stdout}");
     assert!(stdout.contains("create   HARNESS.md"), "{stdout}");
     assert!(stdout.contains("create   record.sh"), "{stdout}");
+    assert!(stdout.contains("check setup: maestro doctor"), "{stdout}");
     assert!(!temp_dir.path().join(".maestro").exists());
 }
 
@@ -173,6 +177,14 @@ fn init_creates_minimal_artifact_tree() {
             .join(".maestro/skills/skill-index.yaml")
             .exists()
     );
+    let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
+    assert!(stdout.contains("next:"), "{stdout}");
+    assert!(stdout.contains("check setup: maestro doctor"), "{stdout}");
+    assert!(
+        stdout.contains("wire agent: maestro install --agent codex"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("resume: maestro status"), "{stdout}");
 
     let harness_yml = fs::read_to_string(temp_dir.path().join(".maestro/harness/harness.yml"))
         .expect("invariant: harness.yml should be readable");
