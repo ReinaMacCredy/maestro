@@ -192,6 +192,19 @@ write_qa_slices() {
   } > "$dir/.maestro/features/$feature/qa-slices.yaml"
 }
 
+write_harness_correction_sessions() {
+  local dir="$1"
+  local session
+  for session in session-a session-b session-c; do
+    mkdir -p "$dir/.maestro/runs/$session"
+    {
+      printf '%s\n' '{"event_type":"UserPromptSubmit","prompt":"no, use rg"}'
+      printf '%s\n' '{"event_type":"UserPromptSubmit","prompt":"wait that is wrong"}'
+      printf '%s\n' '{"event_type":"UserPromptSubmit","prompt":"actually verify it"}'
+    } > "$dir/.maestro/runs/$session/events.jsonl"
+  done
+}
+
 parse_first_blocker_id() {
   local label="$1"
   local blocker
@@ -274,6 +287,19 @@ green-feature-archive
 green-feature-unarchive
 green-uninstall-codex
 green-uninstall-claude
+harness-init
+harness-task-create
+harness-task-explore
+harness-task-accept
+harness-status
+harness-task-next
+harness-status-json
+harness-list
+harness-show
+harness-dismiss
+harness-list-hidden
+harness-list-all
+harness-status-dismissed
 brown-init
 brown-install-codex
 brown-sync
@@ -483,6 +509,56 @@ run_greenfield_workflow() {
   run_in green-uninstall-claude "$work" 0 "$BIN" uninstall --agent claude
 }
 
+run_harness_escalation_workflow() {
+  step "isolated harness escalation workflow"
+  local work="$ARTIFACT_ROOT/harness-escalation"
+  git_init_project "$work"
+
+  run_in harness-init "$work" 0 "$BIN" init --yes
+  run_in harness-task-create "$work" 0 "$BIN" task create "Harness regular work" --check "regular work proof"
+  run_in harness-task-explore "$work" 0 "$BIN" task explore task-001
+  run_in harness-task-accept "$work" 0 "$BIN" task accept task-001
+  write_harness_correction_sessions "$work"
+
+  run_in harness-status "$work" 0 "$BIN" status
+  contains harness-status "HARNESS FRICTION"
+  contains harness-status "seen: 9x/3s"
+  contains harness-status "run: maestro task claim task-001"
+
+  run_in harness-task-next "$work" 0 "$BIN" task next
+  contains harness-task-next "HARNESS FRICTION"
+  contains harness-task-next "run: maestro task claim task-001"
+
+  run_in harness-status-json "$work" 0 "$BIN" status --json
+  json_assert harness-status-json 'data["harness_friction"][0]["id"] == "hb-001"'
+  json_assert harness-status-json 'data["harness_friction"][0]["sessions"] == 3'
+  json_assert harness-status-json 'data["next_action"]["task_id"] == "task-001"'
+
+  run_in harness-list "$work" 0 "$BIN" harness list
+  contains harness-list "SEEN"
+  contains harness-list "recurring_intervention"
+  contains harness-list "9x/3s"
+
+  run_in harness-show "$work" 0 "$BIN" harness show hb-001
+  contains harness-show "priority: high"
+  contains harness-show "sessions_hit: session-a, session-b, session-c"
+
+  run_in harness-dismiss "$work" 0 "$BIN" harness dismiss hb-001 --reason "script fixture noise"
+  contains harness-dismiss "dismissed hb-001"
+
+  run_in harness-list-hidden "$work" 0 "$BIN" harness list
+  contains harness-list-hidden "terminal proposal(s) hidden"
+  not_contains harness-list-hidden "HARNESS FRICTION"
+
+  run_in harness-list-all "$work" 0 "$BIN" harness list --all
+  contains harness-list-all "dismissed"
+  contains harness-list-all "recurring_intervention"
+
+  run_in harness-status-dismissed "$work" 0 "$BIN" status
+  not_contains harness-status-dismissed "HARNESS FRICTION"
+  contains harness-status-dismissed "run: maestro task claim task-001"
+}
+
 run_brownfield_workflow() {
   step "brownfield workflow"
   local work="$ARTIFACT_ROOT/brownfield"
@@ -569,6 +645,7 @@ main() {
 
   build_binary
   run_greenfield_workflow
+  run_harness_escalation_workflow
   run_brownfield_workflow
   audit_required_passes
 

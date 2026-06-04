@@ -63,13 +63,15 @@ never batch-decide. Resume from the feature, not from memory.
 
 Full method -> the maestro-design skill. Accept, tasks, ship, and notes.md mechanics -> the maestro-feature skill.
 
-## Harness self-improvement (on request)
+## Harness self-improvement
 
-Maestro also surfaces recurring friction from the run log and task history as improvement
-proposals. This is passive - review it only when asked, never auto-act.
+Passive friction backlog: `maestro harness list / apply / measure`.
+Over-threshold friction surfaced by status/next/complete: apply and claim it before new work, or dismiss it with a reason when noise.
+Binary only counts and shows; the agent acts.
 
-    maestro harness list [--all]                   # backlog; --all adds the measured ledger
-    maestro harness apply <id>                     # accept -> spawns a standalone task (give it a --check, run the loop above)
+    maestro harness list [--all]                   # backlog; --all adds the terminal ledger
+    maestro harness dismiss <id> --reason "<why>"  # suppress a noisy fingerprint
+    maestro harness apply <id>                     # accept -> spawns an accepted standalone task, then claim it
     maestro harness measure <id> [--force]         # re-run the detector to close the loop -> measured once the friction is gone
 
 Full method -> the maestro-task skill.
