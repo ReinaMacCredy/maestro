@@ -1,6 +1,6 @@
 ---
 name: maestro-task
-version: 1.6.0
+version: 1.7.0
 description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs and the harness self-improvement loop. For the feature contract tasks deliver against, see the maestro-feature skill.
 ---
 
@@ -143,9 +143,10 @@ with a reason when it is noise. The binary only counts and shows; the agent acts
 State flow: `proposed -> accepted -> measured` (ineffective: `accepted -> proposed`;
 regressed: `measured -> proposed`)
 
-    maestro harness list [--all]       # backlog (proposed + accepted); --all adds the measured ledger
+    maestro harness list [--all]       # backlog (proposed + accepted); --all adds the terminal ledger
     maestro harness show <id>          # one proposal: type, status, spawned task, history
-    maestro harness apply <id>         # proposed -> accepted; spawns a STANDALONE task to do the fix
+    maestro harness dismiss <id> --reason "<why>"  # suppress a noisy fingerprint
+    maestro harness apply <id>         # proposed -> accepted; spawns an accepted STANDALONE task
     maestro harness measure <id>       # re-run the detector to close the loop (gated; see below)
 
 `apply` spawns a *standalone* task (no feature), presets the detector check, and accepts it
