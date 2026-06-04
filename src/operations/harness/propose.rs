@@ -3,7 +3,9 @@ use std::collections::BTreeSet;
 use anyhow::{Result, bail};
 
 use crate::domain::harness::backlog;
-use crate::domain::harness::{BacklogConfig, BacklogItem, HistoryEntry, is_state_detector};
+use crate::domain::harness::{
+    BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
+};
 use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::{nanos_since_epoch_string, utc_now_timestamp};
@@ -21,9 +23,11 @@ pub fn load_backlog(paths: &MaestroPaths) -> Result<BacklogConfig> {
 /// alongside the ids that are ready to measure (D7). The hint is derived from the
 /// current detection run and never persisted, so the interface stays a pure
 /// renderer and the state-detector predicate stays in this layer.
-pub fn refresh(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)> {
+pub fn refresh(
+    paths: &MaestroPaths,
+) -> Result<(BacklogConfig, BTreeSet<String>, Vec<OverThresholdItem>)> {
     let escalation = policy::load_policy(paths)?;
-    let proposals = detect::detect(paths)?;
+    let proposals = detect::detect_with_policy(paths, &escalation)?;
     let fresh = proposals
         .iter()
         .map(|proposal| proposal.fingerprint.clone())
@@ -41,26 +45,27 @@ pub fn refresh(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)
         .filter(|item| ready_to_measure(item, &fresh) && linked_task_verified(paths, item))
         .map(|item| item.id.clone())
         .collect();
-    Ok((backlog, ready))
+    let over_threshold = over_threshold_items_from_backlog(&backlog, &escalation);
+    Ok((backlog, ready, over_threshold))
 }
 
 /// Guarded hot-verb refresh: detect only when the evidence stamp changed.
-pub fn refresh_if_stale(paths: &MaestroPaths) -> Result<BacklogConfig> {
+fn refresh_if_stale(paths: &MaestroPaths) -> Result<(BacklogConfig, EscalationPolicy)> {
     let escalation = policy::load_policy(paths)?;
     if !escalation.enabled {
-        return backlog::load(paths);
+        return Ok((backlog::load(paths)?, escalation));
     }
     let stamp = policy::evidence_stamp(paths)?;
     let mut backlog = backlog::load(paths)?;
     if backlog.evidence_stamp == stamp {
-        return Ok(backlog);
+        return Ok((backlog, escalation));
     }
-    let proposals = detect::detect(paths)?;
+    let proposals = detect::detect_with_policy(paths, &escalation)?;
     backlog::merge_proposals(&mut backlog, proposals);
     backlog.evidence_stamp = stamp;
     backlog::apply_escalation_policy(&mut backlog, &escalation);
     backlog::save(paths, &backlog)?;
-    Ok(backlog)
+    Ok((backlog, escalation))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -80,12 +85,21 @@ pub struct AppliedItem {
 }
 
 pub fn over_threshold_items(paths: &MaestroPaths) -> Result<Vec<OverThresholdItem>> {
-    let escalation = policy::load_policy(paths)?;
+    let (backlog, escalation) = refresh_if_stale(paths)?;
     if !escalation.enabled {
         return Ok(Vec::new());
     }
-    let backlog = refresh_if_stale(paths)?;
-    Ok(backlog
+    Ok(over_threshold_items_from_backlog(&backlog, &escalation))
+}
+
+fn over_threshold_items_from_backlog(
+    backlog: &BacklogConfig,
+    escalation: &EscalationPolicy,
+) -> Vec<OverThresholdItem> {
+    if !escalation.enabled {
+        return Vec::new();
+    }
+    backlog
         .items
         .iter()
         .filter(|item| field_or_default(&item.status, "proposed") == "proposed")
@@ -98,7 +112,7 @@ pub fn over_threshold_items(paths: &MaestroPaths) -> Result<Vec<OverThresholdIte
             occurrences: item.occurrences,
             sessions: item.sessions_hit.len(),
         })
-        .collect())
+        .collect()
 }
 
 /// D7 hint: an accepted state-detector note whose detector is currently silent is
@@ -135,7 +149,7 @@ fn linked_task_verified(paths: &MaestroPaths, item: &BacklogItem) -> bool {
 /// per SPEC §5.1, so apply and measure share this step.
 fn detect_and_merge(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)> {
     let escalation = policy::load_policy(paths)?;
-    let proposals = detect::detect(paths)?;
+    let proposals = detect::detect_with_policy(paths, &escalation)?;
     let fresh = proposals
         .iter()
         .map(|proposal| proposal.fingerprint.clone())

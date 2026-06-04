@@ -4,7 +4,7 @@ use std::fs;
 use anyhow::{Context, Result};
 
 use crate::domain::decisions::query::decision_entries;
-use crate::domain::harness::{BacklogItem, HarnessConfig};
+use crate::domain::harness::{BacklogItem, EscalationPolicy, HarnessConfig};
 use crate::domain::proof;
 use crate::domain::run;
 use crate::domain::task::{self, TaskEntry};
@@ -13,12 +13,19 @@ use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
 
+use super::friction::{looks_like_correction, looks_like_correction_requiring_keyword};
 use super::policy;
-use super::{looks_like_correction, looks_like_correction_requiring_keyword};
 
 /// Detect rule-based harness improvement proposals without LLM calls.
 pub fn detect(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
     let escalation = policy::load_policy(paths)?;
+    detect_with_policy(paths, &escalation)
+}
+
+pub(super) fn detect_with_policy(
+    paths: &MaestroPaths,
+    escalation: &EscalationPolicy,
+) -> Result<Vec<BacklogItem>> {
     let task_entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut proposals = Vec::new();
     proposals.extend(detect_recurring_interventions(paths, escalation.enabled)?);

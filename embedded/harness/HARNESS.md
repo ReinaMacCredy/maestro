@@ -1,10 +1,10 @@
 ---
-version: 1.7.0
+version: 1.8.0
 ---
 
 # Maestro Harness Protocol
 
-You are an agent (Claude, Codex, or future) working in a repo that
+You are an agent working in a repo that
 uses Maestro. Follow these rules.
 
 ## Shared protocol (all agents)
@@ -79,14 +79,3 @@ independent. The recipes live in the skills; this is the menu:
 Results land through the verbs (task / decision / event), never only in conversation.
 Claude Code: author a Workflow script. Codex: parallel sub-agents directly (worktree
 threads when files overlap).
-
-## If you are Claude Code
-- Read your task with @file imports: `@.maestro/tasks/<id>/task.yaml` +
-  `@.maestro/tasks/<id>/acceptance.yaml` (the locked checks).
-- The maestro-task skill auto-activates when `.maestro/` is present - use it for the full
-  loop and the rarer verbs.
-
-## If you are Codex CLI
-- No @file imports - read `.maestro/tasks/<id>/task.yaml` and `acceptance.yaml` with your
-  file-read tool; resolve `<id>` from MAESTRO_CURRENT_TASK or `maestro task show`. Full
-  loop -> the maestro-task skill.

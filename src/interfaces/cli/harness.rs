@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use anyhow::Result;
 
 use crate::domain::harness::BacklogItem;
@@ -22,11 +20,11 @@ pub fn run(args: HarnessArgs) -> Result<()> {
 }
 
 fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
-    let (backlog, ready) = harness::refresh(paths)?;
-    let over_threshold = harness::over_threshold_items(paths)?
+    let (backlog, ready, over_threshold_items) = harness::refresh(paths)?;
+    let over_threshold = over_threshold_items
         .into_iter()
         .map(|item| item.id)
-        .collect::<BTreeSet<_>>();
+        .collect::<std::collections::BTreeSet<_>>();
     // Terminal ledger items are hidden by default; surface the count so they
     // don't appear to have vanished (UX-3).
     let hidden = backlog
@@ -75,7 +73,7 @@ fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
 }
 
 fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let (backlog, _) = harness::refresh(paths)?;
+    let (backlog, _, _) = harness::refresh(paths)?;
     print_item(backlog.find(id)?);
     Ok(())
 }

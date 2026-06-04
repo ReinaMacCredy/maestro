@@ -15,8 +15,8 @@ fn harness_markdown_matches_spec_section_14_protocol() {
     assert!(HARNESS_MD.contains("maestro task next"));
     assert!(HARNESS_MD.contains("--proof \"<observed evidence>\""));
     assert!(HARNESS_MD.contains("maestro query proof <id>"));
-    assert!(HARNESS_MD.contains("## If you are Claude Code"));
-    assert!(HARNESS_MD.contains("## If you are Codex CLI"));
+    assert!(!HARNESS_MD.contains("## If you are Claude Code"));
+    assert!(!HARNESS_MD.contains("## If you are Codex CLI"));
 }
 
 #[test]

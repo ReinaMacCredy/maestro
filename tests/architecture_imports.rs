@@ -605,7 +605,7 @@ fn harness_operation_owns_implementation() {
         "mod policy;",
         "mod propose;",
         "pub use detect::detect;",
-        "pub use friction::{looks_like_correction, looks_like_correction_requiring_keyword};",
+        "pub use friction::looks_like_correction;",
         "pub use propose::{",
     ] {
         assert!(
@@ -627,12 +627,10 @@ fn harness_operation_owns_implementation() {
             "detect".to_string(),
             "load_backlog".to_string(),
             "looks_like_correction".to_string(),
-            "looks_like_correction_requiring_keyword".to_string(),
             "measure".to_string(),
             "over_threshold_items".to_string(),
             "OverThresholdItem".to_string(),
             "refresh".to_string(),
-            "refresh_if_stale".to_string(),
         ]),
         "operations/harness should expose only deliberate root facade symbols"
     );
