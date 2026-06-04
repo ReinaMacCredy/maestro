@@ -8,6 +8,7 @@ use crate::domain::feature::{self, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::interfaces::cli::StatusArgs;
+use crate::operations::harness;
 
 const STATUS_TASK_ROW_LIMIT: usize = 5;
 
@@ -43,7 +44,7 @@ pub fn run_task_next(paths: &MaestroPaths, json: bool) -> Result<()> {
     } else {
         print_task_next(&report);
     }
-    if report.next_action.is_none() {
+    if report.next_action.is_none() && report.harness_friction.is_empty() {
         bail!("no actionable tasks");
     }
     Ok(())
@@ -86,6 +87,7 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         report.features.active,
         report.ready_to_ship_features.len()
     );
+    print_harness_friction(&report.harness_friction);
     if let Some(action) = &report.next_action {
         print_next_action(action);
     } else {
@@ -136,6 +138,7 @@ fn print_task_next(report: &StatusReport) {
         }
         println!();
     }
+    print_harness_friction(&report.harness_friction);
     if let Some(action) = &report.next_action {
         print_next_action(action);
         return;
@@ -144,6 +147,32 @@ fn print_task_next(report: &StatusReport) {
     if !report.ready_to_ship_features.is_empty() {
         println!("broader repo action available: ready_to_ship_features");
         println!("check broader repo status: maestro status");
+    }
+}
+
+pub(crate) fn print_harness_friction_epilogue(paths: &MaestroPaths) -> Result<()> {
+    let items = harness::over_threshold_items(paths)?
+        .into_iter()
+        .map(HarnessFrictionJson::from)
+        .collect::<Vec<_>>();
+    print_harness_friction(&items);
+    Ok(())
+}
+
+fn print_harness_friction(items: &[HarnessFrictionJson]) {
+    if items.is_empty() {
+        return;
+    }
+    println!("HARNESS FRICTION");
+    for item in items {
+        println!("! friction {} over threshold", item.id);
+        println!("  seen: {}x/{}s", item.occurrences, item.sessions);
+        println!("  title: {}", item.title);
+        println!("  apply: maestro harness apply {}", item.id);
+        println!(
+            "  dismiss: maestro harness dismiss {} --reason \"<why>\"",
+            item.id
+        );
     }
 }
 
@@ -234,13 +263,17 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     };
     let ready_to_ship_features = ready_to_ship_features(&features);
     let active_features = active_feature_rows(&features);
+    let harness_friction = harness::over_threshold_items(paths)?
+        .into_iter()
+        .map(HarnessFrictionJson::from)
+        .collect::<Vec<_>>();
     let sections = StatusSectionsJson {
         ready_to_ship: ready_to_ship_features.clone(),
     };
 
     Ok(StatusReport {
         schema: "maestro.status.v1".to_string(),
-        status: if next_action.is_some() {
+        status: if next_action.is_some() || !harness_friction.is_empty() {
             "actionable".to_string()
         } else {
             "no_action".to_string()
@@ -254,6 +287,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         features: FeatureSummaryJson::from_features(&features),
         task_rows: rows,
         active_features,
+        harness_friction,
         sections,
         ready_to_ship_features,
     })
@@ -428,6 +462,7 @@ struct StatusReport {
     features: FeatureSummaryJson,
     task_rows: Vec<TaskRowJson>,
     active_features: Vec<FeatureRowJson>,
+    harness_friction: Vec<HarnessFrictionJson>,
     sections: StatusSectionsJson,
     ready_to_ship_features: Vec<ReadyFeatureJson>,
 }
@@ -458,6 +493,7 @@ impl StatusReport {
             features: FeatureSummaryJson::default(),
             task_rows: Vec::new(),
             active_features: Vec::new(),
+            harness_friction: Vec::new(),
             sections: StatusSectionsJson::default(),
             ready_to_ship_features: Vec::new(),
         }
@@ -469,6 +505,7 @@ struct TaskNextJson {
     schema: String,
     status: String,
     next_action: Option<NextAction>,
+    harness_friction: Vec<HarnessFrictionJson>,
     broader_actions: Vec<BroaderActionJson>,
     warnings: Vec<WarningJson>,
     summary: String,
@@ -496,7 +533,8 @@ impl From<&ReadyFeatureJson> for BroaderActionJson {
 impl From<&StatusReport> for TaskNextJson {
     fn from(report: &StatusReport) -> Self {
         let warnings = report.warnings.clone();
-        let broader_actions = if report.next_action.is_none() {
+        let broader_actions = if report.next_action.is_none() && report.harness_friction.is_empty()
+        {
             report
                 .ready_to_ship_features
                 .iter()
@@ -507,19 +545,43 @@ impl From<&StatusReport> for TaskNextJson {
         };
         Self {
             schema: "maestro.task_next.v1".to_string(),
-            status: if report.next_action.is_some() {
+            status: if report.next_action.is_some() || !report.harness_friction.is_empty() {
                 "actionable".to_string()
             } else {
                 "no_action".to_string()
             },
             next_action: report.next_action.clone(),
+            harness_friction: report.harness_friction.clone(),
             broader_actions,
             warnings,
-            summary: if report.next_action.is_some() {
+            summary: if report.next_action.is_some() || !report.harness_friction.is_empty() {
                 "task action available".to_string()
             } else {
                 "no actionable tasks".to_string()
             },
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct HarnessFrictionJson {
+    id: String,
+    item_type: String,
+    title: String,
+    priority: String,
+    occurrences: usize,
+    sessions: usize,
+}
+
+impl From<harness::OverThresholdItem> for HarnessFrictionJson {
+    fn from(item: harness::OverThresholdItem) -> Self {
+        Self {
+            id: item.id,
+            item_type: item.item_type,
+            title: item.title,
+            priority: item.priority,
+            occurrences: item.occurrences,
+            sessions: item.sessions,
         }
     }
 }

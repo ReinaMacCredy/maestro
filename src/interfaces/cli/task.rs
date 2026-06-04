@@ -344,7 +344,10 @@ fn complete_task(
     }
     println!("auto: maestro task verify {}", task.id);
     match verify::run_for_task(paths, &task.id, actor) {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            status::print_harness_friction_epilogue(paths)?;
+            Ok(())
+        }
         Err(error) => {
             eprintln!("task remains: needs_verification");
             eprintln!("next: maestro query proof {}", task.id);

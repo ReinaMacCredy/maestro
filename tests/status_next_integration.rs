@@ -97,6 +97,40 @@ fn write_baseline(repo: &Path, feature_id: &str) {
     .expect("invariant: baseline.md should be writable");
 }
 
+fn write_disabled_harness(repo: &Path) {
+    fs::write(
+        repo.join(".maestro/harness/harness.yml"),
+        concat!(
+            "schema_version: maestro.harness.v1\n",
+            "stack:\n",
+            "  kind: generic\n",
+            "  detected_by: []\n",
+            "  verify: []\n"
+        ),
+    )
+    .expect("invariant: harness should be writable");
+}
+
+fn write_correction_session(repo: &Path, session: &str) {
+    let run_dir = repo.join(".maestro/runs").join(session);
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    fs::write(
+        run_dir.join("events.jsonl"),
+        concat!(
+            "{\"event_type\":\"UserPromptSubmit\",\"prompt\":\"no, use rg\"}\n",
+            "{\"event_type\":\"UserPromptSubmit\",\"prompt\":\"wait that's wrong\"}\n",
+            "{\"event_type\":\"UserPromptSubmit\",\"prompt\":\"actually verify it\"}\n"
+        ),
+    )
+    .expect("invariant: events fixture should be writable");
+}
+
+fn backlog_yaml(repo: &Path) -> YamlValue {
+    let raw = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
+        .expect("invariant: backlog should be readable");
+    serde_yaml::from_str(&raw).expect("invariant: backlog should parse")
+}
+
 #[test]
 fn status_before_init_is_friendly_and_read_only() {
     let temp = TestTempDir::new("maestro-status-preinit");
@@ -179,6 +213,128 @@ fn status_and_task_next_choose_current_task_before_ready_queue() {
         json["next_action"]["command"]["requires_input"][0]["name"],
         "observable_result"
     );
+}
+
+#[test]
+fn disabled_escalation_keeps_status_and_task_next_output_unchanged() {
+    let temp = setup_repo("maestro-escalation-disabled-output");
+    let repo = temp.path();
+    write_disabled_harness(repo);
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready check"],
+    );
+    run(repo, &["task", "explore", "task-001"]);
+    run(repo, &["task", "accept", "task-001"]);
+
+    let status_before = run(repo, &["status"]);
+    let next_before = run(repo, &["task", "next"]);
+    write_correction_session(repo, "session-a");
+    write_correction_session(repo, "session-b");
+    write_correction_session(repo, "session-c");
+
+    assert_eq!(run(repo, &["status"]), status_before);
+    assert_eq!(run(repo, &["task", "next"]), next_before);
+}
+
+#[test]
+fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
+    let temp = setup_repo("maestro-harness-surfacing");
+    let repo = temp.path();
+    write_correction_session(repo, "session-a");
+    write_correction_session(repo, "session-b");
+    write_correction_session(repo, "session-c");
+    run(
+        repo,
+        &["task", "create", "Ready task", "--check", "ready proof"],
+    );
+    run(repo, &["task", "explore", "task-001"]);
+    run(repo, &["task", "accept", "task-001"]);
+
+    let status = run(repo, &["status"]);
+    assert!(status.contains("HARNESS FRICTION"), "{status}");
+    assert!(
+        status.contains("! friction hb-001 over threshold"),
+        "{status}"
+    );
+    assert!(
+        status.contains("apply: maestro harness apply hb-001"),
+        "{status}"
+    );
+
+    let next = run(repo, &["task", "next"]);
+    let friction_at = next
+        .find("HARNESS FRICTION")
+        .expect("invariant: task next should show friction");
+    let normal_at = next
+        .find("run: maestro task claim task-001")
+        .expect("invariant: task next should keep normal next action");
+    assert!(friction_at < normal_at, "{next}");
+
+    let list = run(repo, &["harness", "list"]);
+    assert!(list.contains("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE"), "{list}");
+    assert!(
+        list.contains("hb-001\t!\tproposed\trecurring_intervention\t9x/3s"),
+        "{list}"
+    );
+
+    run(repo, &["task", "claim", "task-001"]);
+    let complete = run(
+        repo,
+        &[
+            "task",
+            "complete",
+            "task-001",
+            "--summary",
+            "done",
+            "--claim",
+            "ready proof",
+            "--proof",
+            "ready proof",
+        ],
+    );
+    assert!(
+        complete.contains("verification passed for task-001"),
+        "{complete}"
+    );
+    assert!(complete.contains("HARNESS FRICTION"), "{complete}");
+}
+
+#[test]
+fn hot_verbs_skip_detect_until_evidence_stamp_changes() {
+    let temp = setup_repo("maestro-harness-stamp-skip");
+    let repo = temp.path();
+    write_correction_session(repo, "session-a");
+    write_correction_session(repo, "session-b");
+    write_correction_session(repo, "session-c");
+
+    let status = run(repo, &["status"]);
+    assert!(status.contains("HARNESS FRICTION"), "{status}");
+    for _ in 0..3 {
+        run(repo, &["status"]);
+    }
+    let stamped = backlog_yaml(repo);
+    assert_eq!(
+        stamped["items"][0]["sessions_hit"]
+            .as_sequence()
+            .unwrap()
+            .len(),
+        3
+    );
+
+    let mut edited = stamped;
+    edited["items"] = YamlValue::Sequence(Vec::new());
+    fs::write(
+        repo.join(".maestro/harness/backlog.yaml"),
+        serde_yaml::to_string(&edited).expect("invariant: backlog should serialize"),
+    )
+    .expect("invariant: backlog should be writable");
+    let skipped = run(repo, &["status"]);
+    assert!(!skipped.contains("HARNESS FRICTION"), "{skipped}");
+
+    run(repo, &["task", "create", "Task-dir stamp change"]);
+    let refreshed = run(repo, &["status"]);
+    assert!(refreshed.contains("HARNESS FRICTION"), "{refreshed}");
 }
 
 #[test]

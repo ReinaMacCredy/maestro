@@ -1,7 +1,7 @@
 ---
 name: maestro-task
-version: 1.5.0
-description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs and the on-request harness self-improvement loop. For the feature contract tasks deliver against, see the maestro-feature skill.
+version: 1.6.0
+description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs and the harness self-improvement loop. For the feature contract tasks deliver against, see the maestro-feature skill.
 ---
 
 # Maestro Task
@@ -132,12 +132,13 @@ keeps finding issues, a backlog drain.
    `maestro harness measure <id>` - friction gone means measured, still
    firing means it reopens.
 
-## Harness self-improvement (on request)
+## Harness self-improvement
 
 Maestro also watches its own run log and task history and surfaces recurring friction as
 improvement proposals - a missing verification command, a recurring blocker, a decision
-worth re-recording. It is passive: review the backlog only when asked, and never act on a
-proposal without the human's say-so.
+worth re-recording. When status, `task next`, or `task complete` surfaces over-threshold
+friction, treat it as the first action: apply and claim it before new work, or dismiss it
+with a reason when it is noise. The binary only counts and shows; the agent acts.
 
 State flow: `proposed -> accepted -> measured` (ineffective: `accepted -> proposed`;
 regressed: `measured -> proposed`)
@@ -147,11 +148,11 @@ regressed: `measured -> proposed`)
     maestro harness apply <id>         # proposed -> accepted; spawns a STANDALONE task to do the fix
     maestro harness measure <id>       # re-run the detector to close the loop (gated; see below)
 
-`apply` spawns a *standalone* task (no feature), so it needs at least one `--check` before
-you can claim it - then run that task through the loop above. `measure` re-runs the
-originating detector: friction gone -> `measured`; still firing -> back to `proposed` (the
-fix was ineffective and the task link is cleared); a `measured` item whose friction later
-returns reopens to `proposed`. `measure` refuses unless the linked task is `verified` - pass
+`apply` spawns a *standalone* task (no feature), presets the detector check, and accepts it
+so `maestro task claim <task-id>` works immediately. `measure` re-runs the originating
+detector: friction gone -> `measured`; still firing -> back to `proposed` (the fix was
+ineffective and the task link is cleared); a `measured` item whose friction later returns
+reopens to `proposed`. `measure` refuses unless the linked task is `verified` - pass
 `--force` to close it anyway.
 
 ## Defaults

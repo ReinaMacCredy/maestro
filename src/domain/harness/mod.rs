@@ -9,8 +9,8 @@ use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 pub use schema::{
-    BacklogConfig, BacklogItem, HarnessConfig, HistoryEntry, StackConfig, StackKind,
-    is_state_detector,
+    BacklogConfig, BacklogItem, EscalationConfig, EscalationPolicy, HarnessConfig, HistoryEntry,
+    StackConfig, StackKind, is_state_detector,
 };
 
 /// Require the Harness protocol file that install-managed pointers reference.

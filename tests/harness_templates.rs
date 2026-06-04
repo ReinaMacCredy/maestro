@@ -59,6 +59,10 @@ fn harness_yaml_and_backlog_yaml_are_valid_yaml() {
 
     assert!(harness.contains("schema_version: maestro.harness.v1"));
     assert!(harness.contains("kind: generic"));
+    assert!(harness.contains("escalation:"));
+    assert!(harness.contains("enabled: true"));
+    assert!(harness.contains("warn_after: 2"));
+    assert!(harness.contains("act_after: 3"));
     assert!(backlog.contains("schema_version: maestro.backlog.v1"));
     assert!(backlog.contains("items: []"));
 }

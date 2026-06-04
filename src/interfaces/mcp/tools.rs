@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 
 use crate::domain::task;
 use crate::foundation::core::paths::MaestroPaths;
+use crate::operations::harness;
 
 /// MCP tool metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -164,6 +165,16 @@ fn status(paths: &MaestroPaths) -> Result<String> {
     } else {
         for (agent, tasks) in claimed {
             out.push_str(&format!("  {agent}: {}\n", tasks.join(", ")));
+        }
+    }
+    let friction = harness::over_threshold_items(paths)?;
+    if !friction.is_empty() {
+        out.push_str("Harness friction:\n");
+        for item in friction {
+            out.push_str(&format!(
+                  "  ! {} {}x/{}s: {} (apply: maestro harness apply {}; dismiss: maestro harness dismiss {} --reason \"<why>\")\n",
+                  item.id, item.occurrences, item.sessions, item.title, item.id, item.id
+              ));
         }
     }
     Ok(out)

@@ -21,9 +21,14 @@ fn proposal(source: &str, item_type: &str, title: &str) -> BacklogItem {
         item_type: item_type.to_string(),
         title: title.to_string(),
         priority: "medium".to_string(),
+        occurrences: 0,
+        sessions_hit: Vec::new(),
+        first_seen: String::new(),
+        last_seen: String::new(),
         status: "proposed".to_string(),
         evidence: vec![format!("{source} evidence")],
         spawned_task: None,
+        dismissal_reason: None,
         history: Vec::new(),
     }
 }

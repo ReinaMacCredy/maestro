@@ -72,7 +72,7 @@ pub enum RootCommand {
     Feature(FeatureArgs),
     #[command(about = "Create, show, and list decision records in .maestro/decisions/")]
     Decision(DecisionArgs),
-    #[command(about = "List, show, apply, and measure harness improvement suggestions")]
+    #[command(about = "List, show, apply, dismiss, and measure harness improvement suggestions")]
     Harness(HarnessArgs),
     #[command(about = "Query computed read models (matrix, friction, decisions, proof, backlog)")]
     Query(QueryArgs),
@@ -490,9 +490,9 @@ pub struct HarnessArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum HarnessCommand {
-    #[command(about = "List proposals (proposed + accepted; --all adds the measured ledger)")]
+    #[command(about = "List proposals (proposed + accepted; --all adds the terminal ledger)")]
     List {
-        /// Include measured proposals (the completed-improvement ledger).
+        /// Include measured and dismissed proposals (the terminal ledger).
         #[arg(long)]
         all: bool,
     },
@@ -500,6 +500,12 @@ pub enum HarnessCommand {
     Show { id: String },
     #[command(about = "Accept a proposal and spawn a linked task (-> accepted)")]
     Apply { id: String },
+    #[command(about = "Dismiss a noisy proposal and suppress its fingerprint")]
+    Dismiss {
+        id: String,
+        #[arg(long, help = "Why this proposal is noise or not worth acting on")]
+        reason: String,
+    },
     #[command(about = "Re-run the detector to close or revert a proposal (-> measured)")]
     Measure {
         id: String,

@@ -1,5 +1,6 @@
 mod support;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs as unix_fs;
@@ -64,6 +65,75 @@ fn write_empty_harness(repo: &Path) {
         ),
     )
     .expect("invariant: harness should be writable");
+}
+
+fn write_enabled_harness(repo: &Path) {
+    fs::write(
+        repo.join(".maestro/harness/harness.yml"),
+        concat!(
+            "schema_version: maestro.harness.v1\n",
+            "stack:\n",
+            "  kind: generic\n",
+            "  detected_by: []\n",
+            "  verify: []\n",
+            "escalation:\n",
+            "  enabled: true\n",
+            "  warn_after: 2\n",
+            "  act_after: 3\n"
+        ),
+    )
+    .expect("invariant: harness should be writable");
+}
+
+fn write_prompt_session(repo: &Path, session: &str, prompts: &[&str]) {
+    let run_dir = repo.join(".maestro/runs").join(session);
+    fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
+    let events = prompts
+        .iter()
+        .map(|prompt| {
+            format!(
+                "{{\"event_type\":\"UserPromptSubmit\",\"prompt\":{}}}\n",
+                serde_json::to_string(prompt).expect("invariant: prompt should serialize")
+            )
+        })
+        .collect::<String>();
+    fs::write(run_dir.join("events.jsonl"), events)
+        .expect("invariant: events fixture should be writable");
+}
+
+fn write_correction_session(repo: &Path, session: &str) {
+    write_prompt_session(
+        repo,
+        session,
+        &[
+            "no, use rg",
+            "wait that's wrong",
+            "actually keep scope tight",
+        ],
+    );
+}
+
+fn ids_by_type(list: &str) -> BTreeMap<String, String> {
+    let mut ids = BTreeMap::new();
+    for line in list.lines().skip(1) {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        if fields.len() >= 4 {
+            ids.insert(fields[3].to_string(), fields[0].to_string());
+        }
+    }
+    ids
+}
+
+fn spawned_task_id(output: &str) -> String {
+    let start = output
+        .find("(spawned ")
+        .expect("invariant: apply output should include spawned task")
+        + "(spawned ".len();
+    let end = output[start..]
+        .find(')')
+        .expect("invariant: spawned task should close")
+        + start;
+    output[start..end].to_string()
 }
 
 fn failed_verification_report(task_id: &str, verified_at: &str, schema_version: &str) -> String {
@@ -290,7 +360,11 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     assert!(out.contains("missing_skill"));
     assert!(out.contains("rediscovered_decision"));
 
-    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    let ids = ids_by_type(&out);
+    let show_id = ids
+        .get("missing_skill")
+        .expect("invariant: missing_skill id should be listed");
+    let show = run_success(repo, &["harness", "show", show_id]);
     assert!(show.contains("status: proposed"));
     assert!(show.contains("evidence:"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
@@ -299,12 +373,107 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     assert!(!backlog.contains("top secret"));
     assert!(!backlog.contains("api_key"));
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("accepted hb-001"));
-    assert!(apply.contains("spawned task-"));
-    let applied = run_success(repo, &["harness", "show", "hb-001"]);
-    assert!(applied.contains("status: accepted"));
-    assert!(applied.contains("spawned_task: task-"));
+    for item_type in [
+        "recurring_intervention",
+        "missing_verification",
+        "recurring_blocker",
+        "missing_skill",
+        "rediscovered_decision",
+    ] {
+        let id = ids
+            .get(item_type)
+            .unwrap_or_else(|| panic!("invariant: {item_type} id should be listed"));
+        let apply = run_success(repo, &["harness", "apply", id]);
+        assert!(apply.contains(&format!("accepted {id}")), "{apply}");
+        assert!(apply.contains("spawned task-"), "{apply}");
+        assert!(apply.contains("check preset:"), "{apply}");
+        assert!(apply.contains("next: maestro task claim"), "{apply}");
+        let spawned = spawned_task_id(&apply);
+        let claim = run_success(repo, &["task", "claim", &spawned]);
+        assert!(
+            claim.contains(&format!("updated {spawned} -> in_progress")),
+            "{claim}"
+        );
+        let applied = run_success(repo, &["harness", "show", id]);
+        assert!(applied.contains("status: accepted"));
+        assert!(applied.contains("spawned_task: task-"));
+    }
+}
+
+#[test]
+fn harness_escalation_tracks_recurring_intervention_globally_and_dismisses() {
+    let temp = setup_repo("maestro-harness-escalation-global");
+    let repo = temp.path();
+    write_enabled_harness(repo);
+    write_correction_session(repo, "session-a");
+    write_correction_session(repo, "session-b");
+    write_correction_session(repo, "session-c");
+
+    let list = run_success(repo, &["harness", "list"]);
+    assert!(list.contains("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE"), "{list}");
+    assert!(
+        list.contains("!\tproposed\trecurring_intervention\t9x/3s"),
+        "{list}"
+    );
+    let ids = ids_by_type(&list);
+    let id = ids
+        .get("recurring_intervention")
+        .expect("invariant: recurring intervention should be listed");
+
+    let show = run_success(repo, &["harness", "show", id]);
+    assert!(show.contains("priority: high"), "{show}");
+    assert!(show.contains("seen: 9x/3s"), "{show}");
+    assert!(
+        show.contains("sessions_hit: session-a, session-b, session-c"),
+        "{show}"
+    );
+    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
+        .expect("invariant: backlog should be readable");
+    assert!(backlog.contains("fingerprint: recurring_intervention:global"));
+    assert_eq!(backlog.matches("type: recurring_intervention").count(), 1);
+
+    let dismiss = run_success(
+        repo,
+        &["harness", "dismiss", id, "--reason", "already handled"],
+    );
+    assert!(dismiss.contains(&format!("dismissed {id}")), "{dismiss}");
+    let active = run_success(repo, &["harness", "list"]);
+    assert!(!active.contains("recurring_intervention"), "{active}");
+    let all = run_success(repo, &["harness", "list", "--all"]);
+    assert!(all.contains("dismissed\trecurring_intervention"), "{all}");
+    assert_eq!(all.matches("recurring_intervention").count(), 1);
+}
+
+#[test]
+fn correction_heuristic_is_gated_by_escalation_enabled() {
+    let enabled = setup_repo("maestro-harness-correction-enabled");
+    write_enabled_harness(enabled.path());
+    write_prompt_session(enabled.path(), "noise", &["ok", "continue", "looks good"]);
+
+    let enabled_list = run_success(enabled.path(), &["harness", "list"]);
+    assert!(
+        !enabled_list.contains("recurring_intervention"),
+        "{enabled_list}"
+    );
+    write_prompt_session(
+        enabled.path(),
+        "corrections",
+        &["no, use rg", "wait that's wrong", "actually verify it"],
+    );
+    let enabled_list = run_success(enabled.path(), &["harness", "list"]);
+    assert!(
+        enabled_list.contains("recurring_intervention"),
+        "{enabled_list}"
+    );
+
+    let disabled = setup_repo("maestro-harness-correction-disabled");
+    write_empty_harness(disabled.path());
+    write_prompt_session(disabled.path(), "noise", &["ok", "continue", "looks good"]);
+    let disabled_list = run_success(disabled.path(), &["harness", "list"]);
+    assert!(
+        disabled_list.contains("recurring_intervention"),
+        "{disabled_list}"
+    );
 }
 
 #[test]
@@ -1679,9 +1848,10 @@ fn harness_measure_closes_silent_state_note() {
 
     let apply = run_success(repo, &["harness", "apply", "hb-001"]);
     assert!(apply.contains("spawned task-002"));
-    // apply points at the check-then-claim step the spawned standalone task needs (UX-2).
+    // apply now presets a check and accepts the standalone task, so it is claimable.
+    assert!(apply.contains("check preset:"), "{apply}");
     assert!(
-        apply.contains("maestro task set task-002 --check"),
+        apply.contains("next: maestro task claim task-002"),
         "{apply}"
     );
 
@@ -1707,7 +1877,7 @@ fn harness_measure_closes_silent_state_note() {
     // default view says how many it hid so they don't seem to have vanished (UX-3).
     let list = run_success(repo, &["harness", "list"]);
     assert!(!list.contains("hb-001"));
-    assert!(list.contains("measured proposal(s) hidden"), "{list}");
+    assert!(list.contains("terminal proposal(s) hidden"), "{list}");
     let all = run_success(repo, &["harness", "list", "--all"]);
     assert!(all.contains("hb-001"));
 }

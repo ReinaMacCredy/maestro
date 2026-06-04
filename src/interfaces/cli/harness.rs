@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use anyhow::Result;
 
 use crate::domain::harness::BacklogItem;
@@ -14,14 +16,19 @@ pub fn run(args: HarnessArgs) -> Result<()> {
         HarnessCommand::List { all } => list(&paths, all),
         HarnessCommand::Show { id } => show(&paths, &id),
         HarnessCommand::Apply { id } => apply(&paths, &id),
+        HarnessCommand::Dismiss { id, reason } => dismiss(&paths, &id, &reason),
         HarnessCommand::Measure { id, force } => measure(&paths, &id, force),
     }
 }
 
 fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
     let (backlog, ready) = harness::refresh(paths)?;
-    // Measured items are the only thing the default view hides; surface the count
-    // so they don't appear to have vanished (UX-3).
+    let over_threshold = harness::over_threshold_items(paths)?
+        .into_iter()
+        .map(|item| item.id)
+        .collect::<BTreeSet<_>>();
+    // Terminal ledger items are hidden by default; surface the count so they
+    // don't appear to have vanished (UX-3).
     let hidden = backlog
         .items
         .iter()
@@ -35,11 +42,11 @@ fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
     if visible.is_empty() {
         println!("no improvement proposals found");
         if !all && hidden > 0 {
-            println!("# {hidden} measured proposal(s) hidden; use --all to include");
+            println!("# {hidden} terminal proposal(s) hidden; use --all to include");
         }
         return Ok(());
     }
-    println!("ID\tSTATUS\tTYPE\tTITLE");
+    println!("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE");
     for item in visible {
         let hint = if ready.contains(&item.id) {
             "\t(ready to measure)"
@@ -47,16 +54,22 @@ fn list(paths: &MaestroPaths, all: bool) -> Result<()> {
             ""
         };
         println!(
-            "{}\t{}\t{}\t{}{}",
+            "{}\t{}\t{}\t{}\t{}\t{}{}",
             item.id,
+            if over_threshold.contains(&item.id) {
+                "!"
+            } else {
+                ""
+            },
             field_or_default(&item.status, "proposed"),
             field_or_default(&item.item_type, "unknown"),
+            seen_label(item),
             item.title,
             hint
         );
     }
     if !all && hidden > 0 {
-        println!("# {hidden} measured proposal(s) hidden; use --all to include");
+        println!("# {hidden} terminal proposal(s) hidden; use --all to include");
     }
     Ok(())
 }
@@ -68,18 +81,25 @@ fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
 }
 
 fn apply(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let item = harness::apply(paths, id)?;
-    match &item.spawned_task {
+    let applied = harness::apply(paths, id)?;
+    match &applied.item.spawned_task {
         Some(task) => {
-            println!("accepted {} (spawned {task})", item.id);
-            // The spawned task is standalone (no feature), so claim refuses it until
-            // it has a check; point at that step (UX-2).
-            println!(
-                "next: `maestro task set {task} --check \"...\"` then `maestro task claim {task}`"
-            );
+            println!("accepted {} (spawned {task})", applied.item.id);
+            println!("  check preset: \"{}\"", applied.check);
+            println!("next: maestro task claim {task}");
         }
-        None => println!("accepted {}", item.id),
+        None => println!("accepted {}", applied.item.id),
     }
+    Ok(())
+}
+
+fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<()> {
+    let item = harness::dismiss(paths, id, reason)?;
+    println!("dismissed {}", item.id);
+    println!(
+        "reason: {}",
+        item.dismissal_reason.as_deref().unwrap_or(reason)
+    );
     Ok(())
 }
 
@@ -109,9 +129,10 @@ fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<()> {
 }
 
 /// Default list shows the active set (proposed + accepted); `--all` adds the
-/// `measured` ledger.
+/// terminal ledger.
 fn is_visible(item: &BacklogItem, all: bool) -> bool {
-    all || field_or_default(&item.status, "proposed") != "measured"
+    let status = field_or_default(&item.status, "proposed");
+    all || !matches!(status, "measured" | "dismissed")
 }
 
 fn print_item(item: &BacklogItem) {
@@ -120,11 +141,24 @@ fn print_item(item: &BacklogItem) {
     println!("type: {}", field_or_default(&item.item_type, "unknown"));
     println!("status: {}", field_or_default(&item.status, "proposed"));
     println!("priority: {}", field_or_default(&item.priority, "medium"));
+    println!("seen: {}", seen_label(item));
+    if !item.sessions_hit.is_empty() {
+        println!("sessions_hit: {}", item.sessions_hit.join(", "));
+    }
+    if !item.first_seen.is_empty() {
+        println!("first_seen: {}", item.first_seen);
+    }
+    if !item.last_seen.is_empty() {
+        println!("last_seen: {}", item.last_seen);
+    }
     if !item.source.is_empty() {
         println!("source: {}", item.source);
     }
     if let Some(task) = &item.spawned_task {
         println!("spawned_task: {task}");
+    }
+    if let Some(reason) = &item.dismissal_reason {
+        println!("dismissal_reason: {reason}");
     }
     if !item.evidence.is_empty() {
         println!("evidence:");
@@ -145,4 +179,8 @@ fn print_item(item: &BacklogItem) {
 
 fn field_or_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {
     if value.is_empty() { fallback } else { value }
+}
+
+fn seen_label(item: &BacklogItem) -> String {
+    format!("{}x/{}s", item.occurrences, item.sessions_hit.len())
 }

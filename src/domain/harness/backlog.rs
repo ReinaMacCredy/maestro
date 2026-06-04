@@ -4,7 +4,9 @@ use std::io::ErrorKind;
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::harness::schema::{BacklogConfig, BacklogItem, HistoryEntry, is_state_detector};
+use crate::domain::harness::schema::{
+    BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
+};
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -62,14 +64,16 @@ pub fn merge_proposals(backlog: &mut BacklogConfig, mut proposals: Vec<BacklogIt
     proposals.sort_by(|a, b| a.fingerprint.cmp(&b.fingerprint));
 
     for mut proposal in proposals {
+        normalize_recurrence(&mut proposal);
         let fingerprint = proposal.fingerprint.clone();
         if !fingerprint.is_empty() && fingerprints.contains(&fingerprint) {
             if let Some(existing) = backlog
                 .items
                 .iter_mut()
-                .find(|item| item.fingerprint == fingerprint)
+                .find(|item| item.fingerprint == fingerprint && item.status != "dismissed")
             {
                 reopen_if_regressed(existing);
+                refresh_existing_recurrence(existing, &proposal);
                 refresh_existing_evidence(existing, &proposal);
             }
             continue;
@@ -108,6 +112,34 @@ fn is_ephemeral_reconcilable(item: &BacklogItem, fresh_fingerprints: &BTreeSet<S
         && item.spawned_task.is_none()
         && item.history.is_empty()
         && !fresh_fingerprints.contains(&item.fingerprint)
+}
+
+/// Derive stored priority from the active escalation policy.
+pub fn apply_escalation_policy(backlog: &mut BacklogConfig, policy: &EscalationPolicy) {
+    for item in &mut backlog.items {
+        item.priority = policy.priority_for(item.sessions_hit.len(), &item.priority);
+    }
+}
+
+fn normalize_recurrence(item: &mut BacklogItem) {
+    if item.sessions_hit.is_empty() && !item.source.is_empty() {
+        item.sessions_hit.push(item.source.clone());
+    }
+    item.sessions_hit.sort();
+    item.sessions_hit.dedup();
+    if item.occurrences == 0 {
+        item.occurrences = item.sessions_hit.len();
+    }
+}
+
+fn refresh_existing_recurrence(existing: &mut BacklogItem, proposal: &BacklogItem) {
+    if existing.first_seen.is_empty() {
+        existing.first_seen = proposal.first_seen.clone();
+    }
+    existing.last_seen = proposal.last_seen.clone();
+    existing.occurrences = proposal.occurrences;
+    existing.sessions_hit = proposal.sessions_hit.clone();
+    normalize_recurrence(existing);
 }
 
 fn refresh_existing_evidence(existing: &mut BacklogItem, proposal: &BacklogItem) {

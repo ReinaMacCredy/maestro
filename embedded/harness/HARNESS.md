@@ -1,5 +1,5 @@
 ---
-version: 1.6.0
+version: 1.7.0
 ---
 
 # Maestro Harness Protocol
@@ -59,10 +59,11 @@ open questions ONE at a time - lock each as a decision + a notes.md line, never 
 
 Full method -> the maestro-design skill; lifecycle -> maestro-feature.
 
-## Harness self-improvement (on request)
+## Harness self-improvement
 
-Passive friction backlog: `maestro harness list / apply / measure` - review only when
-asked, never auto-act. Full method -> the maestro-task skill.
+Passive friction backlog: `maestro harness list / apply / measure`.
+Over-threshold friction surfaced by status/next/complete: apply and claim it before new work, or dismiss it with a reason when noise.
+Binary only counts and shows; the agent acts. Full method -> the maestro-task skill.
 
 ## Orchestration (when work can fan out)
 

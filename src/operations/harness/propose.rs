@@ -4,11 +4,11 @@ use anyhow::{Result, bail};
 
 use crate::domain::harness::backlog;
 use crate::domain::harness::{BacklogConfig, BacklogItem, HistoryEntry, is_state_detector};
-use crate::domain::task::{self, TaskState};
+use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::{nanos_since_epoch_string, utc_now_timestamp};
 
-use super::detect;
+use super::{detect, policy};
 
 /// Read the persisted backlog for display through the operations facade. A
 /// missing backlog file reads as an empty backlog, so a fresh repo reports
@@ -22,12 +22,19 @@ pub fn load_backlog(paths: &MaestroPaths) -> Result<BacklogConfig> {
 /// current detection run and never persisted, so the interface stays a pure
 /// renderer and the state-detector predicate stays in this layer.
 pub fn refresh(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)> {
+    let escalation = policy::load_policy(paths)?;
     let proposals = detect::detect(paths)?;
     let fresh = proposals
         .iter()
         .map(|proposal| proposal.fingerprint.clone())
         .collect::<BTreeSet<_>>();
-    let backlog = backlog::refresh(paths, proposals)?;
+    let mut backlog = backlog::load(paths)?;
+    backlog::merge_proposals(&mut backlog, proposals);
+    if escalation.enabled {
+        backlog.evidence_stamp = policy::evidence_stamp(paths)?;
+    }
+    backlog::apply_escalation_policy(&mut backlog, &escalation);
+    backlog::save(paths, &backlog)?;
     let ready = backlog
         .items
         .iter()
@@ -35,6 +42,63 @@ pub fn refresh(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)
         .map(|item| item.id.clone())
         .collect();
     Ok((backlog, ready))
+}
+
+/// Guarded hot-verb refresh: detect only when the evidence stamp changed.
+pub fn refresh_if_stale(paths: &MaestroPaths) -> Result<BacklogConfig> {
+    let escalation = policy::load_policy(paths)?;
+    if !escalation.enabled {
+        return backlog::load(paths);
+    }
+    let stamp = policy::evidence_stamp(paths)?;
+    let mut backlog = backlog::load(paths)?;
+    if backlog.evidence_stamp == stamp {
+        return Ok(backlog);
+    }
+    let proposals = detect::detect(paths)?;
+    backlog::merge_proposals(&mut backlog, proposals);
+    backlog.evidence_stamp = stamp;
+    backlog::apply_escalation_policy(&mut backlog, &escalation);
+    backlog::save(paths, &backlog)?;
+    Ok(backlog)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OverThresholdItem {
+    pub id: String,
+    pub item_type: String,
+    pub title: String,
+    pub priority: String,
+    pub occurrences: usize,
+    pub sessions: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppliedItem {
+    pub item: BacklogItem,
+    pub check: String,
+}
+
+pub fn over_threshold_items(paths: &MaestroPaths) -> Result<Vec<OverThresholdItem>> {
+    let escalation = policy::load_policy(paths)?;
+    if !escalation.enabled {
+        return Ok(Vec::new());
+    }
+    let backlog = refresh_if_stale(paths)?;
+    Ok(backlog
+        .items
+        .iter()
+        .filter(|item| field_or_default(&item.status, "proposed") == "proposed")
+        .filter(|item| escalation.over_threshold(item.sessions_hit.len()))
+        .map(|item| OverThresholdItem {
+            id: item.id.clone(),
+            item_type: item.item_type.clone(),
+            title: item.title.clone(),
+            priority: escalation.priority_for(item.sessions_hit.len(), &item.priority),
+            occurrences: item.occurrences,
+            sessions: item.sessions_hit.len(),
+        })
+        .collect())
 }
 
 /// D7 hint: an accepted state-detector note whose detector is currently silent is
@@ -70,6 +134,7 @@ fn linked_task_verified(paths: &MaestroPaths, item: &BacklogItem) -> bool {
 /// fingerprints (used by the measure verdict). Re-derive runs on every command
 /// per SPEC §5.1, so apply and measure share this step.
 fn detect_and_merge(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)> {
+    let escalation = policy::load_policy(paths)?;
     let proposals = detect::detect(paths)?;
     let fresh = proposals
         .iter()
@@ -77,6 +142,10 @@ fn detect_and_merge(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<Str
         .collect::<BTreeSet<_>>();
     let mut backlog = backlog::load(paths)?;
     backlog::merge_proposals(&mut backlog, proposals);
+    if escalation.enabled {
+        backlog.evidence_stamp = policy::evidence_stamp(paths)?;
+    }
+    backlog::apply_escalation_policy(&mut backlog, &escalation);
     Ok((backlog, fresh))
 }
 
@@ -84,7 +153,7 @@ fn detect_and_merge(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<Str
 /// is an error; the existing task is already linked. A measure that reverted the
 /// note to `proposed` clears the old link, so the next accept spawns a fresh task
 /// rather than silently reusing a closed one (impl-default (c)).
-pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
+pub fn apply(paths: &MaestroPaths, id: &str) -> Result<AppliedItem> {
     let (mut backlog, _) = detect_and_merge(paths)?;
 
     let item = backlog.find_mut(id)?;
@@ -106,15 +175,27 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
     }
 
     let title = item.title.clone();
+    let check = default_check(item);
+    let actor = "maestro-harness";
+    let now = nanos_since_epoch_string();
     let task = task::create_task(
         &paths.tasks_dir(),
         &title,
         None,
         None,
         None,
-        Vec::new(),
-        &nanos_since_epoch_string(),
+        vec![check.clone()],
+        &now,
     )?;
+    task::transition_task(
+        &paths.tasks_dir(),
+        &task.id,
+        TaskState::Exploring,
+        actor,
+        &now,
+        TransitionDetails::default(),
+    )?;
+    let task = task::accept_task(&paths.tasks_dir(), &task.id, actor, &now)?;
     item.status = "accepted".to_string();
     item.spawned_task = Some(task.id.clone());
     item.history.push(HistoryEntry {
@@ -124,7 +205,29 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<BacklogItem> {
     });
     let accepted = item.clone();
     backlog::save(paths, &backlog)?;
-    Ok(accepted)
+    Ok(AppliedItem {
+        item: accepted,
+        check,
+    })
+}
+
+pub fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<BacklogItem> {
+    if reason.trim().is_empty() {
+        bail!("dismiss reason must not be empty");
+    }
+    let (mut backlog, _) = detect_and_merge(paths)?;
+    let now = utc_now_timestamp();
+    let item = backlog.find_mut(id)?;
+    item.status = "dismissed".to_string();
+    item.dismissal_reason = Some(reason.trim().to_string());
+    item.history.push(HistoryEntry {
+        result: "dismissed".to_string(),
+        task: item.spawned_task.clone(),
+        at: now,
+    });
+    let dismissed = item.clone();
+    backlog::save(paths, &backlog)?;
+    Ok(dismissed)
 }
 
 /// Measure an accepted proposal (the only path to `measured`). A state detector
@@ -201,4 +304,28 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
     let measured = item.clone();
     backlog::save(paths, &backlog)?;
     Ok((measured, friction_live))
+}
+
+fn default_check(item: &BacklogItem) -> String {
+    match item.item_type.as_str() {
+        "missing_verification" => {
+            "verification command is added to harness.yml and detector is silent".to_string()
+        }
+        "recurring_blocker" => {
+            format!("{} is resolved and detector is silent", item.title)
+        }
+        "missing_skill" => format!("{} is added and detector is silent", item.title),
+        "rediscovered_decision" => format!("{} and detector is silent", item.title),
+        "recurring_intervention" => {
+            "repeated correction prompts are addressed and detector is silent".to_string()
+        }
+        _ => format!(
+            "{} improvement is implemented and detector is silent",
+            item.title
+        ),
+    }
+}
+
+fn field_or_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {
+    if value.is_empty() { fallback } else { value }
 }

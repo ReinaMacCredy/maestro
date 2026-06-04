@@ -587,7 +587,7 @@ fn update_operation_owns_implementation() {
 
 #[test]
 fn harness_operation_owns_implementation() {
-    for leaf in ["detect.rs", "friction.rs", "propose.rs"] {
+    for leaf in ["detect.rs", "friction.rs", "policy.rs", "propose.rs"] {
         assert!(
             Path::new(&format!("src/operations/harness/{leaf}")).is_file(),
             "Harness implementation should live under src/operations/harness"
@@ -602,10 +602,11 @@ fn harness_operation_owns_implementation() {
     for item in [
         "mod detect;",
         "mod friction;",
+        "mod policy;",
         "mod propose;",
         "pub use detect::detect;",
-        "pub use friction::looks_like_correction;",
-        "pub use propose::{apply, load_backlog, measure, refresh};",
+        "pub use friction::{looks_like_correction, looks_like_correction_requiring_keyword};",
+        "pub use propose::{",
     ] {
         assert!(
             operations_facade.contains(item),
@@ -621,11 +622,17 @@ fn harness_operation_owns_implementation() {
         public_reexport_item_names(&operations_facade),
         BTreeSet::from([
             "apply".to_string(),
+            "AppliedItem".to_string(),
+            "dismiss".to_string(),
             "detect".to_string(),
             "load_backlog".to_string(),
             "looks_like_correction".to_string(),
+            "looks_like_correction_requiring_keyword".to_string(),
             "measure".to_string(),
+            "over_threshold_items".to_string(),
+            "OverThresholdItem".to_string(),
             "refresh".to_string(),
+            "refresh_if_stale".to_string(),
         ]),
         "operations/harness should expose only deliberate root facade symbols"
     );

@@ -86,7 +86,7 @@ fn root_about_strings_name_every_subcommand() {
         &maestro(&["--help"]),
         &[
             "Create, show, and list decision records in .maestro/decisions/",
-            "List, show, apply, and measure harness improvement suggestions",
+            "List, show, apply, dismiss, and measure harness improvement suggestions",
             "Query computed read models (matrix, friction, decisions, proof, backlog)",
             "Run or inspect the MCP server (serve, stdin, tools, list)",
         ],

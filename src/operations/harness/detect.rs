@@ -11,14 +11,17 @@ use crate::domain::task::{self, TaskEntry};
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::time::utc_now_timestamp;
 
-use super::looks_like_correction;
+use super::policy;
+use super::{looks_like_correction, looks_like_correction_requiring_keyword};
 
 /// Detect rule-based harness improvement proposals without LLM calls.
 pub fn detect(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
+    let escalation = policy::load_policy(paths)?;
     let task_entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut proposals = Vec::new();
-    proposals.extend(detect_recurring_interventions(paths)?);
+    proposals.extend(detect_recurring_interventions(paths, escalation.enabled)?);
     proposals.extend(detect_missing_checks(paths, &task_entries)?);
     proposals.extend(detect_recurring_blockers(&task_entries));
     proposals.extend(detect_missing_skills(&task_entries));
@@ -26,13 +29,21 @@ pub fn detect(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
     Ok(proposals)
 }
 
-fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
+fn detect_recurring_interventions(
+    paths: &MaestroPaths,
+    require_keyword: bool,
+) -> Result<Vec<BacklogItem>> {
     let mut corrections_by_session = BTreeMap::<String, Vec<String>>::new();
     run::visit_managed_events(paths, |record| {
         let event = record.event();
         if event.is_event_type("UserPromptSubmit") {
             let text = event.prompt_text().unwrap_or_default();
-            if looks_like_correction(text) {
+            let is_correction = if require_keyword {
+                looks_like_correction_requiring_keyword(text)
+            } else {
+                looks_like_correction(text)
+            };
+            if is_correction {
                 corrections_by_session
                     .entry(record.session_id().to_string())
                     .or_default()
@@ -42,23 +53,31 @@ fn detect_recurring_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogIte
         Ok(())
     })?;
 
-    let proposals = corrections_by_session
-        .into_iter()
-        .filter(|(_, corrections)| corrections.len() >= 3)
-        .map(|(session, corrections)| {
-            proposal(
-                session.clone(),
-                "recurring_intervention",
-                &session,
-                "Reduce repeated correction prompts",
-                vec![format!(
-                    "{session} had {} correction-like user prompts",
-                    corrections.len()
-                )],
-            )
-        })
-        .collect();
-    Ok(proposals)
+    let mut sessions = Vec::new();
+    let mut evidence = Vec::new();
+    let mut occurrences = 0;
+    for (session, corrections) in corrections_by_session {
+        if corrections.len() >= 3 {
+            occurrences += corrections.len();
+            evidence.push(format!(
+                "{session} had {} correction-like user prompts",
+                corrections.len()
+            ));
+            sessions.push(session);
+        }
+    }
+    if sessions.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(vec![proposal(
+        "global".to_string(),
+        "recurring_intervention",
+        "global",
+        "Reduce repeated correction prompts",
+        evidence,
+        sessions,
+        occurrences,
+    )])
 }
 
 fn detect_missing_checks(paths: &MaestroPaths, entries: &[TaskEntry]) -> Result<Vec<BacklogItem>> {
@@ -75,6 +94,7 @@ fn detect_missing_checks(paths: &MaestroPaths, entries: &[TaskEntry]) -> Result<
             .filter(|command| !harness_commands.contains(command.command()))
             .collect::<Vec<_>>();
         if !missing.is_empty() {
+            let occurrences = missing.len();
             proposals.push(proposal(
                 entry.task.id.clone(),
                 "missing_verification",
@@ -90,6 +110,8 @@ fn detect_missing_checks(paths: &MaestroPaths, entries: &[TaskEntry]) -> Result<
                         )
                     })
                     .collect(),
+                vec![entry.task.id.clone()],
+                occurrences,
             ));
         }
     }
@@ -114,6 +136,8 @@ fn detect_recurring_blockers(entries: &[TaskEntry]) -> Vec<BacklogItem> {
         .into_iter()
         .filter(|(_, tasks)| tasks.len() >= 2)
         .map(|(reason, tasks)| {
+            let sessions_hit = tasks.iter().cloned().collect::<Vec<_>>();
+            let occurrences = sessions_hit.len();
             proposal(
                 "blockers".to_string(),
                 "recurring_blocker",
@@ -124,6 +148,8 @@ fn detect_recurring_blockers(entries: &[TaskEntry]) -> Vec<BacklogItem> {
                     tasks.len(),
                     tasks.into_iter().collect::<Vec<_>>().join(", ")
                 )],
+                sessions_hit,
+                occurrences,
             )
         })
         .collect()
@@ -139,13 +165,13 @@ fn detect_missing_skills(entries: &[TaskEntry]) -> Vec<BacklogItem> {
         return Vec::new();
     }
 
-    let mut by_domain = BTreeMap::<String, Vec<u64>>::new();
+    let mut by_domain = BTreeMap::<String, Vec<(String, u64)>>::new();
     for entry in entries {
         if let Some(duration) = durations.get(&entry.task.id) {
             by_domain
                 .entry(task_domain(entry))
                 .or_default()
-                .push(*duration);
+                .push((entry.task.id.clone(), *duration));
         }
     }
 
@@ -153,8 +179,14 @@ fn detect_missing_skills(entries: &[TaskEntry]) -> Vec<BacklogItem> {
         .into_iter()
         .filter(|(_, values)| values.len() >= 2)
         .filter_map(|(domain, values)| {
-            let domain_median = median(&values)?;
+            let duration_values = values.iter().map(|(_, value)| *value).collect::<Vec<_>>();
+            let domain_median = median(&duration_values)?;
             if domain_median > overall_median.saturating_mul(2) {
+                let sessions_hit = values
+                    .iter()
+                    .map(|(task_id, _)| task_id.clone())
+                    .collect::<Vec<_>>();
+                let occurrences = sessions_hit.len();
                 Some(proposal(
                     domain.clone(),
                     "missing_skill",
@@ -165,6 +197,8 @@ fn detect_missing_skills(entries: &[TaskEntry]) -> Vec<BacklogItem> {
                         domain_median / 60,
                         overall_median / 60
                     )],
+                    sessions_hit,
+                    occurrences,
                 ))
             } else {
                 None
@@ -207,6 +241,8 @@ fn detect_rediscovered_decisions(
                     .any(|decision| decision.contains(topic))
         })
         .map(|(topic, tasks)| {
+            let sessions_hit = tasks.iter().cloned().collect::<Vec<_>>();
+            let occurrences = sessions_hit.len();
             proposal(
                 "decisions".to_string(),
                 "rediscovered_decision",
@@ -217,6 +253,8 @@ fn detect_rediscovered_decisions(
                     tasks.len(),
                     tasks.into_iter().collect::<Vec<_>>().join(", ")
                 )],
+                sessions_hit,
+                occurrences,
             )
         })
         .collect();
@@ -292,19 +330,27 @@ fn proposal(
     subject: impl AsRef<str>,
     title: impl Into<String>,
     evidence: Vec<String>,
+    sessions_hit: Vec<String>,
+    occurrences: usize,
 ) -> BacklogItem {
     let item_type = item_type.into();
     let fingerprint = format!("{item_type}:{}", subject.as_ref());
+    let now = utc_now_timestamp();
     BacklogItem {
         id: String::new(),
         fingerprint,
         source,
         item_type,
         title: title.into(),
-        priority: "medium".to_string(),
+        priority: String::new(),
+        occurrences,
+        sessions_hit,
+        first_seen: now.clone(),
+        last_seen: now,
         status: "proposed".to_string(),
         evidence,
         spawned_task: None,
+        dismissal_reason: None,
         history: Vec::new(),
     }
 }

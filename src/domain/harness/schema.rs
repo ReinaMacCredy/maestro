@@ -37,6 +37,32 @@ pub struct HarnessConfig {
     pub schema_version: String,
     /// Detected stack and verification defaults.
     pub stack: StackConfig,
+    /// Optional recurrence-threshold surfacing policy. Missing means disabled for
+    /// legacy repos so read verbs keep their old behavior until the repo opts in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escalation: Option<EscalationConfig>,
+}
+
+/// Per-repo Harness recurrence threshold policy.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EscalationConfig {
+    /// Enable threshold-based surfacing and stricter detector guardrails.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Session/source count where a proposal becomes medium priority.
+    #[serde(default = "default_warn_after")]
+    pub warn_after: usize,
+    /// Session/source count where a proposal becomes high priority and surfaces.
+    #[serde(default = "default_act_after")]
+    pub act_after: usize,
+}
+
+/// Runtime-normalized escalation policy.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscalationPolicy {
+    pub enabled: bool,
+    pub warn_after: usize,
+    pub act_after: usize,
 }
 
 /// `.maestro/harness/backlog.yaml` V1 configuration.
@@ -44,6 +70,9 @@ pub struct HarnessConfig {
 pub struct BacklogConfig {
     /// Backlog schema version.
     pub schema_version: String,
+    /// Last evidence stamp used by guarded hot-verb refresh.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub evidence_stamp: String,
     /// Rule-based improver proposals. Empty at init.
     pub items: Vec<BacklogItem>,
 }
@@ -67,6 +96,18 @@ pub struct BacklogItem {
     /// Proposal priority.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub priority: String,
+    /// Latest detector-computed magnitude for this proposal.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub occurrences: usize,
+    /// Distinct session or source ids the detector says this proposal has hit.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sessions_hit: Vec<String>,
+    /// First time this proposal was seen by the backlog.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub first_seen: String,
+    /// Most recent time this proposal was detected.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub last_seen: String,
     /// Proposal status: `proposed`, `accepted`, or `measured`.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub status: String,
@@ -76,6 +117,9 @@ pub struct BacklogItem {
     /// Task spawned when this proposal was accepted (`apply`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spawned_task: Option<String>,
+    /// Human dismissal reason for ignored/noisy proposals.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dismissal_reason: Option<String>,
     /// Append-only lifecycle log (accepted, ineffective, measured, regressed).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<HistoryEntry>,
@@ -106,6 +150,14 @@ impl HarnessConfig {
         Self {
             schema_version: HARNESS_SCHEMA_VERSION.to_string(),
             stack: detect_stack(repo_root),
+            escalation: Some(EscalationConfig::enabled_default()),
+        }
+    }
+
+    pub fn escalation_policy(&self) -> EscalationPolicy {
+        match &self.escalation {
+            Some(config) if config.enabled => config.policy(),
+            _ => EscalationPolicy::disabled(),
         }
     }
 }
@@ -115,6 +167,7 @@ impl BacklogConfig {
     pub fn empty() -> Self {
         Self {
             schema_version: BACKLOG_SCHEMA_VERSION.to_string(),
+            evidence_stamp: String::new(),
             items: Vec::new(),
         }
     }
@@ -134,6 +187,76 @@ impl BacklogConfig {
             .find(|item| item.id == id)
             .ok_or_else(|| anyhow!("backlog item not found: {id}"))
     }
+}
+
+impl EscalationConfig {
+    pub fn enabled_default() -> Self {
+        Self {
+            enabled: true,
+            warn_after: default_warn_after(),
+            act_after: default_act_after(),
+        }
+    }
+
+    fn policy(&self) -> EscalationPolicy {
+        let warn_after = self.warn_after.max(1);
+        let act_after = self.act_after.max(warn_after);
+        EscalationPolicy {
+            enabled: true,
+            warn_after,
+            act_after,
+        }
+    }
+}
+
+impl EscalationPolicy {
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            warn_after: default_warn_after(),
+            act_after: default_act_after(),
+        }
+    }
+
+    pub fn priority_for(&self, sessions_hit: usize, fallback: &str) -> String {
+        if sessions_hit == 0 {
+            return if fallback.is_empty() {
+                "medium".to_string()
+            } else {
+                fallback.to_string()
+            };
+        }
+        if !self.enabled {
+            return if fallback.is_empty() {
+                "medium".to_string()
+            } else {
+                fallback.to_string()
+            };
+        }
+        if sessions_hit >= self.act_after {
+            "high".to_string()
+        } else if sessions_hit >= self.warn_after {
+            "medium".to_string()
+        } else {
+            "low".to_string()
+        }
+    }
+
+    pub fn over_threshold(&self, sessions_hit: usize) -> bool {
+        self.enabled && sessions_hit >= self.act_after
+    }
+}
+
+fn default_warn_after() -> usize {
+    2
+}
+
+fn default_act_after() -> usize {
+    3
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
 }
 
 /// Detect the project stack from repo-local files.
