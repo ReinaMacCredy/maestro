@@ -908,6 +908,10 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
     fs::write(
         &plan,
         concat!(
+            "# Implementation Plan\n",
+            "\n",
+            "## Task Plan\n",
+            "\n",
             "## Task T1: Implement protected read handlers\n",
             "check: GET /articles returns compact paginated records\n",
             "check: missing or invalid demo API key is rejected\n",

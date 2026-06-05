@@ -340,6 +340,12 @@ fn parse_task_heading(line: &str) -> Result<Option<(Option<String>, String)>> {
         return Ok(None);
     };
     let rest = rest.trim();
+    if !rest.starts_with(':') && !rest.contains(':') {
+        if looks_like_task_local_id(rest) {
+            bail!("task heading must be `## Task: <title>` or `## Task T1: <title>`: {line}");
+        }
+        return Ok(None);
+    }
     let (local_id, title) = if let Some(title) = rest.strip_prefix(':') {
         (None, title.trim())
     } else if let Some((local_id, title)) = rest.split_once(':') {
@@ -355,6 +361,15 @@ fn parse_task_heading(line: &str) -> Result<Option<(Option<String>, String)>> {
         bail!("task heading title must not be empty: {line}");
     }
     Ok(Some((local_id, title.to_string())))
+}
+
+fn looks_like_task_local_id(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && value.chars().any(|ch| ch.is_ascii_digit())
+        && value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
 }
 
 fn field_value<'a>(line: &'a str, field: &str) -> Option<&'a str> {

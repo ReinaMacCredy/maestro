@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{fs, path::Path};
 
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -296,7 +296,7 @@ pub fn detect_stack(repo_root: &Path) -> StackConfig {
         return StackConfig {
             kind: StackKind::Python,
             detected_by: python_signals,
-            verify: vec!["python -m mypy".to_string(), "python -m pytest".to_string()],
+            verify: detect_python_verify(repo_root),
         };
     }
 
@@ -310,4 +310,26 @@ pub fn detect_stack(repo_root: &Path) -> StackConfig {
         detected_by: Vec::new(),
         verify,
     }
+}
+
+fn detect_python_verify(repo_root: &Path) -> Vec<String> {
+    if uses_pytest(repo_root) {
+        return vec!["python -m pytest".to_string()];
+    }
+    if repo_root.join("tests").is_dir() {
+        return vec!["python -m unittest discover -s tests".to_string()];
+    }
+    vec!["python -m unittest discover".to_string()]
+}
+
+fn uses_pytest(repo_root: &Path) -> bool {
+    repo_root.join("pytest.ini").is_file()
+        || repo_root.join("conftest.py").is_file()
+        || repo_root.join("tests/conftest.py").is_file()
+        || file_contains(repo_root.join("pyproject.toml").as_path(), "pytest")
+        || file_contains(repo_root.join("requirements.txt").as_path(), "pytest")
+}
+
+fn file_contains(path: &Path, needle: &str) -> bool {
+    fs::read_to_string(path).is_ok_and(|contents| contents.contains(needle))
 }

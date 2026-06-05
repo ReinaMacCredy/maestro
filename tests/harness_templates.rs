@@ -40,6 +40,27 @@ fn harness_config_detects_rust_stack_defaults() {
 }
 
 #[test]
+fn harness_config_detects_python_stdlib_test_defaults() {
+    let temp_dir = TestTempDir::new("maestro-harness-test");
+    fs::write(
+        temp_dir.path().join("pyproject.toml"),
+        "[project]\nname = \"demo\"\n",
+    )
+    .expect("invariant: pyproject.toml should be writable");
+    fs::create_dir(temp_dir.path().join("tests"))
+        .expect("invariant: tests dir should be creatable");
+
+    let config = HarnessConfig::detect(temp_dir.path());
+
+    assert_eq!(config.stack.kind, StackKind::Python);
+    assert_eq!(config.stack.detected_by, vec!["pyproject.toml"]);
+    assert_eq!(
+        config.stack.verify,
+        vec!["python -m unittest discover -s tests"]
+    );
+}
+
+#[test]
 fn stack_detection_uses_generic_unknown_stack_fallback() {
     let temp_dir = TestTempDir::new("maestro-harness-test");
 
