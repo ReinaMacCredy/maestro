@@ -23,7 +23,7 @@ pub fn run(args: ResumeArgs) -> Result<()> {
     let mode = ResumeMode::from_args(&args);
     let report = build_resume_report(&paths, &args, mode)?;
     let written_path = if args.write {
-        let write = resume_write(&paths, &report)?;
+        let write = resume_write(&report)?;
         write_string_atomic(&write.path, &write.contents)
             .with_context(|| format!("failed to write {}", write.path.display()))?;
         Some(display_repo_relative(&paths, &write.path))
@@ -53,10 +53,8 @@ fn build_resume_report(
     args: &ResumeArgs,
     mode: ResumeMode,
 ) -> Result<ResumeReport> {
-    let tasks = task::load_task_records(&paths.tasks_dir())?;
-    let features = feature::list(paths)?;
-    let selected_task = select_task(paths, &tasks, args)?;
-    let selected_feature = select_feature(paths, &features, args, selected_task.as_ref())?;
+    let selected_task = select_task(paths, args)?;
+    let selected_feature = select_feature(paths, args, selected_task.as_ref())?;
     let next = next_action_for(selected_task.as_ref(), selected_feature.as_ref());
     let required_reads = required_reads(paths, selected_task.as_ref(), selected_feature.as_ref());
     let guardrails = vec![
@@ -65,15 +63,19 @@ fn build_resume_report(
         "read required artifacts before acting".to_string(),
     ];
     let source_refs = source_refs(paths, selected_task.as_ref(), selected_feature.as_ref());
-    let full = (mode != ResumeMode::Compact).then(|| {
-        full_context(
+    let write_path = write_path(paths, selected_task.as_ref(), selected_feature.as_ref());
+    let full = if mode != ResumeMode::Compact {
+        let tasks = task::load_task_records(&paths.tasks_dir())?;
+        Some(full_context(
             paths,
             &tasks,
             selected_task.as_ref(),
             selected_feature.as_ref(),
             mode,
-        )
-    });
+        )?)
+    } else {
+        None
+    };
 
     Ok(ResumeReport {
         schema: RESUME_SCHEMA.to_string(),
@@ -86,30 +88,24 @@ fn build_resume_report(
         required_reads,
         guardrails,
         source_refs,
+        write_path,
         full,
     })
 }
 
-fn select_task(
-    paths: &MaestroPaths,
-    tasks: &[task::TaskRecord],
-    args: &ResumeArgs,
-) -> Result<Option<task::TaskRecord>> {
+fn select_task(paths: &MaestroPaths, args: &ResumeArgs) -> Result<Option<task::TaskRecord>> {
     if let Some(id) = args.task.as_deref() {
         return task::load_task_record(&paths.tasks_dir(), id).map(Some);
     }
 
-    if let Some(feature_id) = args.feature.as_deref()
-        && let Some(task) = choose_next_task(
+    if let Some(feature_id) = args.feature.as_deref() {
+        let tasks = task::load_task_records(&paths.tasks_dir())?;
+        return Ok(choose_next_task(
             tasks
                 .iter()
                 .filter(|task| task.feature_id.as_deref() == Some(feature_id)),
         )
-    {
-        return Ok(Some(task.clone()));
-    }
-    if args.feature.is_some() {
-        return Ok(None);
+        .cloned());
     }
 
     if let Ok(id) = env::var("MAESTRO_CURRENT_TASK")
@@ -120,6 +116,7 @@ fn select_task(
         return Ok(Some(task));
     }
 
+    let tasks = task::load_task_records(&paths.tasks_dir())?;
     Ok(choose_next_task(tasks.iter()).cloned())
 }
 
@@ -140,13 +137,11 @@ fn choose_next_task<'a>(
             return Some(task);
         }
     }
-    live.into_iter()
-        .find(|task| task::has_unresolved_blockers(task))
+    None
 }
 
 fn select_feature(
     paths: &MaestroPaths,
-    features: &[feature::FeatureView],
     args: &ResumeArgs,
     task: Option<&task::TaskRecord>,
 ) -> Result<Option<feature::FeatureView>> {
@@ -156,7 +151,7 @@ fn select_feature(
     let Some(feature_id) = task.and_then(|task| task.feature_id.as_deref()) else {
         return Ok(None);
     };
-    Ok(features.iter().find(|view| view.id == feature_id).cloned())
+    feature::show(paths, feature_id).map(Some)
 }
 
 fn objective(task: Option<&task::TaskRecord>, feature: Option<&feature::FeatureView>) -> String {
@@ -335,16 +330,19 @@ fn full_context(
     task: Option<&task::TaskRecord>,
     feature: Option<&feature::FeatureView>,
     mode: ResumeMode,
-) -> ResumeFullContext {
-    ResumeFullContext {
-        prior_decisions: prior_decisions(paths).unwrap_or_default(),
+) -> Result<ResumeFullContext> {
+    let proof = task
+        .map(|task| proof_summary(paths, &task.id))
+        .transpose()?;
+    Ok(ResumeFullContext {
+        prior_decisions: prior_decisions(paths)?,
         last_verified_tasks: last_verified_tasks(tasks, feature.map(|feature| feature.id.as_str())),
-        proof: task.and_then(|task| proof_summary(paths, &task.id).ok()),
+        proof,
         file_scope: feature
             .map(|feature| feature.affected_areas.clone())
             .unwrap_or_default(),
         prompt: (mode == ResumeMode::Handoff).then(|| handoff_prompt(task, feature)),
-    }
+    })
 }
 
 fn prior_decisions(paths: &MaestroPaths) -> Result<Vec<String>> {
@@ -432,8 +430,8 @@ fn write_list(out: &mut String, label: &str, values: &[String]) {
     }
 }
 
-fn resume_write(paths: &MaestroPaths, report: &ResumeReport) -> Result<ResumeWrite> {
-    let path = write_path(paths, report);
+fn resume_write(report: &ResumeReport) -> Result<ResumeWrite> {
+    let path = report.write_path.clone();
     let mut contents = String::new();
     writeln!(&mut contents, "# Maestro Resume").unwrap();
     writeln!(&mut contents).unwrap();
@@ -447,20 +445,19 @@ fn resume_write(paths: &MaestroPaths, report: &ResumeReport) -> Result<ResumeWri
     Ok(ResumeWrite { path, contents })
 }
 
-fn write_path(paths: &MaestroPaths, report: &ResumeReport) -> PathBuf {
-    if let Some(task_ref) = report
-        .source_refs
-        .iter()
-        .find(|source| source.starts_with(".maestro/tasks/") && source.ends_with("/task.yaml"))
-        && let Some(task_dir) = task_ref.strip_suffix("/task.yaml")
-    {
-        return paths.repo_root().join(task_dir).join("resume.md");
+fn write_path(
+    paths: &MaestroPaths,
+    task: Option<&task::TaskRecord>,
+    feature: Option<&feature::FeatureView>,
+) -> PathBuf {
+    if let Some(task) = task {
+        return paths
+            .tasks_dir()
+            .join(task.directory_name())
+            .join("resume.md");
     }
-    if let Some(feature_ref) = report.source_refs.iter().find(|source| {
-        source.starts_with(".maestro/features/") && source.ends_with("/feature.yaml")
-    }) && let Some(feature_dir) = feature_ref.strip_suffix("/feature.yaml")
-    {
-        return paths.repo_root().join(feature_dir).join("resume.md");
+    if let Some(feature) = feature {
+        return paths.features_dir().join(&feature.id).join("resume.md");
     }
     paths.maestro_dir().join("resume.md")
 }
@@ -512,6 +509,8 @@ struct ResumeReport {
     required_reads: Vec<String>,
     guardrails: Vec<String>,
     source_refs: Vec<String>,
+    #[serde(skip_serializing)]
+    write_path: PathBuf,
     #[serde(skip_serializing_if = "Option::is_none")]
     full: Option<ResumeFullContext>,
 }

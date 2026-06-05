@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use maestro::task::lookup::resolve_task_yaml_path;
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
@@ -76,20 +77,11 @@ fn task_yaml(repo: &Path, id: &str) -> YamlValue {
 }
 
 fn task_dir(repo: &Path, id: &str) -> PathBuf {
-    let prefix = format!("{id}-");
-    let tasks_dir = repo.join(".maestro/tasks");
-    for entry in fs::read_dir(tasks_dir).expect("invariant: tasks dir should be readable") {
-        let entry = entry.expect("invariant: task entry should be readable");
-        let name = entry
-            .file_name()
-            .to_str()
-            .expect("invariant: task dir should be UTF-8")
-            .to_string();
-        if name.starts_with(&prefix) {
-            return entry.path();
-        }
-    }
-    panic!("invariant: task directory should exist for {id}");
+    resolve_task_yaml_path(&repo.join(".maestro/tasks"), id)
+        .expect("invariant: task.yaml should resolve")
+        .parent()
+        .expect("invariant: task.yaml should have a parent")
+        .to_path_buf()
 }
 
 fn write_baseline(repo: &Path, feature_id: &str) {
