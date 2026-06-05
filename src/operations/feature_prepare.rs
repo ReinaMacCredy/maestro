@@ -107,6 +107,16 @@ pub fn prepare_from_file(
     plan_path: &Path,
     actor: &str,
 ) -> Result<PrepareReport> {
+    prepare_from_file_with_blocker(paths, feature_id, plan_path, actor, block_prepared_task)
+}
+
+fn prepare_from_file_with_blocker(
+    paths: &MaestroPaths,
+    feature_id: &str,
+    plan_path: &Path,
+    actor: &str,
+    block_task_fn: fn(&MaestroPaths, &str, &str, BlockerTarget, &str) -> Result<PreparedBlocker>,
+) -> Result<PrepareReport> {
     let view = feature::show(paths, feature_id)?;
     guard_feature_can_prepare(&view.status, &view.id)?;
     guard_no_existing_child_tasks(paths, &view.id)?;
@@ -117,99 +127,120 @@ pub fn prepare_from_file(
     validate_plan(&plan)?;
 
     let mut created = Vec::with_capacity(plan.len());
-    let mut id_by_local_ref = BTreeMap::new();
-    for (index, item) in plan.iter().enumerate() {
-        let now = nanos_since_epoch_string();
-        let task = task::create_task(
-            &paths.tasks_dir(),
-            &item.title,
-            Some(view.id.clone()),
-            None,
-            None,
-            item.checks.clone(),
-            &now,
-        )?;
-        let now = nanos_since_epoch_string();
-        task::transition_task(
-            &paths.tasks_dir(),
-            &task.id,
-            TaskState::Exploring,
-            actor,
-            &now,
-            TransitionDetails::default(),
-        )?;
-        let now = nanos_since_epoch_string();
-        let task = task::accept_task(&paths.tasks_dir(), &task.id, actor, &now)?;
-        let local_ref = item
-            .local_id
-            .clone()
-            .unwrap_or_else(|| format!("@{}", index + 1));
-        id_by_local_ref.insert(local_ref, task.id.clone());
-        created.push(task);
-    }
-
-    let mut blockers = Vec::new();
-    for (index, item) in plan.iter().enumerate() {
-        let task_id = task_id_for_item(index, item, &id_by_local_ref)?;
-        for reason in &item.blockers {
-            blockers.push(block_prepared_task(
-                paths,
-                &task_id,
-                reason,
-                BlockerTarget::Human,
+    let result = (|| -> Result<PrepareReport> {
+        let mut id_by_local_ref = BTreeMap::new();
+        for (index, item) in plan.iter().enumerate() {
+            let now = nanos_since_epoch_string();
+            let task = task::create_task(
+                &paths.tasks_dir(),
+                &item.title,
+                Some(view.id.clone()),
+                None,
+                None,
+                item.checks.clone(),
+                &now,
+            )?;
+            let now = nanos_since_epoch_string();
+            let task = task::transition_task(
+                &paths.tasks_dir(),
+                &task.id,
+                TaskState::Exploring,
                 actor,
+                &now,
+                TransitionDetails::default(),
+            )?;
+            let local_ref = item
+                .local_id
+                .clone()
+                .unwrap_or_else(|| format!("@{}", index + 1));
+            id_by_local_ref.insert(local_ref, task.id.clone());
+            created.push(task);
+        }
+
+        let mut blockers = Vec::new();
+        for (index, item) in plan.iter().enumerate() {
+            let task_id = task_id_for_item(index, item, &id_by_local_ref)?;
+            for reason in &item.blockers {
+                blockers.push(block_task_fn(
+                    paths,
+                    &task_id,
+                    reason,
+                    BlockerTarget::Human,
+                    actor,
+                )?);
+            }
+            for after in &item.after {
+                let predecessor = id_by_local_ref
+                    .get(after)
+                    .with_context(|| format!("after reference `{after}` was not prepared"))?;
+                let reason =
+                    format!("{AFTER_DEPENDENCY_REASON_PREFIX} {after} ({predecessor}) verified");
+                blockers.push(block_task_fn(
+                    paths,
+                    &task_id,
+                    &reason,
+                    BlockerTarget::Task(predecessor.clone()),
+                    actor,
+                )?);
+            }
+        }
+
+        let mut accepted = Vec::with_capacity(created.len());
+        for task in &created {
+            let now = nanos_since_epoch_string();
+            accepted.push(task::accept_task(
+                &paths.tasks_dir(),
+                &task.id,
+                actor,
+                &now,
             )?);
         }
-        for after in &item.after {
-            let predecessor = id_by_local_ref
-                .get(after)
-                .with_context(|| format!("after reference `{after}` was not prepared"))?;
-            let reason =
-                format!("{AFTER_DEPENDENCY_REASON_PREFIX} {after} ({predecessor}) verified");
-            blockers.push(block_prepared_task(
-                paths,
-                &task_id,
-                &reason,
-                BlockerTarget::Task(predecessor.clone()),
-                actor,
-            )?);
+
+        let prepared = reload_created_tasks(paths, &accepted)?;
+        let ready_count = prepared
+            .iter()
+            .filter(|task| task.state == TaskState::Ready && !task::has_unresolved_blockers(task))
+            .count();
+        let blocked_count = prepared
+            .iter()
+            .filter(|task| task::has_unresolved_blockers(task))
+            .count();
+        let started = ready_count > 0 && view.status == FeatureStatus::Ready;
+        if started {
+            feature::start(paths, &view.id)?;
+        }
+
+        Ok(PrepareReport {
+            feature_id: view.id.clone(),
+            task_count: prepared.len(),
+            ready_count,
+            blocked_count,
+            started,
+            remained_ready: ready_count == 0 && view.status == FeatureStatus::Ready,
+            prepared: prepared
+                .into_iter()
+                .map(|task| {
+                    let blocked = task::has_unresolved_blockers(&task);
+                    PreparedTask {
+                        id: task.id,
+                        title: task.title,
+                        blocked,
+                    }
+                })
+                .collect(),
+            blockers,
+        })
+    })();
+
+    match result {
+        Ok(report) => Ok(report),
+        Err(error) => {
+            rollback_created_tasks(paths, &created).with_context(|| {
+                format!("failed to roll back partial prepare after error: {error}")
+            })?;
+            Err(error)
         }
     }
-
-    let prepared = reload_created_tasks(paths, &created)?;
-    let ready_count = prepared
-        .iter()
-        .filter(|task| task.state == TaskState::Ready && !task::has_unresolved_blockers(task))
-        .count();
-    let blocked_count = prepared
-        .iter()
-        .filter(|task| task::has_unresolved_blockers(task))
-        .count();
-    let started = ready_count > 0 && view.status == FeatureStatus::Ready;
-    if started {
-        feature::start(paths, &view.id)?;
-    }
-
-    Ok(PrepareReport {
-        feature_id: view.id,
-        task_count: prepared.len(),
-        ready_count,
-        blocked_count,
-        started,
-        remained_ready: ready_count == 0 && view.status == FeatureStatus::Ready,
-        prepared: prepared
-            .into_iter()
-            .map(|task| {
-                let blocked = task::has_unresolved_blockers(&task);
-                PreparedTask {
-                    id: task.id,
-                    title: task.title,
-                    blocked,
-                }
-            })
-            .collect(),
-        blockers,
-    })
 }
 
 /// Resolve prepare-generated `after:` blockers once their prerequisite task verifies.
@@ -601,4 +632,100 @@ fn reload_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Result<
         .iter()
         .map(|task| task::load_task_record(&paths.tasks_dir(), &task.id))
         .collect()
+}
+
+fn rollback_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Result<()> {
+    for task in created.iter().rev() {
+        let task_dir = paths.tasks_dir().join(task.directory_name());
+        if task_dir.exists() {
+            fs::remove_dir_all(&task_dir)
+                .with_context(|| format!("failed to remove {}", task_dir.display()))?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::feature::ContractEdits;
+
+    #[test]
+    fn prepare_rolls_back_created_tasks_when_blocker_attachment_fails() {
+        let root = temp_root("maestro-feature-prepare-rollback");
+        let paths = MaestroPaths::new(&root);
+        let feature_id = feature::create(&paths, "Rollback Prepare")
+            .expect("invariant: feature should be created");
+        feature::set(
+            &paths,
+            &feature_id,
+            ContractEdits {
+                acceptance: Some(vec!["rollback behavior is observable".to_string()]),
+                affected_areas: Some(vec!["task".to_string()]),
+                ..ContractEdits::default()
+            },
+        )
+        .expect("invariant: feature contract should be set");
+        fs::write(
+            paths.features_dir().join(&feature_id).join("baseline.md"),
+            "---\namend_log_position: 0\n---\n\nbaseline\n",
+        )
+        .expect("invariant: baseline should be writable");
+        feature::accept(&paths, &feature_id, false).expect("invariant: feature should be ready");
+        let plan = root.join("prepare.md");
+        fs::write(
+            &plan,
+            concat!(
+                "## Task T1: First generated task\n",
+                "check: first task works\n",
+                "blocker: injected failure\n",
+            ),
+        )
+        .expect("invariant: plan should be writable");
+
+        let error =
+            prepare_from_file_with_blocker(&paths, &feature_id, &plan, "tester", fail_blocker)
+                .expect_err("invariant: injected blocker failure should fail prepare");
+
+        assert!(error.to_string().contains("injected blocker failure"));
+        assert!(
+            task_dirs(&paths).is_empty(),
+            "created tasks should be rolled back after prepare failure"
+        );
+        fs::remove_dir_all(root).expect("invariant: temp root should be removable");
+    }
+
+    fn fail_blocker(
+        _paths: &MaestroPaths,
+        _task_id: &str,
+        _reason: &str,
+        _target: BlockerTarget,
+        _actor: &str,
+    ) -> Result<PreparedBlocker> {
+        bail!("injected blocker failure")
+    }
+
+    fn task_dirs(paths: &MaestroPaths) -> Vec<PathBuf> {
+        if !paths.tasks_dir().exists() {
+            return Vec::new();
+        }
+        fs::read_dir(paths.tasks_dir())
+            .expect("invariant: tasks dir should be readable")
+            .map(|entry| {
+                entry
+                    .expect("invariant: task entry should be readable")
+                    .path()
+            })
+            .collect()
+    }
+
+    fn temp_root(prefix: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "{prefix}-{}-{}",
+            std::process::id(),
+            nanos_since_epoch_string()
+        ));
+        fs::create_dir_all(&root).expect("invariant: temp root should be creatable");
+        root
+    }
 }

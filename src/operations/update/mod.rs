@@ -64,6 +64,8 @@ pub struct UpdateOutcome {
     pub repo_uninitialized: bool,
     /// Refreshed global skills, only when the user-level global lock already existed.
     pub global_skills: Option<GlobalSkillsOutcome>,
+    /// Warning from the optional global skill refresh phase.
+    pub global_skills_warning: Option<String>,
 }
 
 /// Human-facing release metadata for update status output.
@@ -445,10 +447,17 @@ pub fn run_update_with_seams(
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
             global_skills: None,
+            global_skills_warning: None,
         });
     }
-    let prepared_global_skills =
-        skills::prepare_global_skills_if_locked(options.global_skills_home)?;
+    let (prepared_global_skills, mut global_skills_warning) =
+        match skills::prepare_global_skills_if_locked(options.global_skills_home) {
+            Ok(prepared) => (prepared, None),
+            Err(error) => (
+                None,
+                Some(format!("global Maestro skill sync skipped: {error}")),
+            ),
+        };
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
     // A never-init'd repo has no `.maestro`: upgrade the binary but do NOT extract
@@ -486,7 +495,13 @@ pub fn run_update_with_seams(
         }
     };
     let global_skills = match prepared_global_skills {
-        Some(prepared) => Some(skills::write_prepared_global_skills(prepared)?),
+        Some(prepared) => match skills::write_prepared_global_skills(prepared) {
+            Ok(outcome) => Some(outcome),
+            Err(error) => {
+                global_skills_warning = Some(format!("global Maestro skill sync skipped: {error}"));
+                None
+            }
+        },
         None => None,
     };
 
@@ -497,6 +512,7 @@ pub fn run_update_with_seams(
         schema_mismatches,
         repo_uninitialized,
         global_skills,
+        global_skills_warning,
     })
 }
 

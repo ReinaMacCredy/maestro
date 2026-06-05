@@ -427,7 +427,7 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
         .find("HARNESS FRICTION")
         .expect("invariant: task next should show friction");
     let normal_at = next
-        .find("run: maestro task claim --next")
+        .find("run: maestro task claim task-001")
         .expect("invariant: task next should keep normal next action");
     assert!(friction_at < normal_at, "{next}");
 
@@ -569,7 +569,67 @@ fn human_fallback_warnings_are_first_line_for_status_and_task_next() {
         next_out.starts_with("warning: MAESTRO_CURRENT_TASK=task-999 was not found"),
         "{next_out}"
     );
-    assert!(next_out.contains("run: maestro task claim --next"));
+    assert!(next_out.contains("run: maestro task claim task-001"));
+}
+
+#[test]
+fn current_ready_task_next_claims_selected_task_not_generic_next() {
+    let temp = setup_repo("maestro-status-current-ready-task");
+    let repo = temp.path();
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "First ready task",
+            "--check",
+            "first check",
+        ],
+    );
+    run(repo, &["task", "explore", "task-001"]);
+    run(repo, &["task", "accept", "task-001"]);
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Current ready task",
+            "--check",
+            "second check",
+        ],
+    );
+    run(repo, &["task", "explore", "task-002"]);
+    run(repo, &["task", "accept", "task-002"]);
+
+    let human = maestro_with_env(
+        repo,
+        &["task", "next"],
+        &[("MAESTRO_CURRENT_TASK", "task-002")],
+    );
+    assert_success(&human, &["task", "next"]);
+    let human_out = stdout(&human);
+    assert!(
+        human_out.contains("run: maestro task claim task-002"),
+        "{human_out}"
+    );
+    assert!(
+        !human_out.contains("maestro task claim --next"),
+        "{human_out}"
+    );
+
+    let json = maestro_with_env(
+        repo,
+        &["task", "next", "--json"],
+        &[("MAESTRO_CURRENT_TASK", "task-002")],
+    );
+    assert_success(&json, &["task", "next", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&stdout(&json)).expect("invariant: task next JSON should parse");
+    assert_eq!(parsed["next_action"]["task_id"], "task-002");
+    assert_eq!(
+        parsed["next_action"]["command"]["argv"],
+        serde_json::json!(["maestro", "task", "claim", "task-002"])
+    );
 }
 
 #[test]

@@ -178,6 +178,9 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
     if let Some(global_skills) = &outcome.global_skills {
         out.push_str(&skills::render_global_skills_outcome(global_skills));
     }
+    if let Some(warning) = &outcome.global_skills_warning {
+        out.push_str(&format!("warning: {warning}\n"));
+    }
 
     // A created file (no `previous`) has no backup, so it is otherwise invisible
     // here -- the very gap that made a Cargo/local `update` look like a no-op while
@@ -417,6 +420,7 @@ mod tests {
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
             global_skills: None,
+            global_skills_warning: None,
         };
 
         assert_eq!(
@@ -442,6 +446,7 @@ mod tests {
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
             global_skills: None,
+            global_skills_warning: None,
         };
 
         assert_eq!(
@@ -450,6 +455,39 @@ mod tests {
                 "Updating to version 0.0.1779772576-g751b94...\n",
                 "Downloading update (25.35 MB/25.35 MB)\n",
                 "✓ Maestro updated to version 0.0.1779772576-g751b94 (released 1h ago)\n",
+            )
+        );
+    }
+
+    #[test]
+    fn renders_global_skill_warning_after_successful_update() {
+        let outcome = update::UpdateOutcome {
+            binary_status: update::BinaryStatus::Replaced {
+                path: std::path::PathBuf::from("/tmp/maestro"),
+                release: Some(update::ReleaseInfo {
+                    version: "0.0.1779772576-g751b94".to_string(),
+                    released_at: Some("2026-05-26T05:16:16.000Z".to_string()),
+                    relative_age: Some("1h ago".to_string()),
+                    size_bytes: Some(25_350_000),
+                }),
+            },
+            resource_backups: Vec::new(),
+            resource_writes: Vec::new(),
+            schema_mismatches: Vec::new(),
+            repo_uninitialized: false,
+            global_skills: None,
+            global_skills_warning: Some(
+                "global Maestro skill sync skipped: late collision".to_string(),
+            ),
+        };
+
+        assert_eq!(
+            render_outcome(&outcome, false, Colors::plain()),
+            concat!(
+                "Updating to version 0.0.1779772576-g751b94...\n",
+                "Downloading update (25.35 MB/25.35 MB)\n",
+                "✓ Maestro updated to version 0.0.1779772576-g751b94 (released 1h ago)\n",
+                "warning: global Maestro skill sync skipped: late collision\n",
             )
         );
     }
@@ -470,6 +508,7 @@ mod tests {
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
             global_skills: None,
+            global_skills_warning: None,
         };
 
         assert_eq!(
@@ -495,6 +534,7 @@ mod tests {
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
             global_skills: None,
+            global_skills_warning: None,
         };
 
         assert_eq!(
@@ -523,6 +563,7 @@ mod tests {
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
             global_skills: None,
+            global_skills_warning: None,
         };
 
         let output = render_outcome(&outcome, false, Colors::plain());
@@ -606,6 +647,7 @@ mod tests {
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
             global_skills: None,
+            global_skills_warning: None,
         };
 
         assert_eq!(

@@ -340,7 +340,7 @@ fn task_action(paths: &MaestroPaths, task: &TaskRecord) -> Result<Option<NextAct
         TaskState::Ready => NextAction::task(
             "claim_task",
             task,
-            runnable_command(["maestro", "task", "claim", "--next"]),
+            runnable_command(["maestro", "task", "claim", task.id.as_str()]),
             "ready task is unclaimed",
         ),
         TaskState::InProgress => NextAction::task(

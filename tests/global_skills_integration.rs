@@ -94,7 +94,10 @@ fn install_creates_global_cache_lock_and_all_supported_agent_links() {
 
     assert_success(&output);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("global Maestro skills synced:"), "{stdout}");
+    assert!(
+        stdout.contains("global Maestro skills synced for all supported agents:"),
+        "{stdout}"
+    );
     assert!(stdout.contains(&format!(
         "cache: {}",
         home.join(".maestro/skills").display()
@@ -232,7 +235,8 @@ fn update_check_does_not_mutate_global_skills_but_update_refreshes_existing_glob
         bundled_task_skill_md()
     );
     assert!(
-        String::from_utf8_lossy(&update.stdout).contains("global Maestro skills synced:"),
+        String::from_utf8_lossy(&update.stdout)
+            .contains("global Maestro skills synced for all supported agents:"),
         "update should report the global refresh"
     );
 }

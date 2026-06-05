@@ -7,12 +7,12 @@ use std::process::Command;
 use std::{env, fs};
 
 use anyhow::{Result, bail};
-use maestro::domain::skills::catalog::skills;
+use maestro::domain::skills::{catalog::skills, sync_global_skills_at};
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::operations::update::{
-    AtomicBinaryReplacer, BinaryReplacer, ChecksumVerifier, DownloadedBinary, ReleaseInfo,
-    Sha256Verifier, UpdateDownloader, UpdateOptions, UpdateRequest, detect_schema_mismatches,
-    run_update_with_seams,
+    AtomicBinaryReplacer, BinaryReplacer, BinaryStatus, ChecksumVerifier, DownloadedBinary,
+    ReleaseInfo, Sha256Verifier, UpdateDownloader, UpdateOptions, UpdateRequest,
+    detect_schema_mismatches, run_update_with_seams,
 };
 use support::TestTempDir;
 
@@ -539,6 +539,62 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
 }
 
 #[test]
+fn late_global_skill_sync_failure_warns_without_reverting_installed_update() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+    let paths = MaestroPaths::new(temp_dir.path());
+    let home = temp_dir.path().join("home");
+    fs::create_dir_all(&home).expect("invariant: home should be creatable");
+    sync_global_skills_at(&home).expect("invariant: initial global sync should succeed");
+    let executable_path = temp_dir.path().join("bin").join("maestro");
+    fs::create_dir_all(
+        executable_path
+            .parent()
+            .expect("invariant: executable path should have a parent"),
+    )
+    .expect("invariant: executable parent should be creatable");
+    fs::write(&executable_path, "current binary\n")
+        .expect("invariant: current binary should be writable");
+
+    let outcome = run_update_with_seams(
+        &UpdateOptions {
+            paths: &paths,
+            executable_path: &executable_path,
+            backup_timestamp: "test",
+            current_version: "0.0.1779700000-gabc123",
+            check_only: false,
+            force: false,
+            global_skills_home: Some(&home),
+        },
+        &CandidateDownloader,
+        &NoopVerifier,
+        &LateGlobalCollisionReplacer { home: home.clone() },
+    )
+    .expect("invariant: late global sync failure should not fail installed update");
+
+    assert!(matches!(
+        outcome.binary_status,
+        BinaryStatus::Replaced { .. }
+    ));
+    assert_eq!(
+        fs::read_to_string(&executable_path)
+            .expect("invariant: replaced binary should be readable"),
+        "replacement binary\n"
+    );
+    assert!(
+        outcome.global_skills.is_none(),
+        "failed global sync should not report a successful refresh"
+    );
+    let warning = outcome
+        .global_skills_warning
+        .as_deref()
+        .expect("late global skill failure should be reported as a warning");
+    assert!(warning.contains("global Maestro skill sync skipped"));
+    assert!(warning.contains("maestro-task"), "{warning}");
+}
+
+#[test]
 fn schema_mismatch_reports_incompatible_and_does_not_mutate_harness_files() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
@@ -986,6 +1042,22 @@ struct NoopReplacer;
 
 impl BinaryReplacer for NoopReplacer {
     fn replace(&self, _current: &Path, _candidate: &Path) -> Result<()> {
+        Ok(())
+    }
+}
+
+struct LateGlobalCollisionReplacer {
+    home: PathBuf,
+}
+
+impl BinaryReplacer for LateGlobalCollisionReplacer {
+    fn replace(&self, current: &Path, candidate: &Path) -> Result<()> {
+        fs::copy(candidate, current)?;
+        let global_skill_link = self.home.join(".claude/skills/maestro-task");
+        if fs::symlink_metadata(&global_skill_link).is_ok() {
+            fs::remove_file(&global_skill_link)?;
+        }
+        fs::write(global_skill_link, "late collision\n")?;
         Ok(())
     }
 }

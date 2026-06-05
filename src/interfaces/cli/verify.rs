@@ -38,7 +38,12 @@ pub(super) fn run_for_task(paths: &MaestroPaths, id: &str, actor: &str) -> Resul
             );
         }
     }
-    render_applied_verification(paths, result.verification())
+    render_applied_verification(paths, result.verification())?;
+    for warning in result.warnings() {
+        eprintln!("warning: {warning}");
+        eprintln!("follow-up: run maestro task list --blocked");
+    }
+    Ok(())
 }
 
 fn render_applied_verification(

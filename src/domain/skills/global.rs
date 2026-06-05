@@ -218,7 +218,7 @@ pub fn write_prepared_global_skills(prepared: PreparedGlobalSkills) -> Result<Gl
 /// Render a successful global skill sync.
 pub fn render_global_skills_outcome(outcome: &GlobalSkillsOutcome) -> String {
     let mut out = String::new();
-    out.push_str("global Maestro skills synced:\n");
+    out.push_str("global Maestro skills synced for all supported agents:\n");
     out.push_str(&format!("cache: {}\n", outcome.cache_dir.display()));
     out.push_str(&format!("lock: {}\n", outcome.lock_path.display()));
     for root in &outcome.roots {
@@ -242,7 +242,7 @@ pub fn render_global_skills_outcome(outcome: &GlobalSkillsOutcome) -> String {
 /// Render a dry-run global skill sync.
 pub fn render_global_skills_dry_run(prepared: &PreparedGlobalSkills) -> String {
     let mut out = String::new();
-    out.push_str("global Maestro skills would sync:\n");
+    out.push_str("global Maestro skills would sync for all supported agents:\n");
     out.push_str(&format!("cache: {}\n", prepared.cache_dir.display()));
     out.push_str(&format!("lock: {}\n", prepared.lock_path.display()));
     for root in &prepared.roots {

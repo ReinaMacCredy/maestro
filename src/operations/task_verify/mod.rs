@@ -12,6 +12,7 @@ use crate::foundation::core::time::nanos_since_epoch_string;
 pub(crate) struct TaskVerifyResult {
     pub(crate) verification: proof::TaskVerification,
     pub(crate) application: TaskVerifyApplication,
+    pub(crate) warnings: Vec<String>,
 }
 
 impl TaskVerifyResult {
@@ -21,6 +22,10 @@ impl TaskVerifyResult {
 
     pub(crate) fn application(&self) -> &TaskVerifyApplication {
         &self.application
+    }
+
+    pub(crate) fn warnings(&self) -> &[String] {
+        &self.warnings
     }
 }
 
@@ -46,15 +51,22 @@ pub(crate) fn verify_task(
             reason: TaskVerifyUnappliedReason::from_error(&error),
         },
     };
+    let mut warnings = Vec::new();
     if matches!(application, TaskVerifyApplication::Applied)
         && verification.status == proof::TaskVerificationStatus::Passed
+        && let Err(error) =
+            feature_prepare::resolve_after_dependency_blockers(paths, &verification.task_id, actor)
     {
-        feature_prepare::resolve_after_dependency_blockers(paths, &verification.task_id, actor)?;
+        warnings.push(format!(
+            "after-dependency cleanup incomplete for {}: {error}",
+            verification.task_id
+        ));
     }
 
     Ok(TaskVerifyResult {
         verification,
         application,
+        warnings,
     })
 }
 

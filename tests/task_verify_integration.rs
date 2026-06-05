@@ -164,6 +164,16 @@ fn write_event(repo: &Path, task_id: &str, message: &str) {
     .expect("invariant: events.jsonl should be writable");
 }
 
+fn write_feature_baseline(repo: &Path, feature_id: &str) {
+    fs::write(
+        repo.join(".maestro/features")
+            .join(feature_id)
+            .join("baseline.md"),
+        "---\namend_log_position: 0\n---\n\nbaseline\n",
+    )
+    .expect("invariant: feature baseline should be writable");
+}
+
 fn write_harness_verify_command(repo: &Path, command: &str) {
     let harness_dir = repo.join(".maestro/harness");
     fs::create_dir_all(&harness_dir).expect("invariant: harness dir should be creatable");
@@ -263,6 +273,109 @@ fn task_verify_passes_with_event_proof_and_persists_verification_json() {
             .as_str()
             .expect("invariant: proof source path should be present")
             .contains("events.jsonl")
+    );
+}
+
+#[test]
+fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    assert_success(
+        &maestro(repo, &["feature", "new", "Cleanup Dependency"]),
+        &["feature", "new", "Cleanup Dependency"],
+    );
+    assert_success(
+        &maestro(
+            repo,
+            &[
+                "feature",
+                "set",
+                "cleanup-dependency",
+                "--acceptance",
+                "first task done",
+                "--area",
+                "task",
+            ],
+        ),
+        &["feature", "set", "cleanup-dependency"],
+    );
+    write_feature_baseline(repo, "cleanup-dependency");
+    assert_success(
+        &maestro(repo, &["feature", "accept", "cleanup-dependency"]),
+        &["feature", "accept", "cleanup-dependency"],
+    );
+    let plan = repo.join("PLAN-cleanup-dependency.md");
+    fs::write(
+        &plan,
+        concat!(
+            "## Task T1: First dependency\n",
+            "check: first task done\n",
+            "\n",
+            "## Task T2: Dependent task\n",
+            "after: T1\n",
+            "check: second task done\n",
+        ),
+    )
+    .expect("invariant: prepare plan should be writable");
+    let plan_arg = plan
+        .to_str()
+        .expect("invariant: prepare plan path should be UTF-8");
+    assert_success(
+        &maestro(
+            repo,
+            &[
+                "feature",
+                "prepare",
+                "cleanup-dependency",
+                "--from",
+                plan_arg,
+            ],
+        ),
+        &["feature", "prepare", "cleanup-dependency", "--from"],
+    );
+    assert_success(
+        &maestro(repo, &["task", "claim", "task-001"]),
+        &["task", "claim", "task-001"],
+    );
+    fs::write(
+        task_dir(repo, "task-002").join("task.yaml.lock"),
+        "locked\n",
+    )
+    .expect("invariant: dependent task lock should be writable");
+
+    let verify = maestro(
+        repo,
+        &[
+            "task",
+            "complete",
+            "task-001",
+            "--summary",
+            "first task done",
+            "--claim",
+            "first task done",
+            "--proof",
+            "first task done",
+        ],
+    );
+
+    assert_success(&verify, &["task", "complete", "task-001"]);
+    assert!(stdout(&verify).contains("verification passed for task-001"));
+    let err = stderr(&verify);
+    assert!(
+        err.contains("warning: after-dependency cleanup incomplete for task-001"),
+        "{err}"
+    );
+    assert!(
+        err.contains("follow-up: run maestro task list --blocked"),
+        "{err}"
+    );
+    assert_eq!(
+        task_yaml(repo, "task-001")["state"],
+        YamlValue::String("verified".to_string())
+    );
+    assert_eq!(
+        task_yaml(repo, "task-002")["blockers"][0]["resolved_at"],
+        YamlValue::Null
     );
 }
 
