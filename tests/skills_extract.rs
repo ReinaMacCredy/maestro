@@ -184,6 +184,17 @@ fn thin_bundled_skills_include_operational_runbooks() {
     assert!(verify.contains("maestro query proof <id>"));
     assert!(verify.contains("qa-baseline"));
     assert!(verify.contains("qa-slice"));
+
+    let feature = skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-feature")
+        .expect("invariant: maestro-feature should be bundled")
+        .skill_md();
+    assert!(feature.contains("version: 1.6.0"));
+    assert!(feature.contains("## Spec/Plan Intake"));
+    assert!(feature.contains("the agent converts it into Maestro artifacts"));
+    assert!(feature.contains("feature prepare <id> --from <plan-file>"));
+    assert!(feature.contains("If the source only describes intent, write the concrete"));
 }
 
 #[cfg(unix)]

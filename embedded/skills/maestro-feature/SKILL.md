@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.5.1
+version: 1.6.0
 description: "Use for the Maestro feature lifecycle: author, accept, prepare, start, amend, ship, cancel, archive, and inspect a feature contract plus its child-task rollup."
 ---
 
@@ -35,6 +35,40 @@ maestro feature archive <id>                          # terminal features only
 `set` works only while `proposed` and replaces each repeated field:
 `--acceptance`, `--area`, `--non-goal`, `--question`, `--clear-questions`,
 `--description`, `--request`, `--type`.
+
+## Spec/Plan Intake
+
+When the user gives a SPEC, PLAN, issue, PRD, brainstorm note, or rough prose,
+the agent converts it into Maestro artifacts. Maestro stores the result; it does
+not infer product scope from arbitrary prose.
+
+1. Read the source document completely and preserve explicit constraints.
+2. Extract the feature contract:
+   title, request, description, acceptance criteria, affected areas,
+   non-goals, and unresolved questions.
+3. Create or update the proposed feature with `feature new` and `feature set`.
+4. Use `qa-baseline` to write the baseline, then run `feature accept`.
+5. Extract implementation work into an explicit prepare plan file when the
+   source is not already a clean plan.
+6. Run `feature prepare <id> --from <plan-file>` and inspect created tasks.
+
+Prepare plans may be agent-authored. Keep every task explicit and observable:
+
+```markdown
+## Task Plan
+
+- Task T1: Add the API route
+  - check: GET /articles returns compact records
+
+2. T2: Add retry support
+   - after: T1
+   - check: POST /retry retries failed jobs
+   - blocker: deployment approval required
+```
+
+`prepare --from` parses explicit task entries and `check:`, `after:`, and
+`blocker:` fields. If the source only describes intent, write the concrete
+plan first instead of expecting the CLI to infer tasks.
 
 `prepare --from` expects a visible plan:
 
