@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -85,9 +86,17 @@ impl UpdateDownloader for GitHubCurlDownloader {
         };
         let asset = self.selected_asset(&release);
         let release_info = self.release_info(&release, asset);
-        if release_versions_match(&release_info.version, &request.current_version) && !request.force
-        {
-            return Ok(UpdateCheck::UpToDate(release_info));
+        match release_version_decision(&release_info.version, &request.current_version) {
+            ReleaseVersionDecision::Current if !request.force => {
+                return Ok(UpdateCheck::UpToDate(release_info));
+            }
+            ReleaseVersionDecision::LocalNewer => {
+                return Ok(UpdateCheck::LocalNewer {
+                    release: release_info,
+                    current_version: request.current_version.clone(),
+                });
+            }
+            ReleaseVersionDecision::Current | ReleaseVersionDecision::Available => {}
         }
         if asset.is_none() {
             return Ok(UpdateCheck::Unavailable(
@@ -108,19 +117,29 @@ impl UpdateDownloader for GitHubCurlDownloader {
                 UpdateUnavailable::LocalDevelopment,
             ));
         };
-        let asset = self.selected_asset(&release).ok_or_else(|| {
-            UpdateFailure::download(
-                Some(self.release_info(&release, None)),
+        let asset = self.selected_asset(&release);
+        let release_info = self.release_info(&release, asset);
+        match release_version_decision(&release_info.version, &request.current_version) {
+            ReleaseVersionDecision::Current if !request.force => {
+                return Ok(DownloadedBinary::UpToDate(release_info));
+            }
+            ReleaseVersionDecision::LocalNewer => {
+                return Ok(DownloadedBinary::LocalNewer {
+                    release: release_info,
+                    current_version: request.current_version.clone(),
+                });
+            }
+            ReleaseVersionDecision::Current | ReleaseVersionDecision::Available => {}
+        }
+        let Some(asset) = asset else {
+            return Err(UpdateFailure::download(
+                Some(release_info),
                 None,
                 None,
                 format!("no GitHub release asset matches {}", platform_asset_hint()),
             )
-        })?;
-        let release_info = self.release_info(&release, Some(asset));
-        if release_versions_match(&release_info.version, &request.current_version) && !request.force
-        {
-            return Ok(DownloadedBinary::UpToDate(release_info));
-        }
+            .into());
+        };
 
         fs::create_dir_all(&request.work_dir)
             .with_context(|| format!("failed to create {}", request.work_dir.display()))?;
@@ -295,8 +314,39 @@ fn normalized_release_version(tag_name: &str) -> String {
     tag_name.strip_prefix('v').unwrap_or(tag_name).to_string()
 }
 
-fn release_versions_match(release_version: &str, current_version: &str) -> bool {
-    normalized_release_version(release_version) == normalized_release_version(current_version)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ReleaseVersionDecision {
+    Current,
+    Available,
+    LocalNewer,
+}
+
+fn release_version_decision(
+    release_version: &str,
+    current_version: &str,
+) -> ReleaseVersionDecision {
+    let release = normalized_release_version(release_version);
+    let current = normalized_release_version(current_version);
+    if release == current {
+        return ReleaseVersionDecision::Current;
+    }
+
+    match (version_order_key(&release), version_order_key(&current)) {
+        (Some(release), Some(current)) => match release.cmp(&current) {
+            Ordering::Less => ReleaseVersionDecision::LocalNewer,
+            Ordering::Equal | Ordering::Greater => ReleaseVersionDecision::Available,
+        },
+        _ => ReleaseVersionDecision::Available,
+    }
+}
+
+fn version_order_key(version: &str) -> Option<Vec<u64>> {
+    let numeric = version.split('-').next().unwrap_or(version);
+    let components: Option<Vec<u64>> = numeric
+        .split('.')
+        .map(|component| component.parse::<u64>().ok())
+        .collect();
+    components.filter(|components| !components.is_empty())
 }
 
 fn relative_age_from_rfc3339(value: &str) -> Option<String> {
@@ -306,7 +356,9 @@ fn relative_age_from_rfc3339(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{GithubAsset, release_versions_match, select_platform_asset};
+    use super::{
+        GithubAsset, ReleaseVersionDecision, release_version_decision, select_platform_asset,
+    };
 
     #[test]
     fn selects_current_platform_maestro_asset() {
@@ -364,7 +416,39 @@ mod tests {
     #[test]
     fn parses_release_timestamp_and_version_match() {
         assert!(super::relative_age_from_rfc3339("1970-01-01T00:00:00Z").is_some());
-        assert!(release_versions_match("v0.1.0", "0.1.0"));
+        assert_eq!(
+            release_version_decision("v0.1.0", "0.1.0"),
+            ReleaseVersionDecision::Current
+        );
+    }
+
+    #[test]
+    fn orders_release_versions_to_prevent_downgrades() {
+        assert_eq!(
+            release_version_decision(
+                "v0.107.0.1780674159-g057a731",
+                "0.107.0.1780680000-gf00ba47"
+            ),
+            ReleaseVersionDecision::LocalNewer
+        );
+        assert_eq!(
+            release_version_decision(
+                "v0.107.0.1780680000-gf00ba47",
+                "0.107.0.1780674159-g057a731"
+            ),
+            ReleaseVersionDecision::Available
+        );
+        assert_eq!(
+            release_version_decision(
+                "v0.107.0.1780674159-g057a731",
+                "0.107.0.1780674159-g057a7310"
+            ),
+            ReleaseVersionDecision::Available
+        );
+        assert_eq!(
+            release_version_decision("v9.9.9-gfuture", "0.107.0.1780674159-g057a731"),
+            ReleaseVersionDecision::Available
+        );
     }
 
     fn asset(name: &str) -> GithubAsset {

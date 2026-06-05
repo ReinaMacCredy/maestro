@@ -135,6 +135,18 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
             )));
             out.push('\n');
         }
+        update::BinaryStatus::LocalNewer {
+            release,
+            current_version,
+        } => {
+            out.push_str(&colors.success("✓ Maestro is newer than the latest GitHub release"));
+            out.push('\n');
+            out.push_str(&format!("Current version: {current_version}\n"));
+            out.push_str(&format!(
+                "Latest GitHub release: {}\n",
+                release_summary_short(release)
+            ));
+        }
         update::BinaryStatus::Skipped { reason } => {
             out.push_str(&format!("Update unavailable {reason}.\n"));
         }
@@ -490,6 +502,37 @@ mod tests {
             concat!(
                 "Update available: 0.0.1779772576-g751b94 (released 1h ago)\n",
                 "Current version: 0.0.1779700000-gabc123\n",
+            )
+        );
+    }
+
+    #[test]
+    fn renders_local_newer_without_advertising_an_update() {
+        let outcome = update::UpdateOutcome {
+            binary_status: update::BinaryStatus::LocalNewer {
+                release: update::ReleaseInfo {
+                    version: "0.0.1779700000-gabc123".to_string(),
+                    released_at: Some("2026-05-26T05:16:16.000Z".to_string()),
+                    relative_age: Some("1h ago".to_string()),
+                    size_bytes: Some(25_350_000),
+                },
+                current_version: "0.0.1779772576-g751b94".to_string(),
+            },
+            resource_backups: Vec::new(),
+            resource_writes: Vec::new(),
+            schema_mismatches: Vec::new(),
+            repo_uninitialized: false,
+            global_skills: None,
+        };
+
+        let output = render_outcome(&outcome, false, Colors::plain());
+        assert!(!output.contains("Update available"));
+        assert_eq!(
+            output,
+            concat!(
+                "✓ Maestro is newer than the latest GitHub release\n",
+                "Current version: 0.0.1779772576-g751b94\n",
+                "Latest GitHub release: 0.0.1779700000-gabc123 (released 1h ago)\n",
             )
         );
     }

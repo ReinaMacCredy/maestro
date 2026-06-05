@@ -25,6 +25,10 @@ pub(super) enum PreparedBinary {
     UpToDate {
         release: ReleaseInfo,
     },
+    LocalNewer {
+        release: ReleaseInfo,
+        current_version: String,
+    },
     Skipped {
         reason: UpdateUnavailable,
     },
@@ -47,6 +51,16 @@ pub(super) fn prepare_binary_update(
         Ok(DownloadedBinary::UpToDate(release)) => {
             cleanup_work_dir(&work_dir);
             return Ok(PreparedBinary::UpToDate { release });
+        }
+        Ok(DownloadedBinary::LocalNewer {
+            release,
+            current_version,
+        }) => {
+            cleanup_work_dir(&work_dir);
+            return Ok(PreparedBinary::LocalNewer {
+                release,
+                current_version,
+            });
         }
         Ok(DownloadedBinary::Unavailable(reason)) => {
             cleanup_work_dir(&work_dir);
@@ -77,6 +91,13 @@ pub(super) fn replace_prepared_binary(
 ) -> Result<BinaryStatus> {
     match binary {
         PreparedBinary::UpToDate { release } => Ok(BinaryStatus::UpToDate { release }),
+        PreparedBinary::LocalNewer {
+            release,
+            current_version,
+        } => Ok(BinaryStatus::LocalNewer {
+            release,
+            current_version,
+        }),
         PreparedBinary::Skipped { reason } => Ok(BinaryStatus::Skipped { reason }),
         PreparedBinary::Candidate {
             path,
@@ -109,6 +130,7 @@ pub(super) fn cleanup_prepared_binary(binary: &PreparedBinary) {
 pub(super) fn prepared_release(binary: &PreparedBinary) -> Option<ReleaseInfo> {
     match binary {
         PreparedBinary::UpToDate { release } => Some(release.clone()),
+        PreparedBinary::LocalNewer { release, .. } => Some(release.clone()),
         PreparedBinary::Skipped { .. } => None,
         PreparedBinary::Candidate { release, .. } => release.clone(),
     }

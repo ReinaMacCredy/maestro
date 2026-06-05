@@ -89,6 +89,11 @@ pub enum BinaryStatus {
     },
     /// The currently installed binary already matches the newest release.
     UpToDate { release: ReleaseInfo },
+    /// The currently installed binary is newer than the latest release.
+    LocalNewer {
+        release: ReleaseInfo,
+        current_version: String,
+    },
     /// No binary was available from the downloader seam.
     Skipped { reason: UpdateUnavailable },
     /// The executable path was atomically replaced.
@@ -135,6 +140,11 @@ pub enum DownloadedBinary {
     },
     /// The latest release already matches the current binary.
     UpToDate(ReleaseInfo),
+    /// The current binary is newer than the latest release.
+    LocalNewer {
+        release: ReleaseInfo,
+        current_version: String,
+    },
     /// No binary work should be performed in this run.
     Unavailable(UpdateUnavailable),
 }
@@ -149,6 +159,11 @@ pub enum UpdateCheck {
     },
     /// The current binary already matches the newest release.
     UpToDate(ReleaseInfo),
+    /// The current binary is newer than the latest release.
+    LocalNewer {
+        release: ReleaseInfo,
+        current_version: String,
+    },
     /// No release lookup is available for this build.
     Unavailable(UpdateUnavailable),
 }
@@ -507,6 +522,13 @@ fn check_binary_update(
             current_version,
         }),
         UpdateCheck::UpToDate(release) => Ok(BinaryStatus::UpToDate { release }),
+        UpdateCheck::LocalNewer {
+            release,
+            current_version,
+        } => Ok(BinaryStatus::LocalNewer {
+            release,
+            current_version,
+        }),
         UpdateCheck::Unavailable(reason) => Ok(BinaryStatus::Skipped { reason }),
     }
 }

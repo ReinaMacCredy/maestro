@@ -224,6 +224,44 @@ printf '{{"tag_name":"v{}","published_at":"2026-05-26T05:16:16.000Z","assets":[{
 }
 
 #[test]
+fn update_does_not_downgrade_when_local_version_is_newer_than_github_release() {
+    let temp_dir = TestTempDir::new("maestro-update-test");
+    init_git_marker(temp_dir.path());
+    let paths = MaestroPaths::new(temp_dir.path());
+    assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
+
+    let path = fake_curl_path_env(
+        &temp_dir,
+        format!(
+            r#"#!/bin/sh
+printf '{{"tag_name":"v0.0.0.1-golder","published_at":"2026-05-26T05:16:16.000Z","assets":[{{"name":"{}","browser_download_url":"https://example.test/maestro","size":10}}]}}\n'
+"#,
+            platform_asset_name()
+        ),
+    );
+
+    let update = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .arg("update")
+        .current_dir(temp_dir.path())
+        .env("HOME", temp_dir.path().join("home"))
+        .env("MAESTRO_INSTALL_METHOD", "curl")
+        .env("PATH", path)
+        .output()
+        .expect("invariant: maestro update should run");
+
+    assert_success(&update);
+    let stdout = String::from_utf8_lossy(&update.stdout);
+    assert!(
+        stdout.contains("Maestro is newer than the latest GitHub release"),
+        "a newer local binary should be reported as newer, not downgraded:\n{stdout}"
+    );
+    assert!(stdout.contains(env!("MAESTRO_VERSION")));
+    assert!(stdout.contains("Latest GitHub release: 0.0.0.1-golder"));
+    assert!(!stdout.contains("Update available"));
+    assert!(!paths.maestro_dir().join("update").exists());
+}
+
+#[test]
 fn update_reports_manager_commands_for_cargo_installs() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
