@@ -281,8 +281,9 @@ fn guard_no_existing_child_tasks(paths: &MaestroPaths, feature_id: &str) -> Resu
 fn parse_plan(contents: &str) -> Result<Vec<PlanTask>> {
     let mut tasks = Vec::new();
     let mut current: Option<PlanTask> = None;
+    let mut in_task_plan_section = false;
     for (line_number, line) in contents.lines().enumerate() {
-        if let Some((local_id, title)) = parse_task_heading(line)? {
+        if let Some((local_id, title)) = parse_task_line(line, in_task_plan_section)? {
             if let Some(task) = current.take() {
                 tasks.push(task);
             }
@@ -296,17 +297,22 @@ fn parse_plan(contents: &str) -> Result<Vec<PlanTask>> {
             continue;
         }
         let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
+        if let Some(heading) = markdown_heading_text(trimmed) {
+            in_task_plan_section = is_task_plan_section(heading);
+            continue;
+        }
+        if trimmed.is_empty() {
             continue;
         }
         let Some(task) = current.as_mut() else {
             continue;
         };
-        if let Some(value) = field_value(trimmed, "check") {
+        let field_line = strip_markdown_list_marker(trimmed).unwrap_or(trimmed);
+        if let Some(value) = field_value(field_line, "check") {
             push_non_empty(&mut task.checks, value, line_number + 1, "check")?;
-        } else if let Some(value) = field_value(trimmed, "blocker") {
+        } else if let Some(value) = field_value(field_line, "blocker") {
             push_non_empty(&mut task.blockers, value, line_number + 1, "blocker")?;
-        } else if let Some(value) = field_value(trimmed, "after") {
+        } else if let Some(value) = field_value(field_line, "after") {
             let refs = value
                 .split(',')
                 .map(str::trim)
@@ -326,41 +332,185 @@ fn parse_plan(contents: &str) -> Result<Vec<PlanTask>> {
         tasks.push(task);
     }
     if tasks.is_empty() {
-        bail!("prepare plan must contain at least one `## Task` section");
+        bail!(
+            "prepare plan must contain at least one explicit task entry, such as `## Task T1: <title>`, `- Task T1: <title>`, or a numbered item inside a Task Plan section"
+        );
     }
     Ok(tasks)
 }
 
-fn parse_task_heading(line: &str) -> Result<Option<(Option<String>, String)>> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PlanLineKind {
+    Heading,
+    ListItem,
+    Plain,
+}
+
+fn parse_task_line(
+    line: &str,
+    in_task_plan_section: bool,
+) -> Result<Option<(Option<String>, String)>> {
     let trimmed = line.trim();
-    let Some(rest) = trimmed
-        .strip_prefix("## Task")
-        .or_else(|| trimmed.strip_prefix("### Task"))
-    else {
-        return Ok(None);
+    let (text, kind) = if let Some(heading) = markdown_heading_text(trimmed) {
+        (heading, PlanLineKind::Heading)
+    } else if let Some(item) = strip_markdown_list_marker(trimmed) {
+        (item, PlanLineKind::ListItem)
+    } else {
+        (trimmed, PlanLineKind::Plain)
     };
+
+    if text.is_empty() || is_task_field_line(text) {
+        return Ok(None);
+    }
+
+    if let Some(rest) = task_prefix_rest(text) {
+        return parse_task_rest(rest, line);
+    }
+
+    if in_task_plan_section {
+        if let Some((local_id, title)) = parse_local_ref_title(text, line)? {
+            return Ok(Some((Some(local_id), title)));
+        }
+        if kind == PlanLineKind::ListItem {
+            return Ok(Some((None, non_empty_task_title(text, line)?)));
+        }
+    }
+
+    Ok(None)
+}
+
+fn parse_task_rest(rest: &str, line: &str) -> Result<Option<(Option<String>, String)>> {
     let rest = rest.trim();
-    if !rest.starts_with(':') && !rest.contains(':') {
+    if let Some(title) = rest.strip_prefix(':') {
+        return Ok(Some((None, non_empty_task_title(title, line)?)));
+    }
+    if let Some(title) = rest.strip_prefix("- ") {
+        return Ok(Some((None, non_empty_task_title(title, line)?)));
+    }
+    if let Some((local_id, title)) = parse_local_ref_title(rest, line)? {
+        return Ok(Some((Some(local_id), title)));
+    }
+    if !rest.contains(':') && !rest.contains(" - ") {
         if looks_like_task_local_id(rest) {
             bail!("task heading must be `## Task: <title>` or `## Task T1: <title>`: {line}");
         }
         return Ok(None);
     }
-    let (local_id, title) = if let Some(title) = rest.strip_prefix(':') {
-        (None, title.trim())
-    } else if let Some((local_id, title)) = rest.split_once(':') {
-        let local_id = local_id.trim();
-        if local_id.is_empty() {
-            bail!("task heading has an empty local id: {line}");
-        }
-        (Some(local_id.to_string()), title.trim())
-    } else {
-        bail!("task heading must be `## Task: <title>` or `## Task T1: <title>`: {line}");
+    bail!("task heading must be `## Task: <title>` or `## Task T1: <title>`: {line}");
+}
+
+fn parse_local_ref_title(value: &str, line: &str) -> Result<Option<(String, String)>> {
+    let Some((local_id, title)) = split_task_title(value) else {
+        return Ok(None);
     };
+    let local_id = local_id.trim();
+    if local_id.is_empty() {
+        bail!("task heading has an empty local id: {line}");
+    }
+    if !looks_like_task_local_id(local_id) {
+        return Ok(None);
+    }
+    Ok(Some((
+        local_id.to_string(),
+        non_empty_task_title(title, line)?,
+    )))
+}
+
+fn split_task_title(value: &str) -> Option<(&str, &str)> {
+    value.split_once(':').or_else(|| value.split_once(" - "))
+}
+
+fn non_empty_task_title(value: &str, line: &str) -> Result<String> {
+    let title = value.trim();
     if title.is_empty() {
         bail!("task heading title must not be empty: {line}");
     }
-    Ok(Some((local_id, title.to_string())))
+    Ok(title.to_string())
+}
+
+fn markdown_heading_text(line: &str) -> Option<&str> {
+    let hash_count = line.bytes().take_while(|byte| *byte == b'#').count();
+    if !(1..=6).contains(&hash_count) {
+        return None;
+    }
+    let rest = line.get(hash_count..)?;
+    if !rest.starts_with(' ') {
+        return None;
+    }
+    Some(rest.trim())
+}
+
+fn strip_markdown_list_marker(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    let rest = trimmed
+        .strip_prefix("- ")
+        .or_else(|| trimmed.strip_prefix("* "))
+        .or_else(|| trimmed.strip_prefix("+ "));
+    if let Some(rest) = rest {
+        return Some(strip_checkbox(rest).trim());
+    }
+
+    let marker_len = trimmed
+        .bytes()
+        .take_while(|byte| byte.is_ascii_digit())
+        .count();
+    if marker_len == 0 {
+        return None;
+    }
+    let after_digits = trimmed.get(marker_len..)?;
+    let delimiter = after_digits.as_bytes().first().copied()?;
+    if delimiter != b'.' && delimiter != b')' {
+        return None;
+    }
+    let rest = after_digits.get(1..)?;
+    if !rest.starts_with(' ') {
+        return None;
+    }
+    Some(strip_checkbox(rest).trim())
+}
+
+fn strip_checkbox(value: &str) -> &str {
+    let trimmed = value.trim_start();
+    if let Some(rest) = trimmed
+        .strip_prefix("[ ] ")
+        .or_else(|| trimmed.strip_prefix("[x] "))
+        .or_else(|| trimmed.strip_prefix("[X] "))
+    {
+        rest
+    } else {
+        value
+    }
+}
+
+fn task_prefix_rest(value: &str) -> Option<&str> {
+    let rest = value
+        .strip_prefix("Task")
+        .or_else(|| value.strip_prefix("task"))?;
+    if rest
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_alphabetic())
+    {
+        return None;
+    }
+    Some(rest.trim())
+}
+
+fn is_task_plan_section(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    normalized == "tasks"
+        || normalized == "plan"
+        || normalized.contains("task plan")
+        || normalized.contains("task breakdown")
+        || normalized.contains("implementation plan")
+        || normalized.contains("implementation tasks")
+        || normalized.contains("work plan")
+}
+
+fn is_task_field_line(value: &str) -> bool {
+    field_value(value, "check").is_some()
+        || field_value(value, "blocker").is_some()
+        || field_value(value, "after").is_some()
 }
 
 fn looks_like_task_local_id(value: &str) -> bool {
