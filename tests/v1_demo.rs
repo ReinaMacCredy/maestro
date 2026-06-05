@@ -8,10 +8,13 @@ use std::process::{Command, Stdio};
 use serde_json::Value;
 use support::TestTempDir;
 
-fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(args)
-        .current_dir(cwd)
+fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
@@ -30,8 +33,8 @@ fn stdout(output: &std::process::Output) -> String {
     String::from_utf8(output.stdout.clone()).expect("invariant: stdout should be UTF-8")
 }
 
-fn run(repo: &Path, args: &[&str]) -> String {
-    let output = maestro(repo, args);
+fn run_with_env(repo: &Path, args: &[&str], envs: &[(&str, &str)]) -> String {
+    let output = maestro_with_env(repo, args, envs);
     assert_success(&output, args);
     stdout(&output)
 }
@@ -54,20 +57,24 @@ fn parse_mcp_frame(bytes: &[u8]) -> Value {
 fn v1_demo_runs_core_flow_watch_query_and_mcp() {
     let temp = TestTempDir::new("maestro-v1-demo");
     let repo = temp.path();
+    let home = TestTempDir::new("maestro-v1-demo-home");
+    let home_var = home.path().to_string_lossy().into_owned();
+    let envs = [("HOME", home_var.as_str())];
     fs::create_dir(repo.join(".git")).expect("invariant: git marker should be creatable");
 
-    run(repo, &["init", "--yes"]);
-    run(repo, &["install", "--agent", "claude"]);
-    run(repo, &["install", "--agent", "codex"]);
-    run(repo, &["task", "create", "Demo task"]);
-    run(
+    run_with_env(repo, &["init", "--yes"], &envs);
+    run_with_env(repo, &["install", "--agent", "claude"], &envs);
+    run_with_env(repo, &["install", "--agent", "codex"], &envs);
+    run_with_env(repo, &["task", "create", "Demo task"], &envs);
+    run_with_env(
         repo,
         &["task", "set", "task-001", "--check", "demo task verified"],
+        &envs,
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
-    run(repo, &["task", "claim", "task-001"]);
-    run(
+    run_with_env(repo, &["task", "explore", "task-001"], &envs);
+    run_with_env(repo, &["task", "accept", "task-001"], &envs);
+    run_with_env(repo, &["task", "claim", "task-001"], &envs);
+    run_with_env(
         repo,
         &[
             "task",
@@ -80,24 +87,28 @@ fn v1_demo_runs_core_flow_watch_query_and_mcp() {
             "--proof",
             "implemented demo task",
         ],
+        &envs,
     );
 
-    let watch = run(repo, &["task", "list", "--watch", "--interval", "1"]);
+    let watch = run_with_env(repo, &["task", "list", "--watch", "--interval", "1"], &envs);
     assert!(watch.contains("scheduler:"));
     assert!(watch.contains("Demo task"));
     assert!(watch.contains("verified"));
 
-    let proof = run(repo, &["query", "proof", "task-001"]);
+    let proof = run_with_env(repo, &["query", "proof", "task-001"], &envs);
     assert!(proof.contains("proof task-001: accepted"));
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_maestro"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command
         .args(["mcp", "serve"])
         .current_dir(repo)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("invariant: mcp serve should spawn");
+        .stderr(Stdio::piped());
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    let mut child = command.spawn().expect("invariant: mcp serve should spawn");
     child
         .stdin
         .as_mut()
@@ -120,7 +131,7 @@ fn v1_demo_runs_core_flow_watch_query_and_mcp() {
             .any(|tool| tool["name"] == "maestro_status")
     );
 
-    let help = run(repo, &["--help"]);
+    let help = run_with_env(repo, &["--help"], &envs);
     for dropped in ["mission", "verdict", "policy", "workflow"] {
         assert!(!help.contains(dropped), "help should not expose {dropped}");
     }

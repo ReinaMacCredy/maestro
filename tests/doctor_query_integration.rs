@@ -349,24 +349,27 @@ fn doctor_and_task_doctor_flag_a_dangling_decision_blocker() {
 fn doctor_flags_a_deleted_installed_mirror() {
     let temp = setup_repo("maestro-doctor-install-integrity");
     let repo = temp.path();
+    let home = TestTempDir::new("maestro-doctor-install-home");
+    let home_var = home.path().to_string_lossy().into_owned();
+    let envs = [("HOME", home_var.as_str())];
 
     // Init'd but no agent installed: no install check, doctor stays ok.
-    let pre = maestro(repo, &["doctor"]);
+    let pre = maestro_with_env(repo, &["doctor"], &envs);
     assert_success(&pre, &["doctor"]);
     assert!(!stdout(&pre).contains("check install"));
 
     assert_success(
-        &maestro(repo, &["install", "--agent", "claude"]),
+        &maestro_with_env(repo, &["install", "--agent", "claude"], &envs),
         &["install", "--agent", "claude"],
     );
-    let installed = maestro(repo, &["doctor"]);
+    let installed = maestro_with_env(repo, &["doctor"], &envs);
     assert_success(&installed, &["doctor"]);
     assert!(stdout(&installed).contains("check install: ok"));
 
     // Deleting an owned mirror is caught.
     fs::remove_file(repo.join("CLAUDE.md"))
         .expect("invariant: installed CLAUDE.md should be removable");
-    let broken = maestro(repo, &["doctor"]);
+    let broken = maestro_with_env(repo, &["doctor"], &envs);
     assert_failure(&broken, &["doctor"]);
     assert!(
         stderr(&broken).contains("mirror is missing or broken"),
@@ -376,10 +379,10 @@ fn doctor_flags_a_deleted_installed_mirror() {
 
     // Re-installing repairs it.
     assert_success(
-        &maestro(repo, &["install", "--agent", "claude"]),
+        &maestro_with_env(repo, &["install", "--agent", "claude"], &envs),
         &["install", "--agent", "claude"],
     );
-    assert_success(&maestro(repo, &["doctor"]), &["doctor"]);
+    assert_success(&maestro_with_env(repo, &["doctor"], &envs), &["doctor"]);
 }
 
 #[test]

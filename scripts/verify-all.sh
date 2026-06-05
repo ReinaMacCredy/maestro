@@ -53,9 +53,10 @@ else
 fi
 
 LOG="$ARTIFACT_ROOT/logs"
+VERIFY_HOME="$ARTIFACT_ROOT/home"
 PASS_FILE="$ARTIFACT_ROOT/passes.txt"
 REQUIRED_FILE="$ARTIFACT_ROOT/required-passes.txt"
-mkdir -p "$LOG"
+mkdir -p "$LOG" "$VERIFY_HOME"
 : > "$PASS_FILE"
 : > "$REQUIRED_FILE"
 
@@ -93,7 +94,11 @@ run_in() {
   printf '+ %s\n' "$*" > "$outfile"
   (
     cd "$dir" || exit 125
-    "$@"
+    if [[ "${1:-}" == "$BIN" ]]; then
+      HOME="$VERIFY_HOME" "$@"
+    else
+      "$@"
+    fi
   ) >> "$outfile" 2>&1
   local rc=$?
   if [[ "$expected" == "fail" ]]; then
@@ -523,11 +528,11 @@ run_harness_escalation_workflow() {
   run_in harness-status "$work" 0 "$BIN" status
   contains harness-status "HARNESS FRICTION"
   contains harness-status "seen: 9x/3s"
-  contains harness-status "run: maestro task claim task-001"
+  contains harness-status "run: maestro task claim --next"
 
   run_in harness-task-next "$work" 0 "$BIN" task next
   contains harness-task-next "HARNESS FRICTION"
-  contains harness-task-next "run: maestro task claim task-001"
+  contains harness-task-next "run: maestro task claim --next"
 
   run_in harness-status-json "$work" 0 "$BIN" status --json
   json_assert harness-status-json 'data["harness_friction"][0]["id"] == "hb-001"'
@@ -556,7 +561,7 @@ run_harness_escalation_workflow() {
 
   run_in harness-status-dismissed "$work" 0 "$BIN" status
   not_contains harness-status-dismissed "HARNESS FRICTION"
-  contains harness-status-dismissed "run: maestro task claim task-001"
+  contains harness-status-dismissed "run: maestro task claim --next"
 }
 
 run_brownfield_workflow() {
