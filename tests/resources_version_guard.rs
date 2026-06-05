@@ -24,8 +24,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 9] = [
     (
         "skill",
         "maestro-task",
-        "1.8.0",
-        "4b5d8a928ed09bea6659a892afc227a0983b463f2eb0f58e56c789e88223c675",
+        "1.8.1",
+        "2a5e1c39a5eb4b29c58c053e823c2ef495b53ee52045a75d31914168207b0ae9",
     ),
     (
         "skill",

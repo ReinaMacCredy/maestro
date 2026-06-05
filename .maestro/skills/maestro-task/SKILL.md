@@ -1,6 +1,6 @@
 ---
 name: maestro-task
-version: 1.8.0
+version: 1.8.1
 description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs and the harness self-improvement loop. For the feature contract tasks deliver against, see the maestro-feature skill.
 ---
 
@@ -81,8 +81,8 @@ Use `maestro event create --task-id <id> --claim "<claim>"` only when repairing
 missing proof or recording additional manual evidence after the default
 `complete --proof` path was not enough.
 
-If `srcwalk review`, `git diff`, or changed-file discovery cannot run because
-the workspace has no Git metadata, do a targeted non-Git closeout review:
+If `git diff` or changed-file discovery cannot run because the workspace has no
+Git metadata, do a targeted non-Git closeout review:
 read the touched modules directly, run the task's smallest falsifying gates,
 and state that Git metadata was unavailable in the completion proof.
 
