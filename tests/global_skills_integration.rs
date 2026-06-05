@@ -144,7 +144,7 @@ fn install_creates_global_cache_lock_and_all_supported_agent_links() {
 }
 
 #[test]
-fn install_global_collision_fails_before_repo_local_writes() {
+fn install_global_collision_warns_after_repo_local_writes() {
     let temp = TestTempDir::new("maestro-global-skills-test");
     let repo = temp.path().join("repo");
     let home = temp.path().join("home");
@@ -158,12 +158,17 @@ fn install_global_collision_fails_before_repo_local_writes() {
 
     let output = maestro(&["install", "--agent", "codex"], &repo, &home);
 
-    assert!(!output.status.success());
+    assert_success(&output);
     let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("warning: installed repo integration, but skipped global skill sync"),
+        "{stderr}"
+    );
     assert!(stderr.contains("refusing global skill install"), "{stderr}");
     assert!(stderr.contains("maestro-task"), "{stderr}");
-    assert!(!repo.join(".maestro/install-lock.yaml").exists());
-    assert!(!repo.join(".codex/config.toml").exists());
+    assert!(repo.join(".maestro/install-lock.yaml").exists());
+    assert!(repo.join(".codex/config.toml").exists());
+    assert!(repo.join(".codex/skills").is_symlink());
     assert!(!home.join(".maestro/skills/maestro-task/SKILL.md").exists());
 }
 

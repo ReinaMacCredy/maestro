@@ -1,6 +1,6 @@
 ---
 name: qa-baseline
-version: 1.1.0
+version: 1.1.1
 description: "Use before feature accept to capture baseline.md: a short real-scenario behavior contract with stable bl-NNN ids for the later ship gate."
 ---
 
@@ -9,8 +9,8 @@ description: "Use before feature accept to capture baseline.md: a short real-sce
 Create `.maestro/features/<id>/baseline.md` before feature edits start. This is
 the behavior oracle for `feature ship`, not a list of tests.
 
-Activate: record `skill_activation` for `qa-baseline` with
-`activation_mode=agent_selected` through `maestro hook record`.
+Activate:
+`printf '%s\n' '{"event_type":"skill_activation","skill_name":"qa-baseline","activation_mode":"agent_selected"}' | maestro hook record`
 
 ## Use
 

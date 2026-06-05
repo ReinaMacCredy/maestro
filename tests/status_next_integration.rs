@@ -888,6 +888,21 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         &["feature", "prepare", "serverless-news-backend", "--draft"],
     );
     assert!(draft.contains("prepare-draft.md"), "{draft}");
+    let draft_path = repo.join(".maestro/features/serverless-news-backend/prepare-draft.md");
+    let draft_contents =
+        fs::read_to_string(draft_path).expect("invariant: prepare draft should be readable");
+    assert!(
+        draft_contents.contains("## Task T1: Implement accepted behavior"),
+        "{draft_contents}"
+    );
+    assert!(
+        draft_contents.contains("check: GET /articles returns records"),
+        "{draft_contents}"
+    );
+    assert!(
+        !draft_contents.contains("dependency approval required"),
+        "{draft_contents}"
+    );
 
     let plan = repo.join("PLAN-serverless-news.md");
     fs::write(

@@ -19,6 +19,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             area,
             non_goal,
             question,
+            clear_questions,
             description,
             request,
             input_type,
@@ -29,7 +30,11 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 acceptance: opt_list(acceptance),
                 affected_areas: opt_list(area),
                 non_goals: opt_list(non_goal),
-                open_questions: opt_list(question),
+                open_questions: if clear_questions {
+                    Some(Vec::new())
+                } else {
+                    opt_list(question)
+                },
                 description,
                 raw_request: request,
                 input_type,
@@ -259,7 +264,7 @@ fn new_feature(paths: &MaestroPaths, title: &str) -> Result<()> {
 fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<()> {
     if edits.is_empty() {
         bail!(
-            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  flags: --acceptance --area --non-goal --question --description --request --type"
+            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  flags: --acceptance --area --non-goal --question --clear-questions --description --request --type"
         );
     }
     let view = feature::set(paths, id, edits)?;

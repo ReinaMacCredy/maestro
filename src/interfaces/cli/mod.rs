@@ -415,6 +415,12 @@ pub enum FeatureCommand {
             help = "Open question (repeatable); replaces the current questions list"
         )]
         question: Vec<String>,
+        #[arg(
+            long = "clear-questions",
+            conflicts_with = "question",
+            help = "Clear all open questions"
+        )]
+        clear_questions: bool,
         #[arg(long, help = "Replace the description")]
         description: Option<String>,
         #[arg(long, help = "Replace the raw request")]

@@ -92,6 +92,23 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(set_output.contains("acceptance=1"));
     assert!(set_output.contains("areas=1"));
 
+    let question_args = [
+        "feature",
+        "set",
+        "billing-csv-export",
+        "--question",
+        "Which export filename?",
+    ];
+    let question_output = stdout(maestro(&question_args, temp_dir.path()), &question_args);
+    assert!(question_output.contains("questions=1"));
+
+    let clear_questions_args = ["feature", "set", "billing-csv-export", "--clear-questions"];
+    let clear_questions_output = stdout(
+        maestro(&clear_questions_args, temp_dir.path()),
+        &clear_questions_args,
+    );
+    assert!(clear_questions_output.contains("questions=0"));
+
     // accept also requires a captured baseline (F); ship requires it proven.
     let features_dir = temp_dir.path().join(".maestro/features");
     write_baseline(&features_dir, "billing-csv-export");

@@ -72,14 +72,24 @@ pub fn write_draft(paths: &MaestroPaths, feature_id: &str) -> Result<DraftReport
         .parent()
         .with_context(|| format!("failed to determine parent for {}", path.display()))?;
     ensure_dir(parent)?;
+    let first_check = view
+        .acceptance
+        .first()
+        .map(String::as_str)
+        .unwrap_or("observable behavior passes through the real entry point");
+    let areas = if view.affected_areas.is_empty() {
+        "unspecified".to_string()
+    } else {
+        view.affected_areas.join(", ")
+    };
     let template = format!(
         "# Prepare plan for {}\n\n\
-         ## Task T1: Scaffold project\n\
-         check: package manifest exists and tests run\n\
-         blocker: dependency approval required for <packages>\n\n\
-         ## Task T2: Implement first behavior\n\
-         after: T1\n\
-         check: observable behavior passes through the real entry point\n",
+         # Review before applying. Split this into multiple tasks only when the\n\
+         # accepted contract has independent work slices; add blocker: lines only\n\
+         # for real approvals or external waits.\n\
+         # Affected areas: {areas}\n\n\
+         ## Task T1: Implement accepted behavior\n\
+         check: {first_check}\n",
         view.id
     );
     write_string_atomic(&path, &template)

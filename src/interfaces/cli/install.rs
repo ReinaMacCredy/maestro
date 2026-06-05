@@ -15,10 +15,13 @@ pub fn run(args: AgentArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
     harness::ensure_harness_protocol_exists(&paths)?;
     extraction::ensure_hook_script_exists(&paths)?;
-    let global_skills = skills::prepare_global_skills()?;
     install::install_agent(&paths, agent)?;
-    let global_outcome = skills::write_prepared_global_skills(global_skills)?;
-    print!("{}", skills::render_global_skills_outcome(&global_outcome));
+    match skills::prepare_global_skills().and_then(skills::write_prepared_global_skills) {
+        Ok(global_outcome) => print!("{}", skills::render_global_skills_outcome(&global_outcome)),
+        Err(error) => {
+            eprintln!("warning: installed repo integration, but skipped global skill sync: {error}")
+        }
+    }
 
     // The mirror writes above print their diffs; close with a uniform success
     // line plus the per-agent next step so both agents end the same way (T6.4).

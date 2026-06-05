@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.5.0
+version: 1.5.1
 description: "Use for the Maestro feature lifecycle: author, accept, prepare, start, amend, ship, cancel, archive, and inspect a feature contract plus its child-task rollup."
 ---
 
@@ -9,8 +9,8 @@ description: "Use for the Maestro feature lifecycle: author, accept, prepare, st
 Use this for the feature contract and its guarded lifecycle. Tasks deliver the
 work; QA baseline and slice artifacts prove the feature gates.
 
-Activate: record `skill_activation` for `maestro-feature` with
-`activation_mode=agent_selected` through `maestro hook record`.
+Activate:
+`printf '%s\n' '{"event_type":"skill_activation","skill_name":"maestro-feature","activation_mode":"agent_selected"}' | maestro hook record`
 
 ## Use
 
@@ -33,8 +33,8 @@ maestro feature archive <id>                          # terminal features only
 ```
 
 `set` works only while `proposed` and replaces each repeated field:
-`--acceptance`, `--area`, `--non-goal`, `--question`, `--description`,
-`--request`, `--type`.
+`--acceptance`, `--area`, `--non-goal`, `--question`, `--clear-questions`,
+`--description`, `--request`, `--type`.
 
 `prepare --from` expects a visible plan:
 

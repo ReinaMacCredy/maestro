@@ -1,6 +1,6 @@
 ---
 name: qa-slice
-version: 1.1.0
+version: 1.1.1
 description: "Use after implementation waves to replay affected baseline scenarios and record qa-slices.yaml evidence for every shipped behavioral bl-NNN."
 ---
 
@@ -10,8 +10,8 @@ Replay affected baseline scenarios after an implementation wave and record the
 evidence in `.maestro/features/<id>/qa-slices.yaml`. The ship gate counts only
 slices with scenario ids and non-empty evidence.
 
-Activate: record `skill_activation` for `qa-slice` with
-`activation_mode=agent_selected` through `maestro hook record`.
+Activate:
+`printf '%s\n' '{"event_type":"skill_activation","skill_name":"qa-slice","activation_mode":"agent_selected"}' | maestro hook record`
 
 ## Use
 

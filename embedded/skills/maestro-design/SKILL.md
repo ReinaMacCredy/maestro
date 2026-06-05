@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.4.0
+version: 1.4.1
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-feature."
 ---
 
@@ -10,8 +10,8 @@ Use this when the deliverable is the design of record, not code. The feature
 stays `proposed` while the contract is still editable; `feature accept` ends
 design and freezes the contract.
 
-Activate: record `skill_activation` for `maestro-design` with
-`activation_mode=agent_selected` through `maestro hook record`.
+Activate:
+`printf '%s\n' '{"event_type":"skill_activation","skill_name":"maestro-design","activation_mode":"agent_selected"}' | maestro hook record`
 
 ## Do
 
@@ -22,15 +22,17 @@ Activate: record `skill_activation` for `maestro-design` with
    where code is involved.
 3. Put the problem and open questions on the feature:
    `maestro feature set <id> --description "<problem>" --question "<fork>"`.
-   Re-issue `--question` with the remaining list whenever one is answered.
 4. Decide one fork at a time. For each fork, give the concrete example, the
    options, the tradeoff, and the chosen answer.
 5. Lock each decision durably:
-   `maestro decision new "<decision title>"`, then append the reasoning to
-   `.maestro/features/<id>/notes.md` as a dated line.
+   `maestro decision new "<decision title>"`, fill the generated decision
+   template, then append the reasoning to `.maestro/features/<id>/notes.md` as
+   a dated line.
 6. If a chosen answer removes a field, file, command, behavior, or workflow,
    enumerate consumers before locking the removal.
-7. Author the implementation contract only after decisions are stable:
+7. Keep feature questions current: re-issue `--question` with remaining open
+   forks, or use `maestro feature set <id> --clear-questions` when none remain.
+8. Author the implementation contract only after decisions are stable:
    `maestro feature set <id> --acceptance "<observable behavior>" --area "<surface>"`.
 
 ## Taste Forks
