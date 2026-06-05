@@ -4,6 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 
+use crate::domain::skills;
 use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
@@ -42,6 +43,7 @@ pub fn run(args: UpdateArgs) -> Result<()> {
         current_version: env!("MAESTRO_VERSION"),
         check_only: args.check,
         force: args.force,
+        global_skills_home: None,
     }) {
         Ok(outcome) => outcome,
         Err(error) => {
@@ -95,6 +97,7 @@ pub fn run_auto_check() -> Result<()> {
         current_version: env!("MAESTRO_VERSION"),
         check_only: true,
         force: false,
+        global_skills_home: None,
     })?;
     record_auto_check(&paths, now)?;
 
@@ -158,6 +161,10 @@ fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors
         out.push_str(
             "No `.maestro` here; run `maestro init` to set up this repo (bundled resources were not extracted).\n",
         );
+    }
+
+    if let Some(global_skills) = &outcome.global_skills {
+        out.push_str(&skills::render_global_skills_outcome(global_skills));
     }
 
     // A created file (no `previous`) has no backup, so it is otherwise invisible
@@ -397,6 +404,7 @@ mod tests {
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
+            global_skills: None,
         };
 
         assert_eq!(
@@ -421,6 +429,7 @@ mod tests {
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
+            global_skills: None,
         };
 
         assert_eq!(
@@ -448,6 +457,7 @@ mod tests {
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
+            global_skills: None,
         };
 
         assert_eq!(
@@ -472,6 +482,7 @@ mod tests {
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
+            global_skills: None,
         };
 
         assert_eq!(
@@ -551,6 +562,7 @@ mod tests {
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
+            global_skills: None,
         };
 
         assert_eq!(

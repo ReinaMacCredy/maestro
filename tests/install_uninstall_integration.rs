@@ -14,6 +14,7 @@ fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(args)
         .current_dir(cwd)
+        .env("HOME", cwd.join("home"))
         .output()
         .expect("invariant: compiled maestro binary should be runnable in install tests")
 }

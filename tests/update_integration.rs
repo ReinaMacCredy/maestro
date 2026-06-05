@@ -20,6 +20,7 @@ fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(args)
         .current_dir(cwd)
+        .env("HOME", cwd.join("home"))
         .output()
         .expect("invariant: maestro binary should run")
 }
@@ -185,6 +186,7 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
     let auto_check = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("doctor")
         .current_dir(temp_dir.path())
+        .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", path)
         .output()
@@ -206,6 +208,7 @@ printf '{{"tag_name":"v{}","published_at":"2026-05-26T05:16:16.000Z","assets":[{
     let curl_update = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("update")
         .current_dir(temp_dir.path())
+        .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", curl_update_path)
         .output()
@@ -229,6 +232,7 @@ fn update_reports_manager_commands_for_cargo_installs() {
     let cargo = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(["update", "--check"])
         .current_dir(temp_dir.path())
+        .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "cargo")
         .output()
         .expect("invariant: maestro update should run");
@@ -264,6 +268,7 @@ fn simulated_download_failure_preserves_existing_binary_file() {
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
+            global_skills_home: Some(temp_dir.path()),
         },
         &FailingDownloader,
         &NoopVerifier,
@@ -315,6 +320,7 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
+            global_skills_home: Some(temp_dir.path()),
         },
         &StagingFailingDownloader,
         &NoopVerifier,
@@ -352,6 +358,7 @@ fn checksum_verification_failure_prevents_binary_replacement() {
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
+            global_skills_home: Some(temp_dir.path()),
         },
         &CandidateDownloader,
         &FailingVerifier,
@@ -417,6 +424,7 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
+            global_skills_home: Some(temp_dir.path()),
         },
         &CandidateDownloader,
         &NoopVerifier,
@@ -472,6 +480,7 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
             current_version: "0.0.1779700000-gabc123",
             check_only: false,
             force: false,
+            global_skills_home: Some(temp_dir.path()),
         },
         &CandidateDownloader,
         &NoopVerifier,
@@ -614,6 +623,7 @@ exit 18
     let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("update")
         .current_dir(temp_dir.path())
+        .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", path)
         .output()
@@ -648,6 +658,7 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
     let first = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("doctor")
         .current_dir(temp_dir.path())
+        .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", &path)
         .output()
@@ -660,6 +671,7 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
     let second = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("doctor")
         .current_dir(temp_dir.path())
+        .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", path)
         .output()
@@ -686,6 +698,7 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
     let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(["init", "--dry-run"])
         .current_dir(temp_dir.path())
+        .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", path)
         .output()

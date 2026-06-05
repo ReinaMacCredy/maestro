@@ -557,7 +557,11 @@ in context, alongside the feature and task flows.
 
 `maestro install` extracts agent skills (design, feature, task, verify, QA) into
 `.maestro/skills/` and wires hook scripts so the agent's actions are recorded as run events.
-`maestro sync` refreshes those bundled resources to the running binary, preserving your edits.
+It also syncs Maestro-owned global skills under `~/.maestro/skills` and links them into
+supported agent roots (`~/.agents/skills`, `~/.claude/skills`) so Maestro skills are available
+outside the current repo. `~/.codex/skills` is not managed in v1.
+`maestro sync` refreshes repo-local bundled resources to the running binary, preserving your
+edits. `maestro sync --global-skills` refreshes only the user-level global skill cache and links.
 
 ## Command reference
 
@@ -565,7 +569,7 @@ in context, alongside the feature and task flows.
 | --- | --- |
 | `init` | Scaffold `.maestro/` and extract bundled resources |
 | `install` / `uninstall` | Wire or remove agent hooks and config (`--agent claude\|codex`) |
-| `sync` | Resync bundled resources to this binary, offline, preserving edits |
+| `sync` | Resync repo-local bundled resources, or global skills with `--global-skills` |
 | `update` | Upgrade the binary and refresh resources |
 | `doctor` | Diagnose the installation |
 | `feature` | Manage the product contract and its lifecycle |

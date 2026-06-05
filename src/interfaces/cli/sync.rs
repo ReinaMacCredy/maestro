@@ -7,6 +7,7 @@ use crate::operations::sync::{self, SyncOptions};
 pub fn run(args: SyncArgs) -> Result<()> {
     let outcome = sync::run(&SyncOptions {
         dry_run: args.dry_run,
+        global_skills: args.global_skills,
     })?;
     print!("{}", sync::render(&outcome));
     Ok(())

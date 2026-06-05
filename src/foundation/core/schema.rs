@@ -16,6 +16,8 @@ pub const VERIFICATION_SCHEMA_VERSION: &str = "maestro.verification.v1";
 pub const ACCEPTANCE_SCHEMA_VERSION: &str = "maestro.acceptance.v1";
 /// Schema version for install ownership lockfiles.
 pub const INSTALL_LOCK_SCHEMA_VERSION: &str = "maestro.install_lock.v1";
+/// Schema version for the user-level Maestro global skills lock.
+pub const GLOBAL_SKILLS_LOCK_SCHEMA_VERSION: &str = "maestro.global_skills_lock.v1";
 /// Schema version for harness backlog proposals.
 pub const BACKLOG_SCHEMA_VERSION: &str = "maestro.backlog.v1";
 /// Schema version for the canonical verification report restore journal.
@@ -32,6 +34,7 @@ pub const ALL_SCHEMA_VERSIONS: &[&str] = &[
     VERIFICATION_SCHEMA_VERSION,
     ACCEPTANCE_SCHEMA_VERSION,
     INSTALL_LOCK_SCHEMA_VERSION,
+    GLOBAL_SKILLS_LOCK_SCHEMA_VERSION,
     BACKLOG_SCHEMA_VERSION,
     VERIFICATION_RESTORE_SCHEMA_VERSION,
 ];

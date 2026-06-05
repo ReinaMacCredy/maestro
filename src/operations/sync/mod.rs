@@ -14,6 +14,7 @@ use crate::domain::extraction::{
     ExtractMode, ExtractReport, FolderDecision, FolderPreview, extract_all, preview_all,
     render_preview,
 };
+use crate::domain::skills::{self, GlobalSkillsOutcome};
 use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
@@ -26,6 +27,8 @@ const NOT_INITIALIZED: &str = "no .maestro directory found here; run `maestro in
 pub struct SyncOptions {
     /// Preview the resync without writing files.
     pub dry_run: bool,
+    /// Resync the user-level Maestro global skill cache instead of repo-local resources.
+    pub global_skills: bool,
 }
 
 /// Result of a sync operation.
@@ -40,11 +43,26 @@ pub enum SyncOutcome {
     },
     /// Sync only previewed the resync (`--dry-run`).
     DryRun(Vec<FolderPreview>),
+    /// Sync resynced the user-level global skill cache and links.
+    GlobalSkills(GlobalSkillsOutcome),
+    /// Sync only previewed global skills (`--dry-run --global-skills`).
+    GlobalSkillsDryRun(String),
 }
 
 /// Resync bundled resources to this binary's shipped versions. Offline and
 /// edit-preserving; backs up drifted folders before overwriting them.
 pub fn run(options: &SyncOptions) -> Result<SyncOutcome> {
+    if options.global_skills {
+        let prepared = skills::prepare_global_skills()?;
+        if options.dry_run {
+            return Ok(SyncOutcome::GlobalSkillsDryRun(
+                skills::render_global_skills_dry_run(&prepared),
+            ));
+        }
+        let outcome = skills::write_prepared_global_skills(prepared)?;
+        return Ok(SyncOutcome::GlobalSkills(outcome));
+    }
+
     let paths = sync_paths()?;
     announce_repo_root(paths.repo_root());
 
@@ -115,6 +133,8 @@ pub fn render(outcome: &SyncOutcome) -> String {
             out
         }
         SyncOutcome::Applied { preview, report } => render_applied(preview, report),
+        SyncOutcome::GlobalSkills(outcome) => skills::render_global_skills_outcome(outcome),
+        SyncOutcome::GlobalSkillsDryRun(rendered) => rendered.clone(),
     }
 }
 

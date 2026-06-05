@@ -1,6 +1,9 @@
 use anyhow::Result;
 
+use crate::domain::extraction;
+use crate::domain::harness;
 use crate::domain::install;
+use crate::domain::skills;
 use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
 use crate::interfaces::cli::{Agent, AgentArgs};
 
@@ -10,7 +13,12 @@ pub fn run(args: AgentArgs) -> Result<()> {
     let repo_root = discover_repo_root()?;
     announce_repo_root(&repo_root);
     let paths = MaestroPaths::new(repo_root);
+    harness::ensure_harness_protocol_exists(&paths)?;
+    extraction::ensure_hook_script_exists(&paths)?;
+    let global_skills = skills::prepare_global_skills()?;
     install::install_agent(&paths, agent)?;
+    let global_outcome = skills::write_prepared_global_skills(global_skills)?;
+    print!("{}", skills::render_global_skills_outcome(&global_outcome));
 
     // The mirror writes above print their diffs; close with a uniform success
     // line plus the per-agent next step so both agents end the same way (T6.4).

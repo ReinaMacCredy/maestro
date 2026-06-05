@@ -50,7 +50,7 @@ pub enum RootCommand {
     Update(UpdateArgs),
     #[command(
         about = "Resync bundled resources to this binary's versions (offline)",
-        after_help = "Examples:\n  maestro sync                 # resync bundled resources to this binary, preserving edits\n  maestro sync --dry-run       # preview the resync, write nothing"
+        after_help = "Examples:\n  maestro sync                 # resync repo bundled resources to this binary, preserving edits\n  maestro sync --global-skills # resync user-level Maestro skill cache and links\n  maestro sync --dry-run       # preview the resync, write nothing"
     )]
     Sync(SyncArgs),
     #[command(about = "Remove maestro hooks and config for an agent")]
@@ -156,6 +156,9 @@ pub struct SyncArgs {
     /// Preview the resync without writing files.
     #[arg(long)]
     pub dry_run: bool,
+    /// Resync the user-level Maestro global skill cache and supported agent skill links.
+    #[arg(long = "global-skills")]
+    pub global_skills: bool,
 }
 
 #[derive(Clone, Debug, ValueEnum)]

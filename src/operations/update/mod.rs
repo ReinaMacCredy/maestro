@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use crate::domain::extraction::{
     ExtractMode, ExtractReport, ResourceBackup, ResourceWrite, extract_all, rollback_writes,
 };
+use crate::domain::skills::{self, GlobalSkillsOutcome};
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
@@ -40,6 +41,8 @@ pub struct UpdateOptions<'a> {
     pub check_only: bool,
     /// Reinstall even when the remote reports this version as current.
     pub force: bool,
+    /// Test seam for user-level global skill state. `None` uses `HOME`.
+    pub global_skills_home: Option<&'a Path>,
 }
 
 /// Result of a complete update operation.
@@ -59,6 +62,8 @@ pub struct UpdateOutcome {
     /// `update` upgrades the binary but must not scaffold a partial repo. Signals
     /// the renderer to point the user at `maestro init`.
     pub repo_uninitialized: bool,
+    /// Refreshed global skills, only when the user-level global lock already existed.
+    pub global_skills: Option<GlobalSkillsOutcome>,
 }
 
 /// Human-facing release metadata for update status output.
@@ -424,8 +429,11 @@ pub fn run_update_with_seams(
             resource_writes: Vec::new(),
             schema_mismatches: Vec::new(),
             repo_uninitialized: false,
+            global_skills: None,
         });
     }
+    let prepared_global_skills =
+        skills::prepare_global_skills_if_locked(options.global_skills_home)?;
     let schema_mismatches = detect_schema_mismatches(options.paths)?;
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
     // A never-init'd repo has no `.maestro`: upgrade the binary but do NOT extract
@@ -462,6 +470,10 @@ pub fn run_update_with_seams(
             .into());
         }
     };
+    let global_skills = match prepared_global_skills {
+        Some(prepared) => Some(skills::write_prepared_global_skills(prepared)?),
+        None => None,
+    };
 
     Ok(UpdateOutcome {
         binary_status,
@@ -469,6 +481,7 @@ pub fn run_update_with_seams(
         resource_writes: extract_report.writes,
         schema_mismatches,
         repo_uninitialized,
+        global_skills,
     })
 }
 
