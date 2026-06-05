@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.3.0
+version: 1.4.0
 description: Feature lifecycle layer for Maestro — the guarded five-state machine (proposed -> ready -> in_progress -> shipped/cancelled), its accept and ship gates, append-only amend, and feature/child-task archival.
 ---
 
@@ -17,8 +17,8 @@ On activation, log the skill activation by piping a compact JSON payload to
 
 ## When to use
 
-Use this skill whenever you propose, author, accept, start, ship, cancel, or archive a
-feature, or need to read a feature's contract and task rollup (`show` / `list`).
+Use this skill whenever you propose, author, accept, prepare, start, ship, cancel, or archive
+a feature, or need to read a feature's contract and task rollup (`show` / `list`).
 
 ## When NOT to use
 
@@ -41,7 +41,9 @@ non-terminal state). `shipped` and `cancelled` are terminal.
     maestro feature new "<title>"                          # -> proposed; prints "created feature <id> (proposed)"
     maestro feature set <id> --acceptance "<criterion>" --area "<surface>"   # author the contract (proposed only; replace-per-field)
     maestro feature accept <id>                            # proposed -> ready; the accept gate (below); FREEZES the contract + baseline
-    maestro feature start <id>                             # ready -> in_progress
+    maestro feature prepare <id> --draft                   # stage an explicit child-task plan
+    maestro feature prepare <id> --from <plan-file>        # create/explore/accept child tasks from the reviewed plan
+    maestro feature start <id>                             # ready -> in_progress (low-level; prepare auto-starts when work is claimable)
     maestro feature amend <id> --add-acceptance "<…>" --reason "<why>"       # grow a frozen contract (ready/in_progress; append-only)
     maestro feature ship <id> --outcome "<one line>"   # in_progress -> shipped; the ship gate (below);
                                                         # --outcome records the result shown in `feature list --all`
@@ -52,6 +54,34 @@ non-terminal state). `shipped` and `cancelled` are terminal.
 `set` is replace-per-field and repeatable: `--acceptance --area --non-goal --question
 --description --request --type`; each repeated flag replaces that whole list. Both `accept`
 and `ship` take `--dry-run` to preview the gate at exit 0 without transitioning.
+
+## Prepare the implementation queue
+
+After `feature accept`, use `feature prepare`, not ad hoc task choreography.
+
+1. Draft or review the plan:
+
+       maestro feature prepare <id> --draft
+       maestro feature prepare <id> --from .maestro/features/<id>/prepare-draft.md
+
+2. The plan is explicit and line-oriented:
+
+       ## Task T1: Scaffold project
+       check: package manifest exists and tests run
+       blocker: dependency approval required for aws-cdk-lib
+
+       ## Task T2: Implement API handlers
+       after: T1
+       check: GET /articles satisfies the API contract
+
+3. `prepare --from` creates the full visible queue, moves each task through
+   create -> explore -> accept, and starts the feature only when at least one
+   task is ready and unblocked.
+4. `blocker:` fields are the only approval blockers it creates. Do not rely on
+   vague task text; write dependency, secrets, cloud, schema, paid service, or
+   destructive-operation approval blockers explicitly.
+5. `after:` dependencies create generated task blockers. Downstream tasks are
+   visible but not claimable until prerequisite tasks verify.
 
 ## The design notes (`notes.md`)
 

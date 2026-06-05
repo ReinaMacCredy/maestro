@@ -38,7 +38,14 @@ pub fn run(args: TaskArgs) -> Result<()> {
         } => set_task(&paths, &id, check, feature, no_feature, &actor),
         TaskCommand::Explore { id } => explore_task(&paths, &id, &actor),
         TaskCommand::Accept { id } => accept_task(&paths, &id, &actor),
-        TaskCommand::Claim { id } => claim_task(&paths, &id, &actor),
+        TaskCommand::Claim { id, next } => match (id, next) {
+            (Some(id), false) => claim_task(&paths, &id, &actor),
+            (None, true) => claim_next_task(&paths, &actor),
+            (Some(_), true) => {
+                bail!("use `maestro task claim --next` or `maestro task claim <id>`, not both")
+            }
+            (None, false) => bail!("task claim requires <id> or --next"),
+        },
         TaskCommand::Complete {
             id,
             summary,
@@ -290,6 +297,82 @@ fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
         task.id
     );
     Ok(())
+}
+
+fn claim_next_task(paths: &MaestroPaths, actor: &str) -> Result<()> {
+    let tasks = task::load_task_records(&paths.tasks_dir())?;
+    let Some(next) = tasks
+        .iter()
+        .find(|task| task.state == TaskState::Ready && !task::has_unresolved_blockers(task))
+    else {
+        bail!("no ready, unblocked task to claim; run `maestro task next`");
+    };
+    let now = nanos_since_epoch_string();
+    let task = task::claim_task(&paths.tasks_dir(), &next.id, actor, &now)?;
+    let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
+    println!("claimed {} -> {}", task.id, task.state.as_str());
+    print_claim_next_context(paths, &task)?;
+    println!("title: {}", task.title);
+    print_acceptance_checks(&checks);
+    println!("finish with proof:");
+    println!(
+        "  maestro task complete {} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"",
+        task.id
+    );
+    Ok(())
+}
+
+fn print_claim_next_context(paths: &MaestroPaths, task: &TaskRecord) -> Result<()> {
+    let Some(feature_id) = task.feature_id.as_deref() else {
+        return Ok(());
+    };
+    println!("feature: {feature_id}");
+    let mut feature_tasks: Vec<TaskRecord> = task::load_task_records(&paths.tasks_dir())?
+        .into_iter()
+        .filter(|candidate| candidate.feature_id.as_deref() == Some(feature_id))
+        .collect();
+    feature_tasks.sort_by(|left, right| left.id.cmp(&right.id));
+    let Some(index) = feature_tasks
+        .iter()
+        .position(|candidate| candidate.id == task.id)
+    else {
+        return Ok(());
+    };
+    let start = index.saturating_sub(1);
+    let end = (index + 2).min(feature_tasks.len());
+    if end > start {
+        println!("chain:");
+        for candidate in &feature_tasks[start..end] {
+            println!(
+                "  {} {:<8} {}",
+                candidate.id,
+                task_chain_state(candidate, &task.id),
+                candidate.title
+            );
+        }
+    }
+    Ok(())
+}
+
+fn task_chain_state(task: &TaskRecord, current_id: &str) -> &'static str {
+    if task.id == current_id {
+        "current"
+    } else if task::has_unresolved_blockers(task) {
+        "blocked"
+    } else {
+        task.state.as_str()
+    }
+}
+
+fn print_acceptance_checks(checks: &[String]) {
+    if checks.is_empty() {
+        println!("acceptance: inherited from feature");
+        return;
+    }
+    println!("acceptance:");
+    for check in checks {
+        println!("- {check}");
+    }
 }
 
 fn explore_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {

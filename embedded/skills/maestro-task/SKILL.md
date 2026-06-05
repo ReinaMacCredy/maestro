@@ -1,6 +1,6 @@
 ---
 name: maestro-task
-version: 1.7.0
+version: 1.8.0
 description: Task workflow layer for operating Maestro - create, claim, advance, block, and verify tasks, plus the rarer terminal verbs and the harness self-improvement loop. For the feature contract tasks deliver against, see the maestro-feature skill.
 ---
 
@@ -38,9 +38,10 @@ State flow: `draft -> exploring -> ready -> in_progress -> needs_verification ->
     maestro task create "<title>" [--feature F --lane L --risk R]   # -> draft; prints "created <id>"
     maestro task explore <id>          # draft -> exploring
     maestro task accept <id>           # exploring -> ready; LOCKS acceptance (lane "tiny" may skip the lock)
-    maestro task claim <id>            # ready -> in_progress; requires acceptance locked AND no open blockers
+    maestro task claim --next          # claim the next ready, unblocked task and print feature/chain context
+    maestro task claim <id>            # explicit claim path; still valid when you already chose the task
     maestro task update <id> --summary "<note>" --claim "<evidence>"   # records progress, no state change
-    maestro task complete <id> --summary "<what>" --claim "<evidence>" # in_progress -> needs_verification; requires no open blockers
+    maestro task complete <id> --summary "<what>" --claim "<evidence>" --proof "<observed evidence>" # complete + record proof + auto-verify
     maestro task verify <id>           # the gate (below); on pass needs_verification -> verified
 
 `update` requires at least one of `--summary` / `--claim`. `verify` and `show` resolve
@@ -65,16 +66,25 @@ A claim is "backed" when its text matches one of these evidence sources for the 
 - A recorded hook event - its `claim` / `message` / `claims`, plus an auto-synthesized
   `<tool> <tool_input_hash>` for each successful tool call (hooks record these for you).
 - A `claim:`-prefixed line in any text file under `.maestro/tasks/<id>/evidence/` or `proof/`.
-- A `task_proof` event you record explicitly with `maestro event create`.
+- A `task_proof` event from `maestro task complete --proof`, or one you record
+  explicitly with `maestro event create` for advanced recovery.
 
-Reliable recipe - record the claim as evidence, then complete with the same text:
+Reliable recipe - complete with the same claim and observed proof text:
 
-    maestro event create --task-id <id> --claim "cargo test: 40 passed, 0 failed"
-    maestro task complete <id> --summary "<what changed>" --claim "cargo test: 40 passed, 0 failed"
-    maestro task verify <id>     # the completion claim matches the recorded event -> passes
+    maestro task claim --next
+    maestro task complete <id> --summary "<what changed>" --claim "cargo test: 40 passed, 0 failed" --proof "cargo test: 40 passed, 0 failed"
 
 The claim strings must match (whitespace aside). Vague claims you cannot point evidence at
 will fail step 4 even when the work is real.
+
+Use `maestro event create --task-id <id> --claim "<claim>"` only when repairing
+missing proof or recording additional manual evidence after the default
+`complete --proof` path was not enough.
+
+If `srcwalk review`, `git diff`, or changed-file discovery cannot run because
+the workspace has no Git metadata, do a targeted non-Git closeout review:
+read the touched modules directly, run the task's smallest falsifying gates,
+and state that Git metadata was unavailable in the completion proof.
 
 ## Blockers (overlay any state)
 

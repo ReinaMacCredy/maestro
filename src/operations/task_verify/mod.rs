@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 
-use super::{TaskVerifyApplication, TaskVerifyUnappliedReason};
+use super::{TaskVerifyApplication, TaskVerifyUnappliedReason, feature_prepare};
 use crate::domain::{proof, task};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::nanos_since_epoch_string;
@@ -46,6 +46,11 @@ pub(crate) fn verify_task(
             reason: TaskVerifyUnappliedReason::from_error(&error),
         },
     };
+    if matches!(application, TaskVerifyApplication::Applied)
+        && verification.status == proof::TaskVerificationStatus::Passed
+    {
+        feature_prepare::resolve_after_dependency_blockers(paths, &verification.task_id, actor)?;
+    }
 
     Ok(TaskVerifyResult {
         verification,

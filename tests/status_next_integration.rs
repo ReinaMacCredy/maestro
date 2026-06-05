@@ -267,7 +267,7 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
         .find("HARNESS FRICTION")
         .expect("invariant: task next should show friction");
     let normal_at = next
-        .find("run: maestro task claim task-001")
+        .find("run: maestro task claim --next")
         .expect("invariant: task next should keep normal next action");
     assert!(friction_at < normal_at, "{next}");
 
@@ -409,7 +409,7 @@ fn human_fallback_warnings_are_first_line_for_status_and_task_next() {
         next_out.starts_with("warning: MAESTRO_CURRENT_TASK=task-999 was not found"),
         "{next_out}"
     );
-    assert!(next_out.contains("run: maestro task claim task-001"));
+    assert!(next_out.contains("run: maestro task claim --next"));
 }
 
 #[test]
@@ -696,4 +696,251 @@ fn feature_linked_complete_handoff_uses_existing_feature_command() {
         !complete.contains("maestro feature status"),
         "feature status is not a command: {complete}"
     );
+}
+
+#[test]
+fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
+    let temp = setup_repo("maestro-feature-prepare-queue");
+    let repo = temp.path();
+
+    run(repo, &["feature", "new", "Serverless news backend"]);
+    run(
+        repo,
+        &[
+            "feature",
+            "set",
+            "serverless-news-backend",
+            "--acceptance",
+            "GET /articles returns records",
+            "--area",
+            "api",
+        ],
+    );
+    write_baseline(repo, "serverless-news-backend");
+    let accept = run(repo, &["feature", "accept", "serverless-news-backend"]);
+    assert!(
+        accept.contains("next: maestro feature prepare serverless-news-backend --draft"),
+        "{accept}"
+    );
+
+    let draft = run(
+        repo,
+        &["feature", "prepare", "serverless-news-backend", "--draft"],
+    );
+    assert!(draft.contains("prepare-draft.md"), "{draft}");
+
+    let plan = repo.join("PLAN-serverless-news.md");
+    fs::write(
+        &plan,
+        concat!(
+            "## Task T1: Implement protected read handlers\n",
+            "check: GET /articles returns compact paginated records\n",
+            "check: missing or invalid demo API key is rejected\n",
+            "\n",
+            "## Task T2: Implement operation handlers\n",
+            "after: T1\n",
+            "check: POST /collect and POST /retry satisfy the API contract\n",
+            "\n",
+            "## Task T3: Complete deploy gate\n",
+            "after: T2\n",
+            "check: VERIFY has expected vs observed evidence\n",
+            "blocker: cloud deploy approval required\n",
+        ),
+    )
+    .expect("invariant: prepare plan should be writable");
+
+    let prepare = run(
+        repo,
+        &[
+            "feature",
+            "prepare",
+            "serverless-news-backend",
+            "--from",
+            plan.to_str().expect("invariant: plan path should be UTF-8"),
+        ],
+    );
+    assert!(prepare.contains("prepared 3 task(s)"), "{prepare}");
+    assert!(
+        prepare.contains("started serverless-news-backend -> in_progress"),
+        "{prepare}"
+    );
+    assert!(prepare.contains("task-002 ready / blocked"), "{prepare}");
+    assert!(
+        prepare.contains("after dependency: T1 (task-001) verified"),
+        "{prepare}"
+    );
+    assert!(
+        prepare.contains("cloud deploy approval required"),
+        "{prepare}"
+    );
+    assert!(
+        prepare.contains("next: maestro task claim --next"),
+        "{prepare}"
+    );
+
+    let task_002 = task_yaml(repo, "task-002");
+    assert_eq!(task_002["state"], YamlValue::String("ready".to_string()));
+    assert_eq!(
+        task_002["blockers"][0]["reason"],
+        YamlValue::String("after dependency: T1 (task-001) verified".to_string())
+    );
+
+    let claim = run(repo, &["task", "claim", "--next"]);
+    assert!(claim.contains("claimed task-001 -> in_progress"), "{claim}");
+    assert!(
+        claim.contains("feature: serverless-news-backend"),
+        "{claim}"
+    );
+    assert!(claim.contains("chain:"), "{claim}");
+    assert!(
+        claim.contains("task-001 current  Implement protected read handlers"),
+        "{claim}"
+    );
+    assert!(
+        claim.contains("task-002 blocked  Implement operation handlers"),
+        "{claim}"
+    );
+    assert!(claim.contains("acceptance:"), "{claim}");
+    assert!(
+        claim.contains("- GET /articles returns compact paginated records"),
+        "{claim}"
+    );
+    assert!(!claim.contains("feature title:"), "{claim}");
+
+    let complete = run(
+        repo,
+        &[
+            "task",
+            "complete",
+            "task-001",
+            "--summary",
+            "read handlers done",
+            "--claim",
+            "GET /articles returns compact paginated records",
+            "--proof",
+            "GET /articles returns compact paginated records",
+        ],
+    );
+    assert!(
+        complete.contains("verification passed for task-001"),
+        "{complete}"
+    );
+    assert!(
+        complete.contains("next: maestro task claim --next"),
+        "{complete}"
+    );
+
+    let task_002_after = task_yaml(repo, "task-002");
+    assert_ne!(
+        task_002_after["blockers"][0]["resolved_at"],
+        YamlValue::Null
+    );
+
+    let next_claim = run(repo, &["task", "claim", "--next"]);
+    assert!(
+        next_claim.contains("claimed task-002 -> in_progress"),
+        "{next_claim}"
+    );
+    assert!(
+        next_claim.contains("task-001 verified Implement protected read handlers"),
+        "{next_claim}"
+    );
+    assert!(
+        next_claim.contains("task-002 current  Implement operation handlers"),
+        "{next_claim}"
+    );
+}
+
+#[test]
+fn feature_prepare_does_not_infer_blockers_and_keeps_all_blocked_feature_ready() {
+    let temp = setup_repo("maestro-feature-prepare-blockers");
+    let repo = temp.path();
+
+    run(repo, &["feature", "new", "No inferred blockers"]);
+    run(
+        repo,
+        &[
+            "feature",
+            "set",
+            "no-inferred-blockers",
+            "--acceptance",
+            "dependency task exists",
+            "--area",
+            "setup",
+        ],
+    );
+    write_baseline(repo, "no-inferred-blockers");
+    run(repo, &["feature", "accept", "no-inferred-blockers"]);
+    let vague_plan = repo.join("PLAN-no-infer.md");
+    fs::write(
+        &vague_plan,
+        concat!(
+            "## Task T1: Scaffold dependencies\n",
+            "check: package manifest mentions dependency approval required\n",
+        ),
+    )
+    .expect("invariant: vague plan should be writable");
+    let vague_prepare = run(
+        repo,
+        &[
+            "feature",
+            "prepare",
+            "no-inferred-blockers",
+            "--from",
+            vague_plan
+                .to_str()
+                .expect("invariant: plan path should be UTF-8"),
+        ],
+    );
+    assert!(vague_prepare.contains("started no-inferred-blockers -> in_progress"));
+    let vague_task = task_yaml(repo, "task-001");
+    assert_eq!(vague_task["blockers"], YamlValue::Null);
+
+    run(repo, &["feature", "new", "All blocked setup"]);
+    run(
+        repo,
+        &[
+            "feature",
+            "set",
+            "all-blocked-setup",
+            "--acceptance",
+            "blocked setup is visible",
+            "--area",
+            "setup",
+        ],
+    );
+    write_baseline(repo, "all-blocked-setup");
+    run(repo, &["feature", "accept", "all-blocked-setup"]);
+    let blocked_plan = repo.join("PLAN-all-blocked.md");
+    fs::write(
+        &blocked_plan,
+        concat!(
+            "## Task T1: Scaffold approved dependencies\n",
+            "check: package manifest exists\n",
+            "blocker: dependency approval required\n",
+        ),
+    )
+    .expect("invariant: blocked plan should be writable");
+    let blocked_prepare = run(
+        repo,
+        &[
+            "feature",
+            "prepare",
+            "all-blocked-setup",
+            "--from",
+            blocked_plan
+                .to_str()
+                .expect("invariant: plan path should be UTF-8"),
+        ],
+    );
+    assert!(
+        blocked_prepare.contains("feature remains ready"),
+        "{blocked_prepare}"
+    );
+    assert!(
+        blocked_prepare.contains("task-002 ready / blocked"),
+        "{blocked_prepare}"
+    );
+    let feature = run(repo, &["feature", "show", "all-blocked-setup"]);
+    assert!(feature.contains("status: ready"), "{feature}");
 }

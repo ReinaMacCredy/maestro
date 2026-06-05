@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -218,7 +220,11 @@ pub enum TaskCommand {
     #[command(about = "Lock acceptance and mark the task ready (-> ready)")]
     Accept { id: String },
     #[command(about = "Claim a ready, unblocked task to work on it (-> in_progress)")]
-    Claim { id: String },
+    Claim {
+        id: Option<String>,
+        #[arg(long, help = "Claim the next safe ready task")]
+        next: bool,
+    },
     #[command(about = "Submit work for verification (-> needs_verification)")]
     Complete {
         id: String,
@@ -397,6 +403,22 @@ pub enum FeatureCommand {
         id: String,
         #[arg(long, help = "Preview the accept gate without transitioning")]
         dry_run: bool,
+    },
+    #[command(about = "Prepare an accepted feature into a ready implementation queue")]
+    Prepare {
+        id: String,
+        #[arg(
+            long = "from",
+            value_name = "PLAN_FILE",
+            help = "Read explicit task plan file"
+        )]
+        from: Option<PathBuf>,
+        #[arg(
+            long,
+            conflicts_with = "from",
+            help = "Create or point to the feature prepare draft file"
+        )]
+        draft: bool,
     },
     #[command(about = "Grow a frozen contract additively with an audit reason (ready/in_progress)")]
     Amend {

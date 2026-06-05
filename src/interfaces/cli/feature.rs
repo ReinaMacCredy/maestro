@@ -4,6 +4,7 @@ use crate::domain::feature::{self, ContractAdditions, ContractEdits, FeatureStat
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::render_timestamp;
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand};
+use crate::operations::feature_prepare;
 
 /// Execute `maestro feature`.
 pub fn run(args: FeatureArgs) -> Result<()> {
@@ -35,7 +36,15 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             },
         ),
         FeatureCommand::Accept { id, dry_run } => {
-            print_note(feature::accept(&paths, &id, dry_run)?.note)
+            let report = feature::accept(&paths, &id, dry_run)?;
+            print_note(report.note)?;
+            if report.changed && report.status == FeatureStatus::Ready {
+                println!("next: maestro feature prepare {} --draft", report.id);
+            }
+            Ok(())
+        }
+        FeatureCommand::Prepare { id, from, draft } => {
+            prepare_feature(&paths, &id, from.as_deref(), draft)
         }
         FeatureCommand::Amend {
             id,
@@ -83,6 +92,71 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 feature_unarchive_error_message(&id, &error.to_string())
             ),
         },
+    }
+}
+
+fn prepare_feature(
+    paths: &MaestroPaths,
+    id: &str,
+    plan_file: Option<&std::path::Path>,
+    draft: bool,
+) -> Result<()> {
+    match (plan_file, draft) {
+        (Some(_), true) => bail!("use either --from <plan-file> or --draft, not both"),
+        (None, false) => bail!(
+            "feature prepare requires --from <plan-file> or --draft\n  maestro feature prepare {id} --draft\n  maestro feature prepare {id} --from <plan-file>"
+        ),
+        (None, true) => {
+            let report = feature_prepare::write_draft(paths, id)?;
+            if report.written {
+                println!("wrote {}", report.path.display());
+            } else {
+                println!("draft exists: {}", report.path.display());
+            }
+            println!("review and run:");
+            println!(
+                "  maestro feature prepare {id} --from {}",
+                report.path.display()
+            );
+            Ok(())
+        }
+        (Some(plan_file), false) => {
+            let actor = super::actor();
+            let report = feature_prepare::prepare_from_file(paths, id, plan_file, &actor)?;
+            println!("prepared {} task(s)", report.task_count);
+            if report.started {
+                println!("started {} -> in_progress", report.feature_id);
+            } else if report.remained_ready {
+                println!("feature remains ready");
+            }
+            println!("prepared:");
+            for task in &report.prepared {
+                let state = if task.blocked {
+                    "ready / blocked"
+                } else {
+                    "ready"
+                };
+                println!("  {} {:<15} {}", task.id, state, task.title);
+            }
+            if !report.blockers.is_empty() {
+                println!("blockers:");
+                for blocker in &report.blockers {
+                    println!(
+                        "  {} {} {}",
+                        blocker.task_id, blocker.blocker_id, blocker.reason
+                    );
+                }
+            }
+            if report.ready_count > 0 {
+                println!("next: maestro task claim --next");
+            } else {
+                println!(
+                    "next: maestro task list --feature {} --blocked",
+                    report.feature_id
+                );
+            }
+            Ok(())
+        }
     }
 }
 
@@ -498,7 +572,7 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
 fn feature_next_label(view: &feature::FeatureView) -> &'static str {
     match view.status {
         FeatureStatus::Proposed => "template: set_contract",
-        FeatureStatus::Ready => "run: start_feature",
+        FeatureStatus::Ready => "run: prepare_feature",
         FeatureStatus::InProgress
             if view.counts.total > 0 && view.counts.total == view.counts.verified =>
         {

@@ -339,7 +339,7 @@ fn task_action(paths: &MaestroPaths, task: &TaskRecord) -> Result<Option<NextAct
         TaskState::Ready => NextAction::task(
             "claim_task",
             task,
-            runnable_command(["maestro", "task", "claim", task.id.as_str()]),
+            runnable_command(["maestro", "task", "claim", "--next"]),
             "ready task is unclaimed",
         ),
         TaskState::InProgress => NextAction::task(
@@ -438,7 +438,7 @@ fn active_feature_rows(features: &[feature::FeatureView]) -> Vec<FeatureRowJson>
 fn status_feature_next_label(view: &feature::FeatureView) -> &'static str {
     match view.status {
         FeatureStatus::Proposed => "template: set_contract",
-        FeatureStatus::Ready => "run: start_feature",
+        FeatureStatus::Ready => "run: prepare_feature",
         FeatureStatus::InProgress
             if view.counts.total > 0 && view.counts.total == view.counts.verified =>
         {

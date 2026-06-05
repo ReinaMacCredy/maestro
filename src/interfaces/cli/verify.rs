@@ -81,6 +81,13 @@ pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Re
                 println!("template: maestro feature ship {feature_id} --outcome \"<outcome>\"");
                 println!("required input:");
                 println!("- outcome: shipping outcome text");
+            } else if next_ready_task_for_feature(paths, feature_id)?.is_some() {
+                println!("feature progress:");
+                println!(
+                    "  {feature_id} tasks: {}/{} verified",
+                    view.counts.verified, view.counts.total
+                );
+                println!("next: maestro task claim --next");
             } else {
                 println!("feature progress:");
                 println!(
@@ -97,4 +104,15 @@ pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Re
         println!("inspect: maestro task show {}", task.id);
     }
     Ok(())
+}
+
+fn next_ready_task_for_feature(paths: &MaestroPaths, feature_id: &str) -> Result<Option<String>> {
+    Ok(task::load_task_records(&paths.tasks_dir())?
+        .into_iter()
+        .find(|task| {
+            task.feature_id.as_deref() == Some(feature_id)
+                && task.state == task::TaskState::Ready
+                && !task::has_unresolved_blockers(task)
+        })
+        .map(|task| task.id))
 }

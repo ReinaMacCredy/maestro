@@ -164,7 +164,7 @@ acceptance check, and closes once a recorded run backs its claim:
 maestro task create "Patch null deref in parser" --check "regression test passes"  # -> draft
 maestro task explore task-001                                # -> exploring
 maestro task accept task-001                                 # locks the check -> ready
-maestro task claim task-001                                  # -> in_progress
+maestro task claim --next                                    # -> in_progress
 maestro task complete task-001 --summary "guard the None case" \
   --claim "cargo test parser passes" --proof "observed: cargo test parser passes"
 ```
@@ -189,12 +189,12 @@ cat > .maestro/features/csv-export/baseline.md <<'EOF'
 EOF
 
 maestro feature accept csv-export                        # freeze the contract -> ready
-maestro feature start csv-export                         # -> in_progress
-
-maestro task create "Implement CSV writer" --feature csv-export   # inherits the feature's contract; no --check
-maestro task explore task-001
-maestro task accept task-001
-maestro task claim task-001
+cat > PLAN-csv-export.md <<'EOF'
+## Task T1: Implement CSV writer
+check: cargo test export passes
+EOF
+maestro feature prepare csv-export --from PLAN-csv-export.md
+maestro task claim --next
 maestro task complete task-001 --summary "wrote csv writer" \
   --claim "cargo test export passes" --proof "observed: cargo test export passes"
 
@@ -222,7 +222,7 @@ maestro harness apply hb-001                # accept a proposal -> spawns a stan
 maestro task set task-003 --check "deflake the integration suite"   # standalone tasks need a check first
 maestro task explore task-003
 maestro task accept task-003
-maestro task claim task-003
+maestro task claim --next
 maestro task complete task-003 --summary "stabilized the suite" \
   --claim "cargo test integration passes" --proof "observed: cargo test integration passes"
 maestro harness measure hb-001              # close the loop once that task is verified
@@ -271,17 +271,12 @@ created decision decision-001
 # (write .maestro/features/api-rate-limiting/baseline.md first — see flow 1) — accept then succeeds:
 $ maestro feature accept api-rate-limiting
 accepted api-rate-limiting (-> ready); contract frozen (acceptance=2, areas=1); note: 1 open question(s) carried (non-blocking)
-$ maestro feature start api-rate-limiting
-started api-rate-limiting (-> in_progress)
-
-$ maestro task create "Add fixed-window counter middleware" --feature api-rate-limiting
-created task-001 (draft)
-$ maestro task explore task-001
-updated task-001 -> exploring
-$ maestro task accept task-001
-accepted task-001 -> ready
-$ maestro task claim task-001
-updated task-001 -> in_progress
+$ maestro feature prepare api-rate-limiting --from PLAN-api-rate-limiting.md
+prepared 1 task(s)
+started api-rate-limiting -> in_progress
+next: maestro task claim --next
+$ maestro task claim --next
+claimed task-001 -> in_progress
 $ maestro task complete task-001 --summary "fixed-window counter in the request middleware" --claim "cargo test ratelimit passes" --proof "observed: cargo test ratelimit passes"
 auto: recorded task_proof event for task-001
 auto: maestro task verify task-001
@@ -299,14 +294,14 @@ because that gate is the point.
 
 `feature new` then `feature set` map the contract (acceptance, affected areas, non-goals, open
 questions); `decision new` records each fork as a durable file. `feature accept` freezes the contract
-into `ready` — but only once you have captured a behavior baseline — and `feature start` moves it to
-`in_progress`.
+into `ready` — but only once you have captured a behavior baseline — and `feature prepare` turns a
+reviewed plan file into ready child tasks.
 
 *Prompt:* "Follow the `maestro-design` skill to set up <idea> as a maestro feature: `feature new`, then
 `feature set` with the acceptance criteria, affected areas, non-goals, and open questions, recording
 each fork with `decision new`. Capture the `[bl-NNN]` behavior baseline at
-`.maestro/features/<id>/baseline.md` with the `qa-baseline` skill, then `feature accept` and
-`feature start`."
+`.maestro/features/<id>/baseline.md` with the `qa-baseline` skill, then `feature accept`,
+`feature prepare --draft`, and `feature prepare --from <plan-file>`."
 
 The gate: `accept` refuses until a baseline exists, and names the file it wants.
 
@@ -321,16 +316,15 @@ Error: cannot accept api-rate-limiting — contract incomplete:
 
 #### 2. Spin off tasks, each closed by proof
 
-`task create --feature <id>` per slice — feature-linked tasks inherit the contract, while a standalone
-task needs its own `--check` first. Then drive every task through the same gated loop:
-`task explore` -> `task accept` -> `task claim` -> `task complete --summary "..." --claim "..."
---proof "..."`. Completion records the inline proof and runs `task verify`; a `verified` task is
-always evidence you can open.
+`feature prepare --from <plan-file>` creates the feature's child task queue from explicit `## Task`,
+`check:`, `blocker:`, and `after:` lines. Then drive every task through the same gated loop:
+`task claim --next` -> work -> `task complete --summary "..." --claim "..." --proof "..."`.
+Completion records the inline proof and runs `task verify`; a `verified` task is always evidence
+you can open.
 
-*Prompt:* "Follow the `maestro-task` skill: for each slice of <feature>, `task create --feature <id>`,
-explore, accept, claim it, do the work, then `task complete` with a `--claim` stating what proves it
-and `--proof` containing the observed evidence. Use the `maestro-verify` skill and `maestro query proof`
-if verification fails."
+*Prompt:* "Follow the `maestro-task` skill: claim the next ready task with `task claim --next`, do
+the work, then `task complete` with a `--claim` stating what proves it and `--proof` containing the
+observed evidence. Use the `maestro-verify` skill and `maestro query proof` if verification fails."
 
 The gate: `verify` refuses until the claim is backed by recorded proof — and prints the exact command
 to record it.
@@ -408,8 +402,8 @@ $ maestro task explore task-003
 updated task-003 -> exploring
 $ maestro task accept task-003
 accepted task-003 -> ready
-$ maestro task claim task-003
-updated task-003 -> in_progress
+$ maestro task claim --next
+claimed task-003 -> in_progress
 $ maestro task complete task-003 --summary "added staging creds to onboarding" --claim "onboarding doc lists staging creds" --proof "observed: onboarding doc lists staging creds"
 auto: recorded task_proof event for task-003
 auto: maestro task verify task-003
