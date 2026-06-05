@@ -75,6 +75,7 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     println!("maestro status");
     println!("repo: {}", report.repo);
+    println!("resume: maestro resume");
     println!(
         "tasks: active={} ready={} needs_verification={} blocked={}",
         report.tasks.active,

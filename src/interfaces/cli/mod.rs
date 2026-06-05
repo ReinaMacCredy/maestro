@@ -13,6 +13,7 @@ pub mod init;
 pub mod install;
 pub mod mcp;
 pub mod query;
+pub mod resume;
 pub mod shell_init;
 pub mod status;
 pub mod sync;
@@ -66,6 +67,11 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro status\n  maestro status --json"
     )]
     Status(StatusArgs),
+    #[command(
+        about = "Print a clean-session resume packet from current repo artifacts",
+        after_help = "Examples:\n  maestro resume\n  maestro resume --full\n  maestro resume --handoff --write"
+    )]
+    Resume(ResumeArgs),
     #[command(about = "Manage tasks: create, claim, complete, verify, and query")]
     Task(TaskArgs),
     #[command(about = "Record run events from the agent harness")]
@@ -178,6 +184,27 @@ pub struct TaskArgs {
 #[derive(Debug, Args)]
 pub struct StatusArgs {
     #[arg(long, help = "Print machine-readable status JSON")]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+#[command(group(
+    clap::ArgGroup::new("resume_target")
+        .args(["task", "feature"])
+        .multiple(false)
+))]
+pub struct ResumeArgs {
+    #[arg(long, value_name = "TASK_ID", help = "Resume from this task")]
+    pub task: Option<String>,
+    #[arg(long, value_name = "FEATURE_ID", help = "Resume from this feature")]
+    pub feature: Option<String>,
+    #[arg(long, help = "Include fuller source-backed handoff context")]
+    pub full: bool,
+    #[arg(long, help = "Include handoff context and suggested prompt text")]
+    pub handoff: bool,
+    #[arg(long, help = "Write the resume packet as an explicit artifact")]
+    pub write: bool,
+    #[arg(long, help = "Print machine-readable resume JSON")]
     pub json: bool,
 }
 
@@ -614,6 +641,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
         RootCommand::Status(args) => status::run(args),
+        RootCommand::Resume(args) => resume::run(args),
         RootCommand::Task(args) => task::run(args),
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),

@@ -41,6 +41,7 @@ fn root_help_lists_top_level_commands() {
             "uninstall",
             "doctor",
             "shell-init",
+            "resume",
             "task",
             "event",
             "feature",
@@ -66,6 +67,7 @@ fn top_level_help_fills_descriptions_and_examples() {
             "Resync bundled resources to this binary's versions (offline)",
             "Scaffold .maestro/ and extract bundled resources into this repo",
             "Diagnose the maestro installation and report problems",
+            "Print a clean-session resume packet from current repo artifacts",
         ],
     );
 
@@ -125,6 +127,17 @@ fn nested_help_lists_section_38_command_tree() {
     assert_contains_all(
         &maestro(&["uninstall", "--help"]),
         &["--agent", "claude", "codex"],
+    );
+    assert_contains_all(
+        &maestro(&["resume", "--help"]),
+        &[
+            "--task",
+            "--feature",
+            "--full",
+            "--handoff",
+            "--write",
+            "--json",
+        ],
     );
     assert_contains_all(
         &maestro(&["task", "--help"]),

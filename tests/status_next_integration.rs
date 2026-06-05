@@ -1,7 +1,7 @@
 mod support;
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value as JsonValue;
@@ -70,6 +70,12 @@ fn run(repo: &Path, args: &[&str]) -> String {
 }
 
 fn task_yaml(repo: &Path, id: &str) -> YamlValue {
+    let raw = fs::read_to_string(task_dir(repo, id).join("task.yaml"))
+        .expect("invariant: task.yaml should be readable");
+    serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse")
+}
+
+fn task_dir(repo: &Path, id: &str) -> PathBuf {
     let prefix = format!("{id}-");
     let tasks_dir = repo.join(".maestro/tasks");
     for entry in fs::read_dir(tasks_dir).expect("invariant: tasks dir should be readable") {
@@ -80,9 +86,7 @@ fn task_yaml(repo: &Path, id: &str) -> YamlValue {
             .expect("invariant: task dir should be UTF-8")
             .to_string();
         if name.starts_with(&prefix) {
-            let raw = fs::read_to_string(entry.path().join("task.yaml"))
-                .expect("invariant: task.yaml should be readable");
-            return serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
+            return entry.path();
         }
     }
     panic!("invariant: task directory should exist for {id}");
@@ -212,6 +216,170 @@ fn status_and_task_next_choose_current_task_before_ready_queue() {
     assert_eq!(
         json["next_action"]["command"]["requires_input"][0]["name"],
         "observable_result"
+    );
+}
+
+#[test]
+fn status_points_to_resume_and_resume_default_is_compact_read_only() {
+    let temp = setup_repo("maestro-resume-compact");
+    let repo = temp.path();
+    run(repo, &["feature", "new", "CSV export"]);
+    fs::write(
+        repo.join("IMPLEMENTATION_NOTES-csv-export.md"),
+        "# notes\n\n- resume from here\n",
+    )
+    .expect("invariant: implementation notes should be writable");
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Implement CSV writer",
+            "--feature",
+            "csv-export",
+        ],
+    );
+    run(repo, &["task", "explore", "task-001"]);
+    run(repo, &["task", "accept", "task-001"]);
+    run(repo, &["task", "claim", "task-001"]);
+
+    let status = run(repo, &["status"]);
+    assert!(status.contains("resume: maestro resume"), "{status}");
+
+    let resume = run(repo, &["resume"]);
+    assert!(
+        resume.contains("objective: continue task task-001 for feature csv-export"),
+        "{resume}"
+    );
+    assert!(resume.contains("state: in_progress"), "{resume}");
+    assert!(resume.contains("blockers: none"), "{resume}");
+    assert!(resume.contains("next:"), "{resume}");
+    assert!(
+        resume.contains("run focused gate, then maestro task complete task-001"),
+        "{resume}"
+    );
+    assert!(resume.contains("required reads:"), "{resume}");
+    assert!(
+        resume.contains("maestro task show task-001")
+            && resume.contains("maestro feature show csv-export")
+            && resume.contains("IMPLEMENTATION_NOTES-csv-export.md"),
+        "{resume}"
+    );
+    assert!(resume.contains("guardrails:"), "{resume}");
+    assert!(
+        resume.contains("preserve unrelated dirty files"),
+        "{resume}"
+    );
+    assert!(resume.contains("do not commit SPEC/notes"), "{resume}");
+    assert!(
+        !resume.contains("prior decisions:")
+            && !resume.contains("handoff prompt:")
+            && !resume.contains("proof history"),
+        "default resume should stay compact: {resume}"
+    );
+    assert!(
+        !task_dir(repo, "task-001").join("resume.md").exists(),
+        "default resume must not write a resume artifact"
+    );
+
+    let json = run(repo, &["resume", "--json"]);
+    let parsed: JsonValue =
+        serde_json::from_str(&json).expect("invariant: resume JSON should parse");
+    assert_eq!(parsed["schema"], "maestro.resume.v1");
+    assert_eq!(parsed["mode"], "compact");
+    assert_eq!(parsed["state"], "in_progress");
+    assert!(parsed["full"].is_null());
+}
+
+#[test]
+fn resume_full_handoff_and_write_are_explicit() {
+    let temp = setup_repo("maestro-resume-full-write");
+    let repo = temp.path();
+    run(repo, &["feature", "new", "CSV export"]);
+    run(repo, &["decision", "new", "Use compact resume by default"]);
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Implement CSV writer",
+            "--feature",
+            "csv-export",
+        ],
+    );
+    run(repo, &["task", "explore", "task-001"]);
+    run(repo, &["task", "accept", "task-001"]);
+    run(repo, &["task", "claim", "task-001"]);
+
+    let full = run(repo, &["resume", "--full"]);
+    assert!(full.contains("prior decisions:"), "{full}");
+    assert!(
+        full.contains("decision-001: Use compact resume by default"),
+        "{full}"
+    );
+    assert!(full.contains("source references:"), "{full}");
+    assert!(!full.contains("handoff prompt:"), "{full}");
+    assert!(
+        !task_dir(repo, "task-001").join("resume.md").exists(),
+        "--full without --write must not write an artifact"
+    );
+
+    let handoff = run(repo, &["resume", "--handoff"]);
+    assert!(handoff.contains("handoff prompt:"), "{handoff}");
+    assert!(
+        !task_dir(repo, "task-001").join("resume.md").exists(),
+        "--handoff without --write must not write an artifact"
+    );
+
+    let written = run(repo, &["resume", "--handoff", "--write"]);
+    assert!(
+        written.contains("wrote: .maestro/tasks/task-001-implement-csv-writer/resume.md"),
+        "{written}"
+    );
+    let resume_md = task_dir(repo, "task-001").join("resume.md");
+    let resume_doc = fs::read_to_string(&resume_md)
+        .expect("invariant: explicit resume artifact should be readable");
+    assert!(resume_doc.contains("generated_at:"), "{resume_doc}");
+    assert!(resume_doc.contains("source references:"), "{resume_doc}");
+    assert!(
+        resume_doc.contains(".maestro/tasks/task-001-implement-csv-writer/task.yaml"),
+        "{resume_doc}"
+    );
+    assert!(resume_doc.contains("handoff prompt:"), "{resume_doc}");
+}
+
+#[test]
+fn resume_feature_target_does_not_select_unrelated_tasks() {
+    let temp = setup_repo("maestro-resume-feature-target");
+    let repo = temp.path();
+    run(repo, &["feature", "new", "CSV export"]);
+    run(repo, &["feature", "new", "Search ranking"]);
+    run(
+        repo,
+        &[
+            "task",
+            "create",
+            "Tune ranking scorer",
+            "--feature",
+            "search-ranking",
+        ],
+    );
+    run(repo, &["task", "explore", "task-001"]);
+    run(repo, &["task", "accept", "task-001"]);
+    run(repo, &["task", "claim", "task-001"]);
+
+    let resume = run(repo, &["resume", "--feature", "csv-export"]);
+    assert!(
+        resume.contains("objective: continue feature csv-export"),
+        "{resume}"
+    );
+    assert!(
+        resume.contains("maestro feature show csv-export"),
+        "{resume}"
+    );
+    assert!(
+        !resume.contains("task-001") && !resume.contains("search-ranking"),
+        "explicit feature target must not leak unrelated task context: {resume}"
     );
 }
 
