@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.2.0
+version: 1.3.0
 description: Initial setup and harness tuning protocol for a Maestro-enabled repository.
 ---
 
@@ -17,8 +17,10 @@ Use this skill after `maestro init`, after `maestro install`, or when
 
 ## Steps
 
-1. Start with `maestro status`. If the repo is not initialized, run
-   `maestro init --dry-run`, then `maestro init --yes`.
+1. Start with `pwd`, then `maestro status`. If the repo is not initialized, run
+   `maestro init --dry-run`. If dry-run prints `operating on <path>` and that
+   path is not the intended current project root, stop and ask the user to pick
+   or create the project root before any write. Only then run `maestro init --yes`.
 2. Run `maestro doctor`. If no agent integration is installed, run
    `maestro install --agent codex` unless the user asked for a different agent.
 3. Inspect the repo structure, build and test commands, existing agent
@@ -36,6 +38,8 @@ Use this skill after `maestro init`, after `maestro install`, or when
 ## Safety
 
 - `maestro init --dry-run` writes nothing.
+- Never follow `maestro init --dry-run` with `maestro init --yes` until the
+  reported root is the intended current project root.
 - `maestro init --yes` keeps existing files and creates what is missing.
 - Use `maestro init --force` only when a deliberate refresh is needed; it backs
   up existing managed files first.

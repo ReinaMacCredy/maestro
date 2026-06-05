@@ -101,13 +101,24 @@ pub fn discover_repo_root() -> Result<PathBuf> {
 
 /// Discover the nearest ancestor that contains a `.maestro` or `.git` directory.
 pub fn discover_repo_root_from(start_dir: impl AsRef<Path>) -> Result<PathBuf> {
-    let start_dir = start_dir.as_ref();
+    let home_root = env::var_os("HOME")
+        .map(PathBuf::from)
+        .and_then(|path| path.canonicalize().ok());
+    discover_repo_root_from_with_home(start_dir.as_ref(), home_root.as_deref())
+}
+
+fn discover_repo_root_from_with_home(
+    start_dir: &Path,
+    home_root: Option<&Path>,
+) -> Result<PathBuf> {
     let mut current = start_dir
         .canonicalize()
         .with_context(|| format!("failed to resolve start directory {}", start_dir.display()))?;
+    let start = current.clone();
 
     loop {
-        if current.join(".maestro").is_dir() || current.join(".git").exists() {
+        let has_repo_marker = current.join(".maestro").is_dir() || current.join(".git").exists();
+        if has_repo_marker && !is_home_root_escape(&current, &start, home_root) {
             return Ok(current);
         }
 
@@ -118,6 +129,10 @@ pub fn discover_repo_root_from(start_dir: impl AsRef<Path>) -> Result<PathBuf> {
             .into());
         }
     }
+}
+
+fn is_home_root_escape(current: &Path, start: &Path, home_root: Option<&Path>) -> bool {
+    home_root.is_some_and(|home| current == home && start != home)
 }
 
 /// Announce, on stderr, the repository root a mutating command resolved to when
@@ -132,5 +147,92 @@ pub fn announce_repo_root(root: &Path) {
     let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     if canonical(&cwd) != canonical(root) {
         eprintln!("operating on {}", root.display());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::*;
+
+    #[test]
+    fn discovery_skips_home_level_maestro_for_clean_child_directory() {
+        let root = temp_root("maestro-home-discovery-test");
+        let home = root.join("home");
+        fs::create_dir_all(home.join(".maestro"))
+            .expect("invariant: home-level maestro dir should be creatable");
+        let project = home.join("Code/demo");
+        fs::create_dir_all(&project).expect("invariant: project dir should be creatable");
+        let home = home
+            .canonicalize()
+            .expect("invariant: home dir should canonicalize");
+
+        let error = discover_repo_root_from_with_home(&project, Some(&home))
+            .expect_err("home-level .maestro must not capture clean child directories");
+
+        assert!(
+            matches!(
+                error.downcast_ref::<MaestroError>(),
+                Some(MaestroError::RepoRootNotFound { .. })
+            ),
+            "{error:?}"
+        );
+        fs::remove_dir_all(root).expect("invariant: temp root should be removable");
+    }
+
+    #[test]
+    fn discovery_allows_home_level_maestro_when_started_at_home() {
+        let root = temp_root("maestro-home-discovery-test");
+        let home = root.join("home");
+        fs::create_dir_all(home.join(".maestro"))
+            .expect("invariant: home-level maestro dir should be creatable");
+        let home = home
+            .canonicalize()
+            .expect("invariant: home dir should canonicalize");
+
+        let discovered = discover_repo_root_from_with_home(&home, Some(&home))
+            .expect("home itself remains a valid explicit root");
+
+        assert_eq!(discovered, home);
+        fs::remove_dir_all(root).expect("invariant: temp root should be removable");
+    }
+
+    #[test]
+    fn discovery_prefers_project_marker_before_home_marker() {
+        let root = temp_root("maestro-home-discovery-test");
+        let home = root.join("home");
+        fs::create_dir_all(home.join(".maestro"))
+            .expect("invariant: home-level maestro dir should be creatable");
+        let project = home.join("Code/demo");
+        fs::create_dir_all(project.join(".git"))
+            .expect("invariant: project git marker should be creatable");
+        let nested = project.join("src/deep");
+        fs::create_dir_all(&nested).expect("invariant: nested dir should be creatable");
+        let home = home
+            .canonicalize()
+            .expect("invariant: home dir should canonicalize");
+
+        let discovered = discover_repo_root_from_with_home(&nested, Some(&home))
+            .expect("project marker should win before home marker");
+
+        assert_eq!(
+            discovered,
+            project
+                .canonicalize()
+                .expect("invariant: project dir should canonicalize")
+        );
+        fs::remove_dir_all(root).expect("invariant: temp root should be removable");
+    }
+
+    fn temp_root(prefix: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock should be after epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
+        fs::create_dir_all(&root).expect("invariant: temp root should be creatable");
+        root
     }
 }
