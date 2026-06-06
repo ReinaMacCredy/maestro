@@ -1,9 +1,13 @@
+use std::env;
+use std::path::PathBuf;
+
 use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
 use crate::domain::task;
+use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::{
     BACKLOG_SCHEMA_VERSION, Compat, HARNESS_SCHEMA_VERSION, classify,
@@ -12,9 +16,22 @@ use crate::harness::schema::{BacklogConfig, HarnessConfig};
 
 /// Execute `maestro doctor`.
 pub fn run() -> Result<()> {
-    let repo_root = discover_repo_root()?;
-    let paths = MaestroPaths::new(repo_root);
-    let report = doctor_report(&paths)?;
+    let report = match discover_repo_root() {
+        Ok(repo_root) => {
+            let paths = MaestroPaths::new(repo_root);
+            doctor_report(&paths)?
+        }
+        Err(error)
+            if matches!(
+                error.downcast_ref::<MaestroError>(),
+                Some(MaestroError::RepoRootNotFound { .. })
+            ) =>
+        {
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            DoctorReport::not_initialized(cwd)
+        }
+        Err(error) => return Err(error),
+    };
 
     for check in &report.checks {
         println!("check {}: ok ({})", check.name, check.detail);
@@ -52,6 +69,19 @@ struct DoctorReport {
     checks: Vec<DoctorCheck>,
     warnings: Vec<String>,
     errors: Vec<String>,
+}
+
+impl DoctorReport {
+    fn not_initialized(cwd: PathBuf) -> Self {
+        Self {
+            checks: Vec::new(),
+            warnings: Vec::new(),
+            errors: vec![format!(
+                "{} is not initialized for Maestro; run `maestro init --yes` to create .maestro",
+                cwd.display()
+            )],
+        }
+    }
 }
 
 #[derive(Debug)]

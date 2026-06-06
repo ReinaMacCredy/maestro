@@ -116,6 +116,32 @@ fn create_verified_task_with_proof(repo: &Path) {
 }
 
 #[test]
+fn doctor_outside_repo_reports_not_initialized_instead_of_discovery_error() {
+    let temp = TestTempDir::new("maestro-doctor-rootless");
+
+    let doctor = maestro(temp.path(), &["doctor"]);
+
+    assert_failure(&doctor, &["doctor"]);
+    let err = stderr(&doctor);
+    assert!(
+        err.contains("is not initialized for Maestro"),
+        "rootless doctor should explain the missing setup:\n{err}"
+    );
+    assert!(
+        err.contains("maestro init --yes"),
+        "rootless doctor should include the repair command:\n{err}"
+    );
+    assert!(
+        !err.contains("failed to discover repository root"),
+        "rootless doctor should not leak raw repo discovery:\n{err}"
+    );
+    assert!(
+        !temp.path().join(".maestro").exists(),
+        "doctor must not scaffold .maestro"
+    );
+}
+
+#[test]
 fn doctor_reports_ok_for_initialized_phase_three_artifacts() {
     let temp = setup_repo("maestro-doctor-ok");
     let repo = temp.path();
