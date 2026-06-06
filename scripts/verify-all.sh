@@ -241,6 +241,7 @@ green-uninstall-help
 green-hook-record-help
 green-init-dry
 green-init
+green-harness-claims-only
 green-install-codex
 green-install-claude
 green-sync-dry
@@ -306,6 +307,7 @@ harness-list-hidden
 harness-list-all
 harness-status-dismissed
 brown-init
+brown-harness-claims-only
 brown-install-codex
 brown-sync
 brown-task-create
@@ -425,6 +427,8 @@ run_greenfield_workflow() {
   contains green-init "initialized maestro"
   assert_path_exists "$work/.maestro/harness/HARNESS.md"
   assert_path_exists "$work/.maestro/skills/maestro-task/SKILL.md"
+  run_in green-harness-claims-only "$work" 0 "$BIN" harness set --claims-only
+  contains green-harness-claims-only "claims-only verification accepted"
 
   run_in green-install-codex "$work" 0 "$BIN" install --agent codex
   run_in green-install-claude "$work" 0 "$BIN" install --agent claude
@@ -570,6 +574,8 @@ run_brownfield_workflow() {
   git_init_project "$work"
 
   run_in brown-init "$work" 0 "$BIN" init --yes
+  run_in brown-harness-claims-only "$work" 0 "$BIN" harness set --claims-only
+  contains brown-harness-claims-only "claims-only verification accepted"
   run_in brown-install-codex "$work" 0 "$BIN" install --agent codex
   mkdir -p "$work/.maestro/skills/local-only"
   printf '%s\n' '# Local Only' 'User-owned local skill.' > "$work/.maestro/skills/local-only/SKILL.md"
