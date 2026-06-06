@@ -10,6 +10,10 @@ fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
         .args(args)
         .current_dir(cwd)
+        // Pin the agent so the demo path is deterministic: the doctor handoff
+        // hint derives from agent env vars, which differ between developer
+        // sessions (CLAUDECODE) and clean CI environments.
+        .env("MAESTRO_AGENT", "codex")
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
