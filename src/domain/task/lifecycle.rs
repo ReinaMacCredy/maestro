@@ -3,6 +3,8 @@ use anyhow::{Result, bail};
 use crate::domain::task::blockers::has_unresolved_blockers;
 use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
 
+const MAX_HISTORY_ENTRIES: usize = 10;
+
 /// Transition a task forward or terminally, appending state history.
 pub fn transition(
     task: &mut TaskRecord,
@@ -17,15 +19,19 @@ pub fn transition(
         task.claimed_by = Some(by.to_string());
         task.claimed_at = Some(at.to_string());
     }
-    task.state_history.push(StateHistoryEntry {
-        state: to,
-        at: at.to_string(),
-        by: by.to_string(),
-        to: details.to,
-        summary: details.summary,
-        claims: details.claims,
-        open_items: details.open_items,
-    });
+    push_history(
+        task,
+        StateHistoryEntry {
+            state: to,
+            at: at.to_string(),
+            by: by.to_string(),
+            to: details.to,
+            summary: details.summary,
+            claims: details.claims,
+            open_items: details.open_items,
+            repeats: None,
+        },
+    );
     task.updated_at = at.to_string();
 
     Ok(())
@@ -33,16 +39,58 @@ pub fn transition(
 
 /// Append a non-transition state-history entry and update the task timestamp.
 pub fn append_history(task: &mut TaskRecord, by: &str, at: &str, details: TransitionDetails) {
-    task.state_history.push(StateHistoryEntry {
-        state: task.state.clone(),
-        at: at.to_string(),
-        by: by.to_string(),
-        to: details.to,
-        summary: details.summary,
-        claims: details.claims,
-        open_items: details.open_items,
-    });
+    push_history(
+        task,
+        StateHistoryEntry {
+            state: task.state.clone(),
+            at: at.to_string(),
+            by: by.to_string(),
+            to: details.to,
+            summary: details.summary,
+            claims: details.claims,
+            open_items: details.open_items,
+            repeats: None,
+        },
+    );
     task.updated_at = at.to_string();
+}
+
+fn push_history(task: &mut TaskRecord, mut entry: StateHistoryEntry) {
+    promote_claims(task, &entry.claims);
+    if let Some(previous) = task.state_history.last_mut()
+        && history_entries_match(previous, &entry)
+    {
+        previous.at = entry.at;
+        previous.repeats = Some(previous.repeats.unwrap_or(1) + 1);
+        return;
+    }
+    entry.repeats = None;
+    task.state_history.push(entry);
+    let remove_count = task.state_history.len().saturating_sub(MAX_HISTORY_ENTRIES);
+    if remove_count > 0 {
+        task.state_history.drain(0..remove_count);
+    }
+}
+
+fn promote_claims(task: &mut TaskRecord, claims: &[String]) {
+    for claim in claims
+        .iter()
+        .map(|claim| claim.trim())
+        .filter(|claim| !claim.is_empty())
+    {
+        if !task.claims.iter().any(|existing| existing == claim) {
+            task.claims.push(claim.to_string());
+        }
+    }
+}
+
+fn history_entries_match(left: &StateHistoryEntry, right: &StateHistoryEntry) -> bool {
+    left.state == right.state
+        && left.by == right.by
+        && left.to == right.to
+        && left.summary == right.summary
+        && left.claims == right.claims
+        && left.open_items == right.open_items
 }
 
 /// Optional metadata for state-history entries.

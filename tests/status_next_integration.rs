@@ -87,10 +87,10 @@ fn task_dir(repo: &Path, id: &str) -> PathBuf {
 fn write_baseline(repo: &Path, feature_id: &str) {
     let dir = repo.join(".maestro/features").join(feature_id);
     fs::write(
-        dir.join("baseline.md"),
+        dir.join("qa.md"),
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] csv export round-trips\n",
     )
-    .expect("invariant: baseline.md should be writable");
+    .expect("invariant: qa.md should be writable");
 }
 
 fn write_disabled_harness(repo: &Path) {
@@ -325,7 +325,9 @@ fn resume_full_handoff_and_write_are_explicit() {
 
     let written = run(repo, &["resume", "--handoff", "--write"]);
     assert!(
-        written.contains("wrote: .maestro/tasks/task-001-implement-csv-writer/resume.md"),
+        written.contains(
+            "wrote: .maestro/features/csv-export/tasks/task-001-implement-csv-writer/resume.md"
+        ),
         "{written}"
     );
     let resume_md = task_dir(repo, "task-001").join("resume.md");
@@ -334,7 +336,8 @@ fn resume_full_handoff_and_write_are_explicit() {
     assert!(resume_doc.contains("generated_at:"), "{resume_doc}");
     assert!(resume_doc.contains("source references:"), "{resume_doc}");
     assert!(
-        resume_doc.contains(".maestro/tasks/task-001-implement-csv-writer/task.yaml"),
+        resume_doc
+            .contains(".maestro/features/csv-export/tasks/task-001-implement-csv-writer/task.yaml"),
         "{resume_doc}"
     );
     assert!(resume_doc.contains("handoff prompt:"), "{resume_doc}");

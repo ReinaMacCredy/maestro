@@ -6,6 +6,7 @@
 pub mod feature_prepare;
 pub mod harness;
 pub mod init;
+pub mod migrate;
 pub mod sync;
 pub mod update;
 
@@ -50,7 +51,7 @@ impl fmt::Display for TaskVerifyUnappliedReason {
     }
 }
 
-/// Coordinate Task snapshot loading, Proof report writing, and Task outcome
+/// Coordinate Task snapshot loading, Proof outcome evaluation, and Task outcome
 /// application.
 pub(crate) fn verify_task(
     paths: &MaestroPaths,

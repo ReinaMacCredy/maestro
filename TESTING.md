@@ -170,19 +170,16 @@ above.
 
 If changing current Task verification surfaces such as
 `src/domain/proof/verify_task.rs`, the task verify command path,
-`operations/task_verify`, Proof report writing, or Task verification binding
-behavior, run `tests/task_verify_integration.rs`, Task
-lifecycle tests, and focused tests for stale Task snapshots, report-write
-failure, typed Task-apply failure leaving a readable unapplied report, failed
-verification moving a previously verified Task only through Task-owned
-lifecycle logic, concurrent verifies not overwriting the canonical applied
-report with a stale attempt, Harness verify commands not replacing
-`acceptance.yaml` with a symlink, symlinked `verification.attempts/` read/write
-rejection, symlinked canonical `verification.json` rejection, latest-attempt
-marker maintenance, rollback-safe canonical report promotion when the final
-Task write fails, interrupted canonical-promotion recovery through the restore
-journal, and Proof status deriving applied/unapplied state from the Task-owned
-applied-report receipt instead of state-history text.
+`operations/task_verify`, Proof outcome evaluation, or Task verification
+binding behavior, run `tests/task_verify_integration.rs`, Task lifecycle tests,
+and focused tests for stale Task snapshots, failed Task writes leaving
+verification outcome data readable through `task.yaml`, failed verification
+moving a previously verified Task only through Task-owned lifecycle logic,
+concurrent verifies not overwriting a fresher embedded verification binding,
+Harness verify commands not replacing Task-owned `task.yaml` fields with
+symlinks, legacy `verification.json` and `verification.attempts/` sidecars
+being ignored as active proof state, and Proof status deriving applied/unapplied
+state from the Task-owned verification binding instead of state-history text.
 
 If changing Run append, event read models, or run evidence generation, run hook
 and run evidence tests plus focused tests for concurrent same-session appends,

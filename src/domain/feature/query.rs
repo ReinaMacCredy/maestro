@@ -9,25 +9,22 @@ use crate::domain::task::TaskState;
 /// Computed task counts for a feature.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct FeatureTaskCounts {
-    /// Number of tasks that reference the feature.
+    /// Number of tasks owned by the feature.
     pub total: usize,
     /// Number of verified tasks that reference the feature.
     pub verified: usize,
 }
 
-/// Count tasks by scanning `.maestro/tasks/**/task.yaml` on demand.
+/// Count tasks by scanning standalone and feature-owned task roots on demand.
 pub fn count_tasks_for_feature(tasks_dir: &Path, feature_id: &str) -> Result<FeatureTaskCounts> {
     Ok(count_tasks_by_feature(tasks_dir)?
         .remove(feature_id)
         .unwrap_or_default())
 }
 
-/// Count tasks for every feature by scanning `.maestro/tasks/**/task.yaml` once.
+/// Count tasks for every feature by scanning standalone and feature-owned task roots once.
 pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, FeatureTaskCounts>> {
     let mut counts: HashMap<String, FeatureTaskCounts> = HashMap::new();
-    if !tasks_dir.exists() {
-        return Ok(counts);
-    }
 
     for projection in task::load_feature_task_projections(tasks_dir)? {
         if let Some(feature_id) = projection.feature_id {
@@ -49,9 +46,6 @@ pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, Featur
 /// needs_verification`. `verified` and the terminal-settled states do not.
 pub fn live_child_task_ids(tasks_dir: &Path, feature_id: &str) -> Result<Vec<String>> {
     let mut ids = Vec::new();
-    if !tasks_dir.exists() {
-        return Ok(ids);
-    }
     for projection in task::load_feature_task_projections(tasks_dir)? {
         if projection.feature_id.as_deref() != Some(feature_id) {
             continue;

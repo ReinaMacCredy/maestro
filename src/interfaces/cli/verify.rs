@@ -32,7 +32,7 @@ pub(super) fn run_for_task(paths: &MaestroPaths, id: &str, actor: &str) -> Resul
                 eprintln!("verification failure: {failure}");
             }
             bail!(
-                "verification report was written but task outcome was not applied for {}: {}",
+                "verification outcome was not embedded for {}: {}",
                 result.verification().task_id,
                 reason
             );

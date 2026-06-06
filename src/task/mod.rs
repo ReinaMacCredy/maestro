@@ -121,7 +121,7 @@ pub mod lookup {
     use crate::domain::task::template::TaskSnapshot;
 
     pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
-        crate::domain::task::lookup::resolve_task_yaml_path(tasks_dir, id)
+        crate::domain::task::task_yaml_path(tasks_dir, id)
     }
 
     pub fn task_yaml_path_for_entry(entry: &fs::DirEntry) -> Result<Option<PathBuf>> {

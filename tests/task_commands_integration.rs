@@ -5,7 +5,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde_yaml::Value;
+use serde_yaml::{Mapping, Value};
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
@@ -63,22 +63,36 @@ fn setup_repo() -> TestTempDir {
 }
 
 fn task_yaml_path(repo: &Path, id: &str) -> PathBuf {
-    let tasks_dir = repo.join(".maestro/tasks");
     let prefix = format!("{id}-");
-    let entries =
-        fs::read_dir(&tasks_dir).expect("invariant: tasks directory should be readable in tests");
-    for entry in entries {
-        let entry = entry.expect("invariant: tasks entry should be readable");
-        let name = entry
-            .file_name()
-            .to_str()
-            .expect("invariant: tasks entry names should be UTF-8")
-            .to_string();
-        if name.starts_with(&prefix) {
-            return entry.path().join("task.yaml");
+    for root in task_roots(repo) {
+        let Ok(entries) = fs::read_dir(&root) else {
+            continue;
+        };
+        for entry in entries {
+            let entry = entry.expect("invariant: tasks entry should be readable");
+            let name = entry
+                .file_name()
+                .to_str()
+                .expect("invariant: tasks entry names should be UTF-8")
+                .to_string();
+            if name.starts_with(&prefix) {
+                return entry.path().join("task.yaml");
+            }
         }
     }
     panic!("invariant: expected task directory for {id}");
+}
+
+fn task_roots(repo: &Path) -> Vec<PathBuf> {
+    let mut roots = vec![repo.join(".maestro/tasks")];
+    let features_dir = repo.join(".maestro/features");
+    if let Ok(features) = fs::read_dir(features_dir) {
+        for feature in features {
+            let feature = feature.expect("invariant: feature entry should be readable");
+            roots.push(feature.path().join("tasks"));
+        }
+    }
+    roots
 }
 
 fn task_yaml(repo: &Path, id: &str) -> Value {
@@ -152,7 +166,18 @@ fn create_explore_accept_claim_complete_flow_updates_task_record() {
     assert_eq!(doc["state"], Value::String("verified".to_string()));
     assert_eq!(doc["claimed_by"], Value::String("maestro".to_string()));
     assert_eq!(doc["acceptance_locked"], Value::Bool(true));
-    assert_eq!(doc["feature_id"], Value::String("billing-csv".to_string()));
+    assert!(
+        !doc.as_mapping()
+            .expect("invariant: task yaml should be a mapping")
+            .contains_key(Value::String("feature_id".to_string())),
+        "feature ownership is path-derived in v2"
+    );
+    assert!(
+        task_yaml_path(repo, "task-001")
+            .to_string_lossy()
+            .contains(".maestro/features/billing-csv/tasks"),
+        "feature-owned tasks should live under their feature directory"
+    );
     let history = doc["state_history"]
         .as_sequence()
         .expect("invariant: state_history should be an array");
@@ -925,19 +950,13 @@ fn set_on_a_settled_task_refuses_the_link_change_before_writing_checks() {
     assert_failure(&set, args);
     assert!(stderr(&set).contains("settled history"));
 
-    // The refused set wrote no check: acceptance carries nothing from it.
-    let acceptance = task_yaml_path(repo, "task-001")
-        .parent()
-        .expect("invariant: task path should have a directory")
-        .join("acceptance.yaml");
-    if acceptance.exists() {
-        let raw =
-            fs::read_to_string(&acceptance).expect("invariant: acceptance.yaml should be readable");
-        assert!(
-            !raw.contains("must not persist"),
-            "a refused set must not persist its checks: {raw}"
-        );
-    }
+    // The refused set wrote no check: inline acceptance carries nothing from it.
+    let raw = fs::read_to_string(task_yaml_path(repo, "task-001"))
+        .expect("invariant: task.yaml should be readable");
+    assert!(
+        !raw.contains("must not persist"),
+        "a refused set must not persist its checks: {raw}"
+    );
 }
 
 #[test]
@@ -1078,20 +1097,33 @@ fn set_check_honors_an_on_disk_acceptance_lock_even_when_the_task_snapshot_is_st
         &["task", "create", "Race probe"],
     );
 
-    // Simulate the accept/set_checks race: a concurrent `accept` freezes the
-    // contract on disk (writes locked_by into acceptance.yaml) AFTER a racing
-    // `set_checks` has already loaded an unlocked task.yaml snapshot. The task
-    // stays draft (acceptance_locked = false), so the snapshot guard does not
-    // fire; only re-reading the acceptance file's own lock marker catches it.
-    let acceptance = task_yaml_path(repo, "task-001")
-        .parent()
-        .expect("invariant: task path should have a directory")
-        .join("acceptance.yaml");
-    fs::write(
-        &acceptance,
-        "schema_version: maestro.acceptance.v1\ntask: task-001\nchecks: []\nlocked_by: maestro\nlocked_at: now\n",
+    // Simulate a partially-written inline contract lock: the task stays draft
+    // (`acceptance_locked = false`), but the nested acceptance record is frozen.
+    let task_path = task_yaml_path(repo, "task-001");
+    let mut doc: Value = serde_yaml::from_str(
+        &fs::read_to_string(&task_path).expect("invariant: task.yaml should be readable"),
     )
-    .expect("invariant: acceptance.yaml should be writable");
+    .expect("invariant: task.yaml should parse");
+    let mut acceptance = Mapping::new();
+    acceptance.insert(
+        Value::String("locked_by".to_string()),
+        Value::String("maestro".to_string()),
+    );
+    acceptance.insert(
+        Value::String("locked_at".to_string()),
+        Value::String("now".to_string()),
+    );
+    doc.as_mapping_mut()
+        .expect("invariant: task.yaml should be a mapping")
+        .insert(
+            Value::String("acceptance".to_string()),
+            Value::Mapping(acceptance),
+        );
+    fs::write(
+        &task_path,
+        serde_yaml::to_string(&doc).expect("invariant: task yaml should serialize"),
+    )
+    .expect("invariant: task.yaml should be writable");
 
     let args = &[
         "task",
@@ -1109,8 +1141,7 @@ fn set_check_honors_an_on_disk_acceptance_lock_even_when_the_task_snapshot_is_st
     );
 
     // The refused set left the frozen contract intact (no clobber).
-    let raw =
-        fs::read_to_string(&acceptance).expect("invariant: acceptance.yaml should be readable");
+    let raw = fs::read_to_string(&task_path).expect("invariant: task.yaml should be readable");
     assert!(
         raw.contains("locked_by: maestro") && !raw.contains("must not clobber"),
         "the frozen contract must survive the refused set: {raw}"

@@ -62,8 +62,8 @@ fn build_resume_report(
         "do not commit SPEC/notes".to_string(),
         "read required artifacts before acting".to_string(),
     ];
-    let source_refs = source_refs(paths, selected_task.as_ref(), selected_feature.as_ref());
-    let write_path = write_path(paths, selected_task.as_ref(), selected_feature.as_ref());
+    let source_refs = source_refs(paths, selected_task.as_ref(), selected_feature.as_ref())?;
+    let write_path = write_path(paths, selected_task.as_ref(), selected_feature.as_ref())?;
     let full = if mode != ResumeMode::Compact {
         let tasks = task::load_task_records(&paths.tasks_dir())?;
         Some(full_context(
@@ -293,23 +293,11 @@ fn source_refs(
     paths: &MaestroPaths,
     task: Option<&task::TaskRecord>,
     feature: Option<&feature::FeatureView>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     let mut refs = Vec::new();
     if let Some(task) = task {
-        refs.push(display_repo_relative(
-            paths,
-            &paths
-                .tasks_dir()
-                .join(task.directory_name())
-                .join("task.yaml"),
-        ));
-        refs.push(display_repo_relative(
-            paths,
-            &paths
-                .tasks_dir()
-                .join(task.directory_name())
-                .join("acceptance.yaml"),
-        ));
+        let task_yaml = task::task_yaml_path(&paths.tasks_dir(), &task.id)?;
+        refs.push(display_repo_relative(paths, &task_yaml));
     }
     if let Some(feature) = feature {
         refs.push(display_repo_relative(
@@ -321,7 +309,7 @@ fn source_refs(
             &paths.features_dir().join(&feature.id).join("notes.md"),
         ));
     }
-    refs
+    Ok(refs)
 }
 
 fn full_context(
@@ -449,17 +437,18 @@ fn write_path(
     paths: &MaestroPaths,
     task: Option<&task::TaskRecord>,
     feature: Option<&feature::FeatureView>,
-) -> PathBuf {
+) -> Result<PathBuf> {
     if let Some(task) = task {
-        return paths
-            .tasks_dir()
-            .join(task.directory_name())
-            .join("resume.md");
+        let task_yaml = task::task_yaml_path(&paths.tasks_dir(), &task.id)?;
+        return Ok(task_yaml
+            .parent()
+            .context("task.yaml path is missing parent directory")?
+            .join("resume.md"));
     }
     if let Some(feature) = feature {
-        return paths.features_dir().join(&feature.id).join("resume.md");
+        return Ok(paths.features_dir().join(&feature.id).join("resume.md"));
     }
-    paths.maestro_dir().join("resume.md")
+    Ok(paths.maestro_dir().join("resume.md"))
 }
 
 fn display_repo_relative(paths: &MaestroPaths, path: &Path) -> String {

@@ -5,7 +5,7 @@ use maestro::task::template::{load_task, save_task_with_snapshot, write_task_art
 use support::TestTempDir;
 
 #[test]
-fn task_artifacts_write_v1_task_markdown_and_acceptance_files() {
+fn task_artifacts_write_v2_task_markdown_and_inline_acceptance() {
     let temp_dir = TestTempDir::new("maestro-task-test");
     let tasks_dir = temp_dir.path().join(".maestro/tasks");
     let task = TaskRecord::draft("task-003", "Add CSV export", "2026-05-25T08:00:00Z");
@@ -25,18 +25,22 @@ fn task_artifacts_write_v1_task_markdown_and_acceptance_files() {
         .expect("invariant: task.yaml should be readable");
     let task_md = std::fs::read_to_string(task_dir.join("task.md"))
         .expect("invariant: task.md should be readable");
-    let acceptance_yaml = std::fs::read_to_string(task_dir.join("acceptance.yaml"))
-        .expect("invariant: acceptance.yaml should be readable");
 
-    assert!(task_yaml.contains("schema_version: maestro.task.v1"));
+    assert!(task_yaml.contains("schema_version: maestro.task.v2"));
     assert!(task_yaml.contains("state: draft"));
     assert!(task_yaml.contains("acceptance_locked: false"));
+    assert!(task_yaml.contains("acceptance:"));
+    assert!(task_yaml.contains("CSV export button appears on billing page"));
+    assert!(task_yaml.contains("Clicking export downloads a .csv file"));
     assert!(task_yaml.contains("verification:"));
-    let expected_task_md = "# Add CSV export\n\n## Acceptance\nSee acceptance.yaml.\n";
+    assert!(
+        !task_dir.join("acceptance.yaml").exists(),
+        "acceptance sidecar should not be written for v2 tasks"
+    );
+    let expected_task_md = "# Add CSV export\n\n## Acceptance\n- CSV export button appears on billing page\n- Clicking export downloads a .csv file\n";
     assert_eq!(task_md, expected_task_md);
-    assert_eq!(task_markdown(&task), expected_task_md);
-    assert!(acceptance_yaml.contains("schema_version: maestro.acceptance.v1"));
-    assert!(acceptance_yaml.contains("task: task-003"));
+    let (loaded, _) = load_task(&task_dir.join("task.yaml")).expect("invariant: task should load");
+    assert_eq!(task_markdown(&loaded), expected_task_md);
 }
 
 #[test]

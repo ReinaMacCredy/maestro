@@ -9,21 +9,28 @@ pub struct ParsedTimestamp {
     pub nanos_since_epoch: i128,
 }
 
-/// Return nanoseconds since the Unix epoch as a decimal string, falling back to
-/// `"0"` when the system clock predates the epoch.
+/// Return the current UTC timestamp with millisecond precision.
+pub fn utc_now_millis_timestamp() -> String {
+    let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return "1970-01-01T00:00:00.000Z".to_string();
+    };
+    format_unix_timestamp_millis(duration.as_secs(), duration.subsec_millis())
+}
+
+/// Return a filesystem-safe current UTC timestamp with millisecond precision.
+pub fn utc_now_filesystem_millis_timestamp() -> String {
+    utc_now_millis_timestamp().replace(':', "-")
+}
+
+/// Deprecated name retained for call-site stability while the persisted format
+/// has moved from nanosecond epochs to RFC3339 UTC milliseconds.
 pub fn nanos_since_epoch_string() -> String {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos().to_string())
-        .unwrap_or_else(|_| "0".to_string())
+    utc_now_millis_timestamp()
 }
 
 /// Return the current time as a UTC event timestamp.
 pub fn utc_now_timestamp() -> String {
-    let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) else {
-        return "1970-01-01T00:00:00.000000000Z".to_string();
-    };
-    format_unix_timestamp(duration.as_secs(), duration.subsec_nanos())
+    utc_now_millis_timestamp()
 }
 
 /// Parse an event timestamp emitted by `utc_now_timestamp`.
@@ -64,16 +71,20 @@ pub fn parse_utc_timestamp(value: &str) -> Option<ParsedTimestamp> {
     })
 }
 
-fn format_unix_timestamp(seconds: u64, nanos: u32) -> String {
-    let (year, month, day, hour, minute, second) = civil_parts(seconds);
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{nanos:09}Z")
-}
-
 /// Format Unix epoch seconds as an RFC3339 UTC timestamp with millisecond precision
 /// (e.g. `2026-05-26T05:16:16.000Z`). Seconds-resolution input always renders `.000`.
 pub fn format_utc_seconds_rfc3339_millis(seconds: u64) -> String {
+    format_utc_millis_rfc3339(seconds, 0)
+}
+
+/// Format Unix epoch seconds + milliseconds as an RFC3339 UTC timestamp.
+pub fn format_utc_millis_rfc3339(seconds: u64, millis: u32) -> String {
+    format_unix_timestamp_millis(seconds, millis)
+}
+
+fn format_unix_timestamp_millis(seconds: u64, millis: u32) -> String {
     let (year, month, day, hour, minute, second) = civil_parts(seconds);
-    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.000Z")
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
 }
 
 /// Render a persisted nanos-since-epoch string as a human RFC3339 UTC timestamp.
@@ -81,8 +92,22 @@ pub fn format_utc_seconds_rfc3339_millis(seconds: u64) -> String {
 /// hand-edited or legacy field is shown verbatim rather than mangled.
 pub fn render_timestamp(value: &str) -> String {
     match value.trim().parse::<u64>() {
-        Ok(nanos) => format_utc_seconds_rfc3339_millis(nanos / 1_000_000_000),
+        Ok(timestamp) => render_numeric_timestamp(timestamp, value.trim().len()),
         Err(_) => value.to_string(),
+    }
+}
+
+fn render_numeric_timestamp(timestamp: u64, digits: usize) -> String {
+    match digits {
+        0..=10 => format_utc_seconds_rfc3339_millis(timestamp),
+        11..=13 => format_utc_millis_rfc3339(timestamp / 1_000, (timestamp % 1_000) as u32),
+        14..=16 => {
+            format_utc_millis_rfc3339(timestamp / 1_000_000, ((timestamp / 1_000) % 1_000) as u32)
+        }
+        _ => format_utc_millis_rfc3339(
+            timestamp / 1_000_000_000,
+            ((timestamp / 1_000_000) % 1_000) as u32,
+        ),
     }
 }
 

@@ -34,8 +34,8 @@ struct TaskVerifyAttempt {
     application: Result<()>,
 }
 
-/// Evaluate Proof, persist a receipt-keyed attempt, then ask Task to promote
-/// the canonical report and apply the outcome against the original snapshot.
+/// Evaluate Proof, then ask Task to embed the verification outcome against the
+/// original snapshot.
 pub(crate) fn verify_task(
     paths: &MaestroPaths,
     task_id: &str,
@@ -77,21 +77,11 @@ fn verify_loaded_task(
     verified_at: &str,
 ) -> Result<TaskVerifyAttempt> {
     let task_dir = handle.task_dir().to_path_buf();
-    let report = proof::evaluate_and_write_task_report_attempt(
-        paths,
-        handle.task(),
-        &task_dir,
-        verified_at,
-    )?;
+    let report = proof::evaluate_task_report(paths, handle.task(), &task_dir, verified_at)?;
 
     let outcome = proof::verification_outcome_for_report(&report)?;
-    let application = task::apply_verification_outcome_to_handle_after(
-        handle,
-        outcome,
-        actor,
-        verified_at,
-        || proof::replace_task_report_preserving_previous(&task_dir, &report),
-    );
+    let application =
+        task::apply_verification_outcome_to_handle(handle, outcome, actor, verified_at);
 
     Ok(TaskVerifyAttempt {
         report,

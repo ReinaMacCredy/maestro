@@ -11,7 +11,7 @@ use maestro::foundation::core::schema::{
 };
 
 #[test]
-fn all_v1_schema_versions_are_declared_once() {
+fn all_active_schema_versions_are_declared_once() {
     assert_eq!(
         ALL_SCHEMA_VERSIONS,
         &[
@@ -21,28 +21,29 @@ fn all_v1_schema_versions_are_declared_once() {
             RUN_SCHEMA_VERSION,
             EVENT_SCHEMA_VERSION,
             RUN_EVIDENCE_SCHEMA_VERSION,
-            VERIFICATION_SCHEMA_VERSION,
-            ACCEPTANCE_SCHEMA_VERSION,
             INSTALL_LOCK_SCHEMA_VERSION,
             GLOBAL_SKILLS_LOCK_SCHEMA_VERSION,
             BACKLOG_SCHEMA_VERSION,
-            VERIFICATION_RESTORE_SCHEMA_VERSION,
         ]
     );
-    assert_eq!(ALL_SCHEMA_VERSIONS.len(), 12);
+    assert_eq!(ALL_SCHEMA_VERSIONS.len(), 9);
 }
 
 #[test]
-fn schema_constants_match_spec_section_37() {
+fn schema_constants_match_current_artifact_contract() {
     assert_eq!(HARNESS_SCHEMA_VERSION, "maestro.harness.v1");
-    assert_eq!(FEATURE_SCHEMA_VERSION, "maestro.feature.v1");
-    assert_eq!(TASK_SCHEMA_VERSION, "maestro.task.v1");
+    assert_eq!(FEATURE_SCHEMA_VERSION, "maestro.feature.v2");
+    assert_eq!(TASK_SCHEMA_VERSION, "maestro.task.v2");
     assert_eq!(RUN_SCHEMA_VERSION, "maestro.run.v1");
     assert_eq!(EVENT_SCHEMA_VERSION, "maestro.event.v1");
     assert_eq!(RUN_EVIDENCE_SCHEMA_VERSION, "maestro.run_evidence.v1");
     assert_eq!(VERIFICATION_SCHEMA_VERSION, "maestro.verification.v1");
     assert_eq!(ACCEPTANCE_SCHEMA_VERSION, "maestro.acceptance.v1");
     assert_eq!(INSTALL_LOCK_SCHEMA_VERSION, "maestro.install_lock.v1");
+    assert_eq!(
+        GLOBAL_SKILLS_LOCK_SCHEMA_VERSION,
+        "maestro.global_skills_lock.v1"
+    );
     assert_eq!(BACKLOG_SCHEMA_VERSION, "maestro.backlog.v1");
     assert_eq!(
         VERIFICATION_RESTORE_SCHEMA_VERSION,
@@ -89,7 +90,7 @@ fn classify_maps_exact_match_and_treats_everything_else_as_incompatible() {
     );
     // A newer generation than this binary understands is incompatible.
     assert_eq!(
-        classify("maestro.feature.v2", FEATURE_SCHEMA_VERSION),
+        classify("maestro.feature.v3", FEATURE_SCHEMA_VERSION),
         Compat::Incompatible
     );
     // The install-lock gate stays hard.
@@ -109,7 +110,7 @@ fn typed_errors_implement_display_debug_and_error() {
 
     assert_eq!(
         error.to_string(),
-        "schema mismatch for task.yaml: expected maestro.task.v1, found maestro.task.v0"
+        "schema mismatch for task.yaml: expected maestro.task.v2, found maestro.task.v0"
     );
     assert!(
         format!("{error:?}").contains("SchemaMismatch"),
@@ -119,7 +120,7 @@ fn typed_errors_implement_display_debug_and_error() {
     let as_error: &dyn Error = &error;
     assert_eq!(
         as_error.to_string(),
-        "schema mismatch for task.yaml: expected maestro.task.v1, found maestro.task.v0"
+        "schema mismatch for task.yaml: expected maestro.task.v2, found maestro.task.v0"
     );
 }
 

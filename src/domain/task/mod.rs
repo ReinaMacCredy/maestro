@@ -5,10 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
 
-use crate::foundation::core::fs::read_to_string_if_exists;
-use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::time::parse_utc_timestamp;
 
 pub(crate) mod archive;
@@ -19,7 +17,6 @@ pub(crate) mod lifecycle;
 pub(crate) mod lookup;
 pub(crate) mod template;
 
-pub(crate) use archive::live_task_referrer;
 pub use archive::{archive_task, unarchive_task};
 pub use blockers::has_unresolved_blockers;
 pub use display::{render_task, render_task_list, render_task_list_with_missing_checks};
@@ -30,12 +27,13 @@ pub use doctor::{
 pub use lifecycle::TransitionDetails;
 pub(crate) use template::TaskSaveError;
 pub use template::{
-    AcceptanceFile, AppliedVerificationReceipt, Blocker, BlockerKind, BlockerRef, BlockerSource,
-    TaskRecord, TaskState, VerificationBinding, task_markdown,
+    AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ClaimCheckReceipt,
+    ProofSourceReceipt, TaskRecord, TaskState, VerificationBinding, VerificationCommandReceipt,
+    VerificationStatus, task_markdown,
 };
 
 /// Minimal Task projection for feature rollups.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeatureTaskProjection {
     pub id: String,
     pub feature_id: Option<String>,
@@ -97,7 +95,9 @@ pub fn create_task(
         task.risk = Some(risk);
     }
     let acceptance = AcceptanceFile::new(&id, checks);
-    template::write_task_artifacts(tasks_dir, &task, &acceptance)?;
+    task.acceptance = acceptance.clone();
+    let task_root = task_root_for_feature(tasks_dir, task.feature_id.as_deref())?;
+    template::write_task_artifacts(&task_root, &task, &acceptance)?;
     Ok(task)
 }
 
@@ -107,14 +107,15 @@ pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     Ok(task)
 }
 
-/// Read a task's acceptance checks for display, deriving the sibling
-/// `acceptance.yaml` from the task's own directory. Empty when the task has
-/// none (or its acceptance file was hand-deleted).
+/// Resolve a task's current `task.yaml` path by id or id prefix.
+pub fn task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
+    lookup::resolve_task_yaml_path(tasks_dir, id)
+}
+
+/// Read a task's inline acceptance checks for display.
 pub fn load_task_checks(tasks_dir: &Path, task: &TaskRecord) -> Result<Vec<String>> {
-    let path = tasks_dir
-        .join(task.directory_name())
-        .join("acceptance.yaml");
-    Ok(read_acceptance_or_new(&path, &task.id)?.checks)
+    let _ = tasks_dir;
+    Ok(task.acceptance.checks.clone())
 }
 
 /// Filters applied to a task listing by the CLI and MCP surfaces.
@@ -189,27 +190,14 @@ pub fn filter_tasks(mut tasks: Vec<TaskRecord>, filter: &TaskFilter) -> Vec<Task
 
 /// Load minimal task projections for feature read models without full record sorting.
 pub fn load_feature_task_projections(tasks_dir: &Path) -> Result<Vec<FeatureTaskProjection>> {
-    let mut projections = Vec::new();
-    if !tasks_dir.is_dir() {
-        return Ok(projections);
-    }
-
-    for entry in fs::read_dir(tasks_dir)
-        .with_context(|| format!("failed to read tasks dir {}", tasks_dir.display()))?
-    {
-        let entry =
-            entry.with_context(|| format!("failed to read entry in {}", tasks_dir.display()))?;
-        let Some(task_path) = lookup::task_yaml_path_for_entry(&entry)? else {
-            continue;
-        };
-
-        let contents = fs::read_to_string(&task_path)
-            .with_context(|| format!("failed to read {}", task_path.display()))?;
-        let projection: FeatureTaskProjection = serde_yaml::from_str(&contents)
-            .with_context(|| format!("failed to parse {}", task_path.display()))?;
-        projections.push(projection);
-    }
-    Ok(projections)
+    Ok(load_task_entries(tasks_dir)?
+        .into_iter()
+        .map(|entry| FeatureTaskProjection {
+            id: entry.task.id,
+            feature_id: entry.task.feature_id,
+            state: Some(entry.task.state),
+        })
+        .collect())
 }
 
 /// Return per-task verification durations for loaded task entries.
@@ -280,6 +268,8 @@ pub fn accept_task(
     // first surfaces the real blocker (terminal / explore-first). For a valid
     // exploring->ready accept the transition passes and the checks gate fires.
     task.acceptance_locked = true;
+    task.acceptance.locked_by = Some(actor.to_string());
+    task.acceptance.locked_at = Some(accepted_at.to_string());
     lifecycle::transition(
         &mut task,
         TaskState::Ready,
@@ -289,12 +279,6 @@ pub fn accept_task(
     )?;
     ensure_standalone_has_checks(&task, &task_dir)?;
     template::save_task_with_snapshot(&task, &snapshot)?;
-    lock_acceptance(
-        task_dir.join("acceptance.yaml"),
-        &task.id,
-        actor,
-        accepted_at,
-    )?;
     Ok(task)
 }
 
@@ -369,24 +353,22 @@ pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<(Ta
             handle.task().id
         );
     }
-    let path = handle.task_dir().join("acceptance.yaml");
-    let mut acceptance = read_acceptance_or_new(&path, &handle.task().id)?;
+    let mut task = handle.task().clone();
     // Re-check the freshly read acceptance file's own lock marker, not just the
     // task.yaml snapshot loaded above: a concurrent `accept`/claim can freeze the
     // contract between that load and this write. `lock_acceptance` records the
     // freeze as `locked_by`/`locked_at` in this file, so honoring it here closes
     // the race where set_checks would otherwise clobber an already-frozen contract.
-    if acceptance.locked_by.is_some() {
+    if task.acceptance.locked_by.is_some() {
         bail!(
             "task {} acceptance is locked; checks cannot be changed after accept",
             handle.task().id
         );
     }
-    let replaced = acceptance.checks.len();
-    acceptance.checks = checks;
-    write_string_atomic(&path, &serde_yaml::to_string(&acceptance)?)
-        .with_context(|| format!("failed to write {}", path.display()))?;
-    Ok((handle.task().clone(), replaced))
+    let replaced = task.acceptance.checks.len();
+    task.acceptance.checks = checks;
+    template::save_task_with_snapshot(&task, &handle.snapshot)?;
+    Ok((task, replaced))
 }
 
 /// Attach, move, or detach a task's `feature_id` (Theme II Q-II-2/3).
@@ -402,7 +384,7 @@ pub fn set_feature(
     actor: &str,
     at: &str,
 ) -> Result<TaskRecord> {
-    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    let (mut task, snapshot, current_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     if feature_link_is_settled(&task.state) {
         bail!(
             "task {} is {}; its feature link is settled history and cannot change",
@@ -430,6 +412,25 @@ pub fn set_feature(
         },
     );
     template::save_task_with_snapshot(&task, &snapshot)?;
+    let target_root = task_root_for_feature(tasks_dir, task.feature_id.as_deref())?;
+    let target_dir = target_root.join(task.directory_name());
+    if target_dir != current_dir {
+        if target_dir.exists() {
+            bail!(
+                "cannot move task {} — target already exists at {}",
+                task.id,
+                target_dir.display()
+            );
+        }
+        ensure_dir(&target_root)?;
+        fs::rename(&current_dir, &target_dir).with_context(|| {
+            format!(
+                "failed to move {} to {}",
+                current_dir.display(),
+                target_dir.display()
+            )
+        })?;
+    }
     Ok(task)
 }
 
@@ -583,7 +584,6 @@ fn apply_verification_outcome(
         VerificationOutcome::Passed(passed) => {
             task.state = TaskState::Verified;
             task.verification = passed.binding;
-            task.verification.applied_report = Some(passed.receipt);
             lifecycle::append_history(
                 task,
                 actor,
@@ -598,10 +598,7 @@ fn apply_verification_outcome(
             if task.state == TaskState::Verified {
                 task.state = TaskState::NeedsVerification;
             }
-            task.verification = VerificationBinding {
-                applied_report: Some(failed.receipt),
-                ..VerificationBinding::default()
-            };
+            task.verification = failed.binding;
             lifecycle::append_history(
                 task,
                 actor,
@@ -616,20 +613,14 @@ fn apply_verification_outcome(
     }
 }
 
-/// Apply and save a verification outcome after a caller-owned pre-save step.
-pub(crate) fn apply_verification_outcome_to_handle_after<F, C>(
+pub(crate) fn apply_verification_outcome_to_handle(
     handle: &mut TaskHandle,
     outcome: VerificationOutcome,
     actor: &str,
     applied_at: &str,
-    before_save: F,
-) -> Result<()>
-where
-    F: FnOnce() -> Result<C>,
-    C: template::SaveTaskHook,
-{
+) -> Result<()> {
     apply_verification_outcome(&mut handle.task, outcome, actor, applied_at);
-    template::save_task_with_snapshot_after(&handle.task, &handle.snapshot, before_save)
+    template::save_task_with_snapshot(&handle.task, &handle.snapshot)
 }
 
 /// Verification outcome request accepted by the Task aggregate.
@@ -643,38 +634,15 @@ pub(crate) enum VerificationOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct VerificationPassed {
     pub(crate) binding: VerificationBinding,
-    pub(crate) receipt: AppliedVerificationReceipt,
     pub(crate) summary: String,
 }
 
 /// Failed verification data accepted by the Task aggregate.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct VerificationFailed {
-    pub(crate) receipt: AppliedVerificationReceipt,
+    pub(crate) binding: VerificationBinding,
     pub(crate) summary: String,
     pub(crate) failures: Vec<String>,
-}
-
-fn lock_acceptance(path: PathBuf, task_id: &str, actor: &str, locked_at: &str) -> Result<()> {
-    let acceptance = read_acceptance_or_new(&path, task_id)?;
-    let locked = AcceptanceFile {
-        locked_by: Some(actor.to_string()),
-        locked_at: Some(locked_at.to_string()),
-        ..acceptance
-    };
-    write_string_atomic(&path, &serde_yaml::to_string(&locked)?)
-        .with_context(|| format!("failed to write {}", path.display()))
-}
-
-/// Read a task's `acceptance.yaml`, falling back to a fresh unlocked file when
-/// it is absent (a freshly created task always has one, so this only guards a
-/// hand-deleted artifact).
-fn read_acceptance_or_new(path: &Path, task_id: &str) -> Result<AcceptanceFile> {
-    match read_to_string_if_exists(path)? {
-        Some(content) => serde_yaml::from_str::<AcceptanceFile>(&content)
-            .with_context(|| format!("failed to parse {}", path.display())),
-        None => Ok(AcceptanceFile::new(task_id, Vec::new())),
-    }
 }
 
 /// C4 lock-path gate: a standalone task (no `feature_id`) carries no inherited
@@ -682,11 +650,11 @@ fn read_acceptance_or_new(path: &Path, task_id: &str) -> Result<AcceptanceFile> 
 /// non-empty before it can be accepted or claim-auto-locked. Featured tasks
 /// inherit the feature's frozen contract and are exempt.
 fn ensure_standalone_has_checks(task: &TaskRecord, task_dir: &Path) -> Result<()> {
+    let _ = task_dir;
     if task.feature_id.is_some() {
         return Ok(());
     }
-    let acceptance = read_acceptance_or_new(&task_dir.join("acceptance.yaml"), &task.id)?;
-    if acceptance.checks.is_empty() {
+    if task.acceptance.checks.is_empty() {
         bail!(
             "standalone task {} has no checks; add at least one with `maestro task set {} --check \"...\"` before it can be accepted",
             task.id,
@@ -718,11 +686,20 @@ fn next_task_id(tasks_dir: &Path) -> Result<String> {
 /// Highest `task-NNN` number among the directory's entries (0 if dir absent).
 fn max_task_number(tasks_dir: &Path) -> Result<u32> {
     let mut max = 0_u32;
-    if tasks_dir.is_dir() {
-        for entry in fs::read_dir(tasks_dir)
-            .with_context(|| format!("failed to read {}", tasks_dir.display()))?
+    for root in lookup::task_roots(tasks_dir)? {
+        if !root.is_dir() {
+            continue;
+        }
+        for entry in
+            fs::read_dir(&root).with_context(|| format!("failed to read {}", root.display()))?
         {
-            let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
+            let entry = entry.with_context(|| format!("failed to list {}", root.display()))?;
+            let file_type = entry
+                .file_type()
+                .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+            if !file_type.is_dir() || file_type.is_symlink() {
+                continue;
+            }
             let Some(name) = entry.file_name().to_str().map(str::to_string) else {
                 continue;
             };
@@ -736,6 +713,19 @@ fn max_task_number(tasks_dir: &Path) -> Result<u32> {
         }
     }
     Ok(max)
+}
+
+fn task_root_for_feature(tasks_dir: &Path, feature_id: Option<&str>) -> Result<PathBuf> {
+    let Some(feature_id) = feature_id else {
+        return Ok(tasks_dir.to_path_buf());
+    };
+    let maestro_dir = tasks_dir.parent().with_context(|| {
+        format!(
+            "cannot derive feature task root from {}",
+            tasks_dir.display()
+        )
+    })?;
+    Ok(maestro_dir.join("features").join(feature_id).join("tasks"))
 }
 
 /// `.maestro/tasks` → `.maestro/archive/tasks` (the archive sibling tree, §5.3).
@@ -783,8 +773,8 @@ fn blocker_descriptor(target: BlockerTarget) -> (BlockerKind, Option<BlockerRef>
 #[cfg(test)]
 mod tests {
     use super::{
-        AppliedVerificationReceipt, TaskRecord, TaskState, VerificationBinding,
-        VerificationOutcome, VerificationPassed, apply_verification_outcome,
+        TaskRecord, TaskState, VerificationBinding, VerificationOutcome, VerificationPassed,
+        VerificationStatus, apply_verification_outcome,
     };
 
     #[test]
@@ -796,18 +786,12 @@ mod tests {
             &mut task,
             VerificationOutcome::Passed(VerificationPassed {
                 binding: VerificationBinding {
+                    status: Some(VerificationStatus::Passed),
                     verified_at: Some("t1".to_string()),
                     verified_commit: Some("abc123".to_string()),
                     verified_by_run: Some("runs/session".to_string()),
-                    task_contract_hash: Some("task-hash".to_string()),
-                    acceptance_hash: Some("acceptance-hash".to_string()),
-                    checks_hash: Some("checks-hash".to_string()),
+                    contract_hash: Some("task-hash".to_string()),
                     ..VerificationBinding::default()
-                },
-                receipt: AppliedVerificationReceipt {
-                    task_snapshot_updated_at: "t0".to_string(),
-                    verified_at: "t1".to_string(),
-                    attempt_id: Some("attempt-1".to_string()),
                 },
                 summary: "verification passed: 1 claim(s), 1 proof source(s)".to_string(),
             }),
@@ -818,13 +802,10 @@ mod tests {
         assert_eq!(task.state, TaskState::Verified);
         assert_eq!(task.verification.verified_at.as_deref(), Some("t1"));
         assert_eq!(task.verification.verified_commit.as_deref(), Some("abc123"));
+        assert_eq!(task.verification.status, Some(VerificationStatus::Passed));
         assert_eq!(
-            task.verification.applied_report,
-            Some(AppliedVerificationReceipt {
-                task_snapshot_updated_at: "t0".to_string(),
-                verified_at: "t1".to_string(),
-                attempt_id: Some("attempt-1".to_string())
-            })
+            task.verification.contract_hash.as_deref(),
+            Some("task-hash")
         );
         let latest = task
             .state_history
@@ -847,10 +828,11 @@ mod tests {
         apply_verification_outcome(
             &mut task,
             VerificationOutcome::Failed(super::VerificationFailed {
-                receipt: AppliedVerificationReceipt {
-                    task_snapshot_updated_at: "t0".to_string(),
-                    verified_at: "t1".to_string(),
-                    attempt_id: Some("attempt-1".to_string()),
+                binding: VerificationBinding {
+                    status: Some(VerificationStatus::Failed),
+                    verified_at: Some("t1".to_string()),
+                    failures: vec!["missing evidence".to_string()],
+                    ..VerificationBinding::default()
                 },
                 summary: "verification failed: missing evidence".to_string(),
                 failures: vec!["missing evidence".to_string()],
@@ -860,7 +842,7 @@ mod tests {
         );
 
         assert_eq!(task.state, TaskState::NeedsVerification);
-        assert_eq!(task.verification.verified_at, None);
+        assert_eq!(task.verification.verified_at.as_deref(), Some("t1"));
         assert_eq!(task.verification.verified_commit, None);
         let latest = task
             .state_history
@@ -872,13 +854,7 @@ mod tests {
             Some("verification failed: missing evidence")
         );
         assert_eq!(latest.open_items, vec!["missing evidence"]);
-        assert_eq!(
-            task.verification.applied_report,
-            Some(AppliedVerificationReceipt {
-                task_snapshot_updated_at: "t0".to_string(),
-                verified_at: "t1".to_string(),
-                attempt_id: Some("attempt-1".to_string())
-            })
-        );
+        assert_eq!(task.verification.status, Some(VerificationStatus::Failed));
+        assert_eq!(task.verification.failures, vec!["missing evidence"]);
     }
 }

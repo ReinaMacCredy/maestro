@@ -9,10 +9,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{ACCEPTANCE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
+use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
 use crate::foundation::core::slug::slugify_ascii;
 
-/// V1 task lifecycle states.
+/// Task lifecycle states.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskState {
@@ -63,27 +63,26 @@ impl TaskState {
     }
 }
 
-/// V1 task record stored in `task.yaml`.
+/// Task record stored in `task.yaml`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TaskRecord {
     pub schema_version: String,
     pub id: String,
-    pub slug: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip)]
     pub feature_id: Option<String>,
     pub title: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub risk: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_request: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub input_type: Option<String>,
     pub state: TaskState,
     pub acceptance_locked: bool,
+    #[serde(default)]
+    pub acceptance: AcceptanceFile,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claims: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claimed_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -152,11 +151,15 @@ pub struct StateHistoryEntry {
     pub claims: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub open_items: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repeats: Option<usize>,
 }
 
 /// Verification proof binding stored in task.yaml.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct VerificationBinding {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<VerificationStatus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verified_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -164,29 +167,50 @@ pub struct VerificationBinding {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verified_by_run: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task_contract_hash: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub acceptance_hash: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub checks_hash: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub applied_report: Option<AppliedVerificationReceipt>,
+    pub contract_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claim_checks: Vec<ClaimCheckReceipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<VerificationCommandReceipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub proof_sources: Vec<ProofSourceReceipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failures: Vec<String>,
 }
 
-/// Task-owned receipt for the verification report last applied to this task.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct AppliedVerificationReceipt {
-    pub task_snapshot_updated_at: String,
-    pub verified_at: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attempt_id: Option<String>,
+#[serde(rename_all = "snake_case")]
+pub enum VerificationStatus {
+    Passed,
+    Failed,
 }
 
-/// Acceptance criteria stored in `acceptance.yaml`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClaimCheckReceipt {
+    pub claim: String,
+    pub matched: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct VerificationCommandReceipt {
+    pub cmd: String,
+    pub exit_code: i32,
+    pub duration_ms: u128,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProofSourceReceipt {
+    pub kind: String,
+    pub path: String,
+    pub hash: String,
+}
+
+/// Acceptance criteria stored inside `task.yaml`.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AcceptanceFile {
-    pub schema_version: String,
-    pub task: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub checks: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locked_by: Option<String>,
@@ -215,20 +239,18 @@ pub(crate) enum TaskSaveError {
 impl TaskRecord {
     /// Create a draft task artifact.
     pub fn draft(id: &str, title: &str, created_at: &str) -> Self {
-        let slug = slugify_ascii(title);
         Self {
             schema_version: TASK_SCHEMA_VERSION.to_string(),
             id: id.to_string(),
-            slug,
             feature_id: None,
             title: title.to_string(),
-            task_type: None,
             lane: Some("normal".to_string()),
             risk: Some("medium".to_string()),
             raw_request: None,
-            input_type: None,
             state: TaskState::Draft,
             acceptance_locked: false,
+            acceptance: AcceptanceFile::new(id, Vec::new()),
+            claims: Vec::new(),
             claimed_by: None,
             claimed_at: None,
             blockers: Vec::new(),
@@ -240,6 +262,7 @@ impl TaskRecord {
                 summary: None,
                 claims: Vec::new(),
                 open_items: Vec::new(),
+                repeats: None,
             }],
             verification: VerificationBinding::default(),
             created_at: created_at.to_string(),
@@ -249,16 +272,14 @@ impl TaskRecord {
 
     /// Repo-local task directory name.
     pub fn directory_name(&self) -> String {
-        format!("{}-{}", self.id, self.slug)
+        format!("{}-{}", self.id, slugify_ascii(&self.title))
     }
 }
 
 impl AcceptanceFile {
     /// Create an unlocked acceptance file.
-    pub fn new(task_id: &str, checks: Vec<String>) -> Self {
+    pub fn new(_task_id: &str, checks: Vec<String>) -> Self {
         Self {
-            schema_version: ACCEPTANCE_SCHEMA_VERSION.to_string(),
-            task: task_id.to_string(),
             checks,
             locked_by: None,
             locked_at: None,
@@ -266,7 +287,7 @@ impl AcceptanceFile {
     }
 }
 
-/// Write task.yaml, task.md, and acceptance.yaml for a task.
+/// Write task.yaml and task.md for a task.
 pub fn write_task_artifacts(
     tasks_dir: &Path,
     task: &TaskRecord,
@@ -274,15 +295,12 @@ pub fn write_task_artifacts(
 ) -> Result<PathBuf> {
     let task_dir = tasks_dir.join(task.directory_name());
     ensure_dir(&task_dir)?;
-    write_string_atomic(task_dir.join("task.yaml"), &serde_yaml::to_string(task)?)
+    let mut record = task.clone();
+    record.acceptance = acceptance.clone();
+    write_string_atomic(task_dir.join("task.yaml"), &serde_yaml::to_string(&record)?)
         .context("failed to write task.yaml")?;
-    write_string_atomic(task_dir.join("task.md"), &task_markdown(task))
+    write_string_atomic(task_dir.join("task.md"), &task_markdown(&record))
         .context("failed to write task.md")?;
-    write_string_atomic(
-        task_dir.join("acceptance.yaml"),
-        &serde_yaml::to_string(acceptance)?,
-    )
-    .context("failed to write acceptance.yaml")?;
 
     Ok(task_dir)
 }
@@ -394,7 +412,15 @@ impl Drop for TaskSaveLock {
 
 /// Render the Task-owned `task.md` companion artifact.
 pub fn task_markdown(task: &TaskRecord) -> String {
-    format!("# {}\n\n## Acceptance\nSee acceptance.yaml.\n", task.title)
+    let mut out = format!("# {}\n\n## Acceptance\n", task.title);
+    if task.acceptance.checks.is_empty() {
+        out.push_str("- none\n");
+    } else {
+        for check in &task.acceptance.checks {
+            out.push_str(&format!("- {check}\n"));
+        }
+    }
+    out
 }
 
 #[cfg(test)]

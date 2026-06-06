@@ -65,9 +65,8 @@ fn feature_guarded_lifecycle_via_cli() {
         &["feature", "show", "billing-csv-export"],
     );
     assert!(show_output.contains("status: proposed"));
-    // `feature new` scaffolds notes.md; `show` renders it.
-    assert!(show_output.contains("notes:"));
-    assert!(show_output.contains("Design notes:"));
+    // `feature new` no longer scaffolds notes.md; notes are created on first write.
+    assert!(!show_output.contains("notes:"));
 
     // accept blocks on an incomplete contract, naming the gaps.
     let accept_args = ["feature", "accept", "billing-csv-export"];
@@ -75,7 +74,7 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(accept_stderr.contains("acceptance"));
     assert!(accept_stderr.contains("affected_areas"));
     assert!(accept_stderr.contains("skill: qa-baseline"));
-    assert!(accept_stderr.contains("target: .maestro/features/billing-csv-export/baseline.md"));
+    assert!(accept_stderr.contains("target: .maestro/features/billing-csv-export/qa.md"));
     assert!(accept_stderr.contains("retry: maestro feature accept billing-csv-export"));
 
     // author the contract, then accept freezes it.
@@ -239,8 +238,13 @@ fn feature_cancel_via_cli_cascades_to_live_tasks() {
     );
     assert!(show_output.contains("status: cancelled"));
 
-    let task_raw = fs::read_to_string(tasks_dir.join("task-001").join("task.yaml"))
-        .expect("invariant: cascaded child task should be readable");
+    let task_raw = fs::read_to_string(
+        tasks_dir
+            .parent()
+            .expect("invariant: tasks dir should have parent")
+            .join("features/billing-csv-export/tasks/task-001-task-001/task.yaml"),
+    )
+    .expect("invariant: cascaded child task should be readable");
     assert!(task_raw.contains("abandoned"));
 }
 
@@ -412,32 +416,37 @@ fn write_baseline(features_dir: &Path, id: &str) {
     let dir = features_dir.join(id);
     ensure_dir(&dir).expect("invariant: feature directory should be creatable");
     fs::write(
-        dir.join("baseline.md"),
+        dir.join("qa.md"),
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] csv export round-trips\n",
     )
-    .expect("invariant: baseline.md should be writable");
+    .expect("invariant: qa.md should be writable");
 }
 
 /// Write a counting QA slice (scenarios + evidence) covering `[bl-001]`.
 fn write_qa_slice(features_dir: &Path, id: &str) {
     let dir = features_dir.join(id);
     ensure_dir(&dir).expect("invariant: feature directory should be creatable");
-    fs::write(
-        dir.join("qa-slices.yaml"),
-        "slices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"manual: exported csv opens in a spreadsheet\"]\n",
-    )
-    .expect("invariant: qa-slices.yaml should be writable");
+    let path = dir.join("qa.md");
+    let mut contents = fs::read_to_string(&path).unwrap_or_default();
+    contents.push_str("\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"manual: exported csv opens in a spreadsheet\"]\n```\n");
+    fs::write(path, contents).expect("invariant: qa.md should be writable");
 }
 
 fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
-    let task_dir = tasks_dir.join(id);
+    let task_dir = tasks_dir
+        .parent()
+        .expect("invariant: tasks dir should have parent")
+        .join("features")
+        .join(feature_id)
+        .join("tasks")
+        .join(format!("{id}-{id}"));
     ensure_dir(&task_dir).expect("invariant: task directory should be creatable");
     // A complete TaskRecord: the cancel cascade loads and transitions the child,
     // so a projection-only stub (id/feature_id/state) fails to deserialize.
     fs::write(
         task_dir.join("task.yaml"),
         format!(
-            "schema_version: maestro.task.v1\nid: {id}\nslug: {id}\nfeature_id: {feature_id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"1\"\nupdated_at: \"1\"\n"
+            "schema_version: maestro.task.v2\nid: {id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\n"
         ),
     )
     .expect("invariant: task yaml should be writable");
@@ -565,12 +574,16 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     // The feature dir + QA artifacts moved into the archive sibling tree.
     let archived_feature = root.join(".maestro/archive/features/billing-csv-export");
     assert!(archived_feature.join("feature.yaml").is_file());
-    assert!(archived_feature.join("baseline.md").is_file());
-    assert!(archived_feature.join("qa-slices.yaml").is_file());
+    assert!(archived_feature.join("qa.md").is_file());
     assert!(!features_dir.join("billing-csv-export").exists());
-    assert!(root.join(".maestro/archive/tasks/task-001").is_dir());
-    assert!(root.join(".maestro/archive/tasks/task-002").is_dir());
-    assert!(!tasks_dir.join("task-001").exists());
+    assert!(archived_feature.join("tasks/task-001-task-001").is_dir());
+    assert!(archived_feature.join("tasks/task-002-task-002").is_dir());
+    assert!(
+        !features_dir
+            .join("billing-csv-export")
+            .join("tasks/task-001-task-001")
+            .exists()
+    );
 
     // L6b: show falls through to the archive; list --all reads it.
     let show = stdout(
@@ -604,18 +617,21 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     assert!(
         features_dir
             .join("billing-csv-export")
-            .join("baseline.md")
+            .join("qa.md")
             .is_file()
     );
-    assert!(tasks_dir.join("task-001").is_dir());
+    assert!(
+        features_dir
+            .join("billing-csv-export")
+            .join("tasks/task-001-task-001")
+            .is_dir()
+    );
     assert!(!archived_feature.exists());
 }
 
-/// The straggler-sweep case: a child a live task still references is skipped (not
-/// blocked) while the feature + other children archive; clearing the reference
-/// and re-running sweeps the straggler even though the feature dir already moved.
+/// The nested archive case: terminal child tasks move with the feature directory.
 #[test]
-fn feature_archive_skips_a_referenced_child_then_sweeps_it_on_rerun() {
+fn feature_archive_moves_nested_child_tasks_with_feature_dir() {
     let temp_dir = TestTempDir::new("maestro-feature-archive-straggler");
     let root = temp_dir.path();
     init_git_marker(root);
@@ -672,41 +688,40 @@ fn feature_archive_skips_a_referenced_child_then_sweeps_it_on_rerun() {
     ];
     stdout(maestro(&block_args, root), &block_args);
 
-    // Archive: task-002 is skipped (live-referenced), the feature + task-001/003 move.
+    // Archive moves the feature directory and every nested terminal child task.
     let archive_args = ["feature", "archive", "billing-csv-export"];
     let first = stdout(maestro(&archive_args, root), &archive_args);
-    assert!(first.contains("skipped"));
+    assert!(first.contains("archived feature billing-csv-export"));
+    assert!(first.contains("task-001"));
     assert!(first.contains("task-002"));
-    assert!(first.contains("task-004"));
+    assert!(first.contains("task-003"));
     assert!(
         root.join(".maestro/archive/features/billing-csv-export/feature.yaml")
             .is_file()
     );
-    assert!(root.join(".maestro/archive/tasks/task-001").is_dir());
-    assert!(root.join(".maestro/archive/tasks/task-003").is_dir());
-    // The straggler stays in the live tree.
-    assert!(tasks_dir.join("task-002").is_dir());
-    assert!(!root.join(".maestro/archive/tasks/task-002").exists());
+    assert!(
+        root.join(".maestro/archive/features/billing-csv-export/tasks/task-001-task-001")
+            .is_dir()
+    );
+    assert!(
+        root.join(".maestro/archive/features/billing-csv-export/tasks/task-002-task-002")
+            .is_dir()
+    );
+    assert!(
+        root.join(".maestro/archive/features/billing-csv-export/tasks/task-003-task-003")
+            .is_dir()
+    );
 
-    // R25/R26: an archived show discloses it is the archive view, and its
-    // archive-tree count (task-001+task-003) annotates the straggler it omits
-    // (task-002 still live) instead of reporting a misleading total.
+    // R25/R26: an archived show discloses it is the archive view.
     let show = stdout(
         maestro(&["feature", "show", "billing-csv-export"], root),
         &["feature", "show", "billing-csv-export"],
     );
     assert!(show.contains("archived: true"));
-    assert!(show.contains("tasks_total: 2 (1 live task(s) not archived)"));
+    assert!(show.contains("tasks_total: 3"));
 
-    // Clear the reference, then re-run: task-002 sweeps even though the feature
-    // dir already moved (the child sweep is unconditional).
-    let unblock_args = ["task", "unblock", "task-004", "--blocker", "blk-001"];
-    stdout(maestro(&unblock_args, root), &unblock_args);
-    let swept = stdout(maestro(&archive_args, root), &archive_args);
-    assert!(swept.contains("already archived"));
-    assert!(swept.contains("task-002"));
-    assert!(root.join(".maestro/archive/tasks/task-002").is_dir());
-    assert!(!tasks_dir.join("task-002").exists());
+    let again = stdout(maestro(&archive_args, root), &archive_args);
+    assert!(again.contains("already archived"));
 }
 
 /// `feature archive --shipped` archives every shipped feature (each cascading its
@@ -758,8 +773,14 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
     let features_dir = root.join(".maestro/features");
     assert!(root.join(".maestro/archive/features/alpha-export").is_dir());
     assert!(root.join(".maestro/archive/features/beta-export").is_dir());
-    assert!(root.join(".maestro/archive/tasks/task-001").is_dir());
-    assert!(root.join(".maestro/archive/tasks/task-002").is_dir());
+    assert!(
+        root.join(".maestro/archive/features/alpha-export/tasks/task-001-task-001")
+            .is_dir()
+    );
+    assert!(
+        root.join(".maestro/archive/features/beta-export/tasks/task-002-task-002")
+            .is_dir()
+    );
     // The in-progress feature is untouched and stays in the live tree.
     assert!(
         features_dir

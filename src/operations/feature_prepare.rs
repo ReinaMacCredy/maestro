@@ -233,7 +233,14 @@ fn prepare_from_file_with_blocker(
     })();
 
     match result {
-        Ok(report) => Ok(report),
+        Ok(report) => {
+            let draft_path = paths.features_dir().join(&view.id).join("prepare-draft.md");
+            if same_path(plan_path, &draft_path) && draft_path.exists() {
+                fs::remove_file(&draft_path)
+                    .with_context(|| format!("failed to remove {}", draft_path.display()))?;
+            }
+            Ok(report)
+        }
         Err(error) => {
             rollback_created_tasks(paths, &created).with_context(|| {
                 format!("failed to roll back partial prepare after error: {error}")
@@ -241,6 +248,11 @@ fn prepare_from_file_with_blocker(
             Err(error)
         }
     }
+}
+
+fn same_path(left: &Path, right: &Path) -> bool {
+    left.canonicalize().unwrap_or_else(|_| left.to_path_buf())
+        == right.canonicalize().unwrap_or_else(|_| right.to_path_buf())
 }
 
 /// Resolve prepare-generated `after:` blockers once their prerequisite task verifies.
@@ -636,13 +648,20 @@ fn reload_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Result<
 
 fn rollback_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Result<()> {
     for task in created.iter().rev() {
-        let task_dir = paths.tasks_dir().join(task.directory_name());
+        let task_dir = task_root_for_created(paths, task).join(task.directory_name());
         if task_dir.exists() {
             fs::remove_dir_all(&task_dir)
                 .with_context(|| format!("failed to remove {}", task_dir.display()))?;
         }
     }
     Ok(())
+}
+
+fn task_root_for_created(paths: &MaestroPaths, task: &TaskRecord) -> PathBuf {
+    match task.feature_id.as_deref() {
+        Some(feature_id) => paths.features_dir().join(feature_id).join("tasks"),
+        None => paths.tasks_dir(),
+    }
 }
 
 #[cfg(test)]
@@ -667,7 +686,7 @@ mod tests {
         )
         .expect("invariant: feature contract should be set");
         fs::write(
-            paths.features_dir().join(&feature_id).join("baseline.md"),
+            paths.features_dir().join(&feature_id).join("qa.md"),
             "---\namend_log_position: 0\n---\n\nbaseline\n",
         )
         .expect("invariant: baseline should be writable");
@@ -706,10 +725,11 @@ mod tests {
     }
 
     fn task_dirs(paths: &MaestroPaths) -> Vec<PathBuf> {
-        if !paths.tasks_dir().exists() {
+        let tasks_dir = paths.features_dir().join("rollback-prepare").join("tasks");
+        if !tasks_dir.exists() {
             return Vec::new();
         }
-        fs::read_dir(paths.tasks_dir())
+        fs::read_dir(tasks_dir)
             .expect("invariant: tasks dir should be readable")
             .map(|entry| {
                 entry

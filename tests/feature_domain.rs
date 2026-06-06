@@ -18,14 +18,20 @@ fn write_feature(paths: &MaestroPaths, id: &str, contents: &str) {
 
 /// Write a minimal task.yaml carrying the fields the feature projection reads.
 fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
-    let dir = tasks_dir.join(id);
+    let dir = tasks_dir
+        .parent()
+        .expect("invariant: tasks dir should have parent")
+        .join("features")
+        .join(feature_id)
+        .join("tasks")
+        .join(format!("{id}-{id}"));
     ensure_dir(&dir).expect("invariant: task directory should be creatable");
     // A complete TaskRecord: the cancel cascade loads and transitions the child,
     // so a projection-only stub (id/feature_id/state) fails to deserialize.
     fs::write(
         dir.join("task.yaml"),
         format!(
-            "schema_version: maestro.task.v1\nid: {id}\nslug: {id}\nfeature_id: {feature_id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"1\"\nupdated_at: \"1\"\n"
+            "schema_version: maestro.task.v2\nid: {id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\n"
         ),
     )
     .expect("invariant: task.yaml should be writable");
@@ -53,10 +59,10 @@ fn author_contract(paths: &MaestroPaths, id: &str) {
     let dir = paths.features_dir().join(id);
     ensure_dir(&dir).expect("invariant: feature dir should be creatable");
     fs::write(
-        dir.join("baseline.md"),
+        dir.join("qa.md"),
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Baseline gaps:\n  - none (no behavioral surface)\n",
     )
-    .expect("invariant: baseline.md should be writable");
+    .expect("invariant: qa.md should be writable");
 }
 
 #[test]
@@ -330,8 +336,12 @@ fn cancel_cascades_to_live_child_tasks() {
     // The audited reason is persisted on the feature record.
     assert_eq!(view.cancel_reason.as_deref(), Some("scope dropped"));
     // The child task is now abandoned.
-    let task_raw = fs::read_to_string(paths.tasks_dir().join("task-001").join("task.yaml"))
-        .expect("invariant: child task should be readable");
+    let task_raw = fs::read_to_string(
+        paths
+            .features_dir()
+            .join("billing-csv/tasks/task-001-task-001/task.yaml"),
+    )
+    .expect("invariant: child task should be readable");
     assert!(task_raw.contains("abandoned"));
 }
 
@@ -390,16 +400,16 @@ fn amend_is_append_only_with_value_dedup() {
     .expect("invariant: amend retry should succeed");
     assert!(!report.changed);
 
-    // the amend-log records the one genuine amend
-    let log_raw = fs::read_to_string(
+    // the feature record embeds the one genuine amend
+    let feature_raw = fs::read_to_string(
         paths
             .features_dir()
             .join("billing-csv")
-            .join("amend-log.yaml"),
+            .join("feature.yaml"),
     )
-    .expect("invariant: amend-log should be readable");
-    assert!(log_raw.contains("widen scope"));
-    assert!(!log_raw.contains("retry"));
+    .expect("invariant: feature.yaml should be readable");
+    assert!(feature_raw.contains("widen scope"));
+    assert!(!feature_raw.contains("retry"));
 }
 
 #[test]

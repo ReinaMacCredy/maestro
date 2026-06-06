@@ -396,12 +396,10 @@ fn proof_domain_facade_does_not_publish_leaf_modules() {
         "src/domain/proof/mod.rs should expose only the deliberate Proof facade surface"
     );
     for leaf in [
-        "attempts",
         "claims",
         "commands",
         "events",
         "proof_status",
-        "restore_journal",
         "stale",
         "verify_task",
     ] {
@@ -889,12 +887,16 @@ fn proof_domain_does_not_apply_or_mutate_task_directly() {
     let allowed_task_symbols = BTreeSet::from([
         "AcceptanceFile".to_string(),
         "AppliedVerificationReceipt".to_string(),
+        "ClaimCheckReceipt".to_string(),
+        "ProofSourceReceipt".to_string(),
         "TaskRecord".to_string(),
         "TaskState".to_string(),
         "VerificationBinding".to_string(),
+        "VerificationCommandReceipt".to_string(),
         "VerificationFailed".to_string(),
         "VerificationOutcome".to_string(),
         "VerificationPassed".to_string(),
+        "VerificationStatus".to_string(),
         "load_task_for_update".to_string(),
         "load_task_record".to_string(),
     ]);
@@ -1236,7 +1238,14 @@ fn transitional_public_surfaces_match_phase_policy() {
     );
     assert_public_modules(
         Path::new("src/operations/mod.rs"),
-        &["feature_prepare", "harness", "init", "sync", "update"],
+        &[
+            "feature_prepare",
+            "harness",
+            "init",
+            "migrate",
+            "sync",
+            "update",
+        ],
         &[],
     );
 }

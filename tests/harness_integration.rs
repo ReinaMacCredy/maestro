@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use serde_json::Value as JsonValue;
-use serde_yaml::Value as YamlValue;
+use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
@@ -230,8 +230,70 @@ fn mark_verified(repo: &Path, id: &str, domain: &str, created_at: &str, verified
         serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
     task["state"] = YamlValue::String("verified".to_string());
     task["created_at"] = YamlValue::String(created_at.to_string());
+    task["lane"] = YamlValue::String(domain.to_string());
     task["verification"]["verified_at"] = YamlValue::String(verified_at.to_string());
-    task["feature_id"] = YamlValue::String(domain.to_string());
+    fs::write(
+        &path,
+        serde_yaml::to_string(&task).expect("invariant: task should serialize"),
+    )
+    .expect("invariant: task.yaml should be writable");
+}
+
+fn write_embedded_failed_verification(repo: &Path, id: &str, verified_at: &str, command: &str) {
+    write_embedded_failed_verification_commands(repo, id, verified_at, &[command]);
+}
+
+fn write_embedded_failed_verification_commands(
+    repo: &Path,
+    id: &str,
+    verified_at: &str,
+    commands: &[&str],
+) {
+    let path = task_dir(repo, id).join("task.yaml");
+    let raw = fs::read_to_string(&path).expect("invariant: task.yaml should be readable");
+    let mut task: YamlValue =
+        serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
+    let command_receipts = commands
+        .iter()
+        .map(|command| {
+            let mut command_receipt = YamlMapping::new();
+            command_receipt.insert(
+                YamlValue::String("cmd".to_string()),
+                YamlValue::String((*command).to_string()),
+            );
+            command_receipt.insert(
+                YamlValue::String("exit_code".to_string()),
+                YamlValue::Number(1.into()),
+            );
+            command_receipt.insert(
+                YamlValue::String("duration_ms".to_string()),
+                YamlValue::Number(10.into()),
+            );
+            YamlValue::Mapping(command_receipt)
+        })
+        .collect::<Vec<_>>();
+    let mut verification = YamlMapping::new();
+    verification.insert(
+        YamlValue::String("status".to_string()),
+        YamlValue::String("failed".to_string()),
+    );
+    verification.insert(
+        YamlValue::String("verified_at".to_string()),
+        YamlValue::String(verified_at.to_string()),
+    );
+    verification.insert(
+        YamlValue::String("contract_hash".to_string()),
+        YamlValue::String("task-hash".to_string()),
+    );
+    verification.insert(
+        YamlValue::String("commands".to_string()),
+        YamlValue::Sequence(command_receipts),
+    );
+    verification.insert(
+        YamlValue::String("failures".to_string()),
+        YamlValue::Sequence(vec![YamlValue::String("report".to_string())]),
+    );
+    task["verification"] = YamlValue::Mapping(verification);
     fs::write(
         &path,
         serde_yaml::to_string(&task).expect("invariant: task should serialize"),
@@ -274,7 +336,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     let verify = maestro(repo, &["task", "verify", "task-003"]);
     assert!(
         !verify.status.success(),
-        "task verify should fail for missing proof but still write verification.json"
+        "task verify should fail for missing proof but still embed verification outcome"
     );
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -369,7 +431,9 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     assert!(show.contains("evidence:"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
-    assert!(backlog.contains("verification.json used verification command 1 outside harness.yml"));
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
     assert!(!backlog.contains("top secret"));
     assert!(!backlog.contains("api_key"));
 
@@ -477,7 +541,7 @@ fn correction_heuristic_is_gated_by_escalation_enabled() {
 }
 
 #[test]
-fn harness_uses_proof_owned_verification_report_reader() {
+fn harness_ignores_legacy_symlinked_verification_report() {
     let temp = setup_repo("maestro-improve-proof-reader");
     let repo = temp.path();
     create_task(repo, "Verify proof reader contract");
@@ -496,18 +560,12 @@ fn harness_uses_proof_owned_verification_report_reader() {
     )
     .expect("invariant: verification report symlink should be creatable");
 
-    let output = maestro(repo, &["harness", "list"]);
-    assert!(
-        !output.status.success(),
-        "improve list should reject symlinked Proof reports\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+    let out = run_success(repo, &["harness", "list"]);
+    assert!(out.contains("no improvement proposals found"));
 }
 
 #[test]
-fn harness_tolerates_legacy_string_verification_commands() {
+fn harness_reads_embedded_verification_command_receipts() {
     let temp = setup_repo("maestro-improve-legacy-proof-commands");
     let repo = temp.path();
     create_task(repo, "Verify legacy proof commands");
@@ -523,34 +581,11 @@ fn harness_tolerates_legacy_string_verification_commands() {
         ),
     )
     .expect("invariant: harness should be writable");
-    fs::write(
-        task_dir(repo, "task-001").join("verification.json"),
-        concat!(
-            "{",
-            r#""schema_version":"maestro.verification.v1","#,
-            r#""task_id":"task-001","#,
-            r#""status":"failed","#,
-            r#""verified_at":"100","#,
-            r#""task_contract_hash":"legacy-task","#,
-            r#""acceptance_hash":"legacy-acceptance","#,
-            r#""checks_hash":"legacy-checks","#,
-            r#""claims":[],"#,
-            r#""commands":["cargo test"],"#,
-            r#""proof_sources":[],"#,
-            r#""failures":["legacy report"]"#,
-            "}"
-        ),
-    )
-    .expect("invariant: legacy verification report should be writable");
+    write_embedded_failed_verification(repo, "task-001", "100", "cargo test");
 
     let proof = maestro(repo, &["query", "proof", "task-001"]);
-    assert!(
-        !proof.status.success(),
-        "query proof should keep canonical Proof report parsing strict\nstdout:\n{}\nstderr:\n{}",
-        stdout(&proof),
-        stderr(&proof)
-    );
-    assert!(stderr(&proof).contains("failed to parse"));
+    assert_success(&proof, &["query", "proof", "task-001"]);
+    assert!(stdout(&proof).contains("proof task-001: failed"));
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -558,33 +593,17 @@ fn harness_tolerates_legacy_string_verification_commands() {
 }
 
 #[test]
-fn harness_accepts_legacy_command_object_forms_without_allowing_bare_strings() {
+fn harness_accepts_multiple_embedded_command_receipts() {
     let temp = setup_repo("maestro-improve-legacy-command-objects");
     let repo = temp.path();
     create_task(repo, "Verify legacy command objects");
     write_empty_harness(repo);
-    fs::write(
-        task_dir(repo, "task-001").join("verification.json"),
-        concat!(
-            "{",
-            r#""schema_version":"maestro.verification.v1","#,
-            r#""task_id":"task-001","#,
-            r#""status":"failed","#,
-            r#""verified_at":"125","#,
-            r#""task_contract_hash":"legacy-task","#,
-            r#""acceptance_hash":"legacy-acceptance","#,
-            r#""checks_hash":"legacy-checks","#,
-            r#""claims":[],"#,
-            r#""commands":["#,
-            r#"{"cmd":"cargo test","duration_ms":"10"},"#,
-            r#"{"cmd":"cargo clippy"}"#,
-            r#"],"#,
-            r#""proof_sources":[],"#,
-            r#""failures":["legacy object report"]"#,
-            "}"
-        ),
-    )
-    .expect("invariant: legacy object verification report should be writable");
+    write_embedded_failed_verification_commands(
+        repo,
+        "task-001",
+        "125",
+        &["cargo test", "cargo clippy"],
+    );
 
     let proof = maestro(repo, &["query", "proof", "task-001"]);
     assert_success(&proof, &["query", "proof", "task-001"]);
@@ -594,8 +613,12 @@ fn harness_accepts_legacy_command_object_forms_without_allowing_bare_strings() {
     assert!(out.contains("Add reusable verification for Verify legacy command objects"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
-    assert!(backlog.contains("verification.json used verification command 1 outside harness.yml"));
-    assert!(backlog.contains("verification.json used verification command 2 outside harness.yml"));
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 2 outside harness.yml")
+    );
 }
 
 #[test]
@@ -620,28 +643,7 @@ fn harness_exactly_matches_sensitive_harness_commands_without_displaying_them() 
         ),
     )
     .expect("invariant: harness should be writable");
-    fs::write(
-        task_dir(repo, "task-001").join("verification.json"),
-        format!(
-            concat!(
-                "{{",
-                r#""schema_version":"maestro.verification.v1","#,
-                r#""task_id":"task-001","#,
-                r#""status":"failed","#,
-                r#""verified_at":"150","#,
-                r#""task_contract_hash":"task-hash","#,
-                r#""acceptance_hash":"acceptance-hash","#,
-                r#""checks_hash":"checks-hash","#,
-                r#""claims":[],"#,
-                r#""commands":[{{"cmd":{},"exit_code":1,"duration_ms":10}}],"#,
-                r#""proof_sources":[],"#,
-                r#""failures":["report"]"#,
-                "}}\n"
-            ),
-            serde_json::to_string(command).expect("invariant: command should serialize")
-        ),
-    )
-    .expect("invariant: verification report should be writable");
+    write_embedded_failed_verification(repo, "task-001", "150", command);
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(!out.contains("missing_verification"));
@@ -657,25 +659,7 @@ fn harness_refreshes_existing_backlog_evidence_to_safe_labels() {
     create_task(repo, "Refresh stale backlog evidence");
     write_empty_harness(repo);
 
-    fs::write(
-        task_dir(repo, "task-001").join("verification.json"),
-        concat!(
-            "{",
-            r#""schema_version":"maestro.verification.v1","#,
-            r#""task_id":"task-001","#,
-            r#""status":"failed","#,
-            r#""verified_at":"175","#,
-            r#""task_contract_hash":"task-hash","#,
-            r#""acceptance_hash":"acceptance-hash","#,
-            r#""checks_hash":"checks-hash","#,
-            r#""claims":[],"#,
-            r#""commands":[{"cmd":"api_key='top secret' cargo test","exit_code":1,"duration_ms":10}],"#,
-            r#""proof_sources":[],"#,
-            r#""failures":["report"]"#,
-            "}\n"
-        ),
-    )
-    .expect("invariant: verification report should be writable");
+    write_embedded_failed_verification(repo, "task-001", "175", "api_key='top secret' cargo test");
     fs::write(
         repo.join(".maestro/harness/backlog.yaml"),
         concat!(
@@ -697,13 +681,17 @@ fn harness_refreshes_existing_backlog_evidence_to_safe_labels() {
 
     let show = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(show.contains("manual note: keep this context"));
-    assert!(show.contains("verification.json used verification command 1 outside harness.yml"));
+    assert!(
+        show.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
     assert!(!show.contains("top secret"));
     assert!(!show.contains("api_key"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
     assert!(backlog.contains("manual note: keep this context"));
-    assert!(backlog.contains("verification.json used verification command 1 outside harness.yml"));
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
     assert!(!backlog.contains("top secret"));
     assert!(!backlog.contains("api_key"));
 }
@@ -790,6 +778,7 @@ fn harness_does_not_recover_canonical_proof_reports_while_detecting() {
     let journal_path = task_dir.join("verification.json.restore");
     fs::write(&canonical_path, canonical).expect("invariant: canonical report should be writable");
     fs::write(&journal_path, journal).expect("invariant: restore journal should be writable");
+    write_embedded_failed_verification(repo, "task-001", "200", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -821,36 +810,16 @@ fn harness_reads_latest_attempt_report_commands_without_canonical_report() {
         ),
     )
     .expect("invariant: harness should be writable");
-    let attempts_dir = task_dir.join("verification.attempts");
-    fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
-    fs::write(
-        attempts_dir.join("latest.json"),
-        concat!(
-            "{",
-            r#""schema_version":"maestro.verification.v1","#,
-            r#""task_id":"task-001","#,
-            r#""status":"failed","#,
-            r#""verified_at":"300","#,
-            r#""task_contract_hash":"attempt-task","#,
-            r#""acceptance_hash":"attempt-acceptance","#,
-            r#""checks_hash":"attempt-checks","#,
-            r#""claims":[],"#,
-            r#""commands":[{"cmd":"cargo test","exit_code":1,"duration_ms":10}],"#,
-            r#""proof_sources":[],"#,
-            r#""failures":["attempt report"]"#,
-            "}\n"
-        ),
-    )
-    .expect("invariant: latest attempt report should be writable");
+    write_embedded_failed_verification(repo, "task-001", "300", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Verify latest attempt reader"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
-    assert!(backlog.contains(
-        "verification.attempts/latest.json used verification command 1 outside harness.yml"
-    ));
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
     assert!(!backlog.contains("verification.json used"));
     assert!(!task_dir.join("verification.json").exists());
 }
@@ -865,22 +834,16 @@ fn harness_uses_latest_attempt_when_canonical_report_is_malformed() {
     let task_dir = task_dir(repo, "task-001");
     fs::write(task_dir.join("verification.json"), "{not-json")
         .expect("invariant: malformed canonical report should be writable");
-    let attempts_dir = task_dir.join("verification.attempts");
-    fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
-    fs::write(
-        attempts_dir.join("latest.json"),
-        failed_verification_report("task-001", "325", "maestro.verification.v1"),
-    )
-    .expect("invariant: latest attempt report should be writable");
+    write_embedded_failed_verification(repo, "task-001", "325", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Canonical malformed attempt valid"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
-    assert!(backlog.contains(
-        "verification.attempts/latest.json used verification command 1 outside harness.yml"
-    ));
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
 }
 
 #[test]
@@ -924,7 +887,7 @@ fn harness_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
 }
 
 #[test]
-fn harness_uses_archived_attempt_when_latest_marker_is_malformed() {
+fn harness_ignores_archived_attempt_when_latest_marker_is_malformed() {
     let temp = setup_repo("maestro-improve-proof-latest-malformed-archived-valid");
     let repo = temp.path();
     create_task(repo, "Latest malformed archived valid");
@@ -941,18 +904,12 @@ fn harness_uses_archived_attempt_when_latest_marker_is_malformed() {
     .expect("invariant: archived attempt report should be writable");
 
     let out = run_success(repo, &["harness", "list"]);
-    assert!(out.contains("missing_verification"));
-    assert!(out.contains("Add reusable verification for Latest malformed archived valid"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
-    assert!(backlog.contains(
-        "verification.attempts/archived attempt used verification command 1 outside harness.yml"
-    ));
-    assert!(!backlog.contains("zz-valid-attempt"));
+    assert!(out.contains("no improvement proposals found"));
+    assert!(!out.contains("Latest malformed archived valid"));
 }
 
 #[test]
-fn harness_uses_older_archived_attempt_when_newer_archive_is_malformed() {
+fn harness_ignores_older_archived_attempt_when_newer_archive_is_malformed() {
     let temp = setup_repo("maestro-improve-proof-newer-archive-malformed");
     let repo = temp.path();
     create_task(repo, "Newer archive malformed older valid");
@@ -971,19 +928,12 @@ fn harness_uses_older_archived_attempt_when_newer_archive_is_malformed() {
         .expect("invariant: newer malformed attempt report should be writable");
 
     let out = run_success(repo, &["harness", "list"]);
-    assert!(out.contains("missing_verification"));
-    assert!(out.contains("Add reusable verification for Newer archive malformed older valid"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
-    assert!(backlog.contains(
-        "verification.attempts/archived attempt used verification command 1 outside harness.yml"
-    ));
-    assert!(!backlog.contains("aa-valid-attempt"));
-    assert!(!backlog.contains("zz-malformed-attempt"));
+    assert!(out.contains("no improvement proposals found"));
+    assert!(!out.contains("Newer archive malformed older valid"));
 }
 
 #[test]
-fn harness_uses_newer_archived_attempt_when_latest_marker_is_stale() {
+fn harness_ignores_newer_archived_attempt_when_latest_marker_is_stale() {
     let temp = setup_repo("maestro-improve-proof-stale-marker-newer-archive");
     let repo = temp.path();
     create_task(repo, "Stale marker newer archive");
@@ -1025,18 +975,12 @@ fn harness_uses_newer_archived_attempt_when_latest_marker_is_stale() {
     .expect("invariant: newer archived attempt report should be writable");
 
     let out = run_success(repo, &["harness", "list"]);
-    assert!(out.contains("missing_verification"));
-    assert!(out.contains("Add reusable verification for Stale marker newer archive"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
-    assert!(backlog.contains(
-        "verification.attempts/archived attempt used verification command 1 outside harness.yml"
-    ));
-    assert!(!backlog.contains("zz-newer-attempt"));
+    assert!(out.contains("no improvement proposals found"));
+    assert!(!out.contains("Stale marker newer archive"));
 }
 
 #[test]
-fn harness_and_query_use_newer_attempt_over_legacy_failed_canonical() {
+fn harness_and_query_use_embedded_verification_over_legacy_sidecars() {
     let temp = setup_repo("maestro-improve-proof-legacy-failed-canonical-newer-attempt");
     let repo = temp.path();
     create_task(repo, "Legacy failed canonical newer attempt");
@@ -1077,21 +1021,27 @@ fn harness_and_query_use_newer_attempt_over_legacy_failed_canonical() {
         ),
     )
     .expect("invariant: newer latest attempt report should be writable");
+    write_embedded_failed_verification(
+        repo,
+        "task-001",
+        "2026-06-06T00:00:00.000Z",
+        "cargo clippy",
+    );
 
     let proof = run_success(repo, &["query", "proof", "task-001"]);
-    assert!(proof.contains("verification.attempts/latest.json"));
-    // verified_at renders the nanos string as a human RFC3339 instant (1000ns -> epoch).
-    assert!(proof.contains("verified_at: 1970-01-01T00:00:00.000Z"));
+    assert!(proof.contains("task.yaml#verification"));
+    assert!(proof.contains("verified_at: 2026-06-06T00:00:00.000Z"));
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Legacy failed canonical newer attempt"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
-    assert!(backlog.contains(
-        "verification.attempts/latest.json used verification command 1 outside harness.yml"
-    ));
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
     assert!(!backlog.contains("verification.json used"));
+    assert!(!backlog.contains("verification.attempts/latest.json used"));
 }
 
 #[test]
@@ -1147,7 +1097,7 @@ fn harness_ignores_atomic_temp_attempt_siblings() {
 }
 
 #[test]
-fn harness_hides_secret_like_archived_attempt_file_names() {
+fn harness_hides_secret_like_embedded_verification_commands() {
     let temp = setup_repo("maestro-improve-proof-secret-archive-name");
     let repo = temp.path();
     create_task(repo, "Secret archive name");
@@ -1162,21 +1112,23 @@ fn harness_hides_secret_like_archived_attempt_file_names() {
         failed_verification_report("task-001", "250", "maestro.verification.v1"),
     )
     .expect("invariant: archived attempt report should be writable");
+    write_embedded_failed_verification(repo, "task-001", "250", "api_key='top secret' cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
-    assert!(backlog.contains(
-        "verification.attempts/archived attempt used verification command 1 outside harness.yml"
-    ));
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
     assert!(!backlog.contains("api_key"));
     assert!(!backlog.contains("top_secret"));
+    assert!(!backlog.contains("top secret"));
 }
 
 #[cfg(unix)]
 #[test]
-fn harness_fails_when_archived_attempt_candidate_is_symlink() {
+fn harness_ignores_legacy_archived_attempt_candidate_symlink() {
     let temp = setup_repo("maestro-improve-proof-archived-symlink");
     let repo = temp.path();
     create_task(repo, "Symlink archived attempt");
@@ -1196,21 +1148,13 @@ fn harness_fails_when_archived_attempt_candidate_is_symlink() {
     )
     .expect("invariant: attempt symlink should be creatable");
 
-    let output = maestro(repo, &["harness", "list"]);
-    assert!(
-        !output.status.success(),
-        "improve list should reject symlinked archived attempts\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("managed verification attempt path must not be a symlink")
-    );
+    let out = run_success(repo, &["harness", "list"]);
+    assert!(out.contains("no improvement proposals found"));
+    assert!(!out.contains("Symlink archived attempt"));
 }
 
 #[test]
-fn harness_fails_when_archived_attempt_candidate_is_directory() {
+fn harness_ignores_legacy_archived_attempt_candidate_directory() {
     let temp = setup_repo("maestro-improve-proof-archived-directory");
     let repo = temp.path();
     create_task(repo, "Directory archived attempt");
@@ -1220,17 +1164,9 @@ fn harness_fails_when_archived_attempt_candidate_is_directory() {
     fs::create_dir_all(attempts_dir.join("zz-directory.json"))
         .expect("invariant: attempt directory should be creatable");
 
-    let output = maestro(repo, &["harness", "list"]);
-    assert!(
-        !output.status.success(),
-        "improve list should reject archived attempt directories\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("managed verification attempt path must be a file")
-    );
+    let out = run_success(repo, &["harness", "list"]);
+    assert!(out.contains("no improvement proposals found"));
+    assert!(!out.contains("Directory archived attempt"));
 }
 
 #[test]
@@ -1240,35 +1176,26 @@ fn harness_distinguishes_multiple_missing_verification_commands_safely() {
     create_task(repo, "Multiple command labels");
     write_empty_harness(repo);
 
-    fs::write(
-        task_dir(repo, "task-001").join("verification.json"),
-        concat!(
-            "{",
-            r#""schema_version":"maestro.verification.v1","#,
-            r#""task_id":"task-001","#,
-            r#""status":"failed","#,
-            r#""verified_at":"850","#,
-            r#""task_contract_hash":"task-hash","#,
-            r#""acceptance_hash":"acceptance-hash","#,
-            r#""checks_hash":"checks-hash","#,
-            r#""claims":[],"#,
-            r#""commands":["#,
-            r#"{"cmd":"api_key='top secret' cargo test","exit_code":1,"duration_ms":10},"#,
-            r#"{"cmd":"TOKEN='other secret' cargo clippy","exit_code":1,"duration_ms":10}"#,
-            r#"],"#,
-            r#""proof_sources":[],"#,
-            r#""failures":["reports"]"#,
-            "}\n"
-        ),
-    )
-    .expect("invariant: report should be writable");
+    write_embedded_failed_verification_commands(
+        repo,
+        "task-001",
+        "850",
+        &[
+            "api_key='top secret' cargo test",
+            "TOKEN='other secret' cargo clippy",
+        ],
+    );
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");
-    assert!(backlog.contains("verification.json used verification command 1 outside harness.yml"));
-    assert!(backlog.contains("verification.json used verification command 2 outside harness.yml"));
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
+    );
+    assert!(
+        backlog.contains("task.yaml#verification used verification command 2 outside harness.yml")
+    );
     assert!(!backlog.contains("top secret"));
     assert!(!backlog.contains("other secret"));
     assert!(!backlog.contains("api_key"));
@@ -1298,25 +1225,7 @@ fn harness_skips_malformed_proof_reports_and_continues_scanning() {
         "{not-json",
     )
     .expect("invariant: malformed report should be writable");
-    fs::write(
-        task_dir(repo, "task-002").join("verification.json"),
-        concat!(
-            "{",
-            r#""schema_version":"maestro.verification.v1","#,
-            r#""task_id":"task-002","#,
-            r#""status":"failed","#,
-            r#""verified_at":"400","#,
-            r#""task_contract_hash":"healthy-task","#,
-            r#""acceptance_hash":"healthy-acceptance","#,
-            r#""checks_hash":"healthy-checks","#,
-            r#""claims":[],"#,
-            r#""commands":[{"cmd":"cargo test","exit_code":1,"duration_ms":10}],"#,
-            r#""proof_sources":[],"#,
-            r#""failures":["healthy report"]"#,
-            "}\n"
-        ),
-    )
-    .expect("invariant: healthy report should be writable");
+    write_embedded_failed_verification(repo, "task-002", "400", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -1350,25 +1259,9 @@ fn harness_skips_malformed_latest_attempt_reports_and_continues_scanning() {
 
     let healthy_attempts = task_dir(repo, "task-002").join("verification.attempts");
     fs::create_dir_all(&healthy_attempts).expect("invariant: attempts dir should be writable");
-    fs::write(
-        healthy_attempts.join("latest.json"),
-        concat!(
-            "{",
-            r#""schema_version":"maestro.verification.v1","#,
-            r#""task_id":"task-002","#,
-            r#""status":"failed","#,
-            r#""verified_at":"500","#,
-            r#""task_contract_hash":"healthy-task","#,
-            r#""acceptance_hash":"healthy-acceptance","#,
-            r#""checks_hash":"healthy-checks","#,
-            r#""claims":[],"#,
-            r#""commands":[{"cmd":"cargo test","exit_code":1,"duration_ms":10}],"#,
-            r#""proof_sources":[],"#,
-            r#""failures":["healthy attempt"]"#,
-            "}\n"
-        ),
-    )
-    .expect("invariant: healthy attempt should be writable");
+    fs::write(healthy_attempts.join("latest.json"), "{not-json")
+        .expect("invariant: legacy attempt should be writable");
+    write_embedded_failed_verification(repo, "task-002", "500", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -1389,11 +1282,7 @@ fn harness_skips_schema_mismatched_proof_reports_and_continues_scanning() {
         failed_verification_report("task-001", "600", "maestro.verification.v0"),
     )
     .expect("invariant: schema mismatched report should be writable");
-    fs::write(
-        task_dir(repo, "task-002").join("verification.json"),
-        failed_verification_report("task-002", "700", "maestro.verification.v1"),
-    )
-    .expect("invariant: healthy report should be writable");
+    write_embedded_failed_verification(repo, "task-002", "700", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -1402,7 +1291,7 @@ fn harness_skips_schema_mismatched_proof_reports_and_continues_scanning() {
 }
 
 #[test]
-fn harness_fails_when_canonical_proof_report_path_is_directory() {
+fn harness_ignores_legacy_canonical_proof_report_path_directory() {
     let temp = setup_repo("maestro-improve-proof-report-directory");
     let repo = temp.path();
     create_task(repo, "Directory proof report");
@@ -1411,21 +1300,13 @@ fn harness_fails_when_canonical_proof_report_path_is_directory() {
     fs::create_dir(task_dir(repo, "task-001").join("verification.json"))
         .expect("invariant: proof report directory should be creatable");
 
-    let output = maestro(repo, &["harness", "list"]);
-    assert!(
-        !output.status.success(),
-        "improve list should reject proof report directories\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("managed verification report path must be a file")
-    );
+    let out = run_success(repo, &["harness", "list"]);
+    assert!(out.contains("no improvement proposals found"));
+    assert!(!out.contains("Directory proof report"));
 }
 
 #[test]
-fn harness_fails_when_verification_attempts_path_is_file() {
+fn harness_ignores_legacy_verification_attempts_path_file() {
     let temp = setup_repo("maestro-improve-proof-attempts-file");
     let repo = temp.path();
     create_task(repo, "Attempts file proof report");
@@ -1437,17 +1318,9 @@ fn harness_fails_when_verification_attempts_path_is_file() {
     )
     .expect("invariant: attempts file should be writable");
 
-    let output = maestro(repo, &["harness", "list"]);
-    assert!(
-        !output.status.success(),
-        "improve list should reject attempts files\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("managed verification attempts path must be a directory")
-    );
+    let out = run_success(repo, &["harness", "list"]);
+    assert!(out.contains("no improvement proposals found"));
+    assert!(!out.contains("Attempts file proof report"));
 }
 
 #[test]
@@ -1807,16 +1680,7 @@ fn setup_missing_verification_note(prefix: &str) -> TestTempDir {
     let repo = temp.path();
     create_task(repo, "Reusable verification");
     write_harness_verify(repo, &[]);
-    fs::write(
-        task_dir(repo, "task-001").join("verification.json"),
-        failed_verification_report_with_command(
-            "task-001",
-            "900",
-            "maestro.verification.v1",
-            "cargo clippy",
-        ),
-    )
-    .expect("invariant: verification report should be writable");
+    write_embedded_failed_verification(repo, "task-001", "900", "cargo clippy");
     let list = run_success(repo, &["harness", "list"]);
     assert!(list.contains("missing_verification"));
     temp

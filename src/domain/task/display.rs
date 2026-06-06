@@ -2,10 +2,10 @@ use std::collections::BTreeSet;
 
 use crate::domain::task::blockers::has_unresolved_blockers;
 use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
-use crate::foundation::core::time::render_timestamp;
+use crate::foundation::core::time::{parse_utc_timestamp, render_timestamp};
 
 /// Render one task for `maestro task show`. `checks` is the task's acceptance
-/// contract, read by the caller from the sibling `acceptance.yaml`.
+/// contract, read by the caller from the task record.
 pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
     let mut out = String::new();
     out.push_str(&format!("id: {}\n", task.id));
@@ -65,9 +65,9 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
         .verification
         .verified_at
         .as_deref()
-        .and_then(|value| value.trim().parse::<u64>().ok());
+        .and_then(timestamp_nanos);
     let is_post_verification =
-        |entry: &StateHistoryEntry| match (verified_at_ns, entry.at.trim().parse::<u64>().ok()) {
+        |entry: &StateHistoryEntry| match (verified_at_ns, timestamp_nanos(&entry.at)) {
             (Some(verified_at), Some(entry_at)) => entry_at > verified_at,
             _ => false,
         };
@@ -121,6 +121,13 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
         }
     }
     out
+}
+
+fn timestamp_nanos(value: &str) -> Option<i128> {
+    if value.chars().all(|character| character.is_ascii_digit()) {
+        return value.trim().parse::<i128>().ok();
+    }
+    parse_utc_timestamp(value).map(|timestamp| timestamp.nanos_since_epoch)
 }
 
 /// Render a compact list for `maestro task list`. Ids in `archived_ids` are

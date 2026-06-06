@@ -2,14 +2,15 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{ensure_parent_dir, sync_parent_dir};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::retention::prune_child_dirs;
 use crate::foundation::core::safe_write::temp_sibling_path;
+use crate::foundation::core::time::utc_now_filesystem_millis_timestamp;
 
 static BACKUP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -56,6 +57,7 @@ pub fn backup_file_with_timestamp(
             destination.display()
         )
     })?;
+    prune_child_dirs(&paths.backups_dir(), 3)?;
 
     Ok(destination)
 }
@@ -113,13 +115,12 @@ fn reject_backup_symlinks(paths: &MaestroPaths) -> Result<()> {
 }
 
 fn backup_timestamp() -> Result<String> {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system clock is before the Unix epoch")?
-        .as_nanos();
     let counter = BACKUP_COUNTER.fetch_add(1, Ordering::Relaxed);
 
-    Ok(format!("{nanos}-{counter}"))
+    Ok(format!(
+        "{}-{counter}",
+        utc_now_filesystem_millis_timestamp()
+    ))
 }
 
 fn validate_operation(operation: &str) -> Result<()> {

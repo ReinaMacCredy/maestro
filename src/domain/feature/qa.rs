@@ -1,13 +1,14 @@
 //! QA gate artifacts and predicates for the feature lifecycle (§4).
 //!
-//! Two agent-authored artifacts live in `.maestro/features/<id>/`:
+//! One agent-authored artifact lives in `.maestro/features/<id>/`:
 //!
-//! - `baseline.md` — the real-scenario behavior contract captured at `accept`
+//! - `qa.md` — the real-scenario behavior contract captured at `accept`
 //!   (before edits, by construction). Optional `amend_log_position` frontmatter
 //!   records which amend-log entry it was captured against; each Scenario Matrix
 //!   entry carries a `[bl-NNN]` id, the **coverage unit**.
-//! - `qa-slices.yaml` — append-only proven slices. A slice **counts** only when it
-//!   references at least one `[bl-NNN]` scenario *and* carries non-empty evidence.
+//!   A fenced YAML block stores append-only proven slices. A slice **counts** only
+//!   when it references at least one `[bl-NNN]` scenario *and* carries non-empty
+//!   evidence.
 //!
 //! The gates ([`baseline_present`] at `accept`, [`ship_qa_gaps`] at `ship`) are
 //! pure functions over these artifacts so they unit-test in isolation; the
@@ -22,7 +23,7 @@ use serde::Deserialize;
 use crate::domain::feature::schema::{AmendEntry, AmendLog};
 use crate::foundation::core::fs::read_to_string_if_exists;
 
-/// The parsed `baseline.md`: the amend-log position it was captured against and
+/// The parsed `qa.md` baseline: the amend-log position it was captured against and
 /// the set of `[bl-NNN]` scenario ids it declares (the ship-gate coverage units).
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Baseline {
@@ -32,7 +33,7 @@ pub(crate) struct Baseline {
     pub scenario_ids: BTreeSet<String>,
 }
 
-/// Append-only proven QA slices the ship gate reads (`qa-slices.yaml`). Only the
+/// Append-only proven QA slices the ship gate reads from `qa.md`. Only the
 /// fields the gate consumes are modeled; any extra keys the skill documents
 /// (`at`, `probes`, `result`) are ignored on parse.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -51,10 +52,10 @@ pub(crate) struct QaSlice {
     pub evidence: Vec<String>,
 }
 
-/// Read `baseline.md`, returning `None` when absent or whitespace-only (the
+/// Read `qa.md`, returning `None` when absent or whitespace-only (the
 /// fail-closed "no baseline" state the accept gate blocks on).
 pub(crate) fn read_baseline(feature_dir: &Path) -> Result<Option<Baseline>> {
-    let path = feature_dir.join("baseline.md");
+    let path = feature_dir.join("qa.md");
     let Some(contents) = read_to_string_if_exists(&path)? else {
         return Ok(None);
     };
@@ -67,7 +68,7 @@ pub(crate) fn read_baseline(feature_dir: &Path) -> Result<Option<Baseline>> {
     }))
 }
 
-/// True when a non-empty `baseline.md` exists (the accept-gate precondition F).
+/// True when a non-empty `qa.md` exists (the accept-gate precondition F).
 pub(crate) fn baseline_present(feature_dir: &Path) -> Result<bool> {
     Ok(read_baseline(feature_dir)?.is_some())
 }
@@ -77,24 +78,29 @@ pub(crate) fn baseline_present(feature_dir: &Path) -> Result<bool> {
 /// `"missing"` (fail-closed, matching `read_baseline`). Called only on the gate-fail
 /// path, where a usable baseline never reaches it.
 pub(crate) fn baseline_absence(feature_dir: &Path) -> &'static str {
-    match read_to_string_if_exists(feature_dir.join("baseline.md")) {
+    match read_to_string_if_exists(feature_dir.join("qa.md")) {
         Ok(Some(text)) if text.trim().is_empty() => "empty",
         _ => "missing",
     }
 }
 
-/// Read `qa-slices.yaml`, returning an empty log when absent. A parse failure is
+/// Read structured slices from `qa.md`, returning an empty log when absent. A parse failure is
 /// an actionable error naming the path and the expected shape (not an opaque bail).
 pub(crate) fn read_qa_slices(feature_dir: &Path) -> Result<QaSliceLog> {
-    let path = feature_dir.join("qa-slices.yaml");
+    let path = feature_dir.join("qa.md");
     match read_to_string_if_exists(&path)? {
         None => Ok(QaSliceLog::default()),
-        Some(contents) => serde_yaml::from_str(&contents).map_err(|err| {
+        Some(contents) => {
+            let Some(yaml) = fenced_slices_yaml(&contents) else {
+                return Ok(QaSliceLog::default());
+            };
+            serde_yaml::from_str(yaml).map_err(|err| {
             anyhow!(
-                "failed to parse {}: {err}\n  expected shape:\n    slices:\n      - scenarios: [\"bl-001\"]\n        evidence: [\"<proof of the replayed scenario>\"]",
-                path.display()
-            )
-        }),
+                  "failed to parse {}: {err}\n  expected shape:\n    slices:\n      - scenarios: [\"bl-001\"]\n        evidence: [\"<proof of the replayed scenario>\"]",
+                  path.display()
+              )
+          })
+        }
     }
 }
 
@@ -119,7 +125,7 @@ pub(crate) fn ship_qa_gaps(
 
     let Some(baseline) = baseline else {
         gaps.push(format!(
-              "qa-baseline {absence} (.maestro/features/{id}/baseline.md)\n    skill: qa-baseline\n    target: .maestro/features/{id}/baseline.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
+              "qa-baseline {absence} (.maestro/features/{id}/qa.md)\n    skill: qa-baseline\n    target: .maestro/features/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
           ));
         return gaps;
     };
@@ -138,7 +144,7 @@ pub(crate) fn ship_qa_gaps(
         .count();
     if behavioral_after > 0 {
         gaps.push(format!(
-              "qa-baseline stale — {behavioral_after} behavioral amend(s) since capture; set amend_log_position: {len}\n    skill: qa-baseline\n    target: .maestro/features/{id}/baseline.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
+                "qa-baseline stale — {behavioral_after} behavioral amend(s) since capture; set amend_log_position: {len}\n    skill: qa-baseline\n    target: .maestro/features/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
           ));
     }
 
@@ -154,7 +160,7 @@ pub(crate) fn ship_qa_gaps(
             .collect();
         if !uncovered.is_empty() {
             gaps.push(format!(
-                  "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}\n    skill: qa-slice\n    target: .maestro/features/{id}/qa-slices.yaml\n    retry: maestro feature ship {id} --outcome \"<outcome>\"",
+                    "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}\n    skill: qa-slice\n    target: .maestro/features/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\"",
                   uncovered.len(),
                   uncovered.join(", ")
               ));
@@ -202,6 +208,27 @@ fn parse_amend_log_position(contents: &str) -> usize {
     serde_yaml::from_str::<Frontmatter>(&rest[..end])
         .unwrap_or_default()
         .amend_log_position
+}
+
+fn fenced_slices_yaml(contents: &str) -> Option<&str> {
+    let mut block_start = None;
+    let mut offset = 0;
+    for line in contents.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            if let Some(start) = block_start {
+                let block = &contents[start..offset];
+                if block.contains("slices:") {
+                    return Some(block);
+                }
+                block_start = None;
+            } else {
+                block_start = Some(offset + line.len());
+            }
+        }
+        offset += line.len();
+    }
+    None
 }
 
 /// Every `bl-NNN` id appearing inside square brackets (`[bl-001]` → `bl-001`).

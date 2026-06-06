@@ -10,7 +10,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 
 use crate::domain::task::doctor::load_task_records;
-use crate::domain::task::lookup::resolve_task_yaml_path;
+use crate::domain::task::lookup::{feature_id_for_task_path, resolve_task_yaml_path};
 use crate::domain::task::template::{BlockerKind, load_task};
 use crate::foundation::core::fs::ensure_dir;
 
@@ -38,7 +38,8 @@ pub fn archive_task(
     // The directory is named `<id>-<slug>` (move target), but the canonical id
     // in the record is what blockers reference and users type (match/messages).
     let dir_name = dir_name(task_dir)?;
-    let (task, _) = load_task(&task_path)?;
+    let (mut task, _) = load_task(&task_path)?;
+    task.feature_id = feature_id_for_task_path(&task_path);
     let id = task.id.as_str();
 
     if task.state.is_live() {
@@ -56,14 +57,15 @@ pub fn archive_task(
     if dry_run {
         return Ok(format!("would archive {id}"));
     }
-    let target = archive_tasks_dir.join(&dir_name);
+    let target_root = archive_root_for_task(archive_tasks_dir, task.feature_id.as_deref())?;
+    let target = target_root.join(&dir_name);
     if target.exists() {
         bail!(
             "cannot archive {id} — an archived copy already exists at {}",
             target.display()
         );
     }
-    ensure_dir(archive_tasks_dir)?;
+    ensure_dir(&target_root)?;
     fs::rename(task_dir, &target).with_context(|| {
         format!(
             "failed to move {} to {}",
@@ -88,15 +90,17 @@ pub fn unarchive_task(tasks_dir: &Path, archive_tasks_dir: &Path, id: &str) -> R
         .parent()
         .context("resolved task path is missing its directory")?;
     let dir_name = dir_name(archived_dir)?;
-    let (task, _) = load_task(&task_path)?;
-    let target = tasks_dir.join(&dir_name);
+    let (mut task, _) = load_task(&task_path)?;
+    task.feature_id = feature_id_for_task_path(&task_path);
+    let target_root = live_root_for_task(tasks_dir, task.feature_id.as_deref())?;
+    let target = target_root.join(&dir_name);
     if target.exists() {
         bail!(
             "cannot unarchive {} — a live task already occupies that id",
             task.id
         );
     }
-    ensure_dir(tasks_dir)?;
+    ensure_dir(&target_root)?;
     fs::rename(archived_dir, &target).with_context(|| {
         format!(
             "failed to move {} to {}",
@@ -141,4 +145,25 @@ fn dir_name(task_dir: &Path) -> Result<String> {
                 task_dir.display()
             )
         })
+}
+
+fn archive_root_for_task(
+    archive_tasks_dir: &Path,
+    feature_id: Option<&str>,
+) -> Result<std::path::PathBuf> {
+    let Some(feature_id) = feature_id else {
+        return Ok(archive_tasks_dir.to_path_buf());
+    };
+    let archive_dir = archive_tasks_dir
+        .parent()
+        .context("archive tasks path is missing parent")?;
+    Ok(archive_dir.join("features").join(feature_id).join("tasks"))
+}
+
+fn live_root_for_task(tasks_dir: &Path, feature_id: Option<&str>) -> Result<std::path::PathBuf> {
+    let Some(feature_id) = feature_id else {
+        return Ok(tasks_dir.to_path_buf());
+    };
+    let maestro_dir = tasks_dir.parent().context("tasks path is missing parent")?;
+    Ok(maestro_dir.join("features").join(feature_id).join("tasks"))
 }

@@ -11,6 +11,7 @@ use serde_json::Value;
 use crate::domain::run::event::{UNATTRIBUTED_SESSION, run_dir_name};
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::retention::prune_child_dirs;
 
 const OPEN_EVENT_FILE_RETRIES: usize = 8;
 
@@ -20,7 +21,11 @@ pub(crate) fn append_normalized_event(paths: &MaestroPaths, event: &Value) -> Re
         .and_then(Value::as_str)
         .map(run_dir_name)
         .unwrap_or_else(|| UNATTRIBUTED_SESSION.to_string());
-    append_event_to_session_dir(paths, &session_id, event)
+    append_event_to_session_dir(paths, &session_id, event)?;
+    if event.get("event_type").and_then(Value::as_str) == Some("SessionStart") {
+        prune_child_dirs(&paths.runs_dir(), 20)?;
+    }
+    Ok(())
 }
 
 /// Append a manually created event (`maestro event create`) into the managed

@@ -6,9 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FreshnessInputs {
     pub commit: Option<String>,
-    pub task_contract_hash: String,
-    pub acceptance_hash: String,
-    pub checks_hash: String,
+    pub contract_hash: String,
 }
 
 /// Stored proof inputs from a previous verification artifact.
@@ -16,9 +14,7 @@ pub struct FreshnessInputs {
 pub struct StoredFreshness {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verified_commit: Option<String>,
-    pub task_contract_hash: String,
-    pub acceptance_hash: String,
-    pub checks_hash: String,
+    pub contract_hash: String,
 }
 
 /// A concrete reason a stored proof no longer matches current inputs.
@@ -40,21 +36,9 @@ pub fn stale_reasons(current: &FreshnessInputs, stored: &StoredFreshness) -> Vec
     );
     push_if_changed(
         &mut reasons,
-        "task_contract_hash",
-        &current.task_contract_hash,
-        &stored.task_contract_hash,
-    );
-    push_if_changed(
-        &mut reasons,
-        "acceptance_hash",
-        &current.acceptance_hash,
-        &stored.acceptance_hash,
-    );
-    push_if_changed(
-        &mut reasons,
-        "checks_hash",
-        &current.checks_hash,
-        &stored.checks_hash,
+        "contract_hash",
+        &current.contract_hash,
+        &stored.contract_hash,
     );
     reasons
 }

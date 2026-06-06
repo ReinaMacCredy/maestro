@@ -91,11 +91,8 @@ fn detect_missing_checks(paths: &MaestroPaths, entries: &[TaskEntry]) -> Result<
     let harness_commands = harness_verify_commands(paths)?;
     let mut proposals = Vec::new();
     for entry in entries {
-        let (commands, source) =
-            match proof::verification_command_read_for_task(&entry.task, &entry.task_dir)? {
-                proof::VerificationCommandRead::Commands { commands, source } => (commands, source),
-                proof::VerificationCommandRead::SkippedMalformedReport => continue,
-            };
+        let proof::VerificationCommandRead::Commands { commands, source } =
+            proof::verification_command_read_for_task(&entry.task, &entry.task_dir)?;
         let missing = commands
             .into_iter()
             .filter(|command| !harness_commands.contains(command.command()))

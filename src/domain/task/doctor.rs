@@ -1,11 +1,10 @@
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result};
 
 use crate::domain::decisions;
-use crate::domain::task::lookup::task_yaml_path_for_entry;
+use crate::domain::task::lookup::{feature_id_for_task_path, task_yaml_paths};
 use crate::domain::task::template::{BlockerKind, TaskRecord, load_task};
 
 /// Result of scanning task blocker references.
@@ -29,7 +28,7 @@ impl TaskDoctorReport {
     }
 }
 
-/// Load all task records under `.maestro/tasks`.
+/// Load all task records under standalone and feature-owned task roots.
 pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
     let mut tasks = load_task_entries(tasks_dir)?
         .into_iter()
@@ -39,24 +38,17 @@ pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
     Ok(tasks)
 }
 
-/// Load all task records with their directories under `.maestro/tasks`.
+/// Load all task records with their directories under standalone and feature-owned task roots.
 pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
-    if !tasks_dir.is_dir() {
-        return Ok(Vec::new());
-    }
-
     let mut entries = Vec::new();
-    for entry in fs::read_dir(tasks_dir)
-        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
-        if let Some(task_path) = task_yaml_path_for_entry(&entry)? {
-            let (task, _) = load_task(&task_path)?;
-            entries.push(TaskEntry {
-                task,
-                task_dir: entry.path(),
-            });
-        }
+    for task_path in task_yaml_paths(tasks_dir)? {
+        let (mut task, _) = load_task(&task_path)?;
+        task.feature_id = feature_id_for_task_path(&task_path);
+        let task_dir = task_path
+            .parent()
+            .map(Path::to_path_buf)
+            .with_context(|| format!("task path is missing parent: {}", task_path.display()))?;
+        entries.push(TaskEntry { task, task_dir });
     }
     entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
     Ok(entries)

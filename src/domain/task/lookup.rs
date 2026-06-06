@@ -8,33 +8,19 @@ use crate::domain::task::template::{TaskRecord, TaskSnapshot, load_task};
 /// Resolve a task id or unique id-prefix to its `task.yaml` path.
 pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
     validate_task_lookup_id(id)?;
-    let direct = tasks_dir.join(id).join("task.yaml");
-    if valid_task_yaml_path(&direct)? {
-        return Ok(direct);
-    }
 
     let prefix = format!("{id}-");
     let mut matches = Vec::new();
-    // A missing tasks dir (fresh repo) has no entries to match: report the id, not
-    // a raw ENOENT path. Mirrors load_task_entries, which guards its read the same way.
-    if !tasks_dir.is_dir() {
-        bail!("task not found: {id}");
-    }
-    for entry in fs::read_dir(tasks_dir)
-        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
-        let file_name = entry.file_name();
-        let Some(name) = file_name.to_str() else {
+    for task_path in task_yaml_paths(tasks_dir)? {
+        let Some(name) = task_path
+            .parent()
+            .and_then(Path::file_name)
+            .and_then(|name| name.to_str())
+        else {
             continue;
         };
         if name.starts_with(&prefix) {
-            let Some(path) = task_yaml_path_for_entry(&entry)? else {
-                continue;
-            };
-            if valid_task_yaml_path(&path)? {
-                matches.push(path);
-            }
+            matches.push(task_path);
         }
     }
     matches.sort();
@@ -44,6 +30,79 @@ pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
         1 => Ok(matches.remove(0)),
         _ => bail!("task id {id} is ambiguous"),
     }
+}
+
+/// Return every managed task.yaml path under the standalone root and feature roots.
+pub fn task_yaml_paths(tasks_dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    for root in task_roots(tasks_dir)? {
+        collect_task_yaml_paths_in_root(&root, &mut paths)?;
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+/// Return standalone and feature-owned task roots derived from the standalone root anchor.
+pub(crate) fn task_roots(tasks_dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut roots = vec![tasks_dir.to_path_buf()];
+    roots.extend(feature_task_roots(tasks_dir)?);
+    roots.sort();
+    roots.dedup();
+    Ok(roots)
+}
+
+fn collect_task_yaml_paths_in_root(root: &Path, paths: &mut Vec<PathBuf>) -> Result<()> {
+    if !root.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(root).with_context(|| format!("failed to read {}", root.display()))? {
+        let entry = entry.with_context(|| format!("failed to list {}", root.display()))?;
+        if let Some(path) = task_yaml_path_for_entry(&entry)? {
+            paths.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn feature_task_roots(tasks_dir: &Path) -> Result<Vec<PathBuf>> {
+    let Some(parent) = tasks_dir.parent() else {
+        return Ok(Vec::new());
+    };
+    let features_dir = parent.join("features");
+    if !features_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut roots = Vec::new();
+    for entry in fs::read_dir(&features_dir)
+        .with_context(|| format!("failed to read {}", features_dir.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to list {}", features_dir.display()))?;
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+        if file_type.is_dir() && !file_type.is_symlink() {
+            roots.push(entry.path().join("tasks"));
+        }
+    }
+    roots.sort();
+    Ok(roots)
+}
+
+pub fn feature_id_for_task_path(path: &Path) -> Option<String> {
+    let task_dir = path.parent()?;
+    let tasks_dir = task_dir.parent()?;
+    if tasks_dir.file_name().and_then(|name| name.to_str()) != Some("tasks") {
+        return None;
+    }
+    let feature_dir = tasks_dir.parent()?;
+    let features_dir = feature_dir.parent()?;
+    if features_dir.file_name().and_then(|name| name.to_str()) != Some("features") {
+        return None;
+    }
+    feature_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
 }
 
 /// Return a task entry's `task.yaml` path when the entry is a real directory.
@@ -100,7 +159,8 @@ pub fn load_task_with_snapshot(
         .parent()
         .map(Path::to_path_buf)
         .context("task path is missing parent directory")?;
-    let (task, snapshot) = load_task(&task_path)?;
+    let (mut task, snapshot) = load_task(&task_path)?;
+    task.feature_id = feature_id_for_task_path(&task_path);
     Ok((task, snapshot, task_dir))
 }
 

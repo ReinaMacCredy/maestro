@@ -1,19 +1,10 @@
-//! Move terminal features (and their terminal child tasks) to and from the
-//! archive sibling tree (§5 L2/L3/L6 + §5.9 child-task cascade).
+//! Move terminal feature directories, including nested terminal child tasks, to
+//! and from the archive sibling tree (§5 L2/L3/L6 + §5.9 child-task cascade).
 //!
 //! A feature directory is named exactly `<id>` (no `<id>-<slug>` split, unlike
-//! tasks), so the move is `features/<id>` ↔ `archive/features/<id>`. Child tasks
-//! live in the separate `tasks/` tree, so `feature archive` cascade-archives the
-//! feature's terminal children (parallel to the cancel cascade in
-//! [`super::registry::cancel`]).
-//!
-//! The cascade order is **children first, feature last**: a partial archive then
-//! leaves the feature in the live tree, so a re-run (`feature archive` is
-//! idempotent) re-scans and sweeps the rest. The child sweep is *unconditional*
-//! (it always scans the live `tasks/` tree), while only the feature-dir move is
-//! gated on the feature still being live — so a child skipped by L6c on the
-//! first run is still swept once its blocker clears, even though the feature dir
-//! already moved.
+//! tasks), so the move is `features/<id>` ↔ `archive/features/<id>`. Feature
+//! child tasks now live below `features/<id>/tasks`, so the feature directory
+//! carries its children during archive and unarchive.
 
 use std::fs;
 
@@ -24,14 +15,11 @@ use crate::domain::task::{self, TaskState};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 
-/// Archive a terminal feature and cascade-archive its terminal child tasks
-/// (§5.9).
+/// Archive a terminal feature and its nested terminal child tasks (§5.9).
 ///
 /// Resolves the record from the live tree, or the archive tree on a sweep
-/// re-run. The child sweep always scans the live `tasks/` tree; a child a live
-/// task still references through an unresolved blocker is **skipped with a
-/// warning** (L6c), not blocked — clearing the reference and re-running sweeps
-/// it. The feature dir moves only if it is still live.
+/// re-run. Child tasks are read from feature-owned task roots; the feature dir
+/// moves only if it is still live.
 ///
 /// Idempotent (§5.4): re-running on an already-archived feature with nothing
 /// left to sweep is a no-op at exit 0.
@@ -61,10 +49,9 @@ pub fn archive_feature(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<
     }
 
     let tasks_dir = paths.tasks_dir();
-    let archive_tasks_dir = paths.archive_tasks_dir();
 
-    // §5.9: child tasks live in the separate tasks/ tree. Partition the live
-    // scan by liveness so a stray live child is refused defensively.
+    // Child tasks live inside the feature dir. Partition by liveness so the
+    // feature can move wholesale only after all children are settled.
     let mut live_children = Vec::new();
     let mut terminal_children = Vec::new();
     for projection in task::load_feature_task_projections(&tasks_dir)? {
@@ -87,23 +74,10 @@ pub fn archive_feature(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<
     }
     terminal_children.sort();
 
-    // Children first (fail-safe): the sweep is unconditional so a child skipped
-    // by L6c on an earlier run still archives once its blocker clears.
-    let mut archived = Vec::new();
-    let mut skipped = Vec::new();
-    for child in &terminal_children {
-        if let Some(referrer) = task::live_task_referrer(&tasks_dir, child)? {
-            skipped.push((child.clone(), referrer));
-        } else if dry_run {
-            archived.push(child.clone());
-        } else {
-            task::archive_task(&tasks_dir, &archive_tasks_dir, child, false)
-                .with_context(|| format!("failed to archive child task {child} of feature {id}"))?;
-            archived.push(child.clone());
-        }
-    }
+    let archived = terminal_children;
+    let skipped = Vec::new();
 
-    // Feature last: move a still-live feature dir; a sweep re-run leaves it put.
+    // Move a still-live feature dir; its child tasks move with it.
     let feature_changed = feature_live && !dry_run;
     if feature_changed {
         let live_dir = paths.features_dir().join(id);
@@ -127,12 +101,11 @@ pub fn archive_feature(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<
     Ok(archive_note(id, dry_run, feature_live, &archived, &skipped))
 }
 
-/// Restore an archived feature and its archived child tasks (§5.9, symmetric).
+/// Restore an archived feature and its nested archived child tasks (§5.9,
+/// symmetric).
 ///
-/// Children first, feature last (same fail-safe order): a partial restore leaves
-/// the feature archived so a re-run re-scans `archive/tasks/` and sweeps the
-/// rest. Idempotent: an already-live feature with no archived children is a
-/// no-op at exit 0.
+/// The feature directory carries its child tasks back with it. Idempotent: an
+/// already-live feature with no archived children is a no-op at exit 0.
 ///
 /// # Errors
 ///
@@ -151,23 +124,15 @@ pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
         bail!("archived feature not found: {id}");
     }
 
-    let tasks_dir = paths.tasks_dir();
-    let archive_tasks_dir = paths.archive_tasks_dir();
-
-    // Children first: restore every archived task that names this feature.
-    let mut restored = Vec::new();
-    for projection in task::load_feature_task_projections(&archive_tasks_dir)? {
-        if projection.feature_id.as_deref() == Some(id) {
-            restored.push(projection.id);
-        }
-    }
+    let mut restored: Vec<String> =
+        task::load_feature_task_projections(&paths.archive_tasks_dir())?
+            .into_iter()
+            .filter(|projection| projection.feature_id.as_deref() == Some(id))
+            .map(|projection| projection.id)
+            .collect();
     restored.sort();
-    for child in &restored {
-        task::unarchive_task(&tasks_dir, &archive_tasks_dir, child)
-            .with_context(|| format!("failed to restore child task {child} of feature {id}"))?;
-    }
 
-    // Feature last.
+    // The feature directory carries its child tasks back with it.
     if feature_archived {
         if live_dir.exists() {
             bail!("cannot unarchive {id} — a live feature already occupies that id");

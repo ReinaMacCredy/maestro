@@ -1,5 +1,5 @@
-//! End-to-end QA gate wiring (§4): accept reads `baseline.md`, ship reads
-//! `qa-slices.yaml` and the real `amend-log.yaml` that `feature amend` writes.
+//! End-to-end QA gate wiring (§4): accept reads `qa.md`, ship reads its fenced
+//! QA slices block and the `feature.yaml` amends that `feature amend` writes.
 //! The pure gate predicates are unit-tested in `domain::feature::qa`; this file
 //! proves the CLI actually consults the on-disk artifacts.
 
@@ -70,10 +70,10 @@ fn write_baseline(repo: &Path, id: &str, position: usize, scenario_ids: &[&str])
         .map(|id| format!("  - [{id}] scenario {id}\n"))
         .collect::<String>();
     fs::write(
-        feature_dir(repo, id).join("baseline.md"),
+        feature_dir(repo, id).join("qa.md"),
         format!("---\namend_log_position: {position}\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n{scenarios}"),
     )
-    .expect("invariant: baseline.md should be writable");
+    .expect("invariant: qa.md should be writable");
 }
 
 fn write_qa_slices(repo: &Path, id: &str, covered: &[&str]) {
@@ -81,11 +81,22 @@ fn write_qa_slices(repo: &Path, id: &str, covered: &[&str]) {
         .iter()
         .map(|id| format!("  - scenarios: [\"{id}\"]\n    evidence: [\"proof for {id}\"]\n"))
         .collect::<String>();
-    fs::write(
-        feature_dir(repo, id).join("qa-slices.yaml"),
-        format!("slices:\n{slices}"),
-    )
-    .expect("invariant: qa-slices.yaml should be writable");
+    write_qa_slices_yaml(repo, id, &format!("slices:\n{slices}"));
+}
+
+fn write_qa_slices_yaml(repo: &Path, id: &str, yaml: &str) {
+    let path = feature_dir(repo, id).join("qa.md");
+    let mut contents = fs::read_to_string(&path).unwrap_or_default();
+    if let Some(start) = contents.find("\n```yaml\nslices:") {
+        contents.truncate(start);
+    }
+    contents.push_str("\n```yaml\n");
+    contents.push_str(yaml);
+    if !yaml.ends_with('\n') {
+        contents.push('\n');
+    }
+    contents.push_str("```\n");
+    fs::write(path, contents).expect("invariant: qa.md should be writable");
 }
 
 #[test]
@@ -103,7 +114,7 @@ fn feature_qa_gates_via_cli() {
     );
     assert!(stderr.contains("skill: qa-baseline"), "{stderr}");
     assert!(
-        stderr.contains("target: .maestro/features/report-builder/baseline.md"),
+        stderr.contains("target: .maestro/features/report-builder/qa.md"),
         "{stderr}"
     );
     assert!(
@@ -129,7 +140,7 @@ fn feature_qa_gates_via_cli() {
     assert!(stderr.contains("coverage incomplete"));
     assert!(stderr.contains("skill: qa-slice"), "{stderr}");
     assert!(
-        stderr.contains("target: .maestro/features/report-builder/qa-slices.yaml"),
+        stderr.contains("target: .maestro/features/report-builder/qa.md"),
         "{stderr}"
     );
     assert!(
@@ -139,11 +150,11 @@ fn feature_qa_gates_via_cli() {
 
     // D count rule through the real YAML parse path: a slice that references the
     // scenario but omits `evidence` (serde default → empty) does not count.
-    fs::write(
-        feature_dir(repo, "report-builder").join("qa-slices.yaml"),
+    write_qa_slices_yaml(
+        repo,
+        "report-builder",
         "slices:\n  - scenarios: [\"bl-001\"]\n",
-    )
-    .expect("invariant: qa-slices.yaml should be writable");
+    );
     let stderr = assert_failure(maestro(&ship, repo), &ship);
     assert!(
         stderr.contains("bl-001"),
@@ -201,13 +212,10 @@ fn accept_words_a_blank_baseline_as_empty_not_missing() {
     let repo = temp.path();
     init_and_author(repo, "report-builder", "Report builder");
 
-    // A present-but-whitespace baseline.md: read_baseline collapses it to None like
+    // A present-but-whitespace qa.md: read_baseline collapses it to None like
     // an absent file, but the gate must distinguish the two in its remedy wording.
-    fs::write(
-        feature_dir(repo, "report-builder").join("baseline.md"),
-        "   \n\n",
-    )
-    .expect("invariant: baseline.md should be writable");
+    fs::write(feature_dir(repo, "report-builder").join("qa.md"), "   \n\n")
+        .expect("invariant: qa.md should be writable");
 
     let accept = ["feature", "accept", "report-builder"];
     let stderr = assert_failure(maestro(&accept, repo), &accept);
@@ -216,7 +224,7 @@ fn accept_words_a_blank_baseline_as_empty_not_missing() {
         "a blank baseline should read 'empty', not 'missing': {stderr}"
     );
     assert!(
-        !stderr.contains("baseline.md missing"),
+        !stderr.contains("qa.md missing"),
         "a present-but-blank file must not be reported as missing: {stderr}"
     );
 }

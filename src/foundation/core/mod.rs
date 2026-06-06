@@ -7,6 +7,7 @@ pub mod hash;
 pub mod managed_blocks;
 pub mod managed_path;
 pub mod paths;
+pub mod retention;
 pub mod safe_write;
 pub mod schema;
 pub mod slug;

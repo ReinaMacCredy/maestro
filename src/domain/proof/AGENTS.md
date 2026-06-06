@@ -3,33 +3,33 @@
 ## OVERVIEW
 
 `src/domain/proof/` owns verification command execution, evidence collection,
-freshness checks, reports, and claim matching.
+freshness checks, verification outcome data, and claim matching.
 
 ## WHERE TO LOOK
 
 | Task | Location | Notes |
 | --- | --- | --- |
 | Run verification commands | `commands.rs` | Reads Harness verification config. |
-| Verify a task snapshot | `verify_task.rs` | Produces typed verification outcome data. |
-| Store/read reports | `attempts.rs`, `restore_journal.rs` | Preserve canonical and attempt-report recovery. |
+| Verify a task snapshot | `verify_task.rs` | Produces typed outcome data for the Task-owned `task.yaml#verification` binding. |
 | Evaluate evidence claims | `claims.rs`, `events.rs` | Claims bind to hook-backed or artifact evidence. |
 | Compute freshness/status | `stale.rs`, `proof_status.rs` | Applied/unapplied state derives from Task-owned binding. |
 
 ## CONVENTIONS
 
-- Proof owns reports and evidence interpretation; Task owns lifecycle state and
-  verification binding application.
+- Proof owns verification outcome evaluation and evidence interpretation; Task
+  owns lifecycle state and verification binding application.
 - `operations/task_verify/` is the coordinator between Proof and Task.
-- Symlink rejection, stale snapshots, rollback, and interrupted promotion are
-  part of the contract, not test-only details.
+- Symlink rejection for Task-owned files, stale snapshots, and failed Task
+  writes are part of the contract, not test-only details.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
 - Do not call Task mutation paths directly from Proof.
-- Do not replace `acceptance.yaml` with generated or symlinked content.
+- Do not replace Task-owned `task.yaml` fields with generated or symlinked content.
 - Do not make a failed verification move a previously verified task except
   through Task-owned lifecycle logic.
-- Do not overwrite canonical `verification.json` with a stale attempt.
+- Do not reintroduce canonical `verification.json`, `verification.attempts/`,
+  or restore-journal sidecars as active proof state.
 
 ## VERIFICATION
 

@@ -162,7 +162,14 @@ fn verified_substatus(
 }
 
 fn task_dir(paths: &MaestroPaths, task: &task::TaskRecord) -> Option<std::path::PathBuf> {
-    let dir = paths.tasks_dir().join(task.directory_name());
+    let dir = match task.feature_id.as_deref() {
+        Some(feature_id) => paths
+            .features_dir()
+            .join(feature_id)
+            .join("tasks")
+            .join(task.directory_name()),
+        None => paths.tasks_dir().join(task.directory_name()),
+    };
     if dir.is_dir() { Some(dir) } else { None }
 }
 
@@ -179,7 +186,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{normalized_interval, render_snapshot};
-    use crate::domain::task::{AcceptanceFile, AppliedVerificationReceipt, TaskRecord, TaskState};
+    use crate::domain::task::{TaskRecord, TaskState, VerificationStatus};
     use crate::foundation::core::paths::MaestroPaths;
 
     static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -192,80 +199,33 @@ mod tests {
     }
 
     #[test]
-    fn render_snapshot_marks_verified_task_with_unapplied_proof() {
-        let temp = TestTempDir::new("maestro-task-list-watch-unapplied");
+    fn render_snapshot_marks_verified_task_with_missing_embedded_proof() {
+        let temp = TestTempDir::new("maestro-task-list-watch-missing");
         let paths = MaestroPaths::new(temp.path().to_path_buf());
         let mut task = TaskRecord::draft("task-001", "Add CSV export", "t0");
         task.state = TaskState::Verified;
         let task_dir = paths.tasks_dir().join(task.directory_name());
         fs::create_dir_all(&task_dir).expect("invariant: task dir should be creatable");
-        fs::write(
-            task_dir.join("acceptance.yaml"),
-            serde_yaml::to_string(&AcceptanceFile::new("task-001", Vec::new()))
-                .expect("invariant: acceptance should serialize"),
-        )
-        .expect("invariant: acceptance should be writable");
-        fs::write(
-            task_dir.join("verification.json"),
-            serde_json::json!({
-                "schema_version": "maestro.verification.v1",
-                "task_id": "task-001",
-                "task_snapshot": { "updated_at": "t0" },
-                "status": "passed",
-                "verified_at": "t1",
-                "task_contract_hash": "old-task",
-                "acceptance_hash": "old-acceptance",
-                "checks_hash": "old-checks",
-                "claims": [],
-                "proof_sources": []
-            })
-            .to_string(),
-        )
-        .expect("invariant: verification should be writable");
 
         let output = render_snapshot(&paths, &[task]).expect("invariant: snapshot should render");
 
         assert!(output.contains("Add CSV export"));
-        assert!(output.contains("verified / unapplied"));
+        assert!(output.contains("verified"));
     }
 
     #[test]
-    fn render_snapshot_marks_needs_verification_task_with_unapplied_proof() {
-        let temp = TestTempDir::new("maestro-task-list-watch-needs-unapplied");
+    fn render_snapshot_marks_needs_verification_task_with_missing_embedded_proof() {
+        let temp = TestTempDir::new("maestro-task-list-watch-needs-missing");
         let paths = MaestroPaths::new(temp.path().to_path_buf());
         let mut task = TaskRecord::draft("task-001", "Add CSV export", "t0");
         task.state = TaskState::NeedsVerification;
         let task_dir = paths.tasks_dir().join(task.directory_name());
         fs::create_dir_all(&task_dir).expect("invariant: task dir should be creatable");
-        fs::write(
-            task_dir.join("acceptance.yaml"),
-            serde_yaml::to_string(&AcceptanceFile::new("task-001", Vec::new()))
-                .expect("invariant: acceptance should serialize"),
-        )
-        .expect("invariant: acceptance should be writable");
-        fs::write(
-            task_dir.join("verification.json"),
-            serde_json::json!({
-                "schema_version": "maestro.verification.v1",
-                "task_id": "task-001",
-                "task_snapshot": { "updated_at": "t0" },
-                "status": "failed",
-                "verified_at": "t1",
-                "task_contract_hash": "old-task",
-                "acceptance_hash": "old-acceptance",
-                "checks_hash": "old-checks",
-                "claims": [],
-                "proof_sources": [],
-                "failures": ["missing proof"]
-            })
-            .to_string(),
-        )
-        .expect("invariant: verification should be writable");
 
         let output = render_snapshot(&paths, &[task]).expect("invariant: snapshot should render");
 
         assert!(output.contains("Add CSV export"));
-        assert!(output.contains("needs_verification / unapplied"));
+        assert!(output.contains("needs_verification"));
     }
 
     #[test]
@@ -274,31 +234,11 @@ mod tests {
         let paths = MaestroPaths::new(temp.path().to_path_buf());
         let mut task = TaskRecord::draft("task-001", "Add CSV export", "t0");
         task.state = TaskState::NeedsVerification;
-        task.verification.applied_report = Some(AppliedVerificationReceipt {
-            task_snapshot_updated_at: "t0".to_string(),
-            verified_at: "t1".to_string(),
-            attempt_id: None,
-        });
+        task.verification.status = Some(VerificationStatus::Failed);
+        task.verification.verified_at = Some("t1".to_string());
+        task.verification.failures = vec!["missing proof".to_string()];
         let task_dir = paths.tasks_dir().join(task.directory_name());
         fs::create_dir_all(&task_dir).expect("invariant: task dir should be creatable");
-        fs::write(
-            task_dir.join("verification.json"),
-            serde_json::json!({
-                "schema_version": "maestro.verification.v1",
-                "task_id": "task-001",
-                "task_snapshot": { "updated_at": "t0" },
-                "status": "failed",
-                "verified_at": "t1",
-                "task_contract_hash": "old-task",
-                "acceptance_hash": "old-acceptance",
-                "checks_hash": "old-checks",
-                "claims": [],
-                "proof_sources": [],
-                "failures": ["missing proof"]
-            })
-            .to_string(),
-        )
-        .expect("invariant: verification should be writable");
 
         let output = render_snapshot(&paths, &[task]).expect("invariant: snapshot should render");
 

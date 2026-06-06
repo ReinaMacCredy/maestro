@@ -12,6 +12,7 @@ pub mod hook;
 pub mod init;
 pub mod install;
 pub mod mcp;
+pub mod migrate;
 pub mod query;
 pub mod resume;
 pub mod shell_init;
@@ -56,6 +57,8 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro sync                 # resync repo bundled resources to this binary, preserving edits\n  maestro sync --global-skills # resync user-level Maestro skill cache and links\n  maestro sync --dry-run       # preview the resync, write nothing"
     )]
     Sync(SyncArgs),
+    #[command(about = "Migrate v1 Maestro artifacts to the reduced v2 layout")]
+    MigrateV2,
     #[command(about = "Remove maestro hooks and config for an agent")]
     Uninstall(AgentArgs),
     #[command(about = "Diagnose the maestro installation and report problems")]
@@ -643,6 +646,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Install(args) => install::run(args),
         RootCommand::Update(args) => update::run(args),
         RootCommand::Sync(args) => sync::run(args),
+        RootCommand::MigrateV2 => migrate::run(),
         RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),

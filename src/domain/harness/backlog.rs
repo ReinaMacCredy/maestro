@@ -240,6 +240,9 @@ fn is_legacy_generated_missing_verification_evidence(evidence: &str) -> bool {
 
 fn safe_verification_source(source: &str) -> &'static str {
     let source = source.trim();
+    if source == "task.yaml#verification" {
+        return "task.yaml#verification";
+    }
     if source == "verification.json" {
         return "verification.json";
     }

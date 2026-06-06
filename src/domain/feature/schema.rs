@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
 
-/// V1 feature record stored in `.maestro/features/<id>/feature.yaml`.
+/// Feature record stored in `.maestro/features/<id>/feature.yaml`.
 ///
 /// Each feature owns its own directory (no flat registry); the record is the
 /// source of truth for the product contract. Task counts are intentionally not
-/// stored here — they are computed on read from `.maestro/tasks/`.
+/// stored here — they are computed on read from task roots.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FeatureRecord {
     /// Feature record schema version.
@@ -39,6 +39,9 @@ pub struct FeatureRecord {
     /// Acceptance criteria for the feature.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub acceptance: Vec<String>,
+    /// Append-only audited amendments.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub amends: Vec<AmendEntry>,
     /// Explicit non-goals.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub non_goals: Vec<String>,
@@ -66,6 +69,7 @@ impl FeatureRecord {
             affected_areas: Vec::new(),
             open_questions: Vec::new(),
             acceptance: Vec::new(),
+            amends: Vec::new(),
             non_goals: Vec::new(),
             outcome: None,
             cancel_reason: None,
@@ -73,7 +77,7 @@ impl FeatureRecord {
     }
 }
 
-/// V1 feature lifecycle status.
+/// Feature lifecycle status.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FeatureStatus {
@@ -108,8 +112,7 @@ impl FeatureStatus {
     }
 }
 
-/// Append-only audit trail of `feature amend` calls, stored alongside the record
-/// in `.maestro/features/<id>/amend-log.yaml`.
+/// Legacy append-only audit trail shape used by migration.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AmendLog {
     /// Append-only amend entries, oldest first.

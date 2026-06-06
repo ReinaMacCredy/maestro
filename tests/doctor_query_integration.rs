@@ -6,6 +6,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
@@ -474,25 +475,26 @@ fn query_views_scan_current_artifacts_without_writing_cache_files() {
 
     let proof = run_success(repo, &["query", "proof", "task-001"]);
     assert!(proof.contains("proof task-001: accepted"));
-    assert!(proof.contains("verification.json"));
+    assert!(proof.contains("task.yaml#verification"));
 
     let after = maestro_files(repo);
     assert_eq!(before, after);
     assert!(!repo.join(".maestro/cache").exists());
     assert!(!repo.join(".maestro/tmp").exists());
 
-    fs::write(
-        task_dir(repo, "task-001").join("acceptance.yaml"),
-        concat!(
-            "schema_version: maestro.acceptance.v1\n",
-            "task: task-001\n",
-            "checks:\n",
-            "- changed query matrix proof binding\n",
-            "locked_by: maestro\n",
-            "locked_at: now\n"
-        ),
+    let task_path = task_dir(repo, "task-001").join("task.yaml");
+    let mut task: YamlValue = serde_yaml::from_str(
+        &fs::read_to_string(&task_path).expect("invariant: task.yaml should be readable"),
     )
-    .expect("invariant: acceptance should be writable for stale proof setup");
+    .expect("invariant: task.yaml should parse");
+    task["acceptance"]["checks"] = YamlValue::Sequence(vec![YamlValue::String(
+        "changed query matrix proof binding".to_string(),
+    )]);
+    fs::write(
+        &task_path,
+        serde_yaml::to_string(&task).expect("invariant: task.yaml should serialize"),
+    )
+    .expect("invariant: task.yaml should be writable for stale proof setup");
     let before_stale = maestro_files(repo);
     let stale_matrix = run_success(repo, &["query", "matrix"]);
     assert!(stale_matrix.contains("stale"));
@@ -631,18 +633,33 @@ fn maestro_files(repo: &Path) -> BTreeSet<PathBuf> {
 
 fn task_dir(repo: &Path, id: &str) -> PathBuf {
     let prefix = format!("{id}-");
-    for entry in
-        fs::read_dir(repo.join(".maestro/tasks")).expect("invariant: tasks dir should be readable")
-    {
-        let entry = entry.expect("invariant: task entry should be readable");
-        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+    for root in task_roots(repo) {
+        let Ok(entries) = fs::read_dir(&root) else {
             continue;
         };
-        if name.starts_with(&prefix) {
-            return entry.path();
+        for entry in entries {
+            let entry = entry.expect("invariant: task entry should be readable");
+            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+                continue;
+            };
+            if name.starts_with(&prefix) {
+                return entry.path();
+            }
         }
     }
     panic!("invariant: task dir should exist for {id}");
+}
+
+fn task_roots(repo: &Path) -> Vec<PathBuf> {
+    let mut roots = vec![repo.join(".maestro/tasks")];
+    let features_dir = repo.join(".maestro/features");
+    if let Ok(features) = fs::read_dir(features_dir) {
+        for feature in features {
+            let feature = feature.expect("invariant: feature entry should be readable");
+            roots.push(feature.path().join("tasks"));
+        }
+    }
+    roots
 }
 
 fn collect_files(dir: &Path, repo: &Path, files: &mut BTreeSet<PathBuf>) {

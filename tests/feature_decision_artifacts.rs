@@ -10,7 +10,7 @@ use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
 #[test]
-fn created_feature_record_carries_v1_schema_version() {
+fn created_feature_record_carries_v2_schema_version() {
     let temp_dir = TestTempDir::new("maestro-feature-schema");
     let paths = MaestroPaths::new(temp_dir.path());
 
@@ -24,7 +24,7 @@ fn created_feature_record_carries_v1_schema_version() {
             .join("feature.yaml"),
     )
     .expect("invariant: per-feature feature.yaml should be readable");
-    assert!(yaml.contains("schema_version: maestro.feature.v1"));
+    assert!(yaml.contains("schema_version: maestro.feature.v2"));
     assert!(yaml.contains("status: proposed"));
 }
 
@@ -46,9 +46,9 @@ fn feature_records_do_not_store_task_counts() {
 fn feature_task_counts_are_computed_from_task_yaml_files() {
     let temp_dir = TestTempDir::new("maestro-feature-test");
     let tasks_dir = temp_dir.path().join(".maestro/tasks");
-    write_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
-    write_task(&tasks_dir, "task-002", "billing-csv-export", "ready");
-    write_task(&tasks_dir, "task-003", "other", "verified");
+    write_feature_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
+    write_feature_task(&tasks_dir, "task-002", "billing-csv-export", "ready");
+    write_feature_task(&tasks_dir, "task-003", "other", "verified");
 
     let counts = count_tasks_for_feature(&tasks_dir, "billing-csv-export")
         .expect("invariant: feature task counts should compute");
@@ -86,12 +86,20 @@ fn decision_markdown_matches_section_7_4_template() {
     assert!(markdown.contains("## Linked tasks"));
 }
 
-fn write_task(tasks_dir: &std::path::Path, id: &str, feature_id: &str, state: &str) {
-    let dir = tasks_dir.join(id);
+fn write_feature_task(tasks_dir: &std::path::Path, id: &str, feature_id: &str, state: &str) {
+    let dir = tasks_dir
+        .parent()
+        .expect("invariant: tasks dir should have parent")
+        .join("features")
+        .join(feature_id)
+        .join("tasks")
+        .join(id);
     ensure_dir(&dir).expect("invariant: task directory should be creatable");
     fs::write(
         dir.join("task.yaml"),
-        format!("id: {id}\nfeature_id: {feature_id}\nstate: {state}\n"),
+        format!(
+            "schema_version: maestro.task.v2\nid: {id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\n"
+        ),
     )
     .expect("invariant: task.yaml should be writable");
 }
