@@ -1,4 +1,8 @@
+mod support;
+
 use std::process::Command;
+
+use support::TestTempDir;
 
 fn maestro(args: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -112,6 +116,37 @@ fn version_flag_matches_the_version_subcommand() {
         "--version and the `version` subcommand disagree on the version string"
     );
     assert_eq!(maestro(&["-V"]), flag, "`-V` should match `--version`");
+}
+
+#[test]
+fn version_subcommand_runs_without_repo_root() {
+    let temp_dir = TestTempDir::new("maestro-version-rootless-test");
+    let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .arg("version")
+        .current_dir(temp_dir.path())
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in CLI tests");
+
+    assert!(
+        output.status.success(),
+        "maestro version failed outside a repo\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stdout.starts_with("maestro "),
+        "unexpected stdout: {stdout}"
+    );
+    assert!(
+        !stderr.contains("failed to discover repository root"),
+        "version should not discover repo roots:\n{stderr}"
+    );
+    assert!(
+        !temp_dir.path().join(".maestro").exists(),
+        "version must not scaffold .maestro"
+    );
 }
 
 #[test]

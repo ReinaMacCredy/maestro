@@ -29,8 +29,8 @@ use replace::{
 /// Options for one `maestro update` operation.
 #[derive(Debug)]
 pub struct UpdateOptions<'a> {
-    /// Repository-local Maestro paths.
-    pub paths: &'a MaestroPaths,
+    /// Repository-local Maestro paths, when the command runs inside a discovered repo.
+    pub paths: Option<&'a MaestroPaths>,
     /// Binary path that would be atomically replaced when a binary is available.
     pub executable_path: &'a Path,
     /// Backup timestamp shared by skill extraction for this update operation.
@@ -458,28 +458,35 @@ pub fn run_update_with_seams(
                 Some(format!("global Maestro skill sync skipped: {error}")),
             ),
         };
-    let schema_mismatches = detect_schema_mismatches(options.paths)?;
+    let schema_mismatches = match options.paths {
+        Some(paths) => detect_schema_mismatches(paths)?,
+        None => Vec::new(),
+    };
     let binary_candidate = prepare_binary_update(options, downloader, verifier)?;
     // A never-init'd repo has no `.maestro`: upgrade the binary but do NOT extract
     // bundled resources, which would write skills/hooks without the structural
     // files `init` lays down, leaving a repo `doctor` immediately calls broken. The
     // renderer points the user at `maestro init` instead.
-    let repo_uninitialized = !options.paths.maestro_dir().exists();
-    let extract_report = if repo_uninitialized {
-        ExtractReport::default()
-    } else {
-        match extract_all(
-            options.paths,
-            ExtractMode::Update {
-                backup_timestamp: options.backup_timestamp,
-            },
-        ) {
-            Ok(report) => report,
-            Err(error) => {
-                cleanup_prepared_binary(&binary_candidate);
-                return Err(error);
+    let repo_uninitialized = match options.paths {
+        Some(paths) => !paths.maestro_dir().exists(),
+        None => true,
+    };
+    let extract_report = match options.paths {
+        Some(paths) if !repo_uninitialized => {
+            match extract_all(
+                paths,
+                ExtractMode::Update {
+                    backup_timestamp: options.backup_timestamp,
+                },
+            ) {
+                Ok(report) => report,
+                Err(error) => {
+                    cleanup_prepared_binary(&binary_candidate);
+                    return Err(error);
+                }
             }
         }
+        _ => ExtractReport::default(),
     };
     let prepared_release = prepared_release(&binary_candidate);
     let binary_status = match replace_prepared_binary(options, replacer, binary_candidate) {
@@ -518,11 +525,18 @@ pub fn run_update_with_seams(
 
 pub(super) fn update_request(options: &UpdateOptions<'_>) -> UpdateRequest {
     UpdateRequest {
-        work_dir: options.paths.maestro_dir().join("update"),
+        work_dir: options
+            .paths
+            .map(|paths| paths.maestro_dir().join("update"))
+            .unwrap_or_else(rootless_update_work_dir),
         current_version: options.current_version.to_string(),
         force: options.force,
         check_only: options.check_only,
     }
+}
+
+fn rootless_update_work_dir() -> PathBuf {
+    std::env::temp_dir().join(format!("maestro-update-{}", std::process::id()))
 }
 
 fn check_binary_update(

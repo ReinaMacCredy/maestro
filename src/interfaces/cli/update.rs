@@ -6,6 +6,7 @@ use anyhow::Result;
 
 use crate::domain::skills;
 use crate::foundation::core::backup::backup_operation_timestamp;
+use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -28,16 +29,14 @@ impl std::error::Error for ReportedError {}
 
 /// Execute `maestro update`.
 pub fn run(args: UpdateArgs) -> Result<()> {
-    let repo_root = discover_repo_root()?;
-    announce_repo_root(&repo_root);
-    let paths = MaestroPaths::new(repo_root);
+    let paths = optional_repo_paths()?;
     let executable_path = env::current_exe()?;
     let backup_timestamp = backup_operation_timestamp()?;
     let colors = Colors::detect();
     println!("{}", colors.info("Checking for updates..."));
 
     let outcome = match update::run_update(&update::UpdateOptions {
-        paths: &paths,
+        paths: paths.as_ref(),
         executable_path: &executable_path,
         backup_timestamp: &backup_timestamp,
         current_version: env!("MAESTRO_VERSION"),
@@ -66,6 +65,24 @@ pub fn run(args: UpdateArgs) -> Result<()> {
     Ok(())
 }
 
+fn optional_repo_paths() -> Result<Option<MaestroPaths>> {
+    match discover_repo_root() {
+        Ok(repo_root) => {
+            announce_repo_root(&repo_root);
+            Ok(Some(MaestroPaths::new(repo_root)))
+        }
+        Err(error)
+            if matches!(
+                error.downcast_ref::<MaestroError>(),
+                Some(MaestroError::RepoRootNotFound { .. })
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 /// Run a passive once-per-day update check. It only prints when an update is available.
 pub fn run_auto_check() -> Result<()> {
     if env::var("MAESTRO_AUTO_UPDATE")
@@ -91,7 +108,7 @@ pub fn run_auto_check() -> Result<()> {
     }
 
     let outcome = update::run_update(&update::UpdateOptions {
-        paths: &paths,
+        paths: Some(&paths),
         executable_path: &executable_path,
         backup_timestamp: "",
         current_version: env!("MAESTRO_VERSION"),

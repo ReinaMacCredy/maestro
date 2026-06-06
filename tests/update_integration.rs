@@ -285,6 +285,27 @@ fn update_reports_manager_commands_for_cargo_installs() {
 }
 
 #[test]
+fn update_runs_outside_maestro_or_git_root_without_scaffolding() {
+    let temp_dir = TestTempDir::new("maestro-update-rootless-test");
+
+    let update = maestro(&["update"], temp_dir.path());
+
+    assert_success(&update);
+    let stdout = String::from_utf8_lossy(&update.stdout);
+    let stderr = String::from_utf8_lossy(&update.stderr);
+    assert!(stdout.contains("Checking for updates..."));
+    assert!(stdout.contains("Update unavailable for this build"));
+    assert!(
+        !stderr.contains("failed to discover repository root"),
+        "rootless update should not surface repo discovery errors:\n{stderr}"
+    );
+    assert!(
+        !temp_dir.path().join(".maestro").exists(),
+        "rootless update must not scaffold .maestro"
+    );
+}
+
+#[test]
 fn simulated_download_failure_preserves_existing_binary_file() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     let paths = MaestroPaths::new(temp_dir.path());
@@ -300,7 +321,7 @@ fn simulated_download_failure_preserves_existing_binary_file() {
 
     let error = run_update_with_seams(
         &UpdateOptions {
-            paths: &paths,
+            paths: Some(&paths),
             executable_path: &executable_path,
             backup_timestamp: "test",
             current_version: "0.0.1779700000-gabc123",
@@ -352,7 +373,7 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
 
     let error = run_update_with_seams(
         &UpdateOptions {
-            paths: &paths,
+            paths: Some(&paths),
             executable_path: &executable_path,
             backup_timestamp: "test",
             current_version: "0.0.1779700000-gabc123",
@@ -390,7 +411,7 @@ fn checksum_verification_failure_prevents_binary_replacement() {
 
     let error = run_update_with_seams(
         &UpdateOptions {
-            paths: &paths,
+            paths: Some(&paths),
             executable_path: &executable_path,
             backup_timestamp: "test",
             current_version: "0.0.1779700000-gabc123",
@@ -456,7 +477,7 @@ fn simulated_replace_failure_preserves_existing_binary_file() {
 
     let error = run_update_with_seams(
         &UpdateOptions {
-            paths: &paths,
+            paths: Some(&paths),
             executable_path: &executable_path,
             backup_timestamp: "test",
             current_version: "0.0.1779700000-gabc123",
@@ -512,7 +533,7 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
 
     let error = run_update_with_seams(
         &UpdateOptions {
-            paths: &paths,
+            paths: Some(&paths),
             executable_path: &executable_path,
             backup_timestamp: "test",
             current_version: "0.0.1779700000-gabc123",
@@ -559,7 +580,7 @@ fn late_global_skill_sync_failure_warns_without_reverting_installed_update() {
 
     let outcome = run_update_with_seams(
         &UpdateOptions {
-            paths: &paths,
+            paths: Some(&paths),
             executable_path: &executable_path,
             backup_timestamp: "test",
             current_version: "0.0.1779700000-gabc123",
