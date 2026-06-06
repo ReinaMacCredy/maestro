@@ -28,12 +28,58 @@ pub(super) fn detect_with_policy(
 ) -> Result<Vec<BacklogItem>> {
     let task_entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut proposals = Vec::new();
+    proposals.extend(detect_explicit_interventions(paths)?);
     proposals.extend(detect_recurring_interventions(paths, escalation.enabled)?);
     proposals.extend(detect_missing_checks(paths, &task_entries)?);
     proposals.extend(detect_recurring_blockers(&task_entries));
     proposals.extend(detect_missing_skills(&task_entries));
     proposals.extend(detect_rediscovered_decisions(paths, &task_entries)?);
     Ok(proposals)
+}
+
+fn detect_explicit_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
+    let mut by_topic = BTreeMap::<String, (BTreeSet<String>, Vec<String>)>::new();
+    run::visit_managed_events(paths, |record| {
+        let event = record.event();
+        if !event.is_event_type("intervention") {
+            return Ok(());
+        }
+        let note = event.intervention_note().unwrap_or_default().trim();
+        if note.is_empty() {
+            return Ok(());
+        }
+        let topic = event
+            .topic()
+            .map(normalize_pinned_topic)
+            .filter(|topic| !topic.is_empty())
+            .unwrap_or_else(|| normalize_topic(note));
+        if topic.is_empty() {
+            return Ok(());
+        }
+        let entry = by_topic.entry(topic).or_default();
+        entry.0.insert(record.session_id().to_string());
+        entry.1.push(format!("{}: {}", record.session_id(), note));
+        Ok(())
+    })?;
+
+    Ok(by_topic
+        .into_iter()
+        .map(|(topic, (sessions, evidence))| {
+            let sessions_hit = sessions.into_iter().collect::<Vec<_>>();
+            let occurrences = evidence.len();
+            let mut item = proposal(
+                topic.clone(),
+                "explicit_intervention",
+                &topic,
+                format!("Record correction protocol for {topic}"),
+                evidence,
+                sessions_hit,
+                occurrences,
+            );
+            item.provenance = "explicit-intervention".to_string();
+            item
+        })
+        .collect())
 }
 
 fn detect_recurring_interventions(
@@ -319,6 +365,15 @@ fn normalize_topic(value: &str) -> String {
         .join(" ")
 }
 
+fn normalize_pinned_topic(value: &str) -> String {
+    value
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .collect()
+}
+
 fn median(values: &[u64]) -> Option<u64> {
     if values.is_empty() {
         return None;
@@ -344,6 +399,8 @@ fn proposal(
         id: String::new(),
         fingerprint,
         source,
+        provenance: "detector".to_string(),
+        topic: subject.as_ref().to_string(),
         item_type,
         title: title.into(),
         priority: String::new(),

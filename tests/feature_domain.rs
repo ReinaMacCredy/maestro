@@ -65,6 +65,19 @@ fn author_contract(paths: &MaestroPaths, id: &str) {
     .expect("invariant: qa.md should be writable");
 }
 
+fn verify_contract(paths: &MaestroPaths, id: &str) {
+    feature::verify_feature(
+        paths,
+        id,
+        Some(feature::FeatureProofUpdate::Explicit {
+            ac_id: "ac-1".to_string(),
+            evidence: "fixture evidence".to_string(),
+        }),
+    )
+    .expect("invariant: proof should record");
+    feature::verify_feature(paths, id, None).expect("invariant: sweep should succeed");
+}
+
 #[test]
 fn create_generates_slug_id_and_persists() {
     let temp = TestTempDir::new("maestro-feature-create");
@@ -245,6 +258,7 @@ fn full_lifecycle_new_set_accept_start_ship() {
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     let started = feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
     assert_eq!(started.status, feature::FeatureStatus::InProgress);
+    verify_contract(&paths, "billing-csv");
     let shipped =
         feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
     assert_eq!(shipped.status, feature::FeatureStatus::Shipped);
@@ -293,6 +307,7 @@ fn ship_blocks_on_live_child_task() {
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
+    verify_contract(&paths, "billing-csv");
 
     write_task(&paths.tasks_dir(), "task-001", "billing-csv", "in_progress");
     let error =
@@ -354,6 +369,7 @@ fn cannot_cancel_a_shipped_feature() {
     author_contract(&paths, "billing-csv");
     feature::accept(&paths, "billing-csv", false).expect("invariant: accept should succeed");
     feature::start(&paths, "billing-csv").expect("invariant: start should succeed");
+    verify_contract(&paths, "billing-csv");
     feature::ship(&paths, "billing-csv", None, false).expect("invariant: ship should succeed");
 
     let error = feature::cancel(&paths, "billing-csv", "too late", false)

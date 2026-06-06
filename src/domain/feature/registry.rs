@@ -31,6 +31,7 @@ use crate::domain::feature::query::{
 use crate::domain::feature::schema::{
     AmendAdditions, AmendEntry, AmendLog, FeatureRecord, FeatureStatus, QaDeclaration,
 };
+use crate::domain::feature::verification;
 use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
 use crate::foundation::core::paths::MaestroPaths;
@@ -654,6 +655,11 @@ pub fn ship(
             &amend_log,
         ));
     }
+    // D5 cond 4 — the full feature acceptance contract must have a fresh
+    // sweep run that resolved every ac-N item.
+    if let Some(gap) = verification::acceptance_ship_gap(paths, &record)? {
+        gaps.push(gap);
+    }
 
     if dry_run {
         let note = if gaps.is_empty() {
@@ -997,7 +1003,7 @@ fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> Feature
     }
 }
 
-fn feature_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
+pub(crate) fn feature_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
     paths.features_dir().join(id)
 }
 
@@ -1053,7 +1059,7 @@ pub(crate) fn validate_feature_id(id: &str) -> Result<()> {
 }
 
 /// Load one feature record, erroring on absence or schema incompatibility.
-fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
+pub(crate) fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
     match load_record_at(&feature_yaml_path(paths, id), id) {
         Ok(record) => Ok(record),
         Err(error) => {
@@ -1092,7 +1098,7 @@ pub(crate) fn load_record_at(path: &Path, id: &str) -> Result<FeatureRecord> {
     Ok(record)
 }
 
-fn save_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
+pub(crate) fn save_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
     let dir = feature_dir(paths, &record.id);
     ensure_dir(&dir)?;
     let contents = serde_yaml::to_string(record).context("failed to serialize feature record")?;

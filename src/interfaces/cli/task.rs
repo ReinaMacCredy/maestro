@@ -26,16 +26,18 @@ pub fn run(args: TaskArgs) -> Result<()> {
         TaskCommand::Create {
             title,
             feature,
+            covers,
             lane,
             risk,
             check,
-        } => create_task(&paths, &title, feature, lane, risk, check),
+        } => create_task(&paths, &title, feature, covers, lane, risk, check),
         TaskCommand::Set {
             id,
             check,
             feature,
             no_feature,
-        } => set_task(&paths, &id, check, feature, no_feature, &actor),
+            covers,
+        } => set_task(&paths, &id, check, covers, feature, no_feature, &actor),
         TaskCommand::Explore { id } => explore_task(&paths, &id, &actor),
         TaskCommand::Accept { id } => accept_task(&paths, &id, &actor),
         TaskCommand::Claim { id, next } => match (id, next) {
@@ -167,6 +169,7 @@ fn create_task(
     paths: &MaestroPaths,
     title: &str,
     feature: Option<String>,
+    covers: Vec<String>,
     lane: Option<String>,
     risk: Option<String>,
     checks: Vec<String>,
@@ -175,7 +178,18 @@ fn create_task(
         guard_feature_target(paths, target)?;
     }
     let now = nanos_since_epoch_string();
-    let task = task::create_task(&paths.tasks_dir(), title, feature, lane, risk, checks, &now)?;
+    let task = task::create_task(
+        &paths.tasks_dir(),
+        title,
+        task::CreateTaskOptions {
+            feature,
+            covers,
+            lane,
+            risk,
+            checks,
+            created_at: now,
+        },
+    )?;
 
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     print_task_create_handoff(&task, &checks);
@@ -186,14 +200,15 @@ fn set_task(
     paths: &MaestroPaths,
     id: &str,
     checks: Vec<String>,
+    covers: Vec<String>,
     feature: Option<String>,
     no_feature: bool,
     actor: &str,
 ) -> Result<()> {
     let changing_feature = feature.is_some() || no_feature;
-    if checks.is_empty() && !changing_feature {
+    if checks.is_empty() && covers.is_empty() && !changing_feature {
         bail!(
-            "task set requires --check, --feature, or --no-feature\n  maestro task set {id} --check \"...\"\n  maestro task set {id} --feature <feature-id>\n  maestro task set {id} --no-feature"
+            "task set requires --check, --covers, --feature, or --no-feature\n  maestro task set {id} --check \"...\"\n  maestro task set {id} --covers ac-1\n  maestro task set {id} --feature <feature-id>\n  maestro task set {id} --no-feature"
         );
     }
 
@@ -215,6 +230,16 @@ fn set_task(
         let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
         print_verify_block(&task, &checks);
         print_task_next_for_state(&task, &checks);
+    }
+
+    if !covers.is_empty() {
+        let (task, replaced) = task::set_covers(&paths.tasks_dir(), id, covers)?;
+        if replaced > 0 {
+            println!(
+                "note: replaced {replaced} existing cover link(s); `--covers` replaces the whole list, so re-pass any you want to keep"
+            );
+        }
+        println!("updated {} covers", task.id);
     }
 
     if changing_feature {

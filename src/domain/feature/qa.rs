@@ -14,7 +14,7 @@
 //! pure functions over these artifacts so they unit-test in isolation; the
 //! registry loads the inputs and renders the gaps.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::{Result, anyhow};
@@ -102,6 +102,25 @@ pub(crate) fn read_qa_slices(feature_dir: &Path) -> Result<QaSliceLog> {
           })
         }
     }
+}
+
+/// Acceptance ids resolved by counting QA slices whose baseline scenario lines
+/// declare `(covers: ac-N)`.
+pub(crate) fn acceptance_ids_covered_by_counting_slices(
+    feature_dir: &Path,
+) -> Result<BTreeSet<String>> {
+    let path = feature_dir.join("qa.md");
+    let Some(contents) = read_to_string_if_exists(&path)? else {
+        return Ok(BTreeSet::new());
+    };
+    let slices = read_qa_slices(feature_dir)?;
+    let covered_scenarios = covered_ids(&slices);
+    let covers_by_scenario = acceptance_covers_by_scenario(&contents);
+    Ok(covered_scenarios
+        .into_iter()
+        .filter_map(|scenario| covers_by_scenario.get(&scenario).cloned())
+        .flatten()
+        .collect())
 }
 
 /// The ship-gate QA gaps for a feature: presence, freshness (E.1), and per-scenario
@@ -243,6 +262,43 @@ fn bracketed_bl_ids(contents: &str) -> BTreeSet<String> {
         }
     }
     ids
+}
+
+fn acceptance_covers_by_scenario(contents: &str) -> BTreeMap<String, BTreeSet<String>> {
+    let mut by_scenario = BTreeMap::new();
+    for line in contents.lines() {
+        let Some(covers) = covers_clause(line) else {
+            continue;
+        };
+        let scenarios = bracketed_bl_ids(line);
+        for scenario in scenarios {
+            by_scenario
+                .entry(scenario)
+                .or_insert_with(BTreeSet::new)
+                .extend(covers.iter().cloned());
+        }
+    }
+    by_scenario
+}
+
+fn covers_clause(line: &str) -> Option<BTreeSet<String>> {
+    let start = line.find("(covers:")? + "(covers:".len();
+    let rest = line.get(start..)?;
+    let end = rest.find(')')?;
+    let ids = rest[..end]
+        .split(',')
+        .filter_map(normalize_ac_id)
+        .collect::<BTreeSet<_>>();
+    (!ids.is_empty()).then_some(ids)
+}
+
+fn normalize_ac_id(raw: &str) -> Option<String> {
+    let digits = raw.trim().strip_prefix("ac-")?;
+    if digits.is_empty() || !digits.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let number = digits.parse::<usize>().ok()?;
+    (number > 0).then(|| format!("ac-{number}"))
 }
 
 /// Normalize a slice scenario reference (`bl-001` or `[bl-001]`) to its `bl-NNN`
@@ -430,6 +486,29 @@ mod tests {
         assert_eq!(normalize_bl_id(" bl-001 "), Some("bl-001".to_string()));
         assert_eq!(normalize_bl_id("nope"), None);
         assert_eq!(normalize_bl_id("bl-"), None);
+    }
+
+    #[test]
+    fn counting_slice_resolves_acceptance_covers_from_baseline_line() {
+        let body = "Scenario Matrix:\n- [bl-001] first (covers: ac-1, ac-02)\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"passed\"]\n```\n";
+        let dir = temp_root("qa-covers");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("qa.md"), body).unwrap();
+
+        let ids = acceptance_ids_covered_by_counting_slices(&dir).unwrap();
+
+        assert_eq!(
+            ids,
+            ["ac-1".to_string(), "ac-2".to_string()]
+                .into_iter()
+                .collect()
+        );
+    }
+
+    fn temp_root(prefix: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!("maestro-{prefix}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        path
     }
 
     #[test]

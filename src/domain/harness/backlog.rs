@@ -49,7 +49,21 @@ pub fn refresh(paths: &MaestroPaths, proposals: Vec<BacklogItem>) -> Result<Back
 /// deterministic ids. Re-detecting a terminal `measured` state note reopens it
 /// (D6); a `proposed` note with no durable history that is no longer detected
 /// is reconciled away (D4).
-pub fn merge_proposals(backlog: &mut BacklogConfig, mut proposals: Vec<BacklogItem>) {
+pub fn merge_proposals(backlog: &mut BacklogConfig, proposals: Vec<BacklogItem>) {
+    merge_proposals_inner(backlog, proposals, true);
+}
+
+/// Merge agent-authored proposals without reconciling away detector-authored
+/// ephemeral items that are absent from this single manual proposal call.
+pub fn merge_proposals_preserving_absent(backlog: &mut BacklogConfig, proposals: Vec<BacklogItem>) {
+    merge_proposals_inner(backlog, proposals, false);
+}
+
+fn merge_proposals_inner(
+    backlog: &mut BacklogConfig,
+    mut proposals: Vec<BacklogItem>,
+    reconcile_absent_ephemeral: bool,
+) {
     sanitize_existing_generated_evidence(backlog);
     let fresh_fingerprints = proposals
         .iter()
@@ -84,9 +98,11 @@ pub fn merge_proposals(backlog: &mut BacklogConfig, mut proposals: Vec<BacklogIt
         backlog.items.push(proposal);
     }
 
-    backlog
-        .items
-        .retain(|item| !is_ephemeral_reconcilable(item, &fresh_fingerprints));
+    if reconcile_absent_ephemeral {
+        backlog
+            .items
+            .retain(|item| !is_ephemeral_reconcilable(item, &fresh_fingerprints));
+    }
 }
 
 /// D6: a re-detected, terminal `measured` state note flips back to `proposed`
@@ -111,6 +127,7 @@ fn is_ephemeral_reconcilable(item: &BacklogItem, fresh_fingerprints: &BTreeSet<S
     item.status == "proposed"
         && item.spawned_task.is_none()
         && item.history.is_empty()
+        && (item.provenance.is_empty() || item.provenance == "detector")
         && !fresh_fingerprints.contains(&item.fingerprint)
 }
 
@@ -143,7 +160,19 @@ fn refresh_existing_recurrence(existing: &mut BacklogItem, proposal: &BacklogIte
 }
 
 fn refresh_existing_evidence(existing: &mut BacklogItem, proposal: &BacklogItem) {
+    if !matches!(
+        existing.item_type.as_str(),
+        "missing_verification" | "explicit_intervention" | "agent_audit"
+    ) {
+        return;
+    }
+
     if existing.item_type != "missing_verification" {
+        for evidence in &proposal.evidence {
+            if !existing.evidence.contains(evidence) {
+                existing.evidence.push(evidence.clone());
+            }
+        }
         return;
     }
 

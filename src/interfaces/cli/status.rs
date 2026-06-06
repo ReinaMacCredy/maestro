@@ -89,6 +89,7 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
         report.ready_to_ship_features.len()
     );
     print_harness_friction(&report.harness_friction);
+    print_audit_hint(report.audit_hint.as_ref());
     if let Some(action) = &report.next_action {
         print_next_action(action);
     } else {
@@ -140,6 +141,7 @@ fn print_task_next(report: &StatusReport) {
         println!();
     }
     print_harness_friction(&report.harness_friction);
+    print_audit_hint(report.audit_hint.as_ref());
     if let Some(action) = &report.next_action {
         print_next_action(action);
         return;
@@ -175,6 +177,21 @@ fn print_harness_friction(items: &[HarnessFrictionJson]) {
             item.id
         );
     }
+}
+
+fn print_audit_hint(hint: Option<&AuditHintJson>) {
+    let Some(hint) = hint else {
+        return;
+    };
+    println!("AUDIT");
+    println!(
+        "! repo audit overdue: {} session(s) since last audit (threshold {})",
+        hint.sessions_since_audit, hint.every_sessions
+    );
+    println!("  skill: maestro-audit");
+    println!(
+        "  propose: maestro harness propose --title \"<finding>\" --evidence \"<evidence>\" --topic <slug>"
+    );
 }
 
 fn print_next_action(action: &NextAction) {
@@ -268,13 +285,14 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         .into_iter()
         .map(HarnessFrictionJson::from)
         .collect::<Vec<_>>();
+    let audit_hint = harness::audit_overdue_hint(paths)?.map(AuditHintJson::from);
     let sections = StatusSectionsJson {
         ready_to_ship: ready_to_ship_features.clone(),
     };
 
     Ok(StatusReport {
         schema: "maestro.status.v1".to_string(),
-        status: if next_action.is_some() || !harness_friction.is_empty() {
+        status: if next_action.is_some() || !harness_friction.is_empty() || audit_hint.is_some() {
             "actionable".to_string()
         } else {
             "no_action".to_string()
@@ -289,6 +307,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         task_rows: rows,
         active_features,
         harness_friction,
+        audit_hint,
         sections,
         ready_to_ship_features,
     })
@@ -464,6 +483,7 @@ struct StatusReport {
     task_rows: Vec<TaskRowJson>,
     active_features: Vec<FeatureRowJson>,
     harness_friction: Vec<HarnessFrictionJson>,
+    audit_hint: Option<AuditHintJson>,
     sections: StatusSectionsJson,
     ready_to_ship_features: Vec<ReadyFeatureJson>,
 }
@@ -495,6 +515,7 @@ impl StatusReport {
             task_rows: Vec::new(),
             active_features: Vec::new(),
             harness_friction: Vec::new(),
+            audit_hint: None,
             sections: StatusSectionsJson::default(),
             ready_to_ship_features: Vec::new(),
         }
@@ -507,6 +528,7 @@ struct TaskNextJson {
     status: String,
     next_action: Option<NextAction>,
     harness_friction: Vec<HarnessFrictionJson>,
+    audit_hint: Option<AuditHintJson>,
     broader_actions: Vec<BroaderActionJson>,
     warnings: Vec<WarningJson>,
     summary: String,
@@ -534,7 +556,9 @@ impl From<&ReadyFeatureJson> for BroaderActionJson {
 impl From<&StatusReport> for TaskNextJson {
     fn from(report: &StatusReport) -> Self {
         let warnings = report.warnings.clone();
-        let broader_actions = if report.next_action.is_none() && report.harness_friction.is_empty()
+        let broader_actions = if report.next_action.is_none()
+            && report.harness_friction.is_empty()
+            && report.audit_hint.is_none()
         {
             report
                 .ready_to_ship_features
@@ -546,20 +570,44 @@ impl From<&StatusReport> for TaskNextJson {
         };
         Self {
             schema: "maestro.task_next.v1".to_string(),
-            status: if report.next_action.is_some() || !report.harness_friction.is_empty() {
+            status: if report.next_action.is_some()
+                || !report.harness_friction.is_empty()
+                || report.audit_hint.is_some()
+            {
                 "actionable".to_string()
             } else {
                 "no_action".to_string()
             },
             next_action: report.next_action.clone(),
             harness_friction: report.harness_friction.clone(),
+            audit_hint: report.audit_hint.clone(),
             broader_actions,
             warnings,
-            summary: if report.next_action.is_some() || !report.harness_friction.is_empty() {
+            summary: if report.next_action.is_some()
+                || !report.harness_friction.is_empty()
+                || report.audit_hint.is_some()
+            {
                 "task action available".to_string()
             } else {
                 "no actionable tasks".to_string()
             },
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct AuditHintJson {
+    sessions_since_audit: usize,
+    every_sessions: usize,
+    skill: String,
+}
+
+impl From<harness::AuditHint> for AuditHintJson {
+    fn from(hint: harness::AuditHint) -> Self {
+        Self {
+            sessions_since_audit: hint.sessions_since_audit,
+            every_sessions: hint.every_sessions,
+            skill: "maestro-audit".to_string(),
         }
     }
 }

@@ -1,6 +1,6 @@
 ---
 name: maestro-task
-version: 1.9.2
+version: 1.9.3
 description: "Use for the Maestro task loop: create, explore, accept, claim, update, complete, block, verify, terminal task verbs, and harness self-improvement tasks."
 ---
 
@@ -22,6 +22,8 @@ Activate:
   `abandon`, `supersede`.
 - Act on harness improvement proposals surfaced by `status`, `task next`, or
   `harness list`.
+- When the user corrects your behavior, record it with
+  `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
 
 ## Do
 

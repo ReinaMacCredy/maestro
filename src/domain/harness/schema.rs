@@ -41,6 +41,9 @@ pub struct HarnessConfig {
     /// legacy repos so read verbs keep their old behavior until the repo opts in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub escalation: Option<EscalationConfig>,
+    /// Optional agent-audit cadence. Missing means no audit hints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit: Option<AuditConfig>,
     /// Explicit repo-level acknowledgement that verification has no command leg.
     #[serde(default, skip_serializing_if = "is_false")]
     pub claims_only_verification: bool,
@@ -58,6 +61,13 @@ pub struct EscalationConfig {
     /// Session/source count where a proposal becomes high priority and surfaces.
     #[serde(default = "default_act_after")]
     pub act_after: usize,
+}
+
+/// Agent-audit cadence policy.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AuditConfig {
+    /// Number of distinct sessions after which an agent-authored repo audit is overdue.
+    pub every_sessions: usize,
 }
 
 /// Runtime-normalized escalation policy.
@@ -91,6 +101,12 @@ pub struct BacklogItem {
     /// Detection source, usually a task id, session id, or aggregate bucket.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source: String,
+    /// Proposal provenance: `detector`, `agent-audit`, or another explicit producer.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub provenance: String,
+    /// Agent-supplied or detector-normalized topic used for merge/measurement.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub topic: String,
     /// Rule category that produced the proposal.
     #[serde(default, rename = "type", skip_serializing_if = "String::is_empty")]
     pub item_type: String,
@@ -154,6 +170,7 @@ impl HarnessConfig {
             schema_version: HARNESS_SCHEMA_VERSION.to_string(),
             stack: detect_stack(repo_root),
             escalation: Some(EscalationConfig::enabled_default()),
+            audit: None,
             claims_only_verification: false,
         }
     }

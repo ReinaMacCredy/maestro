@@ -228,6 +228,11 @@ pub enum TaskCommand {
             help = "Acceptance check (repeatable); seeds the task's verify+ contract"
         )]
         check: Vec<String>,
+        #[arg(
+            long = "covers",
+            help = "Feature acceptance id this task covers, e.g. ac-1 (repeatable)"
+        )]
+        covers: Vec<String>,
     },
     #[command(about = "Author task checks or change its feature link")]
     Set {
@@ -245,6 +250,11 @@ pub enum TaskCommand {
             help = "Detach the task from its feature"
         )]
         no_feature: bool,
+        #[arg(
+            long = "covers",
+            help = "Feature acceptance id this task covers, e.g. ac-1 (repeatable)"
+        )]
+        covers: Vec<String>,
     },
     #[command(about = "Move a draft into exploring (-> exploring)")]
     Explore { id: String },
@@ -386,6 +396,15 @@ pub enum EventCommand {
         #[arg(long, help = "Run label grouping the event")]
         run: Option<String>,
     },
+    #[command(about = "Record an explicit human correction/intervention event")]
+    Intervention {
+        #[arg(long, help = "What the agent got wrong")]
+        note: String,
+        #[arg(long, help = "Stable topic slug for clustering repeated corrections")]
+        topic: Option<String>,
+        #[arg(long, help = "Run label grouping the event")]
+        run: Option<String>,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -485,6 +504,18 @@ pub enum FeatureCommand {
     },
     #[command(about = "Start work on a ready feature (-> in_progress)")]
     Start { id: String },
+    #[command(about = "Sweep or record proof for a feature's acceptance contract")]
+    Verify {
+        id: String,
+        #[arg(long, value_name = "AC_ID", help = "Acceptance id to prove explicitly")]
+        prove: Option<String>,
+        #[arg(long, help = "Observed evidence for --prove")]
+        evidence: Option<String>,
+        #[arg(long, value_name = "AC_ID", help = "Acceptance id to waive")]
+        waive: Option<String>,
+        #[arg(long, help = "Reason required with --waive")]
+        reason: Option<String>,
+    },
     #[command(about = "Append a dated note to a feature's notes.md")]
     Note { id: String, text: String },
     #[command(about = "Ship an in-progress feature (-> shipped; gated)")]
@@ -590,6 +621,15 @@ pub enum HarnessCommand {
             help = "Accept claims-only task verification when no verify commands are configured"
         )]
         claims_only: bool,
+    },
+    #[command(about = "File an agent-authored repo audit proposal")]
+    Propose {
+        #[arg(long, help = "Proposal title")]
+        title: String,
+        #[arg(long, help = "Evidence supporting the proposal")]
+        evidence: String,
+        #[arg(long, help = "Stable topic slug for merging repeated audit findings")]
+        topic: Option<String>,
     },
     #[command(about = "Accept a proposal and spawn a linked task (-> accepted)")]
     Apply { id: String },

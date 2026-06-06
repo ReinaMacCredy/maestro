@@ -95,6 +95,16 @@ impl RunEvent {
         self.string("message")
     }
 
+    /// Explicit intervention note text, when present.
+    pub fn intervention_note(&self) -> Option<&str> {
+        self.string("note")
+    }
+
+    /// Normalized event topic, when present.
+    pub fn topic(&self) -> Option<&str> {
+        self.string("topic")
+    }
+
     /// Proof claim list, when present.
     pub fn claims(&self) -> Vec<String> {
         self.value

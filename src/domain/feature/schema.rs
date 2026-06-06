@@ -39,6 +39,12 @@ pub struct FeatureRecord {
     /// Acceptance criteria for the feature.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub acceptance: Vec<String>,
+    /// Agent/task evidence recorded for feature-level acceptance items.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acceptance_evidence: Vec<AcceptanceEvidenceEntry>,
+    /// Binary-written feature acceptance sweep runs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acceptance_sweeps: Vec<AcceptanceSweepRun>,
     /// Append-only audited amendments.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub amends: Vec<AmendEntry>,
@@ -72,6 +78,8 @@ impl FeatureRecord {
             affected_areas: Vec::new(),
             open_questions: Vec::new(),
             acceptance: Vec::new(),
+            acceptance_evidence: Vec::new(),
+            acceptance_sweeps: Vec::new(),
             amends: Vec::new(),
             qa: None,
             non_goals: Vec::new(),
@@ -79,6 +87,35 @@ impl FeatureRecord {
             cancel_reason: None,
         }
     }
+}
+
+/// One explicit proof or waiver against a feature acceptance item.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AcceptanceEvidenceEntry {
+    /// Stable feature acceptance id, e.g. `ac-1`.
+    pub ac_id: String,
+    /// Evidence kind: `explicit` or `waived`.
+    pub kind: String,
+    /// Operator/agent supplied evidence or waiver reason.
+    pub text: String,
+    /// Timestamp when the entry was recorded.
+    pub at: String,
+}
+
+/// One binary-written acceptance sweep result.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct AcceptanceSweepRun {
+    /// Sweep timestamp.
+    pub at: String,
+    /// Acceptance ids resolved by this run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub resolved: Vec<String>,
+    /// Acceptance ids unresolved by this run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unresolved: Vec<String>,
+    /// Markers newer than the prior sweep that caused re-derivation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub invalidated_by: Vec<String>,
 }
 
 /// Feature lifecycle status.

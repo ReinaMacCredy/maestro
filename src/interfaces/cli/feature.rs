@@ -82,7 +82,18 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             },
             &reason,
         ),
-        FeatureCommand::Start { id } => print_note(feature::start(&paths, &id)?.note),
+        FeatureCommand::Start { id } => {
+            let report = feature::start(&paths, &id)?;
+            print_note(report.note)?;
+            print_uncovered_acceptance_warning(&paths, &id)
+        }
+        FeatureCommand::Verify {
+            id,
+            prove,
+            evidence,
+            waive,
+            reason,
+        } => verify_feature(&paths, &id, prove, evidence, waive, reason),
         FeatureCommand::Note { id, text } => {
             let report = feature::note(&paths, &id, &text)?;
             if report.created {
@@ -159,6 +170,7 @@ fn prepare_feature(
             } else {
                 println!("draft exists: {}", report.path.display());
             }
+            print_uncovered_acceptance_warning(paths, id)?;
             println!("review and run:");
             println!(
                 "  maestro feature prepare {id} --from {}",
@@ -201,9 +213,84 @@ fn prepare_feature(
                     report.feature_id
                 );
             }
+            print_uncovered_acceptance_warning(paths, id)?;
             Ok(())
         }
     }
+}
+
+fn verify_feature(
+    paths: &MaestroPaths,
+    id: &str,
+    prove: Option<String>,
+    evidence: Option<String>,
+    waive: Option<String>,
+    reason: Option<String>,
+) -> Result<()> {
+    let update = match (prove, evidence, waive, reason) {
+        (None, None, None, None) => None,
+        (Some(ac_id), Some(evidence), None, None) => {
+            Some(feature::FeatureProofUpdate::Explicit { ac_id, evidence })
+        }
+        (None, None, Some(ac_id), Some(reason)) => {
+            Some(feature::FeatureProofUpdate::Waive { ac_id, reason })
+        }
+        (Some(_), None, None, None) => bail!("--prove requires --evidence"),
+        (None, Some(_), None, None) => bail!("--evidence requires --prove"),
+        (None, None, Some(_), None) => bail!("--waive requires --reason"),
+        (None, None, None, Some(_)) => bail!("--reason requires --waive"),
+        _ => bail!(
+            "use bare `maestro feature verify {id}`, or exactly one of `--prove <ac-id> --evidence \"...\"` / `--waive <ac-id> --reason \"...\"`"
+        ),
+    };
+    let report = feature::verify_feature(paths, id, update)?;
+    if let Some(recorded) = report.recorded {
+        println!("recorded {recorded}");
+        println!("next: maestro feature verify {}", report.feature_id);
+        return Ok(());
+    }
+    let Some(sweep) = report.sweep else {
+        return Ok(());
+    };
+    println!(
+        "checking contract ({} acceptance items):",
+        sweep.items.len()
+    );
+    if !sweep.invalidated_by.is_empty() {
+        println!("re-derived after: {}", sweep.invalidated_by.join("; "));
+    }
+    for (index, item) in sweep.items.iter().enumerate() {
+        println!(
+            "  [{}/{}] \"{}\"   {}",
+            index + 1,
+            sweep.items.len(),
+            item.text,
+            proof_label(&item.proof)
+        );
+    }
+    let unresolved = sweep
+        .items
+        .iter()
+        .filter(|item| matches!(item.proof, feature::AcceptanceProof::Missing))
+        .collect::<Vec<_>>();
+    if unresolved.is_empty() {
+        println!("ok: every acceptance item has evidence");
+    } else {
+        println!(
+            "blocked: {} acceptance item(s) have no fresh evidence: {}",
+            unresolved.len(),
+            unresolved
+                .iter()
+                .map(|item| item.ac_id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        println!(
+            "fix: add task covers, record proof with `maestro feature verify {} --prove <ac-id> --evidence \"<observed>\"`, or waive with `--waive <ac-id> --reason \"<why>\"`",
+            report.feature_id
+        );
+    }
+    Ok(())
 }
 
 /// Dispatch `feature archive`: exactly one of a single id or `--shipped`.
@@ -569,7 +656,7 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     if let Some(reason) = view.qa_none_reason.as_deref() {
         println!("qa: none ({reason})");
     }
-    print_list("acceptance", &view.acceptance);
+    print_acceptance(paths, &view.id, &view.acceptance, archived)?;
     print_list("affected_areas", &view.affected_areas);
     print_list("non_goals", &view.non_goals);
     print_list("open_questions", &view.open_questions);
@@ -581,6 +668,59 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_acceptance(
+    paths: &MaestroPaths,
+    id: &str,
+    fallback: &[String],
+    archived: bool,
+) -> Result<()> {
+    let coverage = if archived {
+        feature::acceptance_coverage_archived(paths, id)?
+    } else {
+        feature::acceptance_coverage(paths, id)?
+    };
+    println!("acceptance:");
+    if coverage.is_empty() {
+        if fallback.is_empty() {
+            println!("- none");
+        }
+        for (index, item) in fallback.iter().enumerate() {
+            println!("- [{}] {}", feature::acceptance_id(index), item);
+        }
+        return Ok(());
+    }
+    for item in coverage {
+        println!("- [{}] {}", item.ac_id, item.text);
+        if !item.tasks.is_empty() {
+            println!("  covers: {}", item.tasks.join(", "));
+        }
+    }
+    Ok(())
+}
+
+fn print_uncovered_acceptance_warning(paths: &MaestroPaths, id: &str) -> Result<()> {
+    let uncovered = feature::uncovered_acceptance(paths, id)?;
+    if !uncovered.is_empty() {
+        println!(
+            "warning: {} acceptance item(s) have no covering task: {}",
+            uncovered.len(),
+            uncovered.join(", ")
+        );
+        println!("fix: maestro task set <task-id> --covers <ac-id>");
+    }
+    Ok(())
+}
+
+fn proof_label(proof: &feature::AcceptanceProof) -> String {
+    match proof {
+        feature::AcceptanceProof::Task(tasks) => format!("proof: {} OK", tasks.join(", ")),
+        feature::AcceptanceProof::Qa(items) => format!("proof: {} OK", items.join(", ")),
+        feature::AcceptanceProof::Explicit(evidence) => format!("proof: {evidence} OK"),
+        feature::AcceptanceProof::Waived(reason) => format!("WAIVED: {reason}"),
+        feature::AcceptanceProof::Missing => "NO FRESH EVIDENCE".to_string(),
+    }
 }
 
 fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {

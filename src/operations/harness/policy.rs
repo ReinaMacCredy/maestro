@@ -12,17 +12,25 @@ use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
 pub fn load_policy(paths: &MaestroPaths) -> Result<EscalationPolicy> {
+    Ok(
+        load_config(paths)?.map_or_else(EscalationPolicy::disabled, |config| {
+            config.escalation_policy()
+        }),
+    )
+}
+
+pub fn load_config(paths: &MaestroPaths) -> Result<Option<HarnessConfig>> {
     let path = managed_path(
         paths,
         ".maestro/harness/harness.yml",
         SymlinkPolicy::RejectAllComponents,
     )?;
     let Some(raw) = read_to_string_if_exists(&path)? else {
-        return Ok(EscalationPolicy::disabled());
+        return Ok(None);
     };
     let config: HarnessConfig = serde_yaml::from_str(&raw)
         .with_context(|| format!("failed to parse {}", path.display()))?;
-    Ok(config.escalation_policy())
+    Ok(Some(config))
 }
 
 pub fn set_claims_only_verification(paths: &MaestroPaths) -> Result<()> {

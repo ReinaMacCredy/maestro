@@ -61,6 +61,7 @@ fn harness_verify_config(paths: &MaestroPaths) -> Result<HarnessConfig> {
                     verify: Vec::new(),
                 },
                 escalation: None,
+                audit: None,
                 claims_only_verification: false,
             });
         }
@@ -75,6 +76,7 @@ fn harness_verify_config(paths: &MaestroPaths) -> Result<HarnessConfig> {
                 verify: Vec::new(),
             },
             escalation: None,
+            audit: None,
             claims_only_verification: false,
         });
     };

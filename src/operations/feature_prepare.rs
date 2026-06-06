@@ -51,6 +51,7 @@ pub struct PreparedBlocker {
 struct PlanTask {
     local_id: Option<String>,
     title: String,
+    covers: Vec<String>,
     checks: Vec<String>,
     blockers: Vec<String>,
     after: Vec<String>,
@@ -82,6 +83,13 @@ pub fn write_draft(paths: &MaestroPaths, feature_id: &str) -> Result<DraftReport
     } else {
         view.affected_areas.join(", ")
     };
+    let covers = view
+        .acceptance
+        .iter()
+        .enumerate()
+        .map(|(index, _)| feature::acceptance_id(index))
+        .collect::<Vec<_>>()
+        .join(", ");
     let template = format!(
         "# Prepare plan for {}\n\n\
          # Review before applying. Split this into multiple tasks only when the\n\
@@ -89,6 +97,7 @@ pub fn write_draft(paths: &MaestroPaths, feature_id: &str) -> Result<DraftReport
          # for real approvals or external waits.\n\
          # Affected areas: {areas}\n\n\
          ## Task T1: Implement accepted behavior\n\
+         covers: {covers}\n\
          check: {first_check}\n",
         view.id
     );
@@ -134,11 +143,14 @@ fn prepare_from_file_with_blocker(
             let task = task::create_task(
                 &paths.tasks_dir(),
                 &item.title,
-                Some(view.id.clone()),
-                None,
-                None,
-                item.checks.clone(),
-                &now,
+                task::CreateTaskOptions {
+                    feature: Some(view.id.clone()),
+                    covers: item.covers.clone(),
+                    lane: None,
+                    risk: None,
+                    checks: item.checks.clone(),
+                    created_at: now,
+                },
             )?;
             let now = nanos_since_epoch_string();
             let task = task::transition_task(
@@ -333,6 +345,7 @@ fn parse_plan(contents: &str) -> Result<Vec<PlanTask>> {
             current = Some(PlanTask {
                 local_id,
                 title,
+                covers: Vec::new(),
                 checks: Vec::new(),
                 blockers: Vec::new(),
                 after: Vec::new(),
@@ -353,6 +366,8 @@ fn parse_plan(contents: &str) -> Result<Vec<PlanTask>> {
         let field_line = strip_markdown_list_marker(trimmed).unwrap_or(trimmed);
         if let Some(value) = field_value(field_line, "check") {
             push_non_empty(&mut task.checks, value, line_number + 1, "check")?;
+        } else if let Some(value) = field_value(field_line, "covers") {
+            push_comma_values(&mut task.covers, value, line_number + 1, "covers")?;
         } else if let Some(value) = field_value(field_line, "blocker") {
             push_non_empty(&mut task.blockers, value, line_number + 1, "blocker")?;
         } else if let Some(value) = field_value(field_line, "after") {
@@ -552,6 +567,7 @@ fn is_task_plan_section(value: &str) -> bool {
 
 fn is_task_field_line(value: &str) -> bool {
     field_value(value, "check").is_some()
+        || field_value(value, "covers").is_some()
         || field_value(value, "blocker").is_some()
         || field_value(value, "after").is_some()
 }
@@ -582,6 +598,25 @@ fn push_non_empty(
         bail!("line {line_number}: {field} field must not be empty");
     }
     values.push(value.to_string());
+    Ok(())
+}
+
+fn push_comma_values(
+    values: &mut Vec<String>,
+    value: &str,
+    line_number: usize,
+    field: &str,
+) -> Result<()> {
+    let parsed = value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if parsed.is_empty() {
+        bail!("line {line_number}: {field} field must name at least one acceptance id");
+    }
+    values.extend(parsed);
     Ok(())
 }
 

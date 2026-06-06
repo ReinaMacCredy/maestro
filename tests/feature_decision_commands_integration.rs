@@ -57,6 +57,388 @@ fn assert_dated_note_line(notes: &str, expected_text: &str) {
 }
 
 #[test]
+fn feature_verify_sweeps_acceptance_contract() {
+    let temp_dir = TestTempDir::new("maestro-feature-verify-contract");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["harness", "set", "--claims-only"], temp_dir.path()),
+        &["harness", "set", "--claims-only"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Contract Sweep"], temp_dir.path()),
+        &["feature", "new", "Contract Sweep"],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        "contract-sweep",
+        "--acceptance",
+        "first behavior works",
+        "--acceptance",
+        "second behavior works",
+        "--area",
+        "src",
+    ];
+    stdout(maestro(&set_args, temp_dir.path()), &set_args);
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "accept",
+                "contract-sweep",
+                "--qa",
+                "none",
+                "--reason",
+                "contract-only test",
+            ],
+            temp_dir.path(),
+        ),
+        &[
+            "feature",
+            "accept",
+            "contract-sweep",
+            "--qa",
+            "none",
+            "--reason",
+            "contract-only test",
+        ],
+    );
+    let create_args = [
+        "task",
+        "create",
+        "Implement first behavior",
+        "--feature",
+        "contract-sweep",
+        "--covers",
+        "ac-1",
+        "--check",
+        "first behavior works",
+    ];
+    stdout(maestro(&create_args, temp_dir.path()), &create_args);
+    for args in [
+        vec!["task", "explore", "task-001"],
+        vec!["task", "accept", "task-001"],
+        vec!["task", "claim", "task-001"],
+        vec![
+            "task",
+            "complete",
+            "task-001",
+            "--summary",
+            "done",
+            "--claim",
+            "first behavior works",
+            "--proof",
+            "first behavior works",
+        ],
+        vec!["task", "verify", "task-001"],
+    ] {
+        stdout(maestro(&args, temp_dir.path()), &args);
+    }
+    stdout(
+        maestro(&["feature", "start", "contract-sweep"], temp_dir.path()),
+        &["feature", "start", "contract-sweep"],
+    );
+
+    let blocked = stdout(
+        maestro(
+            &[
+                "feature",
+                "ship",
+                "contract-sweep",
+                "--dry-run",
+                "--outcome",
+                "done",
+            ],
+            temp_dir.path(),
+        ),
+        &[
+            "feature",
+            "ship",
+            "contract-sweep",
+            "--dry-run",
+            "--outcome",
+            "done",
+        ],
+    );
+    assert!(blocked.contains("contract sweep missing"), "{blocked}");
+
+    let sweep = stdout(
+        maestro(&["feature", "verify", "contract-sweep"], temp_dir.path()),
+        &["feature", "verify", "contract-sweep"],
+    );
+    assert!(sweep.contains("proof: task-001 OK"), "{sweep}");
+    assert!(sweep.contains("NO FRESH EVIDENCE"), "{sweep}");
+
+    let prove_args = [
+        "feature",
+        "verify",
+        "contract-sweep",
+        "--prove",
+        "ac-2",
+        "--evidence",
+        "manual proof",
+    ];
+    stdout(maestro(&prove_args, temp_dir.path()), &prove_args);
+    let sweep = stdout(
+        maestro(&["feature", "verify", "contract-sweep"], temp_dir.path()),
+        &["feature", "verify", "contract-sweep"],
+    );
+    assert!(sweep.contains("proof: task-001 OK"), "{sweep}");
+    assert!(sweep.contains("proof: manual proof OK"), "{sweep}");
+    assert!(
+        sweep.contains("ok: every acceptance item has evidence"),
+        "{sweep}"
+    );
+
+    let ship_preview = stdout(
+        maestro(
+            &[
+                "feature",
+                "ship",
+                "contract-sweep",
+                "--dry-run",
+                "--outcome",
+                "done",
+            ],
+            temp_dir.path(),
+        ),
+        &[
+            "feature",
+            "ship",
+            "contract-sweep",
+            "--dry-run",
+            "--outcome",
+            "done",
+        ],
+    );
+    assert!(
+        ship_preview.contains("would ship contract-sweep"),
+        "{ship_preview}"
+    );
+}
+
+#[test]
+fn feature_contract_display_warnings_waivers_and_stale_sweep() {
+    let temp_dir = TestTempDir::new("maestro-feature-contract-display");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["harness", "set", "--claims-only"], temp_dir.path()),
+        &["harness", "set", "--claims-only"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Coverage Display"], temp_dir.path()),
+        &["feature", "new", "Coverage Display"],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        "coverage-display",
+        "--acceptance",
+        "first behavior works",
+        "--acceptance",
+        "second behavior works",
+        "--acceptance",
+        "third behavior works",
+        "--area",
+        "src",
+    ];
+    stdout(maestro(&set_args, temp_dir.path()), &set_args);
+    let accept_args = [
+        "feature",
+        "accept",
+        "coverage-display",
+        "--qa",
+        "none",
+        "--reason",
+        "contract display test",
+    ];
+    stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
+
+    let create_args = [
+        "task",
+        "create",
+        "Implement second behavior",
+        "--feature",
+        "coverage-display",
+        "--covers",
+        "ac-2",
+        "--check",
+        "second behavior works",
+    ];
+    stdout(maestro(&create_args, temp_dir.path()), &create_args);
+    let show = stdout(
+        maestro(&["feature", "show", "coverage-display"], temp_dir.path()),
+        &["feature", "show", "coverage-display"],
+    );
+    assert!(show.contains("- [ac-1] first behavior works"), "{show}");
+    assert!(show.contains("- [ac-2] second behavior works"), "{show}");
+    assert!(show.contains("covers: task-001"), "{show}");
+    assert!(show.contains("- [ac-3] third behavior works"), "{show}");
+
+    let draft = stdout(
+        maestro(
+            &["feature", "prepare", "coverage-display", "--draft"],
+            temp_dir.path(),
+        ),
+        &["feature", "prepare", "coverage-display", "--draft"],
+    );
+    assert!(draft.contains("warning: 2 acceptance item(s)"), "{draft}");
+    assert!(draft.contains("ac-1, ac-3"), "{draft}");
+    assert!(
+        draft.contains("maestro task set <task-id> --covers <ac-id>"),
+        "{draft}"
+    );
+
+    let start = stdout(
+        maestro(&["feature", "start", "coverage-display"], temp_dir.path()),
+        &["feature", "start", "coverage-display"],
+    );
+    assert!(start.contains("warning: 2 acceptance item(s)"), "{start}");
+    assert!(start.contains("ac-1, ac-3"), "{start}");
+
+    verify_task_claim(temp_dir.path(), "task-001", "second behavior works");
+    let waive_args = [
+        "feature",
+        "verify",
+        "coverage-display",
+        "--waive",
+        "ac-1",
+        "--reason",
+        "not applicable in fixture",
+    ];
+    stdout(maestro(&waive_args, temp_dir.path()), &waive_args);
+    let prove_args = [
+        "feature",
+        "verify",
+        "coverage-display",
+        "--prove",
+        "ac-3",
+        "--evidence",
+        "manual third proof",
+    ];
+    stdout(maestro(&prove_args, temp_dir.path()), &prove_args);
+    let sweep = stdout(
+        maestro(&["feature", "verify", "coverage-display"], temp_dir.path()),
+        &["feature", "verify", "coverage-display"],
+    );
+    assert!(
+        sweep.contains("WAIVED: not applicable in fixture"),
+        "{sweep}"
+    );
+    assert!(sweep.contains("proof: task-001 OK"), "{sweep}");
+    assert!(sweep.contains("proof: manual third proof OK"), "{sweep}");
+    assert!(
+        sweep.contains("ok: every acceptance item has evidence"),
+        "{sweep}"
+    );
+    let ship_preview = stdout(
+        maestro(
+            &[
+                "feature",
+                "ship",
+                "coverage-display",
+                "--dry-run",
+                "--outcome",
+                "done",
+            ],
+            temp_dir.path(),
+        ),
+        &[
+            "feature",
+            "ship",
+            "coverage-display",
+            "--dry-run",
+            "--outcome",
+            "done",
+        ],
+    );
+    assert!(ship_preview.contains("would ship coverage-display"));
+
+    let create_hotfix_args = [
+        "task",
+        "create",
+        "Hotfix second behavior",
+        "--feature",
+        "coverage-display",
+        "--covers",
+        "ac-2",
+        "--check",
+        "second behavior works",
+    ];
+    stdout(
+        maestro(&create_hotfix_args, temp_dir.path()),
+        &create_hotfix_args,
+    );
+    verify_task_claim(temp_dir.path(), "task-002", "second behavior works");
+    let stale_preview = stdout(
+        maestro(
+            &[
+                "feature",
+                "ship",
+                "coverage-display",
+                "--dry-run",
+                "--outcome",
+                "done",
+            ],
+            temp_dir.path(),
+        ),
+        &[
+            "feature",
+            "ship",
+            "coverage-display",
+            "--dry-run",
+            "--outcome",
+            "done",
+        ],
+    );
+    assert!(
+        stale_preview.contains("contract sweep stale"),
+        "{stale_preview}"
+    );
+    assert!(
+        stale_preview.contains("task-002 settled at"),
+        "{stale_preview}"
+    );
+    let refreshed = stdout(
+        maestro(&["feature", "verify", "coverage-display"], temp_dir.path()),
+        &["feature", "verify", "coverage-display"],
+    );
+    assert!(refreshed.contains("re-derived after: task-002 settled at"));
+    assert!(refreshed.contains("proof: task-001, task-002 OK"));
+    assert!(refreshed.contains("ok: every acceptance item has evidence"));
+}
+
+fn verify_task_claim(root: &Path, id: &str, claim: &str) {
+    for args in [
+        vec!["task", "explore", id],
+        vec!["task", "accept", id],
+        vec!["task", "claim", id],
+        vec![
+            "task",
+            "complete",
+            id,
+            "--summary",
+            "done",
+            "--claim",
+            claim,
+            "--proof",
+            claim,
+        ],
+        vec!["task", "verify", id],
+    ] {
+        stdout(maestro(&args, root), &args);
+    }
+}
+
+#[test]
 fn feature_guarded_lifecycle_via_cli() {
     let temp_dir = TestTempDir::new("maestro-feature-command-test");
     init_git_marker(temp_dir.path());
@@ -164,6 +546,7 @@ fn feature_guarded_lifecycle_via_cli() {
     write_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
     write_task(&tasks_dir, "task-002", "billing-csv-export", "verified");
     write_task(&tasks_dir, "task-003", "billing-csv-export", "in_progress");
+    verify_acceptance(temp_dir.path(), "billing-csv-export");
 
     let ship_args = [
         "feature",
@@ -650,9 +1033,27 @@ fn ship_feature(root: &Path, title: &str, slug: &str, child: &str) {
         &["feature", "start", slug],
     );
     write_task(&root.join(".maestro/tasks"), child, slug, "verified");
+    verify_acceptance(root, slug);
     stdout(
         maestro(&["feature", "ship", slug], root),
         &["feature", "ship", slug],
+    );
+}
+
+fn verify_acceptance(root: &Path, slug: &str) {
+    let prove_args = [
+        "feature",
+        "verify",
+        slug,
+        "--prove",
+        "ac-1",
+        "--evidence",
+        "fixture evidence",
+    ];
+    stdout(maestro(&prove_args, root), &prove_args);
+    stdout(
+        maestro(&["feature", "verify", slug], root),
+        &["feature", "verify", slug],
     );
 }
 
@@ -725,6 +1126,7 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let tasks_dir = root.join(".maestro/tasks");
     write_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
     write_task(&tasks_dir, "task-002", "billing-csv-export", "verified");
+    verify_acceptance(root, "billing-csv-export");
     stdout(
         maestro(&["feature", "ship", "billing-csv-export"], root),
         &["feature", "ship", "billing-csv-export"],

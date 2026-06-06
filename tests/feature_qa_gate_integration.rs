@@ -67,7 +67,7 @@ fn feature_dir(repo: &Path, id: &str) -> std::path::PathBuf {
 fn write_baseline(repo: &Path, id: &str, position: usize, scenario_ids: &[&str]) {
     let scenarios = scenario_ids
         .iter()
-        .map(|id| format!("  - [{id}] scenario {id}\n"))
+        .map(|id| format!("  - [{id}] scenario {id} (covers: ac-1)\n"))
         .collect::<String>();
     fs::write(
         feature_dir(repo, id).join("qa.md"),
@@ -97,6 +97,38 @@ fn write_qa_slices_yaml(repo: &Path, id: &str, yaml: &str) {
     }
     contents.push_str("```\n");
     fs::write(path, contents).expect("invariant: qa.md should be writable");
+}
+
+fn verify_contract_from_qa(repo: &Path, id: &str) {
+    let args = ["feature", "verify", id];
+    let output = stdout(maestro(&args, repo), &args);
+    assert!(
+        output.contains("proof: qa.md counting slice OK"),
+        "{output}"
+    );
+    assert!(
+        output.contains("ok: every acceptance item has evidence"),
+        "{output}"
+    );
+}
+
+fn prove_contract(repo: &Path, id: &str) {
+    let prove = [
+        "feature",
+        "verify",
+        id,
+        "--prove",
+        "ac-1",
+        "--evidence",
+        "fixture evidence",
+    ];
+    stdout(maestro(&prove, repo), &prove);
+    let sweep = ["feature", "verify", id];
+    let output = stdout(maestro(&sweep, repo), &sweep);
+    assert!(
+        output.contains("ok: every acceptance item has evidence"),
+        "{output}"
+    );
 }
 
 #[test]
@@ -162,6 +194,7 @@ fn feature_qa_gates_via_cli() {
     );
 
     write_qa_slices(repo, "report-builder", &["bl-001"]);
+    verify_contract_from_qa(repo, "report-builder");
     let dry = ["feature", "ship", "report-builder", "--dry-run"];
     let preview = stdout(maestro(&dry, repo), &dry);
     assert!(
@@ -191,6 +224,8 @@ fn feature_qa_gates_via_cli() {
     // Refresh the baseline past the amend and add the new scenario; coverage now
     // demands a slice for [bl-002].
     write_baseline(repo, "report-builder", 1, &["bl-001", "bl-002"]);
+    let sweep = ["feature", "verify", "report-builder"];
+    stdout(maestro(&sweep, repo), &sweep);
     let stderr = assert_failure(maestro(&ship, repo), &ship);
     assert!(
         stderr.contains("bl-002"),
@@ -202,6 +237,7 @@ fn feature_qa_gates_via_cli() {
     );
 
     write_qa_slices(repo, "report-builder", &["bl-001", "bl-002"]);
+    verify_contract_from_qa(repo, "report-builder");
     let shipped = stdout(maestro(&ship, repo), &ship);
     assert!(shipped.contains("shipped report-builder"));
 }
@@ -293,6 +329,7 @@ fn qa_none_accept_skips_gates_until_a_behavioral_amend_requires_a_fresh_declarat
         "{redeclared}"
     );
 
+    prove_contract(repo, "config-cleanup");
     let shipped = stdout(maestro(&ship, repo), &ship);
     assert!(shipped.contains("shipped config-cleanup"), "{shipped}");
     assert!(
@@ -330,6 +367,7 @@ fn non_goal_amend_does_not_block_ship_via_cli() {
     ];
     stdout(maestro(&amend, repo), &amend);
 
+    verify_contract_from_qa(repo, "report-builder");
     let ship = ["feature", "ship", "report-builder"];
     let shipped = stdout(maestro(&ship, repo), &ship);
     assert!(shipped.contains("shipped report-builder"));

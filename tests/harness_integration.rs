@@ -19,6 +19,17 @@ fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
 
+fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests")
+}
+
 fn assert_success(output: &std::process::Output, args: &[&str]) {
     assert!(
         output.status.success(),
@@ -85,6 +96,16 @@ fn write_enabled_harness(repo: &Path) {
     .expect("invariant: harness should be writable");
 }
 
+fn write_audit_harness(repo: &Path, every_sessions: usize) {
+    fs::write(
+        repo.join(".maestro/harness/harness.yml"),
+        format!(
+            "schema_version: maestro.harness.v1\nstack:\n  kind: generic\n  detected_by: []\n  verify: []\naudit:\n  every_sessions: {every_sessions}\n"
+        ),
+    )
+    .expect("invariant: harness should be writable");
+}
+
 fn write_prompt_session(repo: &Path, session: &str, prompts: &[&str]) {
     let run_dir = repo.join(".maestro/runs").join(session);
     fs::create_dir_all(&run_dir).expect("invariant: run dir should be creatable");
@@ -99,6 +120,138 @@ fn write_prompt_session(repo: &Path, session: &str, prompts: &[&str]) {
         .collect::<String>();
     fs::write(run_dir.join("events.jsonl"), events)
         .expect("invariant: events fixture should be writable");
+}
+
+#[test]
+fn explicit_intervention_events_cluster_into_harness_backlog() {
+    let temp = setup_repo("maestro-explicit-intervention");
+    let repo = temp.path();
+
+    for session in ["sess-a", "sess-b"] {
+        let args = [
+            "event",
+            "intervention",
+            "--note",
+            "used grep; standard is rg",
+            "--topic",
+            "use-rg",
+            "--run",
+            session,
+        ];
+        assert_success(&maestro(repo, &args), &args);
+    }
+
+    let list = run_success(repo, &["harness", "list"]);
+    let id = ids_by_type(&list)
+        .get("explicit_intervention")
+        .cloned()
+        .expect("explicit intervention item should be listed");
+    let show = run_success(repo, &["harness", "show", &id]);
+    assert!(show.contains("provenance: explicit-intervention"), "{show}");
+    assert!(show.contains("topic: use-rg"), "{show}");
+    assert!(show.contains("sessions_hit: sess-a, sess-b"), "{show}");
+    assert!(show.contains("used grep; standard is rg"), "{show}");
+
+    let apply = run_success(repo, &["harness", "apply", &id]);
+    assert!(
+        apply.contains("guidance for use-rg is recorded in repo instructions"),
+        "{apply}"
+    );
+    assert!(
+        apply.contains("no new intervention events on that topic"),
+        "{apply}"
+    );
+}
+
+#[test]
+fn agent_audit_proposals_merge_and_surface_overdue_hint() {
+    let temp = setup_repo("maestro-agent-audit");
+    let repo = temp.path();
+    write_audit_harness(repo, 1);
+    write_prompt_session(repo, "audit-needed", &["start work"]);
+
+    let status = run_success(repo, &["status"]);
+    assert!(status.contains("repo audit overdue"), "{status}");
+    assert!(status.contains("skill: maestro-audit"), "{status}");
+
+    let args = [
+        "harness",
+        "propose",
+        "--title",
+        "Document build gate",
+        "--evidence",
+        "README.md:1 lacks build gate",
+        "--topic",
+        "build-gate",
+    ];
+    assert_success(
+        &maestro_with_env(repo, &args, &[("MAESTRO_SESSION_ID", "audit-a")]),
+        &args,
+    );
+    assert_success(
+        &maestro_with_env(repo, &args, &[("MAESTRO_SESSION_ID", "audit-b")]),
+        &args,
+    );
+
+    let list = run_success(repo, &["harness", "list"]);
+    let id = ids_by_type(&list)
+        .get("agent_audit")
+        .cloned()
+        .expect("agent audit item should be listed");
+    let show = run_success(repo, &["harness", "show", &id]);
+    assert!(show.contains("provenance: agent-audit"), "{show}");
+    assert!(show.contains("topic: build-gate"), "{show}");
+    assert!(show.contains("seen: 2x/2s"), "{show}");
+    assert!(
+        show.contains("audit-a: README.md:1 lacks build gate"),
+        "{show}"
+    );
+    assert!(
+        show.contains("audit-b: README.md:1 lacks build gate"),
+        "{show}"
+    );
+
+    let apply = run_success(repo, &["harness", "apply", &id]);
+    let task_id = spawned_task_id(&apply);
+    mark_verified(repo, &task_id, "audit", "0", "100");
+    let measure = run_success(repo, &["harness", "measure", &id]);
+    assert!(
+        measure.contains(&format!("{id} is now measured")),
+        "{measure}"
+    );
+
+    let runtime_args = [
+        "harness",
+        "propose",
+        "--title",
+        "Document runtime gate",
+        "--evidence",
+        "README.md:2 lacks runtime gate",
+        "--topic",
+        "runtime-gate",
+    ];
+    assert_success(
+        &maestro_with_env(repo, &runtime_args, &[("MAESTRO_SESSION_ID", "audit-c")]),
+        &runtime_args,
+    );
+    let list = run_success(repo, &["harness", "list"]);
+    let runtime_id = ids_by_type(&list)
+        .get("agent_audit")
+        .cloned()
+        .expect("runtime audit item should be listed");
+    let apply = run_success(repo, &["harness", "apply", &runtime_id]);
+    let task_id = spawned_task_id(&apply);
+    mark_verified(repo, &task_id, "audit", "0", "100");
+    assert_success(
+        &maestro_with_env(repo, &runtime_args, &[("MAESTRO_SESSION_ID", "audit-d")]),
+        &runtime_args,
+    );
+    let reverted = run_success(repo, &["harness", "measure", &runtime_id]);
+    assert!(
+        reverted.contains(&format!("{runtime_id} reverted to proposed")),
+        "{reverted}"
+    );
+    assert!(reverted.contains("friction still detected"), "{reverted}");
 }
 
 fn write_correction_session(repo: &Path, session: &str) {

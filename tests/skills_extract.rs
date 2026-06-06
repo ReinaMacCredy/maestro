@@ -8,7 +8,7 @@ use maestro::foundation::core::backup::backup_operation_timestamp;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
-const BUNDLED_SKILL_NAMES: [&str; 7] = [
+const BUNDLED_SKILL_NAMES: [&str; 8] = [
     "maestro-task",
     "maestro-feature",
     "maestro-setup",
@@ -16,9 +16,10 @@ const BUNDLED_SKILL_NAMES: [&str; 7] = [
     "maestro-design",
     "qa-baseline",
     "qa-slice",
+    "maestro-audit",
 ];
 
-const BUNDLED_SKILL_RESOURCES: [(&str, &str); 7] = [
+const BUNDLED_SKILL_RESOURCES: [(&str, &str); 8] = [
     (
         "maestro-task",
         include_str!("../embedded/skills/maestro-task/SKILL.md"),
@@ -46,6 +47,10 @@ const BUNDLED_SKILL_RESOURCES: [(&str, &str); 7] = [
     (
         "qa-slice",
         include_str!("../embedded/skills/qa-slice/SKILL.md"),
+    ),
+    (
+        "maestro-audit",
+        include_str!("../embedded/skills/maestro-audit/SKILL.md"),
     ),
 ];
 

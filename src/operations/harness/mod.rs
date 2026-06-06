@@ -7,6 +7,6 @@ pub use detect::detect;
 pub use friction::looks_like_correction;
 pub use policy::set_claims_only_verification;
 pub use propose::{
-    AppliedItem, OverThresholdItem, apply, dismiss, load_backlog, measure, over_threshold_items,
-    refresh,
+    AppliedItem, AuditHint, OverThresholdItem, apply, audit_overdue_hint, dismiss, load_backlog,
+    measure, over_threshold_items, propose_agent_audit, refresh,
 };

@@ -14,10 +14,29 @@ pub fn run(args: HarnessArgs) -> Result<()> {
         HarnessCommand::List { all } => list(&paths, all),
         HarnessCommand::Show { id } => show(&paths, &id),
         HarnessCommand::Set { claims_only } => set(&paths, claims_only),
+        HarnessCommand::Propose {
+            title,
+            evidence,
+            topic,
+        } => propose(&paths, &title, &evidence, topic.as_deref()),
         HarnessCommand::Apply { id } => apply(&paths, &id),
         HarnessCommand::Dismiss { id, reason } => dismiss(&paths, &id, &reason),
         HarnessCommand::Measure { id, force } => measure(&paths, &id, force),
     }
+}
+
+fn propose(paths: &MaestroPaths, title: &str, evidence: &str, topic: Option<&str>) -> Result<()> {
+    let item = harness::propose_agent_audit(paths, title, evidence, topic, &super::cli_run_id())?;
+    println!("proposed {} ({})", item.id, item.title);
+    println!(
+        "provenance: {}",
+        field_or_default(&item.provenance, "agent-audit")
+    );
+    if !item.topic.is_empty() {
+        println!("topic: {}", item.topic);
+    }
+    println!("seen: {}", seen_label(&item));
+    Ok(())
 }
 
 fn set(paths: &MaestroPaths, claims_only: bool) -> Result<()> {
@@ -161,6 +180,12 @@ fn print_item(item: &BacklogItem) {
     }
     if !item.source.is_empty() {
         println!("source: {}", item.source);
+    }
+    if !item.provenance.is_empty() {
+        println!("provenance: {}", item.provenance);
+    }
+    if !item.topic.is_empty() {
+        println!("topic: {}", item.topic);
     }
     if let Some(task) = &item.spawned_task {
         println!("spawned_task: {task}");

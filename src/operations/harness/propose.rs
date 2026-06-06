@@ -6,9 +6,12 @@ use crate::domain::harness::backlog;
 use crate::domain::harness::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
 };
+use crate::domain::run;
 use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::time::{nanos_since_epoch_string, utc_now_timestamp};
+use crate::foundation::core::time::{
+    nanos_since_epoch_string, parse_utc_timestamp, utc_now_timestamp,
+};
 
 use super::{detect, policy};
 
@@ -84,12 +87,118 @@ pub struct AppliedItem {
     pub check: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuditHint {
+    pub sessions_since_audit: usize,
+    pub every_sessions: usize,
+}
+
 pub fn over_threshold_items(paths: &MaestroPaths) -> Result<Vec<OverThresholdItem>> {
     let (backlog, escalation) = refresh_if_stale(paths)?;
     if !escalation.enabled {
         return Ok(Vec::new());
     }
     Ok(over_threshold_items_from_backlog(&backlog, &escalation))
+}
+
+pub fn propose_agent_audit(
+    paths: &MaestroPaths,
+    title: &str,
+    evidence: &str,
+    topic: Option<&str>,
+    session_id: &str,
+) -> Result<BacklogItem> {
+    if title.trim().is_empty() {
+        bail!("--title must not be empty");
+    }
+    if evidence.trim().is_empty() {
+        bail!("--evidence must not be empty");
+    }
+    if topic.is_some_and(|topic| topic.trim().is_empty()) {
+        bail!("--topic must not be empty when supplied");
+    }
+    let topic = topic
+        .map(normalize_agent_topic)
+        .filter(|topic| !topic.is_empty())
+        .unwrap_or_else(|| normalize_agent_topic(title));
+    if topic.is_empty() {
+        bail!("proposal topic could not be derived; pass --topic <slug>");
+    }
+    let fingerprint = format!("agent_audit:{topic}");
+    let mut backlog = backlog::load(paths)?;
+    let mut sessions_hit = vec![session_id.to_string()];
+    if let Some(existing) = backlog
+        .items
+        .iter()
+        .find(|item| item.fingerprint == fingerprint && item.status != "dismissed")
+    {
+        sessions_hit.extend(existing.sessions_hit.iter().cloned());
+    }
+    sessions_hit.sort();
+    sessions_hit.dedup();
+    let mut item = manual_proposal(
+        session_id.to_string(),
+        "agent_audit",
+        &topic,
+        title.trim(),
+        vec![format!("{session_id}: {}", evidence.trim())],
+        sessions_hit.clone(),
+        "agent-audit",
+    );
+    item.fingerprint = fingerprint;
+    backlog::merge_proposals_preserving_absent(&mut backlog, vec![item.clone()]);
+    let escalation = policy::load_policy(paths)?;
+    backlog::apply_escalation_policy(&mut backlog, &escalation);
+    backlog::save(paths, &backlog)?;
+    Ok(backlog
+        .items
+        .into_iter()
+        .find(|existing| existing.fingerprint == item.fingerprint)
+        .unwrap_or(item))
+}
+
+pub fn audit_overdue_hint(paths: &MaestroPaths) -> Result<Option<AuditHint>> {
+    let Some(config) = policy::load_config(paths)? else {
+        return Ok(None);
+    };
+    let Some(audit) = config.audit else {
+        return Ok(None);
+    };
+    if audit.every_sessions == 0 {
+        return Ok(None);
+    }
+    let backlog = backlog::load(paths)?;
+    let latest_audit_at = backlog
+        .items
+        .iter()
+        .filter(|item| item.provenance == "agent-audit")
+        .filter_map(|item| timestamp_nanos(&item.last_seen).map(|at| (at, item.last_seen.as_str())))
+        .max_by_key(|(at, _)| *at)
+        .map(|(_, raw)| raw.to_string());
+    let latest_audit_nanos = latest_audit_at
+        .as_deref()
+        .and_then(timestamp_nanos)
+        .unwrap_or(i128::MIN);
+    let mut sessions = BTreeSet::new();
+    run::visit_managed_events(paths, |record| {
+        let event_at = record
+            .event()
+            .timestamp()
+            .and_then(timestamp_nanos)
+            .unwrap_or(i128::MAX);
+        if event_at > latest_audit_nanos {
+            sessions.insert(record.session_id().to_string());
+        }
+        Ok(())
+    })?;
+    if sessions.len() >= audit.every_sessions {
+        Ok(Some(AuditHint {
+            sessions_since_audit: sessions.len(),
+            every_sessions: audit.every_sessions,
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 fn over_threshold_items_from_backlog(
@@ -195,11 +304,14 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<AppliedItem> {
     let task = task::create_task(
         &paths.tasks_dir(),
         &title,
-        None,
-        None,
-        None,
-        vec![check.clone()],
-        &now,
+        task::CreateTaskOptions {
+            feature: None,
+            covers: Vec::new(),
+            lane: None,
+            risk: None,
+            checks: vec![check.clone()],
+            created_at: now.clone(),
+        },
     )?;
     task::transition_task(
         &paths.tasks_dir(),
@@ -274,7 +386,11 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
         _ => bail!("{id} is not accepted yet; run `maestro harness apply {id}` before measuring"),
     }
 
-    let friction_live = fresh.contains(&fingerprint);
+    let friction_live = if item_type == "agent_audit" {
+        audit_reproposed_since_apply(backlog.find(id)?)
+    } else {
+        fresh.contains(&fingerprint)
+    };
 
     if !force {
         match &spawned_task {
@@ -297,7 +413,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
 
     let now = utc_now_timestamp();
     let item = backlog.find_mut(id)?;
-    if is_state_detector(&item_type) && friction_live {
+    if (is_state_detector(&item_type) || item_type == "agent_audit") && friction_live {
         // Friction persists: the improvement was ineffective. Revert to proposed and
         // drop the link so the next accept spawns a fresh task (impl-default (c)).
         item.history.push(HistoryEntry {
@@ -333,11 +449,97 @@ fn default_check(item: &BacklogItem) -> String {
         "recurring_intervention" => {
             "repeated correction prompts are addressed and detector is silent".to_string()
         }
+        "explicit_intervention" => {
+            let topic = field_or_default(&item.topic, &item.source);
+            format!(
+                "guidance for {topic} is recorded in repo instructions and no new intervention events on that topic appear for the next measured sessions"
+            )
+        }
+        "agent_audit" => {
+            let topic = field_or_default(&item.topic, &item.source);
+            format!(
+                "{topic} improvement is implemented and a fresh maestro-audit pass does not re-propose it"
+            )
+        }
         _ => format!(
             "{} improvement is implemented and detector is silent",
             item.title
         ),
     }
+}
+
+fn manual_proposal(
+    source: String,
+    item_type: impl Into<String>,
+    subject: impl AsRef<str>,
+    title: impl Into<String>,
+    evidence: Vec<String>,
+    sessions_hit: Vec<String>,
+    provenance: &str,
+) -> BacklogItem {
+    let item_type = item_type.into();
+    let topic = subject.as_ref().to_string();
+    let now = utc_now_timestamp();
+    let occurrences = sessions_hit.len();
+    BacklogItem {
+        id: String::new(),
+        fingerprint: format!("{item_type}:{topic}"),
+        source,
+        provenance: provenance.to_string(),
+        topic,
+        item_type,
+        title: title.into(),
+        priority: String::new(),
+        occurrences,
+        sessions_hit,
+        first_seen: now.clone(),
+        last_seen: now,
+        status: "proposed".to_string(),
+        evidence,
+        spawned_task: None,
+        dismissal_reason: None,
+        history: Vec::new(),
+    }
+}
+
+fn audit_reproposed_since_apply(item: &BacklogItem) -> bool {
+    let Some(accepted_at) = item
+        .history
+        .iter()
+        .rev()
+        .find(|entry| entry.result == "accepted")
+        .map(|entry| entry.at.as_str())
+    else {
+        return false;
+    };
+    item.last_seen.as_str() > accepted_at
+}
+
+fn normalize_agent_topic(value: &str) -> String {
+    value
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .take(8)
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn timestamp_nanos(value: &str) -> Option<i128> {
+    if value.chars().all(|ch| ch.is_ascii_digit()) {
+        return value.parse::<i128>().ok();
+    }
+    parse_utc_timestamp(value).map(|timestamp| timestamp.nanos_since_epoch)
 }
 
 fn field_or_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {

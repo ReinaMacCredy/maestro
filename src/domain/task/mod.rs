@@ -50,6 +50,16 @@ pub struct NoteReport {
     pub created: bool,
 }
 
+/// Inputs for creating a draft task.
+pub struct CreateTaskOptions {
+    pub feature: Option<String>,
+    pub covers: Vec<String>,
+    pub lane: Option<String>,
+    pub risk: Option<String>,
+    pub checks: Vec<String>,
+    pub created_at: String,
+}
+
 /// Task aggregate loaded with its Task-owned optimistic save context.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TaskHandle {
@@ -83,28 +93,28 @@ pub enum BlockerTarget {
 pub fn create_task(
     tasks_dir: &Path,
     title: &str,
-    feature: Option<String>,
-    lane: Option<String>,
-    risk: Option<String>,
-    checks: Vec<String>,
-    created_at: &str,
+    options: CreateTaskOptions,
 ) -> Result<TaskRecord> {
     if title.trim().is_empty() {
         bail!("task title must not be empty");
     }
-    if checks.iter().any(|check| check.trim().is_empty()) {
+    if options.checks.iter().any(|check| check.trim().is_empty()) {
         bail!("task check cannot be empty; pass an observable verify+ check");
     }
+    if options.covers.iter().any(|cover| cover.trim().is_empty()) {
+        bail!("task cover cannot be empty; pass an acceptance id such as ac-1");
+    }
     let id = next_task_id(tasks_dir)?;
-    let mut task = TaskRecord::draft(&id, title, created_at);
-    task.feature_id = feature;
-    if let Some(lane) = lane {
+    let mut task = TaskRecord::draft(&id, title, &options.created_at);
+    task.feature_id = options.feature;
+    task.covers = options.covers;
+    if let Some(lane) = options.lane {
         task.lane = Some(lane);
     }
-    if let Some(risk) = risk {
+    if let Some(risk) = options.risk {
         task.risk = Some(risk);
     }
-    let acceptance = AcceptanceFile::new(&id, checks);
+    let acceptance = AcceptanceFile::new(&id, options.checks);
     task.acceptance = acceptance.clone();
     let task_root = task_root_for_feature(tasks_dir, task.feature_id.as_deref())?;
     template::write_task_artifacts(&task_root, &task, &acceptance)?;
@@ -408,6 +418,40 @@ pub fn set_checks(tasks_dir: &Path, id: &str, checks: Vec<String>) -> Result<(Ta
     }
     let replaced = task.acceptance.checks.len();
     task.acceptance.checks = checks;
+    template::save_task_with_snapshot(&task, &handle.snapshot)?;
+    Ok((task, replaced))
+}
+
+/// Author a task's feature acceptance coverage links, replacing the current list.
+///
+/// Coverage is part of the task contract and freezes with acceptance, just like
+/// checks. A missed post-acceptance link should be handled by feature-level
+/// explicit evidence instead of moving a verified task's goalposts.
+pub fn set_covers(tasks_dir: &Path, id: &str, covers: Vec<String>) -> Result<(TaskRecord, usize)> {
+    let handle = load_task_for_update(tasks_dir, id)?;
+    if lifecycle::is_terminal(&handle.task().state) || handle.task().state == TaskState::Verified {
+        bail!(
+            "task {} is {}; its covers links are settled history and cannot change",
+            handle.task().id,
+            handle.task().state.as_str()
+        );
+    }
+    if handle.task().acceptance_locked || handle.task().acceptance.locked_by.is_some() {
+        bail!(
+            "task {} acceptance is locked; covers links cannot be changed after accept",
+            handle.task().id
+        );
+    }
+    if covers.iter().any(|cover| cover.trim().is_empty()) {
+        bail!(
+            "task {} cover cannot be empty; e.g. `maestro task set {} --covers ac-1`",
+            handle.task().id,
+            handle.task().id
+        );
+    }
+    let mut task = handle.task().clone();
+    let replaced = task.covers.len();
+    task.covers = covers;
     template::save_task_with_snapshot(&task, &handle.snapshot)?;
     Ok((task, replaced))
 }

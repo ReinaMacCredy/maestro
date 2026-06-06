@@ -70,6 +70,8 @@ pub struct TaskRecord {
     pub id: String,
     #[serde(default, skip)]
     pub feature_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub covers: Vec<String>,
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane: Option<String>,
@@ -249,6 +251,7 @@ impl TaskRecord {
             schema_version: TASK_SCHEMA_VERSION.to_string(),
             id: id.to_string(),
             feature_id: None,
+            covers: Vec::new(),
             title: title.to_string(),
             lane: Some("normal".to_string()),
             risk: Some("medium".to_string()),
@@ -419,6 +422,9 @@ impl Drop for TaskSaveLock {
 /// Render the Task-owned `task.md` companion artifact.
 pub fn task_markdown(task: &TaskRecord) -> String {
     let mut out = format!("# {}\n\n## Acceptance\n", task.title);
+    if !task.covers.is_empty() {
+        out.push_str(&format!("Covers: {}\n\n", task.covers.join(", ")));
+    }
     if task.acceptance.checks.is_empty() {
         out.push_str("- none\n");
     } else {

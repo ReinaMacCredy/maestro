@@ -18,6 +18,8 @@ fn proposal(source: &str, item_type: &str, title: &str) -> BacklogItem {
         id: String::new(),
         fingerprint: format!("{item_type}:{source}"),
         source: source.to_string(),
+        provenance: "detector".to_string(),
+        topic: source.to_string(),
         item_type: item_type.to_string(),
         title: title.to_string(),
         priority: "medium".to_string(),
