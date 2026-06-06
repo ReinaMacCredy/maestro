@@ -228,6 +228,15 @@ pub fn render_global_skills_outcome(outcome: &GlobalSkillsOutcome) -> String {
             root.display_path.display(),
             root.resolved_path.display()
         ));
+        if root.display_path != root.resolved_path
+            && let Some(repo) = git_repo_ancestor(&root.resolved_path)
+        {
+            out.push_str(&format!(
+                "warning: {} root is a symlink into git repo {}; global sync writes there\n",
+                root.agent,
+                repo.display()
+            ));
+        }
     }
     out.push_str("codex legacy root: ~/.codex/skills skipped (not managed in v1)\n");
     out.push_str(&format!(
@@ -251,6 +260,16 @@ pub fn render_global_skills_dry_run(prepared: &PreparedGlobalSkills) -> String {
             root.agent,
             root.display_path.display()
         ));
+        if root.state == RootState::ExistingSymlink
+            && let Ok(resolved) = root.display_path.canonicalize()
+            && let Some(repo) = git_repo_ancestor(&resolved)
+        {
+            out.push_str(&format!(
+                "warning: {} root is a symlink into git repo {}; global sync would write there\n",
+                root.agent,
+                repo.display()
+            ));
+        }
     }
     out.push_str("codex legacy root: ~/.codex/skills skipped (not managed in v1)\n");
     out.push_str(&format!("skills: {}\n", prepared.skills.len()));
@@ -297,6 +316,12 @@ fn prepare_roots(home_dir: &Path) -> Result<Vec<RootPlan>> {
         .iter()
         .map(|root| prepare_root(home_dir, root))
         .collect()
+}
+
+fn git_repo_ancestor(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .find(|ancestor| ancestor.join(".git").exists())
+        .map(Path::to_path_buf)
 }
 
 fn prepare_root(home_dir: &Path, root: &SupportedRoot) -> Result<RootPlan> {
@@ -922,12 +947,30 @@ mod tests {
     fn symlinked_supported_roots_are_accepted_and_record_resolved_targets() {
         let home = temp_home("global-skills-symlink-root");
         let dotfiles = home.join("dotfiles/agents");
+        fs::create_dir_all(home.join("dotfiles/.git")).expect("git marker should be creatable");
         fs::create_dir_all(dotfiles.join("claude-skills")).expect("target should be creatable");
         fs::create_dir_all(home.join(".claude")).expect("parent should be creatable");
         std::os::unix::fs::symlink(dotfiles.join("claude-skills"), home.join(".claude/skills"))
             .expect("root symlink should be creatable");
 
-        let outcome = sync_global_skills_at(&home).expect("global sync should succeed");
+        let prepared = prepare_global_skills_at(&home).expect("global sync should preflight");
+        let preview = render_global_skills_dry_run(&prepared);
+        assert!(
+            preview.contains("warning: claude root is a symlink into git repo"),
+            "{preview}"
+        );
+        assert!(
+            preview.contains("global sync would write there"),
+            "{preview}"
+        );
+
+        let outcome = write_prepared_global_skills(prepared).expect("global sync should succeed");
+        let rendered = render_global_skills_outcome(&outcome);
+        assert!(
+            rendered.contains("warning: claude root is a symlink into git repo"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("global sync writes there"), "{rendered}");
 
         let claude = outcome
             .roots

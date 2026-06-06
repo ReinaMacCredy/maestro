@@ -15,7 +15,7 @@ pub fn run(args: EventArgs) -> Result<()> {
             payload,
             claim,
             run,
-        } => create_event(task_id, message, payload, claim, &run),
+        } => create_event(task_id, message, payload, claim, run),
     }
 }
 
@@ -24,7 +24,7 @@ fn create_event(
     message: Option<String>,
     payload: Option<String>,
     explicit_claims: Vec<String>,
-    run: &str,
+    run: Option<String>,
 ) -> Result<()> {
     let repo_root = discover_repo_root()?;
     let paths = MaestroPaths::new(repo_root);
@@ -42,7 +42,8 @@ fn create_event(
     // `event create --task-id task-999` fails loudly instead of logging a
     // dangling event with exit 0 (T2).
     task::load_task_record(&paths.tasks_dir(), &task_id)?;
-    proof::record_claim(&paths, run, &task_id, message, payload, explicit_claims)?;
+    let run = run.unwrap_or_else(super::cli_run_id);
+    proof::record_claim(&paths, &run, &task_id, message, payload, explicit_claims)?;
     println!("created task_proof event for run {run}");
     Ok(())
 }

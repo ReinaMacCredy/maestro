@@ -29,7 +29,7 @@ use crate::domain::feature::query::{
     FeatureTaskCounts, count_tasks_by_feature, count_tasks_for_feature, live_child_task_ids,
 };
 use crate::domain::feature::schema::{
-    AmendAdditions, AmendEntry, AmendLog, FeatureRecord, FeatureStatus,
+    AmendAdditions, AmendEntry, AmendLog, FeatureRecord, FeatureStatus, QaDeclaration,
 };
 use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
@@ -37,7 +37,7 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{Compat, FEATURE_SCHEMA_VERSION, classify};
 use crate::foundation::core::slug::slugify_ascii;
-use crate::foundation::core::time::nanos_since_epoch_string;
+use crate::foundation::core::time::{nanos_since_epoch_string, utc_now_timestamp};
 
 /// A feature joined with its non-persisted task counts, ready for display.
 ///
@@ -75,6 +75,8 @@ pub struct FeatureView {
     pub outcome: Option<String>,
     /// Operator reason recorded at `cancel --reason`.
     pub cancel_reason: Option<String>,
+    /// Reason for an explicit `qa: none` declaration.
+    pub qa_none_reason: Option<String>,
     /// Design notes (`notes.md`), read on demand by `show`. None elsewhere.
     pub notes: Option<String>,
 }
@@ -188,6 +190,15 @@ pub struct AmendReport {
     pub note: String,
 }
 
+/// Result of appending a feature note.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NoteReport {
+    /// Feature id.
+    pub id: String,
+    /// Whether `notes.md` was created by this append.
+    pub created: bool,
+}
+
 /// Create a feature from a title, generating a slug id and persisting it.
 ///
 /// # Errors
@@ -293,7 +304,57 @@ pub fn set(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<Featu
 /// Errors when the feature is not found, the source state is illegal for
 /// `accept`, or (non-dry-run) the contract is incomplete.
 pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<TransitionReport> {
+    accept_inner(paths, id, None, dry_run)
+}
+
+pub fn accept_with_qa_none(
+    paths: &MaestroPaths,
+    id: &str,
+    reason: &str,
+    dry_run: bool,
+) -> Result<TransitionReport> {
+    if reason.trim().is_empty() {
+        bail!("--reason is required with --qa none");
+    }
+    accept_inner(paths, id, Some(reason), dry_run)
+}
+
+fn accept_inner(
+    paths: &MaestroPaths,
+    id: &str,
+    qa_none_reason: Option<&str>,
+    dry_run: bool,
+) -> Result<TransitionReport> {
     let mut record = load_record(paths, id)?;
+    if let Some(reason) = qa_none_reason
+        && matches!(
+            record.status,
+            FeatureStatus::Ready | FeatureStatus::InProgress
+        )
+    {
+        let reason = reason.trim();
+        if dry_run {
+            return Ok(no_op_report(
+                id,
+                record.status,
+                format!("would record qa: none for {id} ({reason})"),
+            ));
+        }
+        record.qa = Some(QaDeclaration {
+            surface: "none".to_string(),
+            reason: reason.to_string(),
+            amend_log_position: record.amends.len(),
+        });
+        record.updated_at = nanos_since_epoch_string();
+        let status = record.status.clone();
+        save_record(paths, &record)?;
+        return Ok(TransitionReport {
+            id: id.to_string(),
+            status,
+            changed: true,
+            note: format!("recorded qa: none for {id} ({reason})"),
+        });
+    }
     let target = match legal_transition(id, &record.status, FeatureVerb::Accept) {
         Transition::NoOp => {
             return Ok(no_op_report(
@@ -319,19 +380,22 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
     }
     // F — a captured behavior baseline is a precondition of accept (before edits).
     let feat_dir = feature_dir(paths, id);
-    if !qa::baseline_present(&feat_dir)? {
+    if qa_none_reason.is_none() && !qa::baseline_present(&feat_dir)? {
         gaps.push(format!(
-                "qa-baseline (.maestro/features/{id}/qa.md {})\n    skill: qa-baseline\n    target: .maestro/features/{id}/qa.md\n    retry: maestro feature accept {id}",
-              qa::baseline_absence(&feat_dir)
-          ));
+                  "qa-baseline (.maestro/features/{id}/qa.md {})\n    skill: qa-baseline\n    target: .maestro/features/{id}/qa.md\n    retry: maestro feature accept {id}",
+                qa::baseline_absence(&feat_dir)
+            ));
     }
 
     if dry_run {
         let note = if gaps.is_empty() {
             format!(
-                "would accept {id} (-> ready); contract complete (acceptance={}, areas={})",
+                "would accept {id} (-> ready); contract complete (acceptance={}, areas={}){}",
                 record.acceptance.len(),
-                record.affected_areas.len()
+                record.affected_areas.len(),
+                qa_none_reason
+                    .map(|reason| format!("; qa: none ({})", reason.trim()))
+                    .unwrap_or_default()
             )
         } else {
             format!(
@@ -357,14 +421,25 @@ pub fn accept(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<Transitio
             record.open_questions.len()
         )
     };
+    let qa_note = qa_none_reason
+        .map(|reason| format!("; qa: none ({})", reason.trim()))
+        .unwrap_or_default();
     let summary = format!(
-        "accepted {id} (-> ready); contract frozen (acceptance={}, areas={}){}",
+        "accepted {id} (-> ready); contract frozen (acceptance={}, areas={}){}{}",
         record.acceptance.len(),
         record.affected_areas.len(),
+        qa_note,
         questions_note
     );
     record.status = target.clone();
     record.updated_at = nanos_since_epoch_string();
+    if let Some(reason) = qa_none_reason {
+        record.qa = Some(QaDeclaration {
+            surface: "none".to_string(),
+            reason: reason.trim().to_string(),
+            amend_log_position: record.amends.len(),
+        });
+    }
     save_record(paths, &record)?;
     Ok(TransitionReport {
         id: id.to_string(),
@@ -444,6 +519,9 @@ pub fn amend(
         reason: reason.to_string(),
         added: added.clone(),
     });
+    if !added.acceptance.is_empty() || !added.affected_areas.is_empty() {
+        record.qa = None;
+    }
 
     save_record(paths, &record)?;
 
@@ -459,6 +537,20 @@ pub fn amend(
         changed: true,
         added,
         note,
+    })
+}
+
+/// Append one dated line to a feature's `notes.md`, creating it on first write.
+pub fn note(paths: &MaestroPaths, id: &str, text: &str) -> Result<NoteReport> {
+    let record = load_record(paths, id)?;
+    if text.trim().is_empty() {
+        bail!("feature note text cannot be empty");
+    }
+    let path = feature_dir(paths, &record.id).join("notes.md");
+    let created = append_note_file(&path, &record.title, text)?;
+    Ok(NoteReport {
+        id: record.id,
+        created,
     })
 }
 
@@ -536,31 +628,40 @@ pub fn ship(
     }
     // D5 cond 2/3 — QA baseline present + fresh, every behavioral scenario proven.
     let feat_dir = feature_dir(paths, id);
-    let baseline = qa::read_baseline(&feat_dir)?;
-    let slices = qa::read_qa_slices(&feat_dir)?;
-    let amend_log = AmendLog {
-        entries: record.amends.clone(),
-    };
-    // Classify absent-vs-empty only when there is no usable baseline (the only path
-    // that consumes the word); a present baseline skips the extra read.
-    let absence = if baseline.is_none() {
-        qa::baseline_absence(&feat_dir)
-    } else {
-        "missing"
-    };
-    gaps.extend(qa::ship_qa_gaps(
-        id,
-        baseline.as_ref(),
-        absence,
-        &slices,
-        &amend_log,
-    ));
+    let qa_declared_none = record
+        .qa
+        .as_ref()
+        .is_some_and(|qa| qa.surface == "none" && qa.amend_log_position == record.amends.len());
+    let mut baseline = None;
+    if !qa_declared_none {
+        baseline = qa::read_baseline(&feat_dir)?;
+        let slices = qa::read_qa_slices(&feat_dir)?;
+        let amend_log = AmendLog {
+            entries: record.amends.clone(),
+        };
+        // Classify absent-vs-empty only when there is no usable baseline (the only path
+        // that consumes the word); a present baseline skips the extra read.
+        let absence = if baseline.is_none() {
+            qa::baseline_absence(&feat_dir)
+        } else {
+            "missing"
+        };
+        gaps.extend(qa::ship_qa_gaps(
+            id,
+            baseline.as_ref(),
+            absence,
+            &slices,
+            &amend_log,
+        ));
+    }
 
     if dry_run {
         let note = if gaps.is_empty() {
             // gaps empty implies a baseline exists (a missing one is itself a gap); a
             // baseline with no scenarios cleared the gate by skipping, not proving.
-            let qa = if baseline.as_ref().is_some_and(|b| b.scenario_ids.is_empty()) {
+            let qa = if qa_declared_none {
+                "qa: none"
+            } else if baseline.as_ref().is_some_and(|b| b.scenario_ids.is_empty()) {
                 "qa-baseline skipped (no behavioral scenarios)"
             } else {
                 "qa-baseline proven"
@@ -887,6 +988,10 @@ fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> Feature
         open_questions: record.open_questions,
         outcome: record.outcome,
         cancel_reason: record.cancel_reason,
+        qa_none_reason: record
+            .qa
+            .filter(|qa| qa.surface == "none")
+            .map(|qa| qa.reason),
         // notes.md is read on demand by `show`, not on the list path.
         notes: None,
     }
@@ -903,6 +1008,23 @@ fn read_notes_at(dir: &Path) -> Result<Option<String>> {
     Ok(read_to_string_if_exists(dir.join("notes.md"))?
         .map(|s| s.trim_end().to_string())
         .filter(|s| !s.is_empty()))
+}
+
+fn append_note_file(path: &Path, title: &str, text: &str) -> Result<bool> {
+    let existing = read_to_string_if_exists(path)?;
+    let created = existing.is_none();
+    let mut contents = existing.unwrap_or_else(|| format!("# {title}\n\n"));
+    if !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    let date = utc_now_timestamp()
+        .split_once('T')
+        .map(|(date, _)| date.to_string())
+        .unwrap_or_else(|| "1970-01-01".to_string());
+    contents.push_str(&format!("{date}  {}\n", text.trim()));
+    write_string_atomic(path, &contents)
+        .with_context(|| format!("failed to append feature note {}", path.display()))?;
+    Ok(created)
 }
 
 fn feature_yaml_path(paths: &MaestroPaths, id: &str) -> PathBuf {
@@ -932,7 +1054,21 @@ pub(crate) fn validate_feature_id(id: &str) -> Result<()> {
 
 /// Load one feature record, erroring on absence or schema incompatibility.
 fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
-    load_record_at(&feature_yaml_path(paths, id), id)
+    match load_record_at(&feature_yaml_path(paths, id), id) {
+        Ok(record) => Ok(record),
+        Err(error) => {
+            let archived_path = archived_feature_yaml_path(paths, id);
+            if archived_path.exists()
+                && let Ok(record) = load_record_at(&archived_path, id)
+            {
+                bail!(
+                    "feature {id} is archived ({})\n  inspect: maestro feature show {id}\n  restore: maestro feature unarchive {id}\n  then: retry the command",
+                    record.status.as_str()
+                );
+            }
+            Err(error)
+        }
+    }
 }
 
 /// Load a feature record from an explicit `feature.yaml` path, erroring on

@@ -52,10 +52,21 @@ fn render_applied_verification(
 ) -> Result<()> {
     match verification.status {
         proof::TaskVerificationStatus::Passed => {
-            println!(
-                "verification passed for {} ({} claim(s), {} proof source(s))",
-                verification.task_id, verification.claim_count, verification.proof_source_count
-            );
+            if verification.claims_only {
+                println!(
+                    "verification passed for {} (claims-only, {} command(s); {} claim(s), {} proof source(s))",
+                    verification.task_id,
+                    verification.command_count,
+                    verification.claim_count,
+                    verification.proof_source_count
+                );
+                println!("note: unproven by commands -- recorded in verification");
+            } else {
+                println!(
+                    "verification passed for {} ({} claim(s), {} proof source(s))",
+                    verification.task_id, verification.claim_count, verification.proof_source_count
+                );
+            }
             render_verified_handoff(paths, &verification.task_id)
         }
         proof::TaskVerificationStatus::Failed => {
@@ -83,9 +94,7 @@ pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Re
                     "  {feature_id} tasks: {}/{} verified",
                     view.counts.verified, view.counts.total
                 );
-                println!("template: maestro feature ship {feature_id} --outcome \"<outcome>\"");
-                println!("required input:");
-                println!("- outcome: shipping outcome text");
+                print_feature_ship_handoff(paths, feature_id)?;
             } else if next_ready_task_for_feature(paths, feature_id)?.is_some() {
                 println!("feature progress:");
                 println!(
@@ -107,6 +116,22 @@ pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Re
     } else {
         println!("next: maestro status");
         println!("inspect: maestro task show {}", task.id);
+    }
+    Ok(())
+}
+
+fn print_feature_ship_handoff(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
+    let report = feature::ship(paths, feature_id, None, true)?;
+    if report.note.contains("qa-slice coverage incomplete") {
+        println!("next: qa-slice skill -> replay affected baseline scenarios");
+        println!("then: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+    } else if report.note.contains("qa-baseline") {
+        println!("next: qa-baseline skill -> .maestro/features/{feature_id}/qa.md");
+        println!("then: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+    } else {
+        println!("template: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+        println!("required input:");
+        println!("- outcome: shipping outcome text");
     }
     Ok(())
 }

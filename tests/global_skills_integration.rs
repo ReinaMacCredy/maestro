@@ -27,6 +27,15 @@ fn assert_success(output: &std::process::Output) {
     );
 }
 
+fn assert_failure(output: &std::process::Output) {
+    assert!(
+        !output.status.success(),
+        "expected failure\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn init_git_marker(repo: &Path) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
 }
@@ -77,7 +86,7 @@ fn assert_symlink_target(path: &Path, target: &Path) {
 }
 
 #[test]
-fn install_creates_global_cache_lock_and_all_supported_agent_links() {
+fn install_points_to_explicit_sync_which_creates_global_cache_lock_and_supported_agent_links() {
     let temp = TestTempDir::new("maestro-global-skills-test");
     let repo = temp.path().join("repo");
     let home = temp.path().join("home");
@@ -95,22 +104,42 @@ fn install_creates_global_cache_lock_and_all_supported_agent_links() {
     assert_success(&output);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("global Maestro skills synced for all supported agents:"),
+        stdout.contains("installed maestro codex integration (repo only)"),
         "{stdout}"
     );
-    assert!(stdout.contains(&format!(
+    assert!(stdout.contains("global skills not synced"), "{stdout}");
+    assert!(
+        stdout.contains("next: maestro sync --global-skills"),
+        "{stdout}"
+    );
+    assert!(
+        !home.join(".maestro/skills/maestro-task/SKILL.md").exists(),
+        "install must not write global skill cache"
+    );
+
+    let sync = maestro(&["sync", "--global-skills"], &repo, &home);
+    assert_success(&sync);
+    let sync_stdout = String::from_utf8_lossy(&sync.stdout);
+    assert!(
+        sync_stdout.contains("global Maestro skills synced for all supported agents:"),
+        "{sync_stdout}"
+    );
+    assert!(sync_stdout.contains(&format!(
         "cache: {}",
         home.join(".maestro/skills").display()
     )));
-    assert!(stdout.contains(&format!(
+    assert!(sync_stdout.contains(&format!(
         "codex root: {}",
         home.join(".agents/skills").display()
     )));
-    assert!(stdout.contains(&format!(
+    assert!(sync_stdout.contains(&format!(
         "claude root: {}",
         home.join(".claude/skills").display()
     )));
-    assert!(stdout.contains("~/.codex/skills skipped"), "{stdout}");
+    assert!(
+        sync_stdout.contains("~/.codex/skills skipped"),
+        "{sync_stdout}"
+    );
 
     assert_eq!(
         fs::read_to_string(home.join(".maestro/skills/maestro-task/SKILL.md"))
@@ -147,7 +176,7 @@ fn install_creates_global_cache_lock_and_all_supported_agent_links() {
 }
 
 #[test]
-fn install_global_collision_warns_after_repo_local_writes() {
+fn install_leaves_global_collision_for_explicit_sync() {
     let temp = TestTempDir::new("maestro-global-skills-test");
     let repo = temp.path().join("repo");
     let home = temp.path().join("home");
@@ -162,17 +191,33 @@ fn install_global_collision_warns_after_repo_local_writes() {
     let output = maestro(&["install", "--agent", "codex"], &repo, &home);
 
     assert_success(&output);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stderr.contains("warning: installed repo integration, but skipped global skill sync"),
-        "{stderr}"
+        stdout.contains("installed maestro codex integration (repo only)"),
+        "{stdout}"
     );
-    assert!(stderr.contains("refusing global skill install"), "{stderr}");
-    assert!(stderr.contains("maestro-task"), "{stderr}");
+    assert!(
+        stdout.contains("next: maestro sync --global-skills"),
+        "{stdout}"
+    );
     assert!(repo.join(".maestro/install-lock.yaml").exists());
     assert!(repo.join(".codex/config.toml").exists());
     assert!(repo.join(".codex/skills").is_symlink());
     assert!(!home.join(".maestro/skills/maestro-task/SKILL.md").exists());
+
+    let sync = maestro(&["sync", "--global-skills"], &repo, &home);
+
+    assert_failure(&sync);
+    let sync_output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&sync.stdout),
+        String::from_utf8_lossy(&sync.stderr)
+    );
+    assert!(
+        sync_output.contains("refusing global skill install"),
+        "{sync_output}"
+    );
+    assert!(sync_output.contains("maestro-task"), "{sync_output}");
 }
 
 #[test]
@@ -183,12 +228,12 @@ fn sync_global_skills_refreshes_global_cache_without_touching_repo_local_skills(
     fs::create_dir(&repo).expect("invariant: repo should be creatable");
     fs::create_dir(&home).expect("invariant: home should be creatable");
     init_repo(&repo, &home);
-    assert_success(&maestro(&["install", "--agent", "codex"], &repo, &home));
     fs::write(
         repo.join(".maestro/skills/maestro-task/SKILL.md"),
         "repo-local edit must remain\n",
     )
     .expect("invariant: repo-local skill should be editable");
+    assert_success(&maestro(&["sync", "--global-skills"], &repo, &home));
     fs::remove_file(home.join(".maestro/skills/maestro-task/SKILL.md"))
         .expect("invariant: global skill should be removable");
 

@@ -103,7 +103,7 @@ pub fn run_auto_check() -> Result<()> {
 
     if let update::BinaryStatus::UpdateAvailable { release, .. } = outcome.binary_status {
         let colors = Colors::detect();
-        println!(
+        eprintln!(
             "{}",
             colors.info(&format!(
                 "Update available: {}. Run `maestro update` to install.",

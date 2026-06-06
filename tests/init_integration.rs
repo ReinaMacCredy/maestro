@@ -25,6 +25,30 @@ fn maestro(args: &[&str], cwd: &std::path::Path) -> std::process::Output {
         .expect("invariant: compiled maestro binary should be runnable in init tests")
 }
 
+fn maestro_with_clean_agent_env(
+    args: &[&str],
+    cwd: &std::path::Path,
+    envs: &[(&str, &str)],
+) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for key in [
+        "MAESTRO_AGENT",
+        "CLAUDECODE",
+        "CLAUDE_CODE",
+        "CODEX_CLI",
+        "CODEX_SANDBOX",
+    ] {
+        command.env_remove(key);
+    }
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in init tests")
+}
+
 fn init_git_marker(repo: &std::path::Path) {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
 }
@@ -80,6 +104,35 @@ fn init_dry_run_previews_bundled_extraction() {
 }
 
 #[test]
+fn init_agent_handoff_uses_detected_agent_or_choice_fallback() {
+    let fallback = TestTempDir::new("maestro-init-agent-fallback");
+    init_git_marker(fallback.path());
+    let fallback_output = maestro_with_clean_agent_env(&["init", "--yes"], fallback.path(), &[]);
+    assert!(fallback_output.status.success());
+    let fallback_stdout =
+        String::from_utf8(fallback_output.stdout).expect("invariant: stdout should be UTF-8");
+    assert!(
+        fallback_stdout.contains("wire agent: maestro install --agent <claude|codex>"),
+        "{fallback_stdout}"
+    );
+
+    let claude = TestTempDir::new("maestro-init-agent-claude");
+    init_git_marker(claude.path());
+    let claude_output = maestro_with_clean_agent_env(
+        &["init", "--yes"],
+        claude.path(),
+        &[("MAESTRO_AGENT", "claude")],
+    );
+    assert!(claude_output.status.success());
+    let claude_stdout =
+        String::from_utf8(claude_output.stdout).expect("invariant: stdout should be UTF-8");
+    assert!(
+        claude_stdout.contains("wire agent: maestro install --agent claude"),
+        "{claude_stdout}"
+    );
+}
+
+#[test]
 fn init_merge_hints_sync_when_a_folder_is_behind() {
     let temp_dir = TestTempDir::new("maestro-init-test");
     init_git_marker(temp_dir.path());
@@ -125,7 +178,11 @@ fn init_creates_minimal_artifact_tree() {
     )
     .expect("invariant: Cargo.toml should be writable");
 
-    let output = maestro(&["init", "--yes"], temp_dir.path());
+    let output = maestro_with_clean_agent_env(
+        &["init", "--yes"],
+        temp_dir.path(),
+        &[("MAESTRO_AGENT", "codex")],
+    );
 
     assert!(
         output.status.success(),

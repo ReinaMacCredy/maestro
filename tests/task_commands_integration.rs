@@ -59,6 +59,20 @@ fn setup_repo() -> TestTempDir {
     let temp = TestTempDir::new("maestro-task-cli");
     fs::create_dir_all(temp.path().join(".maestro"))
         .expect("invariant: .maestro directory should be creatable");
+    fs::create_dir_all(temp.path().join(".maestro/harness"))
+        .expect("invariant: harness directory should be creatable");
+    fs::write(
+        temp.path().join(".maestro/harness/harness.yml"),
+        concat!(
+            "schema_version: maestro.harness.v1\n",
+            "stack:\n",
+            "  kind: generic\n",
+            "  detected_by: []\n",
+            "  verify: []\n",
+            "claims_only_verification: true\n",
+        ),
+    )
+    .expect("invariant: harness should be writable");
     temp
 }
 
@@ -811,6 +825,26 @@ fn archive_moves_terminal_tasks_and_enforces_guards() {
     assert!(archived.contains("next: maestro status"));
     assert!(!repo.join(".maestro/tasks/task-002-done").exists());
     assert!(repo.join(".maestro/archive/tasks/task-002-done").exists());
+
+    let archived_accept = maestro(repo, &["task", "accept", "task-002"]);
+    assert_failure(&archived_accept, &["task", "accept", "task-002"]);
+    let archived_accept_err = stderr(&archived_accept);
+    assert!(
+        archived_accept_err.contains("task task-002 is archived"),
+        "{archived_accept_err}"
+    );
+    assert!(
+        archived_accept_err.contains("inspect: maestro task show task-002"),
+        "{archived_accept_err}"
+    );
+    assert!(
+        archived_accept_err.contains("restore: maestro task unarchive task-002"),
+        "{archived_accept_err}"
+    );
+    assert!(
+        archived_accept_err.contains("then: retry the command"),
+        "{archived_accept_err}"
+    );
 
     // Default list hides it; `--all` reads the archive; `show` falls through (L6b).
     assert!(!stdout(&maestro(repo, &["task", "list"])).contains("task-002"));

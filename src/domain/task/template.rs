@@ -172,6 +172,8 @@ pub struct VerificationBinding {
     pub claim_checks: Vec<ClaimCheckReceipt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<VerificationCommandReceipt>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub claims_only: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub proof_sources: Vec<ProofSourceReceipt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -205,6 +207,10 @@ pub struct ProofSourceReceipt {
     pub kind: String,
     pub path: String,
     pub hash: String,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Acceptance criteria stored inside `task.yaml`.

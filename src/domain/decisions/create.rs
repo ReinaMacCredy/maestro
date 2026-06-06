@@ -11,7 +11,9 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions::query::{decision_entries, parse_decision_number};
-use crate::domain::decisions::template::{decision_file_name, decision_markdown};
+use crate::domain::decisions::template::{
+    decision_file_name, decision_markdown, decision_markdown_with_sections,
+};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -27,6 +29,36 @@ use crate::foundation::core::slug::slugify_ascii;
 /// created, the existing files cannot be listed, or the new file cannot be
 /// written.
 pub fn create(paths: &MaestroPaths, title: &str) -> Result<u32> {
+    create_with_contents(paths, title, decision_markdown)
+}
+
+pub fn create_complete(
+    paths: &MaestroPaths,
+    title: &str,
+    context: Option<&str>,
+    decision: Option<&str>,
+    alternatives: &[String],
+    consequences: &[String],
+    feature: Option<&str>,
+) -> Result<u32> {
+    create_with_contents(paths, title, |number, title| {
+        decision_markdown_with_sections(
+            number,
+            title,
+            context,
+            decision,
+            alternatives,
+            consequences,
+            feature,
+        )
+    })
+}
+
+fn create_with_contents(
+    paths: &MaestroPaths,
+    title: &str,
+    render: impl FnOnce(u32, &str) -> String,
+) -> Result<u32> {
     if slugify_ascii(title).is_empty() {
         bail!("decision title must contain at least one ASCII letter or digit");
     }
@@ -34,7 +66,7 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<u32> {
     ensure_dir(&decisions_dir)?;
     let number = next_decision_number(&decisions_dir)?;
     let path = decisions_dir.join(decision_file_name(number, title));
-    let contents = decision_markdown(number, title);
+    let contents = render(number, title);
     write_string_atomic(&path, &contents)
         .with_context(|| format!("failed to write {}", path.display()))?;
     Ok(number)

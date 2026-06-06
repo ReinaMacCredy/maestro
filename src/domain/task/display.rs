@@ -104,10 +104,10 @@ pub fn render_task(task: &TaskRecord, checks: &[String]) -> String {
         out.push_str(&format!("next: maestro query proof {}\n", task.id));
     }
 
-    out.push_str("blockers:\n");
     if task.blockers.is_empty() {
-        out.push_str("- none\n");
+        out.push_str("blockers: none\n");
     } else {
+        out.push_str("blockers:\n");
         for blocker in &task.blockers {
             let status = if blocker.resolved_at.is_some() {
                 "resolved"

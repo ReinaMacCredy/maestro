@@ -63,6 +63,10 @@ fn setup_repo(prefix: &str) -> TestTempDir {
         &maestro(temp.path(), &["init", "--yes"]),
         &["init", "--yes"],
     );
+    assert_success(
+        &maestro(temp.path(), &["harness", "set", "--claims-only"]),
+        &["harness", "set", "--claims-only"],
+    );
     temp
 }
 
@@ -115,7 +119,7 @@ fn doctor_reports_ok_for_initialized_phase_three_artifacts() {
     let repo = temp.path();
     create_verified_task_with_proof(repo);
 
-    let doctor = maestro(repo, &["doctor"]);
+    let doctor = maestro_with_env(repo, &["doctor"], &[("MAESTRO_AGENT", "codex")]);
     assert_success(&doctor, &["doctor"]);
     let out = stdout(&doctor);
 
@@ -136,6 +140,14 @@ fn doctor_reports_ok_for_initialized_phase_three_artifacts() {
     assert!(out.contains("doctor: ok"));
     assert!(out.contains("next: maestro install --agent codex"));
     assert!(out.contains("then: maestro status"));
+
+    let claude_doctor = maestro_with_env(repo, &["doctor"], &[("MAESTRO_AGENT", "claude")]);
+    assert_success(&claude_doctor, &["doctor"]);
+    let claude_out = stdout(&claude_doctor);
+    assert!(
+        claude_out.contains("next: maestro install --agent claude"),
+        "{claude_out}"
+    );
 }
 
 #[test]

@@ -1,6 +1,6 @@
 ---
 name: maestro-task
-version: 1.9.1
+version: 1.9.2
 description: "Use for the Maestro task loop: create, explore, accept, claim, update, complete, block, verify, terminal task verbs, and harness self-improvement tasks."
 ---
 
@@ -10,7 +10,7 @@ Use this for task work. A task is the proof-gated unit of implementation; a
 feature is the product contract it may deliver against.
 
 Activate:
-`printf '%s\n' '{"event_type":"skill_activation","skill_name":"maestro-task","activation_mode":"agent_selected"}' | maestro hook record`
+`maestro hook record --event skill_activation --skill maestro-task`
 
 ## Use
 

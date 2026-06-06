@@ -347,8 +347,10 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "FeatureDiagnostic".to_string(),
             "FeatureStatus".to_string(),
             "FeatureView".to_string(),
+            "NoteReport".to_string(),
             "TransitionReport".to_string(),
             "accept".to_string(),
+            "accept_with_qa_none".to_string(),
             "amend".to_string(),
             "archive_feature".to_string(),
             "cancel".to_string(),
@@ -356,6 +358,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "diagnose".to_string(),
             "list".to_string(),
             "list_archived".to_string(),
+            "note".to_string(),
             "set".to_string(),
             "ship".to_string(),
             "show".to_string(),
@@ -629,6 +632,7 @@ fn harness_operation_owns_implementation() {
             "over_threshold_items".to_string(),
             "OverThresholdItem".to_string(),
             "refresh".to_string(),
+            "set_claims_only_verification".to_string(),
         ]),
         "operations/harness should expose only deliberate root facade symbols"
     );

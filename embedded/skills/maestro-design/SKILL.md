@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.4.1
+version: 1.4.2
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-feature."
 ---
 
@@ -11,7 +11,7 @@ stays `proposed` while the contract is still editable; `feature accept` ends
 design and freezes the contract.
 
 Activate:
-`printf '%s\n' '{"event_type":"skill_activation","skill_name":"maestro-design","activation_mode":"agent_selected"}' | maestro hook record`
+`maestro hook record --event skill_activation --skill maestro-design`
 
 ## Do
 

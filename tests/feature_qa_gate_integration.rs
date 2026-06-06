@@ -230,6 +230,78 @@ fn accept_words_a_blank_baseline_as_empty_not_missing() {
 }
 
 #[test]
+fn qa_none_accept_skips_gates_until_a_behavioral_amend_requires_a_fresh_declaration() {
+    let temp = TestTempDir::new("maestro-qa-none-test");
+    let repo = temp.path();
+    init_and_author(repo, "config-cleanup", "Config cleanup");
+
+    let accept = [
+        "feature",
+        "accept",
+        "config-cleanup",
+        "--qa",
+        "none",
+        "--reason",
+        "config-only, no behavior",
+    ];
+    let accepted = stdout(maestro(&accept, repo), &accept);
+    assert!(accepted.contains("accepted config-cleanup"), "{accepted}");
+    assert!(
+        accepted.contains("qa: none (config-only, no behavior)"),
+        "{accepted}"
+    );
+    let show = stdout(
+        maestro(&["feature", "show", "config-cleanup"], repo),
+        &["feature", "show", "config-cleanup"],
+    );
+    assert!(
+        show.contains("qa: none (config-only, no behavior)"),
+        "{show}"
+    );
+
+    stdout(
+        maestro(&["feature", "start", "config-cleanup"], repo),
+        &["feature", "start", "config-cleanup"],
+    );
+    let amend = [
+        "feature",
+        "amend",
+        "config-cleanup",
+        "--add-area",
+        "runtime",
+        "--reason",
+        "scope grew",
+    ];
+    stdout(maestro(&amend, repo), &amend);
+
+    let ship = ["feature", "ship", "config-cleanup"];
+    let stale = assert_failure(maestro(&ship, repo), &ship);
+    assert!(stale.contains("qa-baseline"), "{stale}");
+
+    let redeclare = [
+        "feature",
+        "accept",
+        "config-cleanup",
+        "--qa",
+        "none",
+        "--reason",
+        "still config-only after amend review",
+    ];
+    let redeclared = stdout(maestro(&redeclare, repo), &redeclare);
+    assert!(
+        redeclared.contains("recorded qa: none for config-cleanup"),
+        "{redeclared}"
+    );
+
+    let shipped = stdout(maestro(&ship, repo), &ship);
+    assert!(shipped.contains("shipped config-cleanup"), "{shipped}");
+    assert!(
+        shipped.contains("qa: none (still config-only after amend review)"),
+        "{shipped}"
+    );
+}
+
+#[test]
 fn non_goal_amend_does_not_block_ship_via_cli() {
     let temp = TestTempDir::new("maestro-qa-nongoal-test");
     let repo = temp.path();

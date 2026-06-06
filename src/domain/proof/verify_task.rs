@@ -25,6 +25,8 @@ pub struct TaskVerification {
     pub status: TaskVerificationStatus,
     pub claim_count: usize,
     pub proof_source_count: usize,
+    pub command_count: usize,
+    pub claims_only: bool,
     pub failures: Vec<String>,
 }
 
@@ -130,6 +132,8 @@ pub struct VerificationReport {
     pub claims: Vec<ClaimCheck>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<VerificationCommand>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub claims_only: bool,
     pub proof_sources: Vec<ProofSource>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub failures: Vec<String>,
@@ -155,7 +159,7 @@ pub(crate) fn evaluate_task_report(
     task_dir: &Path,
     verified_at: &str,
 ) -> Result<VerificationReport> {
-    let commands = run_verify_commands(paths)?;
+    let command_run = run_verify_commands(paths)?;
     let inputs =
         freshness_inputs_for_task(task, task_dir, git::head(paths.repo_root()).unwrap_or(None))?;
     let claims = completion_claims(task);
@@ -167,7 +171,11 @@ pub(crate) fn evaluate_task_report(
         &claims,
         &claim_checks,
         &evidence,
-        &commands,
+        VerificationCommandPolicy {
+            commands: &command_run.commands,
+            claims_only: command_run.claims_only,
+            stack_kind: &command_run.stack_kind,
+        },
         standalone_without_checks,
     );
     let status = if failures.is_empty() {
@@ -190,7 +198,8 @@ pub(crate) fn evaluate_task_report(
             contract_hash: inputs.contract_hash,
         },
         claims: claim_checks,
-        commands,
+        commands: command_run.commands,
+        claims_only: command_run.claims_only,
         proof_sources: evidence
             .iter()
             .map(|source| ProofSource {
@@ -215,6 +224,8 @@ impl TaskVerification {
             },
             claim_count: report.claims.len(),
             proof_source_count: report.proof_sources.len(),
+            command_count: report.commands.len(),
+            claims_only: report.claims_only,
             failures: report.failures.clone(),
         }
     }
@@ -302,6 +313,7 @@ pub(crate) fn verification_binding_for_report(report: &VerificationReport) -> Ve
                 duration_ms: command.duration_ms,
             })
             .collect(),
+        claims_only: report.claims_only,
         proof_sources: report
             .proof_sources
             .iter()
@@ -318,9 +330,10 @@ pub(crate) fn verification_binding_for_report(report: &VerificationReport) -> Ve
 pub(crate) fn report_summary(report: &VerificationReport) -> String {
     match report.status {
         VerificationStatus::Passed => format!(
-            "verification passed: {} claim(s), {} proof source(s)",
+            "verification passed: {} claim(s), {} proof source(s){}",
             report.claims.len(),
-            report.proof_sources.len()
+            report.proof_sources.len(),
+            claims_only_suffix(report)
         ),
         VerificationStatus::Failed => {
             let first = report
@@ -346,7 +359,7 @@ fn failures_for(
     claims: &[String],
     claim_checks: &[ClaimCheck],
     evidence: &[EvidenceText],
-    commands: &[VerificationCommand],
+    command_policy: VerificationCommandPolicy<'_>,
     standalone_without_checks: bool,
 ) -> Vec<String> {
     let mut failures = Vec::new();
@@ -377,6 +390,12 @@ fn failures_for(
             task.id
         ));
     }
+    if command_policy.commands.is_empty() && !command_policy.claims_only {
+        failures.push(format!(
+            "cannot verify {} -- no verify commands configured (stack: {})\n  fix: add commands to .maestro/harness/harness.yml stack.verify\n  or: accept claims-only verification: maestro harness set --claims-only\n  retry: maestro task verify {}",
+            task.id, command_policy.stack_kind, task.id
+        ));
+    }
 
     for check in claim_checks.iter().filter(|check| !check.matched) {
         failures.push(format!(
@@ -384,7 +403,11 @@ fn failures_for(
             check.claim, task.id, check.claim
         ));
     }
-    for command in commands.iter().filter(|command| command.exit_code != 0) {
+    for command in command_policy
+        .commands
+        .iter()
+        .filter(|command| command.exit_code != 0)
+    {
         failures.push(format!(
             "verify command failed: {} (exit {})",
             command.cmd, command.exit_code
@@ -392,6 +415,24 @@ fn failures_for(
     }
 
     failures
+}
+
+struct VerificationCommandPolicy<'a> {
+    commands: &'a [VerificationCommand],
+    claims_only: bool,
+    stack_kind: &'a str,
+}
+
+fn claims_only_suffix(report: &VerificationReport) -> String {
+    if report.claims_only {
+        format!(", claims-only, {} command(s)", report.commands.len())
+    } else {
+        String::new()
+    }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn completion_claims(task: &TaskRecord) -> Vec<String> {

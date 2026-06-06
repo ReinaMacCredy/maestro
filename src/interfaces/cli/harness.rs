@@ -13,10 +13,20 @@ pub fn run(args: HarnessArgs) -> Result<()> {
     match args.command {
         HarnessCommand::List { all } => list(&paths, all),
         HarnessCommand::Show { id } => show(&paths, &id),
+        HarnessCommand::Set { claims_only } => set(&paths, claims_only),
         HarnessCommand::Apply { id } => apply(&paths, &id),
         HarnessCommand::Dismiss { id, reason } => dismiss(&paths, &id, &reason),
         HarnessCommand::Measure { id, force } => measure(&paths, &id, force),
     }
+}
+
+fn set(paths: &MaestroPaths, claims_only: bool) -> Result<()> {
+    if !claims_only {
+        anyhow::bail!("no harness policy field selected; pass --claims-only");
+    }
+    harness::set_claims_only_verification(paths)?;
+    println!("claims-only verification accepted for this repo");
+    Ok(())
 }
 
 fn list(paths: &MaestroPaths, all: bool) -> Result<()> {

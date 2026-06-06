@@ -1,3 +1,4 @@
+use std::env;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -278,6 +279,8 @@ pub enum TaskCommand {
         #[arg(long, help = "Print machine-readable next-action JSON")]
         json: bool,
     },
+    #[command(about = "Append a dated note to a task's notes.md")]
+    Note { id: String, text: String },
     #[command(about = "Record progress (summary and/or claims) without changing state")]
     Update {
         id: String,
@@ -380,8 +383,8 @@ pub enum EventCommand {
         payload: Option<String>,
         #[arg(long, help = "Completion claim recorded as task proof (repeatable)")]
         claim: Vec<String>,
-        #[arg(long, default_value = "manual", help = "Run label grouping the event")]
-        run: String,
+        #[arg(long, help = "Run label grouping the event")]
+        run: Option<String>,
     },
 }
 
@@ -415,13 +418,12 @@ pub enum FeatureCommand {
         non_goal: Vec<String>,
         #[arg(
             long = "question",
-            help = "Open question (repeatable); replaces the current questions list"
+            help = "Open question (repeatable; REPLACES the full questions list; repeat to keep existing questions)"
         )]
         question: Vec<String>,
         #[arg(
             long = "clear-questions",
-            conflicts_with = "question",
-            help = "Clear all open questions"
+            help = "Clear all open questions (only needed to clear to zero; cannot combine with --question)"
         )]
         clear_questions: bool,
         #[arg(long, help = "Replace the description")]
@@ -437,6 +439,14 @@ pub enum FeatureCommand {
     #[command(about = "Accept a feature into ready, freezing its contract (-> ready; gated)")]
     Accept {
         id: String,
+        #[arg(
+            long = "qa",
+            value_name = "SURFACE",
+            help = "QA declaration; pass `none` only for no behavioral surface"
+        )]
+        qa: Option<String>,
+        #[arg(long = "reason", help = "Reason required with `--qa none`")]
+        reason: Option<String>,
         #[arg(long, help = "Preview the accept gate without transitioning")]
         dry_run: bool,
     },
@@ -475,6 +485,8 @@ pub enum FeatureCommand {
     },
     #[command(about = "Start work on a ready feature (-> in_progress)")]
     Start { id: String },
+    #[command(about = "Append a dated note to a feature's notes.md")]
+    Note { id: String, text: String },
     #[command(about = "Ship an in-progress feature (-> shipped; gated)")]
     Ship {
         id: String,
@@ -536,7 +548,19 @@ pub struct DecisionArgs {
 #[derive(Debug, Subcommand)]
 pub enum DecisionCommand {
     #[command(about = "Create a decision record (-> decision-NN)")]
-    New { title: String },
+    New {
+        title: String,
+        #[arg(long, help = "Decision context section")]
+        context: Option<String>,
+        #[arg(long, help = "Decision section")]
+        decision: Option<String>,
+        #[arg(long, help = "Alternative considered (repeatable)")]
+        alternative: Vec<String>,
+        #[arg(long, help = "Consequence (repeatable)")]
+        consequence: Vec<String>,
+        #[arg(long, help = "Linked feature id for the Linked tasks section")]
+        feature: Option<String>,
+    },
     #[command(about = "Show a decision record by id (decision-NN)")]
     Show { id: String },
     #[command(about = "List decision records")]
@@ -559,6 +583,14 @@ pub enum HarnessCommand {
     },
     #[command(about = "Show a proposal's detail and history")]
     Show { id: String },
+    #[command(about = "Set harness policy flags")]
+    Set {
+        #[arg(
+            long = "claims-only",
+            help = "Accept claims-only task verification when no verify commands are configured"
+        )]
+        claims_only: bool,
+    },
     #[command(about = "Accept a proposal and spawn a linked task (-> accepted)")]
     Apply { id: String },
     #[command(about = "Dismiss a noisy proposal and suppress its fingerprint")]
@@ -637,7 +669,17 @@ pub struct HookArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum HookCommand {
-    Record,
+    Record {
+        #[arg(long, help = "Event type to record instead of reading JSON from stdin")]
+        event: Option<String>,
+        #[arg(long, help = "Skill name for skill_activation events")]
+        skill: Option<String>,
+        #[arg(
+            long,
+            help = "Logical session id; defaults to session env or cli-YYYY-MM-DD"
+        )]
+        session: Option<String>,
+    },
 }
 
 pub fn run(cli: Cli) -> Result<()> {
@@ -668,4 +710,49 @@ pub fn run(cli: Cli) -> Result<()> {
 
 pub(super) fn actor() -> String {
     std::env::var("MAESTRO_ACTOR").unwrap_or_else(|_| "maestro".to_string())
+}
+
+pub(super) fn cli_run_id() -> String {
+    for key in [
+        "MAESTRO_SESSION_ID",
+        "MAESTRO_RUN_ID",
+        "CODEX_SESSION_ID",
+        "CLAUDE_SESSION_ID",
+        "CLAUDECODE_SESSION_ID",
+    ] {
+        if let Ok(value) = env::var(key)
+            && !value.trim().is_empty()
+        {
+            return value;
+        }
+    }
+    let date = crate::foundation::core::time::utc_now_timestamp()
+        .split_once('T')
+        .map(|(date, _)| date.to_string())
+        .unwrap_or_else(|| "1970-01-01".to_string());
+    format!("cli-{date}")
+}
+
+pub(super) fn detected_agent_hint() -> &'static str {
+    if let Ok(agent) = env::var("MAESTRO_AGENT") {
+        if agent.eq_ignore_ascii_case("claude") {
+            return "claude";
+        }
+        if agent.eq_ignore_ascii_case("codex") {
+            return "codex";
+        }
+    }
+    if env::var_os("CLAUDECODE")
+        .or_else(|| env::var_os("CLAUDE_CODE"))
+        .is_some()
+    {
+        return "claude";
+    }
+    if env::var_os("CODEX_CLI")
+        .or_else(|| env::var_os("CODEX_SANDBOX"))
+        .is_some()
+    {
+        return "codex";
+    }
+    "<claude|codex>"
 }

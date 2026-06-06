@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
 
 use crate::domain::feature::{self, ContractAdditions, ContractEdits, FeatureStatus};
+use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::render_timestamp;
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand};
@@ -23,25 +24,37 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             description,
             request,
             input_type,
-        } => set_feature(
-            &paths,
-            &id,
-            ContractEdits {
-                acceptance: opt_list(acceptance),
-                affected_areas: opt_list(area),
-                non_goals: opt_list(non_goal),
-                open_questions: if clear_questions {
-                    Some(Vec::new())
-                } else {
-                    opt_list(question)
+        } => {
+            if clear_questions && !question.is_empty() {
+                bail!(
+                    "--question already replaces the whole questions list; drop --clear-questions and pass the full set"
+                );
+            }
+            set_feature(
+                &paths,
+                &id,
+                ContractEdits {
+                    acceptance: opt_list(acceptance),
+                    affected_areas: opt_list(area),
+                    non_goals: opt_list(non_goal),
+                    open_questions: if clear_questions {
+                        Some(Vec::new())
+                    } else {
+                        opt_list(question)
+                    },
+                    description,
+                    raw_request: request,
+                    input_type,
                 },
-                description,
-                raw_request: request,
-                input_type,
-            },
-        ),
-        FeatureCommand::Accept { id, dry_run } => {
-            let report = feature::accept(&paths, &id, dry_run)?;
+            )
+        }
+        FeatureCommand::Accept {
+            id,
+            qa,
+            reason,
+            dry_run,
+        } => {
+            let report = accept_feature(&paths, &id, qa, reason, dry_run)?;
             print_note(report.note)?;
             if report.changed && report.status == FeatureStatus::Ready {
                 println!("next: maestro feature prepare {} --draft", report.id);
@@ -70,6 +83,15 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             &reason,
         ),
         FeatureCommand::Start { id } => print_note(feature::start(&paths, &id)?.note),
+        FeatureCommand::Note { id, text } => {
+            let report = feature::note(&paths, &id, &text)?;
+            if report.created {
+                println!("noted {} (notes.md created)", report.id);
+            } else {
+                println!("noted {}", report.id);
+            }
+            Ok(())
+        }
         FeatureCommand::Ship {
             id,
             outcome,
@@ -97,6 +119,25 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 feature_unarchive_error_message(&id, &error.to_string())
             ),
         },
+    }
+}
+
+fn accept_feature(
+    paths: &MaestroPaths,
+    id: &str,
+    qa: Option<String>,
+    reason: Option<String>,
+    dry_run: bool,
+) -> Result<feature::TransitionReport> {
+    match (qa.as_deref(), reason.as_deref()) {
+        (None, None) => feature::accept(paths, id, dry_run),
+        (Some("none"), Some(reason)) if reason.trim().is_empty() => {
+            bail!("--reason must not be empty with --qa none")
+        }
+        (Some("none"), Some(reason)) => feature::accept_with_qa_none(paths, id, reason, dry_run),
+        (Some("none"), None) => bail!("--reason is required with --qa none"),
+        (Some(other), _) => bail!("unsupported --qa value `{other}`; only `--qa none` is accepted"),
+        (None, Some(_)) => bail!("--reason requires --qa none"),
     }
 }
 
@@ -275,6 +316,9 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
         view.non_goals.len(),
         view.open_questions.len()
     );
+    println!("next: qa-baseline skill -> .maestro/features/{id}/qa.md");
+    println!("or: maestro feature accept {id} --qa none --reason \"<why no behavior>\"");
+    println!("then: maestro feature accept {id}");
     Ok(())
 }
 
@@ -347,6 +391,15 @@ fn ship_feature(
         println!("ship receipt:");
         println!("  feature: {}", report.id);
         println!("  status: shipped");
+        if let Ok(view) = feature::show(paths, &report.id)
+            && let Some(reason) = view.qa_none_reason.as_deref()
+        {
+            println!("  qa: none ({reason})");
+        }
+        let claims_only = claims_only_verified_count(paths, &report.id)?;
+        if claims_only > 0 {
+            println!("  verification: {claims_only} claims-only task(s)");
+        }
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
         println!("optional: maestro feature archive {}", report.id);
@@ -513,6 +566,9 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     if let Some(cancel_reason) = view.cancel_reason.as_deref() {
         println!("cancel_reason: {cancel_reason}");
     }
+    if let Some(reason) = view.qa_none_reason.as_deref() {
+        println!("qa: none ({reason})");
+    }
     print_list("acceptance", &view.acceptance);
     print_list("affected_areas", &view.affected_areas);
     print_list("non_goals", &view.non_goals);
@@ -591,6 +647,17 @@ fn feature_next_label(view: &feature::FeatureView) -> &'static str {
 fn print_note(note: String) -> Result<()> {
     println!("{note}");
     Ok(())
+}
+
+fn claims_only_verified_count(paths: &MaestroPaths, feature_id: &str) -> Result<usize> {
+    Ok(task::load_task_records(&paths.tasks_dir())?
+        .into_iter()
+        .filter(|task| {
+            task.feature_id.as_deref() == Some(feature_id)
+                && task.state == task::TaskState::Verified
+                && task.verification.claims_only
+        })
+        .count())
 }
 
 fn print_list(label: &str, items: &[String]) {

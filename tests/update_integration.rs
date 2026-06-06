@@ -759,8 +759,10 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
         .expect("invariant: maestro doctor should run");
     assert_success(&first);
     let stdout = String::from_utf8_lossy(&first.stdout);
-    assert!(stdout.contains("Update available: 9.9.9-gfuture"));
-    assert!(stdout.contains("Run `maestro update` to install."));
+    let stderr = String::from_utf8_lossy(&first.stderr);
+    assert!(!stdout.contains("Update available: 9.9.9-gfuture"));
+    assert!(stderr.contains("Update available: 9.9.9-gfuture"));
+    assert!(stderr.contains("Run `maestro update` to install."));
 
     let second = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("doctor")
@@ -772,7 +774,9 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
         .expect("invariant: maestro doctor should run");
     assert_success(&second);
     let stdout = String::from_utf8_lossy(&second.stdout);
+    let stderr = String::from_utf8_lossy(&second.stderr);
     assert!(!stdout.contains("Update available: 9.9.9-gfuture"));
+    assert!(!stderr.contains("Update available: 9.9.9-gfuture"));
 }
 
 #[test]

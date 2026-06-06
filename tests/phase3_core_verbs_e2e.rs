@@ -35,6 +35,7 @@ fn phase3_core_verbs_demo_path_runs_end_to_end() {
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
 
     run(repo, &["init", "--yes"]);
+    run(repo, &["harness", "set", "--claims-only"]);
     run(repo, &["feature", "new", "Billing CSV export"]);
     run(
         repo,

@@ -61,6 +61,8 @@ fn setup_repo(prefix: &str) -> TestTempDir {
     fs::create_dir(temp.path().join(".git")).expect("invariant: .git marker should be creatable");
     let init = maestro(temp.path(), &["init", "--yes"]);
     assert_success(&init, &["init", "--yes"]);
+    let claims_only = maestro(temp.path(), &["harness", "set", "--claims-only"]);
+    assert_success(&claims_only, &["harness", "set", "--claims-only"]);
     temp
 }
 
@@ -150,8 +152,8 @@ fn task_next_no_action_prints_summary_and_exits_nonzero() {
     let next = maestro(repo, &["task", "next"]);
 
     assert_failure(&next, &["task", "next"]);
-    assert!(stdout(&next).contains("no actionable tasks"));
-    assert!(stderr(&next).contains("no actionable tasks"));
+    assert!(stdout(&next).contains("no actionable task"));
+    assert!(stderr(&next).contains("no actionable task"));
 }
 
 #[test]
@@ -262,7 +264,10 @@ fn status_points_to_resume_and_resume_default_is_compact_read_only() {
         resume.contains("preserve unrelated dirty files"),
         "{resume}"
     );
-    assert!(resume.contains("do not commit SPEC/notes"), "{resume}");
+    assert!(
+        resume.contains("do not commit planning or notes artifacts unless asked"),
+        "{resume}"
+    );
     assert!(
         !resume.contains("prior decisions:")
             && !resume.contains("handoff prompt:")
@@ -683,7 +688,11 @@ fn ready_to_ship_status_json_and_task_next_broader_actions_are_structured() {
         ],
     );
     assert!(
-        complete.contains("template: maestro feature ship csv-export --outcome \"<outcome>\""),
+        complete.contains("next: qa-slice skill -> replay affected baseline scenarios"),
+        "{complete}"
+    );
+    assert!(
+        complete.contains("then: maestro feature ship csv-export --outcome \"<outcome>\""),
         "{complete}"
     );
 

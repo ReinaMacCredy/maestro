@@ -41,6 +41,9 @@ pub struct HarnessConfig {
     /// legacy repos so read verbs keep their old behavior until the repo opts in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub escalation: Option<EscalationConfig>,
+    /// Explicit repo-level acknowledgement that verification has no command leg.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub claims_only_verification: bool,
 }
 
 /// Per-repo Harness recurrence threshold policy.
@@ -151,6 +154,7 @@ impl HarnessConfig {
             schema_version: HARNESS_SCHEMA_VERSION.to_string(),
             stack: detect_stack(repo_root),
             escalation: Some(EscalationConfig::enabled_default()),
+            claims_only_verification: false,
         }
     }
 
@@ -257,6 +261,10 @@ fn default_act_after() -> usize {
 
 fn is_zero(value: &usize) -> bool {
     *value == 0
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Detect the project stack from repo-local files.

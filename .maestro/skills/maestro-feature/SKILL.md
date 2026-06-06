@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.6.0
+version: 1.6.1
 description: "Use for the Maestro feature lifecycle: author, accept, prepare, start, amend, ship, cancel, archive, and inspect a feature contract plus its child-task rollup."
 ---
 
@@ -10,7 +10,7 @@ Use this for the feature contract and its guarded lifecycle. Tasks deliver the
 work; QA baseline and slice artifacts prove the feature gates.
 
 Activate:
-`printf '%s\n' '{"event_type":"skill_activation","skill_name":"maestro-feature","activation_mode":"agent_selected"}' | maestro hook record`
+`maestro hook record --event skill_activation --skill maestro-feature`
 
 ## Use
 

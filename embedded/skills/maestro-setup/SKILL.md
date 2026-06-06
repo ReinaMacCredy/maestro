@@ -1,6 +1,6 @@
 ---
 name: maestro-setup
-version: 1.4.1
+version: 1.4.2
 description: "Use after Maestro init/install or doctor warnings to tune a repository harness from verified repo evidence."
 ---
 
@@ -9,7 +9,7 @@ description: "Use after Maestro init/install or doctor warnings to tune a reposi
 Tune a Maestro-enabled repository harness from current repository evidence.
 
 Activate:
-`printf '%s\n' '{"event_type":"skill_activation","skill_name":"maestro-setup","activation_mode":"agent_selected"}' | maestro hook record`
+`maestro hook record --event skill_activation --skill maestro-setup`
 
 ## Use
 

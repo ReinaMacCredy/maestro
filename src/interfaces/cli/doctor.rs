@@ -19,6 +19,9 @@ pub fn run() -> Result<()> {
     for check in &report.checks {
         println!("check {}: ok ({})", check.name, check.detail);
     }
+    for warning in &report.warnings {
+        println!("warning: {warning}");
+    }
 
     if report.errors.is_empty() {
         println!("doctor: ok");
@@ -36,7 +39,10 @@ fn print_ok_handoff(report: &DoctorReport) {
     if report.checks.iter().any(|check| check.name == "install") {
         println!("next: maestro status");
     } else {
-        println!("next: maestro install --agent codex");
+        println!(
+            "next: maestro install --agent {}",
+            super::detected_agent_hint()
+        );
         println!("then: maestro status");
     }
 }
@@ -44,6 +50,7 @@ fn print_ok_handoff(report: &DoctorReport) {
 #[derive(Debug)]
 struct DoctorReport {
     checks: Vec<DoctorCheck>,
+    warnings: Vec<String>,
     errors: Vec<String>,
 }
 
@@ -55,6 +62,7 @@ struct DoctorCheck {
 
 fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     let mut checks = Vec::new();
+    let mut warnings = Vec::new();
     let mut errors = Vec::new();
 
     if paths.maestro_dir().is_dir() {
@@ -69,7 +77,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     check_harness(paths, &mut checks, &mut errors);
     check_features(paths, &mut checks, &mut errors);
     check_backlog(paths, &mut checks, &mut errors);
-    check_decisions(paths, &mut checks, &mut errors);
+    check_decisions(paths, &mut checks, &mut warnings, &mut errors);
     check_install(paths, &mut checks, &mut errors);
 
     // Collect a corrupt-task error into the report rather than aborting via `?`: a
@@ -84,7 +92,11 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
         Err(error) => errors.push(format!("{error:#}")),
     }
 
-    Ok(DoctorReport { checks, errors })
+    Ok(DoctorReport {
+        checks,
+        warnings,
+        errors,
+    })
 }
 
 /// One vocabulary for every "a scaffolded resource is gone" error: the `{path}
@@ -177,7 +189,12 @@ fn schema_diagnostic(path: &std::path::Path, expected: &str, found: &str) -> Str
     }
 }
 
-fn check_decisions(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
+fn check_decisions(
+    paths: &MaestroPaths,
+    checks: &mut Vec<DoctorCheck>,
+    warnings: &mut Vec<String>,
+    errors: &mut Vec<String>,
+) {
     let dir = paths.decisions_dir();
     if !dir.is_dir() {
         errors.push(missing_resource(&dir));
@@ -185,10 +202,30 @@ fn check_decisions(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: 
     }
 
     match decisions::decision_entries(&dir) {
-        Ok(entries) => checks.push(DoctorCheck {
-            name: "decisions",
-            detail: format!("{} decision file(s)", entries.len()),
-        }),
+        Ok(entries) => {
+            for entry in &entries {
+                match std::fs::read_to_string(&entry.path) {
+                    Ok(contents)
+                        if contents.contains("Why this decision exists.")
+                            || contents.contains("What we decided.") =>
+                    {
+                        warnings.push(format!(
+                            "{} still contains decision template placeholder text",
+                            entry.file_name
+                        ));
+                    }
+                    Ok(_) => {}
+                    Err(error) => errors.push(format!(
+                        "failed to read decision file {}: {error}",
+                        entry.path.display()
+                    )),
+                }
+            }
+            checks.push(DoctorCheck {
+                name: "decisions",
+                detail: format!("{} decision file(s)", entries.len()),
+            });
+        }
         Err(error) => errors.push(format!("{error:#}")),
     }
 }

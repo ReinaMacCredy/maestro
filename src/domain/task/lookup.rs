@@ -26,10 +26,40 @@ pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
     matches.sort();
 
     match matches.len() {
-        0 => bail!("task not found: {id}"),
+        0 => {
+            if archived_task_exists(tasks_dir, id)? {
+                bail!(
+                    "task {id} is archived\n  inspect: maestro task show {id}\n  restore: maestro task unarchive {id}\n  then: retry the command"
+                );
+            }
+            bail!("task not found: {id}")
+        }
         1 => Ok(matches.remove(0)),
         _ => bail!("task id {id} is ambiguous"),
     }
+}
+
+fn archived_task_exists(tasks_dir: &Path, id: &str) -> Result<bool> {
+    let Some(maestro_dir) = tasks_dir.parent() else {
+        return Ok(false);
+    };
+    let archive_tasks = maestro_dir.join("archive/tasks");
+    let prefix = format!("{id}-");
+    if archive_tasks.is_dir() {
+        for task_path in task_yaml_paths_in_single_root(&archive_tasks)? {
+            let Some(name) = task_path
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+            else {
+                continue;
+            };
+            if name.starts_with(&prefix) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 /// Return every managed task.yaml path under the standalone root and feature roots.
@@ -38,6 +68,13 @@ pub fn task_yaml_paths(tasks_dir: &Path) -> Result<Vec<PathBuf>> {
     for root in task_roots(tasks_dir)? {
         collect_task_yaml_paths_in_root(&root, &mut paths)?;
     }
+    paths.sort();
+    Ok(paths)
+}
+
+fn task_yaml_paths_in_single_root(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    collect_task_yaml_paths_in_root(root, &mut paths)?;
     paths.sort();
     Ok(paths)
 }

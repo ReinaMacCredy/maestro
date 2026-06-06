@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::domain::run;
 use crate::foundation::core::paths::MaestroPaths;
 
-pub(crate) fn record_stdin(paths: &MaestroPaths) -> Result<()> {
+pub(crate) fn record_stdin(paths: &MaestroPaths) -> Result<run::RecordOutcome> {
     let mut raw = String::new();
     io::stdin()
         .read_to_string(&mut raw)
@@ -14,18 +14,22 @@ pub(crate) fn record_stdin(paths: &MaestroPaths) -> Result<()> {
     record_payload(paths, &raw)
 }
 
-fn record_payload(paths: &MaestroPaths, raw: &str) -> Result<()> {
-    let payload: Value = serde_json::from_str(raw).context("failed to parse hook payload JSON")?;
-    match run::record_hook_event(paths, &payload)? {
-        run::RecordOutcome::Recorded => {}
-        run::RecordOutcome::Ignored { event_type } => match event_type {
+pub(crate) fn record_value(paths: &MaestroPaths, payload: &Value) -> Result<run::RecordOutcome> {
+    let outcome = run::record_hook_event(paths, payload)?;
+    if let run::RecordOutcome::Ignored { event_type } = &outcome {
+        match event_type {
             Some(event_type) => {
                 eprintln!("maestro hook record: ignored unrecognized event type `{event_type}`");
             }
             None => {
                 eprintln!("maestro hook record: ignored payload with no recognizable event type");
             }
-        },
+        }
     }
-    Ok(())
+    Ok(outcome)
+}
+
+fn record_payload(paths: &MaestroPaths, raw: &str) -> Result<run::RecordOutcome> {
+    let payload: Value = serde_json::from_str(raw).context("failed to parse hook payload JSON")?;
+    record_value(paths, &payload)
 }

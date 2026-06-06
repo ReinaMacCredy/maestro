@@ -45,7 +45,7 @@ pub fn run_task_next(paths: &MaestroPaths, json: bool) -> Result<()> {
         print_task_next(&report);
     }
     if report.next_action.is_none() && report.harness_friction.is_empty() {
-        bail!("no actionable tasks");
+        bail!("no actionable task");
     }
     Ok(())
 }
@@ -144,7 +144,7 @@ fn print_task_next(report: &StatusReport) {
         print_next_action(action);
         return;
     }
-    println!("no actionable tasks");
+    println!("no actionable task");
     if !report.ready_to_ship_features.is_empty() {
         println!("broader repo action available: ready_to_ship_features");
         println!("check broader repo status: maestro status");

@@ -68,6 +68,15 @@ pub fn run(args: TaskArgs) -> Result<()> {
             verify::run_for_task(&paths, &id, &actor)
         }
         TaskCommand::Next { json } => status::run_task_next(&paths, json),
+        TaskCommand::Note { id, text } => {
+            let report = task::note(&paths.tasks_dir(), &id, &text)?;
+            if report.created {
+                println!("noted {} (notes.md created)", report.id);
+            } else {
+                println!("noted {}", report.id);
+            }
+            Ok(())
+        }
         TaskCommand::Update { id, summary, claim } => {
             update_task(&paths, &id, summary, claim, &actor)
         }
@@ -416,7 +425,7 @@ fn complete_task(
         }
         proof::record_claim(
             paths,
-            "task-complete",
+            &super::cli_run_id(),
             &task.id,
             Some(proof_text.clone()),
             None,

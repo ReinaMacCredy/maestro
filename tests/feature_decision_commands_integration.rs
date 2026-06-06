@@ -45,6 +45,17 @@ fn assert_failure(output: std::process::Output, args: &[&str]) -> String {
     String::from_utf8(output.stderr).expect("invariant: stderr should be UTF-8")
 }
 
+fn assert_dated_note_line(notes: &str, expected_text: &str) {
+    let line = notes
+        .lines()
+        .find(|line| line.ends_with(expected_text))
+        .expect("invariant: expected dated note line should exist");
+    assert_eq!(line.len(), 12 + expected_text.len(), "{line}");
+    assert_eq!(&line[4..5], "-", "{line}");
+    assert_eq!(&line[7..8], "-", "{line}");
+    assert_eq!(&line[10..12], "  ", "{line}");
+}
+
 #[test]
 fn feature_guarded_lifecycle_via_cli() {
     let temp_dir = TestTempDir::new("maestro-feature-command-test");
@@ -100,6 +111,29 @@ fn feature_guarded_lifecycle_via_cli() {
     ];
     let question_output = stdout(maestro(&question_args, temp_dir.path()), &question_args);
     assert!(question_output.contains("questions=1"));
+
+    let help = stdout(
+        maestro(&["feature", "set", "--help"], temp_dir.path()),
+        &["feature", "set", "--help"],
+    );
+    assert!(help.contains("REPLACES the full questions list"), "{help}");
+
+    let redundant_clear_args = [
+        "feature",
+        "set",
+        "billing-csv-export",
+        "--clear-questions",
+        "--question",
+        "Which export filename?",
+    ];
+    let redundant_clear = assert_failure(
+        maestro(&redundant_clear_args, temp_dir.path()),
+        &redundant_clear_args,
+    );
+    assert!(
+        redundant_clear.contains("--question already replaces the whole questions list"),
+        "{redundant_clear}"
+    );
 
     let clear_questions_args = ["feature", "set", "billing-csv-export", "--clear-questions"];
     let clear_questions_output = stdout(
@@ -305,6 +339,141 @@ fn decision_new_list_show_auto_increment_and_preserve_template() {
         ],
     );
     assert_eq!(show_output, decision_markdown(8, title));
+
+    let doctor = stdout(maestro(&["doctor"], temp_dir.path()), &["doctor"]);
+    assert!(
+        doctor.contains(
+            "warning: decision-008-use-single-harness-md-instead-of-three-adapter-files.md"
+        ),
+        "{doctor}"
+    );
+    assert!(
+        doctor.contains("still contains decision template placeholder text"),
+        "{doctor}"
+    );
+}
+
+#[test]
+fn decision_new_section_flags_write_complete_record_without_composite_lock_command() {
+    let temp_dir = TestTempDir::new("maestro-decision-command-complete-test");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let args = [
+        "decision",
+        "new",
+        "Timestamps use RFC3339",
+        "--context",
+        "nanosecond epochs are hard to inspect",
+        "--decision",
+        "render RFC3339 UTC with milliseconds",
+        "--alternative",
+        "unix seconds: too lossy",
+        "--alternative",
+        "raw nanos: unreadable",
+        "--consequence",
+        "older records migrate on read",
+        "--feature",
+        "agent-cli-ux",
+    ];
+    let out = stdout(maestro(&args, temp_dir.path()), &args);
+    assert!(out.contains("created decision decision-001"), "{out}");
+    assert!(
+        out.contains("complete: .maestro/decisions/decision-001-timestamps-use-rfc3339.md"),
+        "{out}"
+    );
+
+    let record = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/decisions/decision-001-timestamps-use-rfc3339.md"),
+    )
+    .expect("invariant: complete decision should be readable");
+    assert!(record.contains("## Context\nnanosecond epochs are hard to inspect"));
+    assert!(record.contains("## Decision\nrender RFC3339 UTC with milliseconds"));
+    assert!(record.contains("- unix seconds: too lossy"));
+    assert!(record.contains("- raw nanos: unreadable"));
+    assert!(record.contains("- older records migrate on read"));
+    assert!(record.contains("- feature: agent-cli-ux"));
+    assert!(!record.contains("Why this decision exists."));
+    assert!(!record.contains("What we decided."));
+
+    let help = stdout(
+        maestro(&["decision", "--help"], temp_dir.path()),
+        &["decision", "--help"],
+    );
+    assert!(help.contains("new"), "{help}");
+    assert!(help.contains("show"), "{help}");
+    assert!(help.contains("list"), "{help}");
+    assert!(!help.contains("lock"), "{help}");
+}
+
+#[test]
+fn feature_and_task_note_create_dated_notes_on_first_write() {
+    let temp_dir = TestTempDir::new("maestro-note-command-test");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Billing CSV"], temp_dir.path()),
+        &["feature", "new", "Billing CSV"],
+    );
+
+    let feature_note = stdout(
+        maestro(
+            &["feature", "note", "billing-csv", "locked: export columns"],
+            temp_dir.path(),
+        ),
+        &["feature", "note", "billing-csv", "locked: export columns"],
+    );
+    assert!(
+        feature_note.contains("noted billing-csv (notes.md created)"),
+        "{feature_note}"
+    );
+    let feature_notes = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/features/billing-csv/notes.md"),
+    )
+    .expect("invariant: feature notes should be readable");
+    assert!(feature_notes.starts_with("# Billing CSV\n\n"));
+    assert_dated_note_line(&feature_notes, "locked: export columns");
+
+    stdout(
+        maestro(&["task", "create", "Add CSV export"], temp_dir.path()),
+        &["task", "create", "Add CSV export"],
+    );
+    let task_note = stdout(
+        maestro(
+            &["task", "note", "task-001", "proved: csv opens"],
+            temp_dir.path(),
+        ),
+        &["task", "note", "task-001", "proved: csv opens"],
+    );
+    assert!(
+        task_note.contains("noted task-001 (notes.md created)"),
+        "{task_note}"
+    );
+    let task_dir = fs::read_dir(temp_dir.path().join(".maestro/tasks"))
+        .expect("invariant: tasks dir should be listable")
+        .find_map(|entry| {
+            let entry = entry.expect("invariant: task entry should be readable");
+            entry
+                .file_name()
+                .to_str()
+                .filter(|name| name.starts_with("task-001"))
+                .map(|_| entry.path())
+        })
+        .expect("invariant: task-001 dir should exist");
+    let task_notes = fs::read_to_string(task_dir.join("notes.md"))
+        .expect("invariant: task notes should be readable");
+    assert!(task_notes.starts_with("# Add CSV export\n\n"));
+    assert_dated_note_line(&task_notes, "proved: csv opens");
 }
 
 #[test]
@@ -601,6 +770,29 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
         &["feature", "list", "--all"],
     );
     assert!(list_all.contains("billing-csv-export"));
+
+    let archived_accept_args = ["feature", "accept", "billing-csv-export"];
+    let archived_accept =
+        assert_failure(maestro(&archived_accept_args, root), &archived_accept_args);
+    assert!(
+        archived_accept.contains("feature billing-csv-export is archived (shipped)"),
+        "{archived_accept}"
+    );
+    assert!(
+        archived_accept.contains("inspect: maestro feature show billing-csv-export"),
+        "{archived_accept}"
+    );
+    assert!(
+        archived_accept.contains("restore: maestro feature unarchive billing-csv-export"),
+        "{archived_accept}"
+    );
+    assert!(
+        archived_accept.contains("then: retry the command"),
+        "{archived_accept}"
+    );
+    let missing_accept_args = ["feature", "accept", "missing-feature"];
+    let missing_accept = assert_failure(maestro(&missing_accept_args, root), &missing_accept_args);
+    assert!(missing_accept.contains("feature not found: missing-feature"));
 
     // Idempotent: re-archiving is a no-op at exit 0.
     let again = maestro(&archive_args, root);

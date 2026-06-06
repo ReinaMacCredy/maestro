@@ -59,7 +59,7 @@ fn build_resume_report(
     let required_reads = required_reads(paths, selected_task.as_ref(), selected_feature.as_ref());
     let guardrails = vec![
         "preserve unrelated dirty files".to_string(),
-        "do not commit SPEC/notes".to_string(),
+        "do not commit planning or notes artifacts unless asked".to_string(),
         "read required artifacts before acting".to_string(),
     ];
     let source_refs = source_refs(paths, selected_task.as_ref(), selected_feature.as_ref())?;

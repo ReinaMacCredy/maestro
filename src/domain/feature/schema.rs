@@ -42,6 +42,9 @@ pub struct FeatureRecord {
     /// Append-only audited amendments.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub amends: Vec<AmendEntry>,
+    /// Optional QA declaration for features with no behavioral surface.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qa: Option<QaDeclaration>,
     /// Explicit non-goals.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub non_goals: Vec<String>,
@@ -70,6 +73,7 @@ impl FeatureRecord {
             open_questions: Vec::new(),
             acceptance: Vec::new(),
             amends: Vec::new(),
+            qa: None,
             non_goals: Vec::new(),
             outcome: None,
             cancel_reason: None,
@@ -118,6 +122,18 @@ pub struct AmendLog {
     /// Append-only amend entries, oldest first.
     #[serde(default)]
     pub entries: Vec<AmendEntry>,
+}
+
+/// Explicit feature-level QA declaration.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct QaDeclaration {
+    /// QA surface classification. `none` means no behavioral surface.
+    pub surface: String,
+    /// Human reason recorded at accept.
+    pub reason: String,
+    /// Amend log position covered by the declaration.
+    #[serde(default)]
+    pub amend_log_position: usize,
 }
 
 /// One audited `amend` call: what was added, when, and why.

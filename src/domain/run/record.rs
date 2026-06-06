@@ -2,7 +2,9 @@ use anyhow::{Context, Result};
 use serde_json::{Map, Value, json};
 
 use crate::domain::run::append::append_normalized_event;
-use crate::domain::run::event::{is_accepted_event, normalized_event_type, string_field};
+use crate::domain::run::event::{
+    UNATTRIBUTED_SESSION, is_accepted_event, normalized_event_type, run_dir_name, string_field,
+};
 use crate::domain::run::evidence::write_evidence_for_session;
 use crate::foundation::core::git;
 use crate::foundation::core::hash::sha256_prefixed;
@@ -14,7 +16,7 @@ use crate::foundation::core::time::utc_now_timestamp;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RecordOutcome {
     /// The payload was a recognized hook event and was appended.
-    Recorded,
+    Recorded { event_type: String, run_dir: String },
     /// The payload was not a recognized hook event; nothing was recorded.
     Ignored { event_type: Option<String> },
 }
@@ -27,6 +29,16 @@ pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<Record
         });
     };
     attach_commit_snapshot(paths, &mut event);
+    let event_type = event
+        .get("event_type")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .to_string();
+    let run_dir = event
+        .get("session_id")
+        .and_then(Value::as_str)
+        .map(run_dir_name)
+        .unwrap_or_else(|| UNATTRIBUTED_SESSION.to_string());
     append_normalized_event(paths, &event)?;
     if is_stop_event(&event) {
         // A Stop with no session id must read back the same run bucket
@@ -41,7 +53,10 @@ pub fn record_hook_event(paths: &MaestroPaths, payload: &Value) -> Result<Record
             .unwrap_or("");
         write_evidence_for_session(paths, session_id).context("failed to write run evidence")?;
     }
-    Ok(RecordOutcome::Recorded)
+    Ok(RecordOutcome::Recorded {
+        event_type,
+        run_dir,
+    })
 }
 
 fn normalize_event(payload: &Value) -> Option<Value> {

@@ -5,7 +5,7 @@ use std::time::UNIX_EPOCH;
 
 use anyhow::{Context, Result};
 
-use crate::domain::harness::{EscalationPolicy, HarnessConfig};
+use crate::domain::harness::{self as harness_domain, EscalationPolicy, HarnessConfig};
 use crate::domain::run;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
@@ -23,6 +23,10 @@ pub fn load_policy(paths: &MaestroPaths) -> Result<EscalationPolicy> {
     let config: HarnessConfig = serde_yaml::from_str(&raw)
         .with_context(|| format!("failed to parse {}", path.display()))?;
     Ok(config.escalation_policy())
+}
+
+pub fn set_claims_only_verification(paths: &MaestroPaths) -> Result<()> {
+    harness_domain::set_claims_only_verification(paths)
 }
 
 pub fn evidence_stamp(paths: &MaestroPaths) -> Result<String> {

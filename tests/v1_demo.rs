@@ -63,6 +63,7 @@ fn v1_demo_runs_core_flow_watch_query_and_mcp() {
     fs::create_dir(repo.join(".git")).expect("invariant: git marker should be creatable");
 
     run_with_env(repo, &["init", "--yes"], &envs);
+    run_with_env(repo, &["harness", "set", "--claims-only"], &envs);
     run_with_env(repo, &["install", "--agent", "claude"], &envs);
     run_with_env(repo, &["install", "--agent", "codex"], &envs);
     run_with_env(repo, &["task", "create", "Demo task"], &envs);

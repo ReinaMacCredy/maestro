@@ -46,6 +46,7 @@ pub struct ProofStatus {
     pub verified_commit: Option<String>,
     pub matched_claims: usize,
     pub total_claims: usize,
+    pub claims_only: bool,
     pub sources: Vec<ProofStatusSource>,
     pub stale_reasons: Vec<ProofStaleReason>,
     pub failures: Vec<String>,
@@ -160,6 +161,7 @@ pub fn proof_status_for_task(
             verified_commit: None,
             matched_claims: 0,
             total_claims: 0,
+            claims_only: false,
             sources: Vec::new(),
             stale_reasons: Vec::new(),
             failures: Vec::new(),
@@ -208,6 +210,9 @@ pub fn render_proof_status(status: &ProofStatus) -> String {
         status.verified_commit.as_deref().unwrap_or("<none>")
     ));
     out.push_str(&format_claims(status.matched_claims, status.total_claims));
+    if status.claims_only {
+        out.push_str("claims_only: true\n");
+    }
     out.push_str(&format_sources(&status.sources));
 
     if !status.stale_reasons.is_empty() {
@@ -271,6 +276,7 @@ fn status_from_binding(
             .filter(|claim| claim.matched)
             .count(),
         total_claims: binding.claim_checks.len(),
+        claims_only: binding.claims_only,
         sources: binding
             .proof_sources
             .iter()

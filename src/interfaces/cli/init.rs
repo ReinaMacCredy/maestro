@@ -37,7 +37,10 @@ pub fn run(args: InitArgs) -> Result<()> {
 fn print_post_init_handoff() {
     println!("next:");
     println!("  check setup: maestro doctor");
-    println!("  wire agent: maestro install --agent codex");
+    println!(
+        "  wire agent: maestro install --agent {}",
+        super::detected_agent_hint()
+    );
     println!("  resume: maestro status");
     println!("  tune harness: use the maestro-setup skill");
 }

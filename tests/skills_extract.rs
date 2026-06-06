@@ -166,7 +166,7 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-setup")
         .expect("invariant: maestro-setup should be bundled")
         .skill_md();
-    assert!(setup.contains("version: 1.4.1"));
+    assert!(setup.contains("version: 1.4.2"));
     assert!(setup.contains("maestro status"));
     assert!(setup.contains("maestro init --dry-run"));
     assert!(setup.contains("operating on <path>"));
@@ -178,7 +178,7 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-verify")
         .expect("invariant: maestro-verify should be bundled")
         .skill_md();
-    assert!(verify.contains("version: 1.5.1"));
+    assert!(verify.contains("version: 1.5.2"));
     assert!(verify.contains("maestro task next"));
     assert!(verify.contains("--proof \"<observed evidence>\""));
     assert!(verify.contains("maestro query proof <id>"));
@@ -190,7 +190,7 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-feature")
         .expect("invariant: maestro-feature should be bundled")
         .skill_md();
-    assert!(feature.contains("version: 1.6.0"));
+    assert!(feature.contains("version: 1.6.1"));
     assert!(feature.contains("## Spec/Plan Intake"));
     assert!(feature.contains("the agent converts it into Maestro artifacts"));
     assert!(feature.contains("feature prepare <id> --from <plan-file>"));

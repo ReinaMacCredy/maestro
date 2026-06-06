@@ -12,10 +12,16 @@ use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 
-pub(super) fn run_verify_commands(paths: &MaestroPaths) -> Result<Vec<VerificationCommand>> {
-    let commands = harness_verify_commands(paths)?;
+pub(super) struct VerificationCommandRun {
+    pub commands: Vec<VerificationCommand>,
+    pub claims_only: bool,
+    pub stack_kind: String,
+}
+
+pub(super) fn run_verify_commands(paths: &MaestroPaths) -> Result<VerificationCommandRun> {
+    let config = harness_verify_config(paths)?;
     let mut results = Vec::new();
-    for command in commands {
+    for command in config.stack.verify {
         let started = Instant::now();
         let status = shell_command(&command)
             .current_dir(paths.repo_root())
@@ -27,10 +33,14 @@ pub(super) fn run_verify_commands(paths: &MaestroPaths) -> Result<Vec<Verificati
             duration_ms: started.elapsed().as_millis(),
         });
     }
-    Ok(results)
+    Ok(VerificationCommandRun {
+        commands: results,
+        claims_only: config.claims_only_verification,
+        stack_kind: format!("{:?}", config.stack.kind).to_ascii_lowercase(),
+    })
 }
 
-fn harness_verify_commands(paths: &MaestroPaths) -> Result<Vec<String>> {
+fn harness_verify_config(paths: &MaestroPaths) -> Result<HarnessConfig> {
     let path = match managed_path(
         paths,
         ".maestro/harness/harness.yml",
@@ -43,15 +53,37 @@ fn harness_verify_commands(paths: &MaestroPaths) -> Result<Vec<String>> {
                 Some(MaestroError::ManagedPathContainsSymlink { .. })
             ) =>
         {
-            return Ok(Vec::new());
+            return Ok(HarnessConfig {
+                schema_version: crate::foundation::core::schema::HARNESS_SCHEMA_VERSION.to_string(),
+                stack: crate::domain::harness::StackConfig {
+                    kind: crate::domain::harness::StackKind::Generic,
+                    detected_by: Vec::new(),
+                    verify: Vec::new(),
+                },
+                escalation: None,
+                claims_only_verification: false,
+            });
         }
         Err(error) => return Err(error),
     };
     let Some(raw) = read_to_string_if_exists(&path)? else {
-        return Ok(Vec::new());
+        return Ok(HarnessConfig {
+            schema_version: crate::foundation::core::schema::HARNESS_SCHEMA_VERSION.to_string(),
+            stack: crate::domain::harness::StackConfig {
+                kind: crate::domain::harness::StackKind::Generic,
+                detected_by: Vec::new(),
+                verify: Vec::new(),
+            },
+            escalation: None,
+            claims_only_verification: false,
+        });
     };
-    let config: HarnessConfig = serde_yaml::from_str(&raw)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
+    serde_yaml::from_str(&raw).with_context(|| format!("failed to parse {}", path.display()))
+}
+
+#[cfg(test)]
+fn harness_verify_commands(paths: &MaestroPaths) -> Result<Vec<String>> {
+    let config = harness_verify_config(paths)?;
     Ok(config.stack.verify)
 }
 

@@ -51,6 +51,38 @@ fn setup_repo() -> TestTempDir {
     let temp = TestTempDir::new("maestro-task-verify-cli");
     fs::create_dir_all(temp.path().join(".maestro"))
         .expect("invariant: .maestro directory should be creatable");
+    fs::create_dir_all(temp.path().join(".maestro/harness"))
+        .expect("invariant: harness dir should be creatable");
+    fs::write(
+        temp.path().join(".maestro/harness/harness.yml"),
+        concat!(
+            "schema_version: maestro.harness.v1\n",
+            "stack:\n",
+            "  kind: generic\n",
+            "  detected_by: []\n",
+            "  verify: []\n",
+            "claims_only_verification: true\n"
+        ),
+    )
+    .expect("invariant: claims-only harness should be writable");
+    temp
+}
+
+fn setup_fail_closed_repo() -> TestTempDir {
+    let temp = TestTempDir::new("maestro-task-verify-cli");
+    fs::create_dir_all(temp.path().join(".maestro/harness"))
+        .expect("invariant: harness dir should be creatable");
+    fs::write(
+        temp.path().join(".maestro/harness/harness.yml"),
+        concat!(
+            "schema_version: maestro.harness.v1\n",
+            "stack:\n",
+            "  kind: generic\n",
+            "  detected_by: []\n",
+            "  verify: []\n"
+        ),
+    )
+    .expect("invariant: empty harness should be writable");
     temp
 }
 
@@ -321,6 +353,25 @@ fn task_verify_passes_with_event_proof_and_embeds_verification() {
 }
 
 #[test]
+fn task_verify_fails_closed_when_no_verify_commands_are_configured() {
+    let temp = setup_fail_closed_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    write_event(repo, "task-001", "implemented CSV export");
+
+    let verify = maestro(repo, &["task", "verify", "task-001"]);
+
+    assert_failure(&verify, &["task", "verify", "task-001"]);
+    let err = stderr(&verify);
+    assert!(err.contains("no verify commands configured"), "{err}");
+    assert!(err.contains("maestro harness set --claims-only"), "{err}");
+    assert_eq!(
+        task_yaml(repo, "task-001")["state"],
+        YamlValue::String("needs_verification".to_string())
+    );
+}
+
+#[test]
 fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
     let temp = setup_repo();
     let repo = temp.path();
@@ -559,7 +610,7 @@ fn concurrent_verify_does_not_overwrite_applied_canonical_report_with_stale_atte
     write_harness_verify_command(
         repo,
         &format!(
-            "rm -f {} && {} task verify task-001",
+            "printf '%s\\n' 'schema_version: maestro.harness.v1' 'stack:' '  kind: generic' '  detected_by: []' '  verify:' '  - true' > {} && {} task verify task-001",
             shell_quote(&harness_path),
             shell_quote(Path::new(env!("CARGO_BIN_EXE_maestro")))
         ),

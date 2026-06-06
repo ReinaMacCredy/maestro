@@ -1,6 +1,6 @@
 ---
 name: maestro-verify
-version: 1.5.1
+version: 1.5.2
 description: "Use to prove a Maestro task or feature gate with recorded evidence, repair failed proof, and run adversarial verification for high-risk claims."
 ---
 
@@ -10,7 +10,7 @@ Use this when a task needs verification, proof failed, or a feature gate asks
 for QA evidence.
 
 Activate:
-`printf '%s\n' '{"event_type":"skill_activation","skill_name":"maestro-verify","activation_mode":"agent_selected"}' | maestro hook record`
+`maestro hook record --event skill_activation --skill maestro-verify`
 
 ## Do
 

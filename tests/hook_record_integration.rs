@@ -32,6 +32,42 @@ fn maestro_record(cwd: &Path, payload: &str) -> std::process::Output {
         .expect("invariant: maestro hook record should return process output")
 }
 
+fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in hook tests")
+}
+
+fn maestro_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in hook tests")
+}
+
+fn maestro_without_session_env(cwd: &Path, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_maestro"));
+    command.args(args).current_dir(cwd);
+    for key in [
+        "MAESTRO_SESSION_ID",
+        "MAESTRO_RUN_ID",
+        "CODEX_SESSION_ID",
+        "CLAUDE_SESSION_ID",
+        "CLAUDECODE_SESSION_ID",
+    ] {
+        command.env_remove(key);
+    }
+    command
+        .output()
+        .expect("invariant: compiled maestro binary should be runnable in hook tests")
+}
+
 fn init_repo() -> TestTempDir {
     let temp_dir = TestTempDir::new("maestro-hook-record-test");
     fs::create_dir(temp_dir.path().join(".git"))
@@ -373,6 +409,67 @@ fn skill_activation_event_is_normalized() {
     assert_eq!(events[0]["event_type"], "skill_activation");
     assert_eq!(events[0]["skill_name"], "maestro-task");
     assert_eq!(events[0]["activation_mode"], "agent_selected");
+}
+
+#[test]
+fn hook_record_flags_print_ack_and_use_session_or_cli_run_dirs() {
+    let repo = init_repo();
+    let explicit = maestro(
+        repo.path(),
+        &[
+            "hook",
+            "record",
+            "--event",
+            "skill_activation",
+            "--skill",
+            "qa-baseline",
+            "--session",
+            "session-flags",
+        ],
+    );
+    assert!(
+        explicit.status.success(),
+        "hook record flags failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&explicit.stdout),
+        String::from_utf8_lossy(&explicit.stderr)
+    );
+    let explicit_out = String::from_utf8_lossy(&explicit.stdout);
+    assert!(
+        explicit_out.contains("recorded skill_activation (qa-baseline) -> runs/session-flags"),
+        "{explicit_out}"
+    );
+    let explicit_events = read_events(repo.path(), "session-flags");
+    assert_eq!(explicit_events[0]["event_type"], "skill_activation");
+    assert_eq!(explicit_events[0]["skill_name"], "qa-baseline");
+
+    let env_attributed = maestro_with_env(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+        &[("MAESTRO_SESSION_ID", "session-env")],
+    );
+    assert!(env_attributed.status.success());
+    assert!(
+        String::from_utf8_lossy(&env_attributed.stdout)
+            .contains("recorded UserPromptSubmit -> runs/session-env")
+    );
+    let env_events = read_events(repo.path(), "session-env");
+    assert_eq!(env_events[0]["event_type"], "UserPromptSubmit");
+
+    let cli_attributed = maestro_without_session_env(
+        repo.path(),
+        &["hook", "record", "--event", "UserPromptSubmit"],
+    );
+    assert!(cli_attributed.status.success());
+    let cli_out = String::from_utf8_lossy(&cli_attributed.stdout);
+    let run_dir = cli_out
+        .split("runs/")
+        .nth(1)
+        .expect("invariant: ack should include run dir")
+        .trim();
+    assert!(run_dir.starts_with("cli-"), "{cli_out}");
+    let cli_events = read_events(repo.path(), run_dir);
+    assert_eq!(cli_events[0]["event_type"], "UserPromptSubmit");
+    assert!(!repo.path().join(".maestro/runs/unattributed").exists());
 }
 
 #[test]

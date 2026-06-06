@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::foundation::core::fs::ensure_dir;
-use crate::foundation::core::time::parse_utc_timestamp;
+use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
+use crate::foundation::core::safe_write::write_string_atomic;
+use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
 pub(crate) mod archive;
 pub(crate) mod blockers;
@@ -38,6 +39,15 @@ pub struct FeatureTaskProjection {
     pub id: String,
     pub feature_id: Option<String>,
     pub state: Option<TaskState>,
+}
+
+/// Result of appending a task note.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NoteReport {
+    /// Task id.
+    pub id: String,
+    /// Whether `notes.md` was created by this append.
+    pub created: bool,
 }
 
 /// Task aggregate loaded with its Task-owned optimistic save context.
@@ -252,6 +262,37 @@ pub(crate) fn load_task_for_update(tasks_dir: &Path, id: &str) -> Result<TaskHan
         task_dir,
         snapshot,
     })
+}
+
+/// Append one dated line to a task's `notes.md`, creating it on first write.
+pub fn note(tasks_dir: &Path, id: &str, text: &str) -> Result<NoteReport> {
+    let (task, _, task_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    if text.trim().is_empty() {
+        bail!("task note text cannot be empty");
+    }
+    let path = task_dir.join("notes.md");
+    let created = append_note_file(&path, &task.title, text)?;
+    Ok(NoteReport {
+        id: task.id,
+        created,
+    })
+}
+
+fn append_note_file(path: &Path, title: &str, text: &str) -> Result<bool> {
+    let existing = read_to_string_if_exists(path)?;
+    let created = existing.is_none();
+    let mut contents = existing.unwrap_or_else(|| format!("# {title}\n\n"));
+    if !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    let date = utc_now_timestamp()
+        .split_once('T')
+        .map(|(date, _)| date.to_string())
+        .unwrap_or_else(|| "1970-01-01".to_string());
+    contents.push_str(&format!("{date}  {}\n", text.trim()));
+    write_string_atomic(path, &contents)
+        .with_context(|| format!("failed to append task note {}", path.display()))?;
+    Ok(created)
 }
 
 /// Lock acceptance criteria and move a task to ready.
