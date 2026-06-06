@@ -182,7 +182,7 @@ write_qa_baseline() {
     printf '### QA Baseline Contract\n\n'
     printf '%s\n' '- Scenario Matrix:'
     printf '  - [%s] %s\n' "$scenario_id" "$scenario"
-  } > "$dir/.maestro/features/$feature/baseline.md"
+  } > "$dir/.maestro/features/$feature/qa.md"
 }
 
 write_qa_slices() {
