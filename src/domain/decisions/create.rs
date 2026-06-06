@@ -1,13 +1,13 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions::query::{
-    DecisionSource, decision_exists, load_store_at, normalize_decision_id, save_store_at,
-    store_paths,
+    DecisionSource, decision_entries, decision_exists, load_store_at, normalize_decision_id,
+    parse_decision_number, save_store_at, store_paths,
 };
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
-use crate::foundation::core::fs::ensure_dir;
+use crate::domain::feature;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -142,11 +142,14 @@ pub fn lock(
     }
 
     let note_line = if let Some(feature_id) = record.feature.as_deref() {
-        Some(append_feature_note(
-            paths,
-            feature_id,
-            &format!("{} locked -- {}", record.id, record.title),
-        )?)
+        Some(
+            feature::note(
+                paths,
+                feature_id,
+                &format!("{} locked -- {}", record.id, record.title),
+            )?
+            .line,
+        )
     } else {
         None
     };
@@ -172,11 +175,7 @@ fn decision_store_target(
     feature: Option<&str>,
 ) -> Result<(PathBuf, DecisionSource)> {
     if let Some(feature_id) = feature {
-        validate_component("feature id", feature_id)?;
-        let feature_yaml = paths.features_dir().join(feature_id).join("feature.yaml");
-        if !feature_yaml.is_file() {
-            bail!("feature not found: {feature_id}");
-        }
+        feature::ensure_exists(paths, feature_id)?;
         let path = paths.features_dir().join(feature_id).join("decisions.yaml");
         if !path.exists() {
             ensure_feature_store(paths, feature_id)?;
@@ -198,8 +197,15 @@ fn decision_store_target(
 
 fn next_decision_number(paths: &MaestroPaths) -> Result<u32> {
     let mut max_number = 0_u32;
-    for entry in crate::domain::decisions::query::list(paths)? {
-        if let Some(number) = crate::domain::decisions::query::parse_decision_number(&entry.id) {
+    for store_path in store_paths(paths)? {
+        for record in load_store_at(&store_path.path)?.decisions {
+            if let Some(number) = parse_decision_number(&record.id) {
+                max_number = max_number.max(number);
+            }
+        }
+    }
+    for entry in decision_entries(&paths.decisions_dir())? {
+        if let Some(number) = parse_decision_number(&entry.file_name) {
             max_number = max_number.max(number);
         }
     }
@@ -225,52 +231,4 @@ fn mark_superseded(paths: &MaestroPaths, id: &str, by: &str) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn append_feature_note(paths: &MaestroPaths, feature_id: &str, text: &str) -> Result<String> {
-    let feature_yaml = paths.features_dir().join(feature_id).join("feature.yaml");
-    let raw = std::fs::read_to_string(&feature_yaml)
-        .with_context(|| format!("failed to read {}", feature_yaml.display()))?;
-    let feature: FeatureTitle = serde_yaml::from_str(&raw)
-        .with_context(|| format!("failed to parse {}", feature_yaml.display()))?;
-    let notes = paths.features_dir().join(feature_id).join("notes.md");
-    append_note_file(&notes, &feature.title, text)
-}
-
-fn append_note_file(path: &Path, title: &str, text: &str) -> Result<String> {
-    let existing = crate::foundation::core::fs::read_to_string_if_exists(path)?;
-    let mut contents = existing.unwrap_or_else(|| format!("# {title}\n\n"));
-    if !contents.ends_with('\n') {
-        contents.push('\n');
-    }
-    let date = utc_now_timestamp()
-        .split_once('T')
-        .map(|(date, _)| date.to_string())
-        .unwrap_or_else(|| "1970-01-01".to_string());
-    let line = format!("{date}  {}", text.trim());
-    contents.push_str(&line);
-    contents.push('\n');
-    if let Some(parent) = path.parent() {
-        ensure_dir(parent)?;
-    }
-    crate::foundation::core::safe_write::write_string_atomic(path, &contents)
-        .with_context(|| format!("failed to append feature note {}", path.display()))?;
-    Ok(line)
-}
-
-fn validate_component(label: &str, value: &str) -> Result<()> {
-    let path = Path::new(value);
-    let mut components = path.components();
-    if value.is_empty()
-        || !matches!(components.next(), Some(std::path::Component::Normal(_)))
-        || components.next().is_some()
-    {
-        bail!("invalid {label}: {value}");
-    }
-    Ok(())
-}
-
-#[derive(serde::Deserialize)]
-struct FeatureTitle {
-    title: String,
 }

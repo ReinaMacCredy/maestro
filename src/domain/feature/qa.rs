@@ -20,7 +20,7 @@ use std::path::Path;
 use anyhow::{Result, anyhow};
 use serde::Deserialize;
 
-use crate::domain::feature::schema::{AmendEntry, AmendLog};
+use crate::domain::feature::schema::{AmendLog, normalize_acceptance_id};
 use crate::foundation::core::fs::read_to_string_if_exists;
 
 /// The parsed `qa.md` baseline: the amend-log position it was captured against and
@@ -159,7 +159,7 @@ pub(crate) fn ship_qa_gaps(
     };
     let behavioral_after = amend_log.entries[position..]
         .iter()
-        .filter(|entry| is_behavioral(entry))
+        .filter(|entry| entry.is_behavioral())
         .count();
     if behavioral_after > 0 {
         gaps.push(format!(
@@ -187,12 +187,6 @@ pub(crate) fn ship_qa_gaps(
     }
 
     gaps
-}
-
-/// A behavioral amend grew the proven surface (acceptance or affected area), so a
-/// baseline captured before it is stale. Non-goal / open-question amends do not.
-fn is_behavioral(entry: &AmendEntry) -> bool {
-    !entry.added.acceptance.is_empty() || !entry.added.affected_areas.is_empty()
 }
 
 /// Union of `bl-NNN` ids across counting slices (scenarios + evidence non-empty).
@@ -287,18 +281,9 @@ fn covers_clause(line: &str) -> Option<BTreeSet<String>> {
     let end = rest.find(')')?;
     let ids = rest[..end]
         .split(',')
-        .filter_map(normalize_ac_id)
+        .filter_map(normalize_acceptance_id)
         .collect::<BTreeSet<_>>();
     (!ids.is_empty()).then_some(ids)
-}
-
-fn normalize_ac_id(raw: &str) -> Option<String> {
-    let digits = raw.trim().strip_prefix("ac-")?;
-    if digits.is_empty() || !digits.chars().all(|ch| ch.is_ascii_digit()) {
-        return None;
-    }
-    let number = digits.parse::<usize>().ok()?;
-    (number > 0).then(|| format!("ac-{number}"))
 }
 
 /// Normalize a slice scenario reference (`bl-001` or `[bl-001]`) to its `bl-NNN`
@@ -317,7 +302,7 @@ fn normalize_bl_id(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::feature::schema::AmendAdditions;
+    use crate::domain::feature::schema::{AmendAdditions, AmendEntry};
 
     fn entry(acceptance: &[&str], areas: &[&str]) -> AmendEntry {
         AmendEntry {

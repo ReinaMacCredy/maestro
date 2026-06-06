@@ -83,7 +83,7 @@ pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
                 BlockerKind::External | BlockerKind::Human => continue,
                 BlockerKind::Decision => {
                     if let Some(paths) = decision_paths.as_ref()
-                        && !decisions::decision_exists(paths, &blocked_ref.id).unwrap_or(false)
+                        && !decisions::decision_exists(paths, &blocked_ref.id)?
                     {
                         errors.push(format!(
                             "{} has blocker {} referencing missing decision {}",

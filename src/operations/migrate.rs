@@ -9,10 +9,11 @@ use serde_json::json;
 use serde_yaml::{Mapping, Value};
 
 use crate::domain::task;
-use crate::foundation::core::fs::ensure_dir;
+use crate::foundation::core::fs::{child_dirs as fs_child_dirs, ensure_dir};
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::retention::prune_child_dirs;
+use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{FEATURE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
 use crate::foundation::core::time::render_timestamp;
 
@@ -190,8 +191,9 @@ fn merge_qa_files(feature_dir: &Path, report: &mut MigrateReport) -> Result<()> 
         qa.push_str(slice_yaml.trim_end());
         qa.push_str("\n```\n");
     }
-    fs::write(feature_dir.join("qa.md"), qa)
-        .with_context(|| format!("failed to write {}", feature_dir.join("qa.md").display()))?;
+    let qa_path = feature_dir.join("qa.md");
+    write_string_atomic(&qa_path, &qa)
+        .with_context(|| format!("failed to write {}", qa_path.display()))?;
     remove_if_exists(baseline, report)?;
     remove_if_exists(slices, report)?;
     Ok(())
@@ -229,8 +231,9 @@ fn write_task_markdown(task_dir: &Path, record: &Mapping) -> Result<()> {
         .filter_map(Value::as_str)
         .map(str::to_string)
         .collect();
-    fs::write(task_dir.join("task.md"), task::task_markdown(&task))
-        .with_context(|| format!("failed to write {}", task_dir.join("task.md").display()))
+    let task_md = task_dir.join("task.md");
+    write_string_atomic(&task_md, &task::task_markdown(&task))
+        .with_context(|| format!("failed to write {}", task_md.display()))
 }
 
 fn promote_claims(record: &mut Mapping) {
@@ -315,7 +318,8 @@ fn read_yaml_mapping(path: &Path) -> Result<Mapping> {
 }
 
 fn write_yaml_mapping(path: &Path, mapping: &Mapping) -> Result<()> {
-    fs::write(path, serde_yaml::to_string(mapping)?)
+    let contents = serde_yaml::to_string(mapping)?;
+    write_string_atomic(path, &contents)
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
@@ -369,23 +373,10 @@ fn copy_json_value(
 }
 
 fn child_dirs(parent: &Path) -> Result<Vec<PathBuf>> {
-    let entries = match fs::read_dir(parent) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to read {}", parent.display()));
-        }
-    };
-    let mut dirs = Vec::new();
-    for entry in entries {
-        let entry = entry.with_context(|| format!("failed to list {}", parent.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-        if file_type.is_dir() && !file_type.is_symlink() {
-            dirs.push(entry.path());
-        }
-    }
+    let mut dirs: Vec<PathBuf> = fs_child_dirs(parent)?
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect();
     dirs.sort();
     Ok(dirs)
 }

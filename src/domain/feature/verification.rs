@@ -6,11 +6,12 @@ use anyhow::{Result, bail};
 use crate::domain::feature::qa;
 use crate::domain::feature::registry;
 use crate::domain::feature::schema::{
-    AcceptanceEvidenceEntry, AcceptanceSweepRun, AmendEntry, FeatureRecord,
+    AcceptanceEvidenceEntry, AcceptanceEvidenceKind, AcceptanceSweepRun, FeatureRecord,
+    normalize_acceptance_id,
 };
-use crate::domain::task::{self, TaskRecord, TaskState, VerificationStatus};
+use crate::domain::task::{self, TaskEntry, TaskRecord, TaskState, VerificationStatus};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
+use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AcceptanceCoverage {
@@ -59,16 +60,6 @@ pub fn acceptance_id(index: usize) -> String {
     format!("ac-{}", index + 1)
 }
 
-pub fn normalize_acceptance_id(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    let digits = trimmed.strip_prefix("ac-")?;
-    if digits.is_empty() || !digits.chars().all(|ch| ch.is_ascii_digit()) {
-        return None;
-    }
-    let number = digits.parse::<usize>().ok()?;
-    (number > 0).then(|| format!("ac-{number}"))
-}
-
 pub fn acceptance_coverage(
     paths: &MaestroPaths,
     feature_id: &str,
@@ -107,33 +98,39 @@ pub fn verify_feature(
     let mut record = registry::load_record(paths, feature_id)?;
     if let Some(update) = update {
         let (kind, ac_id, text) = match update {
-            FeatureProofUpdate::Explicit { ac_id, evidence } => {
-                ("explicit", ac_id, evidence.trim().to_string())
-            }
-            FeatureProofUpdate::Waive { ac_id, reason } => {
-                ("waived", ac_id, reason.trim().to_string())
-            }
+            FeatureProofUpdate::Explicit { ac_id, evidence } => (
+                AcceptanceEvidenceKind::Explicit,
+                ac_id,
+                evidence.trim().to_string(),
+            ),
+            FeatureProofUpdate::Waive { ac_id, reason } => (
+                AcceptanceEvidenceKind::Waived,
+                ac_id,
+                reason.trim().to_string(),
+            ),
         };
         let ac_id = normalize_existing_acceptance_id(&record, &ac_id)?;
         if text.is_empty() {
             bail!("feature acceptance evidence must not be empty");
         }
+        let kind_label = kind.as_str();
         record.acceptance_evidence.push(AcceptanceEvidenceEntry {
             ac_id: ac_id.clone(),
-            kind: kind.to_string(),
+            kind,
             text: text.clone(),
             at: utc_now_timestamp(),
         });
         registry::save_record(paths, &record)?;
         return Ok(FeatureVerifyReport {
             feature_id: record.id,
-            recorded: Some(format!("{kind} {ac_id}: {text}")),
+            recorded: Some(format!("{kind_label} {ac_id}: {text}")),
             sweep: None,
         });
     }
 
     let previous = record.acceptance_sweeps.last().map(|run| run.at.clone());
-    let report = sweep_acceptance(paths, &record, previous.as_deref())?;
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    let report = sweep_acceptance(paths, &record, previous.as_deref(), &task_entries)?;
     let resolved = report
         .items
         .iter()
@@ -175,7 +172,8 @@ pub(crate) fn acceptance_ship_gap(
             record.id
         )));
     };
-    let invalidated_by = invalidations_since(paths, record, &latest.at)?;
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    let invalidated_by = invalidations_since(record, &latest.at, &task_entries);
     if !invalidated_by.is_empty() {
         return Ok(Some(format!(
             "contract sweep stale — {}\n    fix: maestro feature verify {}\n    retry: maestro feature ship {} --outcome \"<outcome>\"",
@@ -201,18 +199,19 @@ fn sweep_acceptance(
     paths: &MaestroPaths,
     record: &FeatureRecord,
     previous_sweep_at: Option<&str>,
+    task_entries: &[TaskEntry],
 ) -> Result<AcceptanceSweepReport> {
     let explicit = latest_explicit_evidence(record);
-    let task_proofs = task_proofs_by_acceptance(paths, &record.id)?;
+    let task_proofs = task_proofs_by_acceptance_in_entries(task_entries, &record.id);
     let qa_proofs =
         qa::acceptance_ids_covered_by_counting_slices(&registry::feature_dir(paths, &record.id))?;
     let mut items = Vec::new();
     for (index, text) in record.acceptance.iter().enumerate() {
         let ac_id = acceptance_id(index);
         let proof = if let Some(entry) = explicit.get(&ac_id) {
-            match entry.kind.as_str() {
-                "waived" => AcceptanceProof::Waived(entry.text.clone()),
-                _ => AcceptanceProof::Explicit(entry.text.clone()),
+            match entry.kind {
+                AcceptanceEvidenceKind::Explicit => AcceptanceProof::Explicit(entry.text.clone()),
+                AcceptanceEvidenceKind::Waived => AcceptanceProof::Waived(entry.text.clone()),
             }
         } else if let Some(tasks) = task_proofs.get(&ac_id) {
             AcceptanceProof::Task(tasks.clone())
@@ -230,8 +229,7 @@ fn sweep_acceptance(
     Ok(AcceptanceSweepReport {
         at: utc_now_timestamp(),
         invalidated_by: previous_sweep_at
-            .map(|at| invalidations_since(paths, record, at))
-            .transpose()?
+            .map(|at| invalidations_since(record, at, task_entries))
             .unwrap_or_default(),
         items,
     })
@@ -248,8 +246,19 @@ fn acceptance_coverage_for_record_in_task_root(
     record: &FeatureRecord,
     tasks_dir: &Path,
 ) -> Result<Vec<AcceptanceCoverage>> {
-    let tasks = task_proofs_and_links_by_acceptance(tasks_dir, &record.id, false)?;
-    Ok(record
+    let task_entries = task::load_task_entries(tasks_dir)?;
+    Ok(acceptance_coverage_for_record_in_entries(
+        record,
+        &task_entries,
+    ))
+}
+
+pub(crate) fn acceptance_coverage_for_record_in_entries(
+    record: &FeatureRecord,
+    task_entries: &[TaskEntry],
+) -> Vec<AcceptanceCoverage> {
+    let tasks = task_proofs_and_links_by_acceptance_in_entries(task_entries, &record.id, false);
+    record
         .acceptance
         .iter()
         .enumerate()
@@ -261,7 +270,7 @@ fn acceptance_coverage_for_record_in_task_root(
                 text: text.clone(),
             }
         })
-        .collect())
+        .collect()
 }
 
 fn normalize_existing_acceptance_id(record: &FeatureRecord, value: &str) -> Result<String> {
@@ -292,25 +301,25 @@ fn latest_explicit_evidence(record: &FeatureRecord) -> BTreeMap<String, &Accepta
     entries
 }
 
-fn task_proofs_by_acceptance(
-    paths: &MaestroPaths,
+fn task_proofs_by_acceptance_in_entries(
+    task_entries: &[TaskEntry],
     feature_id: &str,
-) -> Result<BTreeMap<String, Vec<String>>> {
-    task_proofs_and_links_by_acceptance(&paths.tasks_dir(), feature_id, true)
+) -> BTreeMap<String, Vec<String>> {
+    task_proofs_and_links_by_acceptance_in_entries(task_entries, feature_id, true)
 }
 
-fn task_proofs_and_links_by_acceptance(
-    tasks_dir: &Path,
+fn task_proofs_and_links_by_acceptance_in_entries(
+    task_entries: &[TaskEntry],
     feature_id: &str,
     require_verified: bool,
-) -> Result<BTreeMap<String, Vec<String>>> {
+) -> BTreeMap<String, Vec<String>> {
     let mut by_acceptance = BTreeMap::<String, Vec<String>>::new();
-    for entry in task::load_task_entries(tasks_dir)? {
-        let task = entry.task;
+    for entry in task_entries {
+        let task = &entry.task;
         if task.feature_id.as_deref() != Some(feature_id) {
             continue;
         }
-        if require_verified && !is_verified_task(&task) {
+        if require_verified && !is_verified_task(task) {
             continue;
         }
         for cover in &task.covers {
@@ -326,7 +335,7 @@ fn task_proofs_and_links_by_acceptance(
         tasks.sort();
         tasks.dedup();
     }
-    Ok(by_acceptance)
+    by_acceptance
 }
 
 fn is_verified_task(task: &TaskRecord) -> bool {
@@ -335,23 +344,21 @@ fn is_verified_task(task: &TaskRecord) -> bool {
 }
 
 fn invalidations_since(
-    paths: &MaestroPaths,
     record: &FeatureRecord,
     since: &str,
-) -> Result<Vec<String>> {
+    task_entries: &[TaskEntry],
+) -> Vec<String> {
     let Some(since) = timestamp_nanos(since) else {
-        return Ok(vec![
-            "prior sweep timestamp could not be parsed".to_string(),
-        ]);
+        return vec!["prior sweep timestamp could not be parsed".to_string()];
     };
     let mut invalidations = Vec::new();
-    for amend in record.amends.iter().filter(|entry| is_behavioral(entry)) {
+    for amend in record.amends.iter().filter(|entry| entry.is_behavioral()) {
         if timestamp_nanos(&amend.at).is_some_and(|at| at > since) {
             invalidations.push(format!("behavioral amend at {}", amend.at));
         }
     }
-    for entry in task::load_task_entries(&paths.tasks_dir())? {
-        let task = entry.task;
+    for entry in task_entries {
+        let task = &entry.task;
         if task.feature_id.as_deref() != Some(&record.id) {
             continue;
         }
@@ -362,16 +369,5 @@ fn invalidations_since(
             invalidations.push(format!("{} settled at {}", task.id, task.updated_at));
         }
     }
-    Ok(invalidations)
-}
-
-fn is_behavioral(entry: &AmendEntry) -> bool {
-    !entry.added.acceptance.is_empty() || !entry.added.affected_areas.is_empty()
-}
-
-fn timestamp_nanos(value: &str) -> Option<i128> {
-    if value.chars().all(|ch| ch.is_ascii_digit()) {
-        return value.parse::<i128>().ok();
-    }
-    parse_utc_timestamp(value).map(|timestamp| timestamp.nanos_since_epoch)
+    invalidations
 }

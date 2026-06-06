@@ -98,3 +98,28 @@ fn create_open_rejects_empty_slug_title() {
         "no structured store must be written"
     );
 }
+
+#[test]
+fn decision_exists_propagates_structured_store_errors() {
+    let temp = TestTempDir::new("maestro-decision-exists-error");
+    let paths = MaestroPaths::new(temp.path());
+    ensure_dir(
+        paths
+            .decisions_file()
+            .parent()
+            .expect("invariant: decisions file should have parent"),
+    )
+    .expect("invariant: decisions parent should be creatable");
+    fs::write(
+        paths.decisions_file(),
+        "schema_version: wrong.version\ndecisions: []\n",
+    )
+    .expect("invariant: invalid decisions store should be writable");
+
+    let error = decisions::decision_exists(&paths, "decision-001")
+        .expect_err("schema mismatch must not collapse to false");
+    assert!(
+        format!("{error:#}").contains("schema mismatch"),
+        "{error:#}"
+    );
+}

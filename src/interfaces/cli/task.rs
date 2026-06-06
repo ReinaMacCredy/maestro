@@ -5,7 +5,7 @@ use crate::domain::proof;
 use crate::domain::task;
 use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::foundation::core::time::nanos_since_epoch_string;
+use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::status;
 use crate::interfaces::cli::task_id::resolve_optional_task_id;
 use crate::interfaces::cli::verify;
@@ -177,7 +177,7 @@ fn create_task(
     if let Some(target) = feature.as_deref() {
         guard_feature_target(paths, target)?;
     }
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let task = task::create_task(
         &paths.tasks_dir(),
         title,
@@ -243,7 +243,7 @@ fn set_task(
     }
 
     if changing_feature {
-        let now = nanos_since_epoch_string();
+        let now = utc_now_timestamp();
         let target = if no_feature { None } else { feature };
         let task = task::set_feature(&paths.tasks_dir(), id, target, actor, &now)?;
         match &task.feature_id {
@@ -302,7 +302,7 @@ fn guard_feature_target(paths: &MaestroPaths, target: &str) -> Result<()> {
 }
 
 fn accept_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let task = task::accept_task(&paths.tasks_dir(), id, actor, &now)?;
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
 
@@ -320,7 +320,7 @@ fn claim_task(paths: &MaestroPaths, id: &str, actor: &str) -> Result<()> {
         let checks = task::load_task_checks(&paths.tasks_dir(), &task).unwrap_or_default();
         bail!("{}", claim_not_ready_message(&task, &checks));
     }
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let task = task::claim_task(&paths.tasks_dir(), id, actor, &now)?;
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     println!("updated {} -> {}", task.id, task.state.as_str());
@@ -341,7 +341,7 @@ fn claim_next_task(paths: &MaestroPaths, actor: &str) -> Result<()> {
     else {
         bail!("no ready, unblocked task to claim; run `maestro task next`");
     };
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let task = task::claim_task(&paths.tasks_dir(), &next.id, actor, &now)?;
     let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     println!("claimed {} -> {}", task.id, task.state.as_str());
@@ -481,7 +481,7 @@ fn transition_task_record(
     actor: &str,
     details: TransitionDetails,
 ) -> Result<TaskRecord> {
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     task::transition_task(&paths.tasks_dir(), id, to, actor, &now, details)
 }
 
@@ -492,7 +492,7 @@ fn supersede_task(
     reason: &str,
     actor: &str,
 ) -> Result<()> {
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let task = match task::supersede_task(&paths.tasks_dir(), id, by, reason, actor, &now) {
         Ok(task) => task,
         Err(error) => bail!(
@@ -796,7 +796,7 @@ fn block_task(
     by: Option<String>,
     actor: &str,
 ) -> Result<()> {
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let target = blocker_target(by);
     let (task, blocker_id) = task::block_task(&paths.tasks_dir(), id, reason, target, actor, &now)?;
 
@@ -805,7 +805,7 @@ fn block_task(
 }
 
 fn unblock_task(paths: &MaestroPaths, id: &str, blocker_id: &str, actor: &str) -> Result<()> {
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let task = task::unblock_task(&paths.tasks_dir(), id, blocker_id, actor, &now)?;
 
     println!("unblocked {} ({blocker_id})", task.id);
@@ -824,7 +824,7 @@ fn update_task(
             "task update requires --summary or --claim\n  maestro task update {id} --summary \"...\"\n  maestro task update {id} --claim \"...\""
         );
     }
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let task = task::update_task_history(
         &paths.tasks_dir(),
         id,

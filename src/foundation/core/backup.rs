@@ -44,10 +44,9 @@ pub fn backup_file_with_timestamp(
             path: source.to_path_buf(),
         })?;
     reject_backup_symlinks(paths)?;
-    let destination = paths
-        .backups_dir()
-        .join(format!("{timestamp}-{operation}"))
-        .join(relative);
+    let operation_dir = paths.backups_dir().join(format!("{timestamp}-{operation}"));
+    let should_prune = !operation_dir.exists();
+    let destination = operation_dir.join(relative);
 
     ensure_parent_dir(&destination)?;
     copy_without_overwrite(&source, &destination).with_context(|| {
@@ -57,7 +56,9 @@ pub fn backup_file_with_timestamp(
             destination.display()
         )
     })?;
-    prune_child_dirs(&paths.backups_dir(), 3)?;
+    if should_prune {
+        prune_child_dirs(&paths.backups_dir(), 3)?;
+    }
 
     Ok(destination)
 }

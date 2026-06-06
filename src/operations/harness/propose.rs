@@ -9,9 +9,7 @@ use crate::domain::harness::{
 use crate::domain::run;
 use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::time::{
-    nanos_since_epoch_string, parse_utc_timestamp, utc_now_timestamp,
-};
+use crate::foundation::core::time::{timestamp_nanos, utc_now_timestamp};
 
 use super::{detect, policy};
 
@@ -300,7 +298,7 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<AppliedItem> {
     let title = item.title.clone();
     let check = default_check(item);
     let actor = "maestro-harness";
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let task = task::create_task(
         &paths.tasks_dir(),
         &title,
@@ -512,7 +510,9 @@ fn audit_reproposed_since_apply(item: &BacklogItem) -> bool {
     else {
         return false;
     };
-    item.last_seen.as_str() > accepted_at
+    timestamp_nanos(&item.last_seen)
+        .zip(timestamp_nanos(accepted_at))
+        .is_some_and(|(last_seen, accepted_at)| last_seen > accepted_at)
 }
 
 fn normalize_agent_topic(value: &str) -> String {
@@ -533,13 +533,6 @@ fn normalize_agent_topic(value: &str) -> String {
         .take(8)
         .collect::<Vec<_>>()
         .join("-")
-}
-
-fn timestamp_nanos(value: &str) -> Option<i128> {
-    if value.chars().all(|ch| ch.is_ascii_digit()) {
-        return value.parse::<i128>().ok();
-    }
-    parse_utc_timestamp(value).map(|timestamp| timestamp.nanos_since_epoch)
 }
 
 fn field_or_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {

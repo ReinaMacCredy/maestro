@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use anyhow::{Result, bail};
 
@@ -58,7 +57,7 @@ fn query_matrix(paths: &MaestroPaths) -> Result<()> {
     let entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut task_rows = entries
         .iter()
-        .map(|entry| matrix_row(paths, &entry.task, &entry.task_dir, current_commit.clone()))
+        .map(|entry| matrix_row(&entry.task, current_commit.clone()))
         .collect::<Result<Vec<_>>>()?;
     task_rows.sort_by(|left, right| {
         left.feature_id
@@ -185,12 +184,7 @@ struct MatrixRow {
     title: String,
 }
 
-fn matrix_row(
-    paths: &MaestroPaths,
-    task: &task::TaskRecord,
-    task_dir: &Path,
-    current_commit: Option<String>,
-) -> Result<MatrixRow> {
+fn matrix_row(task: &task::TaskRecord, current_commit: Option<String>) -> Result<MatrixRow> {
     Ok(MatrixRow {
         feature_id: task
             .feature_id
@@ -198,18 +192,13 @@ fn matrix_row(
             .unwrap_or_else(|| "<none>".to_string()),
         id: task.id.clone(),
         state: task_state_label(&task.state, task::has_unresolved_blockers(task)),
-        proof: proof_label(paths, task, task_dir, current_commit)?,
+        proof: proof_label(task, current_commit)?,
         title: task.title.clone(),
     })
 }
 
-fn proof_label(
-    paths: &MaestroPaths,
-    task: &task::TaskRecord,
-    task_dir: &Path,
-    current_commit: Option<String>,
-) -> Result<&'static str> {
-    Ok(proof::proof_status_kind_for_task(paths, task, task_dir, current_commit)?.label())
+fn proof_label(task: &task::TaskRecord, current_commit: Option<String>) -> Result<&'static str> {
+    Ok(proof::proof_status_kind_for_task(task, current_commit)?.label())
 }
 
 fn task_state_label(state: &task::TaskState, blocked: bool) -> &'static str {

@@ -26,9 +26,12 @@ pub(super) fn detect_with_policy(
     escalation: &EscalationPolicy,
 ) -> Result<Vec<BacklogItem>> {
     let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    let intervention_events = collect_intervention_events(paths, escalation.enabled)?;
     let mut proposals = Vec::new();
-    proposals.extend(detect_explicit_interventions(paths)?);
-    proposals.extend(detect_recurring_interventions(paths, escalation.enabled)?);
+    proposals.extend(detect_explicit_interventions(intervention_events.by_topic));
+    proposals.extend(detect_recurring_interventions(
+        intervention_events.corrections_by_session,
+    ));
     proposals.extend(detect_missing_checks(paths, &task_entries)?);
     proposals.extend(detect_recurring_blockers(&task_entries));
     proposals.extend(detect_missing_skills(&task_entries));
@@ -36,32 +39,61 @@ pub(super) fn detect_with_policy(
     Ok(proposals)
 }
 
-fn detect_explicit_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogItem>> {
-    let mut by_topic = BTreeMap::<String, (BTreeSet<String>, Vec<String>)>::new();
+#[derive(Debug, Default)]
+struct InterventionEvents {
+    by_topic: BTreeMap<String, (BTreeSet<String>, Vec<String>)>,
+    corrections_by_session: BTreeMap<String, Vec<String>>,
+}
+
+fn collect_intervention_events(
+    paths: &MaestroPaths,
+    require_keyword: bool,
+) -> Result<InterventionEvents> {
+    let mut events = InterventionEvents::default();
     run::visit_managed_events(paths, |record| {
         let event = record.event();
-        if !event.is_event_type("intervention") {
-            return Ok(());
+        if event.is_event_type("intervention") {
+            let note = event.intervention_note().unwrap_or_default().trim();
+            if note.is_empty() {
+                return Ok(());
+            }
+            let topic = event
+                .topic()
+                .map(normalize_pinned_topic)
+                .filter(|topic| !topic.is_empty())
+                .unwrap_or_else(|| normalize_topic(note));
+            if topic.is_empty() {
+                return Ok(());
+            }
+            let entry = events.by_topic.entry(topic).or_default();
+            entry.0.insert(record.session_id().to_string());
+            entry.1.push(format!("{}: {}", record.session_id(), note));
         }
-        let note = event.intervention_note().unwrap_or_default().trim();
-        if note.is_empty() {
-            return Ok(());
+
+        if event.is_event_type("UserPromptSubmit") {
+            let text = event.prompt_text().unwrap_or_default();
+            let is_correction = if require_keyword {
+                looks_like_correction_requiring_keyword(text)
+            } else {
+                looks_like_correction(text)
+            };
+            if is_correction {
+                events
+                    .corrections_by_session
+                    .entry(record.session_id().to_string())
+                    .or_default()
+                    .push(text.to_string());
+            }
         }
-        let topic = event
-            .topic()
-            .map(normalize_pinned_topic)
-            .filter(|topic| !topic.is_empty())
-            .unwrap_or_else(|| normalize_topic(note));
-        if topic.is_empty() {
-            return Ok(());
-        }
-        let entry = by_topic.entry(topic).or_default();
-        entry.0.insert(record.session_id().to_string());
-        entry.1.push(format!("{}: {}", record.session_id(), note));
         Ok(())
     })?;
+    Ok(events)
+}
 
-    Ok(by_topic
+fn detect_explicit_interventions(
+    by_topic: BTreeMap<String, (BTreeSet<String>, Vec<String>)>,
+) -> Vec<BacklogItem> {
+    by_topic
         .into_iter()
         .map(|(topic, (sessions, evidence))| {
             let sessions_hit = sessions.into_iter().collect::<Vec<_>>();
@@ -78,33 +110,12 @@ fn detect_explicit_interventions(paths: &MaestroPaths) -> Result<Vec<BacklogItem
             item.provenance = "explicit-intervention".to_string();
             item
         })
-        .collect())
+        .collect()
 }
 
 fn detect_recurring_interventions(
-    paths: &MaestroPaths,
-    require_keyword: bool,
-) -> Result<Vec<BacklogItem>> {
-    let mut corrections_by_session = BTreeMap::<String, Vec<String>>::new();
-    run::visit_managed_events(paths, |record| {
-        let event = record.event();
-        if event.is_event_type("UserPromptSubmit") {
-            let text = event.prompt_text().unwrap_or_default();
-            let is_correction = if require_keyword {
-                looks_like_correction_requiring_keyword(text)
-            } else {
-                looks_like_correction(text)
-            };
-            if is_correction {
-                corrections_by_session
-                    .entry(record.session_id().to_string())
-                    .or_default()
-                    .push(text.to_string());
-            }
-        }
-        Ok(())
-    })?;
-
+    corrections_by_session: BTreeMap<String, Vec<String>>,
+) -> Vec<BacklogItem> {
     let mut sessions = Vec::new();
     let mut evidence = Vec::new();
     let mut occurrences = 0;
@@ -119,9 +130,9 @@ fn detect_recurring_interventions(
         }
     }
     if sessions.is_empty() {
-        return Ok(Vec::new());
+        return Vec::new();
     }
-    Ok(vec![proposal(
+    vec![proposal(
         "global".to_string(),
         "recurring_intervention",
         "global",
@@ -129,15 +140,15 @@ fn detect_recurring_interventions(
         evidence,
         sessions,
         occurrences,
-    )])
+    )]
 }
 
 fn detect_missing_checks(paths: &MaestroPaths, entries: &[TaskEntry]) -> Result<Vec<BacklogItem>> {
     let harness_commands = harness_verify_commands(paths)?;
     let mut proposals = Vec::new();
     for entry in entries {
-        let proof::VerificationCommandRead::Commands { commands, source } =
-            proof::verification_command_read_for_task(&entry.task, &entry.task_dir)?;
+        let proof::VerificationCommandRead { commands, source } =
+            proof::verification_command_read_for_task(&entry.task)?;
         let missing = commands
             .into_iter()
             .filter(|command| !harness_commands.contains(command.command()))

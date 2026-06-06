@@ -1,4 +1,5 @@
 mod support;
+mod task_support;
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -8,6 +9,7 @@ use std::process::Command;
 
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
+use task_support::task_roots;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -657,18 +659,6 @@ fn task_dir(repo: &Path, id: &str) -> PathBuf {
         }
     }
     panic!("invariant: task dir should exist for {id}");
-}
-
-fn task_roots(repo: &Path) -> Vec<PathBuf> {
-    let mut roots = vec![repo.join(".maestro/tasks")];
-    let features_dir = repo.join(".maestro/features");
-    if let Ok(features) = fs::read_dir(features_dir) {
-        for feature in features {
-            let feature = feature.expect("invariant: feature entry should be readable");
-            roots.push(feature.path().join("tasks"));
-        }
-    }
-    roots
 }
 
 fn collect_files(dir: &Path, repo: &Path, files: &mut BTreeSet<PathBuf>) {

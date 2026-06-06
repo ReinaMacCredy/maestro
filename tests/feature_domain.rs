@@ -216,6 +216,63 @@ fn amend_rejects_a_blank_addition_value() {
 }
 
 #[test]
+fn verify_rejects_unknown_acceptance_evidence_kind() {
+    let temp = TestTempDir::new("maestro-feature-evidence-kind");
+    let paths = MaestroPaths::new(temp.path());
+    feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
+    feature::set(
+        &paths,
+        "billing-csv",
+        ContractEdits {
+            acceptance: Some(vec!["exports rows".to_string()]),
+            affected_areas: Some(vec!["billing".to_string()]),
+            ..Default::default()
+        },
+    )
+    .expect("invariant: set should succeed");
+
+    let path = paths
+        .features_dir()
+        .join("billing-csv")
+        .join("feature.yaml");
+    let mut raw: serde_yaml::Value = serde_yaml::from_str(
+        &fs::read_to_string(&path).expect("invariant: feature should be readable"),
+    )
+    .expect("invariant: feature should parse");
+    raw["acceptance_evidence"] = serde_yaml::Value::Sequence(vec![serde_yaml::Value::Mapping(
+        [
+            (
+                serde_yaml::Value::String("ac_id".to_string()),
+                serde_yaml::Value::String("ac-1".to_string()),
+            ),
+            (
+                serde_yaml::Value::String("kind".to_string()),
+                serde_yaml::Value::String("typo".to_string()),
+            ),
+            (
+                serde_yaml::Value::String("text".to_string()),
+                serde_yaml::Value::String("must not count".to_string()),
+            ),
+            (
+                serde_yaml::Value::String("at".to_string()),
+                serde_yaml::Value::String("2026-06-06T00:00:00.000Z".to_string()),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    )]);
+    fs::write(
+        &path,
+        serde_yaml::to_string(&raw).expect("invariant: feature should serialize"),
+    )
+    .expect("invariant: feature should be writable");
+
+    let error = feature::verify_feature(&paths, "billing-csv", None)
+        .expect_err("unknown evidence kind must not become explicit proof");
+    assert!(format!("{error:#}").contains("kind"), "{error:#}");
+}
+
+#[test]
 fn accept_gate_requires_acceptance_and_areas() {
     let temp = TestTempDir::new("maestro-feature-accept-gate");
     let paths = MaestroPaths::new(temp.path());

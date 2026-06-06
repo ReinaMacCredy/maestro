@@ -22,12 +22,6 @@ pub fn utc_now_filesystem_millis_timestamp() -> String {
     utc_now_millis_timestamp().replace(':', "-")
 }
 
-/// Deprecated name retained for call-site stability while the persisted format
-/// has moved from nanosecond epochs to RFC3339 UTC milliseconds.
-pub fn nanos_since_epoch_string() -> String {
-    utc_now_millis_timestamp()
-}
-
 /// Return the current time as a UTC event timestamp.
 pub fn utc_now_timestamp() -> String {
     utc_now_millis_timestamp()
@@ -69,6 +63,16 @@ pub fn parse_utc_timestamp(value: &str) -> Option<ParsedTimestamp> {
         raw: format!("{value}Z"),
         nanos_since_epoch: seconds_since_epoch * 1_000_000_000 + i128::from(nanos),
     })
+}
+
+/// Parse either a legacy numeric nanosecond timestamp or the current RFC3339 UTC
+/// timestamp format into nanoseconds since the Unix epoch.
+pub fn timestamp_nanos(value: &str) -> Option<i128> {
+    let value = value.trim();
+    if value.chars().all(|character| character.is_ascii_digit()) {
+        return value.parse::<i128>().ok();
+    }
+    parse_utc_timestamp(value).map(|timestamp| timestamp.nanos_since_epoch)
 }
 
 /// Format Unix epoch seconds as an RFC3339 UTC timestamp with millisecond precision

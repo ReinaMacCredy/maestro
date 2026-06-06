@@ -18,7 +18,6 @@ pub enum ProofStatusKind {
     Failed,
     Accepted,
     Stale,
-    Unapplied,
 }
 
 /// One proof source included in a user-facing status read model.
@@ -54,11 +53,9 @@ pub struct ProofStatus {
 
 /// Proof-owned outcome for Improve's verification command read model.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum VerificationCommandRead {
-    Commands {
-        commands: Vec<VerificationCommandEvidence>,
-        source: VerificationCommandSource,
-    },
+pub(crate) struct VerificationCommandRead {
+    pub(crate) commands: Vec<VerificationCommandEvidence>,
+    pub(crate) source: VerificationCommandSource,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -101,19 +98,16 @@ pub fn proof_status(paths: &MaestroPaths, task_id: &str) -> Result<ProofStatus> 
 
 /// Load only the persisted proof classification for an already loaded task.
 pub fn proof_status_kind_for_task(
-    _paths: &MaestroPaths,
     task: &task::TaskRecord,
-    task_dir: &Path,
     current_commit: Option<String>,
 ) -> Result<ProofStatusKind> {
-    classify_binding(task, task_dir, current_commit, FailedStalePolicy::Skip)
+    classify_binding(task, current_commit, FailedStalePolicy::Skip)
         .map(|classification| classification.kind)
 }
 
 /// Load only the persisted proof classification needed by needs-verification UI rows.
 pub fn needs_verification_proof_status_kind_for_task(
     task: &task::TaskRecord,
-    _task_dir: &Path,
 ) -> Result<ProofStatusKind> {
     Ok(match task.verification.status {
         None => ProofStatusKind::Missing,
@@ -125,9 +119,8 @@ pub fn needs_verification_proof_status_kind_for_task(
 /// Read verification commands from task.yaml.
 pub(crate) fn verification_command_read_for_task(
     task: &task::TaskRecord,
-    _task_dir: &Path,
 ) -> Result<VerificationCommandRead> {
-    Ok(VerificationCommandRead::Commands {
+    Ok(VerificationCommandRead {
         commands: task
             .verification
             .commands
@@ -152,7 +145,7 @@ pub fn proof_status_for_task(
     current_commit: Option<String>,
 ) -> Result<ProofStatus> {
     let verification_path = display_verification_path(paths, &task_dir.join("task.yaml"));
-    let Some(status) = task.verification.status.clone() else {
+    if task.verification.status.is_none() {
         return Ok(ProofStatus {
             task_id: task.id.clone(),
             kind: ProofStatusKind::Missing,
@@ -166,14 +159,9 @@ pub fn proof_status_for_task(
             stale_reasons: Vec::new(),
             failures: Vec::new(),
         });
-    };
+    }
 
-    let classification = classify_binding(
-        task,
-        task_dir,
-        current_commit,
-        FailedStalePolicy::BestEffort,
-    )?;
+    let classification = classify_binding(task, current_commit, FailedStalePolicy::BestEffort)?;
     let stale = classification
         .stale
         .into_iter()
@@ -183,7 +171,6 @@ pub fn proof_status_for_task(
         task.id.clone(),
         classification.kind,
         verification_path,
-        status,
         &task.verification,
         stale,
     ))
@@ -241,7 +228,6 @@ impl ProofStatusKind {
             ProofStatusKind::Failed => "failed",
             ProofStatusKind::Accepted => "accepted",
             ProofStatusKind::Stale => "stale",
-            ProofStatusKind::Unapplied => "unapplied",
         }
     }
 }
@@ -260,7 +246,6 @@ fn status_from_binding(
     task_id: String,
     kind: ProofStatusKind,
     verification_path: String,
-    _status: task::VerificationStatus,
     binding: &task::VerificationBinding,
     stale_reasons: Vec<ProofStaleReason>,
 ) -> ProofStatus {
@@ -303,7 +288,6 @@ struct ProofClassification {
 
 fn classify_binding(
     task: &task::TaskRecord,
-    task_dir: &Path,
     current_commit: Option<String>,
     failed_stale_policy: FailedStalePolicy,
 ) -> Result<ProofClassification> {
@@ -315,7 +299,7 @@ fn classify_binding(
     };
     let stale = match (status, failed_stale_policy) {
         (task::VerificationStatus::Failed, FailedStalePolicy::Skip) => Vec::new(),
-        _ => full_status_stale_reasons(task, task_dir, current_commit)?,
+        _ => full_status_stale_reasons(task, current_commit)?,
     };
     let kind = match task.verification.status {
         Some(task::VerificationStatus::Failed) => ProofStatusKind::Failed,
@@ -328,10 +312,9 @@ fn classify_binding(
 
 fn full_status_stale_reasons(
     task: &task::TaskRecord,
-    task_dir: &Path,
     current_commit: Option<String>,
 ) -> Result<Vec<StaleReason>> {
-    let current = freshness_inputs_for_task(task, task_dir, current_commit)?;
+    let current = freshness_inputs_for_task(task, current_commit)?;
     let stored = StoredFreshness {
         verified_commit: task.verification.verified_commit.clone(),
         contract_hash: task.verification.contract_hash.clone().unwrap_or_default(),

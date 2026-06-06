@@ -27,7 +27,8 @@ use anyhow::{Context, Result, bail};
 use crate::domain::decisions;
 use crate::domain::feature::qa;
 use crate::domain::feature::query::{
-    FeatureTaskCounts, count_tasks_by_feature, count_tasks_for_feature, live_child_task_ids,
+    FeatureTaskCounts, count_tasks_by_feature, count_tasks_for_feature,
+    count_tasks_for_feature_in_entries, live_child_task_ids,
 };
 use crate::domain::feature::schema::{
     AmendAdditions, AmendEntry, AmendLog, FeatureRecord, FeatureStatus, QaDeclaration,
@@ -39,7 +40,7 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{Compat, FEATURE_SCHEMA_VERSION, classify};
 use crate::foundation::core::slug::slugify_ascii;
-use crate::foundation::core::time::{nanos_since_epoch_string, utc_now_timestamp};
+use crate::foundation::core::time::utc_now_timestamp;
 
 /// A feature joined with its non-persisted task counts, ready for display.
 ///
@@ -67,6 +68,8 @@ pub struct FeatureView {
     pub input_type: Option<String>,
     /// Acceptance criteria (the product contract).
     pub acceptance: Vec<String>,
+    /// Acceptance criteria joined with covering tasks, populated on show paths.
+    pub acceptance_coverage: Option<Vec<verification::AcceptanceCoverage>>,
     /// Affected surfaces.
     pub affected_areas: Vec<String>,
     /// Explicit non-goals.
@@ -265,7 +268,7 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
             "feature {id} already exists in the archive; `maestro feature unarchive {id}` or choose a different title"
         );
     }
-    let record = FeatureRecord::proposed(&id, title, &nanos_since_epoch_string());
+    let record = FeatureRecord::proposed(&id, title, &utc_now_timestamp());
     save_record(paths, &record)?;
     scaffold_spec_file(paths, &id, title)?;
     decisions::create::ensure_feature_store(paths, &id)?;
@@ -364,7 +367,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
     let open_questions = dedup_new(&record.open_questions, &edits.add_open_questions);
     added.open_questions = open_questions.len();
     record.open_questions.extend(open_questions);
-    record.updated_at = nanos_since_epoch_string();
+    record.updated_at = utc_now_timestamp();
     save_record(paths, &record)?;
     let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
     Ok(SetReport {
@@ -426,7 +429,7 @@ fn accept_inner(
             reason: reason.to_string(),
             amend_log_position: record.amends.len(),
         });
-        record.updated_at = nanos_since_epoch_string();
+        record.updated_at = utc_now_timestamp();
         let status = record.status.clone();
         save_record(paths, &record)?;
         return Ok(TransitionReport {
@@ -513,7 +516,7 @@ fn accept_inner(
         questions_note
     );
     record.status = target.clone();
-    record.updated_at = nanos_since_epoch_string();
+    record.updated_at = utc_now_timestamp();
     if let Some(reason) = qa_none_reason {
         record.qa = Some(QaDeclaration {
             surface: "none".to_string(),
@@ -592,7 +595,7 @@ pub fn amend(
     record
         .open_questions
         .extend(added.open_questions.iter().cloned());
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     record.updated_at = now.clone();
 
     record.amends.push(AmendEntry {
@@ -655,7 +658,7 @@ pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
         Transition::To(target) => target,
     };
     record.status = target.clone();
-    record.updated_at = nanos_since_epoch_string();
+    record.updated_at = utc_now_timestamp();
     save_record(paths, &record)?;
     Ok(TransitionReport {
         id: id.to_string(),
@@ -765,7 +768,7 @@ pub fn ship(
     }
 
     record.status = target.clone();
-    record.updated_at = nanos_since_epoch_string();
+    record.updated_at = utc_now_timestamp();
     if let Some(line) = outcome {
         record.outcome = Some(line);
     }
@@ -826,7 +829,7 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Re
         });
     }
 
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let summary = format!("feature cancelled: {reason}");
     for task_id in &live {
         task::transition_task(
@@ -845,7 +848,7 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Re
 
     record.status = target;
     record.cancel_reason = Some(reason.to_string());
-    record.updated_at = nanos_since_epoch_string();
+    record.updated_at = utc_now_timestamp();
     save_record(paths, &record)?;
 
     let note = if live.is_empty() {
@@ -893,9 +896,13 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
 /// schema-incompatible.
 pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let record = load_record(paths, id)?;
-    let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
+    let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
+    let acceptance_coverage =
+        verification::acceptance_coverage_for_record_in_entries(&record, &task_entries);
     let notes = read_notes_at(&feature_dir(paths, id))?;
     let mut view = view_from_record(record, counts);
+    view.acceptance_coverage = Some(acceptance_coverage);
     view.notes = notes;
     Ok(view)
 }
@@ -910,11 +917,20 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
 /// unparseable / schema-incompatible.
 pub fn show_archived(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let record = load_record_at(&archived_feature_yaml_path(paths, id), id)?;
-    let counts = count_tasks_for_feature(&paths.archive_tasks_dir(), &record.id)?;
+    let task_entries = task::load_task_entries(&paths.archive_tasks_dir())?;
+    let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
+    let acceptance_coverage =
+        verification::acceptance_coverage_for_record_in_entries(&record, &task_entries);
     let notes = read_notes_at(&paths.archive_features_dir().join(id))?;
     let mut view = view_from_record(record, counts);
+    view.acceptance_coverage = Some(acceptance_coverage);
     view.notes = notes;
     Ok(view)
+}
+
+/// Ensure a live feature id is valid and resolves to a compatible record.
+pub fn ensure_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
+    load_record(paths, id).map(|_| ())
 }
 
 /// List every archived feature joined with its archived task counts (L6b,
@@ -1070,6 +1086,7 @@ fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> Feature
         raw_request: record.raw_request,
         input_type: record.input_type,
         acceptance: record.acceptance,
+        acceptance_coverage: None,
         affected_areas: record.affected_areas,
         non_goals: record.non_goals,
         open_questions: record.open_questions,

@@ -55,6 +55,10 @@ fn build_resume_report(
 ) -> Result<ResumeReport> {
     let selected_task = select_task(paths, args)?;
     let selected_feature = select_feature(paths, args, selected_task.as_ref())?;
+    let selected_task_yaml = selected_task
+        .as_ref()
+        .map(|task| task::task_yaml_path(&paths.tasks_dir(), &task.id))
+        .transpose()?;
     let next = next_action_for(selected_task.as_ref(), selected_feature.as_ref());
     let required_reads = required_reads(paths, selected_task.as_ref(), selected_feature.as_ref());
     let guardrails = vec![
@@ -62,8 +66,16 @@ fn build_resume_report(
         "do not commit planning or notes artifacts unless asked".to_string(),
         "read required artifacts before acting".to_string(),
     ];
-    let source_refs = source_refs(paths, selected_task.as_ref(), selected_feature.as_ref())?;
-    let write_path = write_path(paths, selected_task.as_ref(), selected_feature.as_ref())?;
+    let source_refs = source_refs(
+        paths,
+        selected_task_yaml.as_deref(),
+        selected_feature.as_ref(),
+    )?;
+    let write_path = write_path(
+        paths,
+        selected_task_yaml.as_deref(),
+        selected_feature.as_ref(),
+    )?;
     let full = if mode != ResumeMode::Compact {
         let tasks = task::load_task_records(&paths.tasks_dir())?;
         Some(full_context(
@@ -291,13 +303,12 @@ fn implementation_notes_read(paths: &MaestroPaths, feature_id: Option<&str>) -> 
 
 fn source_refs(
     paths: &MaestroPaths,
-    task: Option<&task::TaskRecord>,
+    task_yaml: Option<&Path>,
     feature: Option<&feature::FeatureView>,
 ) -> Result<Vec<String>> {
     let mut refs = Vec::new();
-    if let Some(task) = task {
-        let task_yaml = task::task_yaml_path(&paths.tasks_dir(), &task.id)?;
-        refs.push(display_repo_relative(paths, &task_yaml));
+    if let Some(task_yaml) = task_yaml {
+        refs.push(display_repo_relative(paths, task_yaml));
     }
     if let Some(feature) = feature {
         refs.push(display_repo_relative(
@@ -430,11 +441,10 @@ fn resume_write(report: &ResumeReport) -> Result<ResumeWrite> {
 
 fn write_path(
     paths: &MaestroPaths,
-    task: Option<&task::TaskRecord>,
+    task_yaml: Option<&Path>,
     feature: Option<&feature::FeatureView>,
 ) -> Result<PathBuf> {
-    if let Some(task) = task {
-        let task_yaml = task::task_yaml_path(&paths.tasks_dir(), &task.id)?;
+    if let Some(task_yaml) = task_yaml {
         return Ok(task_yaml
             .parent()
             .context("task.yaml path is missing parent directory")?

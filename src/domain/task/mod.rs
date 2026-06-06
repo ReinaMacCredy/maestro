@@ -469,7 +469,9 @@ pub fn set_feature(
     actor: &str,
     at: &str,
 ) -> Result<TaskRecord> {
-    let (mut task, snapshot, current_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    let (loaded_task, snapshot, current_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
+    let original_task = loaded_task.clone();
+    let mut task = loaded_task;
     if feature_link_is_settled(&task.state) {
         bail!(
             "task {} is {}; its feature link is settled history and cannot change",
@@ -486,6 +488,20 @@ pub fn set_feature(
         (Some(previous), None) => format!("feature link cleared (was {previous})"),
         (None, None) => unreachable!("equal links are returned as a no-op above"),
     };
+    let target_root = task_root_for_feature(tasks_dir, feature.as_deref())?;
+    let target_dir = target_root.join(task.directory_name());
+    let should_move = target_dir != current_dir;
+    if should_move && target_dir.exists() {
+        bail!(
+            "cannot move task {} — target already exists at {}",
+            task.id,
+            target_dir.display()
+        );
+    }
+    if should_move {
+        ensure_dir(&target_root)?;
+    }
+
     task.feature_id = feature;
     lifecycle::append_history(
         &mut task,
@@ -497,24 +513,30 @@ pub fn set_feature(
         },
     );
     template::save_task_with_snapshot(&task, &snapshot)?;
-    let target_root = task_root_for_feature(tasks_dir, task.feature_id.as_deref())?;
-    let target_dir = target_root.join(task.directory_name());
-    if target_dir != current_dir {
-        if target_dir.exists() {
-            bail!(
-                "cannot move task {} — target already exists at {}",
-                task.id,
-                target_dir.display()
-            );
+    if should_move && let Err(error) = fs::rename(&current_dir, &target_dir) {
+        let rollback =
+            serde_yaml::to_string(&original_task).context("failed to serialize task rollback")?;
+        if let Err(rollback_error) = write_string_atomic(&snapshot.path, &rollback) {
+            return Err(error)
+                .with_context(|| {
+                    format!(
+                        "failed to move {} to {}",
+                        current_dir.display(),
+                        target_dir.display()
+                    )
+                })
+                .context(format!(
+                    "failed to restore {} after move failure: {rollback_error}",
+                    snapshot.path.display()
+                ));
         }
-        ensure_dir(&target_root)?;
-        fs::rename(&current_dir, &target_dir).with_context(|| {
+        return Err(error).with_context(|| {
             format!(
                 "failed to move {} to {}",
                 current_dir.display(),
                 target_dir.display()
             )
-        })?;
+        });
     }
     Ok(task)
 }

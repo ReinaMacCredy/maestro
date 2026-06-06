@@ -7,16 +7,16 @@ pub(crate) mod registry;
 pub mod schema;
 mod verification;
 
-pub use archive::{archive_feature, unarchive_feature};
+pub use archive::{FeatureArchiveReport, archive_feature, unarchive_feature};
 pub use registry::{
     AmendReport, CancelReport, ContractAdditions, ContractChangeCounts, ContractEdits,
     FeatureDiagnostic, FeatureView, NoteReport, SetReport, TransitionReport, accept,
-    accept_with_qa_none, amend, cancel, create, diagnose, list, list_archived, note, set,
-    set_with_report, ship, show, show_archived, start, status_label, titles,
+    accept_with_qa_none, amend, cancel, create, diagnose, ensure_exists, list, list_archived, note,
+    set, set_with_report, ship, show, show_archived, start, status_label, titles,
 };
-pub use schema::FeatureStatus;
+pub use schema::{FeatureStatus, normalize_acceptance_id};
 pub use verification::{
     AcceptanceCoverage, AcceptanceProof, AcceptanceSweepItem, AcceptanceSweepReport,
     FeatureProofUpdate, FeatureVerifyReport, acceptance_coverage, acceptance_coverage_archived,
-    acceptance_id, normalize_acceptance_id, uncovered_acceptance, verify_feature,
+    acceptance_id, uncovered_acceptance, verify_feature,
 };

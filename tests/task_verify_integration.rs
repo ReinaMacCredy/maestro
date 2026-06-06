@@ -1,4 +1,5 @@
 mod support;
+mod task_support;
 
 use std::fs;
 use std::io::Write;
@@ -10,6 +11,7 @@ use serde_json::Value;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use sha2::{Digest, Sha256};
 use support::TestTempDir;
+use task_support::task_roots;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -159,18 +161,6 @@ fn task_dir(repo: &Path, id: &str) -> PathBuf {
         }
     }
     panic!("invariant: task directory should exist for {id}");
-}
-
-fn task_roots(repo: &Path) -> Vec<PathBuf> {
-    let mut roots = vec![repo.join(".maestro/tasks")];
-    let features_dir = repo.join(".maestro/features");
-    if let Ok(features) = fs::read_dir(features_dir) {
-        for feature in features {
-            let feature = feature.expect("invariant: feature entry should be readable");
-            roots.push(feature.path().join("tasks"));
-        }
-    }
-    roots
 }
 
 fn task_yaml(repo: &Path, id: &str) -> YamlValue {
@@ -1426,6 +1416,45 @@ fn query_proof_uses_persisted_verification_and_reports_stale_hashes() {
     task["acceptance"]["checks"] =
         YamlValue::Sequence(vec![YamlValue::String("new check".to_string())]);
     write_task_yaml(repo, "task-001", &task);
+
+    let stale = maestro(repo, &["query", "proof", "task-001"]);
+    assert_success(&stale, &["query", "proof", "task-001"]);
+    let stale_out = stdout(&stale);
+    assert!(stale_out.contains("proof task-001: stale"));
+    assert!(stale_out.contains("contract_hash"));
+}
+
+#[test]
+fn query_proof_reports_stale_when_claims_change_after_pass() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    create_completed_task(repo, "implemented CSV export");
+    write_event(repo, "task-001", "implemented CSV export");
+    assert_success(
+        &maestro(repo, &["task", "verify", "task-001"]),
+        &["task", "verify", "task-001"],
+    );
+
+    let update = maestro(
+        repo,
+        &[
+            "task",
+            "update",
+            "task-001",
+            "--claim",
+            "unproven follow-up",
+        ],
+    );
+    assert_success(
+        &update,
+        &[
+            "task",
+            "update",
+            "task-001",
+            "--claim",
+            "unproven follow-up",
+        ],
+    );
 
     let stale = maestro(repo, &["query", "proof", "task-001"]);
     assert_success(&stale, &["query", "proof", "task-001"]);

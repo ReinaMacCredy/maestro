@@ -3,8 +3,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::domain::task;
-use crate::domain::task::TaskState;
+use crate::domain::task::{self, TaskEntry, TaskState};
 
 /// Computed task counts for a feature.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -17,21 +16,38 @@ pub struct FeatureTaskCounts {
 
 /// Count tasks by scanning standalone and feature-owned task roots on demand.
 pub fn count_tasks_for_feature(tasks_dir: &Path, feature_id: &str) -> Result<FeatureTaskCounts> {
-    Ok(count_tasks_by_feature(tasks_dir)?
-        .remove(feature_id)
-        .unwrap_or_default())
+    let entries = task::load_task_entries(tasks_dir)?;
+    Ok(count_tasks_for_feature_in_entries(&entries, feature_id))
+}
+
+/// Count tasks for one feature from an already-loaded task entry set.
+pub fn count_tasks_for_feature_in_entries(
+    entries: &[TaskEntry],
+    feature_id: &str,
+) -> FeatureTaskCounts {
+    let mut counts = FeatureTaskCounts::default();
+    for entry in entries {
+        if entry.task.feature_id.as_deref() != Some(feature_id) {
+            continue;
+        }
+        counts.total += 1;
+        if entry.task.state == TaskState::Verified {
+            counts.verified += 1;
+        }
+    }
+    counts
 }
 
 /// Count tasks for every feature by scanning standalone and feature-owned task roots once.
 pub fn count_tasks_by_feature(tasks_dir: &Path) -> Result<HashMap<String, FeatureTaskCounts>> {
     let mut counts: HashMap<String, FeatureTaskCounts> = HashMap::new();
 
-    for projection in task::load_feature_task_projections(tasks_dir)? {
-        if let Some(feature_id) = projection.feature_id {
-            let entry = counts.entry(feature_id).or_default();
-            entry.total += 1;
-            if projection.state == Some(task::TaskState::Verified) {
-                entry.verified += 1;
+    for task_entry in task::load_task_entries(tasks_dir)? {
+        if let Some(feature_id) = task_entry.task.feature_id.as_deref() {
+            let counts_entry = counts.entry(feature_id.to_string()).or_default();
+            counts_entry.total += 1;
+            if task_entry.task.state == TaskState::Verified {
+                counts_entry.verified += 1;
             }
         }
     }

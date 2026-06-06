@@ -65,7 +65,7 @@ pub fn render_snapshot(paths: &MaestroPaths, tasks: &[task::TaskRecord]) -> Resu
             out.push_str(&format!("  {} {}\n", task_icon(task), task.title));
             out.push_str(&format!(
                 "    {}\n",
-                task_substatus(paths, task, current_commit.clone())?
+                task_substatus(task, current_commit.clone())?
             ));
         }
         out.push('\n');
@@ -94,11 +94,7 @@ fn task_icon(task: &task::TaskRecord) -> &'static str {
     }
 }
 
-fn task_substatus(
-    paths: &MaestroPaths,
-    task: &task::TaskRecord,
-    current_commit: Option<String>,
-) -> Result<String> {
+fn task_substatus(task: &task::TaskRecord, current_commit: Option<String>) -> Result<String> {
     if let Some(blocker) = task
         .blockers
         .iter()
@@ -118,37 +114,26 @@ fn task_substatus(
         ));
     }
     if task.state == task::TaskState::NeedsVerification {
-        return needs_verification_substatus(paths, task);
+        return needs_verification_substatus(task);
     }
     if task.state == task::TaskState::Verified {
-        return verified_substatus(paths, task, current_commit);
+        return verified_substatus(task, current_commit);
     }
     Ok(task.state.as_str().to_string())
 }
 
-fn needs_verification_substatus(paths: &MaestroPaths, task: &task::TaskRecord) -> Result<String> {
-    let Some(task_dir) = task_dir(paths, task) else {
-        return Ok("needs_verification".to_string());
-    };
-    let kind = proof::needs_verification_proof_status_kind_for_task(task, &task_dir)?;
+fn needs_verification_substatus(task: &task::TaskRecord) -> Result<String> {
+    let kind = proof::needs_verification_proof_status_kind_for_task(task)?;
     match kind {
         proof::ProofStatusKind::Failed => Ok("needs_verification (last verify failed)".to_string()),
-        proof::ProofStatusKind::Unapplied => Ok("needs_verification / unapplied".to_string()),
         proof::ProofStatusKind::Missing
         | proof::ProofStatusKind::Accepted
         | proof::ProofStatusKind::Stale => Ok("needs_verification".to_string()),
     }
 }
 
-fn verified_substatus(
-    paths: &MaestroPaths,
-    task: &task::TaskRecord,
-    current_commit: Option<String>,
-) -> Result<String> {
-    let Some(task_dir) = task_dir(paths, task) else {
-        return Ok("verified".to_string());
-    };
-    let kind = proof::proof_status_kind_for_task(paths, task, &task_dir, current_commit)?;
+fn verified_substatus(task: &task::TaskRecord, current_commit: Option<String>) -> Result<String> {
+    let kind = proof::proof_status_kind_for_task(task, current_commit)?;
     match kind {
         proof::ProofStatusKind::Missing | proof::ProofStatusKind::Accepted => {
             Ok("verified".to_string())
@@ -157,20 +142,7 @@ fn verified_substatus(
         proof::ProofStatusKind::Stale => {
             Ok("verified / stale (HEAD changed after proof)".to_string())
         }
-        proof::ProofStatusKind::Unapplied => Ok("verified / unapplied".to_string()),
     }
-}
-
-fn task_dir(paths: &MaestroPaths, task: &task::TaskRecord) -> Option<std::path::PathBuf> {
-    let dir = match task.feature_id.as_deref() {
-        Some(feature_id) => paths
-            .features_dir()
-            .join(feature_id)
-            .join("tasks")
-            .join(task.directory_name()),
-        None => paths.tasks_dir().join(task.directory_name()),
-    };
-    if dir.is_dir() { Some(dir) } else { None }
 }
 
 fn normalized_interval(seconds: u64) -> u64 {

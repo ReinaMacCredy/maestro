@@ -314,8 +314,8 @@ fn archive_features(
 ) -> Result<()> {
     match (id, shipped) {
         (Some(id), false) => match feature::archive_feature(paths, &id, dry_run) {
-            Ok(note) => {
-                print_feature_archive_note(&id, &note, dry_run);
+            Ok(report) => {
+                print_feature_archive_note(&id, &report, dry_run);
                 Ok(())
             }
             Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
@@ -348,13 +348,11 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
     let mut failures = Vec::new();
     let mut archived = 0usize;
     let mut child_tasks = 0usize;
-    let mut skipped = 0usize;
     for id in &shipped {
         match feature::archive_feature(paths, id, dry_run) {
-            Ok(note) => {
+            Ok(report) => {
                 archived += 1;
-                child_tasks += feature_child_count(&note);
-                skipped += feature_skipped_count(&note);
+                child_tasks += report.child_tasks;
             }
             Err(err) => failures.push(format!("{id}: {err:#}")),
         }
@@ -370,7 +368,9 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
     let task_verb = if dry_run { "would archive" } else { "archived" };
     println!("  features: {archived} {feature_verb}");
     println!("  child tasks: {child_tasks} {task_verb}");
-    println!("  skipped: {skipped}");
+    // A terminal feature has no live children by construction, so nothing is
+    // ever skipped; the line stays for receipt-shape stability.
+    println!("  skipped: 0");
     println!("  failed: {}", failures.len());
 
     if !failures.is_empty() {
@@ -609,25 +609,23 @@ fn ship_feature(
     Ok(())
 }
 
-fn print_feature_archive_note(id: &str, note: &str, dry_run: bool) {
-    println!("{note}");
-    let child_tasks = feature_child_count(note);
-    let skipped = feature_skipped_count(note);
+fn print_feature_archive_note(id: &str, report: &feature::FeatureArchiveReport, dry_run: bool) {
+    println!("{}", report.note);
     if dry_run {
         println!("archive receipt preview:");
         println!("  feature: {id}");
-        println!("  child tasks: {child_tasks} would archive");
-        println!("  skipped: {skipped}");
+        println!("  child tasks: {} would archive", report.child_tasks);
+        println!("  skipped: 0");
         println!("writes: none");
         println!("run: maestro feature archive {id}");
-    } else if note.starts_with("already archived") {
+    } else if report.note.starts_with("already archived") {
         println!("inspect: maestro feature show {id}");
         println!("next: maestro status");
     } else {
         println!("archive receipt:");
         println!("  feature: {id}");
-        println!("  child tasks: {child_tasks} archived");
-        println!("  skipped: {skipped}");
+        println!("  child tasks: {} archived", report.child_tasks);
+        println!("  skipped: 0");
         println!("inspect: maestro feature show {id}");
         println!("next: maestro status");
         println!("restore: maestro feature unarchive {id}");
@@ -702,14 +700,6 @@ fn feature_cancel_error_message(id: &str, reason: &str, error: &str) -> String {
     error.to_string()
 }
 
-fn feature_child_count(note: &str) -> usize {
-    count_before_marker(note, " child task(s)").unwrap_or(0)
-}
-
-fn feature_skipped_count(note: &str) -> usize {
-    count_before_marker(note, " live-referenced child task(s)").unwrap_or(0)
-}
-
 fn count_before_marker(note: &str, marker: &str) -> Option<usize> {
     let prefix = note.split(marker).next()?;
     prefix.split_whitespace().last()?.parse().ok()
@@ -769,7 +759,13 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
         println!("qa: none ({reason})");
     }
     print_decision_summary(paths, &view.id)?;
-    print_acceptance(paths, &view.id, &view.acceptance, archived)?;
+    print_acceptance(
+        paths,
+        &view.id,
+        &view.acceptance,
+        view.acceptance_coverage.as_deref(),
+        archived,
+    )?;
     print_list("affected_areas", &view.affected_areas);
     print_list("non_goals", &view.non_goals);
     print_list("open_questions", &view.open_questions);
@@ -898,12 +894,19 @@ fn print_acceptance(
     paths: &MaestroPaths,
     id: &str,
     fallback: &[String],
+    coverage: Option<&[feature::AcceptanceCoverage]>,
     archived: bool,
 ) -> Result<()> {
-    let coverage = if archived {
-        feature::acceptance_coverage_archived(paths, id)?
+    let loaded_coverage;
+    let coverage = if let Some(coverage) = coverage {
+        coverage
     } else {
-        feature::acceptance_coverage(paths, id)?
+        loaded_coverage = if archived {
+            feature::acceptance_coverage_archived(paths, id)?
+        } else {
+            feature::acceptance_coverage(paths, id)?
+        };
+        &loaded_coverage
     };
     println!("acceptance:");
     if coverage.is_empty() {

@@ -11,7 +11,7 @@ use crate::domain::task::{self, BlockerTarget, TaskRecord, TaskState, Transition
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::time::nanos_since_epoch_string;
+use crate::foundation::core::time::utc_now_timestamp;
 
 pub(crate) const AFTER_DEPENDENCY_REASON_PREFIX: &str = "after dependency:";
 
@@ -139,7 +139,7 @@ fn prepare_from_file_with_blocker(
     let result = (|| -> Result<PrepareReport> {
         let mut id_by_local_ref = BTreeMap::new();
         for (index, item) in plan.iter().enumerate() {
-            let now = nanos_since_epoch_string();
+            let now = utc_now_timestamp();
             let task = task::create_task(
                 &paths.tasks_dir(),
                 &item.title,
@@ -152,7 +152,7 @@ fn prepare_from_file_with_blocker(
                     created_at: now,
                 },
             )?;
-            let now = nanos_since_epoch_string();
+            let now = utc_now_timestamp();
             let task = task::transition_task(
                 &paths.tasks_dir(),
                 &task.id,
@@ -199,7 +199,7 @@ fn prepare_from_file_with_blocker(
 
         let mut accepted = Vec::with_capacity(created.len());
         for task in &created {
-            let now = nanos_since_epoch_string();
+            let now = utc_now_timestamp();
             accepted.push(task::accept_task(
                 &paths.tasks_dir(),
                 &task.id,
@@ -293,7 +293,7 @@ pub(crate) fn resolve_after_dependency_blockers(
             .collect();
 
         for blocker_id in blocker_ids {
-            let now = nanos_since_epoch_string();
+            let now = utc_now_timestamp();
             task::unblock_task(&paths.tasks_dir(), &entry.task.id, &blocker_id, actor, &now)?;
             resolved.push(entry.task.id.clone());
         }
@@ -664,7 +664,7 @@ fn block_prepared_task(
     target: BlockerTarget,
     actor: &str,
 ) -> Result<PreparedBlocker> {
-    let now = nanos_since_epoch_string();
+    let now = utc_now_timestamp();
     let (_, blocker_id) =
         task::block_task(&paths.tasks_dir(), task_id, reason, target, actor, &now)?;
     Ok(PreparedBlocker {
@@ -778,7 +778,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "{prefix}-{}-{}",
             std::process::id(),
-            nanos_since_epoch_string()
+            utc_now_timestamp()
         ));
         fs::create_dir_all(&root).expect("invariant: temp root should be creatable");
         root

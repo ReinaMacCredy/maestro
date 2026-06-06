@@ -139,18 +139,27 @@ pub fn decisions_for_feature(
 
 pub fn show(paths: &MaestroPaths, id: &str) -> Result<DecisionContent> {
     let id = normalize_decision_id(id)?;
+    let Some(content) = find_decision_content(paths, &id)? else {
+        bail!("decision not found: {id}");
+    };
+    Ok(content)
+}
+
+fn find_decision_content(paths: &MaestroPaths, id: &str) -> Result<Option<DecisionContent>> {
     for store_path in store_paths(paths)? {
         let store = load_store_at(&store_path.path)?;
         if let Some(record) = store.decisions.into_iter().find(|record| record.id == id) {
-            return Ok(DecisionContent::Structured {
+            return Ok(Some(DecisionContent::Structured {
                 record: Box::new(record),
                 source: store_path.source,
                 path: store_path.path,
-            });
+            }));
         }
     }
 
-    let path = resolve_decision_path(&paths.decisions_dir(), &id)?;
+    let Some(path) = find_legacy_decision_path(&paths.decisions_dir(), id)? else {
+        return Ok(None);
+    };
     let contents = fs::read_to_string(&path)
         .with_context(|| format!("failed to read decision file {}", path.display()))?;
     let file_name = path
@@ -158,25 +167,32 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<DecisionContent> {
         .and_then(|name| name.to_str())
         .unwrap_or_default()
         .to_string();
-    Ok(DecisionContent::Legacy {
+    Ok(Some(DecisionContent::Legacy {
         id: decision_display_id(&file_name),
         title: decision_title(&path)?,
         contents,
         path,
-    })
+    }))
 }
 
 pub fn decision_exists(paths: &MaestroPaths, id: &str) -> Result<bool> {
-    Ok(show(paths, id).is_ok())
+    let id = normalize_decision_id(id)?;
+    Ok(find_decision_content(paths, &id)?.is_some())
 }
 
 pub fn decision_bodies(paths: &MaestroPaths) -> Result<Vec<String>> {
     let mut bodies = Vec::new();
-    for entry in list(paths)? {
-        match show(paths, &entry.id)? {
-            DecisionContent::Structured { record, .. } => bodies.push(render_record(&record)),
-            DecisionContent::Legacy { contents, .. } => bodies.push(contents),
+    for store_path in store_paths(paths)? {
+        for record in load_store_at(&store_path.path)?.decisions {
+            bodies.push(render_record(&record));
         }
+    }
+    for entry in decision_entries(&paths.decisions_dir())? {
+        bodies.push(
+            fs::read_to_string(&entry.path).with_context(|| {
+                format!("failed to read decision file {}", entry.path.display())
+            })?,
+        );
     }
     Ok(bodies)
 }
@@ -337,17 +353,22 @@ pub(crate) fn save_store_at(path: &Path, store: &DecisionStore) -> Result<()> {
 
 /// Resolve a frozen legacy decision id or file name to a markdown path.
 pub fn resolve_decision_path(decisions_dir: &Path, id: &str) -> Result<PathBuf> {
+    find_legacy_decision_path(decisions_dir, id)?
+        .with_context(|| format!("decision not found: {id}"))
+}
+
+fn find_legacy_decision_path(decisions_dir: &Path, id: &str) -> Result<Option<PathBuf>> {
     validate_decision_lookup_id(id)?;
     if id.ends_with(".md") {
         let path = decisions_dir.join(id);
         if valid_decision_file(&path)? {
-            return Ok(path);
+            return Ok(Some(path));
         }
     }
 
     let direct = decisions_dir.join(format!("{id}.md"));
     if valid_decision_file(&direct)? {
-        return Ok(direct);
+        return Ok(Some(direct));
     }
 
     let prefix = format!("{id}-");
@@ -357,8 +378,8 @@ pub fn resolve_decision_path(decisions_dir: &Path, id: &str) -> Result<PathBuf> 
         .collect::<Vec<_>>();
 
     match matches.len() {
-        0 => bail!("decision not found: {id}"),
-        1 => Ok(matches[0].path.clone()),
+        0 => Ok(None),
+        1 => Ok(Some(matches[0].path.clone())),
         _ => bail!("decision id {id} is ambiguous"),
     }
 }

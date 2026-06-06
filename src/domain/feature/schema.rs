@@ -95,11 +95,37 @@ pub struct AcceptanceEvidenceEntry {
     /// Stable feature acceptance id, e.g. `ac-1`.
     pub ac_id: String,
     /// Evidence kind: `explicit` or `waived`.
-    pub kind: String,
+    pub kind: AcceptanceEvidenceKind,
     /// Operator/agent supplied evidence or waiver reason.
     pub text: String,
     /// Timestamp when the entry was recorded.
     pub at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AcceptanceEvidenceKind {
+    Explicit,
+    Waived,
+}
+
+impl AcceptanceEvidenceKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Explicit => "explicit",
+            Self::Waived => "waived",
+        }
+    }
+}
+
+pub fn normalize_acceptance_id(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    let digits = trimmed.strip_prefix("ac-")?;
+    if digits.is_empty() || !digits.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let number = digits.parse::<usize>().ok()?;
+    (number > 0).then(|| format!("ac-{number}"))
 }
 
 /// One binary-written acceptance sweep result.
@@ -182,6 +208,15 @@ pub struct AmendEntry {
     pub reason: String,
     /// The values added by this amend (post-dedup; only genuinely new values).
     pub added: AmendAdditions,
+}
+
+impl AmendEntry {
+    /// A behavioral amend grew the proven surface (acceptance or affected
+    /// area), so QA or acceptance evidence captured before it is stale.
+    /// Non-goal / open-question amends do not.
+    pub fn is_behavioral(&self) -> bool {
+        !self.added.acceptance.is_empty() || !self.added.affected_areas.is_empty()
+    }
 }
 
 /// The contract values added by a single `amend` call.

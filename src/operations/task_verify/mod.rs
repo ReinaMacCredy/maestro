@@ -5,7 +5,7 @@ use anyhow::Result;
 use super::{TaskVerifyApplication, TaskVerifyUnappliedReason, feature_prepare};
 use crate::domain::{proof, task};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::time::nanos_since_epoch_string;
+use crate::foundation::core::time::utc_now_timestamp;
 
 /// Task verification result plus Task-application status.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,7 +42,7 @@ pub(crate) fn verify_task(
     actor: &str,
 ) -> Result<TaskVerifyResult> {
     let mut handle = task::load_task_for_update(&paths.tasks_dir(), task_id)?;
-    let verified_at = nanos_since_epoch_string();
+    let verified_at = utc_now_timestamp();
     let attempt = verify_loaded_task(paths, &mut handle, actor, &verified_at)?;
     let verification = proof::TaskVerification::from_report(&attempt.report);
     let application = match attempt.application {

@@ -160,8 +160,7 @@ pub(crate) fn evaluate_task_report(
     verified_at: &str,
 ) -> Result<VerificationReport> {
     let command_run = run_verify_commands(paths)?;
-    let inputs =
-        freshness_inputs_for_task(task, task_dir, git::head(paths.repo_root()).unwrap_or(None))?;
+    let inputs = freshness_inputs_for_task(task, git::head(paths.repo_root()).unwrap_or(None))?;
     let claims = completion_claims(task);
     let evidence = collect_evidence(paths, task_dir, &task.id)?;
     let claim_checks = check_claims(&claims, &evidence);
@@ -251,14 +250,11 @@ pub fn load_task_by_id(paths: &MaestroPaths, task_id: &str) -> Result<LoadedTask
     })
 }
 
-/// Compute current proof freshness inputs for a task artifact directory.
+/// Compute current proof freshness inputs for a task.
 pub fn freshness_inputs_for_task(
     task: &TaskRecord,
-    task_dir: &Path,
     commit: Option<String>,
 ) -> Result<FreshnessInputs> {
-    let _ = task_dir;
-
     Ok(FreshnessInputs {
         commit,
         contract_hash: task_contract_hash(task),
@@ -468,6 +464,7 @@ fn task_contract_hash(task: &TaskRecord) -> String {
         "id": task.id,
         "title": task.title,
         "acceptance": task.acceptance,
+        "claims": completion_claims(task),
     });
     sha256_hex(contract.to_string().as_bytes())
 }

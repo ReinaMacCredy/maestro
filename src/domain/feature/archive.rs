@@ -15,6 +15,12 @@ use crate::domain::task::{self, TaskState};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeatureArchiveReport {
+    pub note: String,
+    pub child_tasks: usize,
+}
+
 /// Archive a terminal feature and its nested terminal child tasks (§5.9).
 ///
 /// Resolves the record from the live tree, or the archive tree on a sweep
@@ -28,7 +34,11 @@ use crate::foundation::core::paths::MaestroPaths;
 ///
 /// Errors when the feature is not found, is not terminal, has a live child task
 /// (which a terminal feature cannot by construction), or a move fails.
-pub fn archive_feature(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<String> {
+pub fn archive_feature(
+    paths: &MaestroPaths,
+    id: &str,
+    dry_run: bool,
+) -> Result<FeatureArchiveReport> {
     let live_yaml = paths.features_dir().join(id).join("feature.yaml");
     let archive_yaml = paths.archive_features_dir().join(id).join("feature.yaml");
 
@@ -75,7 +85,6 @@ pub fn archive_feature(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<
     terminal_children.sort();
 
     let archived = terminal_children;
-    let skipped = Vec::new();
 
     // Move a still-live feature dir; its child tasks move with it.
     let feature_changed = feature_live && !dry_run;
@@ -98,7 +107,10 @@ pub fn archive_feature(paths: &MaestroPaths, id: &str, dry_run: bool) -> Result<
         })?;
     }
 
-    Ok(archive_note(id, dry_run, feature_live, &archived, &skipped))
+    Ok(FeatureArchiveReport {
+        note: archive_note(id, dry_run, feature_live, &archived),
+        child_tasks: archived.len(),
+    })
 }
 
 /// Restore an archived feature and its nested archived child tasks (§5.9,
@@ -152,15 +164,9 @@ pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
 
 /// Compose the `feature archive` summary across first-run, sweep-re-run,
 /// dry-run, and true no-op cases.
-fn archive_note(
-    id: &str,
-    dry_run: bool,
-    feature_live: bool,
-    archived: &[String],
-    skipped: &[(String, String)],
-) -> String {
+fn archive_note(id: &str, dry_run: bool, feature_live: bool, archived: &[String]) -> String {
     // True no-op: feature already archived and nothing left to sweep.
-    if !feature_live && archived.is_empty() && skipped.is_empty() {
+    if !feature_live && archived.is_empty() {
         return format!("already archived: {id}");
     }
 
@@ -188,17 +194,6 @@ fn archive_note(
             "{verb} {} child task(s): {}",
             archived.len(),
             archived.join(", ")
-        ));
-    }
-    if !skipped.is_empty() {
-        let detail = skipped
-            .iter()
-            .map(|(child, referrer)| format!("{child} (blocks live {referrer})"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        parts.push(format!(
-            "skipped {} live-referenced child task(s): {detail}; clear the reference and re-run `maestro feature archive {id}` to sweep",
-            skipped.len()
         ));
     }
     parts.join("; ")

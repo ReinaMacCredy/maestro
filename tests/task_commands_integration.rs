@@ -1,4 +1,5 @@
 mod support;
+mod task_support;
 
 use std::fs;
 use std::os::unix::fs as unix_fs;
@@ -7,6 +8,7 @@ use std::process::Command;
 
 use serde_yaml::{Mapping, Value};
 use support::TestTempDir;
+use task_support::task_roots;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -95,18 +97,6 @@ fn task_yaml_path(repo: &Path, id: &str) -> PathBuf {
         }
     }
     panic!("invariant: expected task directory for {id}");
-}
-
-fn task_roots(repo: &Path) -> Vec<PathBuf> {
-    let mut roots = vec![repo.join(".maestro/tasks")];
-    let features_dir = repo.join(".maestro/features");
-    if let Ok(features) = fs::read_dir(features_dir) {
-        for feature in features {
-            let feature = feature.expect("invariant: feature entry should be readable");
-            roots.push(feature.path().join("tasks"));
-        }
-    }
-    roots
 }
 
 fn task_yaml(repo: &Path, id: &str) -> Value {
@@ -990,6 +980,43 @@ fn set_on_a_settled_task_refuses_the_link_change_before_writing_checks() {
     assert!(
         !raw.contains("must not persist"),
         "a refused set must not persist its checks: {raw}"
+    );
+}
+
+#[test]
+fn set_feature_target_collision_does_not_write_history() {
+    let temp = setup_repo();
+    let repo = temp.path();
+
+    assert_success(
+        &maestro(repo, &["task", "create", "Move collision"]),
+        &["task", "create", "Move collision"],
+    );
+    assert_success(
+        &maestro(repo, &["feature", "new", "Billing"]),
+        &["feature", "new", "Billing"],
+    );
+    let task_dir_name = task_yaml_path(repo, "task-001")
+        .parent()
+        .expect("invariant: task.yaml should have parent")
+        .file_name()
+        .expect("invariant: task dir should have a name")
+        .to_os_string();
+    let target_dir = repo
+        .join(".maestro/features/billing/tasks")
+        .join(task_dir_name);
+    fs::create_dir_all(&target_dir).expect("invariant: target collision should be creatable");
+
+    let args = &["task", "set", "task-001", "--feature", "billing"];
+    let set = maestro(repo, args);
+    assert_failure(&set, args);
+    assert!(stderr(&set).contains("target already exists"));
+
+    let raw = fs::read_to_string(task_yaml_path(repo, "task-001"))
+        .expect("invariant: task.yaml should be readable");
+    assert!(
+        !raw.contains("feature link set: billing"),
+        "a refused feature move must not append history: {raw}"
     );
 }
 
