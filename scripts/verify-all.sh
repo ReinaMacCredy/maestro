@@ -191,10 +191,12 @@ write_qa_slices() {
   local scenario_id="$3"
   local evidence="$4"
   {
+    printf '\n```yaml\n'
     printf '%s\n' 'slices:'
     printf '  - scenarios: ["%s"]\n' "$scenario_id"
     printf '    evidence: ["manual: %s"]\n' "$evidence"
-  } > "$dir/.maestro/features/$feature/qa-slices.yaml"
+    printf '```\n'
+  } >> "$dir/.maestro/features/$feature/qa.md"
 }
 
 write_harness_correction_sessions() {
@@ -282,6 +284,8 @@ green-feature-task-claim
 green-feature-task-complete
 green-feature-ship-block
 green-feature-ship-dry
+green-feature-prove
+green-feature-verify
 green-feature-ship
 green-query-matrix
 green-harness-list
@@ -498,6 +502,10 @@ run_greenfield_workflow() {
   write_qa_slices "$work" greenfield-export bl-001 "Greenfield export ships"
   run_in green-feature-ship-dry "$work" 0 "$BIN" feature ship greenfield-export --outcome "Greenfield export shipped" --dry-run
   contains green-feature-ship-dry "writes: none"
+  run_in green-feature-prove "$work" 0 "$BIN" feature verify greenfield-export --prove ac-1 --evidence "observed: Greenfield export ships"
+  contains green-feature-prove "explicit ac-1"
+  run_in green-feature-verify "$work" 0 "$BIN" feature verify greenfield-export
+  contains green-feature-verify "every acceptance item has evidence"
   run_in green-feature-ship "$work" 0 "$BIN" feature ship greenfield-export --outcome "Greenfield export shipped"
   contains green-feature-ship "ship receipt:"
 
