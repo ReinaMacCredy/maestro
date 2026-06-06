@@ -447,17 +447,38 @@ fn feature_guarded_lifecycle_via_cli() {
         &["init", "--yes"],
     );
 
-    let create_output = stdout(
-        maestro(&["feature", "new", "Billing CSV export"], temp_dir.path()),
-        &["feature", "new", "Billing CSV export"],
-    );
+    let create_args = [
+        "feature",
+        "new",
+        "Billing CSV export",
+        "--description",
+        "export billing rows",
+        "--question",
+        "Which export filename?",
+    ];
+    let create_output = stdout(maestro(&create_args, temp_dir.path()), &create_args);
     assert!(create_output.contains("created feature billing-csv-export"));
+    assert!(create_output.contains("spec: .maestro/features/billing-csv-export/spec.md"));
+    assert!(
+        temp_dir
+            .path()
+            .join(".maestro/features/billing-csv-export/spec.md")
+            .is_file()
+    );
+    assert!(
+        temp_dir
+            .path()
+            .join(".maestro/features/billing-csv-export/decisions.yaml")
+            .is_file()
+    );
 
     let show_output = stdout(
         maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
         &["feature", "show", "billing-csv-export"],
     );
     assert!(show_output.contains("status: proposed"));
+    assert!(show_output.contains("description: export billing rows"));
+    assert!(show_output.contains("decisions: 0 (open: 0, locked: 0, superseded: 0)"));
     // `feature new` no longer scaffolds notes.md; notes are created on first write.
     assert!(!show_output.contains("notes:"));
 
@@ -499,6 +520,7 @@ fn feature_guarded_lifecycle_via_cli() {
         &["feature", "set", "--help"],
     );
     assert!(help.contains("REPLACES the full questions list"), "{help}");
+    assert!(help.contains("--add-acceptance"), "{help}");
 
     let redundant_clear_args = [
         "feature",
@@ -508,12 +530,12 @@ fn feature_guarded_lifecycle_via_cli() {
         "--question",
         "Which export filename?",
     ];
-    let redundant_clear = assert_failure(
+    let redundant_clear = stdout(
         maestro(&redundant_clear_args, temp_dir.path()),
         &redundant_clear_args,
     );
     assert!(
-        redundant_clear.contains("--question already replaces the whole questions list"),
+        redundant_clear.contains("questions replaced (1)"),
         "{redundant_clear}"
     );
 
@@ -594,6 +616,82 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(list_all.contains("\t3\t3\t"));
     // the outcome rides the title column in `list --all`.
     assert!(list_all.contains("csv export shipped"));
+}
+
+#[test]
+fn feature_authoring_append_flags_are_proposed_only() {
+    let temp_dir = TestTempDir::new("maestro-feature-authoring-ergonomics");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let new_args = [
+        "feature",
+        "new",
+        "Authoring UX",
+        "--description",
+        "reduce wipe-prone feature authoring",
+        "--question",
+        "What is still a loose question?",
+    ];
+    stdout(maestro(&new_args, temp_dir.path()), &new_args);
+    let set_args = [
+        "feature",
+        "set",
+        "authoring-ux",
+        "--acceptance",
+        "first criterion",
+        "--area",
+        "src/interfaces/cli",
+    ];
+    stdout(maestro(&set_args, temp_dir.path()), &set_args);
+
+    let append_args = [
+        "feature",
+        "set",
+        "authoring-ux",
+        "--add-acceptance",
+        "second criterion",
+        "--add-area",
+        "tests",
+        "--add-question",
+        "Should this become a decision?",
+    ];
+    let append = stdout(maestro(&append_args, temp_dir.path()), &append_args);
+    assert!(append.contains("+1 acceptance (2 total)"), "{append}");
+    assert!(append.contains("+1 areas (2 total)"), "{append}");
+    assert!(append.contains("fork hint:"), "{append}");
+
+    let show = stdout(
+        maestro(&["feature", "show", "authoring-ux"], temp_dir.path()),
+        &["feature", "show", "authoring-ux"],
+    );
+    assert!(show.contains("first criterion"));
+    assert!(show.contains("second criterion"));
+    assert!(show.contains("Should this become a decision?"));
+
+    let accept_args = [
+        "feature",
+        "accept",
+        "authoring-ux",
+        "--qa",
+        "none",
+        "--reason",
+        "contract-only test",
+    ];
+    stdout(maestro(&accept_args, temp_dir.path()), &accept_args);
+    let late_args = [
+        "feature",
+        "set",
+        "authoring-ux",
+        "--add-acceptance",
+        "late criterion",
+    ];
+    let frozen = assert_failure(maestro(&late_args, temp_dir.path()), &late_args);
+    assert!(frozen.contains("contract frozen"), "{frozen}");
+    assert!(frozen.contains("feature amend"), "{frozen}");
 }
 
 #[test]
@@ -687,47 +785,37 @@ fn decision_new_list_show_auto_increment_and_preserve_template() {
         maestro(&["decision", "new", title], temp_dir.path()),
         &["decision", "new", title],
     );
-    assert!(new_output.contains("created decision decision-008"));
+    assert!(new_output.contains("opened decision-008 (status: open)"));
 
-    let expected_file =
-        decisions_dir.join("decision-008-use-single-harness-md-instead-of-three-adapter-files.md");
-    assert!(expected_file.is_file());
-    assert_eq!(
-        fs::read_to_string(&expected_file).expect("invariant: decision file should be readable"),
-        decision_markdown(8, title)
+    let decisions_yaml = temp_dir.path().join(".maestro/decisions.yaml");
+    let yaml =
+        fs::read_to_string(&decisions_yaml).expect("invariant: decisions.yaml should be readable");
+    assert!(yaml.contains("id: decision-008"), "{yaml}");
+    assert!(
+        !decisions_dir
+            .join("decision-008-use-single-harness-md-instead-of-three-adapter-files.md")
+            .is_file(),
+        "decision new must not write frozen legacy markdown"
     );
 
     let list_output = stdout(
         maestro(&["decision", "list"], temp_dir.path()),
         &["decision", "list"],
     );
-    assert!(list_output.contains("decision-007-existing"));
-    assert!(
-        list_output.contains("decision-008-use-single-harness-md-instead-of-three-adapter-files")
-    );
+    assert!(list_output.contains("decision-007\tlegacy\tlegacy-md"));
+    assert!(list_output.contains("decision-008\topen\tglobal"));
 
     let show_output = stdout(
-        maestro(
-            &[
-                "decision",
-                "show",
-                "decision-008-use-single-harness-md-instead-of-three-adapter-files",
-            ],
-            temp_dir.path(),
-        ),
-        &[
-            "decision",
-            "show",
-            "decision-008-use-single-harness-md-instead-of-three-adapter-files",
-        ],
+        maestro(&["decision", "show", "decision-008"], temp_dir.path()),
+        &["decision", "show", "decision-008"],
     );
-    assert_eq!(show_output, decision_markdown(8, title));
+    assert!(show_output.contains("store:"));
+    assert!(show_output.contains("id: decision-008"));
+    assert!(show_output.contains(title));
 
     let doctor = stdout(maestro(&["doctor"], temp_dir.path()), &["doctor"]);
     assert!(
-        doctor.contains(
-            "warning: decision-008-use-single-harness-md-instead-of-three-adapter-files.md"
-        ),
+        doctor.contains("warning: decision-007-existing.md"),
         "{doctor}"
     );
     assert!(
@@ -737,52 +825,119 @@ fn decision_new_list_show_auto_increment_and_preserve_template() {
 }
 
 #[test]
-fn decision_new_section_flags_write_complete_record_without_composite_lock_command() {
+fn decision_new_and_lock_write_structured_feature_record() {
     let temp_dir = TestTempDir::new("maestro-decision-command-complete-test");
     init_git_marker(temp_dir.path());
     stdout(
         maestro(&["init", "--yes"], temp_dir.path()),
         &["init", "--yes"],
     );
+    stdout(
+        maestro(&["feature", "new", "Agent CLI UX"], temp_dir.path()),
+        &["feature", "new", "Agent CLI UX"],
+    );
 
-    let args = [
+    let open_args = [
         "decision",
         "new",
         "Timestamps use RFC3339",
         "--context",
         "nanosecond epochs are hard to inspect",
-        "--decision",
-        "render RFC3339 UTC with milliseconds",
-        "--alternative",
-        "unix seconds: too lossy",
-        "--alternative",
-        "raw nanos: unreadable",
-        "--consequence",
-        "older records migrate on read",
         "--feature",
         "agent-cli-ux",
     ];
-    let out = stdout(maestro(&args, temp_dir.path()), &args);
-    assert!(out.contains("created decision decision-001"), "{out}");
-    assert!(
-        out.contains("complete: .maestro/decisions/decision-001-timestamps-use-rfc3339.md"),
-        "{out}"
-    );
+    let out = stdout(maestro(&open_args, temp_dir.path()), &open_args);
+    assert!(out.contains("opened decision-001 (status: open)"), "{out}");
+    assert!(out.contains("feature: agent-cli-ux"), "{out}");
+
+    let lock_args = [
+        "decision",
+        "lock",
+        "decision-001",
+        "--decision",
+        "render RFC3339 UTC with milliseconds",
+        "--rejected",
+        "unix seconds: too lossy",
+        "--rejected",
+        "raw nanos: unreadable",
+        "--preview",
+        "updated_at: 2026-06-06T00:00:00.000Z",
+    ];
+    let out = stdout(maestro(&lock_args, temp_dir.path()), &lock_args);
+    assert!(out.contains("locked decision-001"), "{out}");
+    assert!(out.contains("note:"), "{out}");
 
     let record = fs::read_to_string(
         temp_dir
             .path()
-            .join(".maestro/decisions/decision-001-timestamps-use-rfc3339.md"),
+            .join(".maestro/features/agent-cli-ux/decisions.yaml"),
     )
-    .expect("invariant: complete decision should be readable");
-    assert!(record.contains("## Context\nnanosecond epochs are hard to inspect"));
-    assert!(record.contains("## Decision\nrender RFC3339 UTC with milliseconds"));
-    assert!(record.contains("- unix seconds: too lossy"));
-    assert!(record.contains("- raw nanos: unreadable"));
-    assert!(record.contains("- older records migrate on read"));
-    assert!(record.contains("- feature: agent-cli-ux"));
-    assert!(!record.contains("Why this decision exists."));
-    assert!(!record.contains("What we decided."));
+    .expect("invariant: structured decision should be readable");
+    assert!(record.contains("context: nanosecond epochs are hard to inspect"));
+    assert!(record.contains("decision: render RFC3339 UTC with milliseconds"));
+    assert!(record.contains("unix seconds: too lossy"));
+    assert!(record.contains("raw nanos: unreadable"));
+    assert!(record.contains("preview:"));
+    assert!(record.contains("status: locked"));
+    let notes = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/features/agent-cli-ux/notes.md"),
+    )
+    .expect("invariant: feature notes should be readable");
+    assert_dated_note_line(&notes, "decision-001 locked -- Timestamps use RFC3339");
+
+    let spec = stdout(
+        maestro(&["feature", "spec", "agent-cli-ux"], temp_dir.path()),
+        &["feature", "spec", "agent-cli-ux"],
+    );
+    assert!(spec.contains("status: proposed"), "{spec}");
+    assert!(spec.contains("## Decisions"), "{spec}");
+    assert!(
+        spec.contains("decision-001 [locked]: Timestamps use RFC3339"),
+        "{spec}"
+    );
+
+    let second_open = [
+        "decision",
+        "new",
+        "Use human timestamps everywhere",
+        "--context",
+        "the first lock was too narrow",
+        "--feature",
+        "agent-cli-ux",
+    ];
+    stdout(maestro(&second_open, temp_dir.path()), &second_open);
+    let second_lock = [
+        "decision",
+        "lock",
+        "decision-002",
+        "--decision",
+        "render human timestamps in every agent-facing artifact",
+        "--rejected",
+        "feature-only timestamps: leaves decisions hard to inspect",
+        "--supersedes",
+        "decision-001",
+    ];
+    stdout(maestro(&second_lock, temp_dir.path()), &second_lock);
+    let record = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/features/agent-cli-ux/decisions.yaml"),
+    )
+    .expect("invariant: structured decision should be readable");
+    assert!(record.contains("status: superseded"), "{record}");
+    assert!(record.contains("superseded_by: decision-002"), "{record}");
+    let notes = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/features/agent-cli-ux/notes.md"),
+    )
+    .expect("invariant: feature notes should be readable");
+    assert_dated_note_line(
+        &notes,
+        "decision-002 locked -- Use human timestamps everywhere",
+    );
 
     let help = stdout(
         maestro(&["decision", "--help"], temp_dir.path()),
@@ -791,7 +946,7 @@ fn decision_new_section_flags_write_complete_record_without_composite_lock_comma
     assert!(help.contains("new"), "{help}");
     assert!(help.contains("show"), "{help}");
     assert!(help.contains("list"), "{help}");
-    assert!(!help.contains("lock"), "{help}");
+    assert!(help.contains("lock"), "{help}");
 }
 
 #[test]

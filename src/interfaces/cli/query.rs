@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::{Result, bail};
 
-use crate::decisions::query::{decision_display_id, decision_entries, decision_title};
+use crate::decisions;
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::run;
@@ -135,23 +135,31 @@ fn query_friction(paths: &MaestroPaths) -> Result<()> {
 }
 
 fn query_decisions(paths: &MaestroPaths) -> Result<()> {
-    let decisions = decision_entries(&paths.decisions_dir())?;
-    if decisions.is_empty() {
+    let entries = decisions::list(paths)?;
+    if entries.is_empty() {
         println!("no decisions found");
         return Ok(());
     }
 
-    println!("ID\tFILE\tTITLE");
-    for entry in decisions {
-        let title = decision_title(&entry.path)?;
+    println!("ID\tSTATUS\tHOME\tTITLE");
+    for entry in entries {
         println!(
-            "{}\t{}\t{}",
-            decision_display_id(&entry.file_name),
-            entry.file_name,
-            title
+            "{}\t{}\t{}\t{}",
+            entry.id,
+            entry.status,
+            decision_home(&entry.source),
+            entry.title
         );
     }
     Ok(())
+}
+
+fn decision_home(source: &decisions::DecisionSource) -> String {
+    match source {
+        decisions::DecisionSource::Global => "global".to_string(),
+        decisions::DecisionSource::Feature { feature_id } => format!("feature:{feature_id}"),
+        decisions::DecisionSource::Legacy => "legacy-md".to_string(),
+    }
 }
 
 fn query_backlog(paths: &MaestroPaths) -> Result<()> {

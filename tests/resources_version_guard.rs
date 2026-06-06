@@ -30,8 +30,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
     (
         "skill",
         "maestro-feature",
-        "1.6.1",
-        "0c1a2b58ea0b20da303fae357634c850de3ed8701c5332345f2c919e20ce78a7",
+        "1.7.0",
+        "0078ec5d3973779bf40b6d05121321737e586f2585f5a74bbcd6fc5e7e68be22",
     ),
     (
         "skill",
@@ -60,8 +60,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
     (
         "skill",
         "maestro-design",
-        "1.4.2",
-        "8b88f43a2f474ce729724ef509b8ca5035786707cc6bd9d65745a17ce770cc97",
+        "1.5.0",
+        "320a0af894211d321a42bb66a893947b92205d1327666951e41307fd195b1177",
     ),
     (
         "skill",

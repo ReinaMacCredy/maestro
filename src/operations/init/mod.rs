@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::decisions;
 use crate::domain::extraction::{
     ExtractMode, FolderDecision, FolderPreview, extract_all, preview_all, render_preview,
     validate_all,
@@ -184,6 +185,10 @@ impl InitPlan {
                 InitFile {
                     path: paths.harness_dir().join("backlog.yaml"),
                     contents: backlog_yaml()?,
+                },
+                InitFile {
+                    path: paths.decisions_file(),
+                    contents: decisions::empty_store_yaml()?,
                 },
             ],
         })

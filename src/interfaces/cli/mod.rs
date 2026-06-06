@@ -416,8 +416,14 @@ pub struct FeatureArgs {
 #[derive(Debug, Subcommand)]
 pub enum FeatureCommand {
     #[command(about = "Propose a new feature (-> proposed)")]
-    New { title: String },
-    #[command(about = "Author a proposed feature's contract (replace-per-field; proposed only)")]
+    New {
+        title: String,
+        #[arg(long, help = "Set the initial description")]
+        description: Option<String>,
+        #[arg(long = "question", help = "Initial open question (repeatable)")]
+        question: Vec<String>,
+    },
+    #[command(about = "Author a proposed feature's contract (replace or append fields)")]
     Set {
         id: String,
         #[arg(
@@ -442,9 +448,29 @@ pub enum FeatureCommand {
         question: Vec<String>,
         #[arg(
             long = "clear-questions",
-            help = "Clear all open questions (only needed to clear to zero; cannot combine with --question)"
+            help = "Clear all open questions (with --question, clear then set the passed list)"
         )]
         clear_questions: bool,
+        #[arg(
+            long = "add-acceptance",
+            help = "Acceptance criterion to append while proposed (repeatable)"
+        )]
+        add_acceptance: Vec<String>,
+        #[arg(
+            long = "add-area",
+            help = "Affected area to append while proposed (repeatable)"
+        )]
+        add_area: Vec<String>,
+        #[arg(
+            long = "add-non-goal",
+            help = "Non-goal to append while proposed (repeatable)"
+        )]
+        add_non_goal: Vec<String>,
+        #[arg(
+            long = "add-question",
+            help = "Open question to append while proposed (repeatable)"
+        )]
+        add_question: Vec<String>,
         #[arg(long, help = "Replace the description")]
         description: Option<String>,
         #[arg(long, help = "Replace the raw request")]
@@ -541,6 +567,8 @@ pub enum FeatureCommand {
     },
     #[command(about = "Show a feature's status, full contract, and task counts")]
     Show { id: String },
+    #[command(about = "Render a feature's spec-of-record with decisions and notes")]
+    Spec { id: String },
     #[command(about = "List features with their statuses and task counts")]
     List {
         #[arg(
@@ -578,19 +606,28 @@ pub struct DecisionArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum DecisionCommand {
-    #[command(about = "Create a decision record (-> decision-NN)")]
+    #[command(about = "Open a structured decision fork (-> decision-NN)")]
     New {
         title: String,
-        #[arg(long, help = "Decision context section")]
+        #[arg(long, help = "Why this fork exists")]
         context: Option<String>,
-        #[arg(long, help = "Decision section")]
-        decision: Option<String>,
-        #[arg(long, help = "Alternative considered (repeatable)")]
-        alternative: Vec<String>,
-        #[arg(long, help = "Consequence (repeatable)")]
-        consequence: Vec<String>,
-        #[arg(long, help = "Linked feature id for the Linked tasks section")]
+        #[arg(long, help = "Owning feature id; omit for a global decision")]
         feature: Option<String>,
+    },
+    #[command(about = "Lock an open decision with the chosen answer")]
+    Lock {
+        id: String,
+        #[arg(long, help = "Chosen decision text")]
+        decision: String,
+        #[arg(long = "rejected", help = "Rejected option and reason (repeatable)")]
+        rejected: Vec<String>,
+        #[arg(long, help = "Preview or concrete example")]
+        preview: Option<String>,
+        #[arg(
+            long = "supersedes",
+            help = "Decision id superseded by this lock (repeatable)"
+        )]
+        supersedes: Vec<String>,
     },
     #[command(about = "Show a decision record by id (decision-NN)")]
     Show { id: String },

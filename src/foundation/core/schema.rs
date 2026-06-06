@@ -8,6 +8,8 @@ pub const TASK_SCHEMA_VERSION: &str = "maestro.task.v2";
 pub const RUN_SCHEMA_VERSION: &str = "maestro.run.v1";
 /// Schema version for hook events.
 pub const EVENT_SCHEMA_VERSION: &str = "maestro.event.v1";
+/// Schema version for structured decision stores.
+pub const DECISIONS_SCHEMA_VERSION: &str = "maestro.decisions.v1";
 /// Schema version for run evidence summaries.
 pub const RUN_EVIDENCE_SCHEMA_VERSION: &str = "maestro.run_evidence.v1";
 /// Legacy schema version for task verification reports used by migration/tests.
@@ -30,6 +32,7 @@ pub const ALL_SCHEMA_VERSIONS: &[&str] = &[
     TASK_SCHEMA_VERSION,
     RUN_SCHEMA_VERSION,
     EVENT_SCHEMA_VERSION,
+    DECISIONS_SCHEMA_VERSION,
     RUN_EVIDENCE_SCHEMA_VERSION,
     INSTALL_LOCK_SCHEMA_VERSION,
     GLOBAL_SKILLS_LOCK_SCHEMA_VERSION,

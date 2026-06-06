@@ -24,6 +24,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::decisions;
 use crate::domain::feature::qa;
 use crate::domain::feature::query::{
     FeatureTaskCounts, count_tasks_by_feature, count_tasks_for_feature, live_child_task_ids,
@@ -114,6 +115,14 @@ pub struct ContractEdits {
     pub raw_request: Option<String>,
     /// Replacement input type.
     pub input_type: Option<String>,
+    /// Proposed-stage acceptance additions.
+    pub add_acceptance: Vec<String>,
+    /// Proposed-stage affected-area additions.
+    pub add_affected_areas: Vec<String>,
+    /// Proposed-stage non-goal additions.
+    pub add_non_goals: Vec<String>,
+    /// Proposed-stage open-question additions.
+    pub add_open_questions: Vec<String>,
 }
 
 impl ContractEdits {
@@ -126,7 +135,41 @@ impl ContractEdits {
             && self.description.is_none()
             && self.raw_request.is_none()
             && self.input_type.is_none()
+            && self.add_acceptance.is_empty()
+            && self.add_affected_areas.is_empty()
+            && self.add_non_goals.is_empty()
+            && self.add_open_questions.is_empty()
     }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ContractChangeCounts {
+    pub acceptance: usize,
+    pub affected_areas: usize,
+    pub non_goals: usize,
+    pub open_questions: usize,
+    pub description: usize,
+    pub raw_request: usize,
+    pub input_type: usize,
+}
+
+impl ContractChangeCounts {
+    pub fn is_empty(&self) -> bool {
+        self.acceptance == 0
+            && self.affected_areas == 0
+            && self.non_goals == 0
+            && self.open_questions == 0
+            && self.description == 0
+            && self.raw_request == 0
+            && self.input_type == 0
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SetReport {
+    pub view: FeatureView,
+    pub replaced: ContractChangeCounts,
+    pub added: ContractChangeCounts,
 }
 
 /// Append-only additions applied by `feature amend` (Ready / InProgress).
@@ -198,6 +241,8 @@ pub struct NoteReport {
     pub id: String,
     /// Whether `notes.md` was created by this append.
     pub created: bool,
+    /// The exact dated line appended to `notes.md`.
+    pub line: String,
 }
 
 /// Create a feature from a title, generating a slug id and persisting it.
@@ -222,6 +267,8 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
     }
     let record = FeatureRecord::proposed(&id, title, &nanos_since_epoch_string());
     save_record(paths, &record)?;
+    scaffold_spec_file(paths, &id, title)?;
+    decisions::create::ensure_feature_store(paths, &id)?;
     Ok(id)
 }
 
@@ -242,6 +289,10 @@ fn ensure_no_blank_values(field: &str, values: &[String]) -> Result<()> {
 /// Errors when the feature is not found or its contract is frozen (status is
 /// past `Proposed`).
 pub fn set(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<FeatureView> {
+    Ok(set_with_report(paths, id, edits)?.view)
+}
+
+pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<SetReport> {
     let mut record = load_record(paths, id)?;
     match record.status {
         FeatureStatus::Proposed => {}
@@ -262,36 +313,65 @@ pub fn set(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<Featu
         ("affected_areas", edits.affected_areas.as_deref()),
         ("non_goals", edits.non_goals.as_deref()),
         ("open_questions", edits.open_questions.as_deref()),
+        ("acceptance", Some(edits.add_acceptance.as_slice())),
+        ("affected_areas", Some(edits.add_affected_areas.as_slice())),
+        ("non_goals", Some(edits.add_non_goals.as_slice())),
+        ("open_questions", Some(edits.add_open_questions.as_slice())),
     ] {
         if let Some(values) = values {
             ensure_no_blank_values(field, values)?;
         }
     }
+    let mut replaced = ContractChangeCounts::default();
+    let mut added = ContractChangeCounts::default();
     if let Some(value) = edits.acceptance {
+        replaced.acceptance = value.len();
         record.acceptance = value;
     }
     if let Some(value) = edits.affected_areas {
+        replaced.affected_areas = value.len();
         record.affected_areas = value;
     }
     if let Some(value) = edits.non_goals {
+        replaced.non_goals = value.len();
         record.non_goals = value;
     }
     if let Some(value) = edits.open_questions {
+        replaced.open_questions = value.len();
         record.open_questions = value;
     }
     if let Some(value) = edits.description {
+        replaced.description = 1;
         record.description = Some(value);
     }
     if let Some(value) = edits.raw_request {
+        replaced.raw_request = 1;
         record.raw_request = Some(value);
     }
     if let Some(value) = edits.input_type {
+        replaced.input_type = 1;
         record.input_type = Some(value);
     }
+    let acceptance = dedup_new(&record.acceptance, &edits.add_acceptance);
+    added.acceptance = acceptance.len();
+    record.acceptance.extend(acceptance);
+    let affected_areas = dedup_new(&record.affected_areas, &edits.add_affected_areas);
+    added.affected_areas = affected_areas.len();
+    record.affected_areas.extend(affected_areas);
+    let non_goals = dedup_new(&record.non_goals, &edits.add_non_goals);
+    added.non_goals = non_goals.len();
+    record.non_goals.extend(non_goals);
+    let open_questions = dedup_new(&record.open_questions, &edits.add_open_questions);
+    added.open_questions = open_questions.len();
+    record.open_questions.extend(open_questions);
     record.updated_at = nanos_since_epoch_string();
     save_record(paths, &record)?;
     let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
-    Ok(view_from_record(record, counts))
+    Ok(SetReport {
+        view: view_from_record(record, counts),
+        replaced,
+        added,
+    })
 }
 
 /// Accept a feature: `Proposed → Ready`, gated on a complete contract (D2).
@@ -548,10 +628,11 @@ pub fn note(paths: &MaestroPaths, id: &str, text: &str) -> Result<NoteReport> {
         bail!("feature note text cannot be empty");
     }
     let path = feature_dir(paths, &record.id).join("notes.md");
-    let created = append_note_file(&path, &record.title, text)?;
+    let append = append_note_file(&path, &record.title, text)?;
     Ok(NoteReport {
         id: record.id,
-        created,
+        created: append.created,
+        line: append.line,
     })
 }
 
@@ -1016,7 +1097,13 @@ fn read_notes_at(dir: &Path) -> Result<Option<String>> {
         .filter(|s| !s.is_empty()))
 }
 
-fn append_note_file(path: &Path, title: &str, text: &str) -> Result<bool> {
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct NoteAppend {
+    created: bool,
+    line: String,
+}
+
+fn append_note_file(path: &Path, title: &str, text: &str) -> Result<NoteAppend> {
     let existing = read_to_string_if_exists(path)?;
     let created = existing.is_none();
     let mut contents = existing.unwrap_or_else(|| format!("# {title}\n\n"));
@@ -1027,10 +1114,23 @@ fn append_note_file(path: &Path, title: &str, text: &str) -> Result<bool> {
         .split_once('T')
         .map(|(date, _)| date.to_string())
         .unwrap_or_else(|| "1970-01-01".to_string());
-    contents.push_str(&format!("{date}  {}\n", text.trim()));
+    let line = format!("{date}  {}", text.trim());
+    contents.push_str(&line);
+    contents.push('\n');
     write_string_atomic(path, &contents)
         .with_context(|| format!("failed to append feature note {}", path.display()))?;
-    Ok(created)
+    Ok(NoteAppend { created, line })
+}
+
+fn scaffold_spec_file(paths: &MaestroPaths, id: &str, title: &str) -> Result<()> {
+    let path = feature_dir(paths, id).join("spec.md");
+    if path.exists() {
+        return Ok(());
+    }
+    let contents =
+        format!("# {title}\n\n## Current state\n\n## Problem\n\n## Fork walkthroughs\n\n");
+    write_string_atomic(&path, &contents)
+        .with_context(|| format!("failed to write {}", path.display()))
 }
 
 fn feature_yaml_path(paths: &MaestroPaths, id: &str) -> PathBuf {

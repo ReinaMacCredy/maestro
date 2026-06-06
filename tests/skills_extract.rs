@@ -195,11 +195,11 @@ fn thin_bundled_skills_include_operational_runbooks() {
         .find(|skill| skill.name == "maestro-feature")
         .expect("invariant: maestro-feature should be bundled")
         .skill_md();
-    assert!(feature.contains("version: 1.6.1"));
-    assert!(feature.contains("## Spec/Plan Intake"));
-    assert!(feature.contains("the agent converts it into Maestro artifacts"));
+    assert!(feature.contains("version: 1.7.0"));
+    assert!(feature.contains("Use append flags while proposed"));
+    assert!(feature.contains("feature spec <id>"));
     assert!(feature.contains("feature prepare <id> --from <plan-file>"));
-    assert!(feature.contains("If the source only describes intent, write the concrete"));
+    assert!(feature.contains("--add-acceptance"));
 }
 
 #[cfg(unix)]

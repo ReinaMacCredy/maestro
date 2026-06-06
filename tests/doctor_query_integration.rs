@@ -405,24 +405,21 @@ fn doctor_counts_real_decisions_and_skips_symlinked_entries() {
 
     run_success(repo, &["decision", "new", "Use the domain decision reader"]);
 
-    // Doctor now enumerates decisions through the domain reader, which skips
-    // symlinks for parity with resolve_decision_path's symlink rejection. A
-    // symlinked decision-*.md must not inflate the count (the previous inline
-    // `is_file()` predicate followed the link and counted it).
+    // Doctor enumerates structured decisions plus frozen legacy markdown through
+    // the domain reader. A symlinked legacy decision-*.md must not inflate the
+    // legacy count.
     let decisions_dir = repo.join(".maestro/decisions");
-    let real = decisions_dir.join("decision-001-use-the-domain-decision-reader.md");
-    assert!(
-        real.is_file(),
-        "decision new should create the real decision file"
-    );
-    unix_fs::symlink(&real, decisions_dir.join("decision-002-symlinked.md"))
+    let real = decisions_dir.join("decision-007-legacy.md");
+    fs::write(&real, "# decision-007: Legacy\n\n## Status\nAccepted\n")
+        .expect("invariant: legacy decision should be writable");
+    unix_fs::symlink(&real, decisions_dir.join("decision-008-symlinked.md"))
         .expect("invariant: symlink should be creatable in test");
 
     let doctor = maestro(repo, &["doctor"]);
     let out = stdout(&doctor);
     assert!(
-        out.contains("check decisions: ok (1 decision file(s))"),
-        "doctor should count only the real decision, not the symlink:\n{out}"
+        out.contains("check decisions: ok (1 structured decision(s), 1 legacy file(s))"),
+        "doctor should count the structured decision and only the real legacy file:\n{out}"
     );
 }
 
@@ -467,7 +464,7 @@ fn query_views_scan_current_artifacts_without_writing_cache_files() {
     let before = maestro_files(repo);
 
     let decisions = run_success(repo, &["query", "decisions"]);
-    assert!(decisions.contains("decision-001-use-computed-query-views.md"));
+    assert!(decisions.contains("decision-001\topen\tglobal"));
     assert!(decisions.contains("Use computed query views"));
 
     let backlog = run_success(repo, &["query", "backlog"]);

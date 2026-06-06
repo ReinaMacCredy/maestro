@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use maestro::foundation::core::error::MaestroError;
 use maestro::foundation::core::schema::{
     ACCEPTANCE_SCHEMA_VERSION, ALL_SCHEMA_VERSIONS, BACKLOG_SCHEMA_VERSION, Compat,
-    EVENT_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION, GLOBAL_SKILLS_LOCK_SCHEMA_VERSION,
-    HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION, RUN_EVIDENCE_SCHEMA_VERSION,
-    RUN_SCHEMA_VERSION, TASK_SCHEMA_VERSION, VERIFICATION_RESTORE_SCHEMA_VERSION,
-    VERIFICATION_SCHEMA_VERSION, classify,
+    DECISIONS_SCHEMA_VERSION, EVENT_SCHEMA_VERSION, FEATURE_SCHEMA_VERSION,
+    GLOBAL_SKILLS_LOCK_SCHEMA_VERSION, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION,
+    RUN_EVIDENCE_SCHEMA_VERSION, RUN_SCHEMA_VERSION, TASK_SCHEMA_VERSION,
+    VERIFICATION_RESTORE_SCHEMA_VERSION, VERIFICATION_SCHEMA_VERSION, classify,
 };
 
 #[test]
@@ -20,13 +20,14 @@ fn all_active_schema_versions_are_declared_once() {
             TASK_SCHEMA_VERSION,
             RUN_SCHEMA_VERSION,
             EVENT_SCHEMA_VERSION,
+            DECISIONS_SCHEMA_VERSION,
             RUN_EVIDENCE_SCHEMA_VERSION,
             INSTALL_LOCK_SCHEMA_VERSION,
             GLOBAL_SKILLS_LOCK_SCHEMA_VERSION,
             BACKLOG_SCHEMA_VERSION,
         ]
     );
-    assert_eq!(ALL_SCHEMA_VERSIONS.len(), 9);
+    assert_eq!(ALL_SCHEMA_VERSIONS.len(), 10);
 }
 
 #[test]
@@ -36,6 +37,7 @@ fn schema_constants_match_current_artifact_contract() {
     assert_eq!(TASK_SCHEMA_VERSION, "maestro.task.v2");
     assert_eq!(RUN_SCHEMA_VERSION, "maestro.run.v1");
     assert_eq!(EVENT_SCHEMA_VERSION, "maestro.event.v1");
+    assert_eq!(DECISIONS_SCHEMA_VERSION, "maestro.decisions.v1");
     assert_eq!(RUN_EVIDENCE_SCHEMA_VERSION, "maestro.run_evidence.v1");
     assert_eq!(VERIFICATION_SCHEMA_VERSION, "maestro.verification.v1");
     assert_eq!(ACCEPTANCE_SCHEMA_VERSION, "maestro.acceptance.v1");

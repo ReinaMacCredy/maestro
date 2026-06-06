@@ -44,6 +44,11 @@ impl MaestroPaths {
         self.maestro_dir().join("decisions")
     }
 
+    /// Return the global structured decision store.
+    pub fn decisions_file(&self) -> PathBuf {
+        self.maestro_dir().join("decisions.yaml")
+    }
+
     /// Return the bundled skills directory.
     pub fn skills_dir(&self) -> PathBuf {
         self.maestro_dir().join("skills")

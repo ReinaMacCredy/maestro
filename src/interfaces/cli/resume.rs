@@ -334,18 +334,13 @@ fn full_context(
 }
 
 fn prior_decisions(paths: &MaestroPaths) -> Result<Vec<String>> {
-    decisions::decision_entries(&paths.decisions_dir())?
+    let decisions = decisions::list(paths)?
         .into_iter()
         .rev()
         .take(5)
-        .map(|entry| {
-            let title = decisions::decision_title(&entry.path)?;
-            Ok(format!(
-                "{}: {title}",
-                decisions::decision_display_id(&entry.file_name)
-            ))
-        })
-        .collect()
+        .map(|entry| format!("{}: {}", entry.id, entry.title))
+        .collect::<Vec<_>>();
+    Ok(decisions)
 }
 
 fn last_verified_tasks(tasks: &[task::TaskRecord], feature_id: Option<&str>) -> Vec<String> {

@@ -77,7 +77,7 @@ fn phase3_core_verbs_demo_path_runs_end_to_end() {
     assert!(feature_list.contains("\t1\t1\t"));
 
     let decision_list = stdout(run(repo, &["decision", "list"]));
-    assert!(decision_list.contains("decision-001-use-computed-query-views.md"));
+    assert!(decision_list.contains("decision-001\topen\tglobal\tUse computed query views"));
 
     let proof = stdout(run(repo, &["query", "proof", "task-001"]));
     assert!(proof.contains("proof task-001: accepted"));

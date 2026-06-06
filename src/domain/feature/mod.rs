@@ -9,9 +9,10 @@ mod verification;
 
 pub use archive::{archive_feature, unarchive_feature};
 pub use registry::{
-    AmendReport, CancelReport, ContractAdditions, ContractEdits, FeatureDiagnostic, FeatureView,
-    NoteReport, TransitionReport, accept, accept_with_qa_none, amend, cancel, create, diagnose,
-    list, list_archived, note, set, ship, show, show_archived, start, status_label, titles,
+    AmendReport, CancelReport, ContractAdditions, ContractChangeCounts, ContractEdits,
+    FeatureDiagnostic, FeatureView, NoteReport, SetReport, TransitionReport, accept,
+    accept_with_qa_none, amend, cancel, create, diagnose, list, list_archived, note, set,
+    set_with_report, ship, show, show_archived, start, status_label, titles,
 };
 pub use schema::FeatureStatus;
 pub use verification::{

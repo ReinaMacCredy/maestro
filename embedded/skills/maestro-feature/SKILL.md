@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.6.1
+version: 1.7.0
 description: "Use for the Maestro feature lifecycle: author, accept, prepare, start, amend, ship, cancel, archive, and inspect a feature contract plus its child-task rollup."
 ---
 
@@ -14,7 +14,7 @@ Activate:
 
 ## Use
 
-- Author or inspect a feature: `new`, `set`, `show`, `list`.
+- Author or inspect a feature: `new`, `set`, `show`, `spec`, `list`.
 - Freeze a proposed contract: `accept`.
 - Turn an accepted contract into tasks: `prepare`.
 - Grow a frozen contract: `amend`.
@@ -23,7 +23,7 @@ Activate:
 ## Do
 
 ```sh
-maestro feature new "<title>"                         # -> proposed
+maestro feature new "<title>" --description "<d>"     # -> proposed
 maestro feature set <id> --acceptance "<check>" --area "<surface>"
 maestro feature accept <id>                           # -> ready, requires qa-baseline
 maestro feature prepare <id> --draft                  # reviewable child-task plan
@@ -32,43 +32,19 @@ maestro feature ship <id> --outcome "<one line>"      # -> shipped, requires qa-
 maestro feature archive <id>                          # terminal features only
 ```
 
-`set` works only while `proposed` and replaces each repeated field:
+`set` works only while `proposed`. Repeated base fields replace their full
+list:
 `--acceptance`, `--area`, `--non-goal`, `--question`, `--clear-questions`,
 `--description`, `--request`, `--type`.
 
-## Spec/Plan Intake
+Use append flags while proposed when adding to an existing list without
+resending it: `--add-acceptance`, `--add-area`, `--add-non-goal`,
+`--add-question`. After accept, use `feature amend`.
 
-When the user gives a SPEC, PLAN, issue, PRD, brainstorm note, or rough prose,
-the agent converts it into Maestro artifacts. Maestro stores the result; it does
-not infer product scope from arbitrary prose.
-
-1. Read the source document completely and preserve explicit constraints.
-2. Extract the feature contract:
-   title, request, description, acceptance criteria, affected areas,
-   non-goals, and unresolved questions.
-3. Create or update the proposed feature with `feature new` and `feature set`.
-4. Use `qa-baseline` to write the baseline, then run `feature accept`.
-5. Extract implementation work into an explicit prepare plan file when the
-   source is not already a clean plan.
-6. Run `feature prepare <id> --from <plan-file>` and inspect created tasks.
-
-Prepare plans may be agent-authored. Keep every task explicit and observable:
-
-```markdown
-## Task Plan
-
-- Task T1: Add the API route
-  - check: GET /articles returns compact records
-
-2. T2: Add retry support
-   - after: T1
-   - check: POST /retry retries failed jobs
-   - blocker: deployment approval required
-```
-
-`prepare --from` parses explicit task entries and `check:`, `after:`, and
-`blocker:` fields. If the source only describes intent, write the concrete
-plan first instead of expecting the CLI to infer tasks.
+Use `feature show <id>` for the everyday lifecycle summary. Use
+`feature spec <id>` when the agent needs the narrative spec, open decisions,
+locked decisions, contract, and recent notes in one view. Open decisions are
+for real forks; `--question` is for loose questions not yet forks.
 
 `prepare --from` expects a visible plan:
 

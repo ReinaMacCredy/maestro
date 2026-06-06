@@ -201,33 +201,16 @@ fn check_decisions(
         return;
     }
 
-    match decisions::decision_entries(&dir) {
-        Ok(entries) => {
-            for entry in &entries {
-                match std::fs::read_to_string(&entry.path) {
-                    Ok(contents)
-                        if contents.contains("Why this decision exists.")
-                            || contents.contains("What we decided.") =>
-                    {
-                        warnings.push(format!(
-                            "{} still contains decision template placeholder text",
-                            entry.file_name
-                        ));
-                    }
-                    Ok(_) => {}
-                    Err(error) => errors.push(format!(
-                        "failed to read decision file {}: {error}",
-                        entry.path.display()
-                    )),
-                }
-            }
-            checks.push(DoctorCheck {
-                name: "decisions",
-                detail: format!("{} decision file(s)", entries.len()),
-            });
-        }
-        Err(error) => errors.push(format!("{error:#}")),
-    }
+    let report = decisions::diagnose(paths);
+    warnings.extend(report.warnings);
+    errors.extend(report.errors);
+    checks.push(DoctorCheck {
+        name: "decisions",
+        detail: format!(
+            "{} structured decision(s), {} legacy file(s)",
+            report.structured_count, report.legacy_count
+        ),
+    });
 }
 
 /// Verify that the files an installed agent owns still exist on disk. A bare

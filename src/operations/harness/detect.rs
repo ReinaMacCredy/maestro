@@ -3,7 +3,6 @@ use std::fs;
 
 use anyhow::{Context, Result};
 
-use crate::domain::decisions::query::decision_entries;
 use crate::domain::harness::{BacklogItem, EscalationPolicy, HarnessConfig};
 use crate::domain::proof;
 use crate::domain::run;
@@ -261,10 +260,8 @@ fn detect_rediscovered_decisions(
     paths: &MaestroPaths,
     entries: &[TaskEntry],
 ) -> Result<Vec<BacklogItem>> {
-    let decisions = decision_entries(&paths.decisions_dir())?;
-    let decision_texts = decisions
-        .iter()
-        .filter_map(|entry| fs::read_to_string(&entry.path).ok())
+    let decision_texts = crate::domain::decisions::decision_bodies(paths)?
+        .into_iter()
         .map(|text| text.to_ascii_lowercase())
         .collect::<Vec<_>>();
     let mut by_topic = BTreeMap::<String, BTreeSet<String>>::new();

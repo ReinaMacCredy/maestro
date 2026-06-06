@@ -1,6 +1,4 @@
-use std::fs;
-
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 
 use crate::domain::decisions;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
@@ -15,18 +13,21 @@ pub fn run(args: DecisionArgs) -> Result<()> {
         DecisionCommand::New {
             title,
             context,
-            decision,
-            alternative,
-            consequence,
             feature,
-        } => new_decision(
+        } => new_decision(&paths, &title, context.as_deref(), feature.as_deref()),
+        DecisionCommand::Lock {
+            id,
+            decision,
+            rejected,
+            preview,
+            supersedes,
+        } => lock_decision(
             &paths,
-            &title,
-            context.as_deref(),
-            decision.as_deref(),
-            &alternative,
-            &consequence,
-            feature.as_deref(),
+            &id,
+            &decision,
+            &rejected,
+            preview.as_deref(),
+            &supersedes,
         ),
         DecisionCommand::Show { id } => show_decision(&paths, &id),
         DecisionCommand::List => list_decisions(&paths),
@@ -37,70 +38,79 @@ fn new_decision(
     paths: &MaestroPaths,
     title: &str,
     context: Option<&str>,
-    decision: Option<&str>,
-    alternatives: &[String],
-    consequences: &[String],
     feature: Option<&str>,
 ) -> Result<()> {
-    // An empty title slugifies to a malformed `decision-NNN-.md`; reject it at
-    // the boundary with a remedy rather than writing the husk (T2).
     if title.trim().is_empty() {
         bail!("decision title cannot be empty; e.g. `maestro decision new \"Adopt X for Y\"`");
     }
-    let has_sections = context.is_some()
-        || decision.is_some()
-        || !alternatives.is_empty()
-        || !consequences.is_empty()
-        || feature.is_some();
-    let number = if has_sections {
-        decisions::create_complete(
-            paths,
-            title,
-            context,
-            decision,
-            alternatives,
-            consequences,
-            feature,
-        )?
-    } else {
-        decisions::create(paths, title)?
-    };
-    let file_name = decisions::decision_file_name(number, title);
-    println!("created decision decision-{number:03}");
-    if has_sections {
-        println!("complete: .maestro/decisions/{file_name}");
-    } else {
-        println!(
-            "# template at .maestro/decisions/{file_name} — fill in Context / Decision / Alternatives"
-        );
+    let report = decisions::create_open(paths, title, context, feature)?;
+    println!("opened {} (status: open)", report.record.id);
+    println!("store: {}", report.path.display());
+    println!("{}", decisions::query::render_record(&report.record));
+    Ok(())
+}
+
+fn lock_decision(
+    paths: &MaestroPaths,
+    id: &str,
+    decision: &str,
+    rejected: &[String],
+    preview: Option<&str>,
+    supersedes: &[String],
+) -> Result<()> {
+    if rejected.is_empty() {
+        bail!("decision lock requires at least one --rejected \"<option: why>\"");
+    }
+    let report = decisions::lock(paths, id, decision, rejected, preview, supersedes)?;
+    println!("locked {}", report.record.id);
+    println!("store: {}", report.path.display());
+    println!("{}", decisions::query::render_record(&report.record));
+    if let Some(line) = report.note_line {
+        println!("note:");
+        println!("  {line}");
     }
     Ok(())
 }
 
 fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let path = decisions::resolve_decision_path(&paths.decisions_dir(), id)?;
-    let contents = fs::read_to_string(&path)
-        .with_context(|| format!("failed to read decision file {}", path.display()))?;
-    print!("{contents}");
+    match decisions::show(paths, id)? {
+        decisions::DecisionContent::Structured { record, path, .. } => {
+            println!("store: {}", path.display());
+            print!("{}", decisions::query::render_record(&record));
+        }
+        decisions::DecisionContent::Legacy { contents, path, .. } => {
+            println!("legacy: {}", path.display());
+            print!("{contents}");
+        }
+    }
     Ok(())
 }
 
 fn list_decisions(paths: &MaestroPaths) -> Result<()> {
-    let entries = decisions::decision_entries(&paths.decisions_dir())?;
+    let entries = decisions::list(paths)?;
     if entries.is_empty() {
         println!("no decisions found");
         return Ok(());
     }
 
-    println!("ID\tFILE\tTITLE");
+    println!("ID\tSTATUS\tHOME\tTITLE");
     for entry in entries {
         println!(
-            "{}\t{}\t{}",
-            decisions::decision_display_id(&entry.file_name),
-            entry.file_name,
-            decisions::decision_title(&entry.path)?
+            "{}\t{}\t{}\t{}",
+            entry.id,
+            entry.status,
+            home(&entry.source),
+            entry.title
         );
     }
 
     Ok(())
+}
+
+fn home(source: &decisions::DecisionSource) -> String {
+    match source {
+        decisions::DecisionSource::Global => "global".to_string(),
+        decisions::DecisionSource::Feature { feature_id } => format!("feature:{feature_id}"),
+        decisions::DecisionSource::Legacy => "legacy-md".to_string(),
+    }
 }

@@ -1,6 +1,9 @@
 use anyhow::{Result, bail};
 
-use crate::domain::feature::{self, ContractAdditions, ContractEdits, FeatureStatus};
+use crate::domain::decisions;
+use crate::domain::feature::{
+    self, ContractAdditions, ContractChangeCounts, ContractEdits, FeatureStatus,
+};
 use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::render_timestamp;
@@ -13,7 +16,11 @@ pub fn run(args: FeatureArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
 
     match args.command {
-        FeatureCommand::New { title } => new_feature(&paths, &title),
+        FeatureCommand::New {
+            title,
+            description,
+            question,
+        } => new_feature(&paths, &title, description, question),
         FeatureCommand::Set {
             id,
             acceptance,
@@ -21,33 +28,36 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             non_goal,
             question,
             clear_questions,
+            add_acceptance,
+            add_area,
+            add_non_goal,
+            add_question,
             description,
             request,
             input_type,
-        } => {
-            if clear_questions && !question.is_empty() {
-                bail!(
-                    "--question already replaces the whole questions list; drop --clear-questions and pass the full set"
-                );
-            }
-            set_feature(
-                &paths,
-                &id,
-                ContractEdits {
-                    acceptance: opt_list(acceptance),
-                    affected_areas: opt_list(area),
-                    non_goals: opt_list(non_goal),
-                    open_questions: if clear_questions {
-                        Some(Vec::new())
-                    } else {
-                        opt_list(question)
-                    },
-                    description,
-                    raw_request: request,
-                    input_type,
+        } => set_feature(
+            &paths,
+            &id,
+            ContractEdits {
+                acceptance: opt_list(acceptance),
+                affected_areas: opt_list(area),
+                non_goals: opt_list(non_goal),
+                open_questions: if !question.is_empty() {
+                    opt_list(question)
+                } else if clear_questions {
+                    Some(Vec::new())
+                } else {
+                    None
                 },
-            )
-        }
+                description,
+                raw_request: request,
+                input_type,
+                add_acceptance,
+                add_affected_areas: add_area,
+                add_non_goals: add_non_goal,
+                add_open_questions: add_question,
+            },
+        ),
         FeatureCommand::Accept {
             id,
             qa,
@@ -101,6 +111,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             } else {
                 println!("noted {}", report.id);
             }
+            println!("  {}", report.line);
             Ok(())
         }
         FeatureCommand::Ship {
@@ -114,6 +125,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             dry_run,
         } => cancel_feature(&paths, &id, &reason, dry_run),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
+        FeatureCommand::Spec { id } => show_feature_spec(&paths, &id),
         FeatureCommand::List { all } => list_features(&paths, all),
         FeatureCommand::Archive {
             id,
@@ -383,30 +395,130 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
     Ok(())
 }
 
-fn new_feature(paths: &MaestroPaths, title: &str) -> Result<()> {
+fn new_feature(
+    paths: &MaestroPaths,
+    title: &str,
+    description: Option<String>,
+    questions: Vec<String>,
+) -> Result<()> {
     let id = feature::create(paths, title)?;
+    let initialized = description.is_some() || !questions.is_empty();
+    if initialized {
+        feature::set(
+            paths,
+            &id,
+            ContractEdits {
+                description,
+                open_questions: opt_list(questions),
+                ..Default::default()
+            },
+        )?;
+    }
     println!("created feature {id} (proposed)");
+    println!("spec: .maestro/features/{id}/spec.md");
+    println!("decisions: .maestro/features/{id}/decisions.yaml");
+    if initialized {
+        println!("initialized contract fields");
+    }
     Ok(())
 }
 
 fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<()> {
     if edits.is_empty() {
         bail!(
-            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  flags: --acceptance --area --non-goal --question --clear-questions --description --request --type"
+            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  maestro feature set {id} --add-acceptance \"<criterion>\"\n  flags: --acceptance --area --non-goal --question --clear-questions --add-acceptance --add-area --add-non-goal --add-question --description --request --type"
         );
     }
-    let view = feature::set(paths, id, edits)?;
-    println!(
-        "set {id} (replace-per-field); acceptance={}, areas={}, non_goals={}, questions={}",
-        view.acceptance.len(),
-        view.affected_areas.len(),
-        view.non_goals.len(),
-        view.open_questions.len()
-    );
+    let report = feature::set_with_report(paths, id, edits)?;
+    print_set_report(id, &report);
     println!("next: qa-baseline skill -> .maestro/features/{id}/qa.md");
     println!("or: maestro feature accept {id} --qa none --reason \"<why no behavior>\"");
     println!("then: maestro feature accept {id}");
+    if !report.view.open_questions.is_empty() {
+        println!(
+            "fork hint: open real forks with `maestro decision new \"<title>\" --feature {id} --context \"<why>\"`; keep --question for loose questions"
+        );
+    }
     Ok(())
+}
+
+fn print_set_report(id: &str, report: &feature::SetReport) {
+    println!("set {id}");
+    for line in change_lines("replaced", &report.replaced, &report.view) {
+        println!("  {line}");
+    }
+    for line in change_lines("added", &report.added, &report.view) {
+        println!("  {line}");
+    }
+    if report.replaced.is_empty() && report.added.is_empty() {
+        println!("  no list values changed; scalar fields may have been refreshed");
+    }
+    println!(
+        "  totals: acceptance={}, areas={}, non_goals={}, questions={}",
+        report.view.acceptance.len(),
+        report.view.affected_areas.len(),
+        report.view.non_goals.len(),
+        report.view.open_questions.len()
+    );
+}
+
+fn change_lines(
+    mode: &str,
+    counts: &ContractChangeCounts,
+    view: &feature::FeatureView,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    push_count_line(
+        &mut lines,
+        mode,
+        "acceptance",
+        counts.acceptance,
+        view.acceptance.len(),
+    );
+    push_count_line(
+        &mut lines,
+        mode,
+        "areas",
+        counts.affected_areas,
+        view.affected_areas.len(),
+    );
+    push_count_line(
+        &mut lines,
+        mode,
+        "non_goals",
+        counts.non_goals,
+        view.non_goals.len(),
+    );
+    push_count_line(
+        &mut lines,
+        mode,
+        "questions",
+        counts.open_questions,
+        view.open_questions.len(),
+    );
+    if counts.description > 0 {
+        lines.push("description replaced".to_string());
+    }
+    if counts.raw_request > 0 {
+        lines.push("raw_request replaced".to_string());
+    }
+    if counts.input_type > 0 {
+        lines.push("input_type replaced".to_string());
+    }
+    lines
+}
+
+fn push_count_line(lines: &mut Vec<String>, mode: &str, label: &str, changed: usize, total: usize) {
+    if changed == 0 {
+        return;
+    }
+    if mode == "added" {
+        lines.push(format!("+{changed} {label} ({total} total)"));
+    } else {
+        lines.push(format!(
+            "{label} replaced ({total}); other fields untouched"
+        ));
+    }
 }
 
 fn amend_feature(
@@ -656,6 +768,7 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     if let Some(reason) = view.qa_none_reason.as_deref() {
         println!("qa: none ({reason})");
     }
+    print_decision_summary(paths, &view.id)?;
     print_acceptance(paths, &view.id, &view.acceptance, archived)?;
     print_list("affected_areas", &view.affected_areas);
     print_list("non_goals", &view.non_goals);
@@ -668,6 +781,117 @@ fn show_feature(paths: &MaestroPaths, id: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_decision_summary(paths: &MaestroPaths, id: &str) -> Result<()> {
+    let records = decisions::decisions_for_feature(paths, id)?;
+    let open = records
+        .iter()
+        .filter(|record| record.status == decisions::schema::DecisionStatus::Open)
+        .count();
+    let locked = records
+        .iter()
+        .filter(|record| record.status == decisions::schema::DecisionStatus::Locked)
+        .count();
+    let superseded = records
+        .iter()
+        .filter(|record| record.status == decisions::schema::DecisionStatus::Superseded)
+        .count();
+    println!(
+        "decisions: {} (open: {open}, locked: {locked}, superseded: {superseded})",
+        records.len()
+    );
+    Ok(())
+}
+
+fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
+    let view = feature::show(paths, id)?;
+    println!("status: {}", feature::status_label(&view.status));
+    println!("feature: {}", view.id);
+    println!();
+    let spec_path = paths.features_dir().join(&view.id).join("spec.md");
+    match std::fs::read_to_string(&spec_path) {
+        Ok(spec) => print!("{}", spec.trim_end()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            println!("# {}", view.title);
+            println!();
+            println!("(no spec.md found)");
+        }
+        Err(error) => bail!("failed to read {}: {error}", spec_path.display()),
+    }
+    println!();
+    println!();
+    println!("## Contract");
+    if let Some(description) = view.description.as_deref() {
+        println!("description: {description}");
+    }
+    print_plain_list("acceptance", &view.acceptance);
+    print_plain_list("affected_areas", &view.affected_areas);
+    print_plain_list("non_goals", &view.non_goals);
+    print_plain_list("open_questions", &view.open_questions);
+
+    let records = decisions::decisions_for_feature(paths, &view.id)?;
+    println!();
+    println!("## Decisions");
+    let open = records
+        .iter()
+        .filter(|record| record.status == decisions::schema::DecisionStatus::Open)
+        .collect::<Vec<_>>();
+    if !open.is_empty() {
+        println!("Open forks:");
+        for record in &open {
+            println!("- {}: {}", record.id, record.title);
+            if let Some(context) = record.context.as_deref() {
+                println!("  context: {context}");
+            }
+        }
+    }
+    let closed = records
+        .iter()
+        .filter(|record| record.status != decisions::schema::DecisionStatus::Open)
+        .collect::<Vec<_>>();
+    if closed.is_empty() && open.is_empty() {
+        println!("- none");
+    } else {
+        for record in closed {
+            println!(
+                "- {} [{}]: {}",
+                record.id,
+                record.status.as_str(),
+                record.title
+            );
+            if let Some(decision) = record.decision.as_deref() {
+                println!("  decision: {decision}");
+            }
+        }
+    }
+
+    if let Some(notes) = view.notes.as_deref() {
+        println!();
+        println!("## Recent notes");
+        for line in notes
+            .lines()
+            .rev()
+            .take(10)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+        {
+            println!("{line}");
+        }
+    }
+    Ok(())
+}
+
+fn print_plain_list(label: &str, values: &[String]) {
+    println!("{label}:");
+    if values.is_empty() {
+        println!("- none");
+        return;
+    }
+    for value in values {
+        println!("- {value}");
+    }
 }
 
 fn print_acceptance(
