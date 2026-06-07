@@ -32,6 +32,8 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             add_area,
             add_non_goal,
             add_question,
+            edit_acceptance,
+            text,
             description,
             request,
             input_type,
@@ -56,6 +58,7 @@ pub fn run(args: FeatureArgs) -> Result<()> {
                 add_affected_areas: add_area,
                 add_non_goals: add_non_goal,
                 add_open_questions: add_question,
+                edit_acceptance: paired_acceptance_edits(edit_acceptance, text)?,
             },
         ),
         FeatureCommand::Accept {
@@ -426,7 +429,7 @@ fn new_feature(
 fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<()> {
     if edits.is_empty() {
         bail!(
-            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  maestro feature set {id} --add-acceptance \"<criterion>\"\n  flags: --acceptance --area --non-goal --question --clear-questions --add-acceptance --add-area --add-non-goal --add-question --description --request --type"
+            "no fields to set\n  maestro feature set {id} --acceptance \"<criterion>\" --area \"<surface>\"\n  maestro feature set {id} --add-acceptance \"<criterion>\"\n  maestro feature set {id} --edit-acceptance ac-1 --text \"<criterion>\"\n  flags: --acceptance --area --non-goal --question --clear-questions --add-acceptance --add-area --add-non-goal --add-question --edit-acceptance --text --description --request --type"
         );
     }
     let report = feature::set_with_report(paths, id, edits)?;
@@ -442,6 +445,24 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
     Ok(())
 }
 
+fn paired_acceptance_edits(
+    edit_acceptance: Vec<String>,
+    text: Vec<String>,
+) -> Result<Vec<feature::AcceptanceTextEdit>> {
+    if edit_acceptance.len() != text.len() {
+        bail!(
+            "{} --edit-acceptance but {} --text: each --edit-acceptance needs its --text",
+            edit_acceptance.len(),
+            text.len()
+        );
+    }
+    Ok(edit_acceptance
+        .into_iter()
+        .zip(text)
+        .map(|(id, text)| feature::AcceptanceTextEdit { id, text })
+        .collect())
+}
+
 fn print_set_report(id: &str, report: &feature::SetReport) {
     println!("set {id}");
     for line in change_lines("replaced", &report.replaced, &report.view) {
@@ -450,7 +471,10 @@ fn print_set_report(id: &str, report: &feature::SetReport) {
     for line in change_lines("added", &report.added, &report.view) {
         println!("  {line}");
     }
-    if report.replaced.is_empty() && report.added.is_empty() {
+    if report.edited_acceptance > 0 {
+        println!("  acceptance edited ({})", report.edited_acceptance);
+    }
+    if report.replaced.is_empty() && report.added.is_empty() && report.edited_acceptance == 0 {
         println!("  no list values changed; scalar fields may have been refreshed");
     }
     println!(

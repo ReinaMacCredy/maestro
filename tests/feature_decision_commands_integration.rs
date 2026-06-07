@@ -7,6 +7,7 @@ use std::process::Command;
 
 use maestro::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
+use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 
 fn maestro(args: &[&str], cwd: &Path) -> std::process::Output {
@@ -695,6 +696,107 @@ fn feature_authoring_append_flags_are_proposed_only() {
 }
 
 #[test]
+fn feature_set_edits_one_acceptance_item_by_id() {
+    let temp_dir = TestTempDir::new("maestro-feature-edit-acceptance");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+    stdout(
+        maestro(&["feature", "new", "Edit Acceptance"], root),
+        &["feature", "new", "Edit Acceptance"],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        "edit-acceptance",
+        "--acceptance",
+        "first criterion",
+        "--acceptance",
+        "second criterion",
+        "--acceptance",
+        "third criterion",
+        "--area",
+        "feature authoring",
+    ];
+    stdout(maestro(&set_args, root), &set_args);
+
+    let edit_args = [
+        "feature",
+        "set",
+        "edit-acceptance",
+        "--edit-acceptance",
+        "ac-2",
+        "--text",
+        "corrected second criterion",
+    ];
+    let edit = stdout(maestro(&edit_args, root), &edit_args);
+    assert!(edit.contains("acceptance edited (1)"), "{edit}");
+    assert_eq!(
+        feature_acceptance(root, "edit-acceptance"),
+        vec![
+            "first criterion",
+            "corrected second criterion",
+            "third criterion"
+        ]
+    );
+
+    let duplicate_args = [
+        "feature",
+        "set",
+        "edit-acceptance",
+        "--edit-acceptance",
+        "ac-2",
+        "--text",
+        "intermediate value",
+        "--edit-acceptance",
+        "ac-2",
+        "--text",
+        "last value wins",
+    ];
+    stdout(maestro(&duplicate_args, root), &duplicate_args);
+    assert_eq!(
+        feature_acceptance(root, "edit-acceptance"),
+        vec!["first criterion", "last value wins", "third criterion"]
+    );
+
+    let before_unknown = feature_yaml(root, "edit-acceptance");
+    let unknown_args = [
+        "feature",
+        "set",
+        "edit-acceptance",
+        "--edit-acceptance",
+        "ac-9",
+        "--text",
+        "must not write",
+    ];
+    let unknown = assert_failure(maestro(&unknown_args, root), &unknown_args);
+    assert!(unknown.contains("unknown acceptance id"), "{unknown}");
+    assert!(unknown.contains("ac-9"), "{unknown}");
+    assert_eq!(feature_yaml(root, "edit-acceptance"), before_unknown);
+
+    let count_guard_args = [
+        "feature",
+        "set",
+        "edit-acceptance",
+        "--edit-acceptance",
+        "ac-1",
+    ];
+    let count_guard = assert_failure(maestro(&count_guard_args, root), &count_guard_args);
+    assert!(
+        count_guard.contains("each --edit-acceptance needs its --text"),
+        "{count_guard}"
+    );
+    assert_eq!(feature_yaml(root, "edit-acceptance"), before_unknown);
+
+    let help = stdout(
+        maestro(&["feature", "set", "--help"], root),
+        &["feature", "set", "--help"],
+    );
+    assert!(help.contains("--edit-acceptance"), "{help}");
+    assert!(help.contains("--text"), "{help}");
+}
+
+#[test]
 fn feature_cancel_via_cli_cascades_to_live_tasks() {
     let temp_dir = TestTempDir::new("maestro-feature-cancel-test");
     init_git_marker(temp_dir.path());
@@ -1345,6 +1447,32 @@ fn feature_verbs_reject_path_traversal_ids() {
         &["feature", "unarchive", "../outside"],
     );
     assert!(unarchive_stderr.contains("invalid feature id"));
+}
+
+fn feature_yaml(root: &Path, slug: &str) -> String {
+    fs::read_to_string(
+        root.join(".maestro")
+            .join("features")
+            .join(slug)
+            .join("feature.yaml"),
+    )
+    .expect("invariant: feature.yaml should be readable")
+}
+
+fn feature_acceptance(root: &Path, slug: &str) -> Vec<String> {
+    let yaml: YamlValue =
+        serde_yaml::from_str(&feature_yaml(root, slug)).expect("invariant: feature.yaml parses");
+    yaml.get("acceptance")
+        .and_then(YamlValue::as_sequence)
+        .expect("invariant: acceptance is a sequence")
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .expect("invariant: acceptance item is a string")
+                .to_string()
+        })
+        .collect()
 }
 
 /// Write a minimal QA baseline (one `[bl-001]` scenario) so the accept gate's

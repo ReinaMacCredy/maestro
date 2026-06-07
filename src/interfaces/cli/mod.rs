@@ -478,6 +478,18 @@ pub enum FeatureCommand {
             help = "Open question to append while proposed (repeatable)"
         )]
         add_question: Vec<String>,
+        #[arg(
+            long = "edit-acceptance",
+            value_name = "AC_ID",
+            help = "Acceptance id to edit in place, paired by index with --text"
+        )]
+        edit_acceptance: Vec<String>,
+        #[arg(
+            long = "text",
+            value_name = "TEXT",
+            help = "Replacement acceptance text, paired by index with --edit-acceptance"
+        )]
+        text: Vec<String>,
         #[arg(long, help = "Replace the description")]
         description: Option<String>,
         #[arg(long, help = "Replace the raw request")]

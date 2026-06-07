@@ -32,6 +32,7 @@ use crate::domain::feature::query::{
 };
 use crate::domain::feature::schema::{
     AmendAdditions, AmendEntry, AmendLog, FeatureRecord, FeatureStatus, QaDeclaration,
+    normalize_acceptance_id,
 };
 use crate::domain::feature::verification;
 use crate::domain::task::{self, TaskState, TransitionDetails};
@@ -139,6 +140,8 @@ pub struct ContractEdits {
     pub add_non_goals: Vec<String>,
     /// Proposed-stage open-question additions.
     pub add_open_questions: Vec<String>,
+    /// Proposed-stage in-place acceptance text edits.
+    pub edit_acceptance: Vec<AcceptanceTextEdit>,
 }
 
 impl ContractEdits {
@@ -155,7 +158,14 @@ impl ContractEdits {
             && self.add_affected_areas.is_empty()
             && self.add_non_goals.is_empty()
             && self.add_open_questions.is_empty()
+            && self.edit_acceptance.is_empty()
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AcceptanceTextEdit {
+    pub id: String,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -186,6 +196,7 @@ pub struct SetReport {
     pub view: FeatureView,
     pub replaced: ContractChangeCounts,
     pub added: ContractChangeCounts,
+    pub edited_acceptance: usize,
 }
 
 /// Append-only additions applied by `feature amend` (Ready / InProgress).
@@ -338,6 +349,11 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
             ensure_no_blank_values(field, values)?;
         }
     }
+    for edit in &edits.edit_acceptance {
+        if edit.text.trim().is_empty() {
+            bail!("feature acceptance values must not be empty or whitespace");
+        }
+    }
     let mut replaced = ContractChangeCounts::default();
     let mut added = ContractChangeCounts::default();
     if let Some(value) = edits.acceptance {
@@ -380,6 +396,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
     let open_questions = dedup_new(&record.open_questions, &edits.add_open_questions);
     added.open_questions = open_questions.len();
     record.open_questions.extend(open_questions);
+    apply_acceptance_text_edits(id, &mut record.acceptance, &edits.edit_acceptance)?;
     record.updated_at = utc_now_timestamp();
     save_record(paths, &record)?;
     let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
@@ -387,6 +404,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
         view: view_from_record(record, counts),
         replaced,
         added,
+        edited_acceptance: edits.edit_acceptance.len(),
     })
 }
 
@@ -1124,6 +1142,36 @@ fn dedup_new(current: &[String], incoming: &[String]) -> Vec<String> {
         }
     }
     added
+}
+
+fn apply_acceptance_text_edits(
+    feature_id: &str,
+    acceptance: &mut [String],
+    edits: &[AcceptanceTextEdit],
+) -> Result<()> {
+    for edit in edits {
+        let normalized = normalize_acceptance_id(&edit.id).with_context(|| {
+            format!(
+                "invalid acceptance id for feature {feature_id}: {}",
+                edit.id
+            )
+        })?;
+        let Some(index) = normalized
+            .strip_prefix("ac-")
+            .and_then(|digits| digits.parse::<usize>().ok())
+            .and_then(|number| number.checked_sub(1))
+        else {
+            bail!(
+                "invalid acceptance id for feature {feature_id}: {}",
+                edit.id
+            );
+        };
+        let Some(slot) = acceptance.get_mut(index) else {
+            bail!("unknown acceptance id for feature {feature_id}: {normalized}");
+        };
+        *slot = edit.text.clone();
+    }
+    Ok(())
 }
 
 fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> FeatureView {
