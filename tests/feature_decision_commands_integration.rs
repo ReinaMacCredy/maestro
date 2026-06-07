@@ -797,6 +797,89 @@ fn feature_set_edits_one_acceptance_item_by_id() {
 }
 
 #[test]
+fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
+    let temp_dir = TestTempDir::new("maestro-feature-green-sweep-next");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    create_qa_none_feature(root, "Ready Hint", "ready-hint");
+    record_feature_evidence(root, "ready-hint");
+    let ready_sweep = stdout(
+        maestro(&["feature", "verify", "ready-hint"], root),
+        &["feature", "verify", "ready-hint"],
+    );
+    assert!(ready_sweep.contains("ok: every acceptance item has evidence"));
+    assert!(
+        ready_sweep.contains("next: maestro feature start ready-hint"),
+        "{ready_sweep}"
+    );
+
+    create_qa_none_feature(root, "Ship Hint", "ship-hint");
+    stdout(
+        maestro(&["feature", "start", "ship-hint"], root),
+        &["feature", "start", "ship-hint"],
+    );
+    record_feature_evidence(root, "ship-hint");
+    let ship_sweep = stdout(
+        maestro(&["feature", "verify", "ship-hint"], root),
+        &["feature", "verify", "ship-hint"],
+    );
+    assert!(ship_sweep.contains("ok: every acceptance item has evidence"));
+    assert!(
+        ship_sweep.contains("next: maestro feature ship ship-hint --outcome \"<outcome>\""),
+        "{ship_sweep}"
+    );
+
+    create_qa_none_feature(root, "Blocked Ship Hint", "blocked-ship-hint");
+    stdout(
+        maestro(&["feature", "start", "blocked-ship-hint"], root),
+        &["feature", "start", "blocked-ship-hint"],
+    );
+    stdout(
+        maestro(
+            &[
+                "task",
+                "create",
+                "Live child",
+                "--feature",
+                "blocked-ship-hint",
+            ],
+            root,
+        ),
+        &[
+            "task",
+            "create",
+            "Live child",
+            "--feature",
+            "blocked-ship-hint",
+        ],
+    );
+    record_feature_evidence(root, "blocked-ship-hint");
+    let blocked_sweep = stdout(
+        maestro(&["feature", "verify", "blocked-ship-hint"], root),
+        &["feature", "verify", "blocked-ship-hint"],
+    );
+    assert!(blocked_sweep.contains("ok: every acceptance item has evidence"));
+    assert!(
+        blocked_sweep.contains("not yet shippable:"),
+        "{blocked_sweep}"
+    );
+    assert!(
+        blocked_sweep.contains("1 live child task(s): task-001"),
+        "{blocked_sweep}"
+    );
+    assert!(
+        blocked_sweep.contains("fix: verify or abandon them, then re-ship"),
+        "{blocked_sweep}"
+    );
+    assert!(
+        !blocked_sweep.contains("next: maestro feature ship"),
+        "{blocked_sweep}"
+    );
+}
+
+#[test]
 fn feature_cancel_via_cli_cascades_to_live_tasks() {
     let temp_dir = TestTempDir::new("maestro-feature-cancel-test");
     init_git_marker(temp_dir.path());
@@ -1473,6 +1556,46 @@ fn feature_acceptance(root: &Path, slug: &str) -> Vec<String> {
                 .to_string()
         })
         .collect()
+}
+
+fn create_qa_none_feature(root: &Path, title: &str, slug: &str) {
+    stdout(
+        maestro(&["feature", "new", title], root),
+        &["feature", "new", title],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        slug,
+        "--acceptance",
+        "observable behavior works",
+        "--area",
+        "feature workflow",
+    ];
+    stdout(maestro(&set_args, root), &set_args);
+    let accept_args = [
+        "feature",
+        "accept",
+        slug,
+        "--qa",
+        "none",
+        "--reason",
+        "covered by acceptance evidence",
+    ];
+    stdout(maestro(&accept_args, root), &accept_args);
+}
+
+fn record_feature_evidence(root: &Path, slug: &str) {
+    let prove_args = [
+        "feature",
+        "verify",
+        slug,
+        "--prove",
+        "ac-1",
+        "--evidence",
+        "observed in integration test",
+    ];
+    stdout(maestro(&prove_args, root), &prove_args);
 }
 
 /// Write a minimal QA baseline (one `[bl-001]` scenario) so the accept gate's

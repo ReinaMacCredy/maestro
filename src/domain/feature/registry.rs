@@ -235,6 +235,12 @@ pub struct TransitionReport {
     pub note: String,
 }
 
+struct ShipGateReport {
+    gaps: Vec<String>,
+    qa_declared_none: bool,
+    baseline: Option<qa::Baseline>,
+}
+
 /// Outcome of `feature cancel`, including which child tasks were abandoned.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CancelReport {
@@ -732,8 +738,61 @@ pub fn ship(
         Transition::To(target) => target,
     };
 
+    let gate = ship_gaps_for_record(paths, id, &record)?;
+    let gaps = gate.gaps;
+
+    if dry_run {
+        let note = if gaps.is_empty() {
+            // gaps empty implies a baseline exists (a missing one is itself a gap); a
+            // baseline with no scenarios cleared the gate by skipping, not proving.
+            let qa = if gate.qa_declared_none {
+                "qa: none"
+            } else if gate
+                .baseline
+                .as_ref()
+                .is_some_and(|b| b.scenario_ids.is_empty())
+            {
+                "qa-baseline skipped (no behavioral scenarios)"
+            } else {
+                "qa-baseline proven"
+            };
+            format!("would ship {id} (-> shipped); no live child tasks, {qa}")
+        } else {
+            format!("would block ship {id}:\n  {}", gaps.join("\n  "))
+        };
+        return Ok(no_op_report(id, record.status, note));
+    }
+
+    if !gaps.is_empty() {
+        bail!("cannot ship {id}:\n  {}", gaps.join("\n  "));
+    }
+
+    record.status = target.clone();
+    record.updated_at = utc_now_timestamp();
+    if let Some(line) = outcome {
+        record.outcome = Some(line);
+    }
+    save_record(paths, &record)?;
+    Ok(TransitionReport {
+        id: id.to_string(),
+        status: target,
+        changed: true,
+        note: format!("shipped {id} (-> shipped)"),
+    })
+}
+
+pub fn ship_gaps(paths: &MaestroPaths, id: &str) -> Result<Vec<String>> {
+    let record = load_record(paths, id)?;
+    Ok(ship_gaps_for_record(paths, id, &record)?.gaps)
+}
+
+fn ship_gaps_for_record(
+    paths: &MaestroPaths,
+    id: &str,
+    record: &FeatureRecord,
+) -> Result<ShipGateReport> {
     let mut gaps = Vec::new();
-    // D5 cond 1 — no live child task may outlive its shipped feature.
+    // D5 cond 1 -- no live child task may outlive its shipped feature.
     let live = live_child_task_ids(&paths.tasks_dir(), &record.id)?;
     if !live.is_empty() {
         gaps.push(format!(
@@ -742,7 +801,7 @@ pub fn ship(
             live.join(", ")
         ));
     }
-    // D5 cond 2/3 — QA baseline present + fresh, every behavioral scenario proven.
+    // D5 cond 2/3 -- QA baseline present + fresh, every behavioral scenario proven.
     let feat_dir = feature_dir(paths, id);
     let qa_declared_none = record
         .qa
@@ -770,45 +829,15 @@ pub fn ship(
             &amend_log,
         ));
     }
-    // D5 cond 4 — the full feature acceptance contract must have a fresh
+    // D5 cond 4 -- the full feature acceptance contract must have a fresh
     // sweep run that resolved every ac-N item.
-    if let Some(gap) = verification::acceptance_ship_gap(paths, &record)? {
+    if let Some(gap) = verification::acceptance_ship_gap(paths, record)? {
         gaps.push(gap);
     }
-
-    if dry_run {
-        let note = if gaps.is_empty() {
-            // gaps empty implies a baseline exists (a missing one is itself a gap); a
-            // baseline with no scenarios cleared the gate by skipping, not proving.
-            let qa = if qa_declared_none {
-                "qa: none"
-            } else if baseline.as_ref().is_some_and(|b| b.scenario_ids.is_empty()) {
-                "qa-baseline skipped (no behavioral scenarios)"
-            } else {
-                "qa-baseline proven"
-            };
-            format!("would ship {id} (-> shipped); no live child tasks, {qa}")
-        } else {
-            format!("would block ship {id}:\n  {}", gaps.join("\n  "))
-        };
-        return Ok(no_op_report(id, record.status, note));
-    }
-
-    if !gaps.is_empty() {
-        bail!("cannot ship {id}:\n  {}", gaps.join("\n  "));
-    }
-
-    record.status = target.clone();
-    record.updated_at = utc_now_timestamp();
-    if let Some(line) = outcome {
-        record.outcome = Some(line);
-    }
-    save_record(paths, &record)?;
-    Ok(TransitionReport {
-        id: id.to_string(),
-        status: target,
-        changed: true,
-        note: format!("shipped {id} (-> shipped)"),
+    Ok(ShipGateReport {
+        gaps,
+        qa_declared_none,
+        baseline,
     })
 }
 

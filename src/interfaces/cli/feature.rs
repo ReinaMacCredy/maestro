@@ -290,6 +290,7 @@ fn verify_feature(
         .collect::<Vec<_>>();
     if unresolved.is_empty() {
         println!("ok: every acceptance item has evidence");
+        print_green_sweep_next(paths, &report.feature_id)?;
     } else {
         println!(
             "blocked: {} acceptance item(s) have no fresh evidence: {}",
@@ -304,6 +305,25 @@ fn verify_feature(
             "fix: add task covers, record proof with `maestro feature verify {} --prove <ac-id> --evidence \"<observed>\"`, or waive with `--waive <ac-id> --reason \"<why>\"`",
             report.feature_id
         );
+    }
+    Ok(())
+}
+
+fn print_green_sweep_next(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
+    let view = feature::show(paths, feature_id)?;
+    match view.status {
+        FeatureStatus::Proposed => {}
+        FeatureStatus::Ready => println!("next: maestro feature start {feature_id}"),
+        FeatureStatus::InProgress => {
+            let gaps = feature::ship_gaps(paths, feature_id)?;
+            if gaps.is_empty() {
+                println!("next: maestro feature ship {feature_id} --outcome \"<outcome>\"");
+            } else {
+                println!("not yet shippable:");
+                println!("  {}", gaps.join("\n  "));
+            }
+        }
+        FeatureStatus::Shipped | FeatureStatus::Cancelled => {}
     }
     Ok(())
 }
