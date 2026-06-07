@@ -237,28 +237,29 @@ fn prepare_feature(
 fn verify_feature(
     paths: &MaestroPaths,
     id: &str,
-    prove: Option<String>,
-    evidence: Option<String>,
-    waive: Option<String>,
-    reason: Option<String>,
+    prove: Vec<String>,
+    evidence: Vec<String>,
+    waive: Vec<String>,
+    reason: Vec<String>,
 ) -> Result<()> {
-    let update = match (prove, evidence, waive, reason) {
-        (None, None, None, None) => None,
-        (Some(ac_id), Some(evidence), None, None) => {
-            Some(feature::FeatureProofUpdate::Explicit { ac_id, evidence })
-        }
-        (None, None, Some(ac_id), Some(reason)) => {
-            Some(feature::FeatureProofUpdate::Waive { ac_id, reason })
-        }
-        (Some(_), None, None, None) => bail!("--prove requires --evidence"),
-        (None, Some(_), None, None) => bail!("--evidence requires --prove"),
-        (None, None, Some(_), None) => bail!("--waive requires --reason"),
-        (None, None, None, Some(_)) => bail!("--reason requires --waive"),
-        _ => bail!(
-            "use bare `maestro feature verify {id}`, or exactly one of `--prove <ac-id> --evidence \"...\"` / `--waive <ac-id> --reason \"...\"`"
-        ),
-    };
-    let report = feature::verify_feature(paths, id, update)?;
+    if prove.len() != evidence.len() {
+        bail!("each --prove needs its --evidence");
+    }
+    if waive.len() != reason.len() {
+        bail!("each --waive needs its --reason");
+    }
+    let mut updates = prove
+        .into_iter()
+        .zip(evidence)
+        .map(|(ac_id, evidence)| feature::FeatureProofUpdate::Explicit { ac_id, evidence })
+        .collect::<Vec<_>>();
+    updates.extend(
+        waive
+            .into_iter()
+            .zip(reason)
+            .map(|(ac_id, reason)| feature::FeatureProofUpdate::Waive { ac_id, reason }),
+    );
+    let report = feature::verify_feature(paths, id, updates)?;
     if let Some(recorded) = report.recorded {
         println!("recorded {recorded}");
         println!("next: maestro feature verify {}", report.feature_id);

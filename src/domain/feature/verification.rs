@@ -93,37 +93,44 @@ pub fn uncovered_acceptance(paths: &MaestroPaths, feature_id: &str) -> Result<Ve
 pub fn verify_feature(
     paths: &MaestroPaths,
     feature_id: &str,
-    update: Option<FeatureProofUpdate>,
+    updates: Vec<FeatureProofUpdate>,
 ) -> Result<FeatureVerifyReport> {
     let mut record = registry::load_record(paths, feature_id)?;
-    if let Some(update) = update {
-        let (kind, ac_id, text) = match update {
-            FeatureProofUpdate::Explicit { ac_id, evidence } => (
-                AcceptanceEvidenceKind::Explicit,
+    if !updates.is_empty() {
+        let mut entries = Vec::new();
+        let mut recorded = Vec::new();
+        let at = utc_now_timestamp();
+        for update in updates {
+            let (kind, ac_id, text) = match update {
+                FeatureProofUpdate::Explicit { ac_id, evidence } => (
+                    AcceptanceEvidenceKind::Explicit,
+                    ac_id,
+                    evidence.trim().to_string(),
+                ),
+                FeatureProofUpdate::Waive { ac_id, reason } => (
+                    AcceptanceEvidenceKind::Waived,
+                    ac_id,
+                    reason.trim().to_string(),
+                ),
+            };
+            let ac_id = normalize_existing_acceptance_id(&record, &ac_id)?;
+            if text.is_empty() {
+                bail!("feature acceptance evidence must not be empty");
+            }
+            let kind_label = kind.as_str();
+            recorded.push(format!("{kind_label} {ac_id}: {text}"));
+            entries.push(AcceptanceEvidenceEntry {
                 ac_id,
-                evidence.trim().to_string(),
-            ),
-            FeatureProofUpdate::Waive { ac_id, reason } => (
-                AcceptanceEvidenceKind::Waived,
-                ac_id,
-                reason.trim().to_string(),
-            ),
-        };
-        let ac_id = normalize_existing_acceptance_id(&record, &ac_id)?;
-        if text.is_empty() {
-            bail!("feature acceptance evidence must not be empty");
+                kind,
+                text,
+                at: at.clone(),
+            });
         }
-        let kind_label = kind.as_str();
-        record.acceptance_evidence.push(AcceptanceEvidenceEntry {
-            ac_id: ac_id.clone(),
-            kind,
-            text: text.clone(),
-            at: utc_now_timestamp(),
-        });
+        record.acceptance_evidence.extend(entries);
         registry::save_record(paths, &record)?;
         return Ok(FeatureVerifyReport {
             feature_id: record.id,
-            recorded: Some(format!("{kind_label} {ac_id}: {text}")),
+            recorded: Some(recorded.join("; ")),
             sweep: None,
         });
     }

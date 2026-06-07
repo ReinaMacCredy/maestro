@@ -554,14 +554,22 @@ pub enum FeatureCommand {
     #[command(about = "Sweep or record proof for a feature's acceptance contract")]
     Verify {
         id: String,
-        #[arg(long, value_name = "AC_ID", help = "Acceptance id to prove explicitly")]
-        prove: Option<String>,
-        #[arg(long, help = "Observed evidence for --prove")]
-        evidence: Option<String>,
-        #[arg(long, value_name = "AC_ID", help = "Acceptance id to waive")]
-        waive: Option<String>,
-        #[arg(long, help = "Reason required with --waive")]
-        reason: Option<String>,
+        #[arg(
+            long,
+            value_name = "AC_ID",
+            help = "Acceptance id to prove explicitly (repeatable)"
+        )]
+        prove: Vec<String>,
+        #[arg(long, help = "Observed evidence for --prove (repeatable)")]
+        evidence: Vec<String>,
+        #[arg(
+            long,
+            value_name = "AC_ID",
+            help = "Acceptance id to waive (repeatable)"
+        )]
+        waive: Vec<String>,
+        #[arg(long, help = "Reason required with --waive (repeatable)")]
+        reason: Vec<String>,
     },
     #[command(about = "Append a dated note to a feature's notes.md")]
     Note { id: String, text: String },

@@ -797,6 +797,122 @@ fn feature_set_edits_one_acceptance_item_by_id() {
 }
 
 #[test]
+fn feature_verify_records_repeatable_paired_proofs_atomically() {
+    let temp_dir = TestTempDir::new("maestro-feature-batch-prove");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    stdout(
+        maestro(&["feature", "new", "Batch Proof"], root),
+        &["feature", "new", "Batch Proof"],
+    );
+    let set_args = [
+        "feature",
+        "set",
+        "batch-proof",
+        "--acceptance",
+        "first behavior works",
+        "--acceptance",
+        "second behavior works",
+        "--acceptance",
+        "third behavior works",
+        "--area",
+        "feature workflow",
+    ];
+    stdout(maestro(&set_args, root), &set_args);
+    let accept_args = [
+        "feature",
+        "accept",
+        "batch-proof",
+        "--qa",
+        "none",
+        "--reason",
+        "covered by acceptance evidence",
+    ];
+    stdout(maestro(&accept_args, root), &accept_args);
+
+    let batch_args = [
+        "feature",
+        "verify",
+        "batch-proof",
+        "--prove",
+        "ac-1",
+        "--evidence",
+        "first proof",
+        "--prove",
+        "ac-3",
+        "--evidence",
+        "third proof",
+    ];
+    let batch = stdout(maestro(&batch_args, root), &batch_args);
+    assert!(
+        batch.contains("recorded explicit ac-1: first proof; explicit ac-3: third proof"),
+        "{batch}"
+    );
+
+    let before_count_mismatch = feature_yaml(root, "batch-proof");
+    let count_mismatch_args = [
+        "feature",
+        "verify",
+        "batch-proof",
+        "--prove",
+        "ac-2",
+        "--evidence",
+        "second proof",
+        "--prove",
+        "ac-3",
+    ];
+    let stderr = assert_failure(maestro(&count_mismatch_args, root), &count_mismatch_args);
+    assert!(
+        stderr.contains("each --prove needs its --evidence"),
+        "{stderr}"
+    );
+    assert_eq!(feature_yaml(root, "batch-proof"), before_count_mismatch);
+
+    let before_bad_id = feature_yaml(root, "batch-proof");
+    let bad_id_args = [
+        "feature",
+        "verify",
+        "batch-proof",
+        "--prove",
+        "ac-2",
+        "--evidence",
+        "second proof",
+        "--prove",
+        "ac-9",
+        "--evidence",
+        "bad proof",
+    ];
+    let stderr = assert_failure(maestro(&bad_id_args, root), &bad_id_args);
+    assert!(stderr.contains("unknown acceptance id"), "{stderr}");
+    assert!(stderr.contains("ac-9"), "{stderr}");
+    assert_eq!(feature_yaml(root, "batch-proof"), before_bad_id);
+
+    let fixed_args = [
+        "feature",
+        "verify",
+        "batch-proof",
+        "--prove",
+        "ac-2",
+        "--evidence",
+        "second proof",
+        "--prove",
+        "ac-3",
+        "--evidence",
+        "third proof again",
+    ];
+    stdout(maestro(&fixed_args, root), &fixed_args);
+    let sweep = stdout(
+        maestro(&["feature", "verify", "batch-proof"], root),
+        &["feature", "verify", "batch-proof"],
+    );
+    assert!(sweep.contains("proof: first proof OK"), "{sweep}");
+    assert!(sweep.contains("proof: second proof OK"), "{sweep}");
+    assert!(sweep.contains("proof: third proof again OK"), "{sweep}");
+}
+
+#[test]
 fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
     let temp_dir = TestTempDir::new("maestro-feature-green-sweep-next");
     let root = temp_dir.path();

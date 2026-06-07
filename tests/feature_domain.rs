@@ -69,13 +69,13 @@ fn verify_contract(paths: &MaestroPaths, id: &str) {
     feature::verify_feature(
         paths,
         id,
-        Some(feature::FeatureProofUpdate::Explicit {
+        vec![feature::FeatureProofUpdate::Explicit {
             ac_id: "ac-1".to_string(),
             evidence: "fixture evidence".to_string(),
-        }),
+        }],
     )
     .expect("invariant: proof should record");
-    feature::verify_feature(paths, id, None).expect("invariant: sweep should succeed");
+    feature::verify_feature(paths, id, Vec::new()).expect("invariant: sweep should succeed");
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn verify_rejects_unknown_acceptance_evidence_kind() {
     )
     .expect("invariant: feature should be writable");
 
-    let error = feature::verify_feature(&paths, "billing-csv", None)
+    let error = feature::verify_feature(&paths, "billing-csv", Vec::new())
         .expect_err("unknown evidence kind must not become explicit proof");
     assert!(format!("{error:#}").contains("kind"), "{error:#}");
 }
