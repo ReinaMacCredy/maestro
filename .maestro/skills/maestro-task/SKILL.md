@@ -1,6 +1,6 @@
 ---
 name: maestro-task
-version: 1.9.2
+version: 1.9.4
 description: "Use for the Maestro task loop: create, explore, accept, claim, update, complete, block, verify, terminal task verbs, and harness self-improvement tasks."
 ---
 
@@ -22,6 +22,8 @@ Activate:
   `abandon`, `supersede`.
 - Act on harness improvement proposals surfaced by `status`, `task next`, or
   `harness list`.
+- When the user corrects your behavior, record it with
+  `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
 
 ## Do
 
@@ -36,6 +38,12 @@ maestro task verify <id>
 ```
 
 `verify` and `show` can omit `<id>` when `MAESTRO_CURRENT_TASK` is set.
+
+Use `--lane` as a routing convention, not a schema enum. Standard lanes are
+`implement`, `explore`, `review`, `audit`, and `normal` for unrouted default
+work; extend the vocabulary only by team convention. Existing states still own
+workflow meaning: exploring is a task state, brainstorm/design work belongs in
+a feature or SPEC, and planning usually happens before `feature prepare`.
 
 ## Evidence Gate
 
