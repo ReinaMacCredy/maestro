@@ -99,6 +99,7 @@ fn init_dry_run_previews_bundled_extraction() {
     // folder is enumerated with its `create` verb (the tree is empty here).
     assert!(stdout.contains("create   maestro-task"), "{stdout}");
     assert!(stdout.contains("create   HARNESS.md"), "{stdout}");
+    assert!(stdout.contains("create   RECOVERY.md"), "{stdout}");
     assert!(stdout.contains("create   record.sh"), "{stdout}");
     assert!(stdout.contains("check setup: maestro doctor"), "{stdout}");
     assert!(!temp_dir.path().join(".maestro").exists());

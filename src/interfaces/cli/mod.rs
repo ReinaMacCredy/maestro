@@ -27,6 +27,13 @@ pub mod verify;
 pub mod version;
 pub mod watch;
 
+pub(crate) fn recovery_label(hint: Option<&str>) -> String {
+    match hint {
+        Some(hint) => format!("fix: {hint}"),
+        None => "fix: run maestro doctor".to_string(),
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(
     name = "maestro",

@@ -100,29 +100,17 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<DecisionListEntry>> {
     for store_path in store_paths(paths)? {
         let store = load_store_at(&store_path.path)?;
         for record in store.decisions {
-            entries.push(DecisionListEntry {
-                id: record.id,
-                title: record.title,
-                status: record.status.as_str().to_string(),
-                source: store_path.source.clone(),
-                path: store_path.path.clone(),
-            });
+            entries.push(decision_list_entry(
+                record,
+                store_path.source.clone(),
+                store_path.path.clone(),
+            ));
         }
     }
     for legacy in decision_entries(&paths.decisions_dir())? {
-        entries.push(DecisionListEntry {
-            id: decision_display_id(&legacy.file_name),
-            title: decision_title(&legacy.path)?,
-            status: "legacy".to_string(),
-            source: DecisionSource::Legacy,
-            path: legacy.path,
-        });
+        entries.push(legacy_decision_list_entry(legacy)?);
     }
-    entries.sort_by(|left, right| {
-        decision_sort_key(&left.id)
-            .cmp(&decision_sort_key(&right.id))
-            .then_with(|| left.title.cmp(&right.title))
-    });
+    sort_decision_entries(&mut entries);
     Ok(entries)
 }
 
@@ -132,13 +120,11 @@ pub fn list_tolerant(paths: &MaestroPaths) -> Vec<DecisionListEntry> {
         match load_store_at(&store_path.path) {
             Ok(store) => {
                 for record in store.decisions {
-                    entries.push(DecisionListEntry {
-                        id: record.id,
-                        title: record.title,
-                        status: record.status.as_str().to_string(),
-                        source: store_path.source.clone(),
-                        path: store_path.path.clone(),
-                    });
+                    entries.push(decision_list_entry(
+                        record,
+                        store_path.source.clone(),
+                        store_path.path.clone(),
+                    ));
                 }
             }
             Err(error) => entries.push(DecisionListEntry {
@@ -156,21 +142,53 @@ pub fn list_tolerant(paths: &MaestroPaths) -> Vec<DecisionListEntry> {
         }
     }
     for legacy in decision_entries(&paths.decisions_dir()).unwrap_or_default() {
-        let title = decision_title(&legacy.path).unwrap_or_else(|error| format!("{error:#}"));
-        entries.push(DecisionListEntry {
-            id: decision_display_id(&legacy.file_name),
-            title,
-            status: "legacy".to_string(),
-            source: DecisionSource::Legacy,
-            path: legacy.path,
-        });
+        entries.push(legacy_decision_list_entry_tolerant(legacy));
     }
+    sort_decision_entries(&mut entries);
+    entries
+}
+
+fn decision_list_entry(
+    record: DecisionRecord,
+    source: DecisionSource,
+    path: PathBuf,
+) -> DecisionListEntry {
+    DecisionListEntry {
+        id: record.id,
+        title: record.title,
+        status: record.status.as_str().to_string(),
+        source,
+        path,
+    }
+}
+
+fn legacy_decision_list_entry(legacy: DecisionEntry) -> Result<DecisionListEntry> {
+    Ok(DecisionListEntry {
+        id: decision_display_id(&legacy.file_name),
+        title: decision_title(&legacy.path)?,
+        status: "legacy".to_string(),
+        source: DecisionSource::Legacy,
+        path: legacy.path,
+    })
+}
+
+fn legacy_decision_list_entry_tolerant(legacy: DecisionEntry) -> DecisionListEntry {
+    let title = decision_title(&legacy.path).unwrap_or_else(|error| format!("{error:#}"));
+    DecisionListEntry {
+        id: decision_display_id(&legacy.file_name),
+        title,
+        status: "legacy".to_string(),
+        source: DecisionSource::Legacy,
+        path: legacy.path,
+    }
+}
+
+fn sort_decision_entries(entries: &mut [DecisionListEntry]) {
     entries.sort_by(|left, right| {
         decision_sort_key(&left.id)
             .cmp(&decision_sort_key(&right.id))
             .then_with(|| left.title.cmp(&right.title))
     });
-    entries
 }
 
 pub fn decisions_for_feature(

@@ -61,13 +61,22 @@ pub fn validate_harness(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<(
 pub fn preview_harness(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<Vec<FolderPreview>> {
     let path = harness_file_path(paths, HARNESS_MD_NAME)?;
     let existing = read_existing(&path)?;
-    Ok(vec![preview_folder(
+    let harness_preview = preview_folder(
         HARNESS_MD_NAME,
         mode,
         existing.as_deref(),
         HARNESS_MD,
         frontmatter_version,
-    )])
+    );
+    let recovery_path = recovery_file_path(paths)?;
+    let recovery_existing = read_existing(&recovery_path)?;
+    let recovery_preview = FolderPreview {
+        name: RECOVERY_MD_NAME.to_string(),
+        decision: harness_preview.decision,
+        installed_version: recovery_existing.as_deref().and_then(frontmatter_version),
+        shipped_version: frontmatter_version(RECOVERY_MD),
+    };
+    Ok(vec![harness_preview, recovery_preview])
 }
 
 /// Plan the single-file harness write. The version gate keys on the installed

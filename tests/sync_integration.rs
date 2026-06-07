@@ -109,6 +109,7 @@ fn sync_dry_run_previews_drift_without_writing() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("maestro sync would resync:"), "{stdout}");
     assert!(stdout.contains("refresh  maestro-task"), "{stdout}");
+    assert!(stdout.contains("skip     RECOVERY.md"), "{stdout}");
 
     // Dry-run wrote nothing: the edit stands and no backup directory exists.
     assert_eq!(

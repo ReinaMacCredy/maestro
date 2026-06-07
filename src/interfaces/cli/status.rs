@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use anyhow::{Result, bail};
 use serde::Serialize;
 
-use crate::domain::feature::{self, FeatureStatus};
+use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::interfaces::cli::StatusArgs;
+use crate::interfaces::cli::{StatusArgs, recovery_label};
 use crate::operations::harness;
 
 const STATUS_TASK_ROW_LIMIT: usize = 5;
@@ -223,27 +223,26 @@ fn print_next_action(action: &NextAction) {
 
 fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let tasks = task::load_task_records(&paths.tasks_dir())?;
-    let feature_roster = feature::list_tolerant(paths);
-    let unreadable_features = feature_roster
-        .iter()
-        .filter_map(|entry| match entry {
-            feature::FeatureRosterEntry::Loaded(_) => None,
-            feature::FeatureRosterEntry::Unreadable { id, path, error } => {
-                Some((id.clone(), path.clone(), error.clone()))
-            }
-        })
-        .collect::<Vec<_>>();
-    let features = feature_roster
-        .iter()
-        .filter_map(|entry| match entry {
-            feature::FeatureRosterEntry::Loaded(view) => Some(view.as_ref().clone()),
-            feature::FeatureRosterEntry::Unreadable { .. } => None,
-        })
-        .collect::<Vec<_>>();
+    let mut features = Vec::new();
+    let mut unreadable_features = Vec::new();
+    for entry in feature::list_tolerant(paths) {
+        match entry {
+            FeatureRosterEntry::Loaded(view) => features.push(*view),
+            FeatureRosterEntry::Unreadable {
+                id,
+                path,
+                error,
+                hint,
+                typed_error,
+            } => unreadable_features.push((id, path, error, hint, typed_error)),
+        }
+    }
     if features.is_empty()
-        && let Some((id, _, error)) = unreadable_features.first()
+        && let Some((_, _, error, _, typed_error)) = unreadable_features.first()
     {
-        let _ = feature::show(paths, id)?;
+        if let Some(typed_error) = typed_error.clone() {
+            return Err(typed_error.into());
+        }
         bail!("{error}");
     }
     let mut warnings = Vec::new();
@@ -302,9 +301,8 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
         None => choose_next_task_action(paths, &live_tasks)?,
     };
     let ready_to_ship_features = ready_to_ship_features(&features);
-    let active_features = active_feature_rows(&features);
-    let mut active_features = active_features;
-    for (id, path, error) in unreadable_features {
+    let mut active_features = active_feature_rows(&features);
+    for (id, path, error, hint, _) in unreadable_features {
         warnings.push(WarningJson {
             code: "feature_unreadable".to_string(),
             message: format!("{} is unreadable: {error}", path.display()),
@@ -313,7 +311,7 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
             id: id.clone(),
             state: "unreadable".to_string(),
             title: error,
-            next: "fix: maestro migrate-v2".to_string(),
+            next: recovery_label(hint.as_deref()),
             inspect: format!("maestro feature spec {id}"),
         });
     }

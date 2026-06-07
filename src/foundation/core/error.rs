@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::foundation::core::schema::{FEATURE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
 
 /// Shared recoverable errors for Maestro foundation modules.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum MaestroError {
     /// No supported repository marker was found while walking ancestors.
     #[error("failed to discover repository root from {start}: no .maestro or .git directory found")]

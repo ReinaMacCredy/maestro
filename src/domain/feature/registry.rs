@@ -94,6 +94,8 @@ pub enum FeatureRosterEntry {
         id: String,
         path: PathBuf,
         error: String,
+        hint: Option<String>,
+        typed_error: Option<MaestroError>,
     },
 }
 
@@ -900,10 +902,14 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
 }
 
 pub fn list_tolerant(paths: &MaestroPaths) -> Vec<FeatureRosterEntry> {
-    let counts_by_feature = count_tasks_by_feature(&paths.tasks_dir()).unwrap_or_default();
     let Ok(ids) = feature_ids(&paths.features_dir()) else {
         return Vec::new();
     };
+    if ids.is_empty() {
+        return Vec::new();
+    }
+
+    let counts_by_feature = count_tasks_by_feature(&paths.tasks_dir()).unwrap_or_default();
 
     ids.into_iter()
         .map(|id| {
@@ -916,11 +922,19 @@ pub fn list_tolerant(paths: &MaestroPaths) -> Vec<FeatureRosterEntry> {
                         .unwrap_or_default();
                     FeatureRosterEntry::Loaded(Box::new(view_from_record(record, counts)))
                 }
-                Err(error) => FeatureRosterEntry::Unreadable {
-                    id,
-                    path,
-                    error: format!("{error:#}"),
-                },
+                Err(error) => {
+                    let typed_error = error
+                        .chain()
+                        .find_map(|cause| cause.downcast_ref::<MaestroError>().cloned());
+                    let hint = typed_error.as_ref().and_then(MaestroError::hint);
+                    FeatureRosterEntry::Unreadable {
+                        id,
+                        path,
+                        error: format!("{error:#}"),
+                        hint,
+                        typed_error,
+                    }
+                }
             }
         })
         .collect()

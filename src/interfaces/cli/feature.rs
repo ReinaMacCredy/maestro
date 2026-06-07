@@ -7,7 +7,7 @@ use crate::domain::feature::{
 use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::render_timestamp;
-use crate::interfaces::cli::{FeatureArgs, FeatureCommand};
+use crate::interfaces::cli::{FeatureArgs, FeatureCommand, recovery_label};
 use crate::operations::feature_prepare;
 
 /// Execute `maestro feature`.
@@ -1000,23 +1000,16 @@ fn proof_label(proof: &feature::AcceptanceProof) -> String {
 }
 
 fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
-    let roster = feature::list_tolerant(paths);
-    let unreadable = roster
-        .iter()
-        .filter_map(|entry| match entry {
-            feature::FeatureRosterEntry::Loaded(_) => None,
-            feature::FeatureRosterEntry::Unreadable { id, path: _, error } => {
-                Some((id.clone(), error.clone()))
-            }
-        })
-        .collect::<Vec<_>>();
-    let views = roster
-        .into_iter()
-        .filter_map(|entry| match entry {
-            feature::FeatureRosterEntry::Loaded(view) => Some(*view),
-            feature::FeatureRosterEntry::Unreadable { .. } => None,
-        })
-        .collect::<Vec<_>>();
+    let mut views = Vec::new();
+    let mut unreadable = Vec::new();
+    for entry in feature::list_tolerant(paths) {
+        match entry {
+            feature::FeatureRosterEntry::Loaded(view) => views.push(*view),
+            feature::FeatureRosterEntry::Unreadable {
+                id, error, hint, ..
+            } => unreadable.push((id, error, hint)),
+        }
+    }
     let hidden = views
         .iter()
         .filter(|view| view.status.is_terminal())
@@ -1053,10 +1046,13 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
                 title
             );
         }
-        for (id, error) in &unreadable {
+        for (id, error, hint) in &unreadable {
             println!(
-                "{}\tunreadable\tfix: maestro migrate-v2\tmaestro feature spec {}\t0\t0\t{}",
-                id, id, error
+                "{}\tunreadable\t{}\tmaestro feature spec {}\t0\t0\t{}",
+                id,
+                recovery_label(hint.as_deref()),
+                id,
+                error
             );
         }
     }

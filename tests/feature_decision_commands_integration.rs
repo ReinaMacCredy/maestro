@@ -900,6 +900,7 @@ fn status_and_feature_list_degrade_when_one_feature_record_is_incompatible() {
     let status = stdout(maestro(&["status"], temp_dir.path()), &["status"]);
     assert!(status.contains("healthy-feature"), "{status}");
     assert!(status.contains("bad-feature\tunreadable"), "{status}");
+    assert!(status.contains("fix: run maestro migrate-v2"), "{status}");
 
     let list = stdout(
         maestro(&["feature", "list", "--all"], temp_dir.path()),
@@ -907,6 +908,7 @@ fn status_and_feature_list_degrade_when_one_feature_record_is_incompatible() {
     );
     assert!(list.contains("healthy-feature"), "{list}");
     assert!(list.contains("bad-feature\tunreadable"), "{list}");
+    assert!(list.contains("fix: run maestro migrate-v2"), "{list}");
 }
 
 #[test]
