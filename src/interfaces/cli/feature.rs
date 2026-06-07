@@ -1064,8 +1064,9 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     Ok(())
 }
 
-fn feature_next_label(view: &feature::FeatureView) -> &'static str {
+pub(super) fn feature_next_label(view: &feature::FeatureView) -> &'static str {
     match view.status {
+        FeatureStatus::Proposed if has_authored_contract(view) => "template: qa_baseline",
         FeatureStatus::Proposed => "template: set_contract",
         FeatureStatus::Ready => "run: prepare_feature",
         FeatureStatus::InProgress
@@ -1076,6 +1077,10 @@ fn feature_next_label(view: &feature::FeatureView) -> &'static str {
         FeatureStatus::InProgress => "run: resolve_tasks",
         FeatureStatus::Shipped | FeatureStatus::Cancelled => "run: archive_feature",
     }
+}
+
+fn has_authored_contract(view: &feature::FeatureView) -> bool {
+    !view.acceptance.is_empty() && !view.affected_areas.is_empty()
 }
 
 fn print_note(note: String) -> Result<()> {

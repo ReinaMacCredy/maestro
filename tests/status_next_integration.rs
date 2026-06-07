@@ -123,6 +123,42 @@ fn write_correction_session(repo: &Path, session: &str) {
     .expect("invariant: events fixture should be writable");
 }
 
+#[test]
+fn proposed_feature_with_authored_contract_points_status_and_feature_list_to_qa_baseline() {
+    let temp = setup_repo("maestro-status-authored-feature-next");
+    let repo = temp.path();
+
+    run(repo, &["feature", "new", "Authored Contract"]);
+    run(
+        repo,
+        &[
+            "feature",
+            "set",
+            "authored-contract",
+            "--acceptance",
+            "agent can verify the authored contract",
+            "--area",
+            "status next hints",
+        ],
+    );
+
+    let status = run(repo, &["status"]);
+    assert!(status.contains("authored-contract"), "{status}");
+    assert!(status.contains("template: qa_baseline"), "{status}");
+    assert!(!status.contains("template: set_contract"), "{status}");
+
+    let feature_list = run(repo, &["feature", "list"]);
+    assert!(feature_list.contains("authored-contract"), "{feature_list}");
+    assert!(
+        feature_list.contains("template: qa_baseline"),
+        "{feature_list}"
+    );
+    assert!(
+        !feature_list.contains("template: set_contract"),
+        "{feature_list}"
+    );
+}
+
 fn backlog_yaml(repo: &Path) -> YamlValue {
     let raw = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
         .expect("invariant: backlog should be readable");

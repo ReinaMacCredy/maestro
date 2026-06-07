@@ -483,24 +483,10 @@ fn active_feature_rows(features: &[feature::FeatureView]) -> Vec<FeatureRowJson>
             id: view.id.clone(),
             state: feature::status_label(&view.status).to_string(),
             title: view.title.clone(),
-            next: status_feature_next_label(view).to_string(),
+            next: super::feature::feature_next_label(view).to_string(),
             inspect: format!("maestro feature show {}", view.id),
         })
         .collect()
-}
-
-fn status_feature_next_label(view: &feature::FeatureView) -> &'static str {
-    match view.status {
-        FeatureStatus::Proposed => "template: set_contract",
-        FeatureStatus::Ready => "run: prepare_feature",
-        FeatureStatus::InProgress
-            if view.counts.total > 0 && view.counts.total == view.counts.verified =>
-        {
-            "template: ship_feature"
-        }
-        FeatureStatus::InProgress => "run: resolve_tasks",
-        FeatureStatus::Shipped | FeatureStatus::Cancelled => "run: archive_feature",
-    }
 }
 
 #[derive(Clone, Debug, Serialize)]
