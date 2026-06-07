@@ -205,7 +205,6 @@ fn recordless_task_dir_warnings(paths: &MaestroPaths) -> Result<Vec<String>> {
         )?);
     }
     warnings.sort();
-    warnings.dedup();
     Ok(warnings)
 }
 

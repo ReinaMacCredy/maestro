@@ -17,23 +17,10 @@ pub struct DirReservation {
     path: PathBuf,
 }
 
-impl DirReservation {
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
 impl Drop for DirReservation {
     fn drop(&mut self) {
         let _ = fs::remove_dir(&self.path);
     }
-}
-
-/// Reserve one filesystem marker directory with `create_dir` exclusivity.
-pub fn reserve_marker_dir(root: impl AsRef<Path>, name: &str) -> Result<DirReservation> {
-    let root = root.as_ref();
-    try_reserve_marker_dir(root, name)?
-        .with_context(|| format!("reservation already exists: {}", root.join(name).display()))
 }
 
 /// Try to reserve one marker directory; `Ok(None)` means another writer holds it.
