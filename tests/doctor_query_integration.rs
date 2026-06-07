@@ -522,6 +522,38 @@ fn doctor_warns_on_dangling_supersedes_but_ignores_prose_mentions() {
 }
 
 #[test]
+fn doctor_warns_on_recordless_live_task_and_feature_dirs_without_failing() {
+    let temp = setup_repo("maestro-doctor-recordless-dirs");
+    let repo = temp.path();
+    let task_dir = repo.join(".maestro/tasks/task-999-aborted-create");
+    let feature_dir = repo.join(".maestro/features/ghost-feature");
+    fs::create_dir_all(&task_dir).expect("invariant: task dir should be creatable");
+    fs::create_dir_all(&feature_dir).expect("invariant: feature dir should be creatable");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_success(&doctor, &["doctor"]);
+    let out = stdout(&doctor);
+
+    assert!(
+        out.contains("warning: .maestro/tasks/task-999-aborted-create has no task.yaml"),
+        "{out}"
+    );
+    assert!(
+        out.contains("remove it: rm -r .maestro/tasks/task-999-aborted-create"),
+        "{out}"
+    );
+    assert!(
+        out.contains("warning: .maestro/features/ghost-feature has no feature.yaml"),
+        "{out}"
+    );
+    assert!(
+        out.contains("remove it: rm -r .maestro/features/ghost-feature"),
+        "{out}"
+    );
+    assert!(out.contains("doctor: ok"), "{out}");
+}
+
+#[test]
 fn query_backlog_reports_empty_state_when_the_backlog_file_is_absent() {
     // R29/R22: a repo with no harness backlog (deleted, or never extracted)
     // must read as an empty backlog, not leak a raw ENOENT + absolute path.

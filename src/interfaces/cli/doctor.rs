@@ -1,5 +1,5 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
@@ -7,6 +7,7 @@ use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
 use crate::domain::task;
+use crate::domain::task::lookup::task_roots;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::{
@@ -105,7 +106,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     }
 
     check_harness(paths, &mut checks, &mut errors);
-    check_features(paths, &mut checks, &mut errors);
+    check_features(paths, &mut checks, &mut warnings, &mut errors);
     check_backlog(paths, &mut checks, &mut errors);
     check_decisions(paths, &mut checks, &mut warnings, &mut errors);
     check_install(paths, &mut checks, &mut errors);
@@ -113,6 +114,10 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     // Collect a corrupt-task error into the report rather than aborting via `?`: a
     // single malformed task.yaml must not suppress every other doctor check, and
     // its full cause should surface like the other corrupt-artifact diagnostics.
+    match recordless_task_dir_warnings(paths) {
+        Ok(found) => warnings.extend(found),
+        Err(error) => errors.push(format!("{error:#}")),
+    }
     match task::check_blocker_graph(&paths.tasks_dir()) {
         Ok(task_report) if task_report.is_ok() => checks.push(DoctorCheck {
             name: "task-blockers",
@@ -163,7 +168,12 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
     }
 }
 
-fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
+fn check_features(
+    paths: &MaestroPaths,
+    checks: &mut Vec<DoctorCheck>,
+    warnings: &mut Vec<String>,
+    errors: &mut Vec<String>,
+) {
     // diagnose returns "{dir} is missing" for an absent dir and a scan error for a
     // present-but-corrupt one; only the former is `init --merge`-repairable, so
     // catch the missing dir here (mirroring check_decisions) and leave scan errors
@@ -173,6 +183,10 @@ fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &
         errors.push(missing_resource(&dir));
         return;
     }
+    match recordless_dir_warnings(paths.repo_root(), &dir, "feature.yaml") {
+        Ok(found) => warnings.extend(found),
+        Err(error) => errors.push(format!("{error:#}")),
+    }
     match feature::diagnose(paths).found {
         Ok(count) => checks.push(DoctorCheck {
             name: "features",
@@ -180,6 +194,58 @@ fn check_features(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &
         }),
         Err(error) => errors.push(error),
     }
+}
+
+fn recordless_task_dir_warnings(paths: &MaestroPaths) -> Result<Vec<String>> {
+    let mut warnings = Vec::new();
+    for root in task_roots(&paths.tasks_dir())? {
+        warnings.extend(recordless_dir_warnings(
+            paths.repo_root(),
+            &root,
+            "task.yaml",
+        )?);
+    }
+    warnings.sort();
+    warnings.dedup();
+    Ok(warnings)
+}
+
+fn recordless_dir_warnings(
+    repo_root: &Path,
+    root: &Path,
+    record_name: &str,
+) -> Result<Vec<String>> {
+    let mut warnings = Vec::new();
+    if !root.is_dir() {
+        return Ok(warnings);
+    }
+    for entry in
+        std::fs::read_dir(root).with_context(|| format!("failed to read {}", root.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to list {}", root.display()))?;
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        if entry.path().join(record_name).is_file() {
+            continue;
+        }
+        let display_path = display_relative(repo_root, &entry.path());
+        warnings.push(format!(
+            "{display_path} has no {record_name} (likely an aborted create); remove it: rm -r {display_path}"
+        ));
+    }
+    warnings.sort();
+    Ok(warnings)
+}
+
+fn display_relative(repo_root: &Path, path: &Path) -> String {
+    path.strip_prefix(repo_root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
 }
 
 fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
