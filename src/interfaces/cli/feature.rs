@@ -7,7 +7,7 @@ use crate::domain::feature::{
 use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::render_timestamp;
-use crate::interfaces::cli::{FeatureArgs, FeatureCommand, recovery_label};
+use crate::interfaces::cli::{FeatureArgs, FeatureCommand, feature_next_label, recovery_label};
 use crate::operations::feature_prepare;
 
 /// Execute `maestro feature`.
@@ -1107,25 +1107,6 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     }
 
     Ok(())
-}
-
-pub(super) fn feature_next_label(view: &feature::FeatureView) -> &'static str {
-    match view.status {
-        FeatureStatus::Proposed if has_authored_contract(view) => "template: qa_baseline",
-        FeatureStatus::Proposed => "template: set_contract",
-        FeatureStatus::Ready => "run: prepare_feature",
-        FeatureStatus::InProgress
-            if view.counts.total > 0 && view.counts.total == view.counts.verified =>
-        {
-            "template: ship_feature"
-        }
-        FeatureStatus::InProgress => "run: resolve_tasks",
-        FeatureStatus::Shipped | FeatureStatus::Cancelled => "run: archive_feature",
-    }
-}
-
-fn has_authored_contract(view: &feature::FeatureView) -> bool {
-    !view.acceptance.is_empty() && !view.affected_areas.is_empty()
 }
 
 fn print_note(note: String) -> Result<()> {

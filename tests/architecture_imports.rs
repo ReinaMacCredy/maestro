@@ -348,6 +348,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "AcceptanceProof".to_string(),
             "AcceptanceSweepItem".to_string(),
             "AcceptanceSweepReport".to_string(),
+            "AcceptanceTextEdit".to_string(),
             "CancelReport".to_string(),
             "ContractAdditions".to_string(),
             "ContractChangeCounts".to_string(),
@@ -381,6 +382,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "set".to_string(),
             "set_with_report".to_string(),
             "ship".to_string(),
+            "ship_gaps".to_string(),
             "show".to_string(),
             "show_archived".to_string(),
             "start".to_string(),
@@ -658,6 +660,9 @@ fn harness_operation_owns_implementation() {
             "propose_agent_audit".to_string(),
             "refresh".to_string(),
             "set_claims_only_verification".to_string(),
+            "unapply".to_string(),
+            "UnappliedItem".to_string(),
+            "UnappliedTask".to_string(),
         ]),
         "operations/harness should expose only deliberate root facade symbols"
     );

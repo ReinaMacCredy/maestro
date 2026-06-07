@@ -7,7 +7,7 @@ use serde::Serialize;
 use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::interfaces::cli::{StatusArgs, recovery_label};
+use crate::interfaces::cli::{StatusArgs, feature_next_label, recovery_label};
 use crate::operations::harness;
 
 const STATUS_TASK_ROW_LIMIT: usize = 5;
@@ -483,7 +483,7 @@ fn active_feature_rows(features: &[feature::FeatureView]) -> Vec<FeatureRowJson>
             id: view.id.clone(),
             state: feature::status_label(&view.status).to_string(),
             title: view.title.clone(),
-            next: super::feature::feature_next_label(view).to_string(),
+            next: feature_next_label(view).to_string(),
             inspect: format!("maestro feature show {}", view.id),
         })
         .collect()

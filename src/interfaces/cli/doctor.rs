@@ -7,7 +7,6 @@ use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
 use crate::domain::task;
-use crate::domain::task::lookup::task_roots;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::{
@@ -198,7 +197,7 @@ fn check_features(
 
 fn recordless_task_dir_warnings(paths: &MaestroPaths) -> Result<Vec<String>> {
     let mut warnings = Vec::new();
-    for root in task_roots(&paths.tasks_dir())? {
+    for root in task::task_roots(&paths.tasks_dir())? {
         warnings.extend(recordless_dir_warnings(
             paths.repo_root(),
             &root,

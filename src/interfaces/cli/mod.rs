@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+use crate::domain::feature::{FeatureStatus, FeatureView};
+
 pub mod decision;
 pub mod doctor;
 pub mod event;
@@ -31,6 +33,27 @@ pub(crate) fn recovery_label(hint: Option<&str>) -> String {
     match hint {
         Some(hint) => format!("fix: {hint}"),
         None => "fix: run maestro doctor".to_string(),
+    }
+}
+
+/// Next-step label for a feature, shared by `status` and `feature list` so the
+/// hint never diverges between the two surfaces.
+pub(crate) fn feature_next_label(view: &FeatureView) -> &'static str {
+    match view.status {
+        FeatureStatus::Proposed
+            if !view.acceptance.is_empty() && !view.affected_areas.is_empty() =>
+        {
+            "template: qa_baseline"
+        }
+        FeatureStatus::Proposed => "template: set_contract",
+        FeatureStatus::Ready => "run: prepare_feature",
+        FeatureStatus::InProgress
+            if view.counts.total > 0 && view.counts.total == view.counts.verified =>
+        {
+            "template: ship_feature"
+        }
+        FeatureStatus::InProgress => "run: resolve_tasks",
+        FeatureStatus::Shipped | FeatureStatus::Cancelled => "run: archive_feature",
     }
 }
 

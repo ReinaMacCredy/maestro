@@ -28,6 +28,7 @@ pub use doctor::{
     render_report,
 };
 pub use lifecycle::TransitionDetails;
+pub(crate) use lookup::task_roots;
 pub(crate) use template::TaskSaveError;
 pub use template::{
     AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ClaimCheckReceipt,
