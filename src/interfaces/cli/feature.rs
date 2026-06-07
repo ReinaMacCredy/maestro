@@ -801,7 +801,10 @@ fn print_decision_summary(paths: &MaestroPaths, id: &str) -> Result<()> {
 }
 
 fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let view = feature::show(paths, id)?;
+    let view = match feature::show(paths, id) {
+        Ok(view) => view,
+        Err(error) => return show_unreadable_feature_spec(paths, id, error),
+    };
     println!("status: {}", feature::status_label(&view.status));
     println!("feature: {}", view.id);
     println!();
@@ -859,6 +862,12 @@ fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
             if let Some(decision) = record.decision.as_deref() {
                 println!("  decision: {decision}");
             }
+            if let Some(preview) = record.preview.as_deref() {
+                println!("  preview:");
+                for line in preview.lines() {
+                    println!("    {line}");
+                }
+            }
         }
     }
 
@@ -875,6 +884,46 @@ fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
         {
             println!("{line}");
         }
+    }
+    Ok(())
+}
+
+fn show_unreadable_feature_spec(
+    paths: &MaestroPaths,
+    id: &str,
+    error: anyhow::Error,
+) -> Result<()> {
+    let path = paths.features_dir().join(id).join("feature.yaml");
+    println!("status: unreadable");
+    println!("feature: {id}");
+    println!("path: {}", path.display());
+    println!("error: {error:#}");
+    println!();
+    println!("## Raw feature.yaml");
+    match std::fs::read_to_string(&path) {
+        Ok(contents) => {
+            println!("```yaml");
+            print!("{}", contents.trim_end());
+            println!();
+            println!("```");
+        }
+        Err(read_error) => println!("unavailable: {read_error}"),
+    }
+    println!();
+    println!("## Decisions");
+    match decisions::decisions_for_feature(paths, id) {
+        Ok(records) if records.is_empty() => println!("- none"),
+        Ok(records) => {
+            for record in records {
+                println!(
+                    "- {} [{}]: {}",
+                    record.id,
+                    record.status.as_str(),
+                    record.title
+                );
+            }
+        }
+        Err(error) => println!("- unreadable decisions.yaml: {error:#}"),
     }
     Ok(())
 }
@@ -951,7 +1000,23 @@ fn proof_label(proof: &feature::AcceptanceProof) -> String {
 }
 
 fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
-    let views = feature::list(paths)?;
+    let roster = feature::list_tolerant(paths);
+    let unreadable = roster
+        .iter()
+        .filter_map(|entry| match entry {
+            feature::FeatureRosterEntry::Loaded(_) => None,
+            feature::FeatureRosterEntry::Unreadable { id, path: _, error } => {
+                Some((id.clone(), error.clone()))
+            }
+        })
+        .collect::<Vec<_>>();
+    let views = roster
+        .into_iter()
+        .filter_map(|entry| match entry {
+            feature::FeatureRosterEntry::Loaded(view) => Some(*view),
+            feature::FeatureRosterEntry::Unreadable { .. } => None,
+        })
+        .collect::<Vec<_>>();
     let hidden = views
         .iter()
         .filter(|view| view.status.is_terminal())
@@ -968,7 +1033,7 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
             .collect()
     };
 
-    if shown.is_empty() {
+    if shown.is_empty() && unreadable.is_empty() {
         println!("no features found");
     } else {
         println!("ID\tSTATE\tNEXT\tINSPECT\tTASKS\tVERIFIED\tTITLE");
@@ -986,6 +1051,12 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
                 view.counts.total,
                 view.counts.verified,
                 title
+            );
+        }
+        for (id, error) in &unreadable {
+            println!(
+                "{}\tunreadable\tfix: maestro migrate-v2\tmaestro feature spec {}\t0\t0\t{}",
+                id, id, error
             );
         }
     }

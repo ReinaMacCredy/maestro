@@ -1,6 +1,6 @@
 ---
 name: maestro-feature
-version: 1.7.0
+version: 1.8.0
 description: "Use for the Maestro feature lifecycle: author, accept, prepare, start, amend, ship, cancel, archive, and inspect a feature contract plus its child-task rollup."
 ---
 
@@ -45,6 +45,12 @@ Use `feature show <id>` for the everyday lifecycle summary. Use
 `feature spec <id>` when the agent needs the narrative spec, open decisions,
 locked decisions, contract, and recent notes in one view. Open decisions are
 for real forks; `--question` is for loose questions not yet forks.
+
+At the approval moment, record constraints before `accept`. Scope constraints go
+into the frozen contract with `feature set <id> --add-non-goal "<constraint>"`.
+Directive or sequencing constraints, plus the dated authorization line, go into
+one `feature note <id> "<date + authorization + constraints>"`. Then run
+`feature accept`; `accept` itself does not grow approval fields.
 
 `prepare --from` expects a visible plan:
 

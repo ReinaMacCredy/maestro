@@ -576,6 +576,29 @@ fn tolerant_titles_return_id_to_title_map() {
 }
 
 #[test]
+fn tolerant_roster_marks_incompatible_record_without_dropping_healthy_rows() {
+    let temp = TestTempDir::new("maestro-feature-tolerant-roster");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Healthy Feature").expect("invariant: create should succeed");
+    write_feature(&paths, "billing-csv", BAD_RECORD);
+
+    let roster = feature::list_tolerant(&paths);
+    assert!(
+        roster
+            .iter()
+            .any(|entry| matches!(entry, feature::FeatureRosterEntry::Loaded(view) if view.id == "healthy-feature")),
+        "healthy rows must survive a sibling schema mismatch: {roster:#?}"
+    );
+    assert!(
+        roster
+            .iter()
+            .any(|entry| matches!(entry, feature::FeatureRosterEntry::Unreadable { id, error, .. } if id == "billing-csv" && error.contains("schema mismatch"))),
+        "bad rows must be marked instead of silently dropped: {roster:#?}"
+    );
+}
+
+#[test]
 fn diagnose_reports_count_on_compatible_store() {
     let temp = TestTempDir::new("maestro-feature-diag-ok");
     let paths = MaestroPaths::new(temp.path());

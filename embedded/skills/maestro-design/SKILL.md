@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.5.0
+version: 1.6.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-feature."
 ---
 
@@ -23,19 +23,25 @@ Activate:
 3. Put the problem and open questions on the feature:
    `maestro feature set <id> --description "<problem>" --question "<loose question>"`.
 4. Decide one fork at a time. For each fork, give the concrete example, the
-   options, the tradeoff, and the chosen answer.
+   options, the tradeoff, and the chosen answer. Sketch every option inline as
+   ASCII before asking, so the preview is readable in the terminal.
 5. Lock each decision durably:
    `maestro decision new "<decision title>" --feature <id> --context "<why>"`
    opens the fork; `maestro decision lock <decision-id> --decision "<chosen>"
    --rejected "<option: why>" [--preview "<example>"] [--supersedes <id>]`
-   fills and locks it. The lock echoes the entry and appends the dated
-   feature-note pointer automatically; do not add a manual duplicate note.
+   fills and locks it. Put the chosen ASCII sketch into `--preview` as
+   multiline text. The lock echoes the entry and appends the dated feature-note
+   pointer automatically; do not add a manual duplicate note.
 6. If a chosen answer removes a field, file, command, behavior, or workflow,
    enumerate consumers before locking the removal.
-7. Keep feature questions current: open decisions are for real forks;
+7. Before locking a material or hard-to-reverse fork, get an independent
+   adversarial review from a fresh context. Use an advisor-class tool or a
+   skeptic sub-agent as peers, then incorporate or explicitly rebut its points
+   in the lock context.
+8. Keep feature questions current: open decisions are for real forks;
    `--question` is for loose questions not yet forks. A question that becomes a
    fork is opened as a decision and removed from questions.
-8. Author the implementation contract only after decisions are stable:
+9. Author the implementation contract only after decisions are stable:
    `maestro feature set <id> --acceptance "<observable behavior>" --area "<surface>"`.
 
 ## Taste Forks

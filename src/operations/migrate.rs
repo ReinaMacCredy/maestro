@@ -8,7 +8,7 @@ use anyhow::{Context, Result, bail};
 use serde_json::json;
 use serde_yaml::{Mapping, Value};
 
-use crate::domain::task;
+use crate::domain::{decisions, task};
 use crate::foundation::core::fs::{child_dirs as fs_child_dirs, ensure_dir};
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
@@ -31,9 +31,20 @@ pub fn run(paths: &MaestroPaths) -> Result<MigrateReport> {
     migrate_features(paths, &mut report)?;
     migrate_tasks(paths, &mut report)?;
     remove_if_exists(paths.features_dir().join("features.yaml"), &mut report)?;
+    ensure_decision_store(paths)?;
     report.pruned_backups = prune_child_dirs(&paths.backups_dir(), 3)?;
     report.pruned_runs = prune_child_dirs(&paths.runs_dir(), 20)?;
     Ok(report)
+}
+
+fn ensure_decision_store(paths: &MaestroPaths) -> Result<()> {
+    ensure_dir(paths.decisions_dir())?;
+    let path = paths.decisions_file();
+    if !path.exists() {
+        write_string_atomic(path.as_path(), &decisions::empty_store_yaml()?)
+            .with_context(|| format!("failed to write {}", path.display()))?;
+    }
+    Ok(())
 }
 
 fn migrate_features(paths: &MaestroPaths, report: &mut MigrateReport) -> Result<()> {

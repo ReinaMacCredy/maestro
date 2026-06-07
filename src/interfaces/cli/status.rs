@@ -223,7 +223,29 @@ fn print_next_action(action: &NextAction) {
 
 fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let tasks = task::load_task_records(&paths.tasks_dir())?;
-    let features = feature::list(paths)?;
+    let feature_roster = feature::list_tolerant(paths);
+    let unreadable_features = feature_roster
+        .iter()
+        .filter_map(|entry| match entry {
+            feature::FeatureRosterEntry::Loaded(_) => None,
+            feature::FeatureRosterEntry::Unreadable { id, path, error } => {
+                Some((id.clone(), path.clone(), error.clone()))
+            }
+        })
+        .collect::<Vec<_>>();
+    let features = feature_roster
+        .iter()
+        .filter_map(|entry| match entry {
+            feature::FeatureRosterEntry::Loaded(view) => Some(view.as_ref().clone()),
+            feature::FeatureRosterEntry::Unreadable { .. } => None,
+        })
+        .collect::<Vec<_>>();
+    if features.is_empty()
+        && let Some((id, _, error)) = unreadable_features.first()
+    {
+        let _ = feature::show(paths, id)?;
+        bail!("{error}");
+    }
     let mut warnings = Vec::new();
     let mut current_task = None;
     let mut current_feature = None;
@@ -281,6 +303,20 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     };
     let ready_to_ship_features = ready_to_ship_features(&features);
     let active_features = active_feature_rows(&features);
+    let mut active_features = active_features;
+    for (id, path, error) in unreadable_features {
+        warnings.push(WarningJson {
+            code: "feature_unreadable".to_string(),
+            message: format!("{} is unreadable: {error}", path.display()),
+        });
+        active_features.push(FeatureRowJson {
+            id: id.clone(),
+            state: "unreadable".to_string(),
+            title: error,
+            next: "fix: maestro migrate-v2".to_string(),
+            inspect: format!("maestro feature spec {id}"),
+        });
+    }
     let harness_friction = harness::over_threshold_items(paths)?
         .into_iter()
         .map(HarnessFrictionJson::from)

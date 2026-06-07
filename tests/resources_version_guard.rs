@@ -18,6 +18,7 @@ const RECORD_SH: &str = include_str!("../embedded/hooks/record.sh");
 
 /// The shipped harness protocol (its frontmatter `version:` is the gate marker).
 const HARNESS_MD: &str = include_str!("../embedded/harness/HARNESS.md");
+const RECOVERY_MD: &str = include_str!("../embedded/harness/RECOVERY.md");
 
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
 const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
@@ -30,8 +31,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
     (
         "skill",
         "maestro-feature",
-        "1.7.0",
-        "0078ec5d3973779bf40b6d05121321737e586f2585f5a74bbcd6fc5e7e68be22",
+        "1.8.0",
+        "85c3bbefb6e76ade9298389b29e4b943bc09b3a17eeb24764eb5361e93874466",
     ),
     (
         "skill",
@@ -60,8 +61,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
     (
         "skill",
         "maestro-design",
-        "1.5.0",
-        "320a0af894211d321a42bb66a893947b92205d1327666951e41307fd195b1177",
+        "1.6.0",
+        "49b6cbb569f613f1ad9499636d1ee3f2f2acd1248117d8e262693e72ca60f5a6",
     ),
     (
         "skill",
@@ -78,8 +79,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
     (
         "harness",
         "HARNESS.md",
-        "1.8.1",
-        "af475f0755d070e622212e95035364b544fb215300bf0e68239e1d089e888fb4",
+        "1.8.2",
+        "83b12f3385e502e27e616d00c97803ddcd4cf8e0f08b429741f3539383043be4",
     ),
 ];
 
@@ -126,7 +127,10 @@ fn shipped_resource_trees_and_versions_match_the_recorded_guard() {
                 RECORD_SH.contains(&format!("# maestro:hook-version: {version}")),
             ),
             "harness" => (
-                tree_hash(&[(name, HARNESS_MD.as_bytes())]),
+                tree_hash(&[
+                    (name, HARNESS_MD.as_bytes()),
+                    ("RECOVERY.md", RECOVERY_MD.as_bytes()),
+                ]),
                 HARNESS_MD.contains(&format!("version: {version}")),
             ),
             other => panic!("unknown resource group {other} in RESOURCE_VERSION_GUARD"),

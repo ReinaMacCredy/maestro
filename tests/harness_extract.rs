@@ -16,6 +16,10 @@ fn harness_path(paths: &MaestroPaths) -> PathBuf {
     paths.harness_dir().join("HARNESS.md")
 }
 
+fn recovery_path(paths: &MaestroPaths) -> PathBuf {
+    paths.maestro_dir().join("RECOVERY.md")
+}
+
 #[test]
 fn extract_harness_writes_the_bundled_protocol() {
     let temp_dir = TestTempDir::new("maestro-harness-extract-test");
@@ -28,6 +32,11 @@ fn extract_harness_writes_the_bundled_protocol() {
         .expect("invariant: extracted HARNESS.md should be readable");
     assert!(contents.contains("version:"));
     assert!(contents.contains("# Maestro Harness Protocol"));
+    let recovery = fs::read_to_string(recovery_path(&paths))
+        .expect("invariant: extracted RECOVERY.md should be readable");
+    assert!(recovery.contains("maestro migrate-v2"), "{recovery}");
+    assert!(recovery.contains("maestro init --merge"), "{recovery}");
+    assert!(recovery.contains("git log -1 --oneline"), "{recovery}");
 }
 
 #[test]
@@ -107,10 +116,16 @@ fn extract_harness_update_refreshes_and_backs_up_when_version_differs() {
 
     assert_eq!(
         report.backups.len(),
-        1,
-        "a version bump must back up the edited protocol"
+        2,
+        "a version bump must back up the harness resource family"
     );
-    assert_eq!(report.backups[0].name, "HARNESS.md");
+    let backup_names = report
+        .backups
+        .iter()
+        .map(|backup| backup.name.as_str())
+        .collect::<Vec<_>>();
+    assert!(backup_names.contains(&"HARNESS.md"), "{backup_names:?}");
+    assert!(backup_names.contains(&"RECOVERY.md"), "{backup_names:?}");
     assert_eq!(
         fs::read_to_string(&path).expect("invariant: HARNESS.md should be readable"),
         V2,

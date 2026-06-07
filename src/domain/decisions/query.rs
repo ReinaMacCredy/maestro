@@ -1,9 +1,11 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStore};
+use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -122,6 +124,53 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<DecisionListEntry>> {
             .then_with(|| left.title.cmp(&right.title))
     });
     Ok(entries)
+}
+
+pub fn list_tolerant(paths: &MaestroPaths) -> Vec<DecisionListEntry> {
+    let mut entries = Vec::new();
+    for store_path in store_paths(paths).unwrap_or_default() {
+        match load_store_at(&store_path.path) {
+            Ok(store) => {
+                for record in store.decisions {
+                    entries.push(DecisionListEntry {
+                        id: record.id,
+                        title: record.title,
+                        status: record.status.as_str().to_string(),
+                        source: store_path.source.clone(),
+                        path: store_path.path.clone(),
+                    });
+                }
+            }
+            Err(error) => entries.push(DecisionListEntry {
+                id: store_path
+                    .path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("decisions.yaml")
+                    .to_string(),
+                title: format!("unreadable decision store: {error:#}"),
+                status: "unreadable".to_string(),
+                source: store_path.source,
+                path: store_path.path,
+            }),
+        }
+    }
+    for legacy in decision_entries(&paths.decisions_dir()).unwrap_or_default() {
+        let title = decision_title(&legacy.path).unwrap_or_else(|error| format!("{error:#}"));
+        entries.push(DecisionListEntry {
+            id: decision_display_id(&legacy.file_name),
+            title,
+            status: "legacy".to_string(),
+            source: DecisionSource::Legacy,
+            path: legacy.path,
+        });
+    }
+    entries.sort_by(|left, right| {
+        decision_sort_key(&left.id)
+            .cmp(&decision_sort_key(&right.id))
+            .then_with(|| left.title.cmp(&right.title))
+    });
+    entries
 }
 
 pub fn decisions_for_feature(
@@ -246,6 +295,16 @@ pub fn diagnose(paths: &MaestroPaths) -> DecisionDiagnostic {
     }
 }
 
+pub fn dangling_reference_warnings(paths: &MaestroPaths) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let existing = resolvable_decision_ids(paths);
+    warn_dangling_note_pointers(paths, &existing, &mut warnings);
+    warn_dangling_supersedes(paths, &existing, &mut warnings);
+    warnings.sort();
+    warnings.dedup();
+    warnings
+}
+
 pub fn render_record(record: &DecisionRecord) -> String {
     let mut out = String::new();
     out.push_str(&format!("id: {}\n", record.id));
@@ -332,12 +391,12 @@ pub(crate) fn load_store_at(path: &Path) -> Result<DecisionStore> {
     let store: DecisionStore = serde_yaml::from_str(&contents)
         .with_context(|| format!("failed to parse {}", path.display()))?;
     if classify(&store.schema_version, DECISIONS_SCHEMA_VERSION) != Compat::Exact {
-        bail!(
-            "schema mismatch for {}: expected {}, found {}",
-            path.display(),
-            DECISIONS_SCHEMA_VERSION,
-            store.schema_version
-        );
+        return Err(MaestroError::SchemaMismatch {
+            artifact: path.display().to_string(),
+            expected: DECISIONS_SCHEMA_VERSION,
+            found: store.schema_version,
+        }
+        .into());
     }
     Ok(store)
 }
@@ -432,6 +491,97 @@ pub fn decision_display_id(file_name: &str) -> String {
         Some(number) => format!("decision-{number:03}"),
         None => decision_id(file_name).to_string(),
     }
+}
+
+fn resolvable_decision_ids(paths: &MaestroPaths) -> BTreeSet<String> {
+    let mut ids = BTreeSet::new();
+    for store_path in store_paths(paths).unwrap_or_default() {
+        if let Ok(store) = load_store_at(&store_path.path) {
+            for record in store.decisions {
+                ids.insert(record.id);
+            }
+        }
+    }
+    for entry in decision_entries(&paths.decisions_dir()).unwrap_or_default() {
+        if let Ok(id) = normalize_decision_id(&decision_display_id(&entry.file_name)) {
+            ids.insert(id);
+        }
+    }
+    ids
+}
+
+fn warn_dangling_note_pointers(
+    paths: &MaestroPaths,
+    existing: &BTreeSet<String>,
+    warnings: &mut Vec<String>,
+) {
+    let features_dir = paths.features_dir();
+    let Ok(entries) = fs::read_dir(&features_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        let path = entry.path().join("notes.md");
+        let Ok(Some(contents)) = read_to_string_if_exists(&path) else {
+            continue;
+        };
+        for id in structured_note_decision_refs(&contents) {
+            if !existing.contains(&id) {
+                warnings.push(format!(
+                    "{} references missing decision {id}; fix: restore that decision record or add a superseding note",
+                    path.display()
+                ));
+            }
+        }
+    }
+}
+
+fn warn_dangling_supersedes(
+    paths: &MaestroPaths,
+    existing: &BTreeSet<String>,
+    warnings: &mut Vec<String>,
+) {
+    for store_path in store_paths(paths).unwrap_or_default() {
+        let Ok(store) = load_store_at(&store_path.path) else {
+            continue;
+        };
+        for record in store.decisions {
+            for id in record.supersedes {
+                let normalized = normalize_decision_id(&id).unwrap_or(id);
+                if !existing.contains(&normalized) {
+                    warnings.push(format!(
+                        "{} has {} superseding missing decision {normalized}; fix: restore the target decision or remove the supersedes entry",
+                        store_path.path.display(),
+                        record.id
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn structured_note_decision_refs(contents: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    for line in contents.lines() {
+        if !(line.contains(" locked --") || line.contains(" superseded --")) {
+            continue;
+        }
+        for token in line.split_whitespace() {
+            let candidate = token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '-');
+            if candidate.starts_with("decision-")
+                && let Ok(id) = normalize_decision_id(candidate)
+            {
+                ids.push(id);
+                break;
+            }
+        }
+    }
+    ids
 }
 
 /// The title from a decision file's `# decision-NNN: Title` heading, or

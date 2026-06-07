@@ -452,6 +452,76 @@ fn doctor_counts_real_decisions_and_skips_symlinked_entries() {
 }
 
 #[test]
+fn doctor_warns_on_dangling_structured_decision_refs_without_failing() {
+    let temp = setup_repo("maestro-doctor-dangling-decision-refs");
+    let repo = temp.path();
+
+    run_success(repo, &["feature", "new", "Decision Ref Integrity"]);
+    run_success(
+        repo,
+        &[
+            "decision",
+            "new",
+            "Choose storage",
+            "--feature",
+            "decision-ref-integrity",
+        ],
+    );
+    run_success(
+        repo,
+        &[
+            "decision",
+            "lock",
+            "decision-001",
+            "--decision",
+            "Use feature-local stores",
+            "--rejected",
+            "global only: less local",
+        ],
+    );
+    fs::remove_file(repo.join(".maestro/features/decision-ref-integrity/decisions.yaml"))
+        .expect("invariant: feature decisions store should be removable");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_success(&doctor, &["doctor"]);
+    let out = stdout(&doctor);
+    assert!(out.contains("warning:"), "{out}");
+    assert!(
+        out.contains("notes.md references missing decision decision-001"),
+        "{out}"
+    );
+    assert!(out.contains("fix:"), "{out}");
+}
+
+#[test]
+fn doctor_warns_on_dangling_supersedes_but_ignores_prose_mentions() {
+    let temp = setup_repo("maestro-doctor-dangling-supersedes");
+    let repo = temp.path();
+
+    run_success(repo, &["feature", "new", "Supersede Integrity"]);
+    run_success(repo, &["decision", "new", "Global decision"]);
+    let decisions_yaml = repo.join(".maestro/decisions.yaml");
+    let mut yaml =
+        fs::read_to_string(&decisions_yaml).expect("invariant: decisions.yaml should be readable");
+    yaml.push_str("  supersedes:\n  - decision-999\n");
+    fs::write(&decisions_yaml, yaml).expect("invariant: decisions.yaml should be writable");
+    fs::write(
+        repo.join(".maestro/features/supersede-integrity/spec.md"),
+        "This prose mentions decision-998 but is not a structured reference.\n",
+    )
+    .expect("invariant: spec.md should be writable");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_success(&doctor, &["doctor"]);
+    let out = stdout(&doctor);
+    assert!(
+        out.contains("superseding missing decision decision-999"),
+        "{out}"
+    );
+    assert!(!out.contains("decision-998"), "{out}");
+}
+
+#[test]
 fn query_backlog_reports_empty_state_when_the_backlog_file_is_absent() {
     // R29/R22: a repo with no harness backlog (deleted, or never extracted)
     // must read as an empty backlog, not leak a raw ENOENT + absolute path.

@@ -35,6 +35,7 @@ use crate::domain::feature::schema::{
 };
 use crate::domain::feature::verification;
 use crate::domain::task::{self, TaskState, TransitionDetails};
+use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -84,6 +85,16 @@ pub struct FeatureView {
     pub qa_none_reason: Option<String>,
     /// Design notes (`notes.md`), read on demand by `show`. None elsewhere.
     pub notes: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FeatureRosterEntry {
+    Loaded(Box<FeatureView>),
+    Unreadable {
+        id: String,
+        path: PathBuf,
+        error: String,
+    },
 }
 
 /// Found-vs-expected schema diagnostic for the feature store, reported as data
@@ -888,6 +899,33 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
         .collect())
 }
 
+pub fn list_tolerant(paths: &MaestroPaths) -> Vec<FeatureRosterEntry> {
+    let counts_by_feature = count_tasks_by_feature(&paths.tasks_dir()).unwrap_or_default();
+    let Ok(ids) = feature_ids(&paths.features_dir()) else {
+        return Vec::new();
+    };
+
+    ids.into_iter()
+        .map(|id| {
+            let path = feature_yaml_path(paths, &id);
+            match load_record_at(&path, &id) {
+                Ok(record) => {
+                    let counts = counts_by_feature
+                        .get(&record.id)
+                        .cloned()
+                        .unwrap_or_default();
+                    FeatureRosterEntry::Loaded(Box::new(view_from_record(record, counts)))
+                }
+                Err(error) => FeatureRosterEntry::Unreadable {
+                    id,
+                    path,
+                    error: format!("{error:#}"),
+                },
+            }
+        })
+        .collect()
+}
+
 /// Show one feature joined with its on-demand task counts.
 ///
 /// # Errors
@@ -1205,12 +1243,12 @@ pub(crate) fn load_record_at(path: &Path, id: &str) -> Result<FeatureRecord> {
     let record: FeatureRecord = serde_yaml::from_str(&contents)
         .with_context(|| format!("failed to parse {}", path.display()))?;
     if classify(&record.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
-        bail!(
-            "schema mismatch for {}: expected {}, found {}",
-            path.display(),
-            FEATURE_SCHEMA_VERSION,
-            record.schema_version
-        );
+        return Err(MaestroError::SchemaMismatch {
+            artifact: path.display().to_string(),
+            expected: FEATURE_SCHEMA_VERSION,
+            found: record.schema_version,
+        }
+        .into());
     }
     Ok(record)
 }

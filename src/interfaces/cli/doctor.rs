@@ -233,6 +233,7 @@ fn check_decisions(
 
     let report = decisions::diagnose(paths);
     warnings.extend(report.warnings);
+    warnings.extend(decisions::dangling_reference_warnings(paths));
     errors.extend(report.errors);
     checks.push(DoctorCheck {
         name: "decisions",

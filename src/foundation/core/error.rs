@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use crate::foundation::core::schema::{FEATURE_SCHEMA_VERSION, TASK_SCHEMA_VERSION};
+
 /// Shared recoverable errors for Maestro foundation modules.
 #[derive(Debug, Error)]
 pub enum MaestroError {
@@ -63,4 +65,26 @@ pub enum MaestroError {
     /// A JSON mirror file did not contain a top-level JSON object.
     #[error("managed JSON mirror must be a top-level object")]
     InvalidJsonMirror,
+}
+
+impl MaestroError {
+    pub fn hint(&self) -> Option<String> {
+        match self {
+            Self::RepoRootNotFound { .. } => Some("run maestro init --yes".to_string()),
+            Self::SchemaMismatch {
+                expected, found, ..
+            } if (*expected == FEATURE_SCHEMA_VERSION && found == "maestro.feature.v1")
+                || (*expected == TASK_SCHEMA_VERSION && found == "maestro.task.v1") =>
+            {
+                Some("run maestro migrate-v2".to_string())
+            }
+            Self::SchemaMismatch { .. } => Some("run maestro doctor".to_string()),
+            Self::OutsideRepository { .. }
+            | Self::BackupPathContainsSymlink { .. }
+            | Self::ManagedPathContainsSymlink { .. }
+            | Self::InvalidOperationName { .. }
+            | Self::UnownedManagedContent { .. }
+            | Self::InvalidJsonMirror => None,
+        }
+    }
 }

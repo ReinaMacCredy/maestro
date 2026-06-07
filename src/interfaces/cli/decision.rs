@@ -87,7 +87,7 @@ fn show_decision(paths: &MaestroPaths, id: &str) -> Result<()> {
 }
 
 fn list_decisions(paths: &MaestroPaths) -> Result<()> {
-    let entries = decisions::list(paths)?;
+    let entries = decisions::list_tolerant(paths);
     if entries.is_empty() {
         println!("no decisions found");
         return Ok(());

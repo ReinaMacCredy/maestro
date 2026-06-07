@@ -825,6 +825,234 @@ fn decision_new_list_show_auto_increment_and_preserve_template() {
 }
 
 #[test]
+fn feature_spec_renders_multiline_decision_preview() {
+    let temp_dir = TestTempDir::new("maestro-feature-spec-preview");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Preview Contract"], temp_dir.path()),
+        &["feature", "new", "Preview Contract"],
+    );
+    stdout(
+        maestro(
+            &[
+                "decision",
+                "new",
+                "Choose preview shape",
+                "--feature",
+                "preview-contract",
+            ],
+            temp_dir.path(),
+        ),
+        &[
+            "decision",
+            "new",
+            "Choose preview shape",
+            "--feature",
+            "preview-contract",
+        ],
+    );
+    let lock_args = [
+        "decision",
+        "lock",
+        "decision-001",
+        "--decision",
+        "Use boxed ASCII",
+        "--rejected",
+        "plain text: less concrete",
+        "--preview",
+        "+-----+\n| yes |\n+-----+",
+    ];
+    stdout(maestro(&lock_args, temp_dir.path()), &lock_args);
+
+    let spec = stdout(
+        maestro(&["feature", "spec", "preview-contract"], temp_dir.path()),
+        &["feature", "spec", "preview-contract"],
+    );
+    assert!(spec.contains("preview:"), "{spec}");
+    assert!(spec.contains("+-----+"), "{spec}");
+    assert!(spec.contains("| yes |"), "{spec}");
+}
+
+#[test]
+fn status_and_feature_list_degrade_when_one_feature_record_is_incompatible() {
+    let temp_dir = TestTempDir::new("maestro-feature-roster-degradation");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Healthy Feature"], temp_dir.path()),
+        &["feature", "new", "Healthy Feature"],
+    );
+    let bad_dir = temp_dir.path().join(".maestro/features/bad-feature");
+    fs::create_dir_all(&bad_dir).expect("invariant: bad feature dir should be creatable");
+    fs::write(
+        bad_dir.join("feature.yaml"),
+        "schema_version: maestro.feature.v1\nid: bad-feature\ntitle: Bad Feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+    )
+    .expect("invariant: bad feature record should be writable");
+
+    let status = stdout(maestro(&["status"], temp_dir.path()), &["status"]);
+    assert!(status.contains("healthy-feature"), "{status}");
+    assert!(status.contains("bad-feature\tunreadable"), "{status}");
+
+    let list = stdout(
+        maestro(&["feature", "list", "--all"], temp_dir.path()),
+        &["feature", "list", "--all"],
+    );
+    assert!(list.contains("healthy-feature"), "{list}");
+    assert!(list.contains("bad-feature\tunreadable"), "{list}");
+}
+
+#[test]
+fn feature_spec_and_decision_list_degrade_per_record() {
+    let temp_dir = TestTempDir::new("maestro-feature-decision-per-record-degradation");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Healthy Feature"], temp_dir.path()),
+        &["feature", "new", "Healthy Feature"],
+    );
+    stdout(
+        maestro(
+            &[
+                "decision",
+                "new",
+                "Keep healthy decision visible",
+                "--feature",
+                "healthy-feature",
+            ],
+            temp_dir.path(),
+        ),
+        &[
+            "decision",
+            "new",
+            "Keep healthy decision visible",
+            "--feature",
+            "healthy-feature",
+        ],
+    );
+    let bad_dir = temp_dir.path().join(".maestro/features/bad-feature");
+    fs::create_dir_all(&bad_dir).expect("invariant: bad feature dir should be creatable");
+    fs::write(
+        bad_dir.join("feature.yaml"),
+        "schema_version: maestro.feature.v1\nid: bad-feature\ntitle: Bad Feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+    )
+    .expect("invariant: bad feature record should be writable");
+    fs::write(
+        bad_dir.join("decisions.yaml"),
+        "schema_version: maestro.decisions.v0\ndecisions: []\n",
+    )
+    .expect("invariant: incompatible decision store should be writable");
+
+    let spec = stdout(
+        maestro(&["feature", "spec", "bad-feature"], temp_dir.path()),
+        &["feature", "spec", "bad-feature"],
+    );
+    assert!(spec.contains("status: unreadable"), "{spec}");
+    assert!(spec.contains("## Raw feature.yaml"), "{spec}");
+    assert!(
+        spec.contains("schema_version: maestro.feature.v1"),
+        "{spec}"
+    );
+
+    let decisions = stdout(
+        maestro(&["decision", "list"], temp_dir.path()),
+        &["decision", "list"],
+    );
+    assert!(
+        decisions.contains("decision-001\topen\tfeature:healthy-feature"),
+        "{decisions}"
+    );
+    assert!(
+        decisions.contains("decisions.yaml\tunreadable\tfeature:bad-feature"),
+        "{decisions}"
+    );
+}
+
+#[test]
+fn status_on_only_v1_feature_records_fails_with_migrate_hint() {
+    let temp_dir = TestTempDir::new("maestro-feature-migrate-hint");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    let bad_dir = temp_dir.path().join(".maestro/features/bad-feature");
+    fs::create_dir_all(&bad_dir).expect("invariant: bad feature dir should be creatable");
+    fs::write(
+        bad_dir.join("feature.yaml"),
+        "schema_version: maestro.feature.v1\nid: bad-feature\ntitle: Bad Feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+    )
+    .expect("invariant: bad feature record should be writable");
+
+    let error = assert_failure(maestro(&["status"], temp_dir.path()), &["status"]);
+    assert!(error.contains("schema mismatch"), "{error}");
+    assert!(error.contains("fix: run maestro migrate-v2"), "{error}");
+}
+
+#[test]
+fn unhinted_errors_do_not_print_fix_line() {
+    let temp_dir = TestTempDir::new("maestro-unhinted-error-no-fix-line");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let error = assert_failure(
+        maestro(&["decision", "new", ""], temp_dir.path()),
+        &["decision", "new", ""],
+    );
+    assert!(
+        error.contains("Error: decision title cannot be empty"),
+        "{error}"
+    );
+    assert!(!error.contains("\nfix:"), "{error}");
+}
+
+#[test]
+fn migrate_v2_recreates_decision_scaffold_so_doctor_is_clean() {
+    let temp_dir = TestTempDir::new("maestro-migrate-doctor-clean");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    fs::remove_file(temp_dir.path().join(".maestro/decisions.yaml"))
+        .expect("invariant: decisions.yaml should be removable");
+    fs::remove_dir(temp_dir.path().join(".maestro/decisions"))
+        .expect("invariant: decisions dir should be removable");
+    let feature_dir = temp_dir.path().join(".maestro/features/legacy-feature");
+    fs::create_dir_all(&feature_dir).expect("invariant: feature dir should be creatable");
+    fs::write(
+        feature_dir.join("feature.yaml"),
+        "schema_version: maestro.feature.v1\nid: legacy-feature\ntitle: Legacy Feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+    )
+    .expect("invariant: v1 feature should be writable");
+
+    stdout(maestro(&["migrate-v2"], temp_dir.path()), &["migrate-v2"]);
+    let doctor = stdout(maestro(&["doctor"], temp_dir.path()), &["doctor"]);
+    assert!(doctor.contains("doctor: ok"), "{doctor}");
+    assert!(
+        temp_dir.path().join(".maestro/decisions.yaml").is_file(),
+        "migrate-v2 should recreate the structured decision store"
+    );
+    assert!(
+        temp_dir.path().join(".maestro/decisions").is_dir(),
+        "migrate-v2 should recreate the legacy decisions directory"
+    );
+}
+
+#[test]
 fn decision_new_and_lock_write_structured_feature_record() {
     let temp_dir = TestTempDir::new("maestro-decision-command-complete-test");
     init_git_marker(temp_dir.path());

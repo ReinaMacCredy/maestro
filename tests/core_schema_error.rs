@@ -127,6 +127,69 @@ fn typed_errors_implement_display_debug_and_error() {
 }
 
 #[test]
+fn typed_errors_have_explicit_hint_decisions() {
+    let samples = [
+        (
+            MaestroError::RepoRootNotFound {
+                start: PathBuf::from("/tmp/repo"),
+            },
+            Some("run maestro init --yes"),
+        ),
+        (
+            MaestroError::SchemaMismatch {
+                artifact: "feature.yaml".to_string(),
+                expected: FEATURE_SCHEMA_VERSION,
+                found: "maestro.feature.v1".to_string(),
+            },
+            Some("run maestro migrate-v2"),
+        ),
+        (
+            MaestroError::SchemaMismatch {
+                artifact: "feature.yaml".to_string(),
+                expected: FEATURE_SCHEMA_VERSION,
+                found: "maestro.feature.v3".to_string(),
+            },
+            Some("run maestro doctor"),
+        ),
+        (
+            MaestroError::OutsideRepository {
+                path: PathBuf::from("/tmp/outside"),
+            },
+            None,
+        ),
+        (
+            MaestroError::BackupPathContainsSymlink {
+                path: PathBuf::from("/tmp/link"),
+            },
+            None,
+        ),
+        (
+            MaestroError::ManagedPathContainsSymlink {
+                path: PathBuf::from("/tmp/link"),
+            },
+            None,
+        ),
+        (
+            MaestroError::InvalidOperationName {
+                operation: "bad/name".to_string(),
+            },
+            None,
+        ),
+        (
+            MaestroError::UnownedManagedContent {
+                path: PathBuf::from("/tmp/user-owned"),
+            },
+            None,
+        ),
+        (MaestroError::InvalidJsonMirror, None),
+    ];
+
+    for (error, expected) in samples {
+        assert_eq!(error.hint().as_deref(), expected);
+    }
+}
+
+#[test]
 fn path_errors_include_the_relevant_path() {
     let path = PathBuf::from("/tmp/outside");
     let error = MaestroError::OutsideRepository { path };

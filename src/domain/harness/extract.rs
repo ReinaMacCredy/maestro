@@ -14,7 +14,7 @@ use anyhow::Result;
 use crate::domain::extraction::extract::{
     Action, FolderPreview, apply_actions, file_action, folder_gate, preview_folder, read_existing,
 };
-use crate::domain::harness::templates::HARNESS_MD;
+use crate::domain::harness::templates::{HARNESS_MD, RECOVERY_MD};
 use crate::domain::skills::catalog::frontmatter_version;
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
@@ -24,6 +24,7 @@ pub use crate::domain::extraction::extract::{ExtractMode, ExtractReport};
 
 /// Report name and on-disk filename for the bundled harness protocol.
 const HARNESS_MD_NAME: &str = "HARNESS.md";
+const RECOVERY_MD_NAME: &str = "RECOVERY.md";
 
 /// Extract the bundled harness protocol into `.maestro/harness/`.
 pub fn extract_harness(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<ExtractReport> {
@@ -87,18 +88,32 @@ fn plan_harness<'a>(
         &path,
     )?;
 
-    Ok(vec![file_action(
-        HARNESS_MD_NAME,
-        contents.as_bytes(),
-        path,
-        existing,
-        gate,
-    )?])
+    let recovery_path = recovery_file_path(paths)?;
+    let recovery_existing = read_existing(&recovery_path)?;
+
+    Ok(vec![
+        file_action(HARNESS_MD_NAME, contents.as_bytes(), path, existing, gate)?,
+        file_action(
+            RECOVERY_MD_NAME,
+            RECOVERY_MD.as_bytes(),
+            recovery_path,
+            recovery_existing,
+            gate,
+        )?,
+    ])
 }
 
 fn harness_file_path(paths: &MaestroPaths, file_name: &str) -> Result<PathBuf> {
     let relative = format!(".maestro/harness/{file_name}");
     managed_path(paths, &relative, SymlinkPolicy::RejectAllComponents)
+}
+
+fn recovery_file_path(paths: &MaestroPaths) -> Result<PathBuf> {
+    managed_path(
+        paths,
+        ".maestro/RECOVERY.md",
+        SymlinkPolicy::RejectAllComponents,
+    )
 }
 
 #[cfg(test)]
@@ -107,6 +122,6 @@ mod tests {
 
     #[test]
     fn bundled_harness_declares_a_frontmatter_version() {
-        assert_eq!(frontmatter_version(HARNESS_MD).as_deref(), Some("1.8.1"));
+        assert_eq!(frontmatter_version(HARNESS_MD).as_deref(), Some("1.8.2"));
     }
 }

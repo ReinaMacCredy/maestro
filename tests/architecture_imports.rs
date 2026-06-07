@@ -56,7 +56,10 @@ const OPERATION_FACADES: &[&str] = &["harness", "init", "sync", "update"];
 const RESOURCE_EMBED_ALLOWLIST: &[(&str, &[&str])] = &[
     (
         "src/domain/harness/templates.rs",
-        &["embedded/harness/HARNESS.md"],
+        &[
+            "embedded/harness/HARNESS.md",
+            "embedded/harness/RECOVERY.md",
+        ],
     ),
     ("src/domain/run/event.rs", &["embedded/hooks/events.yaml"]),
     (
@@ -352,6 +355,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "FeatureArchiveReport".to_string(),
             "FeatureDiagnostic".to_string(),
             "FeatureProofUpdate".to_string(),
+            "FeatureRosterEntry".to_string(),
             "FeatureStatus".to_string(),
             "FeatureVerifyReport".to_string(),
             "FeatureView".to_string(),
@@ -371,6 +375,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "ensure_exists".to_string(),
             "list".to_string(),
             "list_archived".to_string(),
+            "list_tolerant".to_string(),
             "normalize_acceptance_id".to_string(),
             "note".to_string(),
             "set".to_string(),
