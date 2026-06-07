@@ -353,7 +353,16 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
     });
     let accepted = item.clone();
     if let Err(error) = backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot) {
-        rollback_spawned_task(paths, &task.id)?;
+        // The save error is the actionable one (a concurrent-store change tells
+        // the caller to re-run). Roll the spawned task back best-effort, but
+        // never let a rollback failure mask that error: surface the save error
+        // as the cause and note the leftover task so it can be cleaned up.
+        if let Err(rollback_error) = rollback_spawned_task(paths, &task.id) {
+            return Err(error.context(format!(
+                "spawned task {} was left behind: {rollback_error:#}",
+                task.id
+            )));
+        }
         return Err(error);
     }
     Ok(AppliedItem {

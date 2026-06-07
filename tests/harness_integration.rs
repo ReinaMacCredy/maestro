@@ -1916,6 +1916,39 @@ fn harness_apply_check_flags_replace_the_preset_on_spawned_task() {
 }
 
 #[test]
+fn harness_apply_rolls_back_spawned_task_when_the_store_save_loses_a_race() {
+    let temp = setup_missing_verification_note("maestro-harness-apply-contended");
+    let repo = temp.path();
+
+    // Simulate another Maestro process holding the backlog write marker: a fresh
+    // (non-stale) reservation dir makes the guarded save in `apply` fail *after*
+    // the task is spawned, exercising the rollback-on-save-failure path.
+    let lock_dir = repo.join(".maestro/harness/.backlog.yaml.write-lock");
+    fs::create_dir(&lock_dir).expect("invariant: write-lock marker should be creatable");
+
+    let apply = maestro(repo, &["harness", "apply", "hb-001"]);
+    assert!(
+        !apply.status.success(),
+        "apply should fail while the store is contended"
+    );
+    assert!(
+        stderr(&apply).contains("is being written by another Maestro process; re-run the command"),
+        "the actionable concurrency error must surface, got:\n{}",
+        stderr(&apply)
+    );
+
+    // Clearing the contention and retrying spawns task-002 cleanly: proof the
+    // first attempt rolled the task back (else the allocator would skip to
+    // task-003) and left the proposal proposed (else re-accept would be rejected).
+    fs::remove_dir_all(&lock_dir).expect("invariant: write-lock marker should be removable");
+    let retry = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(
+        retry.contains("spawned task-002"),
+        "retry after clearing contention should spawn task-002 cleanly: {retry}"
+    );
+}
+
+#[test]
 fn harness_unapply_reverts_accepted_item_and_abandons_spawned_task() {
     let temp = setup_missing_verification_note("maestro-harness-unapply");
     let repo = temp.path();
