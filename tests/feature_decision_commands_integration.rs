@@ -797,6 +797,42 @@ fn feature_set_edits_one_acceptance_item_by_id() {
 }
 
 #[test]
+fn feature_new_existing_slug_fails_without_clobbering_record() {
+    let temp_dir = TestTempDir::new("maestro-feature-existing-slug-test");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Billing CSV"], temp_dir.path()),
+        &["feature", "new", "Billing CSV"],
+    );
+    let original = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/features/billing-csv/feature.yaml"),
+    )
+    .expect("invariant: feature.yaml should be readable");
+
+    let stderr = assert_failure(
+        maestro(&["feature", "new", "Billing CSV"], temp_dir.path()),
+        &["feature", "new", "Billing CSV"],
+    );
+    assert!(
+        stderr.contains("feature billing-csv already exists"),
+        "{stderr}"
+    );
+    let after = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/features/billing-csv/feature.yaml"),
+    )
+    .expect("invariant: feature.yaml should remain readable");
+    assert_eq!(after, original);
+}
+
+#[test]
 fn feature_verify_records_repeatable_paired_proofs_atomically() {
     let temp_dir = TestTempDir::new("maestro-feature-batch-prove");
     let root = temp_dir.path();
@@ -1512,6 +1548,41 @@ fn feature_and_task_note_create_dated_notes_on_first_write() {
     .expect("invariant: feature notes should be readable");
     assert!(feature_notes.starts_with("# Billing CSV\n\n"));
     assert_dated_note_line(&feature_notes, "locked: export columns");
+
+    let first = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["feature", "note", "billing-csv", "parallel first"])
+        .current_dir(temp_dir.path())
+        .spawn()
+        .expect("invariant: first feature note command should spawn");
+    let second = Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["feature", "note", "billing-csv", "parallel second"])
+        .current_dir(temp_dir.path())
+        .spawn()
+        .expect("invariant: second feature note command should spawn");
+    let first = first
+        .wait_with_output()
+        .expect("invariant: first feature note command should finish");
+    let second = second
+        .wait_with_output()
+        .expect("invariant: second feature note command should finish");
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    let feature_notes = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/features/billing-csv/notes.md"),
+    )
+    .expect("invariant: feature notes should be readable after parallel appends");
+    assert!(feature_notes.contains("parallel first"), "{feature_notes}");
+    assert!(feature_notes.contains("parallel second"), "{feature_notes}");
 
     stdout(
         maestro(&["task", "create", "Add CSV export"], temp_dir.path()),

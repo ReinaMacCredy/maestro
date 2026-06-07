@@ -6,7 +6,9 @@ use anyhow::{Context, Result, bail};
 
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStore};
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
+use crate::foundation::core::fs::{
+    ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
+};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{Compat, DECISIONS_SCHEMA_VERSION, classify};
@@ -29,6 +31,12 @@ pub enum DecisionSource {
 pub(crate) struct DecisionStorePath {
     pub path: PathBuf,
     pub source: DecisionSource,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct DecisionStoreSnapshot {
+    pub store: DecisionStore,
+    raw: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -403,8 +411,15 @@ pub(crate) fn store_paths(paths: &MaestroPaths) -> Result<Vec<DecisionStorePath>
 }
 
 pub(crate) fn load_store_at(path: &Path) -> Result<DecisionStore> {
+    Ok(load_store_with_snapshot(path)?.store)
+}
+
+pub(crate) fn load_store_with_snapshot(path: &Path) -> Result<DecisionStoreSnapshot> {
     let Some(contents) = read_to_string_if_exists(path)? else {
-        return Ok(DecisionStore::empty());
+        return Ok(DecisionStoreSnapshot {
+            store: DecisionStore::empty(),
+            raw: None,
+        });
     };
     let store: DecisionStore = serde_yaml::from_str(&contents)
         .with_context(|| format!("failed to parse {}", path.display()))?;
@@ -416,7 +431,10 @@ pub(crate) fn load_store_at(path: &Path) -> Result<DecisionStore> {
         }
         .into());
     }
-    Ok(store)
+    Ok(DecisionStoreSnapshot {
+        store,
+        raw: Some(contents),
+    })
 }
 
 pub(crate) fn save_store_at(path: &Path, store: &DecisionStore) -> Result<()> {
@@ -425,6 +443,19 @@ pub(crate) fn save_store_at(path: &Path, store: &DecisionStore) -> Result<()> {
     }
     let contents = serde_yaml::to_string(store).context("failed to serialize decisions store")?;
     write_string_atomic(path, &contents)
+        .with_context(|| format!("failed to write {}", path.display()))
+}
+
+pub(crate) fn save_store_with_snapshot(
+    path: &Path,
+    store: &DecisionStore,
+    snapshot: &DecisionStoreSnapshot,
+) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        ensure_dir(parent)?;
+    }
+    let contents = serde_yaml::to_string(store).context("failed to serialize decisions store")?;
+    write_string_if_unchanged(path, snapshot.raw.as_deref(), &contents)
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
@@ -634,4 +665,67 @@ fn indent(text: &str) -> String {
         out.push('\n');
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use crate::domain::decisions::query::{load_store_with_snapshot, save_store_with_snapshot};
+    use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
+
+    fn temp_file(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock should be after Unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("maestro-{name}-{}-{nanos}.yaml", process::id()))
+    }
+
+    fn decision(id: &str, title: &str) -> DecisionRecord {
+        DecisionRecord {
+            id: id.to_string(),
+            title: title.to_string(),
+            status: DecisionStatus::Open,
+            feature: None,
+            context: None,
+            decision: None,
+            rejected: Vec::new(),
+            preview: None,
+            supersedes: Vec::new(),
+            superseded_by: None,
+            created_at: "1970-01-01T00:00:00Z".to_string(),
+            locked_at: None,
+        }
+    }
+
+    #[test]
+    fn save_store_with_snapshot_rejects_stale_decision_writer() {
+        let path = temp_file("decisions-stale-writer");
+        let mut first =
+            load_store_with_snapshot(&path).expect("invariant: first decision load should succeed");
+        let mut second = load_store_with_snapshot(&path)
+            .expect("invariant: second decision load should succeed");
+
+        second
+            .store
+            .decisions
+            .push(decision("decision-001", "second writer"));
+        save_store_with_snapshot(&path, &second.store, &second)
+            .expect("invariant: second writer should save first");
+
+        first
+            .store
+            .decisions
+            .push(decision("decision-002", "stale writer"));
+        let error = save_store_with_snapshot(&path, &first.store, &first)
+            .expect_err("stale decision writer must be rejected");
+        assert!(
+            error.to_string().contains("failed to write")
+                && format!("{error:#}").contains("changed since it was read; re-run"),
+            "{error:#}"
+        );
+    }
 }

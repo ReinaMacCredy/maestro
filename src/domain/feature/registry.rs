@@ -37,7 +37,9 @@ use crate::domain::feature::schema::{
 use crate::domain::feature::verification;
 use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists, write_new_dir_atomic};
+use crate::foundation::core::fs::{
+    append_text_file, ensure_dir, read_to_string_if_exists, write_new_dir_atomic,
+};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{Compat, FEATURE_SCHEMA_VERSION, classify};
@@ -1250,20 +1252,12 @@ struct NoteAppend {
 }
 
 fn append_note_file(path: &Path, title: &str, text: &str) -> Result<NoteAppend> {
-    let existing = read_to_string_if_exists(path)?;
-    let created = existing.is_none();
-    let mut contents = existing.unwrap_or_else(|| format!("# {title}\n\n"));
-    if !contents.ends_with('\n') {
-        contents.push('\n');
-    }
     let date = utc_now_timestamp()
         .split_once('T')
         .map(|(date, _)| date.to_string())
         .unwrap_or_else(|| "1970-01-01".to_string());
     let line = format!("{date}  {}", text.trim());
-    contents.push_str(&line);
-    contents.push('\n');
-    write_string_atomic(path, &contents)
+    let created = append_text_file(path, &format!("# {title}\n\n"), &format!("{line}\n"))
         .with_context(|| format!("failed to append feature note {}", path.display()))?;
     Ok(NoteAppend { created, line })
 }

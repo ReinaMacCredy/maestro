@@ -7,6 +7,7 @@ use anyhow::{Context, Result, bail};
 use crate::domain::harness::schema::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
 };
+use crate::foundation::core::fs::write_string_if_unchanged;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -15,18 +16,32 @@ use crate::foundation::core::time::utc_now_timestamp;
 
 /// Load the Harness backlog, returning an empty V1 backlog when it does not exist.
 pub fn load(paths: &MaestroPaths) -> Result<BacklogConfig> {
+    Ok(load_with_snapshot(paths)?.backlog)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct BacklogSnapshot {
+    pub backlog: BacklogConfig,
+    raw: Option<String>,
+}
+
+/// Load the Harness backlog with the exact bytes used for optimistic save.
+pub(crate) fn load_with_snapshot(paths: &MaestroPaths) -> Result<BacklogSnapshot> {
     let path = backlog_path(paths)?;
     let raw = match fs::read_to_string(&path) {
-        Ok(raw) => raw,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(BacklogConfig::empty()),
+        Ok(raw) => Some(raw),
+        Err(error) if error.kind() == ErrorKind::NotFound => None,
         Err(error) => {
             return Err(error).with_context(|| format!("failed to read {}", path.display()));
         }
     };
-    let backlog: BacklogConfig = serde_yaml::from_str(&raw)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
+    let backlog: BacklogConfig = match raw.as_deref() {
+        Some(raw) => serde_yaml::from_str(raw)
+            .with_context(|| format!("failed to parse {}", path.display()))?,
+        None => BacklogConfig::empty(),
+    };
     validate_schema(&path, &backlog)?;
-    Ok(backlog)
+    Ok(BacklogSnapshot { backlog, raw })
 }
 
 /// Persist a Harness backlog through the managed Harness path policy.
@@ -37,12 +52,25 @@ pub fn save(paths: &MaestroPaths, backlog: &BacklogConfig) -> Result<()> {
     write_string_atomic(&path, &raw).with_context(|| format!("failed to write {}", path.display()))
 }
 
+/// Persist a Harness backlog only if the store still matches the loaded snapshot.
+pub(crate) fn save_with_snapshot(
+    paths: &MaestroPaths,
+    backlog: &BacklogConfig,
+    snapshot: &BacklogSnapshot,
+) -> Result<()> {
+    let path = backlog_path(paths)?;
+    validate_schema(&path, backlog)?;
+    let raw = serde_yaml::to_string(backlog).context("failed to serialize backlog")?;
+    write_string_if_unchanged(&path, snapshot.raw.as_deref(), &raw)
+        .with_context(|| format!("failed to write {}", path.display()))
+}
+
 /// Refresh proposals into the Harness backlog without applying them.
 pub fn refresh(paths: &MaestroPaths, proposals: Vec<BacklogItem>) -> Result<BacklogConfig> {
-    let mut backlog = load(paths)?;
-    merge_proposals(&mut backlog, proposals);
-    save(paths, &backlog)?;
-    Ok(backlog)
+    let mut snapshot = load_with_snapshot(paths)?;
+    merge_proposals(&mut snapshot.backlog, proposals);
+    save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+    Ok(snapshot.backlog)
 }
 
 /// Merge proposals into the backlog keyed on stable fingerprint and assign
@@ -313,4 +341,72 @@ fn next_backlog_number(items: &[BacklogItem]) -> u32 {
         .max()
         .unwrap_or(0)
         + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use crate::domain::harness::backlog;
+    use crate::domain::harness::schema::BacklogItem;
+    use crate::foundation::core::paths::MaestroPaths;
+
+    fn temp_paths(name: &str) -> (PathBuf, MaestroPaths) {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock should be after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("maestro-{name}-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        fs::create_dir_all(paths.harness_dir())
+            .expect("invariant: harness dir should be creatable");
+        (root, paths)
+    }
+
+    fn item(id: &str, title: &str) -> BacklogItem {
+        BacklogItem {
+            id: id.to_string(),
+            fingerprint: id.to_string(),
+            source: id.to_string(),
+            provenance: "test".to_string(),
+            topic: id.to_string(),
+            item_type: "agent_audit".to_string(),
+            title: title.to_string(),
+            priority: "medium".to_string(),
+            occurrences: 1,
+            sessions_hit: vec![id.to_string()],
+            first_seen: String::new(),
+            last_seen: String::new(),
+            status: "proposed".to_string(),
+            evidence: vec![title.to_string()],
+            spawned_task: None,
+            dismissal_reason: None,
+            history: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn save_with_snapshot_rejects_stale_backlog_writer() {
+        let (_root, paths) = temp_paths("backlog-stale-writer");
+        let mut first = backlog::load_with_snapshot(&paths)
+            .expect("invariant: first backlog load should succeed");
+        let mut second = backlog::load_with_snapshot(&paths)
+            .expect("invariant: second backlog load should succeed");
+
+        second.backlog.items.push(item("hb-001", "second writer"));
+        backlog::save_with_snapshot(&paths, &second.backlog, &second)
+            .expect("invariant: second writer should save first");
+
+        first.backlog.items.push(item("hb-002", "stale writer"));
+        let error = backlog::save_with_snapshot(&paths, &first.backlog, &first)
+            .expect_err("stale writer must be rejected");
+        assert!(
+            error.to_string().contains("failed to write")
+                && format!("{error:#}").contains("changed since it was read; re-run"),
+            "{error:#}"
+        );
+    }
 }

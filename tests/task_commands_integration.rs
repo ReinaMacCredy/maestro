@@ -106,6 +106,41 @@ fn task_yaml(repo: &Path, id: &str) -> Value {
 }
 
 #[test]
+fn task_create_skips_leaked_alloc_marker_and_doctor_stays_ok() {
+    let temp = setup_repo();
+    let repo = temp.path();
+    fs::create_dir_all(repo.join(".maestro/features"))
+        .expect("invariant: features dir should be creatable");
+    fs::create_dir_all(repo.join(".maestro/decisions"))
+        .expect("invariant: decisions dir should be creatable");
+    fs::write(
+        repo.join(".maestro/harness/backlog.yaml"),
+        "schema_version: maestro.backlog.v1\nitems: []\n",
+    )
+    .expect("invariant: backlog should be writable");
+    let tasks_dir = repo.join(".maestro/tasks");
+    fs::create_dir_all(tasks_dir.join(".alloc-task-001"))
+        .expect("invariant: leaked allocation marker should be creatable");
+
+    let create = maestro(repo, &["task", "create", "Reserved number skips"]);
+    assert_success(&create, &["task", "create", "Reserved number skips"]);
+    assert!(stdout(&create).contains("created task-002"));
+    assert!(
+        task_yaml_path(repo, "task-002").is_file(),
+        "task-002 should exist after leaked task-001 marker"
+    );
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_success(&doctor, &["doctor"]);
+    let doctor_out = stdout(&doctor);
+    assert!(doctor_out.contains("doctor: ok"), "{doctor_out}");
+    assert!(
+        !doctor_out.contains(".alloc-task-001 has no task.yaml"),
+        "{doctor_out}"
+    );
+}
+
+#[test]
 fn create_explore_accept_claim_complete_flow_updates_task_record() {
     let temp = setup_repo();
     let repo = temp.path();

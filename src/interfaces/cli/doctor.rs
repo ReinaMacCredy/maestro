@@ -229,6 +229,13 @@ fn recordless_dir_warnings(
         if !file_type.is_dir() || file_type.is_symlink() {
             continue;
         }
+        if entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with(".alloc-"))
+        {
+            continue;
+        }
         if entry.path().join(record_name).is_file() {
             continue;
         }

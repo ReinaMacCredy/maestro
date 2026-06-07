@@ -1,13 +1,162 @@
-use std::fs;
-use std::io::ErrorKind;
+use std::fs::{self, OpenOptions};
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, bail};
 
 static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
+const STALE_WRITE_LOCK_AGE: Duration = Duration::from_secs(15 * 60);
+
+/// Exclusive marker directory removed on normal drop. If a process crashes
+/// while holding it, the leaked marker intentionally reserves that number.
+#[derive(Debug)]
+pub struct DirReservation {
+    path: PathBuf,
+}
+
+impl DirReservation {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for DirReservation {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir(&self.path);
+    }
+}
+
+/// Reserve one filesystem marker directory with `create_dir` exclusivity.
+pub fn reserve_marker_dir(root: impl AsRef<Path>, name: &str) -> Result<DirReservation> {
+    let root = root.as_ref();
+    try_reserve_marker_dir(root, name)?
+        .with_context(|| format!("reservation already exists: {}", root.join(name).display()))
+}
+
+/// Try to reserve one marker directory; `Ok(None)` means another writer holds it.
+pub fn try_reserve_marker_dir(
+    root: impl AsRef<Path>,
+    name: &str,
+) -> Result<Option<DirReservation>> {
+    let root = root.as_ref();
+    ensure_dir(root)?;
+    let path = root.join(name);
+    match fs::create_dir(&path) {
+        Ok(()) => Ok(Some(DirReservation { path })),
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(None),
+        Err(error) => {
+            Err(error).with_context(|| format!("failed to create reservation {}", path.display()))
+        }
+    }
+}
+
+/// Append UTF-8 text with OS append semantics, creating the file exactly once
+/// with `initial_contents` when it is absent.
+pub fn append_text_file(
+    path: impl AsRef<Path>,
+    initial_contents: &str,
+    appended_contents: &str,
+) -> Result<bool> {
+    let path = path.as_ref();
+    ensure_parent_dir(path)?;
+    match OpenOptions::new().write(true).create_new(true).open(path) {
+        Ok(mut file) => {
+            file.write_all(initial_contents.as_bytes())
+                .and_then(|()| file.write_all(appended_contents.as_bytes()))
+                .and_then(|()| file.sync_all())
+                .with_context(|| format!("failed to append {}", path.display()))?;
+            sync_parent_dir(path)?;
+            Ok(true)
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+            let mut file = OpenOptions::new()
+                .append(true)
+                .open(path)
+                .with_context(|| format!("failed to open {} for append", path.display()))?;
+            file.write_all(appended_contents.as_bytes())
+                .and_then(|()| file.sync_all())
+                .with_context(|| format!("failed to append {}", path.display()))?;
+            Ok(false)
+        }
+        Err(error) => Err(error).with_context(|| format!("failed to create {}", path.display())),
+    }
+}
+
+/// Replace `path` only when its current UTF-8 contents match `expected`.
+pub fn write_string_if_unchanged(
+    path: impl AsRef<Path>,
+    expected: Option<&str>,
+    contents: &str,
+) -> Result<()> {
+    let path = path.as_ref();
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .with_context(|| format!("path has no valid file name: {}", path.display()))?;
+    let lock_name = format!(".{name}.write-lock");
+    let _reservation = reserve_store_write_marker(parent, &lock_name, path)?;
+    let current = read_to_string_if_exists(path)?;
+    if current.as_deref() != expected {
+        bail!(
+            "{} changed since it was read; re-run the command so Maestro can merge from the latest store",
+            path.display()
+        );
+    }
+    crate::foundation::core::safe_write::write_string_atomic(path, contents)
+}
+
+fn reserve_store_write_marker(
+    parent: &Path,
+    lock_name: &str,
+    target: &Path,
+) -> Result<DirReservation> {
+    for _ in 0..2 {
+        if let Some(reservation) = try_reserve_marker_dir(parent, lock_name)? {
+            return Ok(reservation);
+        }
+        let lock_path = parent.join(lock_name);
+        if !stale_write_lock(&lock_path)? {
+            bail!(
+                "{} is being written by another Maestro process; re-run the command",
+                target.display()
+            );
+        }
+        match fs::remove_dir_all(&lock_path) {
+            Ok(()) => continue,
+            Err(error) if error.kind() == ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("failed to remove stale write lock {}", lock_path.display())
+                });
+            }
+        }
+    }
+    bail!(
+        "{} is being written by another Maestro process; re-run the command",
+        target.display()
+    )
+}
+
+fn stale_write_lock(lock_path: &Path) -> Result<bool> {
+    let metadata = match fs::metadata(lock_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to inspect {}", lock_path.display()));
+        }
+    };
+    let modified = metadata
+        .modified()
+        .with_context(|| format!("failed to inspect mtime for {}", lock_path.display()))?;
+    Ok(SystemTime::now()
+        .duration_since(modified)
+        .is_ok_and(|age| age > STALE_WRITE_LOCK_AGE))
+}
 
 /// Flush a path's parent directory entry to disk so a preceding rename or
 /// hard-link is durable across a crash. A no-op when the path has no parent.

@@ -60,6 +60,21 @@ fn create_open_auto_increments_from_structured_store() {
 }
 
 #[test]
+fn create_open_skips_leaked_allocation_marker() {
+    let temp = TestTempDir::new("maestro-decision-alloc-marker");
+    let paths = MaestroPaths::new(temp.path());
+    ensure_dir(paths.decisions_dir().join(".alloc-decision-001"))
+        .expect("invariant: leaked allocation marker should be creatable");
+
+    let report = decisions::create_open(&paths, "After leaked marker", None, None)
+        .expect("invariant: create should succeed");
+
+    assert_eq!(report.record.id, "decision-002");
+    let store = read_global_store(&paths);
+    assert_eq!(store.decisions[0].id, "decision-002");
+}
+
+#[test]
 fn create_open_increments_past_a_seeded_legacy_gap() {
     let temp = TestTempDir::new("maestro-decision-gap");
     let paths = MaestroPaths::new(temp.path());

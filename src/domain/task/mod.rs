@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
+use crate::foundation::core::fs::{
+    DirReservation, append_text_file, ensure_dir, try_reserve_marker_dir,
+};
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
@@ -104,7 +106,8 @@ pub fn create_task(
     if options.covers.iter().any(|cover| cover.trim().is_empty()) {
         bail!("task cover cannot be empty; pass an acceptance id such as ac-1");
     }
-    let id = next_task_id(tasks_dir)?;
+    let reserved = reserve_next_task_id(tasks_dir)?;
+    let id = reserved.id.clone();
     let mut task = TaskRecord::draft(&id, title, &options.created_at);
     task.feature_id = options.feature;
     task.covers = options.covers;
@@ -289,20 +292,16 @@ pub fn note(tasks_dir: &Path, id: &str, text: &str) -> Result<NoteReport> {
 }
 
 fn append_note_file(path: &Path, title: &str, text: &str) -> Result<bool> {
-    let existing = read_to_string_if_exists(path)?;
-    let created = existing.is_none();
-    let mut contents = existing.unwrap_or_else(|| format!("# {title}\n\n"));
-    if !contents.ends_with('\n') {
-        contents.push('\n');
-    }
     let date = utc_now_timestamp()
         .split_once('T')
         .map(|(date, _)| date.to_string())
         .unwrap_or_else(|| "1970-01-01".to_string());
-    contents.push_str(&format!("{date}  {}\n", text.trim()));
-    write_string_atomic(path, &contents)
-        .with_context(|| format!("failed to append task note {}", path.display()))?;
-    Ok(created)
+    append_text_file(
+        path,
+        &format!("# {title}\n\n"),
+        &format!("{date}  {}\n", text.trim()),
+    )
+    .with_context(|| format!("failed to append task note {}", path.display()))
 }
 
 /// Lock acceptance criteria and move a task to ready.
@@ -780,14 +779,37 @@ fn feature_link_is_settled(state: &TaskState) -> bool {
     )
 }
 
-fn next_task_id(tasks_dir: &Path) -> Result<String> {
+#[derive(Debug)]
+struct ReservedTaskId {
+    id: String,
+    _marker: DirReservation,
+}
+
+fn reserve_next_task_id(tasks_dir: &Path) -> Result<ReservedTaskId> {
     // L6a: an archived `task-NNN` still owns its id, so allocate above the max
     // of the union of live + archived tasks — never reissue a freed id.
     let mut max = max_task_number(tasks_dir)?;
     if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir) {
         max = max.max(max_task_number(&archive_tasks_dir)?);
     }
-    Ok(format!("task-{:03}", max + 1))
+    max = max.max(max_reserved_task_number(tasks_dir)?);
+    let mut candidate = max + 1;
+    loop {
+        let marker_name = format!(".alloc-task-{candidate:03}");
+        let Some(marker) = try_reserve_marker_dir(tasks_dir, &marker_name)? else {
+            candidate += 1;
+            continue;
+        };
+        if task_number_exists(tasks_dir, candidate)? {
+            drop(marker);
+            candidate += 1;
+            continue;
+        }
+        return Ok(ReservedTaskId {
+            id: format!("task-{candidate:03}"),
+            _marker: marker,
+        });
+    }
 }
 
 /// Highest `task-NNN` number among the directory's entries (0 if dir absent).
@@ -820,6 +842,77 @@ fn max_task_number(tasks_dir: &Path) -> Result<u32> {
         }
     }
     Ok(max)
+}
+
+fn max_reserved_task_number(tasks_dir: &Path) -> Result<u32> {
+    let mut max = 0_u32;
+    if !tasks_dir.is_dir() {
+        return Ok(max);
+    }
+    for entry in fs::read_dir(tasks_dir)
+        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        if let Some(num) = name
+            .strip_prefix(".alloc-task-")
+            .and_then(|value| value.parse::<u32>().ok())
+        {
+            max = max.max(num);
+        }
+    }
+    Ok(max)
+}
+
+fn task_number_exists(tasks_dir: &Path, number: u32) -> Result<bool> {
+    if task_number_exists_in(tasks_dir, number)? {
+        return Ok(true);
+    }
+    if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir)
+        && task_number_exists_in(&archive_tasks_dir, number)?
+    {
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn task_number_exists_in(tasks_dir: &Path, number: u32) -> Result<bool> {
+    for root in lookup::task_roots(tasks_dir)? {
+        if !root.is_dir() {
+            continue;
+        }
+        for entry in
+            fs::read_dir(&root).with_context(|| format!("failed to read {}", root.display()))?
+        {
+            let entry = entry.with_context(|| format!("failed to list {}", root.display()))?;
+            let file_type = entry
+                .file_type()
+                .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+            if !file_type.is_dir() || file_type.is_symlink() {
+                continue;
+            }
+            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+                continue;
+            };
+            if name
+                .strip_prefix("task-")
+                .and_then(|rest| rest.split('-').next())
+                .and_then(|value| value.parse::<u32>().ok())
+                == Some(number)
+            {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 fn task_root_for_feature(tasks_dir: &Path, feature_id: Option<&str>) -> Result<PathBuf> {

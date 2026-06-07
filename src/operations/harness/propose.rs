@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
+use std::fs;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::harness::backlog;
 use crate::domain::harness::{
@@ -33,21 +34,22 @@ pub fn refresh(
         .iter()
         .map(|proposal| proposal.fingerprint.clone())
         .collect::<BTreeSet<_>>();
-    let mut backlog = backlog::load(paths)?;
-    backlog::merge_proposals(&mut backlog, proposals);
+    let mut snapshot = backlog::load_with_snapshot(paths)?;
+    backlog::merge_proposals(&mut snapshot.backlog, proposals);
     if escalation.enabled {
-        backlog.evidence_stamp = policy::evidence_stamp(paths)?;
+        snapshot.backlog.evidence_stamp = policy::evidence_stamp(paths)?;
     }
-    backlog::apply_escalation_policy(&mut backlog, &escalation);
-    backlog::save(paths, &backlog)?;
-    let ready = backlog
+    backlog::apply_escalation_policy(&mut snapshot.backlog, &escalation);
+    backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+    let ready = snapshot
+        .backlog
         .items
         .iter()
         .filter(|item| ready_to_measure(item, &fresh) && linked_task_verified(paths, item))
         .map(|item| item.id.clone())
         .collect();
-    let over_threshold = over_threshold_items_from_backlog(&backlog, &escalation);
-    Ok((backlog, ready, over_threshold))
+    let over_threshold = over_threshold_items_from_backlog(&snapshot.backlog, &escalation);
+    Ok((snapshot.backlog, ready, over_threshold))
 }
 
 /// Guarded hot-verb refresh: detect only when the evidence stamp changed.
@@ -57,16 +59,16 @@ fn refresh_if_stale(paths: &MaestroPaths) -> Result<(BacklogConfig, EscalationPo
         return Ok((backlog::load(paths)?, escalation));
     }
     let stamp = policy::evidence_stamp(paths)?;
-    let mut backlog = backlog::load(paths)?;
-    if backlog.evidence_stamp == stamp {
-        return Ok((backlog, escalation));
+    let mut snapshot = backlog::load_with_snapshot(paths)?;
+    if snapshot.backlog.evidence_stamp == stamp {
+        return Ok((snapshot.backlog, escalation));
     }
     let proposals = detect::detect_with_policy(paths, &escalation)?;
-    backlog::merge_proposals(&mut backlog, proposals);
-    backlog.evidence_stamp = stamp;
-    backlog::apply_escalation_policy(&mut backlog, &escalation);
-    backlog::save(paths, &backlog)?;
-    Ok((backlog, escalation))
+    backlog::merge_proposals(&mut snapshot.backlog, proposals);
+    snapshot.backlog.evidence_stamp = stamp;
+    backlog::apply_escalation_policy(&mut snapshot.backlog, &escalation);
+    backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+    Ok((snapshot.backlog, escalation))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -138,9 +140,10 @@ pub fn propose_agent_audit(
         bail!("proposal topic could not be derived; pass --topic <slug>");
     }
     let fingerprint = format!("agent_audit:{topic}");
-    let mut backlog = backlog::load(paths)?;
+    let mut snapshot = backlog::load_with_snapshot(paths)?;
     let mut sessions_hit = vec![session_id.to_string()];
-    if let Some(existing) = backlog
+    if let Some(existing) = snapshot
+        .backlog
         .items
         .iter()
         .find(|item| item.fingerprint == fingerprint && item.status != "dismissed")
@@ -159,11 +162,12 @@ pub fn propose_agent_audit(
         "agent-audit",
     );
     item.fingerprint = fingerprint;
-    backlog::merge_proposals_preserving_absent(&mut backlog, vec![item.clone()]);
+    backlog::merge_proposals_preserving_absent(&mut snapshot.backlog, vec![item.clone()]);
     let escalation = policy::load_policy(paths)?;
-    backlog::apply_escalation_policy(&mut backlog, &escalation);
-    backlog::save(paths, &backlog)?;
-    Ok(backlog
+    backlog::apply_escalation_policy(&mut snapshot.backlog, &escalation);
+    backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+    Ok(snapshot
+        .backlog
         .items
         .into_iter()
         .find(|existing| existing.fingerprint == item.fingerprint)
@@ -269,20 +273,20 @@ fn linked_task_verified(paths: &MaestroPaths, item: &BacklogItem) -> bool {
 /// persisting, returning the backlog and the set of currently-detected
 /// fingerprints (used by the measure verdict). Re-derive runs on every command
 /// per SPEC §5.1, so apply and measure share this step.
-fn detect_and_merge(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<String>)> {
+fn detect_and_merge(paths: &MaestroPaths) -> Result<(backlog::BacklogSnapshot, BTreeSet<String>)> {
     let escalation = policy::load_policy(paths)?;
     let proposals = detect::detect_with_policy(paths, &escalation)?;
     let fresh = proposals
         .iter()
         .map(|proposal| proposal.fingerprint.clone())
         .collect::<BTreeSet<_>>();
-    let mut backlog = backlog::load(paths)?;
-    backlog::merge_proposals(&mut backlog, proposals);
+    let mut snapshot = backlog::load_with_snapshot(paths)?;
+    backlog::merge_proposals(&mut snapshot.backlog, proposals);
     if escalation.enabled {
-        backlog.evidence_stamp = policy::evidence_stamp(paths)?;
+        snapshot.backlog.evidence_stamp = policy::evidence_stamp(paths)?;
     }
-    backlog::apply_escalation_policy(&mut backlog, &escalation);
-    Ok((backlog, fresh))
+    backlog::apply_escalation_policy(&mut snapshot.backlog, &escalation);
+    Ok((snapshot, fresh))
 }
 
 /// Accept a proposal (D0/A): spawn a linked task and record the link. Re-accepting
@@ -290,9 +294,9 @@ fn detect_and_merge(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<Str
 /// note to `proposed` clears the old link, so the next accept spawns a fresh task
 /// rather than silently reusing a closed one (impl-default (c)).
 pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<AppliedItem> {
-    let (mut backlog, _) = detect_and_merge(paths)?;
+    let (mut snapshot, _) = detect_and_merge(paths)?;
 
-    let item = backlog.find_mut(id)?;
+    let item = snapshot.backlog.find_mut(id)?;
     match item.status.as_str() {
         "accepted" => bail!("{id} is already accepted; its task is already linked"),
         // detect_and_merge above reopens a measured state detector to `proposed`
@@ -348,7 +352,10 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
         at: utc_now_timestamp(),
     });
     let accepted = item.clone();
-    backlog::save(paths, &backlog)?;
+    if let Err(error) = backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot) {
+        rollback_spawned_task(paths, &task.id)?;
+        return Err(error);
+    }
     Ok(AppliedItem {
         item: accepted,
         checks,
@@ -356,13 +363,22 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
     })
 }
 
+fn rollback_spawned_task(paths: &MaestroPaths, task_id: &str) -> Result<()> {
+    let task_yaml = task::task_yaml_path(&paths.tasks_dir(), task_id)?;
+    let task_dir = task_yaml
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("task path has no parent: {}", task_yaml.display()))?;
+    fs::remove_dir_all(task_dir)
+        .with_context(|| format!("failed to roll back spawned task {}", task_dir.display()))
+}
+
 pub fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<BacklogItem> {
     if reason.trim().is_empty() {
         bail!("dismiss reason must not be empty");
     }
-    let (mut backlog, _) = detect_and_merge(paths)?;
+    let (mut snapshot, _) = detect_and_merge(paths)?;
     let now = utc_now_timestamp();
-    let item = backlog.find_mut(id)?;
+    let item = snapshot.backlog.find_mut(id)?;
     item.status = "dismissed".to_string();
     item.dismissal_reason = Some(reason.trim().to_string());
     item.history.push(HistoryEntry {
@@ -372,16 +388,16 @@ pub fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<BacklogIt
         at: now,
     });
     let dismissed = item.clone();
-    backlog::save(paths, &backlog)?;
+    backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
     Ok(dismissed)
 }
 
 pub fn unapply(paths: &MaestroPaths, id: &str, reason: Option<&str>) -> Result<UnappliedItem> {
     let reason = reason.map(str::trim).filter(|reason| !reason.is_empty());
-    let mut backlog = backlog::load(paths)?;
+    let mut snapshot = backlog::load_with_snapshot(paths)?;
     let now = utc_now_timestamp();
     let (spawned_task, status) = {
-        let item = backlog.find(id)?;
+        let item = snapshot.backlog.find(id)?;
         (item.spawned_task.clone(), item.status.clone())
     };
 
@@ -406,7 +422,7 @@ pub fn unapply(paths: &MaestroPaths, id: &str, reason: Option<&str>) -> Result<U
         (None, None) => None,
     };
 
-    let item = backlog.find_mut(id)?;
+    let item = snapshot.backlog.find_mut(id)?;
     item.status = "proposed".to_string();
     item.spawned_task = None;
     item.history.push(HistoryEntry {
@@ -416,7 +432,7 @@ pub fn unapply(paths: &MaestroPaths, id: &str, reason: Option<&str>) -> Result<U
         at: now,
     });
     let unapplied = item.clone();
-    backlog::save(paths, &backlog)?;
+    backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
     Ok(UnappliedItem {
         item: unapplied,
         task,
@@ -470,11 +486,11 @@ fn unapply_linked_task(paths: &MaestroPaths, task_id: &str, now: &str) -> Result
 /// reverted state detector reads as "ineffective", and a behavioral item closed by
 /// judgment while still emitting gets a "friction still detected" warning (T9).
 pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogItem, bool)> {
-    let (mut backlog, fresh) = detect_and_merge(paths)?;
+    let (mut snapshot, fresh) = detect_and_merge(paths)?;
 
     // Read identity + status before any gate or mutation.
     let (status, fingerprint, item_type, spawned_task) = {
-        let item = backlog.find(id)?;
+        let item = snapshot.backlog.find(id)?;
         (
             item.status.clone(),
             item.fingerprint.clone(),
@@ -489,7 +505,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
     }
 
     let friction_live = if item_type == "agent_audit" {
-        audit_reproposed_since_apply(backlog.find(id)?)
+        audit_reproposed_since_apply(snapshot.backlog.find(id)?)
     } else {
         fresh.contains(&fingerprint)
     };
@@ -514,7 +530,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
     }
 
     let now = utc_now_timestamp();
-    let item = backlog.find_mut(id)?;
+    let item = snapshot.backlog.find_mut(id)?;
     if (is_state_detector(&item_type) || item_type == "agent_audit") && friction_live {
         // Friction persists: the improvement was ineffective. Revert to proposed and
         // drop the link so the next accept spawns a fresh task (impl-default (c)).
@@ -536,7 +552,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
         item.status = "measured".to_string();
     }
     let measured = item.clone();
-    backlog::save(paths, &backlog)?;
+    backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
     Ok((measured, friction_live))
 }
 
