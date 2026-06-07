@@ -688,7 +688,14 @@ pub enum HarnessCommand {
         topic: Option<String>,
     },
     #[command(about = "Accept a proposal and spawn a linked task (-> accepted)")]
-    Apply { id: String },
+    Apply {
+        id: String,
+        #[arg(
+            long = "check",
+            help = "Task acceptance check to use instead of the proposal preset (repeatable)"
+        )]
+        check: Vec<String>,
+    },
     #[command(about = "Dismiss a noisy proposal and suppress its fingerprint")]
     Dismiss {
         id: String,

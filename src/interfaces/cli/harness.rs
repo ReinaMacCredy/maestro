@@ -19,7 +19,7 @@ pub fn run(args: HarnessArgs) -> Result<()> {
             evidence,
             topic,
         } => propose(&paths, &title, &evidence, topic.as_deref()),
-        HarnessCommand::Apply { id } => apply(&paths, &id),
+        HarnessCommand::Apply { id, check } => apply(&paths, &id, check),
         HarnessCommand::Dismiss { id, reason } => dismiss(&paths, &id, &reason),
         HarnessCommand::Measure { id, force } => measure(&paths, &id, force),
     }
@@ -107,12 +107,19 @@ fn show(paths: &MaestroPaths, id: &str) -> Result<()> {
     Ok(())
 }
 
-fn apply(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let applied = harness::apply(paths, id)?;
+fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<()> {
+    let applied = harness::apply(paths, id, checks)?;
     match &applied.item.spawned_task {
         Some(task) => {
             println!("accepted {} (spawned {task})", applied.item.id);
-            println!("  check preset: \"{}\"", applied.check);
+            if applied.used_preset {
+                println!("  check preset: \"{}\"", applied.checks.join("\"; \""));
+            } else {
+                println!(
+                    "  checks: {} authored (preset replaced)",
+                    applied.checks.len()
+                );
+            }
             println!("next: maestro task claim {task}");
         }
         None => println!("accepted {}", applied.item.id),

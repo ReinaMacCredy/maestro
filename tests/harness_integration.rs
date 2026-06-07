@@ -392,6 +392,23 @@ fn mark_verified(repo: &Path, id: &str, domain: &str, created_at: &str, verified
     .expect("invariant: task.yaml should be writable");
 }
 
+fn task_checks(repo: &Path, id: &str) -> Vec<String> {
+    let path = task_dir(repo, id).join("task.yaml");
+    let raw = fs::read_to_string(&path).expect("invariant: task.yaml should be readable");
+    let task: YamlValue = serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
+    task["acceptance"]["checks"]
+        .as_sequence()
+        .expect("invariant: checks should be a sequence")
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .expect("invariant: check should be a string")
+                .to_string()
+        })
+        .collect()
+}
+
 fn write_embedded_failed_verification(repo: &Path, id: &str, verified_at: &str, command: &str) {
     write_embedded_failed_verification_commands(repo, id, verified_at, &[command]);
 }
@@ -1856,6 +1873,36 @@ fn harness_apply_spawns_task_and_rejects_reaccept() {
     let reapply = maestro(repo, &["harness", "apply", "hb-001"]);
     assert!(!reapply.status.success());
     assert!(stderr(&reapply).contains("already accepted"));
+}
+
+#[test]
+fn harness_apply_check_flags_replace_the_preset_on_spawned_task() {
+    let temp = setup_missing_verification_note("maestro-harness-apply-custom-checks");
+    let repo = temp.path();
+
+    let apply = run_success(
+        repo,
+        &[
+            "harness",
+            "apply",
+            "hb-001",
+            "--check",
+            "custom evidence renders",
+            "--check",
+            "dashboard remains usable",
+        ],
+    );
+    assert!(apply.contains("accepted hb-001"), "{apply}");
+    assert!(apply.contains("spawned task-002"), "{apply}");
+    assert!(
+        apply.contains("checks: 2 authored (preset replaced)"),
+        "{apply}"
+    );
+    assert!(!apply.contains("check preset:"), "{apply}");
+    assert_eq!(
+        task_checks(repo, "task-002"),
+        vec!["custom evidence renders", "dashboard remains usable"]
+    );
 }
 
 #[test]

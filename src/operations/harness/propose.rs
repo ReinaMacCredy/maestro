@@ -82,7 +82,8 @@ pub struct OverThresholdItem {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AppliedItem {
     pub item: BacklogItem,
-    pub check: String,
+    pub checks: Vec<String>,
+    pub used_preset: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -274,7 +275,7 @@ fn detect_and_merge(paths: &MaestroPaths) -> Result<(BacklogConfig, BTreeSet<Str
 /// is an error; the existing task is already linked. A measure that reverted the
 /// note to `proposed` clears the old link, so the next accept spawns a fresh task
 /// rather than silently reusing a closed one (impl-default (c)).
-pub fn apply(paths: &MaestroPaths, id: &str) -> Result<AppliedItem> {
+pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<AppliedItem> {
     let (mut backlog, _) = detect_and_merge(paths)?;
 
     let item = backlog.find_mut(id)?;
@@ -296,7 +297,11 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<AppliedItem> {
     }
 
     let title = item.title.clone();
-    let check = default_check(item);
+    let (checks, used_preset) = if checks.is_empty() {
+        (vec![default_check(item)], true)
+    } else {
+        (checks, false)
+    };
     let actor = "maestro-harness";
     let now = utc_now_timestamp();
     let task = task::create_task(
@@ -307,7 +312,7 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<AppliedItem> {
             covers: Vec::new(),
             lane: None,
             risk: None,
-            checks: vec![check.clone()],
+            checks: checks.clone(),
             created_at: now.clone(),
         },
     )?;
@@ -331,7 +336,8 @@ pub fn apply(paths: &MaestroPaths, id: &str) -> Result<AppliedItem> {
     backlog::save(paths, &backlog)?;
     Ok(AppliedItem {
         item: accepted,
-        check,
+        checks,
+        used_preset,
     })
 }
 
