@@ -20,6 +20,7 @@ pub fn run(args: HarnessArgs) -> Result<()> {
             topic,
         } => propose(&paths, &title, &evidence, topic.as_deref()),
         HarnessCommand::Apply { id, check } => apply(&paths, &id, check),
+        HarnessCommand::Unapply { id, reason } => unapply(&paths, &id, reason.as_deref()),
         HarnessCommand::Dismiss { id, reason } => dismiss(&paths, &id, &reason),
         HarnessCommand::Measure { id, force } => measure(&paths, &id, force),
     }
@@ -127,6 +128,29 @@ fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<()> {
     Ok(())
 }
 
+fn unapply(paths: &MaestroPaths, id: &str, reason: Option<&str>) -> Result<()> {
+    let unapplied = harness::unapply(paths, id, reason)?;
+    println!(
+        "{} -> proposed (seen unchanged: {})",
+        unapplied.item.id,
+        seen_label(&unapplied.item)
+    );
+    match unapplied.task {
+        harness::UnappliedTask::Abandoned(task) => {
+            println!("{task} -> abandoned (link cleared)");
+        }
+        harness::UnappliedTask::Archived(task) => {
+            println!("{task} is archived (link cleared)");
+        }
+        harness::UnappliedTask::Missing(task) => {
+            println!("{task} is missing (link cleared)");
+        }
+        harness::UnappliedTask::None => println!("no linked task recorded (link cleared)"),
+    }
+    println!("history: accepted -> unapplied");
+    Ok(())
+}
+
 fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<()> {
     let item = harness::dismiss(paths, id, reason)?;
     println!("dismissed {}", item.id);
@@ -209,9 +233,14 @@ fn print_item(item: &BacklogItem) {
     if !item.history.is_empty() {
         println!("history:");
         for entry in &item.history {
+            let note = entry
+                .note
+                .as_deref()
+                .map(|note| format!(" \"{note}\""))
+                .unwrap_or_default();
             match &entry.task {
-                Some(task) => println!("- {} ({}) {}", entry.result, task, entry.at),
-                None => println!("- {} {}", entry.result, entry.at),
+                Some(task) => println!("- {} ({}) {}{}", entry.result, task, entry.at, note),
+                None => println!("- {} {}{}", entry.result, entry.at, note),
             }
         }
     }

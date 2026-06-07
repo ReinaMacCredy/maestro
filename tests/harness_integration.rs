@@ -409,6 +409,16 @@ fn task_checks(repo: &Path, id: &str) -> Vec<String> {
         .collect()
 }
 
+fn task_state(repo: &Path, id: &str) -> String {
+    let path = task_dir(repo, id).join("task.yaml");
+    let raw = fs::read_to_string(&path).expect("invariant: task.yaml should be readable");
+    let task: YamlValue = serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
+    task["state"]
+        .as_str()
+        .expect("invariant: task state should be a string")
+        .to_string()
+}
+
 fn write_embedded_failed_verification(repo: &Path, id: &str, verified_at: &str, command: &str) {
     write_embedded_failed_verification_commands(repo, id, verified_at, &[command]);
 }
@@ -1902,6 +1912,88 @@ fn harness_apply_check_flags_replace_the_preset_on_spawned_task() {
     assert_eq!(
         task_checks(repo, "task-002"),
         vec!["custom evidence renders", "dashboard remains usable"]
+    );
+}
+
+#[test]
+fn harness_unapply_reverts_accepted_item_and_abandons_spawned_task() {
+    let temp = setup_missing_verification_note("maestro-harness-unapply");
+    let repo = temp.path();
+
+    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
+    assert!(apply.contains("spawned task-002"), "{apply}");
+
+    let unapply = run_success(
+        repo,
+        &[
+            "harness",
+            "unapply",
+            "hb-001",
+            "--reason",
+            "applied before ruling",
+        ],
+    );
+    assert!(
+        unapply.contains("hb-001 -> proposed (seen unchanged: 1x/1s)"),
+        "{unapply}"
+    );
+    assert!(
+        unapply.contains("task-002 -> abandoned (link cleared)"),
+        "{unapply}"
+    );
+    assert!(
+        unapply.contains("history: accepted -> unapplied"),
+        "{unapply}"
+    );
+    assert_eq!(task_state(repo, "task-002"), "abandoned");
+
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    assert!(show.contains("status: proposed"), "{show}");
+    assert!(show.contains("seen: 1x/1s"), "{show}");
+    assert!(!show.contains("spawned_task:"), "{show}");
+    assert!(show.contains("- accepted (task-002)"), "{show}");
+    assert!(show.contains("- unapplied (task-002)"), "{show}");
+    assert!(show.contains("\"applied before ruling\""), "{show}");
+}
+
+#[test]
+fn harness_unapply_clears_missing_or_archived_spawned_task_links() {
+    let missing = setup_missing_verification_note("maestro-harness-unapply-missing");
+    let missing_repo = missing.path();
+    let apply = run_success(missing_repo, &["harness", "apply", "hb-001"]);
+    let missing_task = spawned_task_id(&apply);
+    fs::remove_dir_all(task_dir(missing_repo, &missing_task))
+        .expect("invariant: spawned task dir should be removable");
+    let unapply = run_success(missing_repo, &["harness", "unapply", "hb-001"]);
+    assert!(
+        unapply.contains(&format!("{missing_task} is missing (link cleared)")),
+        "{unapply}"
+    );
+    let show = run_success(missing_repo, &["harness", "show", "hb-001"]);
+    assert!(show.contains("status: proposed"), "{show}");
+    assert!(!show.contains("spawned_task:"), "{show}");
+    assert!(
+        show.contains(&format!("linked task {missing_task} is missing")),
+        "{show}"
+    );
+
+    let archived = setup_missing_verification_note("maestro-harness-unapply-archived");
+    let archived_repo = archived.path();
+    let apply = run_success(archived_repo, &["harness", "apply", "hb-001"]);
+    let archived_task = spawned_task_id(&apply);
+    mark_verified(archived_repo, &archived_task, "general", "0", "100");
+    run_success(archived_repo, &["task", "archive", &archived_task]);
+    let unapply = run_success(archived_repo, &["harness", "unapply", "hb-001"]);
+    assert!(
+        unapply.contains(&format!("{archived_task} is archived (link cleared)")),
+        "{unapply}"
+    );
+    let show = run_success(archived_repo, &["harness", "show", "hb-001"]);
+    assert!(show.contains("status: proposed"), "{show}");
+    assert!(!show.contains("spawned_task:"), "{show}");
+    assert!(
+        show.contains(&format!("linked task {archived_task} is archived")),
+        "{show}"
     );
 }
 

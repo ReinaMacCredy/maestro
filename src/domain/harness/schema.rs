@@ -147,11 +147,14 @@ pub struct BacklogItem {
 /// One append-only lifecycle record on a [`BacklogItem`].
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct HistoryEntry {
-    /// Outcome: `accepted`, `ineffective`, `measured`, or `regressed`.
+    /// Outcome: `accepted`, `unapplied`, `ineffective`, `measured`, or `regressed`.
     pub result: String,
     /// Linked task for the record, when one applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task: Option<String>,
+    /// Optional human note explaining manual lifecycle changes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
     /// Human-facing UTC timestamp of the record.
     pub at: String,
 }

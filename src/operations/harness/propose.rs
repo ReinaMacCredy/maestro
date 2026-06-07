@@ -87,6 +87,20 @@ pub struct AppliedItem {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnappliedItem {
+    pub item: BacklogItem,
+    pub task: UnappliedTask,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum UnappliedTask {
+    Abandoned(String),
+    Archived(String),
+    Missing(String),
+    None,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuditHint {
     pub sessions_since_audit: usize,
     pub every_sessions: usize,
@@ -330,6 +344,7 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
     item.history.push(HistoryEntry {
         result: "accepted".to_string(),
         task: Some(task.id.clone()),
+        note: None,
         at: utc_now_timestamp(),
     });
     let accepted = item.clone();
@@ -353,11 +368,94 @@ pub fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<BacklogIt
     item.history.push(HistoryEntry {
         result: "dismissed".to_string(),
         task: item.spawned_task.clone(),
+        note: None,
         at: now,
     });
     let dismissed = item.clone();
     backlog::save(paths, &backlog)?;
     Ok(dismissed)
+}
+
+pub fn unapply(paths: &MaestroPaths, id: &str, reason: Option<&str>) -> Result<UnappliedItem> {
+    let reason = reason.map(str::trim).filter(|reason| !reason.is_empty());
+    let mut backlog = backlog::load(paths)?;
+    let now = utc_now_timestamp();
+    let (spawned_task, status) = {
+        let item = backlog.find(id)?;
+        (item.spawned_task.clone(), item.status.clone())
+    };
+
+    if status != "accepted" {
+        bail!("{id} is not accepted; run `maestro harness apply {id}` before unapplying");
+    }
+
+    let task = match spawned_task.as_deref() {
+        Some(task_id) => unapply_linked_task(paths, task_id, &now)?,
+        None => UnappliedTask::None,
+    };
+    let task_note = match &task {
+        UnappliedTask::Archived(task_id) => Some(format!("linked task {task_id} is archived")),
+        UnappliedTask::Missing(task_id) => Some(format!("linked task {task_id} is missing")),
+        UnappliedTask::None => Some("no linked task was recorded".to_string()),
+        UnappliedTask::Abandoned(_) => None,
+    };
+    let note = match (reason, task_note.as_deref()) {
+        (Some(reason), Some(task_note)) => Some(format!("{reason}; {task_note}")),
+        (Some(reason), None) => Some(reason.to_string()),
+        (None, Some(task_note)) => Some(task_note.to_string()),
+        (None, None) => None,
+    };
+
+    let item = backlog.find_mut(id)?;
+    item.status = "proposed".to_string();
+    item.spawned_task = None;
+    item.history.push(HistoryEntry {
+        result: "unapplied".to_string(),
+        task: spawned_task,
+        note,
+        at: now,
+    });
+    let unapplied = item.clone();
+    backlog::save(paths, &backlog)?;
+    Ok(UnappliedItem {
+        item: unapplied,
+        task,
+    })
+}
+
+fn unapply_linked_task(paths: &MaestroPaths, task_id: &str, now: &str) -> Result<UnappliedTask> {
+    match task::load_task_record(&paths.tasks_dir(), task_id) {
+        Ok(record) => {
+            if !matches!(
+                record.state,
+                TaskState::Draft | TaskState::Exploring | TaskState::Ready
+            ) {
+                bail!(
+                    "linked task {task_id} is {}; use `maestro harness measure` or close the task before unapplying",
+                    record.state.as_str()
+                );
+            }
+            task::transition_task(
+                &paths.tasks_dir(),
+                task_id,
+                TaskState::Abandoned,
+                "maestro-harness",
+                now,
+                TransitionDetails {
+                    summary: Some("harness proposal unapplied".to_string()),
+                    ..TransitionDetails::default()
+                },
+            )?;
+            Ok(UnappliedTask::Abandoned(task_id.to_string()))
+        }
+        Err(_) => {
+            if task::load_task_record(&paths.archive_tasks_dir(), task_id).is_ok() {
+                Ok(UnappliedTask::Archived(task_id.to_string()))
+            } else {
+                Ok(UnappliedTask::Missing(task_id.to_string()))
+            }
+        }
+    }
 }
 
 /// Measure an accepted proposal (the only path to `measured`). A state detector
@@ -423,6 +521,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
         item.history.push(HistoryEntry {
             result: "ineffective".to_string(),
             task: spawned_task,
+            note: None,
             at: now,
         });
         item.status = "proposed".to_string();
@@ -431,6 +530,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
         item.history.push(HistoryEntry {
             result: "measured".to_string(),
             task: spawned_task,
+            note: None,
             at: now,
         });
         item.status = "measured".to_string();

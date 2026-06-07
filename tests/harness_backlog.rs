@@ -119,6 +119,7 @@ fn refresh_keeps_undetected_proposed_note_with_history() {
     durable.history.push(HistoryEntry {
         result: "ineffective".to_string(),
         task: None,
+        note: None,
         at: "1970-01-01T00:00:00Z".to_string(),
     });
     existing.items.push(durable);

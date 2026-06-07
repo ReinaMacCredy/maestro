@@ -113,6 +113,7 @@ fn reopen_if_regressed(existing: &mut BacklogItem) {
         existing.history.push(HistoryEntry {
             result: "regressed".to_string(),
             task: existing.spawned_task.clone(),
+            note: None,
             at: utc_now_timestamp(),
         });
         // Drop the link so the next accept spawns a fresh task (impl-default (c)),

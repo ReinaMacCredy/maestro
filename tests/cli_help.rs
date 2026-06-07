@@ -92,7 +92,7 @@ fn root_about_strings_name_every_subcommand() {
         &maestro(&["--help"]),
         &[
             "Create, show, and list decision records in .maestro/decisions/",
-            "List, show, apply, dismiss, and measure harness improvement suggestions",
+            "List, show, apply, unapply, dismiss, and measure harness improvement suggestions",
             "Query computed read models (matrix, friction, decisions, proof, backlog)",
             "Run or inspect the MCP server (serve, stdin, tools, list)",
         ],
@@ -209,7 +209,7 @@ fn nested_help_lists_section_38_command_tree() {
     assert_contains_all(&maestro(&["decision", "--help"]), &["new", "show", "list"]);
     assert_contains_all(
         &maestro(&["harness", "--help"]),
-        &["list", "show", "apply", "measure"],
+        &["list", "show", "apply", "unapply", "measure"],
     );
     assert_contains_all(
         &maestro(&["query", "--help"]),

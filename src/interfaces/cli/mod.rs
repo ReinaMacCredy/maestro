@@ -91,7 +91,9 @@ pub enum RootCommand {
     Feature(FeatureArgs),
     #[command(about = "Create, show, and list decision records in .maestro/decisions/")]
     Decision(DecisionArgs),
-    #[command(about = "List, show, apply, dismiss, and measure harness improvement suggestions")]
+    #[command(
+        about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
+    )]
     Harness(HarnessArgs),
     #[command(about = "Query computed read models (matrix, friction, decisions, proof, backlog)")]
     Query(QueryArgs),
@@ -695,6 +697,12 @@ pub enum HarnessCommand {
             help = "Task acceptance check to use instead of the proposal preset (repeatable)"
         )]
         check: Vec<String>,
+    },
+    #[command(about = "Undo an accepted proposal before its linked task is claimed")]
+    Unapply {
+        id: String,
+        #[arg(long, help = "Why this accepted proposal is being rolled back")]
+        reason: Option<String>,
     },
     #[command(about = "Dismiss a noisy proposal and suppress its fingerprint")]
     Dismiss {
