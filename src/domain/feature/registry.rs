@@ -36,7 +36,7 @@ use crate::domain::feature::schema::{
 use crate::domain::feature::verification;
 use crate::domain::task::{self, TaskState, TransitionDetails};
 use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists};
+use crate::foundation::core::fs::{ensure_dir, read_to_string_if_exists, write_new_dir_atomic};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{Compat, FEATURE_SCHEMA_VERSION, classify};
@@ -282,7 +282,7 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
         );
     }
     let record = FeatureRecord::proposed(&id, title, &utc_now_timestamp());
-    save_record(paths, &record)?;
+    save_new_record(paths, &record)?;
     scaffold_spec_file(paths, &id, title)?;
     decisions::create::ensure_feature_store(paths, &id)?;
     Ok(id)
@@ -1274,6 +1274,21 @@ pub(crate) fn save_record(paths: &MaestroPaths, record: &FeatureRecord) -> Resul
     let path = dir.join("feature.yaml");
     write_string_atomic(&path, &contents)
         .with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn save_new_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
+    let dir = feature_dir(paths, &record.id);
+    let contents = serde_yaml::to_string(record).context("failed to serialize feature record")?;
+    write_new_dir_atomic(
+        &dir,
+        paths.maestro_dir().join(".tmp-create"),
+        "feature",
+        |temp_dir| {
+            let path = temp_dir.join("feature.yaml");
+            write_string_atomic(&path, &contents)
+                .with_context(|| format!("failed to write {}", path.display()))
+        },
+    )
 }
 
 /// Ids of feature directories that contain a real `feature.yaml`, sorted.

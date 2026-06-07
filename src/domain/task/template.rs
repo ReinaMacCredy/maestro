@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::foundation::core::fs::ensure_dir;
+use crate::foundation::core::fs::write_new_dir_atomic;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
 use crate::foundation::core::slug::slugify_ascii;
@@ -303,13 +303,16 @@ pub fn write_task_artifacts(
     acceptance: &AcceptanceFile,
 ) -> Result<PathBuf> {
     let task_dir = tasks_dir.join(task.directory_name());
-    ensure_dir(&task_dir)?;
     let mut record = task.clone();
     record.acceptance = acceptance.clone();
-    write_string_atomic(task_dir.join("task.yaml"), &serde_yaml::to_string(&record)?)
-        .context("failed to write task.yaml")?;
-    write_string_atomic(task_dir.join("task.md"), &task_markdown(&record))
-        .context("failed to write task.md")?;
+    let temp_root = tasks_dir.parent().unwrap_or(tasks_dir).join(".tmp-create");
+    write_new_dir_atomic(&task_dir, temp_root, "task", |temp_dir| {
+        write_string_atomic(temp_dir.join("task.md"), &task_markdown(&record))
+            .context("failed to write task.md")?;
+        write_string_atomic(temp_dir.join("task.yaml"), &serde_yaml::to_string(&record)?)
+            .context("failed to write task.yaml")?;
+        Ok(())
+    })?;
 
     Ok(task_dir)
 }
