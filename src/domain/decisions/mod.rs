@@ -1,5 +1,6 @@
 //! Decision aggregate facade.
 
+pub(crate) mod cards;
 pub(crate) mod create;
 pub mod query;
 pub mod schema;

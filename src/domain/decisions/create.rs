@@ -2,6 +2,9 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::store::card_path;
+use crate::domain::card::{StoreMode, store_mode};
+use crate::domain::decisions::cards;
 use crate::domain::decisions::query::{
     DecisionSource, decision_entries, decision_exists, load_store_at, load_store_with_snapshot,
     normalize_decision_id, parse_decision_number, save_store_at, save_store_with_snapshot,
@@ -45,11 +48,60 @@ pub fn create_open(
         bail!("decision title must contain at least one ASCII letter or digit");
     }
     let feature = feature.map(str::trim).filter(|value| !value.is_empty());
+    match store_mode(paths) {
+        StoreMode::Cards => create_open_card(paths, title, context, feature),
+        StoreMode::Legacy => create_open_legacy(paths, title, context, feature),
+    }
+}
+
+fn create_open_legacy(
+    paths: &MaestroPaths,
+    title: &str,
+    context: Option<&str>,
+    feature: Option<&str>,
+) -> Result<DecisionWriteReport> {
     let (path, source) = decision_store_target(paths, feature)?;
     let mut snapshot = load_store_with_snapshot(&path)?;
     let reserved = reserve_next_decision_id(paths)?;
-    let id = reserved.id.clone();
-    let record = DecisionRecord {
+    let record = open_record(reserved.id.clone(), title, context, feature);
+    snapshot.store.decisions.push(record.clone());
+    save_store_with_snapshot(&path, &snapshot.store, &snapshot)?;
+    Ok(DecisionWriteReport {
+        record,
+        path,
+        source,
+    })
+}
+
+fn create_open_card(
+    paths: &MaestroPaths,
+    title: &str,
+    context: Option<&str>,
+    feature: Option<&str>,
+) -> Result<DecisionWriteReport> {
+    if let Some(feature_id) = feature {
+        feature::ensure_exists(paths, feature_id)?;
+    }
+    let number = next_card_decision_number(paths)?;
+    let record = open_record(format!("decision-{number:03}"), title, context, feature);
+    cards::create(paths, &record)?;
+    let path = card_path(paths, &record.id);
+    Ok(DecisionWriteReport {
+        record,
+        path,
+        source: cards::source_from_parent(feature),
+    })
+}
+
+/// Build an open decision record. Shared so the legacy store push and the card
+/// create mint byte-identical records.
+fn open_record(
+    id: String,
+    title: &str,
+    context: Option<&str>,
+    feature: Option<&str>,
+) -> DecisionRecord {
+    DecisionRecord {
         id,
         title: title.trim().to_string(),
         status: DecisionStatus::Open,
@@ -65,14 +117,7 @@ pub fn create_open(
         superseded_by: None,
         created_at: utc_now_timestamp(),
         locked_at: None,
-    };
-    snapshot.store.decisions.push(record.clone());
-    save_store_with_snapshot(&path, &snapshot.store, &snapshot)?;
-    Ok(DecisionWriteReport {
-        record,
-        path,
-        source,
-    })
+    }
 }
 
 pub fn lock(
@@ -90,6 +135,20 @@ pub fn lock(
         bail!("--rejected values must not be empty");
     }
     let id = normalize_decision_id(id)?;
+    match store_mode(paths) {
+        StoreMode::Cards => lock_card(paths, &id, decision, rejected, preview, supersedes),
+        StoreMode::Legacy => lock_legacy(paths, &id, decision, rejected, preview, supersedes),
+    }
+}
+
+fn lock_legacy(
+    paths: &MaestroPaths,
+    id: &str,
+    decision: &str,
+    rejected: &[String],
+    preview: Option<&str>,
+    supersedes: &[String],
+) -> Result<DecisionLockReport> {
     let mut found = None;
     for path in store_paths(paths)? {
         let snapshot = load_store_with_snapshot(&path.path)?;
@@ -104,7 +163,7 @@ pub fn lock(
         }
     }
     let Some((store_path, mut snapshot, index)) = found else {
-        if decision_exists(paths, &id)? {
+        if decision_exists(paths, id)? {
             bail!("{id} is a frozen legacy decision; create a new decision that supersedes it");
         }
         bail!("decision not found: {id}");
@@ -117,33 +176,15 @@ pub fn lock(
         );
     }
 
-    let supersedes = supersedes
-        .iter()
-        .map(|value| normalize_decision_id(value))
-        .collect::<Result<Vec<_>>>()?;
-    if supersedes.iter().any(|target| target == &id) {
-        bail!("{id} cannot supersede itself");
-    }
-    for target in &supersedes {
-        ensure_decision_exists(paths, target)?;
-    }
-
-    let now = utc_now_timestamp();
-    {
-        let record = &mut snapshot.store.decisions[index];
-        record.status = DecisionStatus::Locked;
-        record.decision = Some(decision.trim().to_string());
-        record.rejected = rejected
-            .iter()
-            .map(|value| value.trim().to_string())
-            .collect();
-        record.preview = preview
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
-        record.supersedes = supersedes.clone();
-        record.locked_at = Some(now);
-    }
+    let supersedes = validate_supersedes(paths, id, supersedes)?;
+    apply_lock(
+        &mut snapshot.store.decisions[index],
+        decision,
+        rejected,
+        preview,
+        &supersedes,
+        utc_now_timestamp(),
+    );
     let record = snapshot.store.decisions[index].clone();
     save_store_with_snapshot(&store_path.path, &snapshot.store, &snapshot)?;
 
@@ -151,25 +192,124 @@ pub fn lock(
         mark_superseded(paths, target, &record.id)?;
     }
 
-    let note_line = if let Some(feature_id) = record.feature.as_deref() {
-        Some(
-            feature::note(
-                paths,
-                feature_id,
-                &format!("{} locked -- {}", record.id, record.title),
-            )?
-            .line,
-        )
-    } else {
-        None
-    };
-
+    let note_line = note_locked_feature(paths, &record)?;
     Ok(DecisionLockReport {
         record,
         path: store_path.path,
         source: store_path.source,
         note_line,
     })
+}
+
+fn lock_card(
+    paths: &MaestroPaths,
+    id: &str,
+    decision: &str,
+    rejected: &[String],
+    preview: Option<&str>,
+    supersedes: &[String],
+) -> Result<DecisionLockReport> {
+    let Some((mut record, source, snapshot, path)) = cards::load_one(paths, id)? else {
+        // The card lookup already failed, so a hit here is a frozen legacy
+        // markdown decision (the migration never folds markdown). Same guard the
+        // legacy path gives, reached via the cards-union `decision_exists`.
+        if decision_exists(paths, id)? {
+            bail!("{id} is a frozen legacy decision; create a new decision that supersedes it");
+        }
+        bail!("decision not found: {id}");
+    };
+    if record.status != DecisionStatus::Open {
+        bail!(
+            "{} is already {}; create a new decision to supersede it",
+            record.id,
+            record.status.as_str()
+        );
+    }
+
+    let supersedes = validate_supersedes(paths, id, supersedes)?;
+    apply_lock(
+        &mut record,
+        decision,
+        rejected,
+        preview,
+        &supersedes,
+        utc_now_timestamp(),
+    );
+    cards::save_at(&path, &record, &snapshot)?;
+
+    for target in &supersedes {
+        mark_superseded(paths, target, &record.id)?;
+    }
+
+    let note_line = note_locked_feature(paths, &record)?;
+    Ok(DecisionLockReport {
+        record,
+        path,
+        source,
+        note_line,
+    })
+}
+
+/// Normalize the supersede targets, reject a self-reference, and require each to
+/// resolve (the cards-union `ensure_decision_exists` covers decision cards and
+/// frozen legacy markdown alike).
+fn validate_supersedes(
+    paths: &MaestroPaths,
+    id: &str,
+    supersedes: &[String],
+) -> Result<Vec<String>> {
+    let supersedes = supersedes
+        .iter()
+        .map(|value| normalize_decision_id(value))
+        .collect::<Result<Vec<_>>>()?;
+    if supersedes.iter().any(|target| target == id) {
+        bail!("{id} cannot supersede itself");
+    }
+    for target in &supersedes {
+        ensure_decision_exists(paths, target)?;
+    }
+    Ok(supersedes)
+}
+
+/// Stamp a record locked: decision text, rejected alternatives, preview, the
+/// resolved supersede targets, and the lock timestamp.
+fn apply_lock(
+    record: &mut DecisionRecord,
+    decision: &str,
+    rejected: &[String],
+    preview: Option<&str>,
+    supersedes: &[String],
+    now: String,
+) {
+    record.status = DecisionStatus::Locked;
+    record.decision = Some(decision.trim().to_string());
+    record.rejected = rejected
+        .iter()
+        .map(|value| value.trim().to_string())
+        .collect();
+    record.preview = preview
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    record.supersedes = supersedes.to_vec();
+    record.locked_at = Some(now);
+}
+
+/// Append the feature note for a locked decision, returning the note line. The
+/// feature dir stays `features/<id>/` in both modes, so the note rides the
+/// legacy feature tree regardless of the decision store.
+fn note_locked_feature(paths: &MaestroPaths, record: &DecisionRecord) -> Result<Option<String>> {
+    let Some(feature_id) = record.feature.as_deref() else {
+        return Ok(None);
+    };
+    Ok(Some(
+        feature::note(
+            paths,
+            feature_id,
+            &format!("{} locked -- {}", record.id, record.title),
+        )?
+        .line,
+    ))
 }
 
 pub(crate) fn ensure_feature_store(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
@@ -268,20 +408,49 @@ fn ensure_decision_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
     }
 }
 
-fn mark_superseded(paths: &MaestroPaths, id: &str, by: &str) -> Result<()> {
-    for path in store_paths(paths)? {
-        let mut snapshot = load_store_with_snapshot(&path.path)?;
-        if let Some(record) = snapshot
-            .store
-            .decisions
-            .iter_mut()
-            .find(|record| record.id == id)
-        {
-            record.status = DecisionStatus::Superseded;
-            record.superseded_by = Some(by.to_string());
-            save_store_with_snapshot(&path.path, &snapshot.store, &snapshot)?;
-            return Ok(());
+/// The next `decision-NNN` number in card mode: one past the highest of the live
+/// decision cards and the frozen legacy markdown (still resolvable, so its ids
+/// must not be reused). Single-shot with no `.alloc-` marker -- the CAS in
+/// `cards::create` rejects a racing duplicate id. Two truly concurrent card
+/// creates can both pick N+1 and the loser is rejected with a spurious
+/// sequential-allocation error; only reachable post-migration, and P4 revisits
+/// reservation holistically (mirrors the task card create).
+fn next_card_decision_number(paths: &MaestroPaths) -> Result<u32> {
+    let mut max = cards::max_decision_number(paths)?;
+    for entry in decision_entries(&paths.decisions_dir())? {
+        if let Some(number) = parse_decision_number(&entry.file_name) {
+            max = max.max(number);
         }
     }
-    Ok(())
+    Ok(max + 1)
+}
+
+fn mark_superseded(paths: &MaestroPaths, id: &str, by: &str) -> Result<()> {
+    match store_mode(paths) {
+        StoreMode::Cards => {
+            if let Some((mut record, _source, snapshot, path)) = cards::load_one(paths, id)? {
+                record.status = DecisionStatus::Superseded;
+                record.superseded_by = Some(by.to_string());
+                cards::save_at(&path, &record, &snapshot)?;
+            }
+            Ok(())
+        }
+        StoreMode::Legacy => {
+            for path in store_paths(paths)? {
+                let mut snapshot = load_store_with_snapshot(&path.path)?;
+                if let Some(record) = snapshot
+                    .store
+                    .decisions
+                    .iter_mut()
+                    .find(|record| record.id == id)
+                {
+                    record.status = DecisionStatus::Superseded;
+                    record.superseded_by = Some(by.to_string());
+                    save_store_with_snapshot(&path.path, &snapshot.store, &snapshot)?;
+                    return Ok(());
+                }
+            }
+            Ok(())
+        }
+    }
 }

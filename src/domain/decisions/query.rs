@@ -4,6 +4,8 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::{StoreMode, store_mode};
+use crate::domain::decisions::cards;
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStore};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{
@@ -105,14 +107,23 @@ pub fn decision_entries(decisions_dir: &Path) -> Result<Vec<DecisionEntry>> {
 
 pub fn list(paths: &MaestroPaths) -> Result<Vec<DecisionListEntry>> {
     let mut entries = Vec::new();
-    for store_path in store_paths(paths)? {
-        let store = load_store_at(&store_path.path)?;
-        for record in store.decisions {
-            entries.push(decision_list_entry(
-                record,
-                store_path.source.clone(),
-                store_path.path.clone(),
-            ));
+    match store_mode(paths) {
+        StoreMode::Cards => {
+            for (record, source, path) in cards::scan(paths, false)? {
+                entries.push(decision_list_entry(record, source, path));
+            }
+        }
+        StoreMode::Legacy => {
+            for store_path in store_paths(paths)? {
+                let store = load_store_at(&store_path.path)?;
+                for record in store.decisions {
+                    entries.push(decision_list_entry(
+                        record,
+                        store_path.source.clone(),
+                        store_path.path.clone(),
+                    ));
+                }
+            }
         }
     }
     for legacy in decision_entries(&paths.decisions_dir())? {
@@ -124,29 +135,41 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<DecisionListEntry>> {
 
 pub fn list_tolerant(paths: &MaestroPaths) -> Vec<DecisionListEntry> {
     let mut entries = Vec::new();
-    for store_path in store_paths(paths).unwrap_or_default() {
-        match load_store_at(&store_path.path) {
-            Ok(store) => {
-                for record in store.decisions {
-                    entries.push(decision_list_entry(
-                        record,
-                        store_path.source.clone(),
-                        store_path.path.clone(),
-                    ));
+    match store_mode(paths) {
+        // A corrupt card is skipped (the tolerant scan swallows it), not surfaced
+        // as an `unreadable` row -- a minor card-mode delta the P4 card-aware
+        // doctor refines, consistent with the feature list cutover.
+        StoreMode::Cards => {
+            for (record, source, path) in cards::scan(paths, true).unwrap_or_default() {
+                entries.push(decision_list_entry(record, source, path));
+            }
+        }
+        StoreMode::Legacy => {
+            for store_path in store_paths(paths).unwrap_or_default() {
+                match load_store_at(&store_path.path) {
+                    Ok(store) => {
+                        for record in store.decisions {
+                            entries.push(decision_list_entry(
+                                record,
+                                store_path.source.clone(),
+                                store_path.path.clone(),
+                            ));
+                        }
+                    }
+                    Err(error) => entries.push(DecisionListEntry {
+                        id: store_path
+                            .path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or("decisions.yaml")
+                            .to_string(),
+                        title: format!("unreadable decision store: {error:#}"),
+                        status: "unreadable".to_string(),
+                        source: store_path.source,
+                        path: store_path.path,
+                    }),
                 }
             }
-            Err(error) => entries.push(DecisionListEntry {
-                id: store_path
-                    .path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("decisions.yaml")
-                    .to_string(),
-                title: format!("unreadable decision store: {error:#}"),
-                status: "unreadable".to_string(),
-                source: store_path.source,
-                path: store_path.path,
-            }),
         }
     }
     for legacy in decision_entries(&paths.decisions_dir()).unwrap_or_default() {
@@ -204,11 +227,22 @@ pub fn decisions_for_feature(
     paths: &MaestroPaths,
     feature_id: &str,
 ) -> Result<Vec<DecisionRecord>> {
-    let path = paths.features_dir().join(feature_id).join("decisions.yaml");
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let mut records = load_store_at(&path)?.decisions;
+    let mut records = match store_mode(paths) {
+        StoreMode::Cards => cards::scan(paths, false)?
+            .into_iter()
+            .filter(|(_, source, _)| {
+                matches!(source, DecisionSource::Feature { feature_id: id } if id == feature_id)
+            })
+            .map(|(record, _, _)| record)
+            .collect(),
+        StoreMode::Legacy => {
+            let path = paths.features_dir().join(feature_id).join("decisions.yaml");
+            if !path.exists() {
+                return Ok(Vec::new());
+            }
+            load_store_at(&path)?.decisions
+        }
+    };
     records.sort_by_key(|record| decision_sort_key(&record.id));
     Ok(records)
 }
@@ -222,14 +256,31 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<DecisionContent> {
 }
 
 fn find_decision_content(paths: &MaestroPaths, id: &str) -> Result<Option<DecisionContent>> {
-    for store_path in store_paths(paths)? {
-        let store = load_store_at(&store_path.path)?;
-        if let Some(record) = store.decisions.into_iter().find(|record| record.id == id) {
-            return Ok(Some(DecisionContent::Structured {
-                record: Box::new(record),
-                source: store_path.source,
-                path: store_path.path,
-            }));
+    // The structured lookup and the frozen-legacy markdown lookup are a UNION in
+    // both modes: a card-mode repo still reads `.maestro/decisions/*.md` (the
+    // migration never folds it), and `lock`'s frozen-legacy guard and the
+    // supersedes validation both depend on this resolving a markdown decision.
+    match store_mode(paths) {
+        StoreMode::Cards => {
+            if let Some((record, source, _snapshot, path)) = cards::load_one(paths, id)? {
+                return Ok(Some(DecisionContent::Structured {
+                    record: Box::new(record),
+                    source,
+                    path,
+                }));
+            }
+        }
+        StoreMode::Legacy => {
+            for store_path in store_paths(paths)? {
+                let store = load_store_at(&store_path.path)?;
+                if let Some(record) = store.decisions.into_iter().find(|record| record.id == id) {
+                    return Ok(Some(DecisionContent::Structured {
+                        record: Box::new(record),
+                        source: store_path.source,
+                        path: store_path.path,
+                    }));
+                }
+            }
         }
     }
 
@@ -258,9 +309,18 @@ pub fn decision_exists(paths: &MaestroPaths, id: &str) -> Result<bool> {
 
 pub fn decision_bodies(paths: &MaestroPaths) -> Result<Vec<String>> {
     let mut bodies = Vec::new();
-    for store_path in store_paths(paths)? {
-        for record in load_store_at(&store_path.path)?.decisions {
-            bodies.push(render_record(&record));
+    match store_mode(paths) {
+        StoreMode::Cards => {
+            for (record, _, _) in cards::scan(paths, false)? {
+                bodies.push(render_record(&record));
+            }
+        }
+        StoreMode::Legacy => {
+            for store_path in store_paths(paths)? {
+                for record in load_store_at(&store_path.path)?.decisions {
+                    bodies.push(render_record(&record));
+                }
+            }
         }
     }
     for entry in decision_entries(&paths.decisions_dir())? {
@@ -279,13 +339,24 @@ pub fn diagnose(paths: &MaestroPaths) -> DecisionDiagnostic {
     let mut warnings = Vec::new();
     let mut errors = Vec::new();
 
-    for path in store_paths(paths).unwrap_or_else(|error| {
-        errors.push(format!("{error:#}"));
-        Vec::new()
-    }) {
-        match load_store_at(&path.path) {
-            Ok(store) => structured_count += store.decisions.len(),
+    match store_mode(paths) {
+        // One scan over the card store; the strict scan stops at the first
+        // unparseable card and reports it (vs the legacy per-store continue) --
+        // the P4 card-aware doctor refines this, same bucket as the feature scan.
+        StoreMode::Cards => match cards::scan(paths, false) {
+            Ok(decisions) => structured_count += decisions.len(),
             Err(error) => errors.push(format!("{error:#}")),
+        },
+        StoreMode::Legacy => {
+            for path in store_paths(paths).unwrap_or_else(|error| {
+                errors.push(format!("{error:#}"));
+                Vec::new()
+            }) {
+                match load_store_at(&path.path) {
+                    Ok(store) => structured_count += store.decisions.len(),
+                    Err(error) => errors.push(format!("{error:#}")),
+                }
+            }
         }
     }
 
@@ -324,23 +395,44 @@ pub fn diagnose(paths: &MaestroPaths) -> DecisionDiagnostic {
 
 pub fn dangling_reference_warnings(paths: &MaestroPaths) -> Vec<String> {
     let mut warnings = Vec::new();
-    // Load every decision store once; both the resolvable-id set and the
-    // supersedes scan derive from the same parse rather than re-reading each store.
-    let stores: Vec<(PathBuf, DecisionStore)> = store_paths(paths)
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|store_path| {
-            load_store_at(&store_path.path)
-                .ok()
-                .map(|store| (store_path.path, store))
-        })
-        .collect();
-    let existing = resolvable_decision_ids(paths, &stores);
+    // Load every structured decision once; both the resolvable-id set and the
+    // supersedes scan derive from the same parse rather than re-reading.
+    let records = decision_records_with_path(paths);
+    let existing = resolvable_decision_ids(paths, &records);
     warn_dangling_note_pointers(paths, &existing, &mut warnings);
-    warn_dangling_supersedes(&stores, &existing, &mut warnings);
+    warn_dangling_supersedes(&records, &existing, &mut warnings);
     warnings.sort();
     warnings.dedup();
     warnings
+}
+
+/// Every structured decision paired with the store/card path it lives in. Card
+/// mode reads the decision cards (tolerantly -- a corrupt card just drops from
+/// the scan); legacy mode reads the YAML stores. The legacy markdown is folded
+/// into the resolvable set separately (it has no supersedes to validate).
+fn decision_records_with_path(paths: &MaestroPaths) -> Vec<(PathBuf, DecisionRecord)> {
+    match store_mode(paths) {
+        StoreMode::Cards => cards::scan(paths, true)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(record, _source, path)| (path, record))
+            .collect(),
+        StoreMode::Legacy => store_paths(paths)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|store_path| {
+                load_store_at(&store_path.path)
+                    .ok()
+                    .map(|store| (store_path.path, store))
+            })
+            .flat_map(|(path, store)| {
+                store
+                    .decisions
+                    .into_iter()
+                    .map(move |record| (path.clone(), record))
+            })
+            .collect(),
+    }
 }
 
 pub fn render_record(record: &DecisionRecord) -> String {
@@ -556,17 +648,15 @@ pub fn decision_display_id(file_name: &str) -> String {
 
 fn resolvable_decision_ids(
     paths: &MaestroPaths,
-    stores: &[(PathBuf, DecisionStore)],
+    records: &[(PathBuf, DecisionRecord)],
 ) -> BTreeSet<String> {
     let mut ids = BTreeSet::new();
-    for (_, store) in stores {
-        for record in &store.decisions {
-            // Normalize before inserting (falling back to the raw id) so the
-            // resolvable set matches the normalized ids the dangling-ref checks
-            // look up -- a non-canonical stored id like `decision-7` must still
-            // satisfy a `decision-007` reference.
-            ids.insert(normalize_decision_id(&record.id).unwrap_or_else(|_| record.id.clone()));
-        }
+    for (_, record) in records {
+        // Normalize before inserting (falling back to the raw id) so the
+        // resolvable set matches the normalized ids the dangling-ref checks
+        // look up -- a non-canonical stored id like `decision-7` must still
+        // satisfy a `decision-007` reference.
+        ids.insert(normalize_decision_id(&record.id).unwrap_or_else(|_| record.id.clone()));
     }
     for entry in decision_entries(&paths.decisions_dir()).unwrap_or_default() {
         if let Ok(id) = normalize_decision_id(&decision_display_id(&entry.file_name)) {
@@ -608,21 +698,19 @@ fn warn_dangling_note_pointers(
 }
 
 fn warn_dangling_supersedes(
-    stores: &[(PathBuf, DecisionStore)],
+    records: &[(PathBuf, DecisionRecord)],
     existing: &BTreeSet<String>,
     warnings: &mut Vec<String>,
 ) {
-    for (path, store) in stores {
-        for record in &store.decisions {
-            for id in &record.supersedes {
-                let normalized = normalize_decision_id(id).unwrap_or_else(|_| id.clone());
-                if !existing.contains(&normalized) {
-                    warnings.push(format!(
-                        "{} has {} superseding missing decision {normalized}; fix: restore the target decision or remove the supersedes entry",
-                        path.display(),
-                        record.id
-                    ));
-                }
+    for (path, record) in records {
+        for id in &record.supersedes {
+            let normalized = normalize_decision_id(id).unwrap_or_else(|_| id.clone());
+            if !existing.contains(&normalized) {
+                warnings.push(format!(
+                    "{} has {} superseding missing decision {normalized}; fix: restore the target decision or remove the supersedes entry",
+                    path.display(),
+                    record.id
+                ));
             }
         }
     }
