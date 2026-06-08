@@ -73,7 +73,11 @@ pub fn append_text_file(
             // O_APPEND can't see the existing bytes, so an externally-edited file
             // whose last byte is not a newline would otherwise glue the new line
             // onto the previous one. A 1-byte tail read keeps the concurrency win.
-            let separator: &[u8] = if file_ends_with_newline(path)? { b"" } else { b"\n" };
+            let separator: &[u8] = if file_ends_with_newline(path)? {
+                b""
+            } else {
+                b"\n"
+            };
             let mut file = OpenOptions::new()
                 .append(true)
                 .open(path)
@@ -95,7 +99,9 @@ fn file_ends_with_newline(path: &Path) -> Result<bool> {
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(true),
-        Err(error) => return Err(error).with_context(|| format!("failed to read {}", path.display())),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {}", path.display()));
+        }
     };
     let len = file
         .seek(SeekFrom::End(0))
