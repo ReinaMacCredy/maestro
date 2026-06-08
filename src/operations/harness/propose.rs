@@ -353,17 +353,8 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
     });
     let accepted = item.clone();
     if let Err(error) = backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot) {
-        // The save error is the actionable one (a concurrent-store change tells
-        // the caller to re-run). Roll the spawned task back best-effort, but
-        // never let a rollback failure mask that error: surface the save error
-        // as the cause and note the leftover task so it can be cleaned up.
-        if let Err(rollback_error) = rollback_spawned_task(paths, &task.id) {
-            return Err(error.context(format!(
-                "spawned task {} was left behind: {rollback_error:#}",
-                task.id
-            )));
-        }
-        return Err(error);
+        let rollback = rollback_spawned_task(paths, &task.id);
+        return Err(save_failure_after_spawn(error, rollback, &task.id));
     }
     Ok(AppliedItem {
         item: accepted,
@@ -379,6 +370,25 @@ fn rollback_spawned_task(paths: &MaestroPaths, task_id: &str) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("task path has no parent: {}", task_yaml.display()))?;
     fs::remove_dir_all(task_dir)
         .with_context(|| format!("failed to roll back spawned task {}", task_dir.display()))
+}
+
+/// Compose the error for a `save_with_snapshot` failure that follows spawning a
+/// task. The save error is the actionable one -- a concurrent-store change tells
+/// the caller to re-run -- so a best-effort rollback must never mask it: on
+/// rollback failure the leftover-task note is attached as added context while the
+/// save error stays the underlying cause. Extracted so both branches are unit-
+/// testable without filesystem fault injection.
+fn save_failure_after_spawn(
+    save_error: anyhow::Error,
+    rollback: Result<()>,
+    task_id: &str,
+) -> anyhow::Error {
+    match rollback {
+        Ok(()) => save_error,
+        Err(rollback_error) => save_error.context(format!(
+            "spawned task {task_id} was left behind: {rollback_error:#}"
+        )),
+    }
 }
 
 pub fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<BacklogItem> {
@@ -668,4 +678,50 @@ fn normalize_agent_topic(value: &str) -> String {
 
 fn field_or_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {
     if value.is_empty() { fallback } else { value }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAVE_ERROR: &str =
+        "backlog.yaml is being written by another Maestro process; re-run the command";
+
+    #[test]
+    fn save_failure_after_spawn_returns_the_save_error_when_rollback_succeeds() {
+        let composed = save_failure_after_spawn(anyhow::anyhow!(SAVE_ERROR), Ok(()), "task-002");
+        let rendered = format!("{composed:#}");
+        assert!(
+            rendered.contains("re-run the command"),
+            "actionable save error must surface: {rendered}"
+        );
+        assert!(
+            !rendered.contains("left behind"),
+            "no leftover-task note when rollback succeeds: {rendered}"
+        );
+    }
+
+    #[test]
+    fn save_failure_after_spawn_keeps_the_save_error_as_cause_when_rollback_fails() {
+        let composed = save_failure_after_spawn(
+            anyhow::anyhow!(SAVE_ERROR),
+            Err(anyhow::anyhow!("permission denied removing task dir")),
+            "task-002",
+        );
+        let rendered = format!("{composed:#}");
+        // The actionable save error is never masked by the rollback failure ...
+        assert!(
+            rendered.contains("re-run the command"),
+            "save error must not be masked: {rendered}"
+        );
+        // ... and the leftover task is reported so it can be cleaned up.
+        assert!(
+            rendered.contains("spawned task task-002 was left behind"),
+            "leftover-task note must be attached: {rendered}"
+        );
+        assert!(
+            rendered.contains("permission denied removing task dir"),
+            "rollback cause must be attached: {rendered}"
+        );
+    }
 }
