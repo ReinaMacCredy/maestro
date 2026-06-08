@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::store as card_store;
 use crate::domain::card::{StoreMode, store_mode};
 use crate::foundation::core::fs::{
     ALLOC_MARKER_PREFIX, DirReservation, append_text_file, child_dirs, ensure_dir,
@@ -115,17 +116,21 @@ pub fn create_task(
     if options.covers.iter().any(|cover| cover.trim().is_empty()) {
         bail!("task cover cannot be empty; pass an acceptance id such as ac-1");
     }
-    // Card mode mints the id from the live cards (unioned with the still-legacy
-    // archive, so L6a never reissues a freed id) and relies on the create-time
-    // CAS for atomicity; legacy mode reserves a `.alloc-` marker that it holds
-    // until the artifacts land.
+    // Both modes reserve a `.alloc-` marker that gives the id-allocation loop
+    // liveness (concurrent creates bump past each other's held markers and mint
+    // distinct numbers, SPEC D2) and hold it until the artifacts land. Card mode
+    // allocates above the live task cards unioned with the still-legacy archive
+    // (L6a: never reissue a freed id); the create-time CAS (D1) is the safety belt.
     let card_paths = lookup::paths_for_tasks_dir(tasks_dir)
         .filter(|paths| store_mode(paths) == StoreMode::Cards);
     let (id, _marker) = match card_paths.as_ref() {
-        Some(paths) => (next_card_task_id(paths, tasks_dir)?, None),
+        Some(paths) => {
+            let reserved = reserve_next_card_task_id(paths, tasks_dir)?;
+            (reserved.id, reserved._marker)
+        }
         None => {
             let reserved = reserve_next_task_id(tasks_dir)?;
-            (reserved.id, Some(reserved._marker))
+            (reserved.id, reserved._marker)
         }
     };
     let mut task = TaskRecord::draft(&id, title, &options.created_at);
@@ -150,15 +155,19 @@ pub fn create_task(
     Ok(task)
 }
 
-/// Next `task-NNN` id in card mode: one above the max of live task cards and the
-/// still-legacy archive tasks (L6a -- never reissue an archived id). The
-/// create-time CAS, not a marker dir, makes the subsequent write atomic.
-fn next_card_task_id(paths: &MaestroPaths, tasks_dir: &Path) -> Result<String> {
-    let mut max = cards::max_task_number(paths)?;
+/// Reserve the next `task-NNN` id in card mode through the shared D2 seam: the
+/// floor is the max of live task cards and the still-legacy archive tasks (L6a --
+/// never reissue an archived id), and the `.alloc-` marker is held by the caller
+/// until the card lands.
+fn reserve_next_card_task_id(
+    paths: &MaestroPaths,
+    tasks_dir: &Path,
+) -> Result<card_store::ReservedCardId> {
+    let mut floor = cards::max_task_number(paths)?;
     if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir) {
-        max = max.max(max_task_number(&archive_tasks_dir)?);
+        floor = floor.max(max_task_number(&archive_tasks_dir)?);
     }
-    Ok(format!("task-{:03}", max + 1))
+    card_store::reserve_next_numbered_id(paths, "task", floor)
 }
 
 /// Load one Task record by id or id prefix.

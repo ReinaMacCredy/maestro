@@ -5,7 +5,8 @@ use anyhow::{Context, Result};
 use crate::domain::card::schema::Card;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{
-    ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
+    ALLOC_MARKER_PREFIX, DirReservation, ensure_dir, read_to_string_if_exists,
+    try_reserve_marker_dir, write_string_if_unchanged,
 };
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{CARD_SCHEMA_VERSION, Compat, classify};
@@ -54,6 +55,48 @@ pub fn load_with_snapshot(path: &Path) -> Result<CardSnapshot> {
     })
 }
 
+/// A reserved numbered card id and the `.alloc-` marker dir holding it. The
+/// marker is a `card.yaml`-less directory beside the eventual card dir, so every
+/// card scan skips it; dropping it frees the id.
+#[derive(Debug)]
+pub(crate) struct ReservedCardId {
+    pub id: String,
+    pub _marker: DirReservation,
+}
+
+/// Reserve the next free `<prefix>-NNN` id above `floor` (SPEC D2, the single
+/// id-reservation seam the numbered per-record creators -- task and decision --
+/// share). The `.alloc-` marker gives the allocation loop liveness: two
+/// concurrent creators bump past each other's held markers and so mint distinct
+/// numbers. Safety still rests on the create-time CAS (D1); the marker only
+/// keeps a colliding retry from being needed. The caller holds the returned
+/// marker across the card write.
+pub(crate) fn reserve_next_numbered_id(
+    paths: &MaestroPaths,
+    prefix: &str,
+    floor: u32,
+) -> Result<ReservedCardId> {
+    let cards_dir = paths.cards_dir();
+    let mut candidate = floor + 1;
+    loop {
+        let marker_name = format!("{ALLOC_MARKER_PREFIX}{prefix}-{candidate:03}");
+        let Some(marker) = try_reserve_marker_dir(&cards_dir, &marker_name)? else {
+            candidate += 1;
+            continue;
+        };
+        let id = format!("{prefix}-{candidate:03}");
+        if card_path(paths, &id).is_file() {
+            drop(marker);
+            candidate += 1;
+            continue;
+        }
+        return Ok(ReservedCardId {
+            id,
+            _marker: marker,
+        });
+    }
+}
+
 /// Write a card, but only when its file still matches the snapshot it was read
 /// from (SPEC D1, the single save-CAS seam). Creates the card directory first
 /// so the write-lock marker lands inside it.
@@ -83,6 +126,17 @@ mod tests {
         std::env::temp_dir()
             .join(format!("maestro-{name}-{}-{nanos}", process::id()))
             .join("card.yaml")
+    }
+
+    fn temp_cards_repo(label: &str) -> MaestroPaths {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock should be after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("maestro-{label}-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+        paths
     }
 
     /// A fixture with every field set to a non-default value, so the round-trip
@@ -141,6 +195,26 @@ mod tests {
         assert_eq!(loaded, card, "every field must survive the round-trip");
 
         let _ = std::fs::remove_dir_all(path.parent().expect("card path has a parent"));
+    }
+
+    /// SPEC D2 liveness: a held `.alloc-` marker forces the next reservation
+    /// past it, so two creators racing before either writes its card mint
+    /// distinct ids. The first reservation stays alive (marker held, no card
+    /// written), so the second must bump rather than hand out the same number.
+    #[test]
+    fn reserve_next_numbered_id_bumps_past_a_held_marker() {
+        let paths = temp_cards_repo("reserve-bump");
+
+        let first = reserve_next_numbered_id(&paths, "task", 4).expect("first reservation");
+        assert_eq!(first.id, "task-005");
+
+        let second = reserve_next_numbered_id(&paths, "task", 4).expect("second reservation");
+        assert_eq!(
+            second.id, "task-006",
+            "the held task-005 marker must force the next id up"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
     }
 
     #[test]
