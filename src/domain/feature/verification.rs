@@ -95,7 +95,7 @@ pub fn verify_feature(
     feature_id: &str,
     updates: Vec<FeatureProofUpdate>,
 ) -> Result<FeatureVerifyReport> {
-    let mut record = registry::load_record(paths, feature_id)?;
+    let (mut record, write) = registry::load_record_for_update(paths, feature_id)?;
     if !updates.is_empty() {
         let mut entries = Vec::new();
         let mut recorded = Vec::new();
@@ -127,7 +127,7 @@ pub fn verify_feature(
             });
         }
         record.acceptance_evidence.extend(entries);
-        registry::save_record(paths, &record)?;
+        registry::save_record(paths, &record, &write)?;
         return Ok(FeatureVerifyReport {
             feature_id: record.id,
             recorded: Some(recorded.join("; ")),
@@ -156,7 +156,7 @@ pub fn verify_feature(
         unresolved,
         invalidated_by: report.invalidated_by.clone(),
     });
-    registry::save_record(paths, &record)?;
+    registry::save_record(paths, &record, &write)?;
     Ok(FeatureVerifyReport {
         feature_id: record.id,
         recorded: None,

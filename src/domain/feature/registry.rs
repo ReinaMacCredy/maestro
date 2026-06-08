@@ -23,7 +23,11 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use serde_yaml::{Mapping, Value};
 
+use crate::domain::card::schema::{Card, CardType};
+use crate::domain::card::store::{self as card_store, CardSnapshot};
+use crate::domain::card::{StoreMode, fold, store_mode};
 use crate::domain::decisions;
 use crate::domain::feature::qa;
 use crate::domain::feature::query::{
@@ -291,7 +295,7 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
     if id.is_empty() {
         bail!("feature title must contain at least one ASCII letter or digit");
     }
-    if feature_yaml_path(paths, &id).exists() {
+    if live_record_exists(paths, &id) {
         bail!("feature {id} already exists");
     }
     // L6a: an archived feature still owns its slug — refuse to reissue it.
@@ -328,7 +332,7 @@ pub fn set(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<Featu
 }
 
 pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<SetReport> {
-    let mut record = load_record(paths, id)?;
+    let (mut record, write) = load_record_for_update(paths, id)?;
     match record.status {
         FeatureStatus::Proposed => {}
         // Recommend amend only where it actually works (Ready / InProgress);
@@ -406,7 +410,7 @@ pub fn set_with_report(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> 
     record.open_questions.extend(open_questions);
     apply_acceptance_text_edits(id, &mut record.acceptance, &edits.edit_acceptance)?;
     record.updated_at = utc_now_timestamp();
-    save_record(paths, &record)?;
+    save_record(paths, &record, &write)?;
     let counts = count_tasks_for_feature(&paths.tasks_dir(), &record.id)?;
     Ok(SetReport {
         view: view_from_record(record, counts),
@@ -448,7 +452,7 @@ fn accept_inner(
     qa_none_reason: Option<&str>,
     dry_run: bool,
 ) -> Result<TransitionReport> {
-    let mut record = load_record(paths, id)?;
+    let (mut record, write) = load_record_for_update(paths, id)?;
     if let Some(reason) = qa_none_reason
         && matches!(
             record.status,
@@ -470,7 +474,7 @@ fn accept_inner(
         });
         record.updated_at = utc_now_timestamp();
         let status = record.status.clone();
-        save_record(paths, &record)?;
+        save_record(paths, &record, &write)?;
         return Ok(TransitionReport {
             id: id.to_string(),
             status,
@@ -563,7 +567,7 @@ fn accept_inner(
             amend_log_position: record.amends.len(),
         });
     }
-    save_record(paths, &record)?;
+    save_record(paths, &record, &write)?;
     Ok(TransitionReport {
         id: id.to_string(),
         status: target,
@@ -587,7 +591,7 @@ pub fn amend(
     additions: ContractAdditions,
     reason: &str,
 ) -> Result<AmendReport> {
-    let mut record = load_record(paths, id)?;
+    let (mut record, write) = load_record_for_update(paths, id)?;
     match record.status {
         FeatureStatus::Ready | FeatureStatus::InProgress => {}
         FeatureStatus::Proposed => bail!(
@@ -646,7 +650,7 @@ pub fn amend(
         record.qa = None;
     }
 
-    save_record(paths, &record)?;
+    save_record(paths, &record, &write)?;
 
     let note = format!(
         "amended {id} (acceptance +{}, areas +{}, non_goals +{}, questions +{}); reason recorded",
@@ -684,7 +688,7 @@ pub fn note(paths: &MaestroPaths, id: &str, text: &str) -> Result<NoteReport> {
 ///
 /// Errors when the feature is not found or the source state is illegal.
 pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
-    let mut record = load_record(paths, id)?;
+    let (mut record, write) = load_record_for_update(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Start) {
         Transition::NoOp => {
             return Ok(no_op_report(
@@ -698,7 +702,7 @@ pub fn start(paths: &MaestroPaths, id: &str) -> Result<TransitionReport> {
     };
     record.status = target.clone();
     record.updated_at = utc_now_timestamp();
-    save_record(paths, &record)?;
+    save_record(paths, &record, &write)?;
     Ok(TransitionReport {
         id: id.to_string(),
         status: target,
@@ -724,7 +728,7 @@ pub fn ship(
     outcome: Option<String>,
     dry_run: bool,
 ) -> Result<TransitionReport> {
-    let mut record = load_record(paths, id)?;
+    let (mut record, write) = load_record_for_update(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Ship) {
         Transition::NoOp => {
             // The outcome is set once, at ship. On an already-shipped no-op a new
@@ -774,7 +778,7 @@ pub fn ship(
     if let Some(line) = outcome {
         record.outcome = Some(line);
     }
-    save_record(paths, &record)?;
+    save_record(paths, &record, &write)?;
     Ok(TransitionReport {
         id: id.to_string(),
         status: target,
@@ -855,7 +859,7 @@ fn ship_gaps_for_record(
 /// Errors when the feature is not found, it is already terminal (Shipped), or a
 /// child task cannot be abandoned.
 pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Result<CancelReport> {
-    let mut record = load_record(paths, id)?;
+    let (mut record, write) = load_record_for_update(paths, id)?;
     let target = match legal_transition(id, &record.status, FeatureVerb::Cancel) {
         Transition::NoOp => {
             return Ok(CancelReport {
@@ -911,7 +915,7 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Re
     record.status = target;
     record.cancel_reason = Some(reason.to_string());
     record.updated_at = utc_now_timestamp();
-    save_record(paths, &record)?;
+    save_record(paths, &record, &write)?;
 
     let note = if live.is_empty() {
         format!("cancelled {id}; no child tasks affected")
@@ -951,6 +955,21 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
 }
 
 pub fn list_tolerant(paths: &MaestroPaths) -> Vec<FeatureRosterEntry> {
+    if store_mode(paths) == StoreMode::Cards {
+        let counts_by_feature = count_tasks_by_feature(&paths.tasks_dir()).unwrap_or_default();
+        return scan_feature_cards(paths, true)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|record| {
+                let counts = counts_by_feature
+                    .get(&record.id)
+                    .cloned()
+                    .unwrap_or_default();
+                FeatureRosterEntry::Loaded(Box::new(view_from_record(record, counts)))
+            })
+            .collect();
+    }
+
     let Ok(ids) = feature_ids(&paths.features_dir()) else {
         return Vec::new();
     };
@@ -1305,7 +1324,28 @@ pub(crate) fn validate_feature_id(id: &str) -> Result<()> {
 }
 
 /// Load one feature record, erroring on absence or schema incompatibility.
+///
+/// Dispatched by store mode (SPEC-beads-model P1 dual-read cutover): a migrated
+/// repo reads the feature card; an unmigrated repo reads the legacy per-feature
+/// `feature.yaml`. The card branch has no archive fallback -- there is no card
+/// archive tree until P4, so a missing card is simply "feature not found".
 pub(crate) fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
+    match store_mode(paths) {
+        StoreMode::Cards => {
+            validate_feature_id(id)?;
+            let path = card_store::card_path(paths, id);
+            let Some(card) = card_store::load(&path)? else {
+                bail!("feature not found: {id}");
+            };
+            record_from_card(card, path.display().to_string())
+        }
+        StoreMode::Legacy => load_record_legacy(paths, id),
+    }
+}
+
+/// Legacy read: live `feature.yaml`, falling back to the archive tree to emit
+/// the "feature is archived" hint (§5.9 L6).
+fn load_record_legacy(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
     match load_record_at(&feature_yaml_path(paths, id), id) {
         Ok(record) => Ok(record),
         Err(error) => {
@@ -1320,6 +1360,67 @@ pub(crate) fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecor
             }
             Err(error)
         }
+    }
+}
+
+/// A pending feature-record write, carrying the proof a card-mode save needs to
+/// be a compare-and-set (SPEC D1). The variant records the store the record was
+/// read from, so a card save always has its load-time snapshot (the CAS basis)
+/// and a legacy save is the bare last-writer-wins write (deleted in P5). Threads
+/// from [`load_record_for_update`] to [`save_record`] so the snapshot checked at
+/// write time is the one read at load time -- which is what actually closes the
+/// feature write race for migrated repos.
+pub(crate) enum FeatureWrite {
+    Card(Box<CardSnapshot>),
+    Legacy,
+}
+
+/// Load a feature record for a read-modify-write, returning the write token that
+/// makes the matching [`save_record`] a CAS in card mode. Same dispatch and
+/// errors as [`load_record`].
+pub(crate) fn load_record_for_update(
+    paths: &MaestroPaths,
+    id: &str,
+) -> Result<(FeatureRecord, FeatureWrite)> {
+    match store_mode(paths) {
+        StoreMode::Cards => {
+            validate_feature_id(id)?;
+            let path = card_store::card_path(paths, id);
+            let snapshot = card_store::load_with_snapshot(&path)?;
+            let Some(card) = snapshot.card.clone() else {
+                bail!("feature not found: {id}");
+            };
+            let record = record_from_card(card, path.display().to_string())?;
+            Ok((record, FeatureWrite::Card(Box::new(snapshot))))
+        }
+        StoreMode::Legacy => Ok((load_record_legacy(paths, id)?, FeatureWrite::Legacy)),
+    }
+}
+
+/// Reconstruct a [`FeatureRecord`] from a feature card's verbatim source mapping
+/// (`extra`, the COPY-design payload), re-checking the feature schema the same
+/// way the legacy read does. `artifact` names the card path for error messages.
+fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
+    let record: FeatureRecord = serde_yaml::from_value(Value::Mapping(card.extra))
+        .with_context(|| format!("failed to parse {artifact}"))?;
+    if classify(&record.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
+        return Err(MaestroError::SchemaMismatch {
+            artifact,
+            expected: FEATURE_SCHEMA_VERSION,
+            found: record.schema_version,
+        }
+        .into());
+    }
+    Ok(record)
+}
+
+/// Serialize a feature record to the YAML mapping the card builder folds into
+/// `extra`. Round-trips with [`record_from_card`]; feeding the same mapping the
+/// migration reads off disk keeps a saved card byte-identical to a migrated one.
+fn record_to_mapping(record: &FeatureRecord) -> Result<Mapping> {
+    match serde_yaml::to_value(record).context("failed to serialize feature record")? {
+        Value::Mapping(map) => Ok(map),
+        _ => bail!("feature record did not serialize to a mapping"),
     }
 }
 
@@ -1344,7 +1445,33 @@ pub(crate) fn load_record_at(path: &Path, id: &str) -> Result<FeatureRecord> {
     Ok(record)
 }
 
-pub(crate) fn save_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
+/// Persist a feature record against its write token. In card mode the token
+/// carries the load-time snapshot, so the write is a CAS that rejects a racing
+/// writer (SPEC D1); in legacy mode it is the bare last-writer-wins write to
+/// `feature.yaml` (the legacy path, deleted in P5).
+pub(crate) fn save_record(
+    paths: &MaestroPaths,
+    record: &FeatureRecord,
+    write: &FeatureWrite,
+) -> Result<()> {
+    match write {
+        FeatureWrite::Card(snapshot) => {
+            let card = fold::feature_card(
+                record.id.clone(),
+                record_to_mapping(record)?,
+                &utc_now_timestamp(),
+            );
+            card_store::save_with_snapshot(
+                &card_store::card_path(paths, &record.id),
+                &card,
+                snapshot,
+            )
+        }
+        FeatureWrite::Legacy => save_record_legacy(paths, record),
+    }
+}
+
+fn save_record_legacy(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
     let dir = feature_dir(paths, &record.id);
     ensure_dir(&dir)?;
     let contents = serde_yaml::to_string(record).context("failed to serialize feature record")?;
@@ -1353,19 +1480,100 @@ pub(crate) fn save_record(paths: &MaestroPaths, record: &FeatureRecord) -> Resul
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
+/// Create a new feature record. Card mode writes a fresh feature card against an
+/// absent snapshot, so a concurrent create is rejected by the CAS (matching the
+/// legacy `.alloc-` atomic-create guard); legacy mode writes the new directory.
 fn save_new_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
-    let dir = feature_dir(paths, &record.id);
-    let contents = serde_yaml::to_string(record).context("failed to serialize feature record")?;
-    write_new_dir_atomic(
-        &dir,
-        paths.maestro_dir().join(".tmp-create"),
-        "feature",
-        |temp_dir| {
-            let path = temp_dir.join("feature.yaml");
-            write_string_atomic(&path, &contents)
-                .with_context(|| format!("failed to write {}", path.display()))
-        },
-    )
+    match store_mode(paths) {
+        StoreMode::Cards => {
+            let path = card_store::card_path(paths, &record.id);
+            let snapshot = card_store::load_with_snapshot(&path)?;
+            if snapshot.card.is_some() {
+                bail!("feature {} already exists", record.id);
+            }
+            let card = fold::feature_card(
+                record.id.clone(),
+                record_to_mapping(record)?,
+                &utc_now_timestamp(),
+            );
+            card_store::save_with_snapshot(&path, &card, &snapshot)
+        }
+        StoreMode::Legacy => {
+            let dir = feature_dir(paths, &record.id);
+            let contents =
+                serde_yaml::to_string(record).context("failed to serialize feature record")?;
+            write_new_dir_atomic(
+                &dir,
+                paths.maestro_dir().join(".tmp-create"),
+                "feature",
+                |temp_dir| {
+                    let path = temp_dir.join("feature.yaml");
+                    write_string_atomic(&path, &contents)
+                        .with_context(|| format!("failed to write {}", path.display()))
+                },
+            )
+        }
+    }
+}
+
+/// Whether a live feature record exists for `id` in the authoritative store.
+fn live_record_exists(paths: &MaestroPaths, id: &str) -> bool {
+    match store_mode(paths) {
+        StoreMode::Cards => card_store::card_path(paths, id).exists(),
+        StoreMode::Legacy => feature_yaml_path(paths, id).exists(),
+    }
+}
+
+/// Reconstruct every live feature record. Card mode reads the flat card store
+/// and keeps `feature`-typed cards; legacy mode scans the per-feature
+/// directories. `tolerant` skips a card that fails to load (the strict callers
+/// surface the first such error). Sorted by id.
+fn scan_feature_cards(paths: &MaestroPaths, tolerant: bool) -> Result<Vec<FeatureRecord>> {
+    let cards_dir = paths.cards_dir();
+    let mut ids = Vec::new();
+    if !cards_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    for entry in fs::read_dir(&cards_dir)
+        .with_context(|| format!("failed to read {}", cards_dir.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to list {}", cards_dir.display()))?;
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        if !entry.path().join("card.yaml").is_file() {
+            continue;
+        }
+        if let Some(name) = entry.file_name().to_str() {
+            ids.push(name.to_string());
+        }
+    }
+    ids.sort();
+
+    let mut records = Vec::new();
+    for id in ids {
+        let path = card_store::card_path(paths, &id);
+        match card_store::load(&path) {
+            Ok(Some(card)) if card.card_type == CardType::Feature => {
+                match record_from_card(card, path.display().to_string()) {
+                    Ok(record) => records.push(record),
+                    Err(error) if tolerant => {
+                        let _ = error;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(_) => {}
+            Err(error) if tolerant => {
+                let _ = error;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(records)
 }
 
 /// Ids of feature directories that contain a real `feature.yaml`, sorted.
@@ -1397,18 +1605,101 @@ fn feature_ids(features_dir: &Path) -> Result<Vec<String>> {
 
 /// Strict scan: every present record must parse and be schema-`Exact`.
 fn scan_records_strict(paths: &MaestroPaths) -> Result<Vec<FeatureRecord>> {
-    feature_ids(&paths.features_dir())?
-        .iter()
-        .map(|id| load_record(paths, id))
-        .collect()
+    match store_mode(paths) {
+        StoreMode::Cards => scan_feature_cards(paths, false),
+        StoreMode::Legacy => feature_ids(&paths.features_dir())?
+            .iter()
+            .map(|id| load_record_legacy(paths, id))
+            .collect(),
+    }
 }
 
 /// Tolerant scan: skip records that fail to read, parse, or schema-classify.
 fn scan_records_tolerant(paths: &MaestroPaths) -> Vec<FeatureRecord> {
-    let Ok(ids) = feature_ids(&paths.features_dir()) else {
-        return Vec::new();
-    };
-    ids.iter()
-        .filter_map(|id| load_record(paths, id).ok())
-        .collect()
+    match store_mode(paths) {
+        StoreMode::Cards => scan_feature_cards(paths, true).unwrap_or_default(),
+        StoreMode::Legacy => {
+            let Ok(ids) = feature_ids(&paths.features_dir()) else {
+                return Vec::new();
+            };
+            ids.iter()
+                .filter_map(|id| load_record_legacy(paths, id).ok())
+                .collect()
+        }
+    }
+}
+
+#[cfg(test)]
+mod cutover_tests {
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::*;
+
+    fn card_mode_repo(label: &str) -> (PathBuf, MaestroPaths) {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-cutover-{label}-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        // The card store's mere existence flips dispatch to card mode (P1).
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+        (root, paths)
+    }
+
+    /// In card mode the feature write race is closed: two readers each take a
+    /// load-time snapshot; the first save wins, the second is rejected because
+    /// `save_record` checks the snapshot read at load time, not a fresh one. A
+    /// fresh-snapshot save would let the stale writer clobber the winner.
+    #[test]
+    fn card_mode_save_rejects_a_stale_feature_writer() {
+        let (root, paths) = card_mode_repo("stale-writer");
+        let id = create(&paths, "Race").expect("create writes a feature card");
+        assert_eq!(store_mode(&paths), StoreMode::Cards);
+
+        let (mut winner, winner_write) =
+            load_record_for_update(&paths, &id).expect("first read for update");
+        let (mut loser, loser_write) =
+            load_record_for_update(&paths, &id).expect("second read for update");
+
+        winner.description = Some("winner".to_string());
+        save_record(&paths, &winner, &winner_write).expect("first writer commits");
+
+        loser.description = Some("stale".to_string());
+        let error = save_record(&paths, &loser, &loser_write)
+            .expect_err("the stale writer must be rejected, not silently win");
+        assert!(
+            format!("{error:#}").contains("changed since it was read"),
+            "{error:#}"
+        );
+
+        assert_eq!(
+            load_record(&paths, &id)
+                .expect("reload")
+                .description
+                .as_deref(),
+            Some("winner"),
+            "the winner's write survived"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Create refuses to mint a feature whose card already exists (card-mode
+    /// analogue of the legacy "directory already exists" guard).
+    #[test]
+    fn card_mode_create_refuses_a_duplicate_id() {
+        let (root, paths) = card_mode_repo("dup-id");
+        let id = create(&paths, "Csv export").expect("first create");
+        let error = create(&paths, "Csv export").expect_err("second create must fail");
+        assert!(
+            error
+                .to_string()
+                .contains(&format!("feature {id} already exists")),
+            "{error}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
