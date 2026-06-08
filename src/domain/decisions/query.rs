@@ -547,7 +547,11 @@ fn resolvable_decision_ids(paths: &MaestroPaths) -> BTreeSet<String> {
     for store_path in store_paths(paths).unwrap_or_default() {
         if let Ok(store) = load_store_at(&store_path.path) {
             for record in store.decisions {
-                ids.insert(record.id);
+                // Normalize before inserting (falling back to the raw id) so the
+                // resolvable set matches the normalized ids the dangling-ref checks
+                // look up -- a non-canonical stored id like `decision-7` must still
+                // satisfy a `decision-007` reference.
+                ids.insert(normalize_decision_id(&record.id).unwrap_or(record.id));
             }
         }
     }

@@ -494,6 +494,55 @@ fn doctor_warns_on_dangling_structured_decision_refs_without_failing() {
 }
 
 #[test]
+fn doctor_resolves_a_structured_ref_against_a_non_canonical_stored_id() {
+    // The note ref normalizes to decision-001 form; the resolvable-id set must
+    // normalize stored ids the same way, or an externally non-canonical id like
+    // decision-1 yields a false "missing decision" warning. Regression for the
+    // store-branch normalize asymmetry in resolvable_decision_ids.
+    let temp = setup_repo("maestro-doctor-noncanonical-id");
+    let repo = temp.path();
+
+    run_success(repo, &["feature", "new", "Normalize Check"]);
+    run_success(
+        repo,
+        &[
+            "decision",
+            "new",
+            "Pick storage",
+            "--feature",
+            "normalize-check",
+        ],
+    );
+    run_success(
+        repo,
+        &[
+            "decision",
+            "lock",
+            "decision-001",
+            "--decision",
+            "Use feature-local stores",
+            "--rejected",
+            "global only",
+        ],
+    );
+
+    // Externally rewrite the stored id to a non-canonical form (a hand edit or
+    // partial migration); the structured note ref still says decision-001.
+    let store = repo.join(".maestro/features/normalize-check/decisions.yaml");
+    let yaml = fs::read_to_string(&store).expect("invariant: feature store should be readable");
+    fs::write(&store, yaml.replace("id: decision-001", "id: decision-1"))
+        .expect("invariant: feature store should be writable");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_success(&doctor, &["doctor"]);
+    let out = stdout(&doctor);
+    assert!(
+        !out.contains("references missing decision decision-001"),
+        "a non-canonical stored id should still satisfy the normalized note ref: {out}"
+    );
+}
+
+#[test]
 fn doctor_warns_on_dangling_supersedes_but_ignores_prose_mentions() {
     let temp = setup_repo("maestro-doctor-dangling-supersedes");
     let repo = temp.path();
@@ -505,11 +554,17 @@ fn doctor_warns_on_dangling_supersedes_but_ignores_prose_mentions() {
         fs::read_to_string(&decisions_yaml).expect("invariant: decisions.yaml should be readable");
     yaml.push_str("  supersedes:\n  - decision-999\n");
     fs::write(&decisions_yaml, yaml).expect("invariant: decisions.yaml should be writable");
+    // notes.md is the file the dangling-ref scan actually reads. Seed it with both
+    // a structured dangling ref (which MUST be flagged -- proving the file is
+    // scanned) and a bare prose mention on a non-structured line (which must be
+    // ignored by the `locked`/`superseded` line gate). Writing decision-998 to an
+    // unscanned file like spec.md would make the prose assertion vacuous.
     fs::write(
-        repo.join(".maestro/features/supersede-integrity/spec.md"),
-        "This prose mentions decision-998 but is not a structured reference.\n",
+        repo.join(".maestro/features/supersede-integrity/notes.md"),
+        "2026-06-08  decision-997 locked -- never recorded\n\
+         Background: decision-998 came up in discussion but is prose, not a reference.\n",
     )
-    .expect("invariant: spec.md should be writable");
+    .expect("invariant: notes.md should be writable");
 
     let doctor = maestro(repo, &["doctor"]);
     assert_success(&doctor, &["doctor"]);
@@ -518,6 +573,12 @@ fn doctor_warns_on_dangling_supersedes_but_ignores_prose_mentions() {
         out.contains("superseding missing decision decision-999"),
         "{out}"
     );
+    // The structured dangling ref is caught, so notes.md is genuinely scanned ...
+    assert!(
+        out.contains("references missing decision decision-997"),
+        "{out}"
+    );
+    // ... yet the prose mention of decision-998 on a non-structured line is not.
     assert!(!out.contains("decision-998"), "{out}");
 }
 
