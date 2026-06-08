@@ -171,17 +171,18 @@ fn decision_list_entry(
 }
 
 fn legacy_decision_list_entry(legacy: DecisionEntry) -> Result<DecisionListEntry> {
-    Ok(DecisionListEntry {
-        id: decision_display_id(&legacy.file_name),
-        title: decision_title(&legacy.path)?,
-        status: "legacy".to_string(),
-        source: DecisionSource::Legacy,
-        path: legacy.path,
-    })
+    let title = decision_title(&legacy.path)?;
+    Ok(legacy_decision_entry(legacy, title))
 }
 
 fn legacy_decision_list_entry_tolerant(legacy: DecisionEntry) -> DecisionListEntry {
     let title = decision_title(&legacy.path).unwrap_or_else(|error| format!("{error:#}"));
+    legacy_decision_entry(legacy, title)
+}
+
+/// Build a legacy decision list entry once the title is resolved -- the strict
+/// and tolerant variants differ only in how they obtain that title.
+fn legacy_decision_entry(legacy: DecisionEntry, title: String) -> DecisionListEntry {
     DecisionListEntry {
         id: decision_display_id(&legacy.file_name),
         title,
@@ -323,9 +324,20 @@ pub fn diagnose(paths: &MaestroPaths) -> DecisionDiagnostic {
 
 pub fn dangling_reference_warnings(paths: &MaestroPaths) -> Vec<String> {
     let mut warnings = Vec::new();
-    let existing = resolvable_decision_ids(paths);
+    // Load every decision store once; both the resolvable-id set and the
+    // supersedes scan derive from the same parse rather than re-reading each store.
+    let stores: Vec<(PathBuf, DecisionStore)> = store_paths(paths)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|store_path| {
+            load_store_at(&store_path.path)
+                .ok()
+                .map(|store| (store_path.path, store))
+        })
+        .collect();
+    let existing = resolvable_decision_ids(paths, &stores);
     warn_dangling_note_pointers(paths, &existing, &mut warnings);
-    warn_dangling_supersedes(paths, &existing, &mut warnings);
+    warn_dangling_supersedes(&stores, &existing, &mut warnings);
     warnings.sort();
     warnings.dedup();
     warnings
@@ -542,17 +554,18 @@ pub fn decision_display_id(file_name: &str) -> String {
     }
 }
 
-fn resolvable_decision_ids(paths: &MaestroPaths) -> BTreeSet<String> {
+fn resolvable_decision_ids(
+    paths: &MaestroPaths,
+    stores: &[(PathBuf, DecisionStore)],
+) -> BTreeSet<String> {
     let mut ids = BTreeSet::new();
-    for store_path in store_paths(paths).unwrap_or_default() {
-        if let Ok(store) = load_store_at(&store_path.path) {
-            for record in store.decisions {
-                // Normalize before inserting (falling back to the raw id) so the
-                // resolvable set matches the normalized ids the dangling-ref checks
-                // look up -- a non-canonical stored id like `decision-7` must still
-                // satisfy a `decision-007` reference.
-                ids.insert(normalize_decision_id(&record.id).unwrap_or(record.id));
-            }
+    for (_, store) in stores {
+        for record in &store.decisions {
+            // Normalize before inserting (falling back to the raw id) so the
+            // resolvable set matches the normalized ids the dangling-ref checks
+            // look up -- a non-canonical stored id like `decision-7` must still
+            // satisfy a `decision-007` reference.
+            ids.insert(normalize_decision_id(&record.id).unwrap_or_else(|_| record.id.clone()));
         }
     }
     for entry in decision_entries(&paths.decisions_dir()).unwrap_or_default() {
@@ -595,21 +608,18 @@ fn warn_dangling_note_pointers(
 }
 
 fn warn_dangling_supersedes(
-    paths: &MaestroPaths,
+    stores: &[(PathBuf, DecisionStore)],
     existing: &BTreeSet<String>,
     warnings: &mut Vec<String>,
 ) {
-    for store_path in store_paths(paths).unwrap_or_default() {
-        let Ok(store) = load_store_at(&store_path.path) else {
-            continue;
-        };
-        for record in store.decisions {
-            for id in record.supersedes {
-                let normalized = normalize_decision_id(&id).unwrap_or(id);
+    for (path, store) in stores {
+        for record in &store.decisions {
+            for id in &record.supersedes {
+                let normalized = normalize_decision_id(id).unwrap_or_else(|_| id.clone());
                 if !existing.contains(&normalized) {
                     warnings.push(format!(
                         "{} has {} superseding missing decision {normalized}; fix: restore the target decision or remove the supersedes entry",
-                        store_path.path.display(),
+                        path.display(),
                         record.id
                     ));
                 }
