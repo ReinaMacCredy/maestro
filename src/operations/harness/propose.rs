@@ -424,8 +424,13 @@ pub fn unapply(paths: &MaestroPaths, id: &str, reason: Option<&str>) -> Result<U
         bail!("{id} is not accepted; run `maestro harness apply {id}` before unapplying");
     }
 
+    // Classify the linked task without mutating it; the abandon (the only task
+    // side effect) is deferred until after the backlog save commits. This is the
+    // inverse of apply(), which must spawn the task before saving because the
+    // backlog stores its id -- unapply clears the link, so saving first means a
+    // lost save race leaves the task untouched and the item cleanly unappliable.
     let task = match spawned_task.as_deref() {
-        Some(task_id) => unapply_linked_task(paths, task_id, &now)?,
+        Some(task_id) => inspect_linked_task(paths, task_id)?,
         None => UnappliedTask::None,
     };
     let task_note = match &task {
@@ -448,17 +453,44 @@ pub fn unapply(paths: &MaestroPaths, id: &str, reason: Option<&str>) -> Result<U
         result: "unapplied".to_string(),
         task: spawned_task,
         note,
-        at: now,
+        at: now.clone(),
     });
     let unapplied = item.clone();
     backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+
+    // The backlog now reflects the unapply; abandon the live task as the final
+    // step. A failure here leaves a closeable orphan task (the item already reads
+    // "proposed", so re-running reports "not accepted"), never a wedge.
+    if let UnappliedTask::Abandoned(task_id) = &task {
+        task::transition_task(
+            &paths.tasks_dir(),
+            task_id,
+            TaskState::Abandoned,
+            "maestro-harness",
+            &now,
+            TransitionDetails {
+                summary: Some("harness proposal unapplied".to_string()),
+                ..TransitionDetails::default()
+            },
+        )
+        .with_context(|| {
+            format!(
+                "{id} was unapplied but its linked task {task_id} could not be abandoned; close it with `maestro task abandon {task_id} --reason \"harness proposal unapplied\"`"
+            )
+        })?;
+    }
+
     Ok(UnappliedItem {
         item: unapplied,
         task,
     })
 }
 
-fn unapply_linked_task(paths: &MaestroPaths, task_id: &str, now: &str) -> Result<UnappliedTask> {
+/// Classify an accepted item's linked task without mutating it: a live task is
+/// pending-abandon, a vanished one is archived or missing, and a non-live task
+/// blocks the unapply. The abandon itself is performed by `unapply` only after
+/// the backlog save commits, so a lost save race never strands the task.
+fn inspect_linked_task(paths: &MaestroPaths, task_id: &str) -> Result<UnappliedTask> {
     match task::load_task_record(&paths.tasks_dir(), task_id) {
         Ok(record) => {
             if !matches!(
@@ -470,17 +502,6 @@ fn unapply_linked_task(paths: &MaestroPaths, task_id: &str, now: &str) -> Result
                     record.state.as_str()
                 );
             }
-            task::transition_task(
-                &paths.tasks_dir(),
-                task_id,
-                TaskState::Abandoned,
-                "maestro-harness",
-                now,
-                TransitionDetails {
-                    summary: Some("harness proposal unapplied".to_string()),
-                    ..TransitionDetails::default()
-                },
-            )?;
             Ok(UnappliedTask::Abandoned(task_id.to_string()))
         }
         Err(_) => {

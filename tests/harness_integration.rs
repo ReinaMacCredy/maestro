@@ -2031,6 +2031,96 @@ fn harness_unapply_clears_missing_or_archived_spawned_task_links() {
 }
 
 #[test]
+fn harness_unapply_requires_an_accepted_item() {
+    let temp = setup_missing_verification_note("maestro-harness-unapply-not-accepted");
+    let repo = temp.path();
+
+    // hb-001 starts proposed; unapplying before applying must be a clean error,
+    // not a no-op that touches anything.
+    let unapply = maestro(repo, &["harness", "unapply", "hb-001"]);
+    assert!(
+        !unapply.status.success(),
+        "unapply of a non-accepted item should fail"
+    );
+    assert!(
+        stderr(&unapply)
+            .contains("is not accepted; run `maestro harness apply hb-001` before unapplying"),
+        "got:\n{}",
+        stderr(&unapply)
+    );
+}
+
+#[test]
+fn harness_unapply_refuses_a_non_live_linked_task() {
+    let temp = setup_missing_verification_note("maestro-harness-unapply-inprogress");
+    let repo = temp.path();
+
+    run_success(repo, &["harness", "apply", "hb-001"]);
+    // Drive the spawned task past the live states: unapply must refuse rather than
+    // silently abandon in-flight work.
+    run_success(repo, &["task", "claim", "task-002"]);
+    assert_eq!(task_state(repo, "task-002"), "in_progress");
+
+    let unapply = maestro(repo, &["harness", "unapply", "hb-001"]);
+    assert!(
+        !unapply.status.success(),
+        "unapply must refuse a non-live linked task"
+    );
+    assert!(
+        stderr(&unapply).contains("linked task task-002 is in_progress")
+            && stderr(&unapply).contains("use `maestro harness measure` or close the task"),
+        "got:\n{}",
+        stderr(&unapply)
+    );
+    // The item stays accepted and the task untouched -- no partial change.
+    assert_eq!(task_state(repo, "task-002"), "in_progress");
+    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    assert!(show.contains("status: accepted"), "{show}");
+}
+
+#[test]
+fn harness_unapply_leaves_the_task_recoverable_when_the_store_save_loses_a_race() {
+    let temp = setup_missing_verification_note("maestro-harness-unapply-contended");
+    let repo = temp.path();
+
+    run_success(repo, &["harness", "apply", "hb-001"]);
+    assert_eq!(task_state(repo, "task-002"), "ready");
+
+    // Hold the backlog write marker so the guarded save in unapply fails. Because
+    // unapply abandons the task only *after* the save commits, the failed save
+    // must leave task-002 live -- otherwise the item would be wedged: accepted on
+    // disk but pointing at an abandoned task that re-running unapply can't clear.
+    let lock_dir = repo.join(".maestro/harness/.backlog.yaml.write-lock");
+    fs::create_dir(&lock_dir).expect("invariant: write-lock marker should be creatable");
+    let unapply = maestro(repo, &["harness", "unapply", "hb-001"]);
+    assert!(
+        !unapply.status.success(),
+        "unapply should fail while the store is contended"
+    );
+    assert!(
+        stderr(&unapply)
+            .contains("is being written by another Maestro process; re-run the command"),
+        "got:\n{}",
+        stderr(&unapply)
+    );
+    assert_eq!(
+        task_state(repo, "task-002"),
+        "ready",
+        "a lost save race must leave the linked task live, not stranded as abandoned"
+    );
+
+    // Clearing the contention and retrying completes cleanly: proof the item was
+    // never wedged.
+    fs::remove_dir_all(&lock_dir).expect("invariant: write-lock marker should be removable");
+    let retry = run_success(repo, &["harness", "unapply", "hb-001"]);
+    assert!(
+        retry.contains("task-002 -> abandoned (link cleared)"),
+        "retry after clearing contention should abandon the task cleanly: {retry}"
+    );
+    assert_eq!(task_state(repo, "task-002"), "abandoned");
+}
+
+#[test]
 fn harness_measure_closes_silent_state_note() {
     let temp = setup_missing_verification_note("maestro-harness-measure-silent");
     let repo = temp.path();
