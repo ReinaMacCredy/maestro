@@ -1,5 +1,6 @@
 //! Domain module root for Maestro's durable concepts.
 
+pub mod card;
 pub mod decisions;
 pub mod extraction;
 pub mod feature;

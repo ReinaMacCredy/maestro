@@ -40,6 +40,7 @@ const HOOKS_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 const TUI_TRANSITIONAL_LEGACY_IMPORTS: &[(&str, &[&str])] = &[];
 
 const DOMAIN_FACADES: &[&str] = &[
+    "card",
     "decisions",
     "extraction",
     "feature",
@@ -1253,6 +1254,7 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/domain/mod.rs"),
         &[
+            "card",
             "decisions",
             "extraction",
             "feature",

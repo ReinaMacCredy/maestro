@@ -64,6 +64,16 @@ impl MaestroPaths {
         self.maestro_dir().join("tasks")
     }
 
+    /// Return the card artifact directory (`.maestro/cards`).
+    ///
+    /// Each card owns a directory `cards/<id>/` holding `card.yaml`; feature
+    /// cards carry `spec.md`/`notes.md` as sidecar prose. This is the single
+    /// flat store that the card model folds features/tasks/harness-backlog/
+    /// decisions into (SPEC-beads-model.md).
+    pub fn cards_dir(&self) -> PathBuf {
+        self.maestro_dir().join("cards")
+    }
+
     /// Return the run artifact directory.
     pub fn runs_dir(&self) -> PathBuf {
         self.maestro_dir().join("runs")

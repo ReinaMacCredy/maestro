@@ -4,6 +4,8 @@ pub const HARNESS_SCHEMA_VERSION: &str = "maestro.harness.v1";
 pub const FEATURE_SCHEMA_VERSION: &str = "maestro.feature.v2";
 /// Schema version for task metadata.
 pub const TASK_SCHEMA_VERSION: &str = "maestro.task.v2";
+/// Schema version for `.maestro/cards/<id>/card.yaml`.
+pub const CARD_SCHEMA_VERSION: &str = "maestro.card.v1";
 /// Schema version for run metadata.
 pub const RUN_SCHEMA_VERSION: &str = "maestro.run.v1";
 /// Schema version for hook events.
