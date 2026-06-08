@@ -6,6 +6,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::domain::feature::{FeatureStatus, FeatureView};
 
+pub mod card;
 pub mod decision;
 pub mod doctor;
 pub mod event;
@@ -115,6 +116,16 @@ pub enum RootCommand {
     #[command(about = "Create, show, and list decision records in .maestro/decisions/")]
     Decision(DecisionArgs),
     #[command(
+        about = "List workable cards with no open blockers (card store)",
+        after_help = "Examples:\n  maestro ready                # every unblocked task/bug/chore\n  maestro ready agent-cli-ux   # only those parented to a feature"
+    )]
+    Ready(ReadyArgs),
+    #[command(
+        about = "List cards filtered by parent, type, assignee, or coarse status (card store)",
+        after_help = "Examples:\n  maestro list --parent agent-cli-ux\n  maestro list --type bug --status open\n  maestro list --assignee claude#s1"
+    )]
+    List(ListArgs),
+    #[command(
         about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
     )]
     Harness(HarnessArgs),
@@ -221,6 +232,29 @@ pub struct TaskArgs {
 pub struct StatusArgs {
     #[arg(long, help = "Print machine-readable status JSON")]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ReadyArgs {
+    /// Restrict to cards parented to this feature id (one level).
+    #[arg(value_name = "FEATURE")]
+    pub feature: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    /// Only cards whose parent is this card id.
+    #[arg(long, value_name = "PARENT")]
+    pub parent: Option<String>,
+    /// Only cards of this type (feature, task, bug, chore, idea, decision).
+    #[arg(long = "type", value_name = "TYPE")]
+    pub card_type: Option<String>,
+    /// Only cards claimed by this `<agent>#<session>` (exact match).
+    #[arg(long, value_name = "ASSIGNEE")]
+    pub assignee: Option<String>,
+    /// Only cards in this coarse status (open, in_progress, closed).
+    #[arg(long, value_name = "STATUS")]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -840,6 +874,8 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Event(args) => event::run(args),
         RootCommand::Feature(args) => feature::run(args),
         RootCommand::Decision(args) => decision::run(args),
+        RootCommand::Ready(args) => card::ready(args),
+        RootCommand::List(args) => card::list(args),
         RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
         RootCommand::Mcp(args) => mcp::run(args),

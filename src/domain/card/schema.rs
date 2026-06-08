@@ -115,6 +115,21 @@ impl CardType {
         }
     }
 
+    /// Parse the canonical snake_case label back to a type, mirroring
+    /// `Coarse::parse` so the CLI `--type` filter parses without leaking a clap
+    /// dependency into the domain enum.
+    pub fn parse(word: &str) -> Option<Self> {
+        match word {
+            "feature" => Some(Self::Feature),
+            "task" => Some(Self::Task),
+            "bug" => Some(Self::Bug),
+            "chore" => Some(Self::Chore),
+            "idea" => Some(Self::Idea),
+            "decision" => Some(Self::Decision),
+            _ => None,
+        }
+    }
+
     /// Whether cards of this type are "worked" through the type-agnostic verbs:
     /// they enter `ready`, are claimable, and close via the work lifecycle (SPEC
     /// E3, LOCKED = task/bug/chore). Feature/idea/decision keep their own verbs
@@ -157,5 +172,25 @@ impl DepKind {
             Self::Related => "related",
             Self::Supersedes => "supersedes",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn card_type_parse_round_trips_as_str_and_rejects_unknown() {
+        for ty in [
+            CardType::Feature,
+            CardType::Task,
+            CardType::Bug,
+            CardType::Chore,
+            CardType::Idea,
+            CardType::Decision,
+        ] {
+            assert_eq!(CardType::parse(ty.as_str()), Some(ty));
+        }
+        assert_eq!(CardType::parse("epic"), None);
     }
 }

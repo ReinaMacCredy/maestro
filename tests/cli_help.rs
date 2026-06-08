@@ -50,6 +50,8 @@ fn root_help_lists_top_level_commands() {
             "event",
             "feature",
             "decision",
+            "ready",
+            "list",
             "harness",
             "query",
             "mcp",
@@ -207,6 +209,14 @@ fn nested_help_lists_section_38_command_tree() {
         ],
     );
     assert_contains_all(&maestro(&["decision", "--help"]), &["new", "show", "list"]);
+    assert_contains_all(
+        &maestro(&["ready", "--help"]),
+        &["Examples:", "maestro ready"],
+    );
+    assert_contains_all(
+        &maestro(&["list", "--help"]),
+        &["--parent", "--type", "--assignee", "--status"],
+    );
     assert_contains_all(
         &maestro(&["harness", "--help"]),
         &["list", "show", "apply", "unapply", "measure"],
