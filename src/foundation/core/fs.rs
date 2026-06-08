@@ -1,5 +1,5 @@
-use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -49,7 +49,11 @@ pub fn append_text_file(
 ) -> Result<bool> {
     let path = path.as_ref();
     ensure_parent_dir(path)?;
-    match OpenOptions::new().write(true).create_new(true).open(path) {
+    // The create branch opens in append mode too (O_CREAT|O_EXCL|O_APPEND), so if
+    // a second writer loses the create_new race and opens this file for append
+    // before this one writes its header, both writers' bytes land at EOF instead
+    // of the header overwriting the racer's content at offset 0.
+    match OpenOptions::new().append(true).create_new(true).open(path) {
         Ok(mut file) => {
             file.write_all(initial_contents.as_bytes())
                 .and_then(|()| file.write_all(appended_contents.as_bytes()))
@@ -59,17 +63,46 @@ pub fn append_text_file(
             Ok(true)
         }
         Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+            // Restore the separator the old read-modify-write helper guaranteed:
+            // O_APPEND can't see the existing bytes, so an externally-edited file
+            // whose last byte is not a newline would otherwise glue the new line
+            // onto the previous one. A 1-byte tail read keeps the concurrency win.
+            let separator: &[u8] = if file_ends_with_newline(path)? { b"" } else { b"\n" };
             let mut file = OpenOptions::new()
                 .append(true)
                 .open(path)
                 .with_context(|| format!("failed to open {} for append", path.display()))?;
-            file.write_all(appended_contents.as_bytes())
+            file.write_all(separator)
+                .and_then(|()| file.write_all(appended_contents.as_bytes()))
                 .and_then(|()| file.sync_all())
                 .with_context(|| format!("failed to append {}", path.display()))?;
             Ok(false)
         }
         Err(error) => Err(error).with_context(|| format!("failed to create {}", path.display())),
     }
+}
+
+/// Whether `path`'s final byte is a newline, read with a single-byte tail seek so
+/// it never re-reads the whole file. An absent or empty file counts as "ends with
+/// newline" so the caller appends with no spurious leading blank line.
+fn file_ends_with_newline(path: &Path) -> Result<bool> {
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(true),
+        Err(error) => return Err(error).with_context(|| format!("failed to read {}", path.display())),
+    };
+    let len = file
+        .seek(SeekFrom::End(0))
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    if len == 0 {
+        return Ok(true);
+    }
+    file.seek(SeekFrom::End(-1))
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    let mut last = [0_u8; 1];
+    file.read_exact(&mut last)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    Ok(last[0] == b'\n')
 }
 
 /// Replace `path` only when its current UTF-8 contents match `expected`.
@@ -337,6 +370,57 @@ mod tests {
         assert!(error.to_string().contains("stop before publish"));
         assert!(!target.exists());
         assert!(!temp_root.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn append_text_file_writes_header_then_line_on_first_write() {
+        let root = temp_case("append-first");
+        let path = root.join("notes.md");
+
+        let created = append_text_file(&path, "# Notes\n", "first line\n")
+            .expect("first append should create the file");
+
+        assert!(created, "first write should report creation");
+        assert_eq!(
+            fs::read_to_string(&path).expect("notes should be readable"),
+            "# Notes\nfirst line\n"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn append_text_file_appends_without_extra_blank_when_file_ends_in_newline() {
+        let root = temp_case("append-newline");
+        let path = root.join("notes.md");
+        append_text_file(&path, "# Notes\n", "first line\n").expect("create");
+
+        let created = append_text_file(&path, "# Notes\n", "second line\n").expect("append");
+
+        assert!(!created, "second write should report append, not creation");
+        assert_eq!(
+            fs::read_to_string(&path).expect("notes should be readable"),
+            "# Notes\nfirst line\nsecond line\n"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn append_text_file_inserts_separator_when_existing_file_lacks_trailing_newline() {
+        let root = temp_case("append-no-newline");
+        let path = root.join("notes.md");
+        ensure_parent_dir(&path).expect("parent");
+        // Simulate an externally-edited file whose last byte is not a newline.
+        fs::write(&path, "# Notes\nhand-edited last line").expect("seed file");
+
+        append_text_file(&path, "# Notes\n", "appended line\n").expect("append");
+
+        // The appended line stays on its own line instead of gluing onto the
+        // previous one.
+        assert_eq!(
+            fs::read_to_string(&path).expect("notes should be readable"),
+            "# Notes\nhand-edited last line\nappended line\n"
+        );
         let _ = fs::remove_dir_all(root);
     }
 }
