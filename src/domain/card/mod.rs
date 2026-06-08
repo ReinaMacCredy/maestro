@@ -6,6 +6,7 @@
 //! four existing entities are untouched until the migration and cutover slices.
 
 pub mod fold;
+pub mod query;
 pub mod schema;
 pub mod store;
 

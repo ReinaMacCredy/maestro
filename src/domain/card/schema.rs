@@ -114,6 +114,14 @@ impl CardType {
             Self::Decision => "decision",
         }
     }
+
+    /// Whether cards of this type are "worked" through the type-agnostic verbs:
+    /// they enter `ready`, are claimable, and close via the work lifecycle (SPEC
+    /// E3, LOCKED = task/bug/chore). Feature/idea/decision keep their own verbs
+    /// and never appear in `ready`.
+    pub fn workable(&self) -> bool {
+        matches!(self, Self::Task | Self::Bug | Self::Chore)
+    }
 }
 
 /// One dependency edge from this card to another (SPEC E1). `parent` is a
