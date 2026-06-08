@@ -270,6 +270,15 @@ fn create_temp_child_dir(root: &Path, prefix: &str) -> Result<PathBuf> {
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
                 last_error = Some(error);
             }
+            // A concurrent creator that shares this temp_root removes it (only-if-
+            // empty) in its own post-publish cleanup, which can land between our
+            // caller's ensure_dir and this create_dir. That surfaces as NotFound on
+            // the missing parent; recreate the root and retry rather than failing a
+            // legitimate create.
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                ensure_dir(root)?;
+                last_error = Some(error);
+            }
             Err(error) => {
                 return Err(error).with_context(|| {
                     format!("failed to create temp directory {}", temp_dir.display())
@@ -370,6 +379,20 @@ mod tests {
         assert!(error.to_string().contains("stop before publish"));
         assert!(!target.exists());
         assert!(!temp_root.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn create_temp_child_dir_recreates_a_concurrently_removed_root() {
+        let root = temp_case("temp-root-removed");
+        // The root does not exist -- as if a concurrent creator sharing it removed
+        // it in post-publish cleanup. The first create_dir under it fails NotFound;
+        // the helper must recreate the root and still return a child dir.
+        let child = create_temp_child_dir(&root, "case")
+            .expect("a missing temp root should be recreated, not fail");
+
+        assert!(child.is_dir(), "a child temp dir should be returned");
+        assert!(root.is_dir(), "the missing root should be recreated");
         let _ = fs::remove_dir_all(root);
     }
 
