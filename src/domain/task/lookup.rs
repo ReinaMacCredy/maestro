@@ -3,7 +3,23 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::{StoreMode, store_mode};
+use crate::domain::task::cards;
 use crate::domain::task::template::{TaskRecord, TaskSnapshot, load_task};
+use crate::foundation::core::paths::MaestroPaths;
+
+/// Reconstruct the repo's [`MaestroPaths`] from a tasks directory so the
+/// store-mode dispatch can reach the card store (mirrors `doctor`'s use of the
+/// same parent walk). `tasks_dir` is `.maestro/tasks`, so its grandparent is the
+/// repo root. An off-`.maestro` directory (e.g. the archive tasks tree) walks to
+/// a non-repo-root whose `cards/` is absent, so it falls back to Legacy -- which
+/// is exactly what the still-legacy archive scans need until P4.
+pub(crate) fn paths_for_tasks_dir(tasks_dir: &Path) -> Option<MaestroPaths> {
+    tasks_dir
+        .parent()
+        .and_then(Path::parent)
+        .map(MaestroPaths::new)
+}
 
 /// Resolve a task id or unique id-prefix to its `task.yaml` path.
 pub fn resolve_task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
@@ -186,11 +202,34 @@ fn validate_task_lookup_id(id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Load a task by id or unique id-prefix with its optimistic save snapshot.
+/// Load a task by id with its optimistic save snapshot, dispatched by store mode
+/// (SPEC-beads-model P1 dual-read cutover). A migrated repo reads the `Task`-typed
+/// card (no archive fallback -- the card archive tree is P4); an unmigrated repo
+/// resolves the legacy `task.yaml` and derives `feature_id` from its path.
 pub fn load_task_with_snapshot(
     tasks_dir: &Path,
     id: &str,
 ) -> Result<(TaskRecord, TaskSnapshot, PathBuf)> {
+    if let Some(paths) = paths_for_tasks_dir(tasks_dir)
+        && store_mode(&paths) == StoreMode::Cards
+    {
+        validate_task_lookup_id(id)?;
+        let Some((task, snapshot, path)) = cards::load_one(&paths, id)? else {
+            bail!("task not found: {id}");
+        };
+        let task_dir = path
+            .parent()
+            .map(Path::to_path_buf)
+            .context("card path is missing parent directory")?;
+        return Ok((
+            task,
+            TaskSnapshot::Card {
+                path,
+                snapshot: Box::new(snapshot),
+            },
+            task_dir,
+        ));
+    }
     let task_path = resolve_task_yaml_path(tasks_dir, id)?;
     let task_dir = task_path
         .parent()

@@ -3,8 +3,10 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crate::domain::card::{StoreMode, store_mode};
 use crate::domain::decisions;
-use crate::domain::task::lookup::{feature_id_for_task_path, task_yaml_paths};
+use crate::domain::task::cards;
+use crate::domain::task::lookup::{feature_id_for_task_path, paths_for_tasks_dir, task_yaml_paths};
 use crate::domain::task::template::{BlockerKind, TaskRecord, load_task};
 
 /// Result of scanning task blocker references.
@@ -38,8 +40,22 @@ pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
     Ok(tasks)
 }
 
-/// Load all task records with their directories under standalone and feature-owned task roots.
+/// Load all task records with their directories, dispatched by store mode
+/// (SPEC-beads-model P1 dual-read cutover). This is the single task scan seam:
+/// every roster, count, and projection rides it, so a migrated repo reads
+/// `Task`-typed cards (with `feature_id` recovered from `card.parent`, the field
+/// the counts group by) while an unmigrated repo scans the legacy task roots.
 pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
+    if let Some(paths) = paths_for_tasks_dir(tasks_dir)
+        && store_mode(&paths) == StoreMode::Cards
+    {
+        let mut entries = cards::scan(&paths)?
+            .into_iter()
+            .map(|(task, task_dir)| TaskEntry { task, task_dir })
+            .collect::<Vec<_>>();
+        entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
+        return Ok(entries);
+    }
     let mut entries = Vec::new();
     for task_path in task_yaml_paths(tasks_dir)? {
         let (mut task, _) = load_task(&task_path)?;

@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::domain::card::store::CardSnapshot;
+use crate::domain::task::cards;
 use crate::foundation::core::fs::write_new_dir_atomic;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
@@ -226,11 +228,21 @@ pub struct AcceptanceFile {
     pub locked_at: Option<String>,
 }
 
-/// Optimistic-concurrency snapshot for a loaded task.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TaskSnapshot {
-    pub path: PathBuf,
-    pub updated_at: String,
+/// Optimistic-concurrency snapshot for a loaded task, dispatched by store mode
+/// (SPEC-beads-model P1 dual-read cutover). The snapshot is the CAS basis the
+/// matching save checks; carrying the mode here -- rather than a separate write
+/// token -- works because the save seam takes no `paths`, so the snapshot is the
+/// natural carrier of both the write target and the proof.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TaskSnapshot {
+    /// Legacy `task.yaml`: the CAS compares `updated_at` against a fresh reload.
+    Legacy { path: PathBuf, updated_at: String },
+    /// Migrated card: the card store's raw-string CAS is the guard. `path` is the
+    /// `card.yaml` the save writes back to.
+    Card {
+        path: PathBuf,
+        snapshot: Box<CardSnapshot>,
+    },
 }
 
 struct TaskSaveLock {
@@ -323,7 +335,7 @@ pub fn load_task(path: &Path) -> Result<(TaskRecord, TaskSnapshot)> {
         fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
     let task: TaskRecord = serde_yaml::from_str(&contents)
         .with_context(|| format!("failed to parse {}", path.display()))?;
-    let snapshot = TaskSnapshot {
+    let snapshot = TaskSnapshot::Legacy {
         path: path.to_path_buf(),
         updated_at: task.updated_at.clone(),
     };
@@ -346,15 +358,35 @@ where
     F: FnOnce() -> Result<C>,
     C: SaveTaskHook,
 {
-    let _lock = TaskSaveLock::acquire(&snapshot.path)?;
-    let (current, _) = load_task(&snapshot.path)?;
-    if current.updated_at != snapshot.updated_at {
-        return Err(TaskSaveError::Modified.into());
+    match snapshot {
+        TaskSnapshot::Legacy { path, updated_at } => {
+            // Legacy CAS: hold the per-task lock, reload, and compare `updated_at`
+            // before the bare write.
+            let _lock = TaskSaveLock::acquire(path)?;
+            let (current, _) = load_task(path)?;
+            if &current.updated_at != updated_at {
+                return Err(TaskSaveError::Modified.into());
+            }
+            let serialized = serde_yaml::to_string(task)?;
+            let hook = before_save()?;
+            finish_save(
+                hook,
+                write_string_atomic(path, &serialized)
+                    .with_context(|| format!("failed to write {}", path.display())),
+            )
+        }
+        // Card CAS lives inside the store's raw-string compare-and-set, so there
+        // is no lock or `updated_at` reload here -- `save_at` is the whole guard.
+        TaskSnapshot::Card { path, snapshot } => {
+            let hook = before_save()?;
+            finish_save(hook, cards::save_at(path, task, snapshot))
+        }
     }
-    let serialized = serde_yaml::to_string(task)?;
-    let mut hook = before_save()?;
-    let write_result = write_string_atomic(&snapshot.path, &serialized)
-        .with_context(|| format!("failed to write {}", snapshot.path.display()));
+}
+
+/// Commit the caller-owned pre-save step on a successful write, or roll it back
+/// on failure, so both store-mode arms share one commit/rollback contract.
+fn finish_save<C: SaveTaskHook>(mut hook: C, write_result: Result<()>) -> Result<()> {
     match write_result {
         Ok(()) => {
             hook.commit();

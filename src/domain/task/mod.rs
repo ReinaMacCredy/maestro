@@ -6,15 +6,18 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::{StoreMode, store_mode};
 use crate::foundation::core::fs::{
     ALLOC_MARKER_PREFIX, DirReservation, append_text_file, child_dirs, ensure_dir,
     try_reserve_marker_dir,
 };
+use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
 pub(crate) mod archive;
 pub(crate) mod blockers;
+pub(crate) mod cards;
 pub(crate) mod display;
 pub(crate) mod doctor;
 pub(crate) mod lifecycle;
@@ -65,7 +68,11 @@ pub struct CreateTaskOptions {
 }
 
 /// Task aggregate loaded with its Task-owned optimistic save context.
-#[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// `Eq` is intentionally absent: the card-mode snapshot carries a
+/// [`serde_yaml::Mapping`] (via `CardSnapshot`), whose values may be floats, so
+/// only `PartialEq` is derivable -- matching [`crate::domain::card::schema::Card`].
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TaskHandle {
     task: TaskRecord,
     task_dir: PathBuf,
@@ -108,8 +115,19 @@ pub fn create_task(
     if options.covers.iter().any(|cover| cover.trim().is_empty()) {
         bail!("task cover cannot be empty; pass an acceptance id such as ac-1");
     }
-    let reserved = reserve_next_task_id(tasks_dir)?;
-    let id = reserved.id.clone();
+    // Card mode mints the id from the live cards (unioned with the still-legacy
+    // archive, so L6a never reissues a freed id) and relies on the create-time
+    // CAS for atomicity; legacy mode reserves a `.alloc-` marker that it holds
+    // until the artifacts land.
+    let card_paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .filter(|paths| store_mode(paths) == StoreMode::Cards);
+    let (id, _marker) = match card_paths.as_ref() {
+        Some(paths) => (next_card_task_id(paths, tasks_dir)?, None),
+        None => {
+            let reserved = reserve_next_task_id(tasks_dir)?;
+            (reserved.id, Some(reserved._marker))
+        }
+    };
     let mut task = TaskRecord::draft(&id, title, &options.created_at);
     task.feature_id = options.feature;
     task.covers = options.covers;
@@ -121,9 +139,26 @@ pub fn create_task(
     }
     let acceptance = AcceptanceFile::new(&id, options.checks);
     task.acceptance = acceptance.clone();
-    let task_root = task_root_for_feature(tasks_dir, task.feature_id.as_deref())?;
-    template::write_task_artifacts(&task_root, &task, &acceptance)?;
+    match card_paths.as_ref() {
+        Some(paths) => cards::create(paths, &task)?,
+        None => {
+            let task_root = task_root_for_feature(tasks_dir, task.feature_id.as_deref())?;
+            template::write_task_artifacts(&task_root, &task, &acceptance)?;
+        }
+    }
+    drop(_marker);
     Ok(task)
+}
+
+/// Next `task-NNN` id in card mode: one above the max of live task cards and the
+/// still-legacy archive tasks (L6a -- never reissue an archived id). The
+/// create-time CAS, not a marker dir, makes the subsequent write atomic.
+fn next_card_task_id(paths: &MaestroPaths, tasks_dir: &Path) -> Result<String> {
+    let mut max = cards::max_task_number(paths)?;
+    if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir) {
+        max = max.max(max_task_number(&archive_tasks_dir)?);
+    }
+    Ok(format!("task-{:03}", max + 1))
 }
 
 /// Load one Task record by id or id prefix.
@@ -489,6 +524,23 @@ pub fn set_feature(
         (Some(previous), None) => format!("feature link cleared (was {previous})"),
         (None, None) => unreachable!("equal links are returned as a no-op above"),
     };
+    // Card mode: the parent is just a field, so there is no directory to move --
+    // retarget, audit, and save. Legacy mode physically relocates the task dir
+    // across feature subdirs (below), rolling the record back on a rename failure.
+    if matches!(snapshot, template::TaskSnapshot::Card { .. }) {
+        task.feature_id = feature;
+        lifecycle::append_history(
+            &mut task,
+            actor,
+            at,
+            TransitionDetails {
+                summary: Some(summary),
+                ..TransitionDetails::default()
+            },
+        );
+        template::save_task_with_snapshot(&task, &snapshot)?;
+        return Ok(task);
+    }
     let target_root = task_root_for_feature(tasks_dir, feature.as_deref())?;
     let target_dir = target_root.join(task.directory_name());
     let should_move = target_dir != current_dir;
@@ -517,7 +569,8 @@ pub fn set_feature(
     if should_move && let Err(error) = fs::rename(&current_dir, &target_dir) {
         let rollback =
             serde_yaml::to_string(&original_task).context("failed to serialize task rollback")?;
-        if let Err(rollback_error) = write_string_atomic(&snapshot.path, &rollback) {
+        let current_yaml = current_dir.join("task.yaml");
+        if let Err(rollback_error) = write_string_atomic(&current_yaml, &rollback) {
             return Err(error)
                 .with_context(|| {
                     format!(
@@ -528,7 +581,7 @@ pub fn set_feature(
                 })
                 .context(format!(
                     "failed to restore {} after move failure: {rollback_error}",
-                    snapshot.path.display()
+                    current_yaml.display()
                 ));
         }
         return Err(error).with_context(|| {
