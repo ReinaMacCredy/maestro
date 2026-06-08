@@ -15,7 +15,11 @@ use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
 /// all land in later phases. The `status` is stored as a free string because
 /// the per-type status vocabulary is still open (SPEC O5); only the LOCKED
 /// fields are typed here.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+///
+/// `Eq` is intentionally absent: the `extra` carrier holds a
+/// [`serde_yaml::Mapping`], whose `Value` may contain floats, so only
+/// `PartialEq` is derivable.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Card {
     /// Card schema version.
     pub schema_version: String,
@@ -52,6 +56,15 @@ pub struct Card {
     /// Optional longer description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Transitional carrier for the verbatim pre-fold source record (P1
+    /// migration). The four legacy entities fold into cards by copying their
+    /// whole record mapping here untouched while the identity fields above are
+    /// derived copies; cutover reconstructs the original typed record with one
+    /// `serde_yaml::from_value` over this map. P2 collapses these keys into
+    /// typed per-type fields, at which point the carrier disappears. Empty for
+    /// cards minted natively by the card model.
+    #[serde(default, skip_serializing_if = "serde_yaml::Mapping::is_empty")]
+    pub extra: serde_yaml::Mapping,
 }
 
 impl Card {
@@ -71,6 +84,7 @@ impl Card {
             created_at: now.to_string(),
             updated_at: now.to_string(),
             description: None,
+            extra: serde_yaml::Mapping::new(),
         }
     }
 }

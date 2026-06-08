@@ -1276,6 +1276,7 @@ fn transitional_public_surfaces_match_phase_policy() {
     assert_public_modules(
         Path::new("src/operations/mod.rs"),
         &[
+            "card_migrate",
             "feature_prepare",
             "harness",
             "init",

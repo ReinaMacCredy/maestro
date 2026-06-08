@@ -14,7 +14,7 @@ use crate::foundation::core::schema::{CARD_SCHEMA_VERSION, Compat, classify};
 /// compare-and-set write (SPEC D1). `card` is `None` when the file is absent,
 /// so a brand-new card is created by loading the absent snapshot (`raw = None`)
 /// and writing against it.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CardSnapshot {
     pub card: Option<Card>,
     raw: Option<String>,
@@ -116,6 +116,10 @@ mod tests {
             created_at: "2026-06-08T00:00:00Z".to_string(),
             updated_at: "2026-06-08T01:00:00Z".to_string(),
             description: Some("Stream rows to stdout.".to_string()),
+            extra: serde_yaml::from_str(
+                "legacy_field: kept\nstate_history:\n  - draft\n  - ready\n",
+            )
+            .expect("invariant: fixture extra parses"),
         }
     }
 
