@@ -23,12 +23,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde_yaml::{Mapping, Value};
 
-use crate::domain::card::schema::{Card, CardType};
+use crate::domain::card::fold::{self, string_field};
+use crate::domain::card::schema::Card;
 use crate::domain::card::store::{card_path, load_with_snapshot, save_with_snapshot};
 use crate::domain::decisions::normalize_decision_id;
 use crate::foundation::core::fs::{child_dirs as fs_child_dirs, ensure_dir};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
 
 /// Per-type tally of a card-fold run.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -90,22 +90,7 @@ fn fold_features(
         let id = string_field(&source, "id")
             .or_else(|| dir_name(&feature_dir))
             .with_context(|| format!("feature missing id: {}", yaml.display()))?;
-        let card = Card {
-            schema_version: CARD_SCHEMA_VERSION.to_string(),
-            card_type: CardType::Feature,
-            title: title_or_id(&source, &id),
-            id,
-            status: string_field(&source, "status").unwrap_or_default(),
-            parent: None,
-            deps: Vec::new(),
-            lane: None,
-            claimed_by: None,
-            claimed_at: None,
-            created_at: created_at_or(&source, "created_at", now),
-            updated_at: updated_at_or(&source, "updated_at", "created_at", now),
-            description: None,
-            extra: source,
-        };
+        let card = fold::feature_card(id, source, now);
         if mint(paths, minted, report, card, Some(&feature_dir))? {
             report.features += 1;
         }
@@ -152,23 +137,7 @@ fn fold_one_task(
     let id = string_field(&source, "id")
         .with_context(|| format!("task missing id: {}", yaml.display()))?;
     collect_task_refs(&id, &source, refs);
-    let card = Card {
-        schema_version: CARD_SCHEMA_VERSION.to_string(),
-        id: id.clone(),
-        card_type: CardType::Task,
-        title: title_or_id(&source, &id),
-        // Task lifecycle lives under `state`, not `status`; keep the word verbatim.
-        status: string_field(&source, "state").unwrap_or_default(),
-        parent: parent_from_dir.or_else(|| string_field(&source, "feature_id")),
-        deps: Vec::new(),
-        lane: None,
-        claimed_by: None,
-        claimed_at: None,
-        created_at: created_at_or(&source, "created_at", now),
-        updated_at: updated_at_or(&source, "updated_at", "created_at", now),
-        description: None,
-        extra: source,
-    };
+    let card = fold::task_card(id, source, parent_from_dir, now);
     if mint(paths, minted, report, card, None)? {
         report.tasks += 1;
     }
@@ -229,23 +198,7 @@ fn fold_decision_store(
         let id = string_field(record, "id")
             .with_context(|| format!("decision missing id in {}", store_path.display()))?;
         collect_decision_refs(&id, record, refs);
-        let card = Card {
-            schema_version: CARD_SCHEMA_VERSION.to_string(),
-            id: id.clone(),
-            card_type: CardType::Decision,
-            title: title_or_id(record, &id),
-            status: string_field(record, "status").unwrap_or_default(),
-            // DecisionRecord carries no updated_at; lean on locked_at, else created_at.
-            parent: string_field(record, "feature").or_else(|| feature_parent.clone()),
-            deps: Vec::new(),
-            lane: None,
-            claimed_by: None,
-            claimed_at: None,
-            created_at: created_at_or(record, "created_at", now),
-            updated_at: updated_at_or(record, "locked_at", "created_at", now),
-            description: None,
-            extra: record.clone(),
-        };
+        let card = fold::decision_card(id, record.clone(), feature_parent.clone(), now);
         if mint(paths, minted, report, card, None)? {
             report.decisions += 1;
         }
@@ -275,29 +228,7 @@ fn fold_ideas(
         let id = string_field(record, "id")
             .with_context(|| format!("harness backlog item missing id in {}", backlog.display()))?;
         collect_idea_refs(&id, record, refs);
-        // first_seen/last_seen are skip-if-empty, so fall back rather than store "".
-        let created_at = nonempty_field(record, "first_seen")
-            .or_else(|| nonempty_field(record, "last_seen"))
-            .unwrap_or_else(|| now.to_string());
-        let updated_at = nonempty_field(record, "last_seen").unwrap_or_else(|| created_at.clone());
-        let card = Card {
-            schema_version: CARD_SCHEMA_VERSION.to_string(),
-            id: id.clone(),
-            // Every harness item maps to `idea`; its detector category stays in
-            // `extra.type`, it is not the card type (SPEC keep-ids reconciliation).
-            card_type: CardType::Idea,
-            title: title_or_id(record, &id),
-            status: string_field(record, "status").unwrap_or_default(),
-            parent: None,
-            deps: Vec::new(),
-            lane: None,
-            claimed_by: None,
-            claimed_at: None,
-            created_at,
-            updated_at,
-            description: None,
-            extra: record.clone(),
-        };
+        let card = fold::idea_card(id, record.clone(), now);
         if mint(paths, minted, report, card, None)? {
             report.ideas += 1;
         }
@@ -524,18 +455,6 @@ fn dir_name(dir: &Path) -> Option<String> {
         .map(|name| name.to_string_lossy().into_owned())
 }
 
-fn title_or_id(record: &Mapping, id: &str) -> String {
-    string_field(record, "title").unwrap_or_else(|| id.to_string())
-}
-
-fn created_at_or(record: &Mapping, key: &str, now: &str) -> String {
-    string_field(record, key).unwrap_or_else(|| now.to_string())
-}
-
-fn updated_at_or(record: &Mapping, key: &str, fallback_key: &str, now: &str) -> String {
-    string_field(record, key).unwrap_or_else(|| created_at_or(record, fallback_key, now))
-}
-
 fn read_yaml_mapping(path: &Path) -> Result<Mapping> {
     let raw =
         fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
@@ -545,16 +464,6 @@ fn read_yaml_mapping(path: &Path) -> Result<Mapping> {
         .as_mapping()
         .cloned()
         .with_context(|| format!("expected mapping in {}", path.display()))
-}
-
-fn string_field(map: &Mapping, key: &str) -> Option<String> {
-    map.get(Value::String(key.to_string()))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-}
-
-fn nonempty_field(map: &Mapping, key: &str) -> Option<String> {
-    string_field(map, key).filter(|value| !value.is_empty())
 }
 
 fn sequence_field<'a>(map: &'a Mapping, key: &str) -> Option<&'a Vec<Value>> {
@@ -568,7 +477,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
-    use crate::domain::card::schema::Card;
+    use crate::domain::card::schema::{Card, CardType};
     use crate::domain::card::store::load as load_card;
     use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
     use crate::domain::feature::FeatureStatus;
