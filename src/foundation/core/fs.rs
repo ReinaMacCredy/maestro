@@ -23,6 +23,12 @@ impl Drop for DirReservation {
     }
 }
 
+/// Shared prefix for ID-reservation marker directories (`.alloc-task-007`,
+/// `.alloc-decision-003`). The writers that create these markers and the doctor
+/// scan that skips them all reference this one const, so the diagnostic can never
+/// drift from the reservation scheme and advise removing a still-reserved marker.
+pub(crate) const ALLOC_MARKER_PREFIX: &str = ".alloc-";
+
 /// Try to reserve one marker directory; `Ok(None)` means another writer holds it.
 pub fn try_reserve_marker_dir(
     root: impl AsRef<Path>,
@@ -335,6 +341,17 @@ pub(crate) fn child_dirs(parent: &Path) -> Result<Vec<(PathBuf, SystemTime)>> {
     Ok(dirs)
 }
 
+/// Read a UTF-8 file if it exists.
+pub fn read_to_string_if_exists(path: impl AsRef<Path>) -> Result<Option<String>> {
+    let path = path.as_ref();
+
+    match fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("failed to read file {}", path.display())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,16 +462,5 @@ mod tests {
             "# Notes\nhand-edited last line\nappended line\n"
         );
         let _ = fs::remove_dir_all(root);
-    }
-}
-
-/// Read a UTF-8 file if it exists.
-pub fn read_to_string_if_exists(path: impl AsRef<Path>) -> Result<Option<String>> {
-    let path = path.as_ref();
-
-    match fs::read_to_string(path) {
-        Ok(contents) => Ok(Some(contents)),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error).with_context(|| format!("failed to read file {}", path.display())),
     }
 }

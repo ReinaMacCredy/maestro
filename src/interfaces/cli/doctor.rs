@@ -8,6 +8,7 @@ use crate::domain::feature;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
 use crate::domain::task;
 use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::fs::{ALLOC_MARKER_PREFIX, child_dirs};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::{
     BACKLOG_SCHEMA_VERSION, Compat, HARNESS_SCHEMA_VERSION, classify,
@@ -214,30 +215,18 @@ fn recordless_dir_warnings(
     record_name: &str,
 ) -> Result<Vec<String>> {
     let mut warnings = Vec::new();
-    if !root.is_dir() {
-        return Ok(warnings);
-    }
-    for entry in
-        std::fs::read_dir(root).with_context(|| format!("failed to read {}", root.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", root.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        if entry
+    for (path, _) in child_dirs(root)? {
+        if path
             .file_name()
-            .to_str()
-            .is_some_and(|name| name.starts_with(".alloc-"))
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with(ALLOC_MARKER_PREFIX))
         {
             continue;
         }
-        if entry.path().join(record_name).is_file() {
+        if path.join(record_name).is_file() {
             continue;
         }
-        let display_path = display_relative(repo_root, &entry.path());
+        let display_path = display_relative(repo_root, &path);
         warnings.push(format!(
             "{display_path} has no {record_name} (likely an aborted create); remove it: rm -r {display_path}"
         ));

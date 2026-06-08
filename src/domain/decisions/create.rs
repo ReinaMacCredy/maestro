@@ -9,7 +9,9 @@ use crate::domain::decisions::query::{
 };
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
 use crate::domain::feature;
-use crate::foundation::core::fs::{DirReservation, try_reserve_marker_dir};
+use crate::foundation::core::fs::{
+    ALLOC_MARKER_PREFIX, DirReservation, child_dirs, try_reserve_marker_dir,
+};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -212,7 +214,7 @@ struct ReservedDecisionId {
 fn reserve_next_decision_id(paths: &MaestroPaths) -> Result<ReservedDecisionId> {
     let mut candidate = max_decision_number(paths)? + 1;
     loop {
-        let marker_name = format!(".alloc-decision-{candidate:03}");
+        let marker_name = format!("{ALLOC_MARKER_PREFIX}decision-{candidate:03}");
         let Some(marker) = try_reserve_marker_dir(paths.decisions_dir(), &marker_name)? else {
             candidate += 1;
             continue;
@@ -244,27 +246,15 @@ fn max_decision_number(paths: &MaestroPaths) -> Result<u32> {
             max_number = max_number.max(number);
         }
     }
-    if paths.decisions_dir().is_dir() {
-        for entry in std::fs::read_dir(paths.decisions_dir())
-            .with_context(|| format!("failed to read {}", paths.decisions_dir().display()))?
+    for (path, _) in child_dirs(&paths.decisions_dir())? {
+        if let Some(number) = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.strip_prefix(ALLOC_MARKER_PREFIX))
+            .and_then(|rest| rest.strip_prefix("decision-"))
+            .and_then(|value| value.parse::<u32>().ok())
         {
-            let entry = entry
-                .with_context(|| format!("failed to list {}", paths.decisions_dir().display()))?;
-            let file_type = entry
-                .file_type()
-                .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-            if !file_type.is_dir() || file_type.is_symlink() {
-                continue;
-            }
-            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
-                continue;
-            };
-            if let Some(number) = name
-                .strip_prefix(".alloc-decision-")
-                .and_then(|value| value.parse::<u32>().ok())
-            {
-                max_number = max_number.max(number);
-            }
+            max_number = max_number.max(number);
         }
     }
     Ok(max_number)

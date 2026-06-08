@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::foundation::core::fs::{
-    DirReservation, append_text_file, ensure_dir, try_reserve_marker_dir,
+    ALLOC_MARKER_PREFIX, DirReservation, append_text_file, child_dirs, ensure_dir,
+    try_reserve_marker_dir,
 };
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
@@ -796,7 +797,7 @@ fn reserve_next_task_id(tasks_dir: &Path) -> Result<ReservedTaskId> {
     max = max.max(max_reserved_task_number(tasks_dir)?);
     let mut candidate = max + 1;
     loop {
-        let marker_name = format!(".alloc-task-{candidate:03}");
+        let marker_name = format!("{ALLOC_MARKER_PREFIX}task-{candidate:03}");
         let Some(marker) = try_reserve_marker_dir(tasks_dir, &marker_name)? else {
             candidate += 1;
             continue;
@@ -847,24 +848,12 @@ fn max_task_number(tasks_dir: &Path) -> Result<u32> {
 
 fn max_reserved_task_number(tasks_dir: &Path) -> Result<u32> {
     let mut max = 0_u32;
-    if !tasks_dir.is_dir() {
-        return Ok(max);
-    }
-    for entry in fs::read_dir(tasks_dir)
-        .with_context(|| format!("failed to read {}", tasks_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", tasks_dir.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
-            continue;
-        };
-        if let Some(num) = name
-            .strip_prefix(".alloc-task-")
+    for (path, _) in child_dirs(tasks_dir)? {
+        if let Some(num) = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.strip_prefix(ALLOC_MARKER_PREFIX))
+            .and_then(|rest| rest.strip_prefix("task-"))
             .and_then(|value| value.parse::<u32>().ok())
         {
             max = max.max(num);
@@ -887,24 +876,11 @@ fn task_number_exists(tasks_dir: &Path, number: u32) -> Result<bool> {
 
 fn task_number_exists_in(tasks_dir: &Path, number: u32) -> Result<bool> {
     for root in lookup::task_roots(tasks_dir)? {
-        if !root.is_dir() {
-            continue;
-        }
-        for entry in
-            fs::read_dir(&root).with_context(|| format!("failed to read {}", root.display()))?
-        {
-            let entry = entry.with_context(|| format!("failed to list {}", root.display()))?;
-            let file_type = entry
-                .file_type()
-                .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-            if !file_type.is_dir() || file_type.is_symlink() {
-                continue;
-            }
-            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
-                continue;
-            };
-            if name
-                .strip_prefix("task-")
+        for (path, _) in child_dirs(&root)? {
+            if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| name.strip_prefix("task-"))
                 .and_then(|rest| rest.split('-').next())
                 .and_then(|value| value.parse::<u32>().ok())
                 == Some(number)
