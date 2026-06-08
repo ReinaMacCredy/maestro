@@ -386,6 +386,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "show".to_string(),
             "show_archived".to_string(),
             "start".to_string(),
+            "status".to_string(),
             "status_label".to_string(),
             "titles".to_string(),
             "unarchive_feature".to_string(),

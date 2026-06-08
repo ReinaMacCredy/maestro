@@ -311,8 +311,9 @@ fn verify_feature(
 }
 
 fn print_green_sweep_next(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
-    let view = feature::show(paths, feature_id)?;
-    match view.status {
+    // Only the lifecycle status drives the next-step hint; avoid show's task,
+    // coverage, and note joins (the InProgress arm re-loads via ship_gaps anyway).
+    match feature::status(paths, feature_id)? {
         FeatureStatus::Proposed => {}
         FeatureStatus::Ready => println!("next: maestro feature start {feature_id}"),
         FeatureStatus::InProgress => {

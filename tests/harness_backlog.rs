@@ -4,6 +4,7 @@ use std::fs;
 
 use maestro::domain::harness::backlog;
 use maestro::domain::harness::schema::{BacklogConfig, BacklogItem, HistoryEntry};
+use maestro::foundation::core::error::MaestroError;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
@@ -261,6 +262,12 @@ fn load_rejects_backlog_schema_mismatch() {
     let error = backlog::load(&paths).expect_err("invariant: schema mismatch should fail");
 
     assert!(error.to_string().contains("schema mismatch"));
+    // The mismatch is the typed error, so it carries the actionable doctor hint
+    // (parity with the feature/decision stores) instead of a bare bail.
+    let hint = error
+        .downcast_ref::<MaestroError>()
+        .and_then(MaestroError::hint);
+    assert_eq!(hint.as_deref(), Some("run maestro doctor"));
 }
 
 #[cfg(unix)]

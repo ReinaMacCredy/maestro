@@ -1087,6 +1087,12 @@ pub fn diagnose(paths: &MaestroPaths) -> FeatureDiagnostic {
     }
 }
 
+/// The feature's current lifecycle status, loaded without the task, coverage,
+/// and note joins `show` performs -- for callers that only branch on status.
+pub fn status(paths: &MaestroPaths, id: &str) -> Result<FeatureStatus> {
+    Ok(load_record(paths, id)?.status)
+}
+
 /// Render a [`FeatureStatus`] to its canonical snake_case label.
 pub fn status_label(status: &FeatureStatus) -> &'static str {
     status.as_str()

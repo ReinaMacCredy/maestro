@@ -2,11 +2,12 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
 use crate::domain::harness::schema::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
 };
+use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::write_string_if_unchanged;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
@@ -323,12 +324,15 @@ fn backlog_path(paths: &MaestroPaths) -> Result<std::path::PathBuf> {
 
 fn validate_schema(path: &std::path::Path, backlog: &BacklogConfig) -> Result<()> {
     if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) != Compat::Exact {
-        bail!(
-            "schema mismatch for {}: expected {}, found {}",
-            path.display(),
-            BACKLOG_SCHEMA_VERSION,
-            backlog.schema_version
-        );
+        // Use the typed error (same Display text) so a backlog schema mismatch
+        // emits the `fix: run maestro doctor` hint like feature/decision stores,
+        // rather than a bare bail with no remedy.
+        return Err(MaestroError::SchemaMismatch {
+            artifact: path.display().to_string(),
+            expected: BACKLOG_SCHEMA_VERSION,
+            found: backlog.schema_version.clone(),
+        }
+        .into());
     }
     Ok(())
 }
