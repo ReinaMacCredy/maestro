@@ -141,24 +141,6 @@ pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
     Ok(records)
 }
 
-/// Highest `task-NNN` number among live task cards (0 when none). Drawn from the
-/// reconstructed records so only `Task`-typed cards count (a feature slug like
-/// `task-5-foo` would otherwise inflate a dir-name scan).
-pub(crate) fn max_task_number(paths: &MaestroPaths) -> Result<u32> {
-    let mut max = 0_u32;
-    for (record, _) in scan(paths)? {
-        if let Some(num) = record
-            .id
-            .strip_prefix("task-")
-            .and_then(|rest| rest.split('-').next())
-            .and_then(|value| value.parse::<u32>().ok())
-        {
-            max = max.max(num);
-        }
-    }
-    Ok(max)
-}
-
 /// Create a new task card from a draft record. The write is a CAS against the
 /// absent snapshot, so a concurrent create of the same id is rejected (matching
 /// the legacy `.alloc-` atomic-create guard). The id is reserved by the caller.

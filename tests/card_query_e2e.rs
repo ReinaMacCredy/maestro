@@ -93,13 +93,27 @@ fn ready_and_list_reflect_a_migrated_card_store() {
     assert_eq!(task.id, "task-001");
     card_migrate::run(&paths, NOW).expect("migration succeeds");
 
+    // The remint reassigns the task a stable content-hash id (SPEC E2/O3), so
+    // task-001 no longer addresses anything -- capture the reminted id from the
+    // store and assert the CLI verbs surface it.
+    let task1_id = task::load_task_records(&paths.tasks_dir())
+        .expect("scan tasks")
+        .into_iter()
+        .next()
+        .expect("one migrated task")
+        .id;
+    assert!(
+        task1_id.starts_with("card-"),
+        "task reminted to a content-hash id: {task1_id}"
+    );
+
     let repo = temp.path();
 
     // G3 + D3 + DN3 + D4: the workable, coarse-OPEN task surfaces; the feature
     // card does not.
     let ready = run(repo, &["ready"]);
     assert!(
-        ready.contains("task-001"),
+        ready.contains(&task1_id),
         "ready should list the task:\n{ready}"
     );
     assert!(
@@ -111,12 +125,12 @@ fn ready_and_list_reflect_a_migrated_card_store() {
     // a different path from `list --parent`'s ListFilter).
     let scoped = run(repo, &["ready", "csv-export"]);
     assert!(
-        scoped.contains("task-001"),
+        scoped.contains(&task1_id),
         "feature-scoped ready keeps its children:\n{scoped}"
     );
     let other = run(repo, &["ready", "no-such-feature"]);
     assert!(
-        !other.contains("task-001"),
+        !other.contains(&task1_id),
         "scoping to another feature drops it:\n{other}"
     );
 
@@ -127,24 +141,24 @@ fn ready_and_list_reflect_a_migrated_card_store() {
         "feature should list:\n{features}"
     );
     let tasks = run(repo, &["list", "--type", "task"]);
-    assert!(tasks.contains("task-001"), "task should list:\n{tasks}");
+    assert!(tasks.contains(&task1_id), "task should list:\n{tasks}");
 
     // --parent is the children-of-a-feature query.
     let children = run(repo, &["list", "--parent", "csv-export"]);
     assert!(
-        children.contains("task-001"),
+        children.contains(&task1_id),
         "task is a child of the feature:\n{children}"
     );
 
     // --status reads the COARSE word: the draft task is open, not closed.
     let open = run(repo, &["list", "--status", "open"]);
     assert!(
-        open.contains("task-001"),
+        open.contains(&task1_id),
         "draft maps to coarse open:\n{open}"
     );
     let closed = run(repo, &["list", "--status", "closed"]);
     assert!(
-        !closed.contains("task-001"),
+        !closed.contains(&task1_id),
         "an open task must not match --status closed:\n{closed}"
     );
 }

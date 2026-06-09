@@ -1,22 +1,28 @@
 //! Fold the four legacy artifact trees (features, tasks, decisions, harness
 //! backlog) into the unified flat card store at `.maestro/cards/` (SPEC
-//! beads-model, P1 slice 2).
+//! beads-model, P1 slice 2 + P3 remint).
 //!
 //! Additive and idempotent. It reads the four trees and mints one
-//! `cards/<id>/card.yaml` per artifact, KEEPING every existing id (feature slug
-//! / task-NNN / decision-NNN / harness-backlog id) so current verbs keep
-//! resolving -- this slice is a zero-behavior reorg, the hash remint + ref
-//! rewrite are deferred to P3. The source trees are left untouched: nothing
-//! reads `cards/` until cutover, so leaving features/tasks/decisions/harness in
-//! place keeps the old verbs reading exactly what they read before.
+//! `cards/<id>/card.yaml` per artifact. Feature cards keep their immutable
+//! creation slug; every other card is reminted to a stable opaque `card-<hash>`
+//! id (SPEC E2/O3). The source trees are left untouched: nothing reads `cards/`
+//! until cutover, so leaving features/tasks/decisions/harness in place keeps the
+//! old verbs reading exactly what they read before.
+//!
+//! The run is two-pass so the remint can rewrite references before any card is
+//! written (SPEC E5): first collect every card and its outgoing refs, then
+//! assign the `card-<hash>` ids and rewrite the five structured ref classes (the
+//! dir name, each record's own `id`, the typed cross-refs in `extra`, the
+//! `cards/<feature>/notes.md` decision pointers, and the `runs/**/events.jsonl`
+//! `task_id`s), and only then write. The authoritative dangling-ref gate runs
+//! over the rewritten ref set; human prose is never touched.
 //!
 //! Each source record's whole YAML mapping is copied verbatim into the card's
-//! `extra` carrier while the card's identity fields are derived copies. Cutover
-//! then reconstructs the original typed record with one
-//! `serde_yaml::from_value(card.extra)`, so the migration never has to be kept
-//! byte-synced with a separate reconstruction step.
+//! `extra` carrier while the card's identity fields are derived copies; the
+//! remint then rewrites only the structured id fields inside `extra`. Cutover
+//! reconstructs the original typed record with one `serde_yaml::from_value`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -24,9 +30,10 @@ use anyhow::{Context, Result, bail};
 use serde_yaml::{Mapping, Value};
 
 use crate::domain::card::fold::{self, string_field};
-use crate::domain::card::schema::Card;
-use crate::domain::card::store::{card_path, load_with_snapshot, save_with_snapshot};
+use crate::domain::card::schema::{Card, CardType};
+use crate::domain::card::store::{card_path, load_with_snapshot, mint_hash_id, save_with_snapshot};
 use crate::domain::decisions::normalize_decision_id;
+use crate::domain::run::managed_event_logs;
 use crate::foundation::core::fs::{child_dirs as fs_child_dirs, ensure_dir};
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -43,8 +50,21 @@ pub struct CardMigrateReport {
     pub backup: Option<PathBuf>,
 }
 
-/// One outgoing cross-artifact reference, captured for the post-fold
-/// dangling-ref check. `from`/`field` are carried only to name the offender.
+/// One card collected in the first pass, before ids are assigned and writes
+/// happen. `kept_id` is the legacy id the card was folded from (used to key the
+/// remint and to scope the run-event rewrite); `card.id` starts equal to it and
+/// is rewritten to `card-<hash>` for non-feature cards in `assign_ids`.
+struct PendingCard {
+    kept_id: String,
+    card: Card,
+    /// Feature dir whose prose sidecars (`spec.md`/`notes.md`/`qa.md`) travel
+    /// with the card, for feature cards only.
+    prose_src: Option<PathBuf>,
+}
+
+/// One outgoing cross-artifact reference, captured for the post-rewrite
+/// dangling-ref check. `from`/`field` are carried only to name the offender;
+/// `target` is the legacy id, mapped through the remint at validation time.
 struct CardRef {
     from: String,
     field: String,
@@ -62,25 +82,62 @@ pub fn run(paths: &MaestroPaths, now: &str) -> Result<CardMigrateReport> {
         ..Default::default()
     };
 
-    let mut minted: HashSet<String> = HashSet::new();
+    // Pass 1: collect every card and its outgoing refs, writing nothing yet.
+    let mut pending: Vec<PendingCard> = Vec::new();
     let mut refs: Vec<CardRef> = Vec::new();
+    collect_features(paths, now, &mut pending)?;
+    collect_tasks(paths, now, &mut pending, &mut refs)?;
+    collect_decisions(paths, now, &mut pending, &mut refs)?;
+    collect_ideas(paths, now, &mut pending, &mut refs)?;
 
-    fold_features(paths, now, &mut minted, &mut report)?;
-    fold_tasks(paths, now, &mut minted, &mut refs, &mut report)?;
-    fold_decisions(paths, now, &mut minted, &mut refs, &mut report)?;
-    fold_ideas(paths, now, &mut minted, &mut refs, &mut report)?;
+    // E2/O3: assign stable opaque ids -- non-feature cards become `card-<hash>`,
+    // feature cards keep their slug -- and build the legacy-id -> new-id remap.
+    let remap = assign_ids(&mut pending);
 
-    validate_refs(&minted, &refs)?;
+    // E5: rewrite the structured refs (own id + typed cross-refs) to the new
+    // ids, then run the authoritative dangling-ref gate over the rewritten set.
+    rewrite_refs(&mut pending, &remap);
+    let final_ids: HashSet<String> = pending.iter().map(|entry| entry.card.id.clone()).collect();
+    validate_refs(&final_ids, &remap, &refs)?;
+
+    // Pass 2: writes happen only after the rewrite + gate pass.
+    let mut minted: HashSet<String> = HashSet::new();
+    for entry in &pending {
+        if mint(
+            paths,
+            &mut minted,
+            &mut report,
+            &entry.card,
+            entry.prose_src.as_deref(),
+            &remap,
+        )? {
+            tally(&mut report, entry.card.card_type);
+        }
+    }
+
+    // E5: rewrite run-event `task_id`s for migrated tasks. Scoped per task to
+    // "no live card at the old id" so a post-migration recreate of the same id
+    // keeps its own events (notes 53).
+    let task_remap: Vec<(String, String)> = pending
+        .iter()
+        .filter(|entry| entry.card.card_type == CardType::Task)
+        .map(|entry| (entry.kept_id.clone(), entry.card.id.clone()))
+        .collect();
+    rewrite_run_events(paths, &task_remap)?;
 
     Ok(report)
 }
 
-fn fold_features(
-    paths: &MaestroPaths,
-    now: &str,
-    minted: &mut HashSet<String>,
-    report: &mut CardMigrateReport,
-) -> Result<()> {
+fn tally(report: &mut CardMigrateReport, card_type: CardType) {
+    match card_type {
+        CardType::Feature => report.features += 1,
+        CardType::Decision => report.decisions += 1,
+        CardType::Idea => report.ideas += 1,
+        CardType::Task | CardType::Bug | CardType::Chore => report.tasks += 1,
+    }
+}
+
+fn collect_features(paths: &MaestroPaths, now: &str, pending: &mut Vec<PendingCard>) -> Result<()> {
     for feature_dir in sorted_child_dirs(&paths.features_dir())? {
         let yaml = feature_dir.join("feature.yaml");
         if !yaml.is_file() {
@@ -90,44 +147,43 @@ fn fold_features(
         let id = string_field(&source, "id")
             .or_else(|| dir_name(&feature_dir))
             .with_context(|| format!("feature missing id: {}", yaml.display()))?;
-        let card = fold::feature_card(id, source, now);
-        if mint(paths, minted, report, card, Some(&feature_dir))? {
-            report.features += 1;
-        }
+        let card = fold::feature_card(id.clone(), source, now);
+        pending.push(PendingCard {
+            kept_id: id,
+            card,
+            prose_src: Some(feature_dir),
+        });
     }
     Ok(())
 }
 
-fn fold_tasks(
+fn collect_tasks(
     paths: &MaestroPaths,
     now: &str,
-    minted: &mut HashSet<String>,
+    pending: &mut Vec<PendingCard>,
     refs: &mut Vec<CardRef>,
-    report: &mut CardMigrateReport,
 ) -> Result<()> {
     // Flat tasks (`tasks/<task>/`): no feature parent.
     for task_dir in sorted_child_dirs(&paths.tasks_dir())? {
-        fold_one_task(paths, &task_dir, None, now, minted, refs, report)?;
+        collect_one_task(&task_dir, None, now, pending, refs)?;
     }
     // Nested tasks (`features/<feat>/tasks/<task>/`): the dir IS the only carrier
     // of the feature link, because TaskRecord.feature_id is never serialized.
     for feature_dir in sorted_child_dirs(&paths.features_dir())? {
         let parent = dir_name(&feature_dir);
         for task_dir in sorted_child_dirs(&feature_dir.join("tasks"))? {
-            fold_one_task(paths, &task_dir, parent.clone(), now, minted, refs, report)?;
+            collect_one_task(&task_dir, parent.clone(), now, pending, refs)?;
         }
     }
     Ok(())
 }
 
-fn fold_one_task(
-    paths: &MaestroPaths,
+fn collect_one_task(
     task_dir: &Path,
     parent_from_dir: Option<String>,
     now: &str,
-    minted: &mut HashSet<String>,
+    pending: &mut Vec<PendingCard>,
     refs: &mut Vec<CardRef>,
-    report: &mut CardMigrateReport,
 ) -> Result<()> {
     let yaml = task_dir.join("task.yaml");
     if !yaml.is_file() {
@@ -137,52 +193,35 @@ fn fold_one_task(
     let id = string_field(&source, "id")
         .with_context(|| format!("task missing id: {}", yaml.display()))?;
     collect_task_refs(&id, &source, refs);
-    let card = fold::task_card(id, source, parent_from_dir, now);
-    if mint(paths, minted, report, card, None)? {
-        report.tasks += 1;
-    }
+    let card = fold::task_card(id.clone(), source, parent_from_dir, now);
+    pending.push(PendingCard {
+        kept_id: id,
+        card,
+        prose_src: None,
+    });
     Ok(())
 }
 
-fn fold_decisions(
+fn collect_decisions(
     paths: &MaestroPaths,
     now: &str,
-    minted: &mut HashSet<String>,
+    pending: &mut Vec<PendingCard>,
     refs: &mut Vec<CardRef>,
-    report: &mut CardMigrateReport,
 ) -> Result<()> {
-    fold_decision_store(
-        paths,
-        &paths.decisions_file(),
-        None,
-        now,
-        minted,
-        refs,
-        report,
-    )?;
+    collect_decision_store(&paths.decisions_file(), None, now, pending, refs)?;
     for feature_dir in sorted_child_dirs(&paths.features_dir())? {
         let store = feature_dir.join("decisions.yaml");
-        fold_decision_store(
-            paths,
-            &store,
-            dir_name(&feature_dir),
-            now,
-            minted,
-            refs,
-            report,
-        )?;
+        collect_decision_store(&store, dir_name(&feature_dir), now, pending, refs)?;
     }
     Ok(())
 }
 
-fn fold_decision_store(
-    paths: &MaestroPaths,
+fn collect_decision_store(
     store_path: &Path,
     feature_parent: Option<String>,
     now: &str,
-    minted: &mut HashSet<String>,
+    pending: &mut Vec<PendingCard>,
     refs: &mut Vec<CardRef>,
-    report: &mut CardMigrateReport,
 ) -> Result<()> {
     if !store_path.is_file() {
         return Ok(());
@@ -198,20 +237,21 @@ fn fold_decision_store(
         let id = string_field(record, "id")
             .with_context(|| format!("decision missing id in {}", store_path.display()))?;
         collect_decision_refs(&id, record, refs);
-        let card = fold::decision_card(id, record.clone(), feature_parent.clone(), now);
-        if mint(paths, minted, report, card, None)? {
-            report.decisions += 1;
-        }
+        let card = fold::decision_card(id.clone(), record.clone(), feature_parent.clone(), now);
+        pending.push(PendingCard {
+            kept_id: id,
+            card,
+            prose_src: None,
+        });
     }
     Ok(())
 }
 
-fn fold_ideas(
+fn collect_ideas(
     paths: &MaestroPaths,
     now: &str,
-    minted: &mut HashSet<String>,
+    pending: &mut Vec<PendingCard>,
     refs: &mut Vec<CardRef>,
-    report: &mut CardMigrateReport,
 ) -> Result<()> {
     let backlog = paths.harness_dir().join("backlog.yaml");
     if !backlog.is_file() {
@@ -228,22 +268,128 @@ fn fold_ideas(
         let id = string_field(record, "id")
             .with_context(|| format!("harness backlog item missing id in {}", backlog.display()))?;
         collect_idea_refs(&id, record, refs);
-        let card = fold::idea_card(id, record.clone(), now);
-        if mint(paths, minted, report, card, None)? {
-            report.ideas += 1;
-        }
+        let card = fold::idea_card(id.clone(), record.clone(), now);
+        pending.push(PendingCard {
+            kept_id: id,
+            card,
+            prose_src: None,
+        });
     }
     Ok(())
 }
 
+/// E2/O3: assign the stable opaque id of every card and return the legacy-id ->
+/// new-id remap that the ref rewrite uses. Feature cards keep their slug (and so
+/// seed `taken`, guaranteeing a hash can never alias a slug); every other card
+/// becomes `card-<hash>`. The remap is keyed by `normalize_ref` so a legacy
+/// short-form decision ref (`decision-1`) resolves against the canonical id.
+fn assign_ids(pending: &mut [PendingCard]) -> HashMap<String, String> {
+    let mut taken: HashSet<String> = pending
+        .iter()
+        .filter(|entry| entry.card.card_type == CardType::Feature)
+        .map(|entry| entry.card.id.clone())
+        .collect();
+    let mut remap: HashMap<String, String> = HashMap::new();
+    for entry in pending.iter_mut() {
+        if entry.card.card_type == CardType::Feature {
+            continue;
+        }
+        // O3: salt-bump against the in-memory taken set (feature slugs + ids
+        // assigned so far), then claim the result so the next mint bumps past it.
+        let new_id = mint_hash_id(&entry.kept_id, |candidate| taken.contains(candidate));
+        taken.insert(new_id.clone());
+        remap.insert(normalize_ref(&entry.kept_id), new_id.clone());
+        entry.card.id = new_id;
+    }
+    remap
+}
+
+/// E5: rewrite every structured id field in each card's `extra` to its new id --
+/// the record's own `id` plus the typed cross-refs (task blockers, decision
+/// supersedes/superseded_by, idea spawned_task/history). Human prose is never
+/// touched. A ref whose target is not in the remap is left as-is so the
+/// `validate_refs` gate can name it.
+fn rewrite_refs(pending: &mut [PendingCard], remap: &HashMap<String, String>) {
+    for entry in pending.iter_mut() {
+        let new_id = entry.card.id.clone();
+        entry
+            .card
+            .extra
+            .insert(Value::String("id".to_string()), Value::String(new_id));
+        match entry.card.card_type {
+            CardType::Task | CardType::Bug | CardType::Chore => {
+                rewrite_task_refs(&mut entry.card.extra, remap)
+            }
+            CardType::Decision => rewrite_decision_refs(&mut entry.card.extra, remap),
+            CardType::Idea => rewrite_idea_refs(&mut entry.card.extra, remap),
+            CardType::Feature => {}
+        }
+    }
+}
+
+fn rewrite_task_refs(map: &mut Mapping, remap: &HashMap<String, String>) {
+    let Some(Value::Sequence(blockers)) = map.get_mut(Value::String("blockers".to_string())) else {
+        return;
+    };
+    for blocker in blockers.iter_mut() {
+        if let Value::Mapping(blocker) = blocker
+            && let Some(Value::Mapping(blocked_ref)) =
+                blocker.get_mut(Value::String("blocked_ref".to_string()))
+        {
+            rewrite_string_field(blocked_ref, "id", remap);
+        }
+    }
+}
+
+fn rewrite_decision_refs(map: &mut Mapping, remap: &HashMap<String, String>) {
+    if let Some(Value::Sequence(targets)) = map.get_mut(Value::String("supersedes".to_string())) {
+        for target in targets.iter_mut() {
+            if let Value::String(id) = target
+                && let Some(new) = remap.get(&normalize_ref(id))
+            {
+                *id = new.clone();
+            }
+        }
+    }
+    rewrite_string_field(map, "superseded_by", remap);
+}
+
+fn rewrite_idea_refs(map: &mut Mapping, remap: &HashMap<String, String>) {
+    rewrite_string_field(map, "spawned_task", remap);
+    let Some(Value::Sequence(history)) = map.get_mut(Value::String("history".to_string())) else {
+        return;
+    };
+    for entry in history.iter_mut() {
+        if let Value::Mapping(entry) = entry {
+            rewrite_string_field(entry, "task", remap);
+        }
+    }
+}
+
+/// Rewrite a single string-valued `extra` field through the remap, in place.
+/// Leaves the field untouched when it is absent or its value is not remapped.
+fn rewrite_string_field(map: &mut Mapping, key: &str, remap: &HashMap<String, String>) {
+    let current = map
+        .get(Value::String(key.to_string()))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    if let Some(current) = current
+        && let Some(new) = remap.get(&normalize_ref(&current))
+    {
+        map.insert(Value::String(key.to_string()), Value::String(new.clone()));
+    }
+}
+
 /// Write one card, guarding id collisions and skipping cards a prior run already
-/// minted. Returns whether a new card was written.
+/// minted. After writing a feature card, its prose sidecars are copied and their
+/// structured decision pointers reminted. Returns whether a new card was written.
 fn mint(
     paths: &MaestroPaths,
     minted: &mut HashSet<String>,
     report: &mut CardMigrateReport,
-    card: Card,
+    card: &Card,
     prose_src: Option<&Path>,
+    remap: &HashMap<String, String>,
 ) -> Result<bool> {
     if !minted.insert(card.id.clone()) {
         bail!(
@@ -258,28 +404,113 @@ fn mint(
         report.skipped += 1;
         return Ok(false);
     }
-    save_with_snapshot(&path, &card, &snapshot)
+    save_with_snapshot(&path, card, &snapshot)
         .with_context(|| format!("failed to write card {}", card.id))?;
     if let Some(src) = prose_src {
         let card_dir = path
             .parent()
             .with_context(|| format!("card path missing parent: {}", path.display()))?;
         copy_feature_prose(src, card_dir)?;
+        rewrite_note_pointers(card_dir, remap)?;
     }
     Ok(true)
 }
 
-/// Fail loud when any captured reference does not resolve to a minted card
-/// (SPEC E5, P1 form). Decision ids carry legacy aliasing (`decision-7` ==
-/// `decision-007` == `7`), so both the minted-id set and every ref pass through
-/// `decisions::query::normalize_decision_id` before comparison -- mirroring the
-/// existing dangling-ref checker so the migration never aborts on a ref maestro
-/// itself resolves. Normalization is a no-op for task/feature/idea ids, so only
-/// the decision alias collapses. The hash remint + canonical rewrite are P3's job.
-fn validate_refs(minted: &HashSet<String>, refs: &[CardRef]) -> Result<()> {
-    let resolvable: HashSet<String> = minted.iter().map(|id| normalize_ref(id)).collect();
+/// E5: rewrite the structured `decision-NNN` pointers in a feature card's copied
+/// `notes.md`. Mirrors `decisions::query::structured_note_decision_refs` exactly:
+/// only the first decision token on a `" locked --"` / `" superseded --"` line is
+/// a structured pointer, so only that token is rewritten; freeform prose mentions
+/// are left untouched. The file is left byte-identical when nothing matches.
+fn rewrite_note_pointers(card_dir: &Path, remap: &HashMap<String, String>) -> Result<()> {
+    let notes = card_dir.join("notes.md");
+    if !notes.is_file() {
+        return Ok(());
+    }
+    let original = fs::read_to_string(&notes)
+        .with_context(|| format!("failed to read {}", notes.display()))?;
+    let mut changed = false;
+    let mut rewritten: Vec<String> = Vec::new();
+    for line in original.lines() {
+        let (line, did) = rewrite_note_line(line, remap);
+        changed |= did;
+        rewritten.push(line);
+    }
+    if !changed {
+        return Ok(());
+    }
+    let mut result = rewritten.join("\n");
+    if original.ends_with('\n') {
+        result.push('\n');
+    }
+    fs::write(&notes, result).with_context(|| format!("failed to write {}", notes.display()))?;
+    Ok(())
+}
+
+fn rewrite_note_line(line: &str, remap: &HashMap<String, String>) -> (String, bool) {
+    if !(line.contains(" locked --") || line.contains(" superseded --")) {
+        return (line.to_string(), false);
+    }
+    for token in line.split_whitespace() {
+        let candidate = token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '-');
+        if candidate.starts_with("decision-") && normalize_decision_id(candidate).is_ok() {
+            // First structured pointer on the line, mirroring the parser's break.
+            return match remap.get(&normalize_ref(candidate)) {
+                Some(new) => (line.replacen(candidate, new, 1), true),
+                None => (line.to_string(), false),
+            };
+        }
+    }
+    (line.to_string(), false)
+}
+
+/// E5: rewrite run-event `task_id`s for migrated tasks. Scoped per task to "no
+/// live card exists at the old id": a migrated task lives at `card-<hash>`, so
+/// `cards/<old>/` is absent and its historical events are rewritten; a
+/// post-migration `task create` that reuses the old id mints `cards/<old>/`, so
+/// its events are left alone; a crash-then-rerun still rewrites (notes 53). The
+/// token swap is targeted, not a parse-and-reserialize, so every other byte of
+/// the append-only log is preserved.
+fn rewrite_run_events(paths: &MaestroPaths, task_remap: &[(String, String)]) -> Result<()> {
+    let active: Vec<(&str, &str)> = task_remap
+        .iter()
+        .filter(|(old, _)| !card_path(paths, old).exists())
+        .map(|(old, new)| (old.as_str(), new.as_str()))
+        .collect();
+    if active.is_empty() {
+        return Ok(());
+    }
+    for log in managed_event_logs(paths)? {
+        let path = log.path();
+        let original = fs::read_to_string(path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let mut content = original.clone();
+        for (old, new) in &active {
+            let needle = format!("\"task_id\":\"{old}\"");
+            if content.contains(&needle) {
+                content = content.replace(&needle, &format!("\"task_id\":\"{new}\""));
+            }
+        }
+        if content != original {
+            fs::write(path, content)
+                .with_context(|| format!("failed to write {}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Fail loud when any captured reference does not resolve after the remint (SPEC
+/// E5). Each ref's legacy target is mapped through the remint the same way the
+/// rewrite mapped it (`normalize_ref` collapses decision aliasing); the resulting
+/// id must be one of the cards this run produced, or the run aborts naming the
+/// original target. This is the authoritative dangling-ref gate.
+fn validate_refs(
+    final_ids: &HashSet<String>,
+    remap: &HashMap<String, String>,
+    refs: &[CardRef],
+) -> Result<()> {
     for reference in refs {
-        if !resolvable.contains(&normalize_ref(&reference.target)) {
+        let resolved = remap_target(remap, &reference.target);
+        if !final_ids.contains(&resolved) {
             bail!(
                 "dangling reference: card '{}' {} points at '{}', which no migrated card provides",
                 reference.from,
@@ -291,9 +522,19 @@ fn validate_refs(minted: &HashSet<String>, refs: &[CardRef]) -> Result<()> {
     Ok(())
 }
 
+/// Map a legacy ref target through the remint, falling back to the raw target
+/// (which then fails the `final_ids` membership check as a dangling ref).
+fn remap_target(remap: &HashMap<String, String>, target: &str) -> String {
+    remap
+        .get(&normalize_ref(target))
+        .cloned()
+        .unwrap_or_else(|| target.to_string())
+}
+
 /// Normalize an id the way the decision system resolves references, falling back
 /// to the raw id for a form it cannot normalize (mirrors `decisions::query`,
 /// which uses the same `unwrap_or_else` fallback on both sides of its check).
+/// A no-op for task/feature/idea ids, so only the decision alias collapses.
 fn normalize_ref(id: &str) -> String {
     normalize_decision_id(id).unwrap_or_else(|_| id.to_string())
 }
@@ -478,7 +719,7 @@ mod tests {
 
     use super::*;
     use crate::domain::card::schema::{Card, CardType};
-    use crate::domain::card::store::load as load_card;
+    use crate::domain::card::store::{hash_id, load as load_card};
     use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
     use crate::domain::feature::FeatureStatus;
     use crate::domain::feature::schema::FeatureRecord;
@@ -513,28 +754,36 @@ mod tests {
             .expect("parse fixture")
     }
 
-    fn store_element(store_path: &Path, key: &str, id: &str) -> Value {
-        let store = read_value(store_path);
-        store
-            .as_mapping()
-            .and_then(|store| store.get(Value::String(key.to_string())))
-            .and_then(Value::as_sequence)
-            .and_then(|items| {
-                items.iter().find(|item| {
-                    item.as_mapping()
-                        .and_then(|item| item.get(Value::String("id".to_string())))
-                        .and_then(Value::as_str)
-                        == Some(id)
-                })
-            })
-            .cloned()
-            .unwrap_or_else(|| panic!("element {id} not found in {}", store_path.display()))
-    }
-
     fn load(paths: &MaestroPaths, id: &str) -> Card {
         load_card(&card_path(paths, id))
             .expect("load card")
             .unwrap_or_else(|| panic!("card {id} missing"))
+    }
+
+    /// Persist a card directly, as a post-migration verb would (used to simulate
+    /// a `task create` that reuses a migrated id).
+    fn save_card(paths: &MaestroPaths, card: &Card) {
+        let path = card_path(paths, &card.id);
+        let snapshot = load_with_snapshot(&path).expect("snapshot");
+        save_with_snapshot(&path, card, &snapshot).expect("save card");
+    }
+
+    /// Append one `task_proof` event line carrying `task_id`/`claim` to a
+    /// managed `events.jsonl`, in the compact serde_json shape the rewrite scans.
+    fn append_event(path: &Path, task_id: &str, claim: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("event dir");
+        }
+        let line = format!(
+            "{{\"schema_version\":\"1\",\"event\":\"task_proof\",\"task_id\":\"{task_id}\",\"claim\":\"{claim}\",\"ts\":\"2026-06-01T01:00:00Z\"}}\n"
+        );
+        let mut existing = fs::read_to_string(path).unwrap_or_default();
+        existing.push_str(&line);
+        fs::write(path, existing).expect("write event");
+    }
+
+    fn read_text(path: &Path) -> String {
+        fs::read_to_string(path).expect("read file")
     }
 
     fn decision(id: &str, status: DecisionStatus, feature: Option<&str>) -> DecisionRecord {
@@ -667,8 +916,13 @@ mod tests {
         assert_eq!(report.skipped, 0, "nothing skipped on a fresh run");
         let backup = report.backup.clone().expect("backup taken");
 
-        for id in [
-            "csv-export",
+        // E2: the feature card keeps its slug; every other card is reminted to
+        // `card-<hash>` and lives at that dir.
+        assert!(
+            card_path(&paths, "csv-export").is_file(),
+            "feature keeps its slug id"
+        );
+        for kept in [
             "task-001",
             "task-002",
             "decision-001",
@@ -677,14 +931,20 @@ mod tests {
             "hb-1",
         ] {
             assert!(
-                card_path(&paths, id).is_file(),
-                "card {id} written under its kept id"
+                !card_path(&paths, kept).is_file(),
+                "non-feature card no longer lives at its kept id {kept}"
+            );
+            assert!(
+                card_path(&paths, &hash_id(kept)).is_file(),
+                "{kept} reminted to {}",
+                hash_id(kept)
             );
         }
 
         // Feature card: derived identity + prose sidecars copied beside it.
         let feature_card = load(&paths, "csv-export");
         assert_eq!(feature_card.card_type, CardType::Feature);
+        assert_eq!(feature_card.id, "csv-export");
         assert_eq!(
             feature_card.status, "in_progress",
             "status kept verbatim, not coarsened"
@@ -702,35 +962,40 @@ mod tests {
         }
 
         // Task parent: nested task captures its feature; flat task has none.
-        let task1_card = load(&paths, "task-001");
+        // `parent` is a feature slug, never reminted.
+        let task1_card = load(&paths, &hash_id("task-001"));
+        assert_eq!(task1_card.id, hash_id("task-001"));
         assert_eq!(task1_card.parent.as_deref(), Some("csv-export"));
         assert_eq!(
             task1_card.status, "in_progress",
             "task status comes from `state`"
         );
-        let task2_card = load(&paths, "task-002");
+        let task2_card = load(&paths, &hash_id("task-002"));
         assert_eq!(task2_card.parent, None);
         assert_eq!(task2_card.card_type, CardType::Task);
 
         // Decision parent: explicit `feature` field, then per-feature store dir.
         assert_eq!(
-            load(&paths, "decision-002").parent.as_deref(),
+            load(&paths, &hash_id("decision-002")).parent.as_deref(),
             Some("csv-export")
         );
         assert_eq!(
-            load(&paths, "decision-003").parent.as_deref(),
+            load(&paths, &hash_id("decision-003")).parent.as_deref(),
             Some("csv-export")
         );
-        assert_eq!(load(&paths, "decision-001").card_type, CardType::Decision);
+        assert_eq!(
+            load(&paths, &hash_id("decision-001")).card_type,
+            CardType::Decision
+        );
 
         // Idea: harness item maps to idea; first_seen/last_seen drive timestamps.
-        let idea = load(&paths, "hb-1");
+        let idea = load(&paths, &hash_id("hb-1"));
         assert_eq!(idea.card_type, CardType::Idea);
         assert_eq!(idea.created_at, "2026-06-01T09:00:00Z");
         assert_eq!(idea.updated_at, "2026-06-02T09:00:00Z");
 
-        // Losslessness: extra is the verbatim source mapping after the card disk
-        // round-trip, and still deserializes to the original typed record.
+        // Losslessness for the feature: its id is unchanged and it has no
+        // structured cross-refs, so `extra` stays the verbatim source mapping.
         let feature_src = read_value(&paths.features_dir().join("csv-export").join("feature.yaml"));
         assert_eq!(
             Value::Mapping(feature_card.extra.clone()),
@@ -740,7 +1005,8 @@ mod tests {
         let _: FeatureRecord = serde_yaml::from_value(Value::Mapping(feature_card.extra.clone()))
             .expect("feature extra reconstructs a FeatureRecord");
 
-        // Task typed round-trip is the cutover guarantee: old code reads `extra`.
+        // Task typed round-trip is the cutover guarantee: `extra` reconstructs the
+        // exact record, with its own id and blocker ref reminted to the hash form.
         let task_src_path = paths
             .features_dir()
             .join("csv-export")
@@ -750,22 +1016,48 @@ mod tests {
         let task_original: TaskRecord =
             serde_yaml::from_str(&fs::read_to_string(&task_src_path).expect("read task"))
                 .expect("parse task");
+        let mut task_expected = task_original.clone();
+        task_expected.id = hash_id("task-001");
+        task_expected.blockers[0].blocked_ref = Some(BlockerRef {
+            kind: BlockerKind::Decision,
+            id: hash_id("decision-001"),
+        });
         let task_reconstructed: TaskRecord =
             serde_yaml::from_value(Value::Mapping(task1_card.extra.clone()))
                 .expect("reconstruct task");
         assert_eq!(
-            task_reconstructed, task_original,
-            "task extra reconstructs the exact record"
+            task_reconstructed, task_expected,
+            "task extra reconstructs with reminted id + blocker ref"
         );
 
-        // Decision and idea elements also survive verbatim.
-        let decision_src = store_element(&paths.decisions_file(), "decisions", "decision-001");
+        // Decision cross-refs are reminted: superseded_by and supersedes.
+        let d1: DecisionRecord = serde_yaml::from_value(Value::Mapping(
+            load(&paths, &hash_id("decision-001")).extra.clone(),
+        ))
+        .expect("reconstruct decision-001");
+        assert_eq!(d1.id, hash_id("decision-001"));
         assert_eq!(
-            Value::Mapping(load(&paths, "decision-001").extra.clone()),
-            decision_src
+            d1.superseded_by.as_deref(),
+            Some(hash_id("decision-002").as_str())
         );
-        let idea_src = store_element(&paths.harness_dir().join("backlog.yaml"), "items", "hb-1");
-        assert_eq!(Value::Mapping(idea.extra.clone()), idea_src);
+        let d2: DecisionRecord = serde_yaml::from_value(Value::Mapping(
+            load(&paths, &hash_id("decision-002")).extra.clone(),
+        ))
+        .expect("reconstruct decision-002");
+        assert_eq!(d2.supersedes, vec![hash_id("decision-001")]);
+
+        // Idea cross-refs are reminted: spawned_task and history.task.
+        let idea_rec: BacklogItem =
+            serde_yaml::from_value(Value::Mapping(idea.extra.clone())).expect("reconstruct idea");
+        assert_eq!(idea_rec.id, hash_id("hb-1"));
+        assert_eq!(
+            idea_rec.spawned_task.as_deref(),
+            Some(hash_id("task-002").as_str())
+        );
+        assert_eq!(
+            idea_rec.history[0].task.as_deref(),
+            Some(hash_id("task-001").as_str())
+        );
 
         // Backup is a restorable snapshot of the pre-fold trees, minus backups/.
         assert!(
@@ -848,11 +1140,13 @@ mod tests {
     }
 
     #[test]
-    fn colliding_ids_fail_loud() {
+    fn legacy_id_colliding_with_feature_slug_is_reminted_apart() {
         let root = temp_repo("collision");
         let paths = brownfield(&root);
 
-        // A decision whose id collides with the feature slug minted earlier.
+        // A decision whose legacy id equals the feature slug. Under keep-ids this
+        // aborted as a collision; the hash remint gives the decision a
+        // `card-<hash>` id while the feature keeps its slug, so both migrate.
         let mut global = DecisionStore::empty();
         global.decisions = vec![
             decision("decision-001", DecisionStatus::Locked, None),
@@ -860,12 +1154,13 @@ mod tests {
         ];
         write_record(&paths.decisions_file(), &global);
 
-        let error = run(&paths, NOW).expect_err("id collision must fail loud");
-        let message = error.to_string();
-        assert!(
-            message.contains("collision") && message.contains("csv-export"),
-            "error names the collision: {error}"
-        );
+        run(&paths, NOW).expect("hash remint resolves the slug/id collision");
+
+        // Feature keeps its slug dir; the colliding decision lands at its hash.
+        assert_eq!(load(&paths, "csv-export").card_type, CardType::Feature);
+        let decision_hash = hash_id("csv-export");
+        assert_ne!(decision_hash, "csv-export");
+        assert_eq!(load(&paths, &decision_hash).card_type, CardType::Decision);
 
         cleanup(&root);
     }
@@ -888,6 +1183,117 @@ mod tests {
         let report =
             run(&paths, NOW).expect("short-form decision ref resolves, no false dangling abort");
         assert_eq!(report.decisions, 2, "both decisions migrated");
+
+        // The short-form ref is reminted to the canonical decision's hash.
+        let d2_rec: DecisionRecord = serde_yaml::from_value(Value::Mapping(
+            load(&paths, &hash_id("decision-002")).extra.clone(),
+        ))
+        .expect("reconstruct decision-002");
+        assert_eq!(d2_rec.supersedes, vec![hash_id("decision-001")]);
+
+        cleanup(&root);
+    }
+
+    #[test]
+    fn migration_rewrites_run_event_attribution() {
+        // E5: a proof event naming a migrated task is rewritten to the reminted
+        // id, so `proof`/`claims` (run::visit_managed_events + RunEvent::task_id,
+        // the claims.rs join) still attributes the proof end-to-end.
+        let root = temp_repo("proof-attr");
+        let paths = MaestroPaths::new(&root);
+
+        let task = TaskRecord::draft("task-001", "Writer", "2026-06-01T01:00:00Z");
+        write_record(
+            &paths
+                .tasks_dir()
+                .join(task.directory_name())
+                .join("task.yaml"),
+            &task,
+        );
+        let events = paths
+            .maestro_dir()
+            .join("runs")
+            .join("cli-1")
+            .join("events.jsonl");
+        append_event(&events, "task-001", "exports a header row");
+
+        run(&paths, NOW).expect("migrate");
+        let hash = hash_id("task-001");
+
+        let mut attributed: Vec<String> = Vec::new();
+        let mut stale = false;
+        crate::domain::run::visit_managed_events(&paths, |record| {
+            let event = record.event();
+            if event.task_id() == Some(hash.as_str()) {
+                attributed.extend(event.claim().map(str::to_string));
+            }
+            if event.task_id() == Some("task-001") {
+                stale = true;
+            }
+            Ok(())
+        })
+        .expect("visit events");
+
+        assert!(!stale, "no event still carries the pre-migration task id");
+        assert_eq!(
+            attributed,
+            vec!["exports a header row".to_string()],
+            "proof attributes to the reminted id"
+        );
+
+        cleanup(&root);
+    }
+
+    #[test]
+    fn run_event_rewrite_skips_a_recreated_task_id() {
+        // E5 scoping (notes 53): a migrated task's events are rewritten, but a
+        // post-migration `task create` that reuses the old id keeps its own
+        // events -- the live card at the old id guards them.
+        let root = temp_repo("event-scope");
+        let paths = MaestroPaths::new(&root);
+
+        let task = TaskRecord::draft("task-001", "Writer", "2026-06-01T01:00:00Z");
+        write_record(
+            &paths
+                .tasks_dir()
+                .join(task.directory_name())
+                .join("task.yaml"),
+            &task,
+        );
+        let events = paths
+            .maestro_dir()
+            .join("runs")
+            .join("cli-1")
+            .join("events.jsonl");
+        append_event(&events, "task-001", "wrote the rows");
+
+        run(&paths, NOW).expect("first migrate");
+        let hash = hash_id("task-001");
+        assert!(
+            read_text(&events).contains(&format!("\"task_id\":\"{hash}\"")),
+            "first migrate rewrites the historical event to the reminted id"
+        );
+        assert!(!read_text(&events).contains("\"task_id\":\"task-001\""));
+
+        // Simulate a post-migration recreate of task-001 (Option A keeps numbered
+        // minting) plus a fresh event under that live id.
+        save_card(
+            &paths,
+            &Card::new("task-001", CardType::Task, "New writer", "draft", NOW),
+        );
+        append_event(&events, "task-001", "new run output");
+
+        run(&paths, "2026-06-09T00:00:00Z").expect("second migrate");
+
+        let after = read_text(&events);
+        assert!(
+            after.contains("\"task_id\":\"task-001\""),
+            "the recreated task's event is left untouched: {after}"
+        );
+        assert!(
+            after.contains(&format!("\"task_id\":\"{hash}\"")),
+            "the migrated task's historical event stays reminted: {after}"
+        );
 
         cleanup(&root);
     }

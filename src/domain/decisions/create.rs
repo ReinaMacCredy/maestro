@@ -82,10 +82,11 @@ fn create_open_card(
     if let Some(feature_id) = feature {
         feature::ensure_exists(paths, feature_id)?;
     }
-    let reserved = reserve_next_card_decision_id(paths)?;
-    let record = open_record(reserved.id.clone(), title, context, feature);
+    // Card mode: content-addressed `card-<hash>` id (title + process nonce, SPEC
+    // O3'), no reservation marker -- the create-time CAS (D1) guards collisions.
+    let id = card_store::mint_card_id(paths, title);
+    let record = open_record(id, title, context, feature);
     cards::create(paths, &record)?;
-    drop(reserved._marker);
     let path = card_path(paths, &record.id);
     Ok(DecisionWriteReport {
         record,
@@ -407,21 +408,6 @@ fn ensure_decision_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
     } else {
         bail!("decision not found: {id}")
     }
-}
-
-/// Reserve the next `decision-NNN` id in card mode through the shared D2 seam:
-/// the floor is the highest of the live decision cards and the frozen legacy
-/// markdown (still resolvable, so its ids must not be reused), and the `.alloc-`
-/// marker is held by the caller until the card lands. The marker gives the
-/// allocation loop liveness; the create-time CAS (D1) remains the safety belt.
-fn reserve_next_card_decision_id(paths: &MaestroPaths) -> Result<card_store::ReservedCardId> {
-    let mut floor = cards::max_decision_number(paths)?;
-    for entry in decision_entries(&paths.decisions_dir())? {
-        if let Some(number) = parse_decision_number(&entry.file_name) {
-            floor = floor.max(number);
-        }
-    }
-    card_store::reserve_next_numbered_id(paths, "decision", floor)
 }
 
 fn mark_superseded(paths: &MaestroPaths, id: &str, by: &str) -> Result<()> {

@@ -671,18 +671,11 @@ fn warn_dangling_note_pointers(
     existing: &BTreeSet<String>,
     warnings: &mut Vec<String>,
 ) {
-    let features_dir = paths.features_dir();
-    let Ok(entries) = fs::read_dir(&features_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        let path = entry.path().join("notes.md");
+    // The feature prose sidecars moved with the card model: legacy mode keeps
+    // them under `features/<feat>/notes.md`, card mode under `cards/<feat>/notes.md`.
+    // Reading the wrong root would make this gate vacuously pass (no notes found
+    // -> no warnings), so the path source is mode-branched.
+    for path in feature_note_paths(paths) {
         let Ok(Some(contents)) = read_to_string_if_exists(&path) else {
             continue;
         };
@@ -694,6 +687,30 @@ fn warn_dangling_note_pointers(
                 ));
             }
         }
+    }
+}
+
+/// Every `notes.md` that may carry structured decision pointers, mode-branched:
+/// card mode reads the feature cards' sidecars, legacy mode the feature dirs.
+fn feature_note_paths(paths: &MaestroPaths) -> Vec<PathBuf> {
+    match store_mode(paths) {
+        StoreMode::Cards => crate::domain::card::query::scan(paths)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|card| card.card_type == crate::domain::card::schema::CardType::Feature)
+            .map(|card| paths.cards_dir().join(card.id).join("notes.md"))
+            .collect(),
+        StoreMode::Legacy => fs::read_dir(paths.features_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_type()
+                    .is_ok_and(|file_type| file_type.is_dir() && !file_type.is_symlink())
+            })
+            .map(|entry| entry.path().join("notes.md"))
+            .collect(),
     }
 }
 
@@ -724,15 +741,26 @@ fn structured_note_decision_refs(contents: &str) -> Vec<String> {
         }
         for token in line.split_whitespace() {
             let candidate = token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '-');
-            if candidate.starts_with("decision-")
-                && let Ok(id) = normalize_decision_id(candidate)
-            {
+            if let Some(id) = note_decision_pointer(candidate) {
                 ids.push(id);
                 break;
             }
         }
     }
     ids
+}
+
+/// The decision id a structured note token points at: a canonical `decision-NNN`
+/// (normalized) or a content-addressed `card-<hash>` (taken raw, the post-remint
+/// form). Any other token is not a structured pointer.
+fn note_decision_pointer(candidate: &str) -> Option<String> {
+    if candidate.starts_with("decision-") {
+        normalize_decision_id(candidate).ok()
+    } else if candidate.starts_with("card-") {
+        Some(candidate.to_string())
+    } else {
+        None
+    }
 }
 
 /// The title from a decision file's `# decision-NNN: Title` heading, or
@@ -771,12 +799,21 @@ fn indent(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::PathBuf;
     use std::process;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use super::dangling_reference_warnings;
+    use crate::domain::card::schema::{Card, CardType};
+    use crate::domain::card::store::{card_path, load_with_snapshot, save_with_snapshot};
+    use crate::domain::decisions::create::create_open;
     use crate::domain::decisions::query::{load_store_with_snapshot, save_store_with_snapshot};
     use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
+    use crate::foundation::core::fs::ensure_dir;
+    use crate::foundation::core::paths::MaestroPaths;
+
+    const NOW: &str = "1970-01-01T00:00:00Z";
 
     fn temp_file(name: &str) -> PathBuf {
         let nanos = SystemTime::now()
@@ -784,6 +821,24 @@ mod tests {
             .expect("invariant: test clock should be after Unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!("maestro-{name}-{}-{nanos}.yaml", process::id()))
+    }
+
+    fn card_mode_repo(name: &str) -> MaestroPaths {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock should be after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("maestro-{name}-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+        paths
+    }
+
+    fn save_feature_card(paths: &MaestroPaths, id: &str) {
+        let card = Card::new(id, CardType::Feature, "Feature", "in_progress", NOW);
+        let path = card_path(paths, id);
+        let snapshot = load_with_snapshot(&path).expect("snapshot");
+        save_with_snapshot(&path, &card, &snapshot).expect("save feature card");
     }
 
     fn decision(id: &str, title: &str) -> DecisionRecord {
@@ -829,5 +884,51 @@ mod tests {
                 && format!("{error:#}").contains("changed since it was read; re-run"),
             "{error:#}"
         );
+    }
+
+    /// Part E liveness: in card mode the dangling-note gate must read the feature
+    /// cards' sidecars (`cards/<feat>/notes.md`) and recognize a `card-<hash>`
+    /// pointer. The pre-remint code read `features/<feat>/notes.md`, which is
+    /// empty in card mode, so it would pass vacuously here. The valid-pointer leg
+    /// guards over-warning; the dangling leg is the liveness proof -- an inert
+    /// branch finds no notes and stays silent, failing this assertion.
+    #[test]
+    fn dangling_note_pointer_in_card_mode_warns_only_when_unresolved() {
+        let paths = card_mode_repo("dangling-card-note");
+
+        // A real decision card minted in card mode carries a `card-<hash>` id.
+        let decision = create_open(&paths, "Writer choice", None, None).expect("create decision");
+        let decision_id = decision.record.id.clone();
+        assert!(
+            decision_id.starts_with("card-"),
+            "card-mode decision id: {decision_id}"
+        );
+
+        // A feature card whose notes.md points at that decision (structured
+        // pointer on a `locked --` line).
+        save_feature_card(&paths, "csv-export");
+        let notes = paths.cards_dir().join("csv-export").join("notes.md");
+        fs::write(
+            &notes,
+            format!("- {decision_id} locked -- chose the streaming writer\n"),
+        )
+        .expect("write notes");
+
+        assert!(
+            dangling_reference_warnings(&paths).is_empty(),
+            "a resolvable card-<hash> pointer must not warn"
+        );
+
+        // Repoint at a decision that does not exist: the gate must now fire.
+        fs::write(&notes, "- card-deadbe locked -- points at nothing\n").expect("rewrite notes");
+        let warnings = dangling_reference_warnings(&paths);
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.contains("card-deadbe")),
+            "a dangling card-<hash> pointer must warn: {warnings:?}"
+        );
+
+        let _ = fs::remove_dir_all(paths.maestro_dir());
     }
 }

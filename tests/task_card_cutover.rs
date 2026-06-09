@@ -83,7 +83,9 @@ fn task_verbs_read_and_write_the_card_after_migration() {
     let legacy_yaml = legacy_task_yaml(&paths, &feature_id);
 
     // Fold the legacy trees into cards/. Non-destructive: the legacy task.yaml is
-    // left in place, frozen at `draft`.
+    // left in place, frozen at `draft`. The remint reassigns the task a stable
+    // content-hash id (SPEC E2/O3), so we capture it from the scan rather than
+    // hardcoding -- the old `task-001` no longer addresses anything.
     card_migrate::run(&paths, NOW).expect("migration succeeds");
     assert_eq!(
         store_mode(&paths),
@@ -91,7 +93,19 @@ fn task_verbs_read_and_write_the_card_after_migration() {
         "cards/ present -> card store"
     );
 
-    let migrated = card(&paths, "task-001");
+    // Scan + count read the card: feature_id is recovered from card.parent, so
+    // the on-demand counts group by it without a directory to read.
+    let records = task::load_task_records(&tasks_dir).expect("scan tasks");
+    assert_eq!(records.len(), 1);
+    let task1_id = records[0].id.clone();
+    assert!(
+        task1_id.starts_with("card-"),
+        "task reminted to a content-hash id: {task1_id}"
+    );
+    assert_eq!(records[0].feature_id.as_deref(), Some("csv-export"));
+    assert_eq!(records[0].state, TaskState::Draft);
+
+    let migrated = card(&paths, &task1_id);
     assert_eq!(migrated.card_type, CardType::Task);
     assert_eq!(
         migrated.parent.as_deref(),
@@ -101,19 +115,11 @@ fn task_verbs_read_and_write_the_card_after_migration() {
     assert_eq!(migrated.status, "draft");
     assert_eq!(legacy_state(&legacy_yaml), "draft");
 
-    // Scan + count read the card: feature_id is recovered from card.parent, so
-    // the on-demand counts group by it without a directory to read.
-    let records = task::load_task_records(&tasks_dir).expect("scan tasks");
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].id, "task-001");
-    assert_eq!(records[0].feature_id.as_deref(), Some("csv-export"));
-    assert_eq!(records[0].state, TaskState::Draft);
     let counts = count_tasks_by_feature(&tasks_dir).expect("count by feature");
     assert_eq!(counts.get("csv-export").map(|c| c.total), Some(1));
 
-    // create_task in card mode mints the next id off the card store (no legacy
-    // archive here -> next = max(cards=1, archive=0)+1) and writes a card, not a
-    // legacy tree. This is the one CRUD verb with its own allocation path.
+    // create_task in card mode mints a content-addressed `card-<hash>` id from the
+    // title plus a process nonce (SPEC O3') and writes a card, not a legacy tree.
     let second = task::create_task(
         &tasks_dir,
         "Second task",
@@ -127,30 +133,36 @@ fn task_verbs_read_and_write_the_card_after_migration() {
         },
     )
     .expect("create task in card mode");
-    assert_eq!(second.id, "task-002");
-    assert_eq!(card(&paths, "task-002").card_type, CardType::Task);
-    assert_eq!(card(&paths, "task-002").parent, None);
+    assert!(
+        second.id.starts_with("card-"),
+        "card-mode create mints a content-hash id: {}",
+        second.id
+    );
+    assert_ne!(second.id, task1_id, "the two cards get distinct ids");
+    assert_eq!(card(&paths, &second.id).card_type, CardType::Task);
+    assert_eq!(card(&paths, &second.id).parent, None);
 
-    // Drive the lifecycle through the card. Each verb's load must read the card
-    // the previous verb wrote (not a stale snapshot), proving the CAS round-trip.
+    // Drive the lifecycle through the card, addressed by its content-hash id. Each
+    // verb's load must read the card the previous verb wrote (not a stale
+    // snapshot), proving the CAS round-trip.
     task::transition_task(
         &tasks_dir,
-        "task-001",
+        &task1_id,
         TaskState::Exploring,
         "maestro",
         NOW,
         task::TransitionDetails::default(),
     )
     .expect("explore");
-    assert_eq!(card(&paths, "task-001").status, "exploring");
+    assert_eq!(card(&paths, &task1_id).status, "exploring");
 
-    let accepted = task::accept_task(&tasks_dir, "task-001", "maestro", NOW).expect("accept");
+    let accepted = task::accept_task(&tasks_dir, &task1_id, "maestro", NOW).expect("accept");
     assert_eq!(accepted.state, TaskState::Ready);
-    assert_eq!(card(&paths, "task-001").status, "ready");
+    assert_eq!(card(&paths, &task1_id).status, "ready");
 
-    let claimed = task::claim_task(&tasks_dir, "task-001", "claude#s1", NOW).expect("claim");
+    let claimed = task::claim_task(&tasks_dir, &task1_id, "claude#s1", NOW).expect("claim");
     assert_eq!(claimed.state, TaskState::InProgress);
-    assert_eq!(card(&paths, "task-001").status, "in_progress");
+    assert_eq!(card(&paths, &task1_id).status, "in_progress");
 
     // Three card writes later, the legacy task.yaml is still frozen -> the card,
     // not the legacy file, is authoritative.
@@ -162,9 +174,9 @@ fn task_verbs_read_and_write_the_card_after_migration() {
 
     // set_feature in card mode retargets card.parent with no directory move: the
     // count drops the feature, and no feature task tree is created or removed.
-    task::set_feature(&tasks_dir, "task-001", None, "maestro", NOW).expect("detach feature");
+    task::set_feature(&tasks_dir, &task1_id, None, "maestro", NOW).expect("detach feature");
     assert_eq!(
-        card(&paths, "task-001").parent,
+        card(&paths, &task1_id).parent,
         None,
         "the parent field is cleared in place"
     );
@@ -175,5 +187,9 @@ fn task_verbs_read_and_write_the_card_after_migration() {
         "the detached task no longer counts toward the feature"
     );
     let records = task::load_task_records(&tasks_dir).expect("rescan");
-    assert_eq!(records[0].feature_id, None);
+    let task1 = records
+        .iter()
+        .find(|record| record.id == task1_id)
+        .expect("task1 still present after detach");
+    assert_eq!(task1.feature_id, None);
 }

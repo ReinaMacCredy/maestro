@@ -93,34 +93,52 @@ fn lock_supersedes_across_the_global_feature_boundary_after_migration() {
     );
 
     // Fold the legacy trees into cards/. Non-destructive: both YAML stores stay
-    // in place, frozen at `open`.
+    // in place, frozen at `open`. The remint reassigns each decision a stable
+    // content-hash id (SPEC E2/O3), so `decision-001`/`decision-002` no longer
+    // address anything -- recover the reminted ids by title from the card store.
     card_migrate::run(&paths, NOW).expect("migration succeeds");
     assert_eq!(store_mode(&paths), StoreMode::Cards, "cards/ -> card store");
-    assert_eq!(
-        card(&paths, "decision-001").parent,
-        None,
-        "global -> no parent"
+
+    let post = decisions::list(&paths).expect("list after migration");
+    let find_id = |title: &str| -> String {
+        post.iter()
+            .find(|entry| entry.title == title)
+            .unwrap_or_else(|| panic!("decision titled {title:?} present after migration"))
+            .id
+            .clone()
+    };
+    let d1_id = find_id("Use fire-and-forget hooks");
+    let d2_id = find_id("Use a replay queue for hooks");
+    assert!(
+        d1_id.starts_with("card-"),
+        "global decision reminted: {d1_id}"
     );
+    assert!(
+        d2_id.starts_with("card-"),
+        "feature decision reminted: {d2_id}"
+    );
+
+    assert_eq!(card(&paths, &d1_id).parent, None, "global -> no parent");
     assert_eq!(
-        card(&paths, "decision-002").parent.as_deref(),
+        card(&paths, &d2_id).parent.as_deref(),
         Some(feature_id.as_str()),
         "per-feature -> parent recovered"
     );
 
     // Lock the FEATURE decision, superseding the GLOBAL one. The card-mode lock
-    // must load decision-002's card, validate the cross-boundary target against
-    // the union (cards + legacy markdown), write the locked card, and flip the
-    // superseded target's card -- all without a store-file search.
+    // must load d2's card, validate the cross-boundary target against the union
+    // (cards + legacy markdown), write the locked card, and flip the superseded
+    // target's card -- all without a store-file search.
     let report = decisions::lock(
         &paths,
-        "decision-002",
+        &d2_id,
         "buffer to a replay queue",
         &["fire-and-forget".to_string()],
         Some("queue depth gauge"),
-        &["decision-001".to_string()],
+        std::slice::from_ref(&d1_id),
     )
     .expect("lock crosses the boundary");
-    assert_eq!(report.path, card_path(&paths, "decision-002"));
+    assert_eq!(report.path, card_path(&paths, &d2_id));
     assert_eq!(
         report.source,
         DecisionSource::Feature {
@@ -129,7 +147,7 @@ fn lock_supersedes_across_the_global_feature_boundary_after_migration() {
     );
     assert!(
         report.note_line.as_deref().is_some_and(
-            |line| line.contains("decision-002 locked -- Use a replay queue for hooks")
+            |line| line.contains(&format!("{d2_id} locked -- Use a replay queue for hooks"))
         ),
         "the lock notes the owning feature: {:?}",
         report.note_line
@@ -137,20 +155,20 @@ fn lock_supersedes_across_the_global_feature_boundary_after_migration() {
 
     // The superseding decision's card is locked with its decision text, preview,
     // supersedes target, and lock timestamp.
-    let locked = structured(&paths, "decision-002");
+    let locked = structured(&paths, &d2_id);
     assert_eq!(locked.status, DecisionStatus::Locked);
     assert_eq!(locked.decision.as_deref(), Some("buffer to a replay queue"));
     assert_eq!(locked.preview.as_deref(), Some("queue depth gauge"));
-    assert_eq!(locked.supersedes, vec!["decision-001".to_string()]);
+    assert_eq!(locked.supersedes, vec![d1_id.clone()]);
     assert!(locked.locked_at.is_some(), "locked_at stamped");
-    assert_eq!(card(&paths, "decision-002").status, "locked");
+    assert_eq!(card(&paths, &d2_id).status, "locked");
 
     // The cross-store target's card is flipped to superseded -- the proof the
     // card-mode mark_superseded reached a card that began in a different store.
-    let target = structured(&paths, "decision-001");
+    let target = structured(&paths, &d1_id);
     assert_eq!(target.status, DecisionStatus::Superseded);
-    assert_eq!(target.superseded_by.as_deref(), Some("decision-002"));
-    assert_eq!(card(&paths, "decision-001").status, "superseded");
+    assert_eq!(target.superseded_by.as_deref(), Some(d2_id.as_str()));
+    assert_eq!(card(&paths, &d1_id).status, "superseded");
 
     // Both legacy YAML stores stay frozen at `open` -> the cards, not the YAML,
     // are authoritative.
@@ -165,42 +183,53 @@ fn lock_supersedes_across_the_global_feature_boundary_after_migration() {
         "feature store frozen across the lock write"
     );
 
-    // The owning feature's notes.md (still the legacy feature dir in card mode)
-    // carries the lock note.
+    // The owning feature's notes.md (still the legacy feature dir in card mode --
+    // feature::note has not yet cut over to cards/, deferred to P5d) carries the
+    // lock note under the reminted id.
     let notes = std::fs::read_to_string(paths.features_dir().join(&feature_id).join("notes.md"))
         .expect("feature notes.md written");
     assert!(
-        notes.contains("decision-002 locked"),
+        notes.contains(&format!("{d2_id} locked")),
         "feature note recorded: {notes}"
     );
 
-    // create_open in card mode mints the next id off the card store + legacy
-    // markdown (here decision-003), exercises feature::ensure_exists, and writes a
-    // Decision card with the parent recovered from the feature home.
+    // create_open in card mode mints a content-addressed `card-<hash>` id from the
+    // title plus a process nonce (SPEC O3'), exercises feature::ensure_exists, and
+    // writes a Decision card with the parent recovered from the feature home.
     let third = decisions::create_open(&paths, "Stream rows lazily", None, Some(&feature_id))
         .expect("create a decision in card mode");
-    assert_eq!(third.record.id, "decision-003");
+    let third_id = third.record.id.clone();
+    assert!(
+        third_id.starts_with("card-"),
+        "card-mode create mints a content-hash id: {third_id}"
+    );
+    assert_ne!(third_id, d1_id, "distinct from the migrated decisions");
+    assert_ne!(third_id, d2_id, "distinct from the migrated decisions");
     assert_eq!(
         third.source,
         DecisionSource::Feature {
             feature_id: feature_id.clone()
         }
     );
-    let third_card = card(&paths, "decision-003");
+    let third_card = card(&paths, &third_id);
     assert_eq!(third_card.card_type, CardType::Decision);
     assert_eq!(third_card.parent.as_deref(), Some(feature_id.as_str()));
 
     // Read verbs see the card store: the feature's decisions list the two
-    // per-feature cards, and the global list spans all three.
+    // per-feature cards, and the global list spans all three. Content-hash ids
+    // sort lexically, not by creation order, so compare as sorted sets.
     let for_feature =
         decisions::decisions_for_feature(&paths, &feature_id).expect("decisions for feature");
-    let feature_ids: Vec<&str> = for_feature
-        .iter()
-        .map(|record| record.id.as_str())
-        .collect();
-    assert_eq!(feature_ids, vec!["decision-002", "decision-003"]);
+    let mut feature_ids: Vec<String> = for_feature.iter().map(|record| record.id.clone()).collect();
+    feature_ids.sort();
+    let mut expected_feature = vec![d2_id.clone(), third_id.clone()];
+    expected_feature.sort();
+    assert_eq!(feature_ids, expected_feature);
 
     let all = decisions::list(&paths).expect("list decisions");
-    let listed: Vec<&str> = all.iter().map(|entry| entry.id.as_str()).collect();
-    assert_eq!(listed, vec!["decision-001", "decision-002", "decision-003"]);
+    let mut listed: Vec<String> = all.iter().map(|entry| entry.id.clone()).collect();
+    listed.sort();
+    let mut expected_all = vec![d1_id.clone(), d2_id.clone(), third_id.clone()];
+    expected_all.sort();
+    assert_eq!(listed, expected_all);
 }

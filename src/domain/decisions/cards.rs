@@ -25,7 +25,7 @@ use serde_yaml::{Mapping, Value};
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot};
-use crate::domain::decisions::query::{DecisionSource, parse_decision_number};
+use crate::domain::decisions::query::DecisionSource;
 use crate::domain::decisions::schema::DecisionRecord;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -154,19 +154,6 @@ pub(crate) fn scan(
         }
     }
     Ok(decisions)
-}
-
-/// Highest `decision-NNN` number among live decision cards (0 when none). The
-/// legacy markdown numbers are folded in by the caller, which alone can read the
-/// `.maestro/decisions/` dir.
-pub(crate) fn max_decision_number(paths: &MaestroPaths) -> Result<u32> {
-    let mut max = 0_u32;
-    for (record, _, _) in scan(paths, true)? {
-        if let Some(number) = parse_decision_number(&record.id) {
-            max = max.max(number);
-        }
-    }
-    Ok(max)
 }
 
 /// Create a new decision card from a record. The write is a CAS against the

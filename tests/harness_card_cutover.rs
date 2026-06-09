@@ -83,12 +83,21 @@ fn unapply_after_migration_writes_the_card_and_keeps_the_evidence_stamp() {
 
     card_migrate::run(&paths, NOW).expect("migration succeeds");
     assert_eq!(store_mode(&paths), StoreMode::Cards, "cards/ -> card store");
-    assert_eq!(card(&paths, "hb-001").card_type, CardType::Idea);
 
     // READ: the backlog verbs reconstruct the item from the idea card and the
-    // store-level evidence_stamp from the metadata file.
+    // store-level evidence_stamp from the metadata file. The remint reassigns the
+    // item a stable content-hash id (SPEC E2/O3), so hb-001 no longer addresses
+    // anything -- recover the reminted id from the reconstructed backlog.
     let loaded = harness::load_backlog(&paths).expect("load backlog in card mode");
-    let item = loaded.find("hb-001").expect("hb-001 present");
+    assert_eq!(loaded.items.len(), 1, "one migrated backlog item");
+    let item_id = loaded.items[0].id.clone();
+    assert!(
+        item_id.starts_with("card-"),
+        "backlog item reminted to a content-hash id: {item_id}"
+    );
+    assert_eq!(card(&paths, &item_id).card_type, CardType::Idea);
+
+    let item = loaded.find(&item_id).expect("item present");
     assert_eq!(item.status, "accepted", "item read from the card");
     assert_eq!(
         loaded.evidence_stamp, "seed-stamp",
@@ -97,11 +106,11 @@ fn unapply_after_migration_writes_the_card_and_keeps_the_evidence_stamp() {
 
     // WRITE through a real verb: unapply is a whole-store RMW that never touches the
     // evidence_stamp, so it isolates the item-card write from the metadata file.
-    let unapplied = harness::unapply(&paths, "hb-001", Some("reverting")).expect("unapply");
+    let unapplied = harness::unapply(&paths, &item_id, Some("reverting")).expect("unapply");
     assert_eq!(unapplied.item.status, "proposed");
 
     // The change landed in the idea card (its derived status flipped)...
-    assert_eq!(card(&paths, "hb-001").status, "proposed");
+    assert_eq!(card(&paths, &item_id).status, "proposed");
 
     // ...the items moved to cards, and the metadata file kept the stamp...
     let meta = metadata(&paths);
@@ -116,7 +125,7 @@ fn unapply_after_migration_writes_the_card_and_keeps_the_evidence_stamp() {
 
     // ...and a fresh read round-trips the unapplied item from the card.
     let reloaded = harness::load_backlog(&paths).expect("reload");
-    let item = reloaded.find("hb-001").expect("hb-001 still present");
+    let item = reloaded.find(&item_id).expect("item still present");
     assert_eq!(item.status, "proposed");
     assert!(item.spawned_task.is_none(), "unapply cleared the task link");
 }

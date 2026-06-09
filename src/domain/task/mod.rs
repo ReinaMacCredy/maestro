@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::schema::CardType;
 use crate::domain::card::store as card_store;
 use crate::domain::card::{StoreMode, store_mode};
 use crate::foundation::core::fs::{
@@ -102,17 +103,43 @@ pub enum BlockerTarget {
 }
 
 impl BlockerTarget {
-    /// Classify an optional `--by` reference into a typed target by its id
-    /// prefix; `None` is a manual/human block. The prefix-parse is the
-    /// transitional form -- P5c (SPEC-beads-model remint) swaps it for a card
-    /// type lookup in place.
-    pub fn from_ref(by: Option<String>) -> Self {
-        match by {
-            Some(by) if by.starts_with("task-") => Self::Task(by),
-            Some(by) if by.starts_with("decision-") => Self::Decision(by),
-            Some(by) => Self::External(by),
-            None => Self::Human,
+    /// Classify an optional `--by` reference into a typed blocker target. A
+    /// content-addressed `card-<hash>` id no longer encodes its type, so in card
+    /// mode the referenced card's own `card_type` decides the routing; the
+    /// id-prefix parse is the fallback for an absent card or legacy mode. `None`
+    /// is a manual/human block.
+    pub fn from_ref(paths: &MaestroPaths, by: Option<String>) -> Self {
+        let Some(by) = by else {
+            return Self::Human;
+        };
+        card_blocker_target(paths, &by).unwrap_or_else(|| Self::from_prefix(by))
+    }
+
+    fn from_prefix(by: String) -> Self {
+        if by.starts_with("task-") {
+            Self::Task(by)
+        } else if by.starts_with("decision-") {
+            Self::Decision(by)
+        } else {
+            Self::External(by)
         }
+    }
+}
+
+/// Route a `--by` id to a typed target by the referenced card's type, or `None`
+/// when no card resolves it (the caller falls back to the id-prefix parse). A
+/// Feature/Idea card is not a Task/Decision blocker target, so it also yields
+/// `None` and is left to the prefix parse.
+fn card_blocker_target(paths: &MaestroPaths, by: &str) -> Option<BlockerTarget> {
+    let card = card_store::load(&card_store::card_path(paths, by))
+        .ok()
+        .flatten()?;
+    match card.card_type {
+        CardType::Task | CardType::Bug | CardType::Chore => {
+            Some(BlockerTarget::Task(by.to_string()))
+        }
+        CardType::Decision => Some(BlockerTarget::Decision(by.to_string())),
+        CardType::Feature | CardType::Idea => None,
     }
 }
 
@@ -131,21 +158,20 @@ pub fn create_task(
     if options.covers.iter().any(|cover| cover.trim().is_empty()) {
         bail!("task cover cannot be empty; pass an acceptance id such as ac-1");
     }
-    // Both modes reserve a `.alloc-` marker that gives the id-allocation loop
-    // liveness (concurrent creates bump past each other's held markers and mint
-    // distinct numbers, SPEC D2) and hold it until the artifacts land. Card mode
-    // allocates above the live task cards unioned with the still-legacy archive
-    // (L6a: never reissue a freed id); the create-time CAS (D1) is the safety belt.
+    // Legacy mode reserves a `.alloc-` marker that gives the numbered
+    // id-allocation loop liveness (concurrent creates bump past each other's
+    // held markers, SPEC D2) and holds it until the artifacts land. Card mode
+    // mints a content-addressed `card-<hash>` id from the title plus a process
+    // nonce (SPEC O3') that needs no marker -- the create-time CAS (D1) is the
+    // collision belt, so two creators racing on the same hash both attempt the
+    // write and the loser fails loud rather than silently bumping.
     let card_paths = lookup::paths_for_tasks_dir(tasks_dir)
         .filter(|paths| store_mode(paths) == StoreMode::Cards);
     let (id, _marker) = match card_paths.as_ref() {
-        Some(paths) => {
-            let reserved = reserve_next_card_task_id(paths, tasks_dir)?;
-            (reserved.id, reserved._marker)
-        }
+        Some(paths) => (card_store::mint_card_id(paths, title), None),
         None => {
             let reserved = reserve_next_task_id(tasks_dir)?;
-            (reserved.id, reserved._marker)
+            (reserved.id, Some(reserved._marker))
         }
     };
     let mut task = TaskRecord::draft(&id, title, &options.created_at);
@@ -168,21 +194,6 @@ pub fn create_task(
     }
     drop(_marker);
     Ok(task)
-}
-
-/// Reserve the next `task-NNN` id in card mode through the shared D2 seam: the
-/// floor is the max of live task cards and the still-legacy archive tasks (L6a --
-/// never reissue an archived id), and the `.alloc-` marker is held by the caller
-/// until the card lands.
-fn reserve_next_card_task_id(
-    paths: &MaestroPaths,
-    tasks_dir: &Path,
-) -> Result<card_store::ReservedCardId> {
-    let mut floor = cards::max_task_number(paths)?;
-    if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir) {
-        floor = floor.max(max_task_number(&archive_tasks_dir)?);
-    }
-    card_store::reserve_next_numbered_id(paths, "task", floor)
 }
 
 /// Load one Task record by id or id prefix.
@@ -1063,20 +1074,23 @@ mod tests {
     };
 
     #[test]
-    fn blocker_target_from_ref_classifies_by_prefix() {
+    fn blocker_target_from_ref_falls_back_to_prefix_when_no_card() {
+        // No card store resolves these ids, so classification falls through to
+        // the legacy id-prefix parse -- the card-type lookup is exercised e2e.
+        let paths = MaestroPaths::new(Path::new("/nonexistent-maestro-from-ref"));
         assert_eq!(
-            BlockerTarget::from_ref(Some("task-001".to_string())),
+            BlockerTarget::from_ref(&paths, Some("task-001".to_string())),
             BlockerTarget::Task("task-001".to_string())
         );
         assert_eq!(
-            BlockerTarget::from_ref(Some("decision-007".to_string())),
+            BlockerTarget::from_ref(&paths, Some("decision-007".to_string())),
             BlockerTarget::Decision("decision-007".to_string())
         );
         assert_eq!(
-            BlockerTarget::from_ref(Some("PR #42".to_string())),
+            BlockerTarget::from_ref(&paths, Some("PR #42".to_string())),
             BlockerTarget::External("PR #42".to_string())
         );
-        assert_eq!(BlockerTarget::from_ref(None), BlockerTarget::Human);
+        assert_eq!(BlockerTarget::from_ref(&paths, None), BlockerTarget::Human);
     }
 
     #[test]
