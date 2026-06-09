@@ -205,10 +205,11 @@ fn init_creates_minimal_artifact_tree() {
             .is_file()
     );
     assert!(
-        temp_dir
+        !temp_dir
             .path()
             .join(".maestro/harness/backlog.yaml")
-            .is_file()
+            .exists(),
+        "the backlog has no file of its own; items live as idea cards (D7)"
     );
     assert!(temp_dir.path().join(".maestro/cards").is_dir());
     assert!(temp_dir.path().join(".maestro/skills").is_dir());
@@ -370,7 +371,7 @@ fn init_force_groups_multiple_backups_in_one_operation_directory() {
     let temp_dir = TestTempDir::new("maestro-init-test");
     init_git_marker(temp_dir.path());
     let harness = temp_dir.path().join(".maestro/harness/HARNESS.md");
-    let backlog = temp_dir.path().join(".maestro/harness/backlog.yaml");
+    let config = temp_dir.path().join(".maestro/harness/harness.yml");
     fs::create_dir_all(
         harness
             .parent()
@@ -378,7 +379,7 @@ fn init_force_groups_multiple_backups_in_one_operation_directory() {
     )
     .expect("invariant: harness directory should be creatable");
     fs::write(&harness, "custom harness\n").expect("invariant: harness should be writable");
-    fs::write(&backlog, "custom backlog\n").expect("invariant: backlog should be writable");
+    fs::write(&config, "custom config\n").expect("invariant: config should be writable");
 
     let output = maestro(&["init", "--force"], temp_dir.path());
 
@@ -394,7 +395,7 @@ fn init_force_groups_multiple_backups_in_one_operation_directory() {
     assert_eq!(backup_dirs.len(), 1);
     let backup_dir = backup_dirs[0].path();
     assert!(backup_dir.join(".maestro/harness/HARNESS.md").is_file());
-    assert!(backup_dir.join(".maestro/harness/backlog.yaml").is_file());
+    assert!(backup_dir.join(".maestro/harness/harness.yml").is_file());
 }
 
 #[test]

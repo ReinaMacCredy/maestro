@@ -183,20 +183,18 @@ fn doctor_reports_ok_for_initialized_phase_three_artifacts() {
 
 #[test]
 fn doctor_words_missing_resources_uniformly_with_the_init_merge_repair() {
-    // R31: a deleted harness.yml/backlog.yaml must read "is missing" (like the dir
-    // checks), carry the working `init --merge` repair, and never leak the internal
+    // R31: a deleted harness.yml must read "is missing" (like the dir checks),
+    // carry the working `init --merge` repair, and never leak the internal
     // "failed to read" io phrasing -- one vocabulary across the missing-resource class.
     //
-    // Card-mode change: there is no `.maestro/features` dir to be "missing" anymore;
-    // feature cards live in the flat store and `check features` reads cards, always
-    // reporting ok. So only harness.yml + backlog.yaml remain in the missing-resource
-    // class, and the uniform repair hint fires exactly twice.
+    // Card-mode change: feature cards live in the flat store (`check features`
+    // always reads cards) and the backlog has no file of its own -- items live as
+    // idea cards (D7). So harness.yml is the last member of the missing-resource
+    // class, and the uniform repair hint fires exactly once.
     let temp = setup_repo("maestro-doctor-missing");
     let repo = temp.path();
     fs::remove_file(repo.join(".maestro/harness/harness.yml"))
         .expect("invariant: scaffolded harness.yml should exist");
-    fs::remove_file(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: scaffolded backlog.yaml should exist");
 
     let doctor = maestro(repo, &["doctor"]);
     assert_failure(&doctor, &["doctor"]);
@@ -206,16 +204,14 @@ fn doctor_words_missing_resources_uniformly_with_the_init_merge_repair() {
         !err.contains("failed to read"),
         "missing resources must not leak the io phrasing:\n{err}"
     );
-    for path in ["harness.yml", "backlog.yaml"] {
-        assert!(
-            err.contains(path),
-            "doctor should name {path} as missing:\n{err}"
-        );
-    }
+    assert!(
+        err.contains("harness.yml"),
+        "doctor should name harness.yml as missing:\n{err}"
+    );
     assert_eq!(
         err.matches("is missing; run `maestro init --merge` to repair")
             .count(),
-        2,
+        1,
         "every missing resource should carry the uniform repair hint:\n{err}"
     );
 }
@@ -641,22 +637,20 @@ fn doctor_warns_on_recordless_live_task_and_feature_dirs_without_failing() {
 }
 
 #[test]
-fn query_backlog_reports_empty_state_when_the_backlog_file_is_absent() {
-    // R29/R22: a repo with no harness backlog (deleted, or never extracted)
-    // must read as an empty backlog, not leak a raw ENOENT + absolute path.
+fn query_backlog_reports_empty_state_when_no_idea_cards_exist() {
+    // R29/R22: the backlog has no file of its own (D7) -- a repo with no idea
+    // cards must read as an empty backlog, not leak a raw ENOENT + absolute path.
     let temp = setup_repo("maestro-query-backlog-absent");
     let repo = temp.path();
-    fs::remove_file(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: the scaffolded backlog should exist before removal");
 
     let backlog = run_success(repo, &["query", "backlog"]);
     assert!(
         backlog.contains("no backlog items found"),
-        "absent backlog should report the empty state, got:\n{backlog}"
+        "empty backlog should report the empty state, got:\n{backlog}"
     );
     assert!(
         !backlog.contains("failed to read") && !backlog.contains("os error"),
-        "absent backlog must not leak a raw io error:\n{backlog}"
+        "empty backlog must not leak a raw io error:\n{backlog}"
     );
 }
 

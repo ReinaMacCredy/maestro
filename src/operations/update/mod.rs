@@ -16,7 +16,7 @@ use crate::domain::skills::{self, GlobalSkillsOutcome};
 use crate::foundation::core::hash::hex_digest;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{
-    BACKLOG_SCHEMA_VERSION, Compat, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION, classify,
+    Compat, HARNESS_SCHEMA_VERSION, INSTALL_LOCK_SCHEMA_VERSION, classify,
 };
 
 pub use github_release::GitHubCurlDownloader;
@@ -569,10 +569,6 @@ pub fn detect_schema_mismatches(paths: &MaestroPaths) -> Result<Vec<SchemaMismat
         (
             paths.harness_dir().join("harness.yml"),
             HARNESS_SCHEMA_VERSION,
-        ),
-        (
-            paths.harness_dir().join("backlog.yaml"),
-            BACKLOG_SCHEMA_VERSION,
         ),
         (paths.install_lock_file(), INSTALL_LOCK_SCHEMA_VERSION),
     ];

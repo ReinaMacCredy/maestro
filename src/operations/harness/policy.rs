@@ -37,27 +37,47 @@ pub fn set_claims_only_verification(paths: &MaestroPaths) -> Result<()> {
     harness_domain::set_claims_only_verification(paths)
 }
 
+/// Metadata-only stamp over the detect evidence: run-event logs plus the whole
+/// card store. Idea cards are NOT excluded -- detect's own writes are absorbed
+/// by persisting the stamp AFTER a merge saves (post-write stamping), so any
+/// later task/decision/feature/run mutation still mismatches.
 pub fn evidence_stamp(paths: &MaestroPaths) -> Result<String> {
     let runs = run_event_stamp(paths)?;
-    let cards = card_stamp(&managed_path(
+    let cards = tree_stamp(&managed_path(
         paths,
         ".maestro/cards",
         SymlinkPolicy::RejectAllComponents,
     )?)?;
-    let decisions = tree_stamp(&managed_path(
-        paths,
-        ".maestro/decisions",
-        SymlinkPolicy::RejectAllComponents,
-    )?)?;
     Ok(format!(
-        "runs={}:{};cards={}:{};decisions={}:{}",
-        runs.count,
-        runs.max_modified_nanos,
-        cards.count,
-        cards.max_modified_nanos,
-        decisions.count,
-        decisions.max_modified_nanos
+        "runs={}:{};cards={}:{}",
+        runs.count, runs.max_modified_nanos, cards.count, cards.max_modified_nanos
     ))
+}
+
+/// Read the persisted detect-skip stamp. Absent reads as `None` (a fresh repo
+/// or a cleared cache simply re-detects).
+pub fn read_detect_stamp(paths: &MaestroPaths) -> Result<Option<String>> {
+    let path = detect_stamp_path(paths)?;
+    match fs::read_to_string(&path) {
+        Ok(raw) => Ok(Some(raw.trim().to_string())),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("failed to read {}", path.display())),
+    }
+}
+
+/// Persist the detect-skip stamp. A plain overwrite: the stamp is a cache, not
+/// a store -- a lost or torn write costs one re-detect, never data.
+pub fn write_detect_stamp(paths: &MaestroPaths, stamp: &str) -> Result<()> {
+    let path = detect_stamp_path(paths)?;
+    fs::write(&path, stamp).with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn detect_stamp_path(paths: &MaestroPaths) -> Result<std::path::PathBuf> {
+    managed_path(
+        paths,
+        ".maestro/harness/detect-stamp",
+        SymlinkPolicy::RejectAllComponents,
+    )
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -77,28 +97,6 @@ fn run_event_stamp(paths: &MaestroPaths) -> Result<Stamp> {
 fn tree_stamp(path: &Path) -> Result<Stamp> {
     let mut stamp = Stamp::default();
     visit_tree(path, &mut stamp)?;
-    Ok(stamp)
-}
-
-/// Stamp the card store, skipping detect-owned `hb-*` idea cards and the root
-/// dir's own mtime: detect's persisted friction output must not invalidate its
-/// own skip cache, while any task, decision, or feature card mutation must.
-fn card_stamp(cards_dir: &Path) -> Result<Stamp> {
-    let mut stamp = Stamp::default();
-    let entries = match fs::read_dir(cards_dir) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(stamp),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to read {}", cards_dir.display()));
-        }
-    };
-    for entry in entries {
-        let entry = entry.with_context(|| format!("failed to list {}", cards_dir.display()))?;
-        if entry.file_name().to_string_lossy().starts_with("hb-") {
-            continue;
-        }
-        visit_tree(&entry.path(), &mut stamp)?;
-    }
     Ok(stamp)
 }
 

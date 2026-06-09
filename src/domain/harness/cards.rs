@@ -1,16 +1,11 @@
-//! Harness-backlog <-> card glue for the SPEC-beads-model P1 dual-read cutover.
+//! Harness-backlog <-> card glue.
 //!
 //! Unlike feature/task/decision -- per-record stores whose verbs each touch one
 //! record -- the harness backlog is an AGGREGATE: its verbs load a whole
-//! `BacklogConfig`, run an id-reassigning, item-retaining merge, and save it back.
-//! In card mode each item folds to an `idea`-typed `.maestro/cards/hb-NNN/card.yaml`
-//! (the migration's `fold_ideas` source), while the store-level metadata
-//! (`schema_version` + `evidence_stamp`) stays in `.maestro/harness/backlog.yaml`
-//! with `items: []`. The split is the sanctioned cost of cutting an aggregate over
-//! in P1; D7/P5 collapses it into the one store.
-//!
-//! P1 assumption: every `idea` card IS a harness backlog item (the migration's
-//! only idea source). A non-harness idea source is D7/P5's concern.
+//! `BacklogConfig`, run an item-retaining merge, and save it back. Each item is
+//! an `idea`-typed `.maestro/cards/<id>/card.yaml`; the card store is the only
+//! store (D7), with no metadata file beside it. The detect-skip evidence stamp
+//! lives in `.maestro/harness/detect-stamp` (a cache, not a store).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -80,12 +75,23 @@ fn item_to_mapping(item: &BacklogItem) -> Result<Mapping> {
 }
 
 /// Fold a backlog item into its idea card.
-fn card_for(item: &BacklogItem) -> Result<Card> {
+pub(crate) fn card_for(item: &BacklogItem) -> Result<Card> {
     Ok(fold::idea_card(
         item.id.clone(),
         item_to_mapping(item)?,
         &utc_now_timestamp(),
     ))
+}
+
+/// E7's `idea` arm, dispatched from [`CardType::reconcile`]: merge a
+/// fingerprint-matched re-detection into the existing card by reconstructing
+/// both items, running the pair-level backlog merge, and folding the result
+/// back. The card round-trip is lossless (see `item_round_trips_through_the_card`).
+pub(crate) fn reconcile_idea(existing: Card, incoming: Card) -> Result<Card> {
+    let mut existing_item = item_from_card(existing, "existing idea card")?;
+    let incoming_item = item_from_card(incoming, "incoming idea card")?;
+    crate::domain::harness::backlog::reconcile_item(&mut existing_item, &incoming_item);
+    card_for(&existing_item)
 }
 
 /// Reconstruct every live `Idea`-typed card with its load-time CAS snapshot and
@@ -218,6 +224,80 @@ mod tests {
             reconstructed, item,
             "every field survives the round-trip through card.extra"
         );
+    }
+
+    /// SPEC E7 through the card-level hook: a fingerprint-matched re-detection
+    /// merges into the existing idea card -- recurrence and evidence refresh from
+    /// the incoming detection while identity, status, and the spawned-task link
+    /// stay with the existing item.
+    #[test]
+    fn reconcile_merges_a_re_detection_into_the_existing_idea_card() {
+        let mut existing = item();
+        existing.item_type = "explicit_intervention".to_string();
+        existing.status = "accepted".to_string();
+        existing.spawned_task = Some("card-abc123".to_string());
+
+        let mut incoming = item();
+        incoming.item_type = "explicit_intervention".to_string();
+        incoming.title = "re-detected title".to_string();
+        incoming.last_seen = "2026-06-10T00:00:00Z".to_string();
+        incoming.occurrences = 5;
+        incoming.sessions_hit.push("task-009".to_string());
+        incoming.evidence.push("a fresh correction".to_string());
+
+        let merged = CardType::Idea
+            .reconcile(
+                card_for(&existing).expect("fold the existing item"),
+                card_for(&incoming).expect("fold the incoming item"),
+            )
+            .expect("reconcile the idea cards");
+        let merged = item_from_card(merged, "merged idea card").expect("reconstruct the item");
+
+        assert_eq!(merged.id, existing.id, "identity stays with the existing card");
+        assert_eq!(merged.title, existing.title, "the existing title is kept");
+        assert_eq!(merged.status, "accepted", "a non-regressed status is preserved");
+        assert_eq!(merged.spawned_task.as_deref(), Some("card-abc123"));
+        assert_eq!(merged.last_seen, "2026-06-10T00:00:00Z");
+        assert_eq!(merged.occurrences, 5);
+        assert_eq!(
+            merged.sessions_hit,
+            vec!["task-002", "task-005", "task-009"],
+            "recurrence refreshes from the fresh detection"
+        );
+        assert!(
+            merged.evidence.contains(&"a fresh correction".to_string()),
+            "new evidence accumulates: {:?}",
+            merged.evidence
+        );
+        assert!(
+            merged.evidence.contains(&existing.evidence[0]),
+            "existing evidence survives: {:?}",
+            merged.evidence
+        );
+    }
+
+    /// D6 through the hook: a re-detected `measured` state-detector note reopens
+    /// to `proposed`, logs the regression, and drops the spawned-task link so the
+    /// next accept spawns a fresh task.
+    #[test]
+    fn reconcile_reopens_a_regressed_measured_state_note() {
+        let mut existing = item();
+        existing.status = "measured".to_string();
+        existing.spawned_task = Some("card-abc123".to_string());
+
+        let merged = CardType::Idea
+            .reconcile(
+                card_for(&existing).expect("fold the existing item"),
+                card_for(&item()).expect("fold the incoming item"),
+            )
+            .expect("reconcile the idea cards");
+        let merged = item_from_card(merged, "merged idea card").expect("reconstruct the item");
+
+        assert_eq!(merged.status, "proposed", "the regressed note reopens");
+        assert_eq!(merged.spawned_task, None);
+        assert_eq!(merged.history.len(), 1, "{:?}", merged.history);
+        assert_eq!(merged.history[0].result, "regressed");
+        assert_eq!(merged.history[0].task.as_deref(), Some("card-abc123"));
     }
 
     /// SPEC D1 in card mode: two readers each take a load-time snapshot; the first

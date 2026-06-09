@@ -10,10 +10,9 @@ use crate::domain::task;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{ALLOC_MARKER_PREFIX, child_dirs};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::foundation::core::schema::{
-    BACKLOG_SCHEMA_VERSION, Compat, HARNESS_SCHEMA_VERSION, classify,
-};
-use crate::harness::schema::{BacklogConfig, HarnessConfig};
+use crate::foundation::core::schema::{Compat, HARNESS_SCHEMA_VERSION, classify};
+use crate::harness::schema::HarnessConfig;
+use crate::operations;
 
 /// Execute `maestro doctor`.
 pub fn run() -> Result<()> {
@@ -137,8 +136,8 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
 /// One vocabulary for every "a scaffolded resource is gone" error: the `{path}
 /// is missing` phrasing the directory checks already use, plus the repair the
 /// recorder check already names. `init --merge` restores any deleted piece
-/// (verified: harness.yml, backlog.yaml, the features/decisions dirs, and a
-/// fully-removed `.maestro`), so the hint is honest at every site.
+/// (verified: harness.yml and a fully-removed `.maestro`), so the hint is
+/// honest at every site.
 fn missing_resource(path: &std::path::Path) -> String {
     format!(
         "{} is missing; run `maestro init --merge` to repair",
@@ -238,25 +237,15 @@ fn display_relative(repo_root: &Path, path: &Path) -> String {
 }
 
 fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
-    let path = paths.harness_dir().join("backlog.yaml");
-    if !path.exists() {
-        errors.push(missing_resource(&path));
-        return;
-    }
-    match read_yaml::<BacklogConfig>(&path) {
-        Ok(backlog)
-            if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) == Compat::Exact =>
-        {
+    // The backlog has no file of its own (D7): items live as idea cards, so the
+    // check counts them through the same load every harness verb uses.
+    match operations::harness::load_backlog(paths) {
+        Ok(backlog) => {
             checks.push(DoctorCheck {
                 name: "backlog",
                 detail: format!("{} item(s)", backlog.items.len()),
             });
         }
-        Ok(backlog) => errors.push(schema_diagnostic(
-            &path,
-            BACKLOG_SCHEMA_VERSION,
-            &backlog.schema_version,
-        )),
         Err(error) => errors.push(format!("{error:#}")),
     }
 }

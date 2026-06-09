@@ -35,12 +35,10 @@ pub fn refresh(
         .map(|proposal| proposal.fingerprint.clone())
         .collect::<BTreeSet<_>>();
     let mut snapshot = backlog::load_with_snapshot(paths)?;
-    backlog::merge_proposals(&mut snapshot.backlog, proposals);
-    if escalation.enabled {
-        snapshot.backlog.evidence_stamp = policy::evidence_stamp(paths)?;
-    }
+    backlog::merge_proposals(paths, &mut snapshot.backlog, proposals)?;
     backlog::apply_escalation_policy(&mut snapshot.backlog, &escalation);
     backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+    persist_detect_stamp(paths, &escalation)?;
     let ready = snapshot
         .backlog
         .items
@@ -60,15 +58,25 @@ fn refresh_if_stale(paths: &MaestroPaths) -> Result<(BacklogConfig, EscalationPo
     }
     let stamp = policy::evidence_stamp(paths)?;
     let mut snapshot = backlog::load_with_snapshot(paths)?;
-    if snapshot.backlog.evidence_stamp == stamp {
+    if policy::read_detect_stamp(paths)?.as_deref() == Some(stamp.as_str()) {
         return Ok((snapshot.backlog, escalation));
     }
     let proposals = detect::detect_with_policy(paths, &escalation)?;
-    backlog::merge_proposals(&mut snapshot.backlog, proposals);
-    snapshot.backlog.evidence_stamp = stamp;
+    backlog::merge_proposals(paths, &mut snapshot.backlog, proposals)?;
     backlog::apply_escalation_policy(&mut snapshot.backlog, &escalation);
     backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+    persist_detect_stamp(paths, &escalation)?;
     Ok((snapshot.backlog, escalation))
+}
+
+/// Post-write stamping: persist the detect-skip stamp only AFTER a merge's
+/// cards land, so detect's own idea-card writes are absorbed into the stored
+/// stamp instead of invalidating it. Recomputed fresh here for that reason.
+fn persist_detect_stamp(paths: &MaestroPaths, escalation: &EscalationPolicy) -> Result<()> {
+    if !escalation.enabled {
+        return Ok(());
+    }
+    policy::write_detect_stamp(paths, &policy::evidence_stamp(paths)?)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -162,7 +170,7 @@ pub fn propose_agent_audit(
         "agent-audit",
     );
     item.fingerprint = fingerprint;
-    backlog::merge_proposals_preserving_absent(&mut snapshot.backlog, vec![item.clone()]);
+    backlog::merge_proposals_preserving_absent(paths, &mut snapshot.backlog, vec![item.clone()])?;
     let escalation = policy::load_policy(paths)?;
     backlog::apply_escalation_policy(&mut snapshot.backlog, &escalation);
     backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
@@ -273,7 +281,9 @@ fn linked_task_verified(paths: &MaestroPaths, item: &BacklogItem) -> bool {
 /// persisting, returning the backlog and the set of currently-detected
 /// fingerprints (used by the measure verdict). Re-derive runs on every command
 /// per SPEC §5.1, so apply and measure share this step.
-fn detect_and_merge(paths: &MaestroPaths) -> Result<(backlog::BacklogSnapshot, BTreeSet<String>)> {
+fn detect_and_merge(
+    paths: &MaestroPaths,
+) -> Result<(backlog::BacklogSnapshot, BTreeSet<String>, EscalationPolicy)> {
     let escalation = policy::load_policy(paths)?;
     let proposals = detect::detect_with_policy(paths, &escalation)?;
     let fresh = proposals
@@ -281,12 +291,9 @@ fn detect_and_merge(paths: &MaestroPaths) -> Result<(backlog::BacklogSnapshot, B
         .map(|proposal| proposal.fingerprint.clone())
         .collect::<BTreeSet<_>>();
     let mut snapshot = backlog::load_with_snapshot(paths)?;
-    backlog::merge_proposals(&mut snapshot.backlog, proposals);
-    if escalation.enabled {
-        snapshot.backlog.evidence_stamp = policy::evidence_stamp(paths)?;
-    }
+    backlog::merge_proposals(paths, &mut snapshot.backlog, proposals)?;
     backlog::apply_escalation_policy(&mut snapshot.backlog, &escalation);
-    Ok((snapshot, fresh))
+    Ok((snapshot, fresh, escalation))
 }
 
 /// Accept a proposal (D0/A): spawn a linked task and record the link. Re-accepting
@@ -294,7 +301,7 @@ fn detect_and_merge(paths: &MaestroPaths) -> Result<(backlog::BacklogSnapshot, B
 /// note to `proposed` clears the old link, so the next accept spawns a fresh task
 /// rather than silently reusing a closed one (impl-default (c)).
 pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<AppliedItem> {
-    let (mut snapshot, _) = detect_and_merge(paths)?;
+    let (mut snapshot, _, escalation) = detect_and_merge(paths)?;
 
     let item = snapshot.backlog.find_mut(id)?;
     match item.status.as_str() {
@@ -356,6 +363,7 @@ pub fn apply(paths: &MaestroPaths, id: &str, checks: Vec<String>) -> Result<Appl
         let rollback = rollback_spawned_task(paths, &task.id);
         return Err(save_failure_after_spawn(error, rollback, &task.id));
     }
+    persist_detect_stamp(paths, &escalation)?;
     Ok(AppliedItem {
         item: accepted,
         checks,
@@ -395,7 +403,7 @@ pub fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<BacklogIt
     if reason.trim().is_empty() {
         bail!("dismiss reason must not be empty");
     }
-    let (mut snapshot, _) = detect_and_merge(paths)?;
+    let (mut snapshot, _, escalation) = detect_and_merge(paths)?;
     let now = utc_now_timestamp();
     let item = snapshot.backlog.find_mut(id)?;
     item.status = "dismissed".to_string();
@@ -408,6 +416,7 @@ pub fn dismiss(paths: &MaestroPaths, id: &str, reason: &str) -> Result<BacklogIt
     });
     let dismissed = item.clone();
     backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+    persist_detect_stamp(paths, &escalation)?;
     Ok(dismissed)
 }
 
@@ -526,7 +535,7 @@ fn inspect_linked_task(paths: &MaestroPaths, task_id: &str) -> Result<UnappliedT
 /// reverted state detector reads as "ineffective", and a behavioral item closed by
 /// judgment while still emitting gets a "friction still detected" warning (T9).
 pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogItem, bool)> {
-    let (mut snapshot, fresh) = detect_and_merge(paths)?;
+    let (mut snapshot, fresh, escalation) = detect_and_merge(paths)?;
 
     // Read identity + status before any gate or mutation.
     let (status, fingerprint, item_type, spawned_task) = {
@@ -593,6 +602,7 @@ pub fn measure(paths: &MaestroPaths, id: &str, force: bool) -> Result<(BacklogIt
     }
     let measured = item.clone();
     backlog::save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
+    persist_detect_stamp(paths, &escalation)?;
     Ok((measured, friction_live))
 }
 
@@ -706,7 +716,7 @@ mod tests {
     use super::*;
 
     const SAVE_ERROR: &str =
-        "backlog.yaml is being written by another Maestro process; re-run the command";
+        ".maestro/cards/card-a1b2c3/card.yaml is being written by another Maestro process; re-run the command";
 
     #[test]
     fn save_failure_after_spawn_returns_the_save_error_when_rollback_succeeds() {

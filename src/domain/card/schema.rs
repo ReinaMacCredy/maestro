@@ -1,3 +1,4 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
@@ -137,6 +138,20 @@ impl CardType {
     pub fn workable(&self) -> bool {
         matches!(self, Self::Task | Self::Bug | Self::Chore)
     }
+
+    /// Merge a re-detected `incoming` card into its `existing` counterpart when
+    /// a store refresh re-encounters the same identity (SPEC E7). Only `idea`
+    /// cards carry merge semantics -- the fingerprint-keyed recurrence,
+    /// regression-reopen, and evidence accumulation a detector run feeds the
+    /// harness backlog; every other type replaces wholesale (incoming wins).
+    pub fn reconcile(&self, existing: Card, incoming: Card) -> Result<Card> {
+        match self {
+            // Deliberate intra-domain call: the idea merge semantics live with
+            // the harness item schema, not with the card envelope.
+            Self::Idea => crate::domain::harness::cards::reconcile_idea(existing, incoming),
+            _ => Ok(incoming),
+        }
+    }
 }
 
 /// One dependency edge from this card to another (SPEC E1). `parent` is a
@@ -178,6 +193,33 @@ impl DepKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// SPEC E7 default arm: every non-idea type replaces wholesale -- the
+    /// incoming card wins verbatim. The idea arm's merge semantics are covered in
+    /// `domain::harness::cards`.
+    #[test]
+    fn reconcile_default_arm_replaces_with_the_incoming_card() {
+        let existing = Card::new(
+            "card-aaaaaa",
+            CardType::Task,
+            "old title",
+            "ready",
+            "2026-06-09T00:00:00Z",
+        );
+        let mut incoming = Card::new(
+            "card-aaaaaa",
+            CardType::Task,
+            "new title",
+            "in_progress",
+            "2026-06-10T00:00:00Z",
+        );
+        incoming.description = Some("refreshed".to_string());
+
+        let merged = CardType::Task
+            .reconcile(existing, incoming.clone())
+            .expect("non-idea reconcile is infallible");
+        assert_eq!(merged, incoming);
+    }
 
     #[test]
     fn card_type_parse_round_trips_as_str_and_rejects_unknown() {

@@ -12,6 +12,7 @@ use std::fs;
 use std::path::Path;
 
 use maestro::domain::card::query;
+use maestro::domain::card::schema::CardType;
 use maestro::foundation::core::paths::MaestroPaths;
 use serde_yaml::Value;
 
@@ -51,6 +52,21 @@ pub fn id_by_title(repo: &Path, title: &str) -> String {
         .find(|card| card.title == title)
         .unwrap_or_else(|| panic!("no card titled {title:?}"))
         .id
+}
+
+/// The minted id of the only `idea` card in the repo. Friction detection mints
+/// opaque `card-<hash>` ids (D7 retired the sequential `hb-NNN` mint), so a test
+/// that triggers one detection recovers the card by its type.
+pub fn sole_idea_id(repo: &Path) -> String {
+    let paths = MaestroPaths::new(repo);
+    let mut ideas: Vec<String> = query::scan(&paths)
+        .expect("invariant: card scan should succeed")
+        .into_iter()
+        .filter(|card| card.card_type == CardType::Idea)
+        .map(|card| card.id)
+        .collect();
+    assert_eq!(ideas.len(), 1, "expected exactly one idea card: {ideas:?}");
+    ideas.remove(0)
 }
 
 /// The raw `card.yaml` for a card id, parsed as YAML. Top-level carries the card

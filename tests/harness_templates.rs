@@ -4,7 +4,7 @@ use std::fs;
 
 use maestro::foundation::core::paths::MaestroPaths;
 use maestro::harness::schema::{HarnessConfig, StackKind, detect_stack};
-use maestro::harness::templates::{HARNESS_MD, backlog_yaml, harness_yml};
+use maestro::harness::templates::{HARNESS_MD, harness_yml};
 use support::TestTempDir;
 
 #[test]
@@ -72,11 +72,10 @@ fn stack_detection_uses_generic_unknown_stack_fallback() {
 }
 
 #[test]
-fn harness_yaml_and_backlog_yaml_are_valid_yaml() {
+fn harness_yaml_is_valid_yaml() {
     let temp_dir = TestTempDir::new("maestro-harness-test");
     let config = HarnessConfig::detect(temp_dir.path());
     let harness = harness_yml(&config).expect("invariant: harness config should serialize");
-    let backlog = backlog_yaml().expect("invariant: backlog should serialize");
 
     assert!(harness.contains("schema_version: maestro.harness.v1"));
     assert!(harness.contains("kind: generic"));
@@ -84,8 +83,6 @@ fn harness_yaml_and_backlog_yaml_are_valid_yaml() {
     assert!(harness.contains("enabled: true"));
     assert!(harness.contains("warn_after: 2"));
     assert!(harness.contains("act_after: 3"));
-    assert!(backlog.contains("schema_version: maestro.backlog.v1"));
-    assert!(backlog.contains("items: []"));
 }
 
 #[test]

@@ -1,77 +1,46 @@
 use std::collections::BTreeSet;
-use std::fs;
-use std::io::ErrorKind;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 
+use crate::domain::card::schema::CardType;
 use crate::domain::card::store::{self as card_store, CardSnapshot, card_path};
 use crate::domain::harness::cards;
 use crate::domain::harness::schema::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
 };
-use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::write_string_if_unchanged;
-use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, Compat, classify};
 use crate::foundation::core::time::utc_now_timestamp;
 
-/// Load the Harness backlog, returning an empty V1 backlog when it does not exist.
+/// Load the Harness backlog, returning an empty backlog when no idea cards exist.
 pub fn load(paths: &MaestroPaths) -> Result<BacklogConfig> {
     Ok(load_with_snapshot(paths)?.backlog)
 }
 
-/// The CAS basis the matching save checks: each item card plus the metadata file
-/// that holds the store-level `evidence_stamp` (items live as `idea` cards). The
-/// two-store split is what D7/S4 collapses into the single card store.
+/// The CAS basis the matching save checks: each item's `idea` card (D7 -- the
+/// card store is the only store; there is no metadata file).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct BacklogSnapshot {
     pub backlog: BacklogConfig,
-    meta_raw: Option<String>,
     cards: Vec<(String, CardSnapshot)>,
 }
 
-/// Load the Harness backlog with the exact bytes used for optimistic save.
-/// Store-level metadata (`schema_version` + `evidence_stamp`) reads from
-/// `backlog.yaml`; the items read from the `idea` cards. Frozen migration
-/// leftovers in `backlog.yaml#items` are ignored -- the cards are authoritative
-/// -- so the first save rewrites the metadata file with `items: []`.
+/// Load the Harness backlog with the exact card bytes used for optimistic save.
 pub(crate) fn load_with_snapshot(paths: &MaestroPaths) -> Result<BacklogSnapshot> {
-    let path = backlog_path(paths)?;
-    let meta_raw = match fs::read_to_string(&path) {
-        Ok(raw) => Some(raw),
-        Err(error) if error.kind() == ErrorKind::NotFound => None,
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to read {}", path.display()));
-        }
-    };
-    let meta: BacklogConfig = match meta_raw.as_deref() {
-        Some(raw) => serde_yaml::from_str(raw)
-            .with_context(|| format!("failed to parse {}", path.display()))?,
-        None => BacklogConfig::empty(),
-    };
     let mut items = Vec::new();
     let mut snapshots = Vec::new();
     for (item, snapshot, _) in cards::scan(paths)? {
         snapshots.push((item.id.clone(), snapshot));
         items.push(item);
     }
-    let backlog = BacklogConfig {
-        schema_version: meta.schema_version,
-        evidence_stamp: meta.evidence_stamp,
-        items,
-    };
-    validate_schema(&path, &backlog)?;
     Ok(BacklogSnapshot {
-        backlog,
-        meta_raw,
+        backlog: BacklogConfig { items },
         cards: snapshots,
     })
 }
 
-/// Persist a Harness backlog through the managed Harness path policy. With no
-/// caller-held snapshot, load the current one and replace the store against it so
-/// the save still drops reconciled-away item cards.
+/// Persist a Harness backlog through the card store. With no caller-held
+/// snapshot, load the current one and replace the store against it so the save
+/// still drops reconciled-away item cards.
 pub fn save(paths: &MaestroPaths, backlog: &BacklogConfig) -> Result<()> {
     save_with_snapshot(paths, backlog, &load_with_snapshot(paths)?)
 }
@@ -82,22 +51,17 @@ pub(crate) fn save_with_snapshot(
     backlog: &BacklogConfig,
     snapshot: &BacklogSnapshot,
 ) -> Result<()> {
-    save_cards(paths, backlog, snapshot.meta_raw.as_deref(), &snapshot.cards)
+    save_cards(paths, backlog, &snapshot.cards)
 }
 
-/// Card-mode save: each item folds to its card under per-card CAS (a merge-minted
-/// id CAS-creates against its absent snapshot, so a concurrent mint of the same id
-/// loses), reconciled-away items have their cards removed, and the store metadata
-/// lands under the metadata-file CAS. The multi-file write is not atomic across
-/// the cards and the metadata file; D7/P5 collapses the two stores into one.
+/// Each item folds to its card under per-card CAS (a merge-minted id CAS-creates
+/// against its absent snapshot, so a concurrent mint of the same id loses), and
+/// reconciled-away items have their cards removed (D4).
 fn save_cards(
     paths: &MaestroPaths,
     backlog: &BacklogConfig,
-    meta_raw: Option<&str>,
     loaded: &[(String, CardSnapshot)],
 ) -> Result<()> {
-    let meta_path = backlog_path(paths)?;
-    validate_schema(&meta_path, backlog)?;
     for item in &backlog.items {
         let path = card_path(paths, &item.id);
         let snapshot = match loaded.iter().find(|(id, _)| id == &item.id) {
@@ -125,43 +89,45 @@ fn save_cards(
             cards::remove(paths, id)?;
         }
     }
-    let serialized = serde_yaml::to_string(&BacklogConfig {
-        schema_version: backlog.schema_version.clone(),
-        evidence_stamp: backlog.evidence_stamp.clone(),
-        items: Vec::new(),
-    })
-    .context("failed to serialize backlog metadata")?;
-    write_string_if_unchanged(&meta_path, meta_raw, &serialized)
-        .with_context(|| format!("failed to write {}", meta_path.display()))
+    Ok(())
 }
 
 /// Refresh proposals into the Harness backlog without applying them.
 pub fn refresh(paths: &MaestroPaths, proposals: Vec<BacklogItem>) -> Result<BacklogConfig> {
     let mut snapshot = load_with_snapshot(paths)?;
-    merge_proposals(&mut snapshot.backlog, proposals);
+    merge_proposals(paths, &mut snapshot.backlog, proposals)?;
     save_with_snapshot(paths, &snapshot.backlog, &snapshot)?;
     Ok(snapshot.backlog)
 }
 
-/// Merge proposals into the backlog keyed on stable fingerprint and assign
-/// deterministic ids. Re-detecting a terminal `measured` state note reopens it
-/// (D6); a `proposed` note with no durable history that is no longer detected
-/// is reconciled away (D4).
-pub fn merge_proposals(backlog: &mut BacklogConfig, proposals: Vec<BacklogItem>) {
-    merge_proposals_inner(backlog, proposals, true);
+/// Merge proposals into the backlog keyed on stable fingerprint, minting a
+/// `card-<hash>` id for each new item (E2). Re-detecting a terminal `measured`
+/// state note reopens it (D6); a `proposed` note with no durable history that is
+/// no longer detected is reconciled away (D4).
+pub fn merge_proposals(
+    paths: &MaestroPaths,
+    backlog: &mut BacklogConfig,
+    proposals: Vec<BacklogItem>,
+) -> Result<()> {
+    merge_proposals_inner(paths, backlog, proposals, true)
 }
 
 /// Merge agent-authored proposals without reconciling away detector-authored
 /// ephemeral items that are absent from this single manual proposal call.
-pub fn merge_proposals_preserving_absent(backlog: &mut BacklogConfig, proposals: Vec<BacklogItem>) {
-    merge_proposals_inner(backlog, proposals, false);
+pub fn merge_proposals_preserving_absent(
+    paths: &MaestroPaths,
+    backlog: &mut BacklogConfig,
+    proposals: Vec<BacklogItem>,
+) -> Result<()> {
+    merge_proposals_inner(paths, backlog, proposals, false)
 }
 
 fn merge_proposals_inner(
+    paths: &MaestroPaths,
     backlog: &mut BacklogConfig,
     mut proposals: Vec<BacklogItem>,
     reconcile_absent_ephemeral: bool,
-) {
+) -> Result<()> {
     sanitize_existing_generated_evidence(backlog);
     let fresh_fingerprints = proposals
         .iter()
@@ -172,7 +138,6 @@ fn merge_proposals_inner(
         .iter()
         .map(|item| item.fingerprint.clone())
         .collect::<BTreeSet<_>>();
-    let mut next = next_backlog_number(&backlog.items);
     proposals.sort_by(|a, b| a.fingerprint.cmp(&b.fingerprint));
 
     for mut proposal in proposals {
@@ -184,14 +149,16 @@ fn merge_proposals_inner(
                 .iter_mut()
                 .find(|item| item.fingerprint == fingerprint && item.status != "dismissed")
             {
-                reopen_if_regressed(existing);
-                refresh_existing_recurrence(existing, &proposal);
-                refresh_existing_evidence(existing, &proposal);
+                // A re-detection of a known fingerprint merges through the
+                // per-type hook (SPEC E7); the idea arm lands back in
+                // `reconcile_item` below.
+                let merged = CardType::Idea
+                    .reconcile(cards::card_for(existing)?, cards::card_for(&proposal)?)?;
+                *existing = cards::item_from_card(merged, "reconciled idea card")?;
             }
             continue;
         }
-        proposal.id = format!("hb-{next:03}");
-        next += 1;
+        proposal.id = card_store::mint_card_id(paths, &proposal.title);
         fingerprints.insert(fingerprint);
         backlog.items.push(proposal);
     }
@@ -201,6 +168,17 @@ fn merge_proposals_inner(
             .items
             .retain(|item| !is_ephemeral_reconcilable(item, &fresh_fingerprints));
     }
+    Ok(())
+}
+
+/// Pair-level merge for a fingerprint-matched re-detection: the implementation
+/// behind `CardType::reconcile`'s idea arm (SPEC E7). Reopens a regressed
+/// terminal state note (D6), then refreshes recurrence and evidence from the
+/// fresh detection.
+pub(crate) fn reconcile_item(existing: &mut BacklogItem, incoming: &BacklogItem) {
+    reopen_if_regressed(existing);
+    refresh_existing_recurrence(existing, incoming);
+    refresh_existing_evidence(existing, incoming);
 }
 
 /// D6: a re-detected, terminal `measured` state note flips back to `proposed`
@@ -383,39 +361,6 @@ fn safe_verification_source(source: &str) -> &'static str {
     "verification evidence"
 }
 
-fn backlog_path(paths: &MaestroPaths) -> Result<std::path::PathBuf> {
-    managed_path(
-        paths,
-        ".maestro/harness/backlog.yaml",
-        SymlinkPolicy::RejectAllComponents,
-    )
-}
-
-fn validate_schema(path: &std::path::Path, backlog: &BacklogConfig) -> Result<()> {
-    if classify(&backlog.schema_version, BACKLOG_SCHEMA_VERSION) != Compat::Exact {
-        // Use the typed error (same Display text) so a backlog schema mismatch
-        // emits the `fix: run maestro doctor` hint like feature/decision stores,
-        // rather than a bare bail with no remedy.
-        return Err(MaestroError::SchemaMismatch {
-            artifact: path.display().to_string(),
-            expected: BACKLOG_SCHEMA_VERSION,
-            found: backlog.schema_version.clone(),
-        }
-        .into());
-    }
-    Ok(())
-}
-
-fn next_backlog_number(items: &[BacklogItem]) -> u32 {
-    items
-        .iter()
-        .filter_map(|item| item.id.strip_prefix("hb-"))
-        .filter_map(|number| number.parse::<u32>().ok())
-        .max()
-        .unwrap_or(0)
-        + 1
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -467,23 +412,17 @@ mod tests {
         (root, paths)
     }
 
-    /// Card mode: a whole-store save folds the items to cards, keeps the
-    /// store-level `evidence_stamp` in the metadata file, and removes the card for
-    /// an item the caller dropped (the merge's D4 reconciliation surfaces here).
+    /// A whole-store save folds the items to cards and removes the card for an
+    /// item the caller dropped (the merge's D4 reconciliation surfaces here).
     #[test]
     fn card_mode_save_moves_items_to_cards_and_drops_removed() {
         let (_root, paths) = card_mode_paths("backlog-card-roundtrip");
         let mut config = BacklogConfig::empty();
-        config.evidence_stamp = "stamp-1".to_string();
         config.items = vec![item("hb-001", "first"), item("hb-002", "second")];
         backlog::save(&paths, &config).expect("save two items as cards");
 
         let reloaded = backlog::load(&paths).expect("reload from cards");
         assert_eq!(reloaded.items.len(), 2, "items read back from the cards");
-        assert_eq!(
-            reloaded.evidence_stamp, "stamp-1",
-            "stamp kept in the metadata file"
-        );
         assert!(paths.cards_dir().join("hb-001").join("card.yaml").is_file());
         assert!(paths.cards_dir().join("hb-002").join("card.yaml").is_file());
 

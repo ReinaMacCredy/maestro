@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use card_support::{id_by_title, task_record};
+use card_support::{id_by_title, sole_idea_id, task_record};
 use maestro::foundation::core::fs::ensure_dir;
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
@@ -158,12 +158,6 @@ fn proposed_feature_with_authored_contract_points_status_and_feature_list_to_qa_
         !feature_list.contains("template: set_contract"),
         "{feature_list}"
     );
-}
-
-fn backlog_yaml(repo: &Path) -> YamlValue {
-    let raw = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
-    serde_yaml::from_str(&raw).expect("invariant: backlog should parse")
 }
 
 #[test]
@@ -463,12 +457,13 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
 
     let status = run(repo, &["status"]);
     assert!(status.contains("HARNESS FRICTION"), "{status}");
+    let friction = sole_idea_id(repo);
     assert!(
-        status.contains("! friction hb-001 over threshold"),
+        status.contains(&format!("! friction {friction} over threshold")),
         "{status}"
     );
     assert!(
-        status.contains("apply: maestro harness apply hb-001"),
+        status.contains(&format!("apply: maestro harness apply {friction}")),
         "{status}"
     );
 
@@ -484,7 +479,9 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
     let list = run(repo, &["harness", "list"]);
     assert!(list.contains("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE"), "{list}");
     assert!(
-        list.contains("hb-001\t!\tproposed\trecurring_intervention\t9x/3s"),
+        list.contains(&format!(
+            "{friction}\t!\tproposed\trecurring_intervention\t9x/3s"
+        )),
         "{list}"
     );
 
@@ -511,7 +508,7 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
 }
 
 #[test]
-fn hot_verbs_skip_detect_until_evidence_stamp_changes() {
+fn hot_verbs_persist_the_detect_stamp_and_self_heal_when_the_cards_tree_changes() {
     let temp = setup_repo("maestro-harness-stamp-skip");
     let repo = temp.path();
     write_correction_session(repo, "session-a");
@@ -523,32 +520,34 @@ fn hot_verbs_skip_detect_until_evidence_stamp_changes() {
     for _ in 0..3 {
         run(repo, &["status"]);
     }
-    // In card mode the detected friction is persisted as an `idea` card
-    // (`.maestro/cards/hb-001`), not in `backlog.yaml.items` (which stays `[]`);
-    // its session evidence rides the card's folded `extra.sessions_hit`.
+    // D7: the detected friction is persisted solely as an `idea` card (the
+    // backlog has no file of its own), and the detect-skip evidence stamp lands
+    // post-write in `.maestro/harness/detect-stamp`. The repeated hot verbs above
+    // skip re-detection while the stamp matches, so the card carries exactly the
+    // 3 sessions of the single detection in its folded `extra.sessions_hit`.
     assert!(
-        backlog_yaml(repo)["items"]
-            .as_sequence()
-            .unwrap()
-            .is_empty()
+        !repo.join(".maestro/harness/backlog.yaml").exists(),
+        "the backlog must not have a file of its own"
     );
-    let friction = task_record(repo, "hb-001");
+    assert!(
+        repo.join(".maestro/harness/detect-stamp").is_file(),
+        "detection should persist the skip stamp"
+    );
+    let friction = sole_idea_id(repo);
+    let record = task_record(repo, &friction);
     assert_eq!(
-        friction["sessions_hit"].as_sequence().unwrap().len(),
+        record["sessions_hit"].as_sequence().unwrap().len(),
         3,
-        "{friction:?}"
+        "{record:?}"
     );
 
-    // Hot verbs skip re-detection while the evidence stamp is unchanged: clearing
-    // the persisted friction card without bumping the stamp must not re-surface it.
-    fs::remove_dir_all(repo.join(".maestro/cards/hb-001"))
+    // The stamp covers the whole cards tree, so clearing the persisted friction
+    // card invalidates it: the next hot verb re-detects and the friction
+    // re-surfaces (self-healing) instead of staying silently skipped.
+    fs::remove_dir_all(repo.join(".maestro/cards").join(&friction))
         .expect("invariant: friction card should be removable");
-    let skipped = run(repo, &["status"]);
-    assert!(!skipped.contains("HARNESS FRICTION"), "{skipped}");
-
-    run(repo, &["task", "create", "Task-dir stamp change"]);
-    let refreshed = run(repo, &["status"]);
-    assert!(refreshed.contains("HARNESS FRICTION"), "{refreshed}");
+    let healed = run(repo, &["status"]);
+    assert!(healed.contains("HARNESS FRICTION"), "{healed}");
 }
 
 #[test]
