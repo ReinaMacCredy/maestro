@@ -5,7 +5,6 @@ use std::io::ErrorKind;
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::store::{self as card_store, CardSnapshot, card_path};
-use crate::domain::card::{StoreMode, store_mode};
 use crate::domain::harness::cards;
 use crate::domain::harness::schema::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
@@ -14,7 +13,6 @@ use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::write_string_if_unchanged;
 use crate::foundation::core::managed_path::{SymlinkPolicy, managed_path};
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::{BACKLOG_SCHEMA_VERSION, Compat, classify};
 use crate::foundation::core::time::utc_now_timestamp;
 
@@ -23,61 +21,22 @@ pub fn load(paths: &MaestroPaths) -> Result<BacklogConfig> {
     Ok(load_with_snapshot(paths)?.backlog)
 }
 
+/// The CAS basis the matching save checks: each item card plus the metadata file
+/// that holds the store-level `evidence_stamp` (items live as `idea` cards). The
+/// two-store split is what D7/S4 collapses into the single card store.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct BacklogSnapshot {
     pub backlog: BacklogConfig,
-    cas: BacklogCas,
-}
-
-/// The CAS basis the matching save checks, dispatched by store mode
-/// (SPEC-beads-model P1 dual-read). Legacy guards the whole `backlog.yaml`; card
-/// mode guards each item card plus the metadata file that holds the store-level
-/// `evidence_stamp` (items move to `idea` cards).
-#[derive(Clone, Debug, PartialEq)]
-enum BacklogCas {
-    Legacy {
-        raw: Option<String>,
-    },
-    Cards {
-        meta_raw: Option<String>,
-        cards: Vec<(String, CardSnapshot)>,
-    },
+    meta_raw: Option<String>,
+    cards: Vec<(String, CardSnapshot)>,
 }
 
 /// Load the Harness backlog with the exact bytes used for optimistic save.
+/// Store-level metadata (`schema_version` + `evidence_stamp`) reads from
+/// `backlog.yaml`; the items read from the `idea` cards. Frozen migration
+/// leftovers in `backlog.yaml#items` are ignored -- the cards are authoritative
+/// -- so the first save rewrites the metadata file with `items: []`.
 pub(crate) fn load_with_snapshot(paths: &MaestroPaths) -> Result<BacklogSnapshot> {
-    match store_mode(paths) {
-        StoreMode::Cards => load_with_snapshot_cards(paths),
-        StoreMode::Legacy => load_with_snapshot_legacy(paths),
-    }
-}
-
-fn load_with_snapshot_legacy(paths: &MaestroPaths) -> Result<BacklogSnapshot> {
-    let path = backlog_path(paths)?;
-    let raw = match fs::read_to_string(&path) {
-        Ok(raw) => Some(raw),
-        Err(error) if error.kind() == ErrorKind::NotFound => None,
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to read {}", path.display()));
-        }
-    };
-    let backlog: BacklogConfig = match raw.as_deref() {
-        Some(raw) => serde_yaml::from_str(raw)
-            .with_context(|| format!("failed to parse {}", path.display()))?,
-        None => BacklogConfig::empty(),
-    };
-    validate_schema(&path, &backlog)?;
-    Ok(BacklogSnapshot {
-        backlog,
-        cas: BacklogCas::Legacy { raw },
-    })
-}
-
-/// Card mode: store-level metadata (`schema_version` + `evidence_stamp`) reads
-/// from `backlog.yaml`; the items read from the `idea` cards. The frozen
-/// migration leftovers in `backlog.yaml#items` are ignored -- the cards are
-/// authoritative -- so the first save rewrites the metadata file with `items: []`.
-fn load_with_snapshot_cards(paths: &MaestroPaths) -> Result<BacklogSnapshot> {
     let path = backlog_path(paths)?;
     let meta_raw = match fs::read_to_string(&path) {
         Ok(raw) => Some(raw),
@@ -105,27 +64,16 @@ fn load_with_snapshot_cards(paths: &MaestroPaths) -> Result<BacklogSnapshot> {
     validate_schema(&path, &backlog)?;
     Ok(BacklogSnapshot {
         backlog,
-        cas: BacklogCas::Cards {
-            meta_raw,
-            cards: snapshots,
-        },
+        meta_raw,
+        cards: snapshots,
     })
 }
 
-/// Persist a Harness backlog through the managed Harness path policy.
+/// Persist a Harness backlog through the managed Harness path policy. With no
+/// caller-held snapshot, load the current one and replace the store against it so
+/// the save still drops reconciled-away item cards.
 pub fn save(paths: &MaestroPaths, backlog: &BacklogConfig) -> Result<()> {
-    match store_mode(paths) {
-        // No caller-held snapshot: load the current one and replace the store
-        // against it, so card-mode save still drops reconciled-away item cards.
-        StoreMode::Cards => save_with_snapshot(paths, backlog, &load_with_snapshot_cards(paths)?),
-        StoreMode::Legacy => {
-            let path = backlog_path(paths)?;
-            validate_schema(&path, backlog)?;
-            let raw = serde_yaml::to_string(backlog).context("failed to serialize backlog")?;
-            write_string_atomic(&path, &raw)
-                .with_context(|| format!("failed to write {}", path.display()))
-        }
-    }
+    save_with_snapshot(paths, backlog, &load_with_snapshot(paths)?)
 }
 
 /// Persist a Harness backlog only if the store still matches the loaded snapshot.
@@ -134,19 +82,7 @@ pub(crate) fn save_with_snapshot(
     backlog: &BacklogConfig,
     snapshot: &BacklogSnapshot,
 ) -> Result<()> {
-    match &snapshot.cas {
-        BacklogCas::Legacy { raw } => {
-            let path = backlog_path(paths)?;
-            validate_schema(&path, backlog)?;
-            let serialized =
-                serde_yaml::to_string(backlog).context("failed to serialize backlog")?;
-            write_string_if_unchanged(&path, raw.as_deref(), &serialized)
-                .with_context(|| format!("failed to write {}", path.display()))
-        }
-        BacklogCas::Cards { meta_raw, cards } => {
-            save_cards(paths, backlog, meta_raw.as_deref(), cards)
-        }
-    }
+    save_cards(paths, backlog, snapshot.meta_raw.as_deref(), &snapshot.cards)
 }
 
 /// Card-mode save: each item folds to its card under per-card CAS (a merge-minted
@@ -523,28 +459,6 @@ mod tests {
             dismissal_reason: None,
             history: Vec::new(),
         }
-    }
-
-    #[test]
-    fn save_with_snapshot_rejects_stale_backlog_writer() {
-        let (_root, paths) = temp_paths("backlog-stale-writer");
-        let mut first = backlog::load_with_snapshot(&paths)
-            .expect("invariant: first backlog load should succeed");
-        let mut second = backlog::load_with_snapshot(&paths)
-            .expect("invariant: second backlog load should succeed");
-
-        second.backlog.items.push(item("hb-001", "second writer"));
-        backlog::save_with_snapshot(&paths, &second.backlog, &second)
-            .expect("invariant: second writer should save first");
-
-        first.backlog.items.push(item("hb-002", "stale writer"));
-        let error = backlog::save_with_snapshot(&paths, &first.backlog, &first)
-            .expect_err("stale writer must be rejected");
-        assert!(
-            error.to_string().contains("failed to write")
-                && format!("{error:#}").contains("changed since it was read; re-run"),
-            "{error:#}"
-        );
     }
 
     fn card_mode_paths(name: &str) -> (PathBuf, MaestroPaths) {

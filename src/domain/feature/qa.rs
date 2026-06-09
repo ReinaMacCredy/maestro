@@ -144,7 +144,7 @@ pub(crate) fn ship_qa_gaps(
 
     let Some(baseline) = baseline else {
         gaps.push(format!(
-              "qa-baseline {absence} (.maestro/features/{id}/qa.md)\n    skill: qa-baseline\n    target: .maestro/features/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
+              "qa-baseline {absence} (.maestro/cards/{id}/qa.md)\n    skill: qa-baseline\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
           ));
         return gaps;
     };
@@ -163,7 +163,7 @@ pub(crate) fn ship_qa_gaps(
         .count();
     if behavioral_after > 0 {
         gaps.push(format!(
-                "qa-baseline stale — {behavioral_after} behavioral amend(s) since capture; set amend_log_position: {len}\n    skill: qa-baseline\n    target: .maestro/features/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
+                "qa-baseline stale — {behavioral_after} behavioral amend(s) since capture; set amend_log_position: {len}\n    skill: qa-baseline\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\""
           ));
     }
 
@@ -179,7 +179,7 @@ pub(crate) fn ship_qa_gaps(
             .collect();
         if !uncovered.is_empty() {
             gaps.push(format!(
-                    "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}\n    skill: qa-slice\n    target: .maestro/features/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\"",
+                    "qa-slice coverage incomplete — {} baseline scenario(s) without a counting slice: {}\n    skill: qa-slice\n    target: .maestro/cards/{id}/qa.md\n    retry: maestro feature ship {id} --outcome \"<outcome>\"",
                   uncovered.len(),
                   uncovered.join(", ")
               ));

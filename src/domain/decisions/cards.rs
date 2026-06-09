@@ -26,7 +26,7 @@ use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot};
 use crate::domain::decisions::query::DecisionSource;
-use crate::domain::decisions::schema::DecisionRecord;
+use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
 
@@ -35,8 +35,42 @@ use crate::foundation::core::time::utc_now_timestamp;
 /// version lives on `DecisionStore`, not the record, and the card-store load
 /// already validated `card.schema_version`.
 pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<DecisionRecord> {
+    // A card minted natively by the card model (DN9 `maestro create`) carries no
+    // `extra`, so the verbatim-mapping read below has nothing to parse. Synthesize
+    // the record from the card's own fields instead, so `status`/`doctor` can read
+    // a canonically-created decision card without crashing. This bridge retires in
+    // S4 (E7), when the decision lifecycle moves onto the native fields.
+    if card.extra.is_empty() {
+        return Ok(record_from_native_card(card));
+    }
     serde_yaml::from_value(Value::Mapping(card.extra))
         .with_context(|| format!("failed to parse {artifact}"))
+}
+
+/// Build a [`DecisionRecord`] from a native card's own fields (no `extra`
+/// carrier). The fork/lock prose (`decision`, `rejected`, `preview`) and the
+/// supersession edges a migrated decision carries have no native home yet (the
+/// S4 gap), so the record keeps `None`/empty for those; the home rides
+/// `card.parent` and the status maps from the card's status word.
+fn record_from_native_card(card: Card) -> DecisionRecord {
+    DecisionRecord {
+        id: card.id,
+        title: card.title,
+        status: match card.status.as_str() {
+            "locked" => DecisionStatus::Locked,
+            "superseded" => DecisionStatus::Superseded,
+            _ => DecisionStatus::Open,
+        },
+        feature: card.parent,
+        context: card.description,
+        decision: None,
+        rejected: Vec::new(),
+        preview: None,
+        supersedes: Vec::new(),
+        superseded_by: None,
+        created_at: card.created_at,
+        locked_at: None,
+    }
 }
 
 /// Serialize a decision record to the mapping the card builder folds into

@@ -174,16 +174,11 @@ fn check_features(
     warnings: &mut Vec<String>,
     errors: &mut Vec<String>,
 ) {
-    // diagnose returns "{dir} is missing" for an absent dir and a scan error for a
-    // present-but-corrupt one; only the former is `init --merge`-repairable, so
-    // catch the missing dir here (mirroring check_decisions) and leave scan errors
-    // to surface unchanged.
-    let dir = paths.features_dir();
-    if !dir.is_dir() {
-        errors.push(missing_resource(&dir));
-        return;
-    }
-    match recordless_dir_warnings(paths.repo_root(), &dir, "feature.yaml") {
+    // Feature cards live in the flat card store, so there is no per-entity
+    // `features/` directory to require. The recordless-dir sweep still catches a
+    // legacy ghost dir left behind by a brownfield migration (it reads as empty
+    // when the dir is absent), and `diagnose` counts feature cards from the store.
+    match recordless_dir_warnings(paths.repo_root(), &paths.features_dir(), "feature.yaml") {
         Ok(found) => warnings.extend(found),
         Err(error) => errors.push(format!("{error:#}")),
     }
@@ -285,12 +280,10 @@ fn check_decisions(
     warnings: &mut Vec<String>,
     errors: &mut Vec<String>,
 ) {
-    let dir = paths.decisions_dir();
-    if !dir.is_dir() {
-        errors.push(missing_resource(&dir));
-        return;
-    }
-
+    // Decisions are decision-typed cards in the flat store (plus any frozen
+    // legacy markdown), so there is no `decisions/` directory to require;
+    // `diagnose` and the dangling-ref scan both read an absent legacy dir as
+    // empty.
     let report = decisions::diagnose(paths);
     warnings.extend(report.warnings);
     warnings.extend(decisions::dangling_reference_warnings(paths));

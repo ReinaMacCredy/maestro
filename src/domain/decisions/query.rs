@@ -4,16 +4,10 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::card::{StoreMode, store_mode};
 use crate::domain::decisions::cards;
-use crate::domain::decisions::schema::{DecisionRecord, DecisionStore};
-use crate::foundation::core::error::MaestroError;
-use crate::foundation::core::fs::{
-    ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
-};
+use crate::domain::decisions::schema::DecisionRecord;
+use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{Compat, DECISIONS_SCHEMA_VERSION, classify};
 
 /// One frozen legacy decision markdown file found under `.maestro/decisions`.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -27,18 +21,6 @@ pub enum DecisionSource {
     Global,
     Feature { feature_id: String },
     Legacy,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct DecisionStorePath {
-    pub path: PathBuf,
-    pub source: DecisionSource,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct DecisionStoreSnapshot {
-    pub store: DecisionStore,
-    raw: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -107,24 +89,8 @@ pub fn decision_entries(decisions_dir: &Path) -> Result<Vec<DecisionEntry>> {
 
 pub fn list(paths: &MaestroPaths) -> Result<Vec<DecisionListEntry>> {
     let mut entries = Vec::new();
-    match store_mode(paths) {
-        StoreMode::Cards => {
-            for (record, source, path) in cards::scan(paths, false)? {
-                entries.push(decision_list_entry(record, source, path));
-            }
-        }
-        StoreMode::Legacy => {
-            for store_path in store_paths(paths)? {
-                let store = load_store_at(&store_path.path)?;
-                for record in store.decisions {
-                    entries.push(decision_list_entry(
-                        record,
-                        store_path.source.clone(),
-                        store_path.path.clone(),
-                    ));
-                }
-            }
-        }
+    for (record, source, path) in cards::scan(paths, false)? {
+        entries.push(decision_list_entry(record, source, path));
     }
     for legacy in decision_entries(&paths.decisions_dir())? {
         entries.push(legacy_decision_list_entry(legacy)?);
@@ -135,42 +101,11 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<DecisionListEntry>> {
 
 pub fn list_tolerant(paths: &MaestroPaths) -> Vec<DecisionListEntry> {
     let mut entries = Vec::new();
-    match store_mode(paths) {
-        // A corrupt card is skipped (the tolerant scan swallows it), not surfaced
-        // as an `unreadable` row -- a minor card-mode delta the P4 card-aware
-        // doctor refines, consistent with the feature list cutover.
-        StoreMode::Cards => {
-            for (record, source, path) in cards::scan(paths, true).unwrap_or_default() {
-                entries.push(decision_list_entry(record, source, path));
-            }
-        }
-        StoreMode::Legacy => {
-            for store_path in store_paths(paths).unwrap_or_default() {
-                match load_store_at(&store_path.path) {
-                    Ok(store) => {
-                        for record in store.decisions {
-                            entries.push(decision_list_entry(
-                                record,
-                                store_path.source.clone(),
-                                store_path.path.clone(),
-                            ));
-                        }
-                    }
-                    Err(error) => entries.push(DecisionListEntry {
-                        id: store_path
-                            .path
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .unwrap_or("decisions.yaml")
-                            .to_string(),
-                        title: format!("unreadable decision store: {error:#}"),
-                        status: "unreadable".to_string(),
-                        source: store_path.source,
-                        path: store_path.path,
-                    }),
-                }
-            }
-        }
+    // A corrupt card is skipped (the tolerant scan swallows it), not surfaced
+    // as an `unreadable` row -- a minor card-mode delta the P4 card-aware
+    // doctor refines, consistent with the feature list cutover.
+    for (record, source, path) in cards::scan(paths, true).unwrap_or_default() {
+        entries.push(decision_list_entry(record, source, path));
     }
     for legacy in decision_entries(&paths.decisions_dir()).unwrap_or_default() {
         entries.push(legacy_decision_list_entry_tolerant(legacy));
@@ -227,22 +162,13 @@ pub fn decisions_for_feature(
     paths: &MaestroPaths,
     feature_id: &str,
 ) -> Result<Vec<DecisionRecord>> {
-    let mut records = match store_mode(paths) {
-        StoreMode::Cards => cards::scan(paths, false)?
-            .into_iter()
-            .filter(|(_, source, _)| {
-                matches!(source, DecisionSource::Feature { feature_id: id } if id == feature_id)
-            })
-            .map(|(record, _, _)| record)
-            .collect(),
-        StoreMode::Legacy => {
-            let path = paths.features_dir().join(feature_id).join("decisions.yaml");
-            if !path.exists() {
-                return Ok(Vec::new());
-            }
-            load_store_at(&path)?.decisions
-        }
-    };
+    let mut records: Vec<DecisionRecord> = cards::scan(paths, false)?
+        .into_iter()
+        .filter(|(_, source, _)| {
+            matches!(source, DecisionSource::Feature { feature_id: id } if id == feature_id)
+        })
+        .map(|(record, _, _)| record)
+        .collect();
     records.sort_by_key(|record| decision_sort_key(&record.id));
     Ok(records)
 }
@@ -256,32 +182,16 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<DecisionContent> {
 }
 
 fn find_decision_content(paths: &MaestroPaths, id: &str) -> Result<Option<DecisionContent>> {
-    // The structured lookup and the frozen-legacy markdown lookup are a UNION in
-    // both modes: a card-mode repo still reads `.maestro/decisions/*.md` (the
-    // migration never folds it), and `lock`'s frozen-legacy guard and the
-    // supersedes validation both depend on this resolving a markdown decision.
-    match store_mode(paths) {
-        StoreMode::Cards => {
-            if let Some((record, source, _snapshot, path)) = cards::load_one(paths, id)? {
-                return Ok(Some(DecisionContent::Structured {
-                    record: Box::new(record),
-                    source,
-                    path,
-                }));
-            }
-        }
-        StoreMode::Legacy => {
-            for store_path in store_paths(paths)? {
-                let store = load_store_at(&store_path.path)?;
-                if let Some(record) = store.decisions.into_iter().find(|record| record.id == id) {
-                    return Ok(Some(DecisionContent::Structured {
-                        record: Box::new(record),
-                        source: store_path.source,
-                        path: store_path.path,
-                    }));
-                }
-            }
-        }
+    // The structured lookup and the frozen-legacy markdown lookup are a UNION: a
+    // card-mode repo still reads `.maestro/decisions/*.md` (the migration never
+    // folds it), and `lock`'s frozen-legacy guard and the supersedes validation
+    // both depend on this resolving a markdown decision.
+    if let Some((record, source, _snapshot, path)) = cards::load_one(paths, id)? {
+        return Ok(Some(DecisionContent::Structured {
+            record: Box::new(record),
+            source,
+            path,
+        }));
     }
 
     let Some(path) = find_legacy_decision_path(&paths.decisions_dir(), id)? else {
@@ -309,19 +219,8 @@ pub fn decision_exists(paths: &MaestroPaths, id: &str) -> Result<bool> {
 
 pub fn decision_bodies(paths: &MaestroPaths) -> Result<Vec<String>> {
     let mut bodies = Vec::new();
-    match store_mode(paths) {
-        StoreMode::Cards => {
-            for (record, _, _) in cards::scan(paths, false)? {
-                bodies.push(render_record(&record));
-            }
-        }
-        StoreMode::Legacy => {
-            for store_path in store_paths(paths)? {
-                for record in load_store_at(&store_path.path)?.decisions {
-                    bodies.push(render_record(&record));
-                }
-            }
-        }
+    for (record, _, _) in cards::scan(paths, false)? {
+        bodies.push(render_record(&record));
     }
     for entry in decision_entries(&paths.decisions_dir())? {
         bodies.push(
@@ -339,25 +238,12 @@ pub fn diagnose(paths: &MaestroPaths) -> DecisionDiagnostic {
     let mut warnings = Vec::new();
     let mut errors = Vec::new();
 
-    match store_mode(paths) {
-        // One scan over the card store; the strict scan stops at the first
-        // unparseable card and reports it (vs the legacy per-store continue) --
-        // the P4 card-aware doctor refines this, same bucket as the feature scan.
-        StoreMode::Cards => match cards::scan(paths, false) {
-            Ok(decisions) => structured_count += decisions.len(),
-            Err(error) => errors.push(format!("{error:#}")),
-        },
-        StoreMode::Legacy => {
-            for path in store_paths(paths).unwrap_or_else(|error| {
-                errors.push(format!("{error:#}"));
-                Vec::new()
-            }) {
-                match load_store_at(&path.path) {
-                    Ok(store) => structured_count += store.decisions.len(),
-                    Err(error) => errors.push(format!("{error:#}")),
-                }
-            }
-        }
+    // One scan over the card store; the strict scan stops at the first
+    // unparseable card and reports it -- the P4 card-aware doctor refines this,
+    // same bucket as the feature scan.
+    match cards::scan(paths, false) {
+        Ok(decisions) => structured_count += decisions.len(),
+        Err(error) => errors.push(format!("{error:#}")),
     }
 
     match decision_entries(&paths.decisions_dir()) {
@@ -406,33 +292,15 @@ pub fn dangling_reference_warnings(paths: &MaestroPaths) -> Vec<String> {
     warnings
 }
 
-/// Every structured decision paired with the store/card path it lives in. Card
-/// mode reads the decision cards (tolerantly -- a corrupt card just drops from
-/// the scan); legacy mode reads the YAML stores. The legacy markdown is folded
-/// into the resolvable set separately (it has no supersedes to validate).
+/// Every structured decision paired with the card path it lives in, read
+/// tolerantly (a corrupt card just drops from the scan). The legacy markdown is
+/// folded into the resolvable set separately (it has no supersedes to validate).
 fn decision_records_with_path(paths: &MaestroPaths) -> Vec<(PathBuf, DecisionRecord)> {
-    match store_mode(paths) {
-        StoreMode::Cards => cards::scan(paths, true)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(record, _source, path)| (path, record))
-            .collect(),
-        StoreMode::Legacy => store_paths(paths)
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|store_path| {
-                load_store_at(&store_path.path)
-                    .ok()
-                    .map(|store| (store_path.path, store))
-            })
-            .flat_map(|(path, store)| {
-                store
-                    .decisions
-                    .into_iter()
-                    .map(move |record| (path.clone(), record))
-            })
-            .collect(),
-    }
+    cards::scan(paths, true)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(record, _source, path)| (path, record))
+        .collect()
 }
 
 pub fn render_record(record: &DecisionRecord) -> String {
@@ -475,92 +343,6 @@ pub fn render_record(record: &DecisionRecord) -> String {
         out.push_str(&format!("superseded_by: {id}\n"));
     }
     out
-}
-
-pub(crate) fn store_paths(paths: &MaestroPaths) -> Result<Vec<DecisionStorePath>> {
-    let mut stores = Vec::new();
-    if paths.decisions_file().exists() {
-        stores.push(DecisionStorePath {
-            path: paths.decisions_file(),
-            source: DecisionSource::Global,
-        });
-    }
-    let features_dir = paths.features_dir();
-    if features_dir.is_dir() {
-        for entry in fs::read_dir(&features_dir)
-            .with_context(|| format!("failed to read {}", features_dir.display()))?
-        {
-            let entry = entry
-                .with_context(|| format!("failed to read entry in {}", features_dir.display()))?;
-            let file_type = entry
-                .file_type()
-                .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-            if !file_type.is_dir() || file_type.is_symlink() {
-                continue;
-            }
-            let Some(feature_id) = entry.file_name().to_str().map(str::to_string) else {
-                continue;
-            };
-            let path = entry.path().join("decisions.yaml");
-            if path.exists() {
-                stores.push(DecisionStorePath {
-                    path,
-                    source: DecisionSource::Feature { feature_id },
-                });
-            }
-        }
-    }
-    stores.sort_by(|left, right| left.path.cmp(&right.path));
-    Ok(stores)
-}
-
-pub(crate) fn load_store_at(path: &Path) -> Result<DecisionStore> {
-    Ok(load_store_with_snapshot(path)?.store)
-}
-
-pub(crate) fn load_store_with_snapshot(path: &Path) -> Result<DecisionStoreSnapshot> {
-    let Some(contents) = read_to_string_if_exists(path)? else {
-        return Ok(DecisionStoreSnapshot {
-            store: DecisionStore::empty(),
-            raw: None,
-        });
-    };
-    let store: DecisionStore = serde_yaml::from_str(&contents)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    if classify(&store.schema_version, DECISIONS_SCHEMA_VERSION) != Compat::Exact {
-        return Err(MaestroError::SchemaMismatch {
-            artifact: path.display().to_string(),
-            expected: DECISIONS_SCHEMA_VERSION,
-            found: store.schema_version,
-        }
-        .into());
-    }
-    Ok(DecisionStoreSnapshot {
-        store,
-        raw: Some(contents),
-    })
-}
-
-pub(crate) fn save_store_at(path: &Path, store: &DecisionStore) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        ensure_dir(parent)?;
-    }
-    let contents = serde_yaml::to_string(store).context("failed to serialize decisions store")?;
-    write_string_atomic(path, &contents)
-        .with_context(|| format!("failed to write {}", path.display()))
-}
-
-pub(crate) fn save_store_with_snapshot(
-    path: &Path,
-    store: &DecisionStore,
-    snapshot: &DecisionStoreSnapshot,
-) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        ensure_dir(parent)?;
-    }
-    let contents = serde_yaml::to_string(store).context("failed to serialize decisions store")?;
-    write_string_if_unchanged(path, snapshot.raw.as_deref(), &contents)
-        .with_context(|| format!("failed to write {}", path.display()))
 }
 
 /// Resolve a frozen legacy decision id or file name to a markdown path.
@@ -690,28 +472,15 @@ fn warn_dangling_note_pointers(
     }
 }
 
-/// Every `notes.md` that may carry structured decision pointers, mode-branched:
-/// card mode reads the feature cards' sidecars, legacy mode the feature dirs.
+/// Every feature card's `notes.md` sidecar that may carry structured decision
+/// pointers.
 fn feature_note_paths(paths: &MaestroPaths) -> Vec<PathBuf> {
-    match store_mode(paths) {
-        StoreMode::Cards => crate::domain::card::query::scan(paths)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|card| card.card_type == crate::domain::card::schema::CardType::Feature)
-            .map(|card| paths.cards_dir().join(card.id).join("notes.md"))
-            .collect(),
-        StoreMode::Legacy => fs::read_dir(paths.features_dir())
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|entry| {
-                entry
-                    .file_type()
-                    .is_ok_and(|file_type| file_type.is_dir() && !file_type.is_symlink())
-            })
-            .map(|entry| entry.path().join("notes.md"))
-            .collect(),
-    }
+    crate::domain::card::query::scan(paths)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|card| card.card_type == crate::domain::card::schema::CardType::Feature)
+        .map(|card| paths.cards_dir().join(card.id).join("notes.md"))
+        .collect()
 }
 
 fn warn_dangling_supersedes(
@@ -800,7 +569,6 @@ fn indent(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
     use std::process;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -808,20 +576,10 @@ mod tests {
     use crate::domain::card::schema::{Card, CardType};
     use crate::domain::card::store::{card_path, load_with_snapshot, save_with_snapshot};
     use crate::domain::decisions::create::create_open;
-    use crate::domain::decisions::query::{load_store_with_snapshot, save_store_with_snapshot};
-    use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
     use crate::foundation::core::fs::ensure_dir;
     use crate::foundation::core::paths::MaestroPaths;
 
     const NOW: &str = "1970-01-01T00:00:00Z";
-
-    fn temp_file(name: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("invariant: test clock should be after Unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("maestro-{name}-{}-{nanos}.yaml", process::id()))
-    }
 
     fn card_mode_repo(name: &str) -> MaestroPaths {
         let nanos = SystemTime::now()
@@ -839,51 +597,6 @@ mod tests {
         let path = card_path(paths, id);
         let snapshot = load_with_snapshot(&path).expect("snapshot");
         save_with_snapshot(&path, &card, &snapshot).expect("save feature card");
-    }
-
-    fn decision(id: &str, title: &str) -> DecisionRecord {
-        DecisionRecord {
-            id: id.to_string(),
-            title: title.to_string(),
-            status: DecisionStatus::Open,
-            feature: None,
-            context: None,
-            decision: None,
-            rejected: Vec::new(),
-            preview: None,
-            supersedes: Vec::new(),
-            superseded_by: None,
-            created_at: "1970-01-01T00:00:00Z".to_string(),
-            locked_at: None,
-        }
-    }
-
-    #[test]
-    fn save_store_with_snapshot_rejects_stale_decision_writer() {
-        let path = temp_file("decisions-stale-writer");
-        let mut first =
-            load_store_with_snapshot(&path).expect("invariant: first decision load should succeed");
-        let mut second = load_store_with_snapshot(&path)
-            .expect("invariant: second decision load should succeed");
-
-        second
-            .store
-            .decisions
-            .push(decision("decision-001", "second writer"));
-        save_store_with_snapshot(&path, &second.store, &second)
-            .expect("invariant: second writer should save first");
-
-        first
-            .store
-            .decisions
-            .push(decision("decision-002", "stale writer"));
-        let error = save_store_with_snapshot(&path, &first.store, &first)
-            .expect_err("stale decision writer must be rejected");
-        assert!(
-            error.to_string().contains("failed to write")
-                && format!("{error:#}").contains("changed since it was read; re-run"),
-            "{error:#}"
-        );
     }
 
     /// Part E liveness: in card mode the dangling-note gate must read the feature
@@ -927,6 +640,46 @@ mod tests {
                 .iter()
                 .any(|warning| warning.contains("card-deadbe")),
             "a dangling card-<hash> pointer must warn: {warnings:?}"
+        );
+
+        let _ = fs::remove_dir_all(paths.maestro_dir());
+    }
+
+    /// Parent-filtering separation: a global decision card (parent `None`) and a
+    /// feature-scoped one (parent the feature) co-exist in the one flat store.
+    /// `decisions_for_feature` returns ONLY the feature-scoped card while `list`
+    /// spans both. (Ported from the deleted decision_card_cutover: no other test
+    /// exercises the global-vs-feature split now that the two stores are one.)
+    #[test]
+    fn decisions_for_feature_returns_only_the_feature_scoped_cards() {
+        let paths = card_mode_repo("decisions-by-feature");
+        // The real verb writes a feature card whose `extra` carries a parseable
+        // FeatureRecord; the bare `save_feature_card` shortcut leaves `extra`
+        // empty, which `create_open`'s `feature::ensure_exists` cannot read.
+        let feature_id = crate::feature::create(&paths, "Csv export").expect("create feature card");
+
+        let global = create_open(&paths, "Use fire-and-forget hooks", None, None)
+            .expect("create global decision");
+        let feature = create_open(&paths, "Use a replay queue for hooks", None, Some(&feature_id))
+            .expect("create feature decision");
+
+        let scoped =
+            super::decisions_for_feature(&paths, &feature_id).expect("decisions for feature");
+        let scoped_ids: Vec<String> = scoped.iter().map(|record| record.id.clone()).collect();
+        assert_eq!(
+            scoped_ids,
+            vec![feature.record.id.clone()],
+            "only the feature-scoped card lists under the feature"
+        );
+
+        let all = super::list(&paths).expect("list all decisions");
+        let mut listed: Vec<String> = all.iter().map(|entry| entry.id.clone()).collect();
+        listed.sort();
+        let mut expected = vec![global.record.id.clone(), feature.record.id.clone()];
+        expected.sort();
+        assert_eq!(
+            listed, expected,
+            "the global list spans both the global and feature-scoped decisions"
         );
 
         let _ = fs::remove_dir_all(paths.maestro_dir());

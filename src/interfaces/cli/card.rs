@@ -12,7 +12,7 @@ use crate::interfaces::cli::{
 /// Execute `maestro ready`: workable cards with no open blockers.
 pub fn ready(args: ReadyArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -28,7 +28,7 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
 /// Execute `maestro list`: cards filtered by parent, type, assignee, or coarse status.
 pub fn list(args: ListArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -59,7 +59,7 @@ pub fn list(args: ListArgs) -> Result<()> {
 /// child waits on the parent (SPEC E1/DN6).
 pub fn dep(args: DepArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -80,7 +80,7 @@ pub fn dep(args: DepArgs) -> Result<()> {
 /// `parent=<feature>` children to the archive sibling tree (SPEC E4/D5).
 pub fn archive(args: ArchiveArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -102,7 +102,7 @@ pub fn archive(args: ArchiveArgs) -> Result<()> {
 /// the `<agent>#<session>` identity and moving it to `in_progress` (SPEC E6/DN8).
 pub fn claim(args: ClaimArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -129,7 +129,7 @@ fn print_claim_outcome(id: &str, identity: &str, outcome: &card::edit::ClaimOutc
 /// `notes.md` sidecar (SPEC D5).
 pub fn note(args: NoteArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -148,7 +148,7 @@ pub fn note(args: NoteArgs) -> Result<()> {
 /// `open`, so a workable card is immediately `ready` once it has no open blocker.
 pub fn create(args: CreateArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -175,7 +175,7 @@ pub fn create(args: CreateArgs) -> Result<()> {
 /// `--json` prints the raw card; a missing card exits 0 with a guiding line.
 pub fn show(args: ShowArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -201,7 +201,7 @@ pub fn show(args: ShowArgs) -> Result<()> {
 /// A bare `update` (no id) or an update with no flags exits 0 with usage.
 pub fn update(args: UpdateArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
@@ -248,7 +248,7 @@ pub fn update(args: UpdateArgs) -> Result<()> {
 /// missing cards exit 0 with a guiding line.
 pub fn close(args: CloseArgs) -> Result<()> {
     let paths = repo_paths()?;
-    if card::store_mode(&paths) == card::StoreMode::Legacy {
+    if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }

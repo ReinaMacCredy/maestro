@@ -210,8 +210,10 @@ fn sweep_acceptance(
 ) -> Result<AcceptanceSweepReport> {
     let explicit = latest_explicit_evidence(record);
     let task_proofs = task_proofs_by_acceptance_in_entries(task_entries, &record.id);
-    let qa_proofs =
-        qa::acceptance_ids_covered_by_counting_slices(&registry::feature_dir(paths, &record.id))?;
+    let qa_proofs = qa::acceptance_ids_covered_by_counting_slices(&registry::feature_sidecar_dir(
+        paths,
+        &record.id,
+    ))?;
     let mut items = Vec::new();
     for (index, text) in record.acceptance.iter().enumerate() {
         let ac_id = acceptance_id(index);

@@ -17,7 +17,7 @@ use serde_yaml::{Mapping, Value};
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot};
-use crate::domain::task::template::TaskRecord;
+use crate::domain::task::template::{TaskRecord, TaskState};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{Compat, TASK_SCHEMA_VERSION, classify};
@@ -28,6 +28,15 @@ use crate::foundation::core::time::utc_now_timestamp;
 /// the legacy read does, then recovering the path-derived `feature_id` from
 /// `card.parent` (the field is `#[serde(skip)]`, so it is never in the mapping).
 pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecord> {
+    // A card minted natively by the card model (DN9 `maestro create`) carries no
+    // `extra`, so the verbatim-mapping read below has nothing to parse. Synthesize
+    // the record the task subsystem needs from the card's own fields instead. This
+    // bridge retires in S4 (E7), when the task lifecycle moves onto the native
+    // fields and the carrier disappears; until then `status`/`doctor` must read a
+    // canonically-created task card without crashing.
+    if card.extra.is_empty() {
+        return Ok(record_from_native_card(card));
+    }
     let parent = card.parent.clone();
     let mut record: TaskRecord = serde_yaml::from_value(Value::Mapping(card.extra))
         .with_context(|| format!("failed to parse {artifact}"))?;
@@ -41,6 +50,25 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
     }
     record.feature_id = parent;
     Ok(record)
+}
+
+/// Build a [`TaskRecord`] from a native card's own fields (no `extra` carrier).
+/// The acceptance contract, verification binding, and fine state history a
+/// migrated task carries have no native home yet (the S4 gap), so the record
+/// keeps the draft defaults for those; the fine `state` is mapped from the
+/// card's coarse status word.
+fn record_from_native_card(card: Card) -> TaskRecord {
+    let mut record = TaskRecord::draft(&card.id, &card.title, &card.created_at);
+    record.feature_id = card.parent;
+    record.updated_at = card.updated_at;
+    record.claimed_by = card.claimed_by;
+    record.claimed_at = card.claimed_at;
+    record.state = match card.status.as_str() {
+        "in_progress" => TaskState::InProgress,
+        "closed" => TaskState::Verified,
+        _ => TaskState::Draft,
+    };
+    record
 }
 
 /// Serialize a task record to the mapping the card builder folds into `extra`.

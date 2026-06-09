@@ -3,11 +3,10 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::domain::card::{StoreMode, store_mode};
 use crate::domain::decisions;
 use crate::domain::task::cards;
-use crate::domain::task::lookup::{feature_id_for_task_path, paths_for_tasks_dir, task_yaml_paths};
-use crate::domain::task::template::{BlockerKind, TaskRecord, load_task};
+use crate::domain::task::lookup::paths_for_tasks_dir;
+use crate::domain::task::template::{BlockerKind, TaskRecord};
 
 /// Result of scanning task blocker references.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -40,32 +39,17 @@ pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
     Ok(tasks)
 }
 
-/// Load all task records with their directories, dispatched by store mode
-/// (SPEC-beads-model P1 dual-read cutover). This is the single task scan seam:
-/// every roster, count, and projection rides it, so a migrated repo reads
-/// `Task`-typed cards (with `feature_id` recovered from `card.parent`, the field
-/// the counts group by) while an unmigrated repo scans the legacy task roots.
+/// Load all task records with their directories. This is the single task scan
+/// seam -- every roster, count, and projection rides it: it reads `Task`-typed
+/// cards (with `feature_id` recovered from `card.parent`, the field the counts
+/// group by).
 pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
-    if let Some(paths) = paths_for_tasks_dir(tasks_dir)
-        && store_mode(&paths) == StoreMode::Cards
-    {
-        let mut entries = cards::scan(&paths)?
-            .into_iter()
-            .map(|(task, task_dir)| TaskEntry { task, task_dir })
-            .collect::<Vec<_>>();
-        entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
-        return Ok(entries);
-    }
-    let mut entries = Vec::new();
-    for task_path in task_yaml_paths(tasks_dir)? {
-        let (mut task, _) = load_task(&task_path)?;
-        task.feature_id = feature_id_for_task_path(&task_path);
-        let task_dir = task_path
-            .parent()
-            .map(Path::to_path_buf)
-            .with_context(|| format!("task path is missing parent: {}", task_path.display()))?;
-        entries.push(TaskEntry { task, task_dir });
-    }
+    let paths =
+        paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
+    let mut entries = cards::scan(&paths)?
+        .into_iter()
+        .map(|(task, task_dir)| TaskEntry { task, task_dir })
+        .collect::<Vec<_>>();
     entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
     Ok(entries)
 }

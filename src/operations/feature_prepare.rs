@@ -683,20 +683,13 @@ fn reload_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Result<
 
 fn rollback_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Result<()> {
     for task in created.iter().rev() {
-        let task_dir = task_root_for_created(paths, task).join(task.directory_name());
+        let task_dir = paths.cards_dir().join(&task.id);
         if task_dir.exists() {
             fs::remove_dir_all(&task_dir)
                 .with_context(|| format!("failed to remove {}", task_dir.display()))?;
         }
     }
     Ok(())
-}
-
-fn task_root_for_created(paths: &MaestroPaths, task: &TaskRecord) -> PathBuf {
-    match task.feature_id.as_deref() {
-        Some(feature_id) => paths.features_dir().join(feature_id).join("tasks"),
-        None => paths.tasks_dir(),
-    }
 }
 
 #[cfg(test)]
@@ -721,7 +714,7 @@ mod tests {
         )
         .expect("invariant: feature contract should be set");
         fs::write(
-            paths.features_dir().join(&feature_id).join("qa.md"),
+            paths.cards_dir().join(&feature_id).join("qa.md"),
             "---\namend_log_position: 0\n---\n\nbaseline\n",
         )
         .expect("invariant: baseline should be writable");
@@ -759,18 +752,11 @@ mod tests {
         bail!("injected blocker failure")
     }
 
-    fn task_dirs(paths: &MaestroPaths) -> Vec<PathBuf> {
-        let tasks_dir = paths.features_dir().join("rollback-prepare").join("tasks");
-        if !tasks_dir.exists() {
-            return Vec::new();
-        }
-        fs::read_dir(tasks_dir)
-            .expect("invariant: tasks dir should be readable")
-            .map(|entry| {
-                entry
-                    .expect("invariant: task entry should be readable")
-                    .path()
-            })
+    fn task_dirs(paths: &MaestroPaths) -> Vec<String> {
+        task::load_task_records(&paths.tasks_dir())
+            .expect("invariant: task records should be loadable")
+            .into_iter()
+            .map(|task| task.id)
             .collect()
     }
 

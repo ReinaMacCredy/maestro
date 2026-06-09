@@ -1,20 +1,14 @@
 //! Task aggregate facade.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::schema::CardType;
 use crate::domain::card::store as card_store;
-use crate::domain::card::{StoreMode, store_mode};
-use crate::foundation::core::fs::{
-    ALLOC_MARKER_PREFIX, DirReservation, append_text_file, child_dirs, ensure_dir,
-    try_reserve_marker_dir,
-};
+use crate::foundation::core::fs::append_text_file;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
 pub(crate) mod archive;
@@ -158,22 +152,13 @@ pub fn create_task(
     if options.covers.iter().any(|cover| cover.trim().is_empty()) {
         bail!("task cover cannot be empty; pass an acceptance id such as ac-1");
     }
-    // Legacy mode reserves a `.alloc-` marker that gives the numbered
-    // id-allocation loop liveness (concurrent creates bump past each other's
-    // held markers, SPEC D2) and holds it until the artifacts land. Card mode
-    // mints a content-addressed `card-<hash>` id from the title plus a process
-    // nonce (SPEC O3') that needs no marker -- the create-time CAS (D1) is the
-    // collision belt, so two creators racing on the same hash both attempt the
-    // write and the loser fails loud rather than silently bumping.
-    let card_paths = lookup::paths_for_tasks_dir(tasks_dir)
-        .filter(|paths| store_mode(paths) == StoreMode::Cards);
-    let (id, _marker) = match card_paths.as_ref() {
-        Some(paths) => (card_store::mint_card_id(paths, title), None),
-        None => {
-            let reserved = reserve_next_task_id(tasks_dir)?;
-            (reserved.id, Some(reserved._marker))
-        }
-    };
+    // Mint a content-addressed `card-<hash>` id from the title plus a process
+    // nonce (SPEC O3'); the create-time CAS (D1) is the collision belt, so two
+    // creators racing on the same hash both attempt the write and the loser
+    // fails loud rather than silently bumping.
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    let id = card_store::mint_card_id(&paths, title);
     let mut task = TaskRecord::draft(&id, title, &options.created_at);
     task.feature_id = options.feature;
     task.covers = options.covers;
@@ -183,16 +168,8 @@ pub fn create_task(
     if let Some(risk) = options.risk {
         task.risk = Some(risk);
     }
-    let acceptance = AcceptanceFile::new(&id, options.checks);
-    task.acceptance = acceptance.clone();
-    match card_paths.as_ref() {
-        Some(paths) => cards::create(paths, &task)?,
-        None => {
-            let task_root = task_root_for_feature(tasks_dir, task.feature_id.as_deref())?;
-            template::write_task_artifacts(&task_root, &task, &acceptance)?;
-        }
-    }
-    drop(_marker);
+    task.acceptance = AcceptanceFile::new(&id, options.checks);
+    cards::create(&paths, &task)?;
     Ok(task)
 }
 
@@ -567,9 +544,7 @@ pub fn set_feature(
     actor: &str,
     at: &str,
 ) -> Result<TaskRecord> {
-    let (loaded_task, snapshot, current_dir) = lookup::load_task_with_snapshot(tasks_dir, id)?;
-    let original_task = loaded_task.clone();
-    let mut task = loaded_task;
+    let (mut task, snapshot, _) = lookup::load_task_with_snapshot(tasks_dir, id)?;
     if feature_link_is_settled(&task.state) {
         bail!(
             "task {} is {}; its feature link is settled history and cannot change",
@@ -586,37 +561,7 @@ pub fn set_feature(
         (Some(previous), None) => format!("feature link cleared (was {previous})"),
         (None, None) => unreachable!("equal links are returned as a no-op above"),
     };
-    // Card mode: the parent is just a field, so there is no directory to move --
-    // retarget, audit, and save. Legacy mode physically relocates the task dir
-    // across feature subdirs (below), rolling the record back on a rename failure.
-    if matches!(snapshot, template::TaskSnapshot::Card { .. }) {
-        task.feature_id = feature;
-        lifecycle::append_history(
-            &mut task,
-            actor,
-            at,
-            TransitionDetails {
-                summary: Some(summary),
-                ..TransitionDetails::default()
-            },
-        );
-        template::save_task_with_snapshot(&task, &snapshot)?;
-        return Ok(task);
-    }
-    let target_root = task_root_for_feature(tasks_dir, feature.as_deref())?;
-    let target_dir = target_root.join(task.directory_name());
-    let should_move = target_dir != current_dir;
-    if should_move && target_dir.exists() {
-        bail!(
-            "cannot move task {} — target already exists at {}",
-            task.id,
-            target_dir.display()
-        );
-    }
-    if should_move {
-        ensure_dir(&target_root)?;
-    }
-
+    // The parent is just a card field -- retarget, audit, and save in place.
     task.feature_id = feature;
     lifecycle::append_history(
         &mut task,
@@ -628,32 +573,6 @@ pub fn set_feature(
         },
     );
     template::save_task_with_snapshot(&task, &snapshot)?;
-    if should_move && let Err(error) = fs::rename(&current_dir, &target_dir) {
-        let rollback =
-            serde_yaml::to_string(&original_task).context("failed to serialize task rollback")?;
-        let current_yaml = current_dir.join("task.yaml");
-        if let Err(rollback_error) = write_string_atomic(&current_yaml, &rollback) {
-            return Err(error)
-                .with_context(|| {
-                    format!(
-                        "failed to move {} to {}",
-                        current_dir.display(),
-                        target_dir.display()
-                    )
-                })
-                .context(format!(
-                    "failed to restore {} after move failure: {rollback_error}",
-                    current_yaml.display()
-                ));
-        }
-        return Err(error).with_context(|| {
-            format!(
-                "failed to move {} to {}",
-                current_dir.display(),
-                target_dir.display()
-            )
-        });
-    }
     Ok(task)
 }
 
@@ -896,138 +815,6 @@ fn feature_link_is_settled(state: &TaskState) -> bool {
     )
 }
 
-#[derive(Debug)]
-struct ReservedTaskId {
-    id: String,
-    _marker: DirReservation,
-}
-
-fn reserve_next_task_id(tasks_dir: &Path) -> Result<ReservedTaskId> {
-    // L6a: an archived `task-NNN` still owns its id, so allocate above the max
-    // of the union of live + archived tasks — never reissue a freed id.
-    let mut max = max_task_number(tasks_dir)?;
-    if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir) {
-        max = max.max(max_task_number(&archive_tasks_dir)?);
-    }
-    max = max.max(max_reserved_task_number(tasks_dir)?);
-    let mut candidate = max + 1;
-    loop {
-        let marker_name = format!("{ALLOC_MARKER_PREFIX}task-{candidate:03}");
-        let Some(marker) = try_reserve_marker_dir(tasks_dir, &marker_name)? else {
-            candidate += 1;
-            continue;
-        };
-        if task_number_exists(tasks_dir, candidate)? {
-            drop(marker);
-            candidate += 1;
-            continue;
-        }
-        return Ok(ReservedTaskId {
-            id: format!("task-{candidate:03}"),
-            _marker: marker,
-        });
-    }
-}
-
-/// Highest `task-NNN` number among the directory's entries (0 if dir absent).
-fn max_task_number(tasks_dir: &Path) -> Result<u32> {
-    let mut max = 0_u32;
-    for root in lookup::task_roots(tasks_dir)? {
-        if !root.is_dir() {
-            continue;
-        }
-        for entry in
-            fs::read_dir(&root).with_context(|| format!("failed to read {}", root.display()))?
-        {
-            let entry = entry.with_context(|| format!("failed to list {}", root.display()))?;
-            let file_type = entry
-                .file_type()
-                .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-            if !file_type.is_dir() || file_type.is_symlink() {
-                continue;
-            }
-            let Some(name) = entry.file_name().to_str().map(str::to_string) else {
-                continue;
-            };
-            if let Some(num) = name
-                .strip_prefix("task-")
-                .and_then(|rest| rest.split('-').next())
-                .and_then(|value| value.parse::<u32>().ok())
-            {
-                max = max.max(num);
-            }
-        }
-    }
-    Ok(max)
-}
-
-fn max_reserved_task_number(tasks_dir: &Path) -> Result<u32> {
-    let mut max = 0_u32;
-    for (path, _) in child_dirs(tasks_dir)? {
-        if let Some(num) = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .and_then(|name| name.strip_prefix(ALLOC_MARKER_PREFIX))
-            .and_then(|rest| rest.strip_prefix("task-"))
-            .and_then(|value| value.parse::<u32>().ok())
-        {
-            max = max.max(num);
-        }
-    }
-    Ok(max)
-}
-
-fn task_number_exists(tasks_dir: &Path, number: u32) -> Result<bool> {
-    if task_number_exists_in(tasks_dir, number)? {
-        return Ok(true);
-    }
-    if let Some(archive_tasks_dir) = archive_tasks_sibling(tasks_dir)
-        && task_number_exists_in(&archive_tasks_dir, number)?
-    {
-        return Ok(true);
-    }
-    Ok(false)
-}
-
-fn task_number_exists_in(tasks_dir: &Path, number: u32) -> Result<bool> {
-    for root in lookup::task_roots(tasks_dir)? {
-        for (path, _) in child_dirs(&root)? {
-            if path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .and_then(|name| name.strip_prefix("task-"))
-                .and_then(|rest| rest.split('-').next())
-                .and_then(|value| value.parse::<u32>().ok())
-                == Some(number)
-            {
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
-}
-
-fn task_root_for_feature(tasks_dir: &Path, feature_id: Option<&str>) -> Result<PathBuf> {
-    let Some(feature_id) = feature_id else {
-        return Ok(tasks_dir.to_path_buf());
-    };
-    let maestro_dir = tasks_dir.parent().with_context(|| {
-        format!(
-            "cannot derive feature task root from {}",
-            tasks_dir.display()
-        )
-    })?;
-    Ok(maestro_dir.join("features").join(feature_id).join("tasks"))
-}
-
-/// `.maestro/tasks` → `.maestro/archive/tasks` (the archive sibling tree, §5.3).
-/// Derived from `tasks_dir` to keep `create_task`'s signature stable (D-P4-5).
-fn archive_tasks_sibling(tasks_dir: &Path) -> Option<PathBuf> {
-    tasks_dir
-        .parent()
-        .map(|maestro_dir| maestro_dir.join("archive").join("tasks"))
-}
-
 fn next_blocker_id(task: &TaskRecord) -> String {
     let max = task
         .blockers
@@ -1068,9 +855,9 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        BlockerTarget, MaestroPaths, TaskRecord, TaskState, VerificationBinding,
+        BlockerTarget, CreateTaskOptions, MaestroPaths, TaskRecord, TaskState, VerificationBinding,
         VerificationOutcome, VerificationPassed, VerificationStatus, apply_verification_outcome,
-        missing_verify_contract_ids,
+        create_task, missing_verify_contract_ids, set_feature,
     };
 
     #[test]
@@ -1198,5 +985,71 @@ mod tests {
         assert_eq!(latest.open_items, vec!["missing evidence"]);
         assert_eq!(task.verification.status, Some(VerificationStatus::Failed));
         assert_eq!(task.verification.failures, vec!["missing evidence"]);
+    }
+
+    fn card_mode_repo(label: &str) -> MaestroPaths {
+        use std::process;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-task-setfeat-{label}-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        crate::foundation::core::fs::ensure_dir(paths.cards_dir()).expect("create cards dir");
+        paths
+    }
+
+    /// In card mode `set_feature` retargets `card.parent` in place -- no directory
+    /// move (the legacy carrier of the feature link). Detaching to `None` clears
+    /// the persisted parent and drops the task from the feature's on-demand count.
+    /// (Ported from the deleted task_card_cutover: the legacy directory-move
+    /// collision tests in task_commands cover a path that no longer exists.)
+    #[test]
+    fn card_mode_set_feature_retargets_parent_in_place_and_drops_the_count() {
+        use crate::domain::card::schema::Card;
+        use crate::domain::card::store::card_path;
+
+        let paths = card_mode_repo("detach");
+        let tasks_dir = paths.tasks_dir();
+
+        let feature_id = crate::feature::create(&paths, "Csv export").expect("create feature card");
+        let task = create_task(
+            &tasks_dir,
+            "Add CSV export",
+            CreateTaskOptions {
+                feature: Some(feature_id.clone()),
+                covers: Vec::new(),
+                lane: None,
+                risk: None,
+                checks: Vec::new(),
+                created_at: "2026-06-09T12:00:00Z".to_string(),
+            },
+        )
+        .expect("create task card with a feature parent");
+        assert!(task.id.starts_with("card-"), "card-mode id: {}", task.id);
+
+        let counts = crate::feature::query::count_tasks_by_feature(&tasks_dir).expect("count");
+        assert_eq!(counts.get(&feature_id).map(|c| c.total), Some(1));
+
+        set_feature(&tasks_dir, &task.id, None, "maestro", "2026-06-09T12:00:00Z")
+            .expect("detach the feature");
+
+        let card: Card = serde_yaml::from_str(
+            &std::fs::read_to_string(card_path(&paths, &task.id)).expect("card readable"),
+        )
+        .expect("card parses");
+        assert_eq!(card.parent, None, "the parent field is cleared in place");
+
+        let counts = crate::feature::query::count_tasks_by_feature(&tasks_dir).expect("recount");
+        assert_eq!(
+            counts.get(&feature_id),
+            None,
+            "the detached task no longer counts toward the feature"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.maestro_dir());
     }
 }

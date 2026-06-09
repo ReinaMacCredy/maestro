@@ -3,18 +3,10 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::store::{self as card_store, card_path};
-use crate::domain::card::{StoreMode, store_mode};
 use crate::domain::decisions::cards;
-use crate::domain::decisions::query::{
-    DecisionSource, decision_entries, decision_exists, load_store_at, load_store_with_snapshot,
-    normalize_decision_id, parse_decision_number, save_store_at, save_store_with_snapshot,
-    store_paths,
-};
+use crate::domain::decisions::query::{DecisionSource, decision_exists, normalize_decision_id};
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
 use crate::domain::feature;
-use crate::foundation::core::fs::{
-    ALLOC_MARKER_PREFIX, DirReservation, child_dirs, try_reserve_marker_dir,
-};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -48,29 +40,7 @@ pub fn create_open(
         bail!("decision title must contain at least one ASCII letter or digit");
     }
     let feature = feature.map(str::trim).filter(|value| !value.is_empty());
-    match store_mode(paths) {
-        StoreMode::Cards => create_open_card(paths, title, context, feature),
-        StoreMode::Legacy => create_open_legacy(paths, title, context, feature),
-    }
-}
-
-fn create_open_legacy(
-    paths: &MaestroPaths,
-    title: &str,
-    context: Option<&str>,
-    feature: Option<&str>,
-) -> Result<DecisionWriteReport> {
-    let (path, source) = decision_store_target(paths, feature)?;
-    let mut snapshot = load_store_with_snapshot(&path)?;
-    let reserved = reserve_next_decision_id(paths)?;
-    let record = open_record(reserved.id.clone(), title, context, feature);
-    snapshot.store.decisions.push(record.clone());
-    save_store_with_snapshot(&path, &snapshot.store, &snapshot)?;
-    Ok(DecisionWriteReport {
-        record,
-        path,
-        source,
-    })
+    create_open_card(paths, title, context, feature)
 }
 
 fn create_open_card(
@@ -137,70 +107,7 @@ pub fn lock(
         bail!("--rejected values must not be empty");
     }
     let id = normalize_decision_id(id)?;
-    match store_mode(paths) {
-        StoreMode::Cards => lock_card(paths, &id, decision, rejected, preview, supersedes),
-        StoreMode::Legacy => lock_legacy(paths, &id, decision, rejected, preview, supersedes),
-    }
-}
-
-fn lock_legacy(
-    paths: &MaestroPaths,
-    id: &str,
-    decision: &str,
-    rejected: &[String],
-    preview: Option<&str>,
-    supersedes: &[String],
-) -> Result<DecisionLockReport> {
-    let mut found = None;
-    for path in store_paths(paths)? {
-        let snapshot = load_store_with_snapshot(&path.path)?;
-        if let Some(index) = snapshot
-            .store
-            .decisions
-            .iter()
-            .position(|record| record.id == id)
-        {
-            found = Some((path, snapshot, index));
-            break;
-        }
-    }
-    let Some((store_path, mut snapshot, index)) = found else {
-        if decision_exists(paths, id)? {
-            bail!("{id} is a frozen legacy decision; create a new decision that supersedes it");
-        }
-        bail!("decision not found: {id}");
-    };
-    if snapshot.store.decisions[index].status != DecisionStatus::Open {
-        bail!(
-            "{} is already {}; create a new decision to supersede it",
-            snapshot.store.decisions[index].id,
-            snapshot.store.decisions[index].status.as_str()
-        );
-    }
-
-    let supersedes = validate_supersedes(paths, id, supersedes)?;
-    apply_lock(
-        &mut snapshot.store.decisions[index],
-        decision,
-        rejected,
-        preview,
-        &supersedes,
-        utc_now_timestamp(),
-    );
-    let record = snapshot.store.decisions[index].clone();
-    save_store_with_snapshot(&store_path.path, &snapshot.store, &snapshot)?;
-
-    for target in &supersedes {
-        mark_superseded(paths, target, &record.id)?;
-    }
-
-    let note_line = note_locked_feature(paths, &record)?;
-    Ok(DecisionLockReport {
-        record,
-        path: store_path.path,
-        source: store_path.source,
-        note_line,
-    })
+    lock_card(paths, &id, decision, rejected, preview, supersedes)
 }
 
 fn lock_card(
@@ -314,94 +221,6 @@ fn note_locked_feature(paths: &MaestroPaths, record: &DecisionRecord) -> Result<
     ))
 }
 
-pub(crate) fn ensure_feature_store(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
-    let path = paths.features_dir().join(feature_id).join("decisions.yaml");
-    if path.exists() {
-        return Ok(());
-    }
-    save_store_at(&path, &DecisionStore::empty())
-}
-
-fn decision_store_target(
-    paths: &MaestroPaths,
-    feature: Option<&str>,
-) -> Result<(PathBuf, DecisionSource)> {
-    if let Some(feature_id) = feature {
-        feature::ensure_exists(paths, feature_id)?;
-        let path = paths.features_dir().join(feature_id).join("decisions.yaml");
-        if !path.exists() {
-            ensure_feature_store(paths, feature_id)?;
-        }
-        Ok((
-            path,
-            DecisionSource::Feature {
-                feature_id: feature_id.to_string(),
-            },
-        ))
-    } else {
-        let path = paths.decisions_file();
-        if !path.exists() {
-            save_store_at(&path, &DecisionStore::empty())?;
-        }
-        Ok((path, DecisionSource::Global))
-    }
-}
-
-#[derive(Debug)]
-struct ReservedDecisionId {
-    id: String,
-    _marker: DirReservation,
-}
-
-fn reserve_next_decision_id(paths: &MaestroPaths) -> Result<ReservedDecisionId> {
-    let mut candidate = max_decision_number(paths)? + 1;
-    loop {
-        let marker_name = format!("{ALLOC_MARKER_PREFIX}decision-{candidate:03}");
-        let Some(marker) = try_reserve_marker_dir(paths.decisions_dir(), &marker_name)? else {
-            candidate += 1;
-            continue;
-        };
-        let id = format!("decision-{candidate:03}");
-        if decision_exists(paths, &id)? {
-            drop(marker);
-            candidate += 1;
-            continue;
-        }
-        return Ok(ReservedDecisionId {
-            id,
-            _marker: marker,
-        });
-    }
-}
-
-fn max_decision_number(paths: &MaestroPaths) -> Result<u32> {
-    let mut max_number = 0_u32;
-    for store_path in store_paths(paths)? {
-        for record in load_store_at(&store_path.path)?.decisions {
-            if let Some(number) = parse_decision_number(&record.id) {
-                max_number = max_number.max(number);
-            }
-        }
-    }
-    for entry in decision_entries(&paths.decisions_dir())? {
-        if let Some(number) = parse_decision_number(&entry.file_name) {
-            max_number = max_number.max(number);
-        }
-    }
-    for (path, _) in child_dirs(&paths.decisions_dir())? {
-        if let Some(number) = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .and_then(|name| name.strip_prefix(ALLOC_MARKER_PREFIX))
-            .and_then(|rest| rest.strip_prefix("decision-"))
-            .and_then(|value| value.parse::<u32>().ok())
-        {
-            max_number = max_number.max(number);
-        }
-    }
-    Ok(max_number)
-}
-
 fn ensure_decision_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
     if decision_exists(paths, id)? {
         Ok(())
@@ -411,31 +230,10 @@ fn ensure_decision_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
 }
 
 fn mark_superseded(paths: &MaestroPaths, id: &str, by: &str) -> Result<()> {
-    match store_mode(paths) {
-        StoreMode::Cards => {
-            if let Some((mut record, _source, snapshot, path)) = cards::load_one(paths, id)? {
-                record.status = DecisionStatus::Superseded;
-                record.superseded_by = Some(by.to_string());
-                cards::save_at(&path, &record, &snapshot)?;
-            }
-            Ok(())
-        }
-        StoreMode::Legacy => {
-            for path in store_paths(paths)? {
-                let mut snapshot = load_store_with_snapshot(&path.path)?;
-                if let Some(record) = snapshot
-                    .store
-                    .decisions
-                    .iter_mut()
-                    .find(|record| record.id == id)
-                {
-                    record.status = DecisionStatus::Superseded;
-                    record.superseded_by = Some(by.to_string());
-                    save_store_with_snapshot(&path.path, &snapshot.store, &snapshot)?;
-                    return Ok(());
-                }
-            }
-            Ok(())
-        }
+    if let Some((mut record, _source, snapshot, path)) = cards::load_one(paths, id)? {
+        record.status = DecisionStatus::Superseded;
+        record.superseded_by = Some(by.to_string());
+        cards::save_at(&path, &record, &snapshot)?;
     }
+    Ok(())
 }

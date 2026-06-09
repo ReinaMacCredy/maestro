@@ -30,8 +30,43 @@ use crate::foundation::core::time::utc_now_timestamp;
 /// on `BacklogConfig`, not the item, and the card-store load already validated
 /// `card.schema_version`.
 pub(crate) fn item_from_card(card: Card, artifact: &str) -> Result<BacklogItem> {
+    // A card minted natively by the card model (DN9 `maestro create -t idea`)
+    // carries no `extra`, so the verbatim-mapping read below has nothing to parse.
+    // Synthesize a minimal item from the card's own fields so `harness list` can
+    // read it without crashing. The detector metadata a migrated item carries
+    // (fingerprint, occurrences, evidence, history) has no native home yet (the S4
+    // gap), so it stays empty; the aggregate merge is fingerprint-keyed, so an
+    // empty-fingerprint native idea is the "non-harness idea source" D7/P5 owns.
+    if card.extra.is_empty() {
+        return Ok(item_from_native_card(card));
+    }
     serde_yaml::from_value(Value::Mapping(card.extra))
         .with_context(|| format!("failed to parse {artifact}"))
+}
+
+/// Build a [`BacklogItem`] from a native idea card's own fields (no `extra`
+/// carrier). Only `id`/`title` are required; every detector field is
+/// skip-if-empty, so a minimal item round-trips and reads cleanly.
+fn item_from_native_card(card: Card) -> BacklogItem {
+    BacklogItem {
+        id: card.id,
+        title: card.title,
+        status: card.status,
+        first_seen: card.created_at,
+        last_seen: card.updated_at,
+        fingerprint: String::new(),
+        source: String::new(),
+        provenance: String::new(),
+        topic: String::new(),
+        item_type: String::new(),
+        priority: String::new(),
+        occurrences: 0,
+        sessions_hit: Vec::new(),
+        evidence: Vec::new(),
+        spawned_task: None,
+        dismissal_reason: None,
+        history: Vec::new(),
+    }
 }
 
 /// Serialize a backlog item to the mapping the card builder folds into `extra`.
