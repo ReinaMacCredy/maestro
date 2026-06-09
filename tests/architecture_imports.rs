@@ -933,6 +933,7 @@ fn proof_domain_does_not_apply_or_mutate_task_directly() {
         "VerificationOutcome".to_string(),
         "VerificationPassed".to_string(),
         "VerificationStatus".to_string(),
+        "load_archived_task_record".to_string(),
         "load_task_for_update".to_string(),
         "load_task_record".to_string(),
     ]);

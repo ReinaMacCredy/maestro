@@ -242,7 +242,7 @@ pub fn load_task_by_id(paths: &MaestroPaths, task_id: &str) -> Result<LoadedTask
             task: handle.task().clone(),
             task_dir: handle.task_dir().to_path_buf(),
         }),
-        Err(live_err) => match task::cards::load_one_archived(paths, task_id) {
+        Err(live_err) => match task::load_archived_task_record(paths, task_id) {
             Ok(Some((task, task_dir))) => Ok(LoadedTask { task, task_dir }),
             _ => Err(live_err),
         },

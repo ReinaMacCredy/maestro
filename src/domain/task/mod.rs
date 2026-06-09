@@ -179,6 +179,16 @@ pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     Ok(task)
 }
 
+/// Read an archived task card (`archive/cards/<id>/card.yaml`) with its card
+/// directory. Read-only: archived tasks stay immutable, so no save snapshot is
+/// exposed. `None` when no Task-typed card holds the id in the archive.
+pub fn load_archived_task_record(
+    paths: &MaestroPaths,
+    id: &str,
+) -> Result<Option<(TaskRecord, PathBuf)>> {
+    cards::load_one_archived(paths, id)
+}
+
 /// Resolve a task's on-disk record path (`cards/<id>/card.yaml`) by canonical id.
 ///
 /// Card-routed: the legacy `.maestro/tasks` tree no longer exists, so this joins

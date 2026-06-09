@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 
-use crate::domain::card::store::card_path;
+use crate::domain::card;
 use crate::domain::decisions;
 use crate::domain::feature::{
     self, ContractAdditions, ContractChangeCounts, ContractEdits, FeatureStatus,
@@ -940,7 +940,7 @@ fn show_unreadable_feature_spec(
     id: &str,
     error: anyhow::Error,
 ) -> Result<()> {
-    let path = card_path(paths, id);
+    let path = card::store::card_path(paths, id);
     println!("status: unreadable");
     println!("feature: {id}");
     println!("path: {}", path.display());
