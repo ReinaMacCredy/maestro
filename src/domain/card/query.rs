@@ -52,8 +52,8 @@ pub fn coarse_of(status: &str) -> Option<Coarse> {
     match status {
         "proposed" | "draft" | "exploring" | "ready" | "open" => Some(Coarse::Open),
         "in_progress" | "needs_verification" | "accepted" => Some(Coarse::InProgress),
-        "closed" | "verified" | "measured" | "locked" | "superseded" | "cancelled" | "rejected"
-        | "abandoned" | "dismissed" => Some(Coarse::Closed),
+        "closed" | "verified" | "measured" | "locked" | "superseded" | "shipped" | "cancelled"
+        | "rejected" | "abandoned" | "dismissed" => Some(Coarse::Closed),
         _ => None,
     }
 }
@@ -194,6 +194,7 @@ mod tests {
             "measured",
             "locked",
             "superseded",
+            "shipped",
             "cancelled",
             "rejected",
             "abandoned",

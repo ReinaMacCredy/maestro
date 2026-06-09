@@ -128,6 +128,11 @@ pub enum RootCommand {
     #[command(about = "Author dependency edges between cards (card store)")]
     Dep(DepArgs),
     #[command(
+        about = "Archive a feature card and its child cards (card store)",
+        after_help = "Examples:\n  maestro archive csv-export   # archives the feature card + every parent=csv-export card"
+    )]
+    Archive(ArchiveArgs),
+    #[command(
         about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
     )]
     Harness(HarnessArgs),
@@ -724,6 +729,13 @@ pub enum DecisionCommand {
 }
 
 #[derive(Debug, Args)]
+pub struct ArchiveArgs {
+    /// The feature card to archive (its `parent=<feature>` children ride along).
+    #[arg(value_name = "FEATURE")]
+    pub feature: String,
+}
+
+#[derive(Debug, Args)]
 pub struct DepArgs {
     #[command(subcommand)]
     pub command: DepCommand,
@@ -901,6 +913,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Ready(args) => card::ready(args),
         RootCommand::List(args) => card::list(args),
         RootCommand::Dep(args) => card::dep(args),
+        RootCommand::Archive(args) => card::archive(args),
         RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
         RootCommand::Mcp(args) => mcp::run(args),

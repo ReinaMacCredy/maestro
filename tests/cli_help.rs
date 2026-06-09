@@ -53,6 +53,7 @@ fn root_help_lists_top_level_commands() {
             "ready",
             "list",
             "dep",
+            "archive",
             "harness",
             "query",
             "mcp",
@@ -219,6 +220,10 @@ fn nested_help_lists_section_38_command_tree() {
         &["--parent", "--type", "--assignee", "--status"],
     );
     assert_contains_all(&maestro(&["dep", "--help"]), &["add"]);
+    assert_contains_all(
+        &maestro(&["archive", "--help"]),
+        &["FEATURE", "Examples:", "maestro archive"],
+    );
     assert_contains_all(
         &maestro(&["dep", "add", "--help"]),
         &["CHILD", "PARENT", "Examples:", "maestro dep add"],

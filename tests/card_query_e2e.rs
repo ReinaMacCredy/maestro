@@ -1,10 +1,13 @@
-//! P4b/P4c end-to-end: the `maestro ready`, `maestro list`, and `maestro dep`
-//! verbs drive the card query and edit layers through the real binary. Coverage:
-//! a genuinely migrated repo (coarse mapping DN3 over the real migrated status
-//! words); a hand-built blocker chain (E8 gating clears); `--assignee` matching
-//! the agent portion of a claim; `dep add` authoring a blocking edge that holds
-//! the dependent back (and rejecting a self-block); and the legacy store exiting
-//! 0 with a guiding notice rather than a dead-end error.
+//! P4b/P4c/P4d end-to-end: the `maestro ready`, `maestro list`, `maestro dep`,
+//! and `maestro archive` verbs drive the card query/edit/archive layers through
+//! the real binary. Coverage: a genuinely migrated repo (coarse mapping DN3 over
+//! the real migrated status words); a hand-built blocker chain (E8 gating clears);
+//! `--assignee` matching the agent portion of a claim; `dep add` authoring a
+//! blocking edge that holds the dependent back (and rejecting a self-block);
+//! `archive <feature>` moving the feature card and its `parent=<feature>` children
+//! to the archive sibling (E4 query-driven cascade) and refusing when a member is
+//! still open; and the legacy store exiting 0 with a guiding notice rather than a
+//! dead-end error.
 
 mod support;
 
@@ -266,6 +269,105 @@ fn dep_add_blocks_the_dependent_through_the_binary() {
 }
 
 #[test]
+fn archive_moves_a_shipped_feature_and_its_children_through_the_binary() {
+    let temp = TestTempDir::new("p4d-archive");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    // A shipped feature with two settled children, plus an unrelated feature that
+    // must stay put. "shipped" is the feature terminal word -> coarse CLOSED.
+    write_card(
+        &paths,
+        &Card::new(
+            "csv-export",
+            CardType::Feature,
+            "CSV export",
+            "shipped",
+            NOW,
+        ),
+    );
+    let mut child_a = Card::new("task-001", CardType::Task, "One", "verified", NOW);
+    child_a.parent = Some("csv-export".to_string());
+    let mut child_b = Card::new("task-002", CardType::Task, "Two", "closed", NOW);
+    child_b.parent = Some("csv-export".to_string());
+    write_card(&paths, &child_a);
+    write_card(&paths, &child_b);
+    write_card(
+        &paths,
+        &Card::new("other", CardType::Feature, "Other", "shipped", NOW),
+    );
+
+    let out = run(repo, &["archive", "csv-export"]);
+    assert!(
+        out.contains("archived feature csv-export")
+            && out.contains("task-001")
+            && out.contains("task-002"),
+        "the verb reports the feature and its archived children:\n{out}"
+    );
+
+    // E4: the whole set moved to archive/cards/ and left the live store.
+    for id in ["csv-export", "task-001", "task-002"] {
+        assert!(
+            repo.join(".maestro/archive/cards")
+                .join(id)
+                .join("card.yaml")
+                .is_file(),
+            "{id} moved to the archive"
+        );
+        assert!(
+            !repo.join(".maestro/cards").join(id).exists(),
+            "{id} left the live store"
+        );
+    }
+    // the unrelated feature is untouched
+    assert!(repo.join(".maestro/cards/other").is_dir());
+
+    // archived work no longer surfaces in the live board
+    let ready = run(repo, &["ready"]);
+    assert!(
+        !ready.contains("task-001"),
+        "an archived card is out of ready:\n{ready}"
+    );
+}
+
+#[test]
+fn archive_refuses_a_feature_with_open_work() {
+    let temp = TestTempDir::new("p4d-archive-open");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    write_card(
+        &paths,
+        &Card::new(
+            "csv-export",
+            CardType::Feature,
+            "CSV export",
+            "shipped",
+            NOW,
+        ),
+    );
+    let mut open_child = Card::new("task-001", CardType::Task, "One", "in_progress", NOW);
+    open_child.parent = Some("csv-export".to_string());
+    write_card(&paths, &open_child);
+
+    let out = maestro(repo, &["archive", "csv-export"]);
+    assert!(
+        !out.status.success(),
+        "an open child blocks archive:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("task-001"),
+        "the refusal names the open id"
+    );
+    assert!(
+        repo.join(".maestro/cards/csv-export").is_dir(),
+        "nothing moved when the gate fails"
+    );
+}
+
+#[test]
 fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
     let temp = TestTempDir::new("p4b-legacy");
     let repo = temp.path();
@@ -285,5 +387,10 @@ fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
     assert!(
         dep.contains("no card store"),
         "dep add on a legacy repo also guides rather than erroring:\n{dep}"
+    );
+    let archive = run(repo, &["archive", "csv-export"]);
+    assert!(
+        archive.contains("no card store"),
+        "archive on a legacy repo also guides rather than erroring:\n{archive}"
     );
 }

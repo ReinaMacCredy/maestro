@@ -97,6 +97,15 @@ impl MaestroPaths {
         self.archive_dir().join("features")
     }
 
+    /// Return the archived-cards directory (`.maestro/archive/cards`).
+    ///
+    /// The card-model archive sibling of `cards/`; `archive <feature>` moves the
+    /// feature card and its `parent=<feature>` children here as whole directories
+    /// (SPEC-beads-model E4/D5).
+    pub fn archive_cards_dir(&self) -> PathBuf {
+        self.archive_dir().join("cards")
+    }
+
     /// Return the backup artifact directory.
     pub fn backups_dir(&self) -> PathBuf {
         self.maestro_dir().join("backups")

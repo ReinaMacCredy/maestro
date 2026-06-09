@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow};
 use crate::domain::card;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
-use crate::interfaces::cli::{DepArgs, DepCommand, ListArgs, ReadyArgs};
+use crate::interfaces::cli::{ArchiveArgs, DepArgs, DepCommand, ListArgs, ReadyArgs};
 
 /// Execute `maestro ready`: workable cards with no open blockers.
 pub fn ready(args: ReadyArgs) -> Result<()> {
@@ -82,15 +82,37 @@ pub fn dep(args: DepArgs) -> Result<()> {
     Ok(())
 }
 
+/// Execute `maestro archive <feature>`: move the feature card and its
+/// `parent=<feature>` children to the archive sibling tree (SPEC E4/D5).
+pub fn archive(args: ArchiveArgs) -> Result<()> {
+    let paths = repo_paths()?;
+    if card::store_mode(&paths) == card::StoreMode::Legacy {
+        legacy_notice();
+        return Ok(());
+    }
+    let report = card::archive::archive_feature(&paths, &args.feature)?;
+    if report.children.is_empty() {
+        println!("archived feature {} (no child cards)", report.feature);
+    } else {
+        println!(
+            "archived feature {} + {} child card(s): {}",
+            report.feature,
+            report.children.len(),
+            report.children.join(", ")
+        );
+    }
+    Ok(())
+}
+
 fn repo_paths() -> Result<MaestroPaths> {
     Ok(MaestroPaths::new(discover_repo_root()?))
 }
 
-/// `ready`/`list` read `.maestro/cards/`; an unmigrated repo has none. Exit 0
+/// The card verbs read `.maestro/cards/`; an unmigrated repo has none. Exit 0
 /// with one guiding line rather than a dead-end error: no cards is a state.
 fn legacy_notice() {
     println!(
-        "this repo has no card store yet (.maestro/cards/); ready and list apply once it is migrated to the card model"
+        "this repo has no card store yet (.maestro/cards/); the card verbs apply once it is migrated to the card model"
     );
 }
 
