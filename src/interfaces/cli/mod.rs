@@ -133,6 +133,11 @@ pub enum RootCommand {
     )]
     Archive(ArchiveArgs),
     #[command(
+        about = "Claim a workable card for this session (card store)",
+        after_help = "Examples:\n  maestro claim task-0a1b2c   # take an unclaimed task/bug/chore\n  MAESTRO_SESSION=mine maestro claim task-0a1b2c"
+    )]
+    Claim(ClaimArgs),
+    #[command(
         about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
     )]
     Harness(HarnessArgs),
@@ -736,6 +741,13 @@ pub struct ArchiveArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ClaimArgs {
+    /// The workable card (task/bug/chore) to claim for this session.
+    #[arg(value_name = "ID")]
+    pub id: String,
+}
+
+#[derive(Debug, Args)]
 pub struct DepArgs {
     #[command(subcommand)]
     pub command: DepCommand,
@@ -914,6 +926,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::List(args) => card::list(args),
         RootCommand::Dep(args) => card::dep(args),
         RootCommand::Archive(args) => card::archive(args),
+        RootCommand::Claim(args) => card::claim(args),
         RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
         RootCommand::Mcp(args) => mcp::run(args),
@@ -947,6 +960,32 @@ pub(super) fn cli_run_id() -> String {
         .map(|(date, _)| date.to_string())
         .unwrap_or_else(|| "1970-01-01".to_string());
     format!("cli-{date}")
+}
+
+/// The `<session>` half of a card claim identity (SPEC E6): `MAESTRO_SESSION` if
+/// set, then any real per-session id the agent runtime exports, else a
+/// process-unique token. Never the colliding `cli-DATE` form `cli_run_id` falls
+/// back to -- a date is not a session, and would let two runs share one claim.
+pub(super) fn claim_session() -> String {
+    for key in [
+        "MAESTRO_SESSION",
+        "MAESTRO_SESSION_ID",
+        "MAESTRO_RUN_ID",
+        "CODEX_SESSION_ID",
+        "CLAUDE_SESSION_ID",
+        "CLAUDECODE_SESSION_ID",
+    ] {
+        if let Ok(value) = env::var(key)
+            && !value.trim().is_empty()
+        {
+            return value;
+        }
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    format!("s{}-{nanos}", std::process::id())
 }
 
 pub(super) fn detected_agent_hint() -> &'static str {

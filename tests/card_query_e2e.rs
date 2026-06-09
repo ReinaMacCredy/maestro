@@ -1,13 +1,15 @@
-//! P4b/P4c/P4d end-to-end: the `maestro ready`, `maestro list`, `maestro dep`,
-//! and `maestro archive` verbs drive the card query/edit/archive layers through
-//! the real binary. Coverage: a genuinely migrated repo (coarse mapping DN3 over
-//! the real migrated status words); a hand-built blocker chain (E8 gating clears);
-//! `--assignee` matching the agent portion of a claim; `dep add` authoring a
-//! blocking edge that holds the dependent back (and rejecting a self-block);
-//! `archive <feature>` moving the feature card and its `parent=<feature>` children
-//! to the archive sibling (E4 query-driven cascade) and refusing when a member is
-//! still open; and the legacy store exiting 0 with a guiding notice rather than a
-//! dead-end error.
+//! P4b/P4c/P4d/P4e end-to-end: the `maestro ready`, `maestro list`, `maestro dep`,
+//! `maestro archive`, and `maestro claim` verbs drive the card query/edit/archive
+//! layers through the real binary. Coverage: a genuinely migrated repo (coarse
+//! mapping DN3 over the real migrated status words); a hand-built blocker chain
+//! (E8 gating clears); `--assignee` matching the agent portion of a claim;
+//! `dep add` authoring a blocking edge that holds the dependent back (and
+//! rejecting a self-block); `archive <feature>` moving the feature card and its
+//! `parent=<feature>` children to the archive sibling (E4 query-driven cascade)
+//! and refusing when a member is still open; `claim <id>` taking a free card under
+//! `<agent>#<session>` (DN8), staying idempotent for the same session, refusing a
+//! fresh foreign claim and reclaiming a stale one (E6/O2); and the legacy store
+//! exiting 0 with a guiding notice rather than a dead-end error.
 
 mod support;
 
@@ -29,6 +31,18 @@ fn maestro(cwd: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(cwd)
         .env("MAESTRO_AGENT", "codex")
+        .output()
+        .expect("invariant: compiled maestro binary should run in integration tests")
+}
+
+/// Run `maestro claim <id>` with a fixed `MAESTRO_SESSION` so the stamped
+/// `<agent>#<session>` identity is deterministic (agent is `codex` per `maestro`).
+fn maestro_claim(cwd: &Path, id: &str, session: &str) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_maestro"))
+        .args(["claim", id])
+        .current_dir(cwd)
+        .env("MAESTRO_AGENT", "codex")
+        .env("MAESTRO_SESSION", session)
         .output()
         .expect("invariant: compiled maestro binary should run in integration tests")
 }
@@ -368,6 +382,68 @@ fn archive_refuses_a_feature_with_open_work() {
 }
 
 #[test]
+fn claim_takes_a_free_card_is_idempotent_and_refuses_a_fresh_foreign_claim() {
+    let temp = TestTempDir::new("p4e-claim");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    write_card(
+        &paths,
+        &Card::new("task-001", CardType::Task, "Work", "ready", NOW),
+    );
+
+    // a free card is taken under <agent>#<session> and moves to in_progress
+    let out = maestro_claim(repo, "task-001", "s1");
+    let stdout = String::from_utf8(out.stdout).expect("utf8");
+    assert!(
+        out.status.success() && stdout.contains("claimed task-001 as codex#s1"),
+        "fresh claim stamps the identity:\n{stdout}"
+    );
+    let listed = run(repo, &["list", "--assignee", "codex"]);
+    assert!(
+        listed.contains("task-001") && listed.contains("in_progress"),
+        "the claimed card is in_progress and owned:\n{listed}"
+    );
+
+    // the same session re-claiming is a no-op
+    let again = maestro_claim(repo, "task-001", "s1");
+    assert!(
+        String::from_utf8_lossy(&again.stdout).contains("already yours"),
+        "an idempotent re-claim by the holder reports already-yours"
+    );
+
+    // a different live session is refused -- the claim is fresh, not stale
+    let contend = maestro_claim(repo, "task-001", "s2");
+    assert!(
+        !contend.status.success() && String::from_utf8_lossy(&contend.stderr).contains("codex#s1"),
+        "a fresh foreign claim is refused and names the holder:\nstderr:\n{}",
+        String::from_utf8_lossy(&contend.stderr)
+    );
+}
+
+#[test]
+fn claim_reclaims_a_stale_foreign_claim_through_the_binary() {
+    let temp = TestTempDir::new("p4e-claim-stale");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    // a card held by a long-dead session (claimed_at far in the past, well beyond
+    // the 15-minute TTL) must be reclaimable so it never pins forever (E6/O2).
+    let mut held = Card::new("task-001", CardType::Task, "Work", "in_progress", NOW);
+    held.claimed_by = Some("claude#old".to_string());
+    held.claimed_at = Some("2020-01-01T00:00:00.000Z".to_string());
+    write_card(&paths, &held);
+
+    let out = maestro_claim(repo, "task-001", "s9");
+    let stdout = String::from_utf8(out.stdout).expect("utf8");
+    assert!(
+        out.status.success()
+            && stdout.contains("reclaimed task-001 from claude#old (stale) as codex#s9"),
+        "a stale claim is taken over with a warning:\n{stdout}"
+    );
+}
+
+#[test]
 fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
     let temp = TestTempDir::new("p4b-legacy");
     let repo = temp.path();
@@ -392,5 +468,10 @@ fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
     assert!(
         archive.contains("no card store"),
         "archive on a legacy repo also guides rather than erroring:\n{archive}"
+    );
+    let claim = run(repo, &["claim", "task-001"]);
+    assert!(
+        claim.contains("no card store"),
+        "claim on a legacy repo also guides rather than erroring:\n{claim}"
     );
 }

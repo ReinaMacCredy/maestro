@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow};
 use crate::domain::card;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
-use crate::interfaces::cli::{ArchiveArgs, DepArgs, DepCommand, ListArgs, ReadyArgs};
+use crate::interfaces::cli::{ArchiveArgs, ClaimArgs, DepArgs, DepCommand, ListArgs, ReadyArgs};
 
 /// Execute `maestro ready`: workable cards with no open blockers.
 pub fn ready(args: ReadyArgs) -> Result<()> {
@@ -102,6 +102,42 @@ pub fn archive(args: ArchiveArgs) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Execute `maestro claim <id>`: take a workable card for this session, stamping
+/// the `<agent>#<session>` identity and moving it to `in_progress` (SPEC E6/DN8).
+pub fn claim(args: ClaimArgs) -> Result<()> {
+    let paths = repo_paths()?;
+    if card::store_mode(&paths) == card::StoreMode::Legacy {
+        legacy_notice();
+        return Ok(());
+    }
+    let identity = claim_identity();
+    let outcome = card::edit::claim(&paths, &args.id, &identity, &utc_now_timestamp())?;
+    match outcome {
+        card::edit::ClaimOutcome::Claimed => println!("claimed {} as {identity}", args.id),
+        card::edit::ClaimOutcome::AlreadyMine => {
+            println!("{} is already yours ({identity})", args.id)
+        }
+        card::edit::ClaimOutcome::Reclaimed { previous } => {
+            println!(
+                "reclaimed {} from {previous} (stale) as {identity}",
+                args.id
+            )
+        }
+    }
+    Ok(())
+}
+
+/// The `<agent>#<session>` claim identity (SPEC DN8): the detected agent, or
+/// `maestro` when neither claude nor codex is detectable, joined to the session.
+fn claim_identity() -> String {
+    let agent = match super::detected_agent_hint() {
+        "claude" => "claude",
+        "codex" => "codex",
+        _ => "maestro",
+    };
+    format!("{agent}#{}", super::claim_session())
 }
 
 fn repo_paths() -> Result<MaestroPaths> {

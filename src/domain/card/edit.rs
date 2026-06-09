@@ -4,9 +4,16 @@
 
 use anyhow::{Result, bail};
 
+use crate::domain::card::query::{Coarse, coarse_of};
 use crate::domain::card::schema::{Dep, DepKind};
 use crate::domain::card::store::{card_path, load_with_snapshot, save_with_snapshot};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::time::timestamp_nanos;
+
+/// A claim older than this is stale and may be re-claimed (SPEC O2). Reuses the
+/// 15-minute write-lock staleness precedent (`fs.rs` `STALE_WRITE_LOCK_AGE`); a
+/// dead session must never pin a card forever (SPEC E6).
+const STALE_CLAIM_AGE_NANOS: i128 = 15 * 60 * 1_000_000_000;
 
 /// Add a `blocks` edge so `child` waits on `parent` (SPEC E1/DN6: the edge is
 /// stored on the dependent and gates only its `ready`). Mirrors
@@ -48,6 +55,79 @@ pub fn add_blocks_dep(paths: &MaestroPaths, child: &str, parent: &str, now: &str
     card.updated_at = now.to_string();
     save_with_snapshot(&child_path, &card, &snapshot)?;
     Ok(true)
+}
+
+/// What `claim` did to a card, so the CLI can phrase the right line.
+#[derive(Debug, Eq, PartialEq)]
+pub enum ClaimOutcome {
+    /// The card was free; `claimed_by` is now the caller.
+    Claimed,
+    /// The caller already held it; nothing changed.
+    AlreadyMine,
+    /// A stale claim was taken over from `previous` (SPEC O2/E6).
+    Reclaimed { previous: String },
+}
+
+/// Claim a workable card for `claimed_by` (`<agent>#<session>`, SPEC DN8/E6).
+///
+/// Only task/bug/chore are claimable (SPEC E3); claiming a feature/idea/decision
+/// or a closed card is refused at this input boundary. A live claim held by
+/// someone else is refused, but a claim older than [`STALE_CLAIM_AGE_NANOS`] is
+/// taken over with a `Reclaimed` outcome so a dead session never pins a card
+/// forever (SPEC E6/O2). A successful claim stamps `claimed_at`/`updated_at` and
+/// moves the card to `in_progress`.
+pub fn claim(paths: &MaestroPaths, id: &str, claimed_by: &str, now: &str) -> Result<ClaimOutcome> {
+    let path = card_path(paths, id);
+    let snapshot = load_with_snapshot(&path)?;
+    let Some(mut card) = snapshot.card.clone() else {
+        bail!("no card {id} to claim");
+    };
+    if !card.card_type.workable() {
+        bail!(
+            "{id} is a {}, not a workable card; only task/bug/chore are claimable",
+            card.card_type.as_str()
+        );
+    }
+    if coarse_of(&card.status) == Some(Coarse::Closed) {
+        bail!("{id} is closed ({}); nothing to claim", card.status);
+    }
+
+    let outcome = match card.claimed_by.as_deref() {
+        Some(holder) if holder == claimed_by => return Ok(ClaimOutcome::AlreadyMine),
+        Some(holder) => {
+            let stale = card
+                .claimed_at
+                .as_deref()
+                .is_none_or(|at| claim_is_stale(at, now));
+            if !stale {
+                bail!(
+                    "{id} is held by {holder} (claimed {}); not stale yet -- coordinate or wait",
+                    card.claimed_at.as_deref().unwrap_or("unknown")
+                );
+            }
+            ClaimOutcome::Reclaimed {
+                previous: holder.to_string(),
+            }
+        }
+        None => ClaimOutcome::Claimed,
+    };
+
+    card.claimed_by = Some(claimed_by.to_string());
+    card.claimed_at = Some(now.to_string());
+    card.status = "in_progress".to_string();
+    card.updated_at = now.to_string();
+    save_with_snapshot(&path, &card, &snapshot)?;
+    Ok(outcome)
+}
+
+/// Whether a claim stamped at `claimed_at` is older than the stale TTL as of
+/// `now`. An unparseable/missing timestamp counts as stale so it can never pin a
+/// card forever (SPEC E6).
+fn claim_is_stale(claimed_at: &str, now: &str) -> bool {
+    match (timestamp_nanos(claimed_at), timestamp_nanos(now)) {
+        (Some(then), Some(now)) => now.saturating_sub(then) > STALE_CLAIM_AGE_NANOS,
+        _ => true,
+    }
 }
 
 #[cfg(test)]
@@ -144,5 +224,133 @@ mod tests {
             add_blocks_dep(&paths, "task-404", "task-001", NOW).is_err(),
             "the dependent must exist"
         );
+    }
+
+    /// Seed a card of `ty`/`status`, optionally already claimed, and save it.
+    fn seed_full(
+        paths: &MaestroPaths,
+        id: &str,
+        ty: CardType,
+        status: &str,
+        claimed_by: Option<&str>,
+        claimed_at: Option<&str>,
+    ) {
+        let mut card = Card::new(id, ty, id, status, NOW);
+        card.claimed_by = claimed_by.map(str::to_string);
+        card.claimed_at = claimed_at.map(str::to_string);
+        let path = card_path(paths, id);
+        let snap = load_with_snapshot(&path).expect("absent loads None");
+        save_with_snapshot(&path, &card, &snap).expect("seed card");
+    }
+
+    const LATER: &str = "2026-06-09T01:00:00Z";
+    // five minutes after NOW: a real "now" that is still inside the 15-min TTL.
+    const SOON: &str = "2026-06-09T00:05:00Z";
+
+    #[test]
+    fn claim_takes_a_free_card_and_moves_it_in_progress() {
+        let paths = repo("claim-free");
+        seed(&paths, "task-001");
+
+        let outcome = claim(&paths, "task-001", "claude#s1", LATER).expect("claim succeeds");
+        assert_eq!(outcome, ClaimOutcome::Claimed);
+
+        let card = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("card exists");
+        assert_eq!(card.claimed_by.as_deref(), Some("claude#s1"));
+        assert_eq!(card.claimed_at.as_deref(), Some(LATER));
+        assert_eq!(card.status, "in_progress");
+        assert_eq!(card.updated_at, LATER);
+    }
+
+    #[test]
+    fn claim_is_idempotent_for_the_same_holder() {
+        let paths = repo("claim-mine");
+        seed_full(
+            &paths,
+            "task-001",
+            CardType::Task,
+            "in_progress",
+            Some("claude#s1"),
+            Some(NOW),
+        );
+
+        let outcome = claim(&paths, "task-001", "claude#s1", LATER).expect("re-claim succeeds");
+        assert_eq!(outcome, ClaimOutcome::AlreadyMine);
+
+        // an idempotent re-claim does not re-stamp claimed_at
+        let card = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("card exists");
+        assert_eq!(card.claimed_at.as_deref(), Some(NOW));
+    }
+
+    #[test]
+    fn claim_refuses_a_fresh_claim_held_by_another() {
+        let paths = repo("claim-contend");
+        seed_full(
+            &paths,
+            "task-001",
+            CardType::Task,
+            "in_progress",
+            Some("codex#s9"),
+            Some(NOW),
+        );
+
+        // five minutes later is well inside the 15-minute TTL, so the claim is live
+        let err = claim(&paths, "task-001", "claude#s1", SOON).expect_err("fresh claim refused");
+        assert!(err.to_string().contains("codex#s9"), "names the holder");
+
+        let card = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("card exists");
+        assert_eq!(card.claimed_by.as_deref(), Some("codex#s9"), "untouched");
+    }
+
+    #[test]
+    fn claim_reclaims_a_stale_claim() {
+        let paths = repo("claim-stale");
+        seed_full(
+            &paths,
+            "task-001",
+            CardType::Task,
+            "in_progress",
+            Some("codex#s9"),
+            Some("2020-01-01T00:00:00Z"),
+        );
+
+        let outcome =
+            claim(&paths, "task-001", "claude#s1", LATER).expect("stale reclaim succeeds");
+        assert_eq!(
+            outcome,
+            ClaimOutcome::Reclaimed {
+                previous: "codex#s9".to_string()
+            }
+        );
+
+        let card = load(&card_path(&paths, "task-001"))
+            .expect("load")
+            .expect("card exists");
+        assert_eq!(card.claimed_by.as_deref(), Some("claude#s1"));
+        assert_eq!(card.claimed_at.as_deref(), Some(LATER));
+    }
+
+    #[test]
+    fn claim_refuses_a_non_workable_card() {
+        let paths = repo("claim-feature");
+        seed_full(&paths, "feat-001", CardType::Feature, "open", None, None);
+
+        let err = claim(&paths, "feat-001", "claude#s1", LATER).expect_err("feature not claimable");
+        assert!(err.to_string().contains("feature"), "names the type");
+    }
+
+    #[test]
+    fn claim_refuses_a_closed_card() {
+        let paths = repo("claim-closed");
+        seed_full(&paths, "task-001", CardType::Task, "closed", None, None);
+
+        let err = claim(&paths, "task-001", "claude#s1", LATER).expect_err("closed not claimable");
+        assert!(err.to_string().contains("closed"), "says it is closed");
     }
 }
