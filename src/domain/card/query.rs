@@ -156,6 +156,24 @@ pub fn query<'a>(cards: &'a [Card], filter: &ListFilter) -> Vec<&'a Card> {
     cards.iter().filter(|card| filter.matches(card)).collect()
 }
 
+/// The CLI-only dotted display alias (SPEC E2): `<parent>.<N>`, where N is the
+/// card's 1-based position among its id-sorted siblings (cards sharing its
+/// `parent`). Computed at render time and never stored or parsed back -- the
+/// ordinal shifts when siblings come and go, so only the stable id may be used
+/// as a ref. `None` for a parentless card, or when the card is absent from the
+/// scanned set (e.g. archived).
+pub fn display_alias(cards: &[Card], card: &Card) -> Option<String> {
+    let parent = card.parent.as_deref()?;
+    let mut siblings: Vec<&str> = cards
+        .iter()
+        .filter(|sibling| sibling.parent.as_deref() == Some(parent))
+        .map(|sibling| sibling.id.as_str())
+        .collect();
+    siblings.sort_unstable();
+    let position = siblings.iter().position(|id| *id == card.id)?;
+    Some(format!("{parent}.{}", position + 1))
+}
+
 #[cfg(test)]
 mod tests {
     use std::process;
@@ -294,6 +312,36 @@ mod tests {
             ready(&cards).is_empty(),
             "features/ideas/decisions are not workable; an in_progress task is not coarse-open"
         );
+    }
+
+    #[test]
+    fn display_alias_is_parent_dot_ordinal_among_id_sorted_siblings() {
+        let mut early = card("card-aaa111", CardType::Task, "open");
+        early.parent = Some("csv-export".to_string());
+        let mut late = card("card-zzz999", CardType::Task, "open");
+        late.parent = Some("csv-export".to_string());
+        let mut foreign = card("card-bbb222", CardType::Task, "open");
+        foreign.parent = Some("other-feature".to_string());
+        let unparented = card("card-ccc333", CardType::Task, "open");
+        // Deliberately unsorted input: the ordinal must come from the id sort,
+        // not the caller's ordering.
+        let cards = vec![
+            late.clone(),
+            card("csv-export", CardType::Feature, "proposed"),
+            foreign,
+            early.clone(),
+            unparented.clone(),
+        ];
+
+        assert_eq!(
+            display_alias(&cards, &early).as_deref(),
+            Some("csv-export.1")
+        );
+        assert_eq!(
+            display_alias(&cards, &late).as_deref(),
+            Some("csv-export.2")
+        );
+        assert_eq!(display_alias(&cards, &unparented), None);
     }
 
     #[test]

@@ -108,6 +108,54 @@ fn create_mints_a_card_and_show_round_trips_it() {
 }
 
 #[test]
+fn show_renders_the_display_alias_for_parented_cards() {
+    let temp = cards_repo("s2-display-alias");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "feature", "CSV Export"]);
+    let parent_args = ["--parent", "csv-export"];
+    run(
+        repo,
+        &[&["create", "-t", "task", "First task"], &parent_args[..]].concat(),
+    );
+    run(
+        repo,
+        &[&["create", "-t", "task", "Second task"], &parent_args[..]].concat(),
+    );
+
+    // Hash ids do not sort by creation order, so derive the expected ordinals
+    // from the id sort the alias is specified over (SPEC E2).
+    let mut ordered = [
+        id_by_title(repo, "First task"),
+        id_by_title(repo, "Second task"),
+    ];
+    ordered.sort_unstable();
+    for (index, id) in ordered.iter().enumerate() {
+        let shown = run(repo, &["show", id]);
+        assert!(
+            shown.contains(&format!("alias: csv-export.{} (display only)", index + 1)),
+            "show renders the dotted alias marked display-only:\n{shown}"
+        );
+    }
+
+    let feature_shown = run(repo, &["show", "csv-export"]);
+    assert!(
+        !feature_shown.contains("alias:"),
+        "a parentless card carries no alias line:\n{feature_shown}"
+    );
+    let ready = run(repo, &["ready"]);
+    assert!(
+        !ready.contains("csv-export."),
+        "ready carries no alias column:\n{ready}"
+    );
+    let listed = run(repo, &["list"]);
+    assert!(
+        !listed.contains("csv-export."),
+        "list carries no alias column:\n{listed}"
+    );
+}
+
+#[test]
 fn show_json_mirrors_the_card() {
     let temp = cards_repo("s2-show-json");
     let repo = temp.path();

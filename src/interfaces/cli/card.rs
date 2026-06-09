@@ -190,7 +190,8 @@ pub fn show(args: ShowArgs) -> Result<()> {
     if args.json {
         println!("{}", serde_json::to_string_pretty(&c)?);
     } else {
-        render_show(&c);
+        let alias = card::query::display_alias(&card::query::scan(&paths)?, &c);
+        render_show(&c, alias.as_deref());
     }
     Ok(())
 }
@@ -366,7 +367,7 @@ fn render_list(cards: &[&card::schema::Card]) {
 
 /// Render `show <id>` (SPEC DN9): header line + parent + edges grouped by kind +
 /// body (timestamps and description). Emoji-free.
-fn render_show(c: &card::schema::Card) {
+fn render_show(c: &card::schema::Card, alias: Option<&str>) {
     println!(
         "{}  {}  {}  {}  {}",
         c.id,
@@ -377,6 +378,11 @@ fn render_show(c: &card::schema::Card) {
     );
     if let Some(parent) = &c.parent {
         println!("parent: {parent}");
+    }
+    // SPEC E2: the dotted alias is render-time only -- never a ref, never
+    // accepted as an address, so it is labeled to discourage `claim <alias>`.
+    if let Some(alias) = alias {
+        println!("alias: {alias} (display only)");
     }
     render_edges(c, card::schema::DepKind::Blocks, "blocked by");
     render_edges(c, card::schema::DepKind::Related, "related");
