@@ -70,14 +70,13 @@ fn ready_and_list_reflect_a_migrated_card_store() {
     let temp = TestTempDir::new("p4b-ready-migrated");
     let paths = MaestroPaths::new(temp.path());
 
-    // Author a feature-owned task through the real verbs while the repo is still
-    // legacy, then migrate. The migrated task lands as a workable card in its
-    // creation status ("draft" -> coarse OPEN), so it is ready; the feature card
-    // is not workable and must never appear in `ready`.
+    // Author a feature-owned task through the real verbs. The task lands as a
+    // workable card in its creation status ("draft" -> coarse OPEN), so it is
+    // ready; the feature card is not workable and must never appear in `ready`.
     let feature_id =
         maestro::domain::feature::create(&paths, "Csv export").expect("create feature");
     assert_eq!(feature_id, "csv-export");
-    let task = task::create_task(
+    task::create_task(
         &paths.tasks_dir(),
         "Add CSV export",
         CreateTaskOptions {
@@ -90,12 +89,10 @@ fn ready_and_list_reflect_a_migrated_card_store() {
         },
     )
     .expect("create task");
-    assert_eq!(task.id, "task-001");
     card_migrate::run(&paths, NOW).expect("migration succeeds");
 
-    // The remint reassigns the task a stable content-hash id (SPEC E2/O3), so
-    // task-001 no longer addresses anything -- capture the reminted id from the
-    // store and assert the CLI verbs surface it.
+    // The task is minted with a stable content-hash id (SPEC E2/O3); capture it
+    // from the store and assert the CLI verbs surface it.
     let task1_id = task::load_task_records(&paths.tasks_dir())
         .expect("scan tasks")
         .into_iter()

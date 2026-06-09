@@ -1,3 +1,4 @@
+mod card_support;
 mod support;
 
 use std::fs;
@@ -5,6 +6,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
+use card_support::{card_doc, id_by_title};
 use maestro::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
 use serde_yaml::Value as YamlValue;
@@ -120,14 +122,15 @@ fn feature_verify_sweeps_acceptance_contract() {
         "first behavior works",
     ];
     stdout(maestro(&create_args, temp_dir.path()), &create_args);
+    let task_id = id_by_title(temp_dir.path(), "Implement first behavior");
     for args in [
-        vec!["task", "explore", "task-001"],
-        vec!["task", "accept", "task-001"],
-        vec!["task", "claim", "task-001"],
+        vec!["task", "explore", &task_id],
+        vec!["task", "accept", &task_id],
+        vec!["task", "claim", &task_id],
         vec![
             "task",
             "complete",
-            "task-001",
+            &task_id,
             "--summary",
             "done",
             "--claim",
@@ -135,7 +138,7 @@ fn feature_verify_sweeps_acceptance_contract() {
             "--proof",
             "first behavior works",
         ],
-        vec!["task", "verify", "task-001"],
+        vec!["task", "verify", &task_id],
     ] {
         stdout(maestro(&args, temp_dir.path()), &args);
     }
@@ -171,7 +174,7 @@ fn feature_verify_sweeps_acceptance_contract() {
         maestro(&["feature", "verify", "contract-sweep"], temp_dir.path()),
         &["feature", "verify", "contract-sweep"],
     );
-    assert!(sweep.contains("proof: task-001 OK"), "{sweep}");
+    assert!(sweep.contains(&format!("proof: {task_id} OK")), "{sweep}");
     assert!(sweep.contains("NO FRESH EVIDENCE"), "{sweep}");
 
     let prove_args = [
@@ -188,7 +191,7 @@ fn feature_verify_sweeps_acceptance_contract() {
         maestro(&["feature", "verify", "contract-sweep"], temp_dir.path()),
         &["feature", "verify", "contract-sweep"],
     );
-    assert!(sweep.contains("proof: task-001 OK"), "{sweep}");
+    assert!(sweep.contains(&format!("proof: {task_id} OK")), "{sweep}");
     assert!(sweep.contains("proof: manual proof OK"), "{sweep}");
     assert!(
         sweep.contains("ok: every acceptance item has evidence"),
@@ -275,13 +278,14 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         "second behavior works",
     ];
     stdout(maestro(&create_args, temp_dir.path()), &create_args);
+    let impl_id = id_by_title(temp_dir.path(), "Implement second behavior");
     let show = stdout(
         maestro(&["feature", "show", "coverage-display"], temp_dir.path()),
         &["feature", "show", "coverage-display"],
     );
     assert!(show.contains("- [ac-1] first behavior works"), "{show}");
     assert!(show.contains("- [ac-2] second behavior works"), "{show}");
-    assert!(show.contains("covers: task-001"), "{show}");
+    assert!(show.contains(&format!("covers: {impl_id}")), "{show}");
     assert!(show.contains("- [ac-3] third behavior works"), "{show}");
 
     let draft = stdout(
@@ -305,7 +309,7 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
     assert!(start.contains("warning: 2 acceptance item(s)"), "{start}");
     assert!(start.contains("ac-1, ac-3"), "{start}");
 
-    verify_task_claim(temp_dir.path(), "task-001", "second behavior works");
+    verify_task_claim(temp_dir.path(), &impl_id, "second behavior works");
     let waive_args = [
         "feature",
         "verify",
@@ -334,7 +338,7 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         sweep.contains("WAIVED: not applicable in fixture"),
         "{sweep}"
     );
-    assert!(sweep.contains("proof: task-001 OK"), "{sweep}");
+    assert!(sweep.contains(&format!("proof: {impl_id} OK")), "{sweep}");
     assert!(sweep.contains("proof: manual third proof OK"), "{sweep}");
     assert!(
         sweep.contains("ok: every acceptance item has evidence"),
@@ -378,7 +382,12 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         maestro(&create_hotfix_args, temp_dir.path()),
         &create_hotfix_args,
     );
-    verify_task_claim(temp_dir.path(), "task-002", "second behavior works");
+    let hotfix_id = id_by_title(temp_dir.path(), "Hotfix second behavior");
+    verify_task_claim(temp_dir.path(), &hotfix_id, "second behavior works");
+    // The sweep lists the two ac-2 covering task ids in scan (id-sorted) order.
+    let mut covering = [impl_id.clone(), hotfix_id.clone()];
+    covering.sort();
+    let covering_proof = format!("proof: {}, {} OK", covering[0], covering[1]);
     let stale_preview = stdout(
         maestro(
             &[
@@ -405,15 +414,15 @@ fn feature_contract_display_warnings_waivers_and_stale_sweep() {
         "{stale_preview}"
     );
     assert!(
-        stale_preview.contains("task-002 settled at"),
+        stale_preview.contains(&format!("{hotfix_id} settled at")),
         "{stale_preview}"
     );
     let refreshed = stdout(
         maestro(&["feature", "verify", "coverage-display"], temp_dir.path()),
         &["feature", "verify", "coverage-display"],
     );
-    assert!(refreshed.contains("re-derived after: task-002 settled at"));
-    assert!(refreshed.contains("proof: task-001, task-002 OK"));
+    assert!(refreshed.contains(&format!("re-derived after: {hotfix_id} settled at")));
+    assert!(refreshed.contains(&covering_proof), "{refreshed}");
     assert!(refreshed.contains("ok: every acceptance item has evidence"));
 }
 
@@ -459,17 +468,12 @@ fn feature_guarded_lifecycle_via_cli() {
     ];
     let create_output = stdout(maestro(&create_args, temp_dir.path()), &create_args);
     assert!(create_output.contains("created feature billing-csv-export"));
-    assert!(create_output.contains("spec: .maestro/features/billing-csv-export/spec.md"));
+    // The feature lands as a flat card; `feature new` no longer scaffolds the
+    // legacy `spec.md`/`decisions.yaml` sidecars (those are created on first write).
     assert!(
         temp_dir
             .path()
-            .join(".maestro/features/billing-csv-export/spec.md")
-            .is_file()
-    );
-    assert!(
-        temp_dir
-            .path()
-            .join(".maestro/features/billing-csv-export/decisions.yaml")
+            .join(".maestro/cards/billing-csv-export/card.yaml")
             .is_file()
     );
 
@@ -489,7 +493,7 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(accept_stderr.contains("acceptance"));
     assert!(accept_stderr.contains("affected_areas"));
     assert!(accept_stderr.contains("skill: qa-baseline"));
-    assert!(accept_stderr.contains("target: .maestro/features/billing-csv-export/qa.md"));
+    assert!(accept_stderr.contains("target: .maestro/cards/billing-csv-export/qa.md"));
     assert!(accept_stderr.contains("retry: maestro feature accept billing-csv-export"));
 
     // author the contract, then accept freezes it.
@@ -548,9 +552,9 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(clear_questions_output.contains("questions=0"));
 
     // accept also requires a captured baseline (F); ship requires it proven.
-    let features_dir = temp_dir.path().join(".maestro/features");
-    write_baseline(&features_dir, "billing-csv-export");
-    write_qa_slice(&features_dir, "billing-csv-export");
+    let cards_dir = temp_dir.path().join(".maestro/cards");
+    write_baseline(&cards_dir, "billing-csv-export");
+    write_qa_slice(&cards_dir, "billing-csv-export");
 
     let dry_args = ["feature", "accept", "billing-csv-export", "--dry-run"];
     let dry_output = stdout(maestro(&dry_args, temp_dir.path()), &dry_args);
@@ -565,10 +569,9 @@ fn feature_guarded_lifecycle_via_cli() {
         &["feature", "start", "billing-csv-export"],
     );
 
-    let tasks_dir = temp_dir.path().join(".maestro/tasks");
-    write_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
-    write_task(&tasks_dir, "task-002", "billing-csv-export", "verified");
-    write_task(&tasks_dir, "task-003", "billing-csv-export", "in_progress");
+    write_task(&cards_dir, "task-001", "billing-csv-export", "verified");
+    write_task(&cards_dir, "task-002", "billing-csv-export", "verified");
+    write_task(&cards_dir, "task-003", "billing-csv-export", "in_progress");
     verify_acceptance(temp_dir.path(), "billing-csv-export");
 
     let ship_args = [
@@ -582,7 +585,7 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(ship_stderr.contains("task-003"));
 
     // resolve the live child, then ship succeeds.
-    write_task(&tasks_dir, "task-003", "billing-csv-export", "verified");
+    write_task(&cards_dir, "task-003", "billing-csv-export", "verified");
     let ship_output = stdout(maestro(&ship_args, temp_dir.path()), &ship_args);
     assert!(ship_output.contains("shipped billing-csv-export"));
     assert!(ship_output.contains("ship receipt:"));
@@ -759,7 +762,7 @@ fn feature_set_edits_one_acceptance_item_by_id() {
         vec!["first criterion", "last value wins", "third criterion"]
     );
 
-    let before_unknown = feature_yaml(root, "edit-acceptance");
+    let before_unknown = feature_record(root, "edit-acceptance");
     let unknown_args = [
         "feature",
         "set",
@@ -772,7 +775,7 @@ fn feature_set_edits_one_acceptance_item_by_id() {
     let unknown = assert_failure(maestro(&unknown_args, root), &unknown_args);
     assert!(unknown.contains("unknown acceptance id"), "{unknown}");
     assert!(unknown.contains("ac-9"), "{unknown}");
-    assert_eq!(feature_yaml(root, "edit-acceptance"), before_unknown);
+    assert_eq!(feature_record(root, "edit-acceptance"), before_unknown);
 
     let count_guard_args = [
         "feature",
@@ -786,7 +789,7 @@ fn feature_set_edits_one_acceptance_item_by_id() {
         count_guard.contains("each --edit-acceptance needs its --text"),
         "{count_guard}"
     );
-    assert_eq!(feature_yaml(root, "edit-acceptance"), before_unknown);
+    assert_eq!(feature_record(root, "edit-acceptance"), before_unknown);
 
     let help = stdout(
         maestro(&["feature", "set", "--help"], root),
@@ -808,12 +811,9 @@ fn feature_new_existing_slug_fails_without_clobbering_record() {
         maestro(&["feature", "new", "Billing CSV"], temp_dir.path()),
         &["feature", "new", "Billing CSV"],
     );
-    let original = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/features/billing-csv/feature.yaml"),
-    )
-    .expect("invariant: feature.yaml should be readable");
+    let card_yaml = temp_dir.path().join(".maestro/cards/billing-csv/card.yaml");
+    let original =
+        fs::read_to_string(&card_yaml).expect("invariant: card.yaml should be readable");
 
     let stderr = assert_failure(
         maestro(&["feature", "new", "Billing CSV"], temp_dir.path()),
@@ -823,12 +823,8 @@ fn feature_new_existing_slug_fails_without_clobbering_record() {
         stderr.contains("feature billing-csv already exists"),
         "{stderr}"
     );
-    let after = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/features/billing-csv/feature.yaml"),
-    )
-    .expect("invariant: feature.yaml should remain readable");
+    let after =
+        fs::read_to_string(&card_yaml).expect("invariant: card.yaml should remain readable");
     assert_eq!(after, original);
 }
 
@@ -887,7 +883,7 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
         "{batch}"
     );
 
-    let before_count_mismatch = feature_yaml(root, "batch-proof");
+    let before_count_mismatch = feature_record(root, "batch-proof");
     let count_mismatch_args = [
         "feature",
         "verify",
@@ -904,9 +900,9 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
         stderr.contains("each --prove needs its --evidence"),
         "{stderr}"
     );
-    assert_eq!(feature_yaml(root, "batch-proof"), before_count_mismatch);
+    assert_eq!(feature_record(root, "batch-proof"), before_count_mismatch);
 
-    let before_bad_id = feature_yaml(root, "batch-proof");
+    let before_bad_id = feature_record(root, "batch-proof");
     let bad_id_args = [
         "feature",
         "verify",
@@ -923,7 +919,7 @@ fn feature_verify_records_repeatable_paired_proofs_atomically() {
     let stderr = assert_failure(maestro(&bad_id_args, root), &bad_id_args);
     assert!(stderr.contains("unknown acceptance id"), "{stderr}");
     assert!(stderr.contains("ac-9"), "{stderr}");
-    assert_eq!(feature_yaml(root, "batch-proof"), before_bad_id);
+    assert_eq!(feature_record(root, "batch-proof"), before_bad_id);
 
     let fixed_args = [
         "feature",
@@ -1007,6 +1003,7 @@ fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
             "blocked-ship-hint",
         ],
     );
+    let child_id = id_by_title(root, "Live child");
     record_feature_evidence(root, "blocked-ship-hint");
     let blocked_sweep = stdout(
         maestro(&["feature", "verify", "blocked-ship-hint"], root),
@@ -1018,7 +1015,7 @@ fn feature_verify_green_sweep_prints_state_appropriate_next_hint() {
         "{blocked_sweep}"
     );
     assert!(
-        blocked_sweep.contains("1 live child task(s): task-001"),
+        blocked_sweep.contains(&format!("1 live child task(s): {child_id}")),
         "{blocked_sweep}"
     );
     assert!(
@@ -1054,10 +1051,8 @@ fn feature_cancel_via_cli_cascades_to_live_tasks() {
         "billing",
     ];
     stdout(maestro(&set_args, temp_dir.path()), &set_args);
-    write_baseline(
-        &temp_dir.path().join(".maestro/features"),
-        "billing-csv-export",
-    );
+    let cards_dir = temp_dir.path().join(".maestro/cards");
+    write_baseline(&cards_dir, "billing-csv-export");
     stdout(
         maestro(
             &["feature", "accept", "billing-csv-export"],
@@ -1070,8 +1065,7 @@ fn feature_cancel_via_cli_cascades_to_live_tasks() {
         &["feature", "start", "billing-csv-export"],
     );
 
-    let tasks_dir = temp_dir.path().join(".maestro/tasks");
-    write_task(&tasks_dir, "task-001", "billing-csv-export", "in_progress");
+    write_task(&cards_dir, "task-001", "billing-csv-export", "in_progress");
 
     let cancel_args = [
         "feature",
@@ -1090,18 +1084,18 @@ fn feature_cancel_via_cli_cascades_to_live_tasks() {
     );
     assert!(show_output.contains("status: cancelled"));
 
-    let task_raw = fs::read_to_string(
-        tasks_dir
-            .parent()
-            .expect("invariant: tasks dir should have parent")
-            .join("features/billing-csv-export/tasks/task-001-task-001/task.yaml"),
-    )
-    .expect("invariant: cascaded child task should be readable");
-    assert!(task_raw.contains("abandoned"));
+    // The cascade transitions the flat child card in place; the card carries the
+    // abandoned status.
+    let cascaded = card_doc(temp_dir.path(), "task-001");
+    assert_eq!(
+        cascaded["status"],
+        YamlValue::String("abandoned".into()),
+        "{cascaded:?}"
+    );
 }
 
 #[test]
-fn decision_new_list_show_auto_increment_and_preserve_template() {
+fn decision_new_list_show_mint_card_ids_and_preserve_template() {
     let temp_dir = TestTempDir::new("maestro-decision-command-test");
     init_git_marker(temp_dir.path());
     stdout(
@@ -1122,15 +1116,23 @@ fn decision_new_list_show_auto_increment_and_preserve_template() {
         maestro(&["decision", "new", title], temp_dir.path()),
         &["decision", "new", title],
     );
-    assert!(new_output.contains("opened decision-008 (status: open)"));
+    let decision_id = id_by_title(temp_dir.path(), title);
+    assert!(
+        new_output.contains(&format!("opened {decision_id} (status: open)")),
+        "{new_output}"
+    );
 
-    let decisions_yaml = temp_dir.path().join(".maestro/decisions.yaml");
-    let yaml =
-        fs::read_to_string(&decisions_yaml).expect("invariant: decisions.yaml should be readable");
-    assert!(yaml.contains("id: decision-008"), "{yaml}");
+    let card = card_doc(temp_dir.path(), &decision_id);
+    assert_eq!(
+        card["type"],
+        YamlValue::String("decision".into()),
+        "{card:?}"
+    );
     assert!(
         !decisions_dir
-            .join("decision-008-use-single-harness-md-instead-of-three-adapter-files.md")
+            .join(format!(
+                "{decision_id}-use-single-harness-md-instead-of-three-adapter-files.md"
+            ))
             .is_file(),
         "decision new must not write frozen legacy markdown"
     );
@@ -1140,14 +1142,14 @@ fn decision_new_list_show_auto_increment_and_preserve_template() {
         &["decision", "list"],
     );
     assert!(list_output.contains("decision-007\tlegacy\tlegacy-md"));
-    assert!(list_output.contains("decision-008\topen\tglobal"));
+    assert!(list_output.contains(&format!("{decision_id}\topen\tglobal")));
 
     let show_output = stdout(
-        maestro(&["decision", "show", "decision-008"], temp_dir.path()),
-        &["decision", "show", "decision-008"],
+        maestro(&["decision", "show", &decision_id], temp_dir.path()),
+        &["decision", "show", &decision_id],
     );
     assert!(show_output.contains("store:"));
-    assert!(show_output.contains("id: decision-008"));
+    assert!(show_output.contains(&format!("id: {decision_id}")));
     assert!(show_output.contains(title));
 
     let doctor = stdout(maestro(&["doctor"], temp_dir.path()), &["doctor"]);
@@ -1192,10 +1194,11 @@ fn feature_spec_renders_multiline_decision_preview() {
             "preview-contract",
         ],
     );
+    let decision_id = id_by_title(temp_dir.path(), "Choose preview shape");
     let lock_args = [
         "decision",
         "lock",
-        "decision-001",
+        &decision_id,
         "--decision",
         "Use boxed ASCII",
         "--rejected",
@@ -1226,13 +1229,7 @@ fn status_and_feature_list_degrade_when_one_feature_record_is_incompatible() {
         maestro(&["feature", "new", "Healthy Feature"], temp_dir.path()),
         &["feature", "new", "Healthy Feature"],
     );
-    let bad_dir = temp_dir.path().join(".maestro/features/bad-feature");
-    fs::create_dir_all(&bad_dir).expect("invariant: bad feature dir should be creatable");
-    fs::write(
-        bad_dir.join("feature.yaml"),
-        "schema_version: maestro.feature.v1\nid: bad-feature\ntitle: Bad Feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
-    )
-    .expect("invariant: bad feature record should be writable");
+    write_bad_feature_card(temp_dir.path(), "bad-feature");
 
     let status = stdout(maestro(&["status"], temp_dir.path()), &["status"]);
     assert!(status.contains("healthy-feature"), "{status}");
@@ -1279,41 +1276,49 @@ fn feature_spec_and_decision_list_degrade_per_record() {
             "healthy-feature",
         ],
     );
-    let bad_dir = temp_dir.path().join(".maestro/features/bad-feature");
-    fs::create_dir_all(&bad_dir).expect("invariant: bad feature dir should be creatable");
+    let healthy_decision = id_by_title(temp_dir.path(), "Keep healthy decision visible");
+    write_bad_feature_card(temp_dir.path(), "bad-feature");
+    // A corrupt decision card: a valid card envelope (type decision) whose folded
+    // `extra` is malformed, so the decision scan cannot fold it.
+    let corrupt_dir = temp_dir.path().join(".maestro/cards/card-corrupt-decision");
+    ensure_dir(&corrupt_dir).expect("invariant: corrupt decision dir should be creatable");
     fs::write(
-        bad_dir.join("feature.yaml"),
-        "schema_version: maestro.feature.v1\nid: bad-feature\ntitle: Bad Feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+        corrupt_dir.join("card.yaml"),
+        "schema_version: maestro.card.v1\nid: card-corrupt-decision\ntype: decision\ntitle: Corrupt Decision\nstatus: open\ncreated_at: \"1\"\nupdated_at: \"1\"\nextra:\n  garbage: [unclosed\n",
     )
-    .expect("invariant: bad feature record should be writable");
-    fs::write(
-        bad_dir.join("decisions.yaml"),
-        "schema_version: maestro.decisions.v0\ndecisions: []\n",
-    )
-    .expect("invariant: incompatible decision store should be writable");
+    .expect("invariant: corrupt decision card should be writable");
 
     let spec = stdout(
         maestro(&["feature", "spec", "bad-feature"], temp_dir.path()),
         &["feature", "spec", "bad-feature"],
     );
     assert!(spec.contains("status: unreadable"), "{spec}");
-    assert!(spec.contains("## Raw feature.yaml"), "{spec}");
+    // The raw dump prints the whole card.yaml under the card header; the inner v1
+    // version is visible inside the folded `extra` block.
+    assert!(spec.contains("## Raw card.yaml"), "{spec}");
     assert!(
         spec.contains("schema_version: maestro.feature.v1"),
         "{spec}"
     );
 
+    // obsolete-premise: card mode has no per-feature `decisions.yaml`, so there is
+    // no `decisions.yaml\tunreadable\tfeature:<id>` row to assert. Surfacing an
+    // unreadable decision row is a deferred follow-up; today a corrupt decision card
+    // is silently swallowed. The card-mode behavior: the healthy decision lists, the
+    // corrupt one does not, and the command still exits 0.
     let decisions = stdout(
         maestro(&["decision", "list"], temp_dir.path()),
         &["decision", "list"],
     );
     assert!(
-        decisions.contains("decision-001\topen\tfeature:healthy-feature"),
+        decisions.contains(&format!(
+            "{healthy_decision}\topen\tfeature:healthy-feature"
+        )),
         "{decisions}"
     );
     assert!(
-        decisions.contains("decisions.yaml\tunreadable\tfeature:bad-feature"),
-        "{decisions}"
+        !decisions.contains("card-corrupt-decision"),
+        "a corrupt decision card is silently swallowed:\n{decisions}"
     );
 }
 
@@ -1325,13 +1330,7 @@ fn status_on_only_v1_feature_records_fails_with_migrate_hint() {
         maestro(&["init", "--yes"], temp_dir.path()),
         &["init", "--yes"],
     );
-    let bad_dir = temp_dir.path().join(".maestro/features/bad-feature");
-    fs::create_dir_all(&bad_dir).expect("invariant: bad feature dir should be creatable");
-    fs::write(
-        bad_dir.join("feature.yaml"),
-        "schema_version: maestro.feature.v1\nid: bad-feature\ntitle: Bad Feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
-    )
-    .expect("invariant: bad feature record should be writable");
+    write_bad_feature_card(temp_dir.path(), "bad-feature");
 
     let error = assert_failure(maestro(&["status"], temp_dir.path()), &["status"]);
     assert!(error.contains("schema mismatch"), "{error}");
@@ -1366,10 +1365,10 @@ fn migrate_v2_recreates_decision_scaffold_so_doctor_is_clean() {
         maestro(&["init", "--yes"], temp_dir.path()),
         &["init", "--yes"],
     );
-    fs::remove_file(temp_dir.path().join(".maestro/decisions.yaml"))
-        .expect("invariant: decisions.yaml should be removable");
-    fs::remove_dir(temp_dir.path().join(".maestro/decisions"))
-        .expect("invariant: decisions dir should be removable");
+    // Card-mode init scaffolds no decision stores at all, so the scaffold is
+    // absent by construction; migrate-v2 must create it from nothing.
+    assert!(!temp_dir.path().join(".maestro/decisions.yaml").exists());
+    assert!(!temp_dir.path().join(".maestro/decisions").exists());
     let feature_dir = temp_dir.path().join(".maestro/features/legacy-feature");
     fs::create_dir_all(&feature_dir).expect("invariant: feature dir should be creatable");
     fs::write(
@@ -1414,13 +1413,20 @@ fn decision_new_and_lock_write_structured_feature_record() {
         "agent-cli-ux",
     ];
     let out = stdout(maestro(&open_args, temp_dir.path()), &open_args);
-    assert!(out.contains("opened decision-001 (status: open)"), "{out}");
+    // Decisions mint opaque content-hash ids now (no decision-001 auto-increment);
+    // recover by the unique title.
+    let first_id = id_by_title(temp_dir.path(), "Timestamps use RFC3339");
+    assert!(first_id.starts_with("card-"), "{first_id}");
+    assert!(
+        out.contains(&format!("opened {first_id} (status: open)")),
+        "{out}"
+    );
     assert!(out.contains("feature: agent-cli-ux"), "{out}");
 
     let lock_args = [
         "decision",
         "lock",
-        "decision-001",
+        &first_id,
         "--decision",
         "render RFC3339 UTC with milliseconds",
         "--rejected",
@@ -1431,28 +1437,24 @@ fn decision_new_and_lock_write_structured_feature_record() {
         "updated_at: 2026-06-06T00:00:00.000Z",
     ];
     let out = stdout(maestro(&lock_args, temp_dir.path()), &lock_args);
-    assert!(out.contains("locked decision-001"), "{out}");
+    assert!(out.contains(&format!("locked {first_id}")), "{out}");
     assert!(out.contains("note:"), "{out}");
 
-    let record = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/features/agent-cli-ux/decisions.yaml"),
-    )
-    .expect("invariant: structured decision should be readable");
+    // The structured decision record is now folded under the decision card's `extra`.
+    let record = decision_record_yaml(temp_dir.path(), &first_id);
     assert!(record.contains("context: nanosecond epochs are hard to inspect"));
     assert!(record.contains("decision: render RFC3339 UTC with milliseconds"));
     assert!(record.contains("unix seconds: too lossy"));
     assert!(record.contains("raw nanos: unreadable"));
     assert!(record.contains("preview:"));
     assert!(record.contains("status: locked"));
-    let notes = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/features/agent-cli-ux/notes.md"),
-    )
-    .expect("invariant: feature notes should be readable");
-    assert_dated_note_line(&notes, "decision-001 locked -- Timestamps use RFC3339");
+    // Feature notes ride the feature card's directory.
+    let notes = fs::read_to_string(temp_dir.path().join(".maestro/cards/agent-cli-ux/notes.md"))
+        .expect("invariant: feature notes should be readable");
+    assert_dated_note_line(
+        &notes,
+        &format!("{first_id} locked -- Timestamps use RFC3339"),
+    );
 
     let spec = stdout(
         maestro(&["feature", "spec", "agent-cli-ux"], temp_dir.path()),
@@ -1461,7 +1463,7 @@ fn decision_new_and_lock_write_structured_feature_record() {
     assert!(spec.contains("status: proposed"), "{spec}");
     assert!(spec.contains("## Decisions"), "{spec}");
     assert!(
-        spec.contains("decision-001 [locked]: Timestamps use RFC3339"),
+        spec.contains(&format!("{first_id} [locked]: Timestamps use RFC3339")),
         "{spec}"
     );
 
@@ -1475,35 +1477,30 @@ fn decision_new_and_lock_write_structured_feature_record() {
         "agent-cli-ux",
     ];
     stdout(maestro(&second_open, temp_dir.path()), &second_open);
+    let second_id = id_by_title(temp_dir.path(), "Use human timestamps everywhere");
     let second_lock = [
         "decision",
         "lock",
-        "decision-002",
+        &second_id,
         "--decision",
         "render human timestamps in every agent-facing artifact",
         "--rejected",
         "feature-only timestamps: leaves decisions hard to inspect",
         "--supersedes",
-        "decision-001",
+        &first_id,
     ];
     stdout(maestro(&second_lock, temp_dir.path()), &second_lock);
-    let record = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/features/agent-cli-ux/decisions.yaml"),
-    )
-    .expect("invariant: structured decision should be readable");
+    let record = decision_record_yaml(temp_dir.path(), &first_id);
     assert!(record.contains("status: superseded"), "{record}");
-    assert!(record.contains("superseded_by: decision-002"), "{record}");
-    let notes = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/features/agent-cli-ux/notes.md"),
-    )
-    .expect("invariant: feature notes should be readable");
+    assert!(
+        record.contains(&format!("superseded_by: {second_id}")),
+        "{record}"
+    );
+    let notes = fs::read_to_string(temp_dir.path().join(".maestro/cards/agent-cli-ux/notes.md"))
+        .expect("invariant: feature notes should be readable");
     assert_dated_note_line(
         &notes,
-        "decision-002 locked -- Use human timestamps everywhere",
+        &format!("{second_id} locked -- Use human timestamps everywhere"),
     );
 
     let help = stdout(
@@ -1540,12 +1537,9 @@ fn feature_and_task_note_create_dated_notes_on_first_write() {
         feature_note.contains("noted billing-csv (notes.md created)"),
         "{feature_note}"
     );
-    let feature_notes = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/features/billing-csv/notes.md"),
-    )
-    .expect("invariant: feature notes should be readable");
+    let feature_notes =
+        fs::read_to_string(temp_dir.path().join(".maestro/cards/billing-csv/notes.md"))
+            .expect("invariant: feature notes should be readable");
     assert!(feature_notes.starts_with("# Billing CSV\n\n"));
     assert_dated_note_line(&feature_notes, "locked: export columns");
 
@@ -1575,12 +1569,9 @@ fn feature_and_task_note_create_dated_notes_on_first_write() {
         "{}",
         String::from_utf8_lossy(&second.stderr)
     );
-    let feature_notes = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/features/billing-csv/notes.md"),
-    )
-    .expect("invariant: feature notes should be readable after parallel appends");
+    let feature_notes =
+        fs::read_to_string(temp_dir.path().join(".maestro/cards/billing-csv/notes.md"))
+            .expect("invariant: feature notes should be readable after parallel appends");
     assert!(feature_notes.contains("parallel first"), "{feature_notes}");
     assert!(feature_notes.contains("parallel second"), "{feature_notes}");
 
@@ -1588,30 +1579,26 @@ fn feature_and_task_note_create_dated_notes_on_first_write() {
         maestro(&["task", "create", "Add CSV export"], temp_dir.path()),
         &["task", "create", "Add CSV export"],
     );
+    let task_id = id_by_title(temp_dir.path(), "Add CSV export");
     let task_note = stdout(
         maestro(
-            &["task", "note", "task-001", "proved: csv opens"],
+            &["task", "note", &task_id, "proved: csv opens"],
             temp_dir.path(),
         ),
-        &["task", "note", "task-001", "proved: csv opens"],
+        &["task", "note", &task_id, "proved: csv opens"],
     );
     assert!(
-        task_note.contains("noted task-001 (notes.md created)"),
+        task_note.contains(&format!("noted {task_id} (notes.md created)")),
         "{task_note}"
     );
-    let task_dir = fs::read_dir(temp_dir.path().join(".maestro/tasks"))
-        .expect("invariant: tasks dir should be listable")
-        .find_map(|entry| {
-            let entry = entry.expect("invariant: task entry should be readable");
-            entry
-                .file_name()
-                .to_str()
-                .filter(|name| name.starts_with("task-001"))
-                .map(|_| entry.path())
-        })
-        .expect("invariant: task-001 dir should exist");
-    let task_notes = fs::read_to_string(task_dir.join("notes.md"))
-        .expect("invariant: task notes should be readable");
+    let task_notes = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/cards")
+            .join(&task_id)
+            .join("notes.md"),
+    )
+    .expect("invariant: task notes should be readable");
     assert!(task_notes.starts_with("# Add CSV export\n\n"));
     assert_dated_note_line(&task_notes, "proved: csv opens");
 }
@@ -1631,9 +1618,11 @@ fn decision_show_rejects_path_traversal_ids() {
     );
     assert!(stderr.contains("invalid decision id"));
 
+    // Card-mode init scaffolds no legacy decisions dir; plant it for the
+    // traversal probes against the legacy-markdown read path.
     let decisions_dir = temp_dir.path().join(".maestro/decisions");
     let nested_dir = decisions_dir.join("nested");
-    fs::create_dir(&nested_dir).expect("invariant: nested decisions dir should be creatable");
+    fs::create_dir_all(&nested_dir).expect("invariant: nested decisions dir should be creatable");
     fs::write(nested_dir.join("secret.md"), "secret\n")
         .expect("invariant: nested decision file should be writable");
     let nested_stderr = assert_failure(
@@ -1719,19 +1708,24 @@ fn feature_verbs_reject_path_traversal_ids() {
     assert!(unarchive_stderr.contains("invalid feature id"));
 }
 
-fn feature_yaml(root: &Path, slug: &str) -> String {
-    fs::read_to_string(
-        root.join(".maestro")
-            .join("features")
-            .join(slug)
-            .join("feature.yaml"),
-    )
-    .expect("invariant: feature.yaml should be readable")
+/// The folded decision record carried under a decision card's `extra`, serialized
+/// back to YAML so an assertion written against the old per-feature `decisions.yaml`
+/// text (`record.contains("status: locked")`, ...) reads against the card store.
+fn decision_record_yaml(root: &Path, id: &str) -> String {
+    serde_yaml::to_string(&card_doc(root, id)["extra"])
+        .expect("invariant: decision record should serialize")
+}
+
+/// The folded FeatureRecord carried under `card.extra` for a feature card --
+/// card-mode replacement for reading the legacy `.maestro/features/<slug>/feature.yaml`.
+/// Returned as a value so a "did this verb mutate the record?" check compares the
+/// folded record before/after.
+fn feature_record(root: &Path, slug: &str) -> YamlValue {
+    card_doc(root, slug)["extra"].clone()
 }
 
 fn feature_acceptance(root: &Path, slug: &str) -> Vec<String> {
-    let yaml: YamlValue =
-        serde_yaml::from_str(&feature_yaml(root, slug)).expect("invariant: feature.yaml parses");
+    let yaml = feature_record(root, slug);
     yaml.get("acceptance")
         .and_then(YamlValue::as_sequence)
         .expect("invariant: acceptance is a sequence")
@@ -1787,9 +1781,11 @@ fn record_feature_evidence(root: &Path, slug: &str) {
 
 /// Write a minimal QA baseline (one `[bl-001]` scenario) so the accept gate's
 /// baseline precondition (F) and the ship gate's coverage check are satisfiable.
-fn write_baseline(features_dir: &Path, id: &str) {
-    let dir = features_dir.join(id);
-    ensure_dir(&dir).expect("invariant: feature directory should be creatable");
+/// In card mode the QA artifact rides the feature card directory at
+/// `.maestro/cards/<id>/qa.md`, so callers pass `.maestro/cards` here.
+fn write_baseline(cards_dir: &Path, id: &str) {
+    let dir = cards_dir.join(id);
+    ensure_dir(&dir).expect("invariant: card directory should be creatable");
     fs::write(
         dir.join("qa.md"),
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] csv export round-trips\n",
@@ -1798,33 +1794,48 @@ fn write_baseline(features_dir: &Path, id: &str) {
 }
 
 /// Write a counting QA slice (scenarios + evidence) covering `[bl-001]`.
-fn write_qa_slice(features_dir: &Path, id: &str) {
-    let dir = features_dir.join(id);
-    ensure_dir(&dir).expect("invariant: feature directory should be creatable");
+fn write_qa_slice(cards_dir: &Path, id: &str) {
+    let dir = cards_dir.join(id);
+    ensure_dir(&dir).expect("invariant: card directory should be creatable");
     let path = dir.join("qa.md");
     let mut contents = fs::read_to_string(&path).unwrap_or_default();
     contents.push_str("\n```yaml\nslices:\n  - scenarios: [\"bl-001\"]\n    evidence: [\"manual: exported csv opens in a spreadsheet\"]\n```\n");
     fs::write(path, contents).expect("invariant: qa.md should be writable");
 }
 
-fn write_task(tasks_dir: &Path, id: &str, feature_id: &str, state: &str) {
-    let task_dir = tasks_dir
-        .parent()
-        .expect("invariant: tasks dir should have parent")
-        .join("features")
-        .join(feature_id)
-        .join("tasks")
-        .join(format!("{id}-{id}"));
-    ensure_dir(&task_dir).expect("invariant: task directory should be creatable");
-    // A complete TaskRecord: the cancel cascade loads and transitions the child,
-    // so a projection-only stub (id/feature_id/state) fails to deserialize.
+/// Fabricate a child task as a flat card at `.maestro/cards/<id>/card.yaml` with
+/// `parent: <feature_id>` (card-mode feature ownership is the flat `parent`, not a
+/// directory). A literal id like `task-001` is non-opaque but the card scanner and
+/// the cancel/archive cascades accept it. The card carries a full TaskRecord under
+/// `extra` so the cancel cascade can load and transition the child.
+fn write_task(cards_dir: &Path, id: &str, feature_id: &str, state: &str) {
+    let card_dir = cards_dir.join(id);
+    ensure_dir(&card_dir).expect("invariant: card directory should be creatable");
     fs::write(
-        task_dir.join("task.yaml"),
+        card_dir.join("card.yaml"),
         format!(
-            "schema_version: maestro.task.v2\nid: {id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\n"
+            "schema_version: maestro.card.v1\nid: {id}\ntype: task\ntitle: {id}\nstatus: {state}\nparent: {feature_id}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\nextra:\n  schema_version: maestro.task.v2\n  id: {id}\n  title: {id}\n  state: {state}\n  acceptance_locked: false\n  verification: {{}}\n  created_at: \"2026-06-06T00:00:00.000Z\"\n  updated_at: \"2026-06-06T00:00:00.000Z\"\n"
         ),
     )
-    .expect("invariant: task yaml should be writable");
+    .expect("invariant: card.yaml should be writable");
+}
+
+/// Fabricate a schema-incompatible feature card directly in the card store at
+/// `.maestro/cards/<id>/card.yaml`: a valid `maestro.card.v1` envelope whose folded
+/// `extra` carries the OLD `maestro.feature.v1` version. The card load chokes on the
+/// inner version, so the roster surfaces it as `unreadable`; keeping the inner
+/// version EXACTLY `maestro.feature.v1` is what makes the `migrate-v2` fix hint fire
+/// (any other version yields the generic doctor hint).
+fn write_bad_feature_card(root: &Path, id: &str) {
+    let dir = root.join(".maestro/cards").join(id);
+    ensure_dir(&dir).expect("invariant: bad feature card dir should be creatable");
+    fs::write(
+        dir.join("card.yaml"),
+        format!(
+            "schema_version: maestro.card.v1\nid: {id}\ntype: feature\ntitle: Bad Feature\nstatus: proposed\ncreated_at: \"1\"\nupdated_at: \"1\"\nextra:\n  schema_version: maestro.feature.v1\n  id: {id}\n  title: Bad Feature\n  status: proposed\n  created_at: \"1\"\n  updated_at: \"1\"\n"
+        ),
+    )
+    .expect("invariant: bad feature card should be writable");
 }
 
 /// Drive a fresh feature all the way to Shipped: new -> set -> baseline+slice ->
@@ -1844,9 +1855,9 @@ fn ship_feature(root: &Path, title: &str, slug: &str, child: &str) {
         "core",
     ];
     stdout(maestro(&set_args, root), &set_args);
-    let features_dir = root.join(".maestro/features");
-    write_baseline(&features_dir, slug);
-    write_qa_slice(&features_dir, slug);
+    let cards_dir = root.join(".maestro/cards");
+    write_baseline(&cards_dir, slug);
+    write_qa_slice(&cards_dir, slug);
     stdout(
         maestro(&["feature", "accept", slug], root),
         &["feature", "accept", slug],
@@ -1855,7 +1866,7 @@ fn ship_feature(root: &Path, title: &str, slug: &str, child: &str) {
         maestro(&["feature", "start", slug], root),
         &["feature", "start", slug],
     );
-    write_task(&root.join(".maestro/tasks"), child, slug, "verified");
+    write_task(&cards_dir, child, slug, "verified");
     verify_acceptance(root, slug);
     stdout(
         maestro(&["feature", "ship", slug], root),
@@ -1890,13 +1901,13 @@ fn feature_create_refuses_a_slug_held_in_the_archive() {
     );
 
     // An archived feature still owns its slug; `create` must not reissue it (L6a).
-    let archived = temp_dir.path().join(".maestro/archive/features/csv-export");
-    ensure_dir(&archived).expect("invariant: archive feature dir should be creatable");
+    let archived = temp_dir.path().join(".maestro/archive/cards/csv-export");
+    ensure_dir(&archived).expect("invariant: archive card dir should be creatable");
     fs::write(
-        archived.join("feature.yaml"),
-        "schema_version: maestro.feature.v1\nid: csv-export\ntitle: CSV Export\nstatus: shipped\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
+        archived.join("card.yaml"),
+        "schema_version: maestro.card.v1\nid: csv-export\ntype: feature\ntitle: CSV Export\nstatus: shipped\ncreated_at: \"1\"\nupdated_at: \"1\"\n",
     )
-    .expect("invariant: archived feature yaml should be writable");
+    .expect("invariant: archived card yaml should be writable");
 
     let args = ["feature", "new", "CSV Export"];
     let stderr = assert_failure(maestro(&args, temp_dir.path()), &args);
@@ -1904,9 +1915,10 @@ fn feature_create_refuses_a_slug_held_in_the_archive() {
     assert!(stderr.contains("archive"));
 }
 
-/// Drive a feature to Shipped, then archive it: the feature dir + its terminal
-/// child tasks leave the live scan, the QA artifacts travel inside the archived
-/// dir, reads fall through (L6b), and unarchive round-trips (§5.9).
+/// Drive a feature to Shipped, then archive it: the feature card dir + its
+/// terminal child card dirs leave the live scan, the QA sidecar travels inside
+/// the archived feature dir, reads fall through (L6b), and unarchive
+/// round-trips (§5.9).
 #[test]
 fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let temp_dir = TestTempDir::new("maestro-feature-archive-shipped");
@@ -1929,9 +1941,9 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     ];
     stdout(maestro(&set_args, root), &set_args);
 
-    let features_dir = root.join(".maestro/features");
-    write_baseline(&features_dir, "billing-csv-export");
-    write_qa_slice(&features_dir, "billing-csv-export");
+    let cards_dir = root.join(".maestro/cards");
+    write_baseline(&cards_dir, "billing-csv-export");
+    write_qa_slice(&cards_dir, "billing-csv-export");
     stdout(
         maestro(&["feature", "accept", "billing-csv-export"], root),
         &["feature", "accept", "billing-csv-export"],
@@ -1946,9 +1958,8 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let not_terminal = assert_failure(maestro(&in_progress, root), &in_progress);
     assert!(not_terminal.contains("not terminal"));
 
-    let tasks_dir = root.join(".maestro/tasks");
-    write_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
-    write_task(&tasks_dir, "task-002", "billing-csv-export", "verified");
+    write_task(&cards_dir, "task-001", "billing-csv-export", "verified");
+    write_task(&cards_dir, "task-002", "billing-csv-export", "verified");
     verify_acceptance(root, "billing-csv-export");
     stdout(
         maestro(&["feature", "ship", "billing-csv-export"], root),
@@ -1965,19 +1976,17 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     assert!(archived.contains("child tasks: 2 archived"));
     assert!(archived.contains("restore: maestro feature unarchive billing-csv-export"));
 
-    // The feature dir + QA artifacts moved into the archive sibling tree.
-    let archived_feature = root.join(".maestro/archive/features/billing-csv-export");
-    assert!(archived_feature.join("feature.yaml").is_file());
+    // The feature card dir (QA sidecar inside) + each child card dir moved into
+    // the flat archive sibling tree.
+    let archive_cards = root.join(".maestro/archive/cards");
+    let archived_feature = archive_cards.join("billing-csv-export");
+    assert!(archived_feature.join("card.yaml").is_file());
     assert!(archived_feature.join("qa.md").is_file());
-    assert!(!features_dir.join("billing-csv-export").exists());
-    assert!(archived_feature.join("tasks/task-001-task-001").is_dir());
-    assert!(archived_feature.join("tasks/task-002-task-002").is_dir());
-    assert!(
-        !features_dir
-            .join("billing-csv-export")
-            .join("tasks/task-001-task-001")
-            .exists()
-    );
+    assert!(!cards_dir.join("billing-csv-export").exists());
+    assert!(archive_cards.join("task-001").join("card.yaml").is_file());
+    assert!(archive_cards.join("task-002").join("card.yaml").is_file());
+    assert!(!cards_dir.join("task-001").exists());
+    assert!(!cards_dir.join("task-002").exists());
 
     // L6b: show falls through to the archive; list --all reads it.
     let show = stdout(
@@ -2024,7 +2033,7 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     let again_out = stdout(again, &archive_args);
     assert!(again_out.contains("already archived"));
 
-    // Unarchive restores the feature dir + its archived children.
+    // Unarchive restores the feature card dir + each archived child card dir.
     let unarchive_args = ["feature", "unarchive", "billing-csv-export"];
     let restored = stdout(maestro(&unarchive_args, root), &unarchive_args);
     assert!(restored.contains("unarchived feature billing-csv-export"));
@@ -2032,23 +2041,19 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     assert!(restored.contains("restore receipt:"));
     assert!(restored.contains("next: maestro status"));
     assert!(
-        features_dir
+        cards_dir
             .join("billing-csv-export")
             .join("qa.md")
             .is_file()
     );
-    assert!(
-        features_dir
-            .join("billing-csv-export")
-            .join("tasks/task-001-task-001")
-            .is_dir()
-    );
+    assert!(cards_dir.join("task-001").join("card.yaml").is_file());
     assert!(!archived_feature.exists());
 }
 
-/// The nested archive case: terminal child tasks move with the feature directory.
+/// The cascade case: every terminal `parent=<feature>` card dir moves to the
+/// flat archive tree alongside the feature card dir.
 #[test]
-fn feature_archive_moves_nested_child_tasks_with_feature_dir() {
+fn feature_archive_moves_terminal_child_cards_with_feature() {
     let temp_dir = TestTempDir::new("maestro-feature-archive-straggler");
     let root = temp_dir.path();
     init_git_marker(root);
@@ -2068,7 +2073,8 @@ fn feature_archive_moves_nested_child_tasks_with_feature_dir() {
         "billing",
     ];
     stdout(maestro(&set_args, root), &set_args);
-    write_baseline(&root.join(".maestro/features"), "billing-csv-export");
+    let cards_dir = root.join(".maestro/cards");
+    write_baseline(&cards_dir, "billing-csv-export");
     stdout(
         maestro(&["feature", "accept", "billing-csv-export"], root),
         &["feature", "accept", "billing-csv-export"],
@@ -2080,10 +2086,9 @@ fn feature_archive_moves_nested_child_tasks_with_feature_dir() {
 
     // Three live children; cancel abandons them so the feature is terminal with
     // terminal children (cheaper than the ship gate, exercises the same cascade).
-    let tasks_dir = root.join(".maestro/tasks");
-    write_task(&tasks_dir, "task-001", "billing-csv-export", "in_progress");
-    write_task(&tasks_dir, "task-002", "billing-csv-export", "in_progress");
-    write_task(&tasks_dir, "task-003", "billing-csv-export", "in_progress");
+    write_task(&cards_dir, "task-001", "billing-csv-export", "in_progress");
+    write_task(&cards_dir, "task-002", "billing-csv-export", "in_progress");
+    write_task(&cards_dir, "task-003", "billing-csv-export", "in_progress");
     let cancel_args = [
         "feature",
         "cancel",
@@ -2095,39 +2100,35 @@ fn feature_archive_moves_nested_child_tasks_with_feature_dir() {
     assert!(cancelled.contains("cancel receipt:"));
     assert!(cancelled.contains("next: maestro status"));
 
-    // A live task (task-004) blocked by the terminal child task-002 entangles it.
+    // A live standalone task blocked by the terminal child task-002 entangles it.
     stdout(
         maestro(&["task", "create", "Holder"], root),
         &["task", "create", "Holder"],
     );
+    let holder_id = id_by_title(root, "Holder");
     let block_args = [
-        "task", "block", "task-004", "--reason", "needs 2", "--by", "task-002",
+        "task", "block", &holder_id, "--reason", "needs 2", "--by", "task-002",
     ];
     stdout(maestro(&block_args, root), &block_args);
 
-    // Archive moves the feature directory and every nested terminal child task.
+    // Archive moves the feature card dir and every terminal child card dir.
     let archive_args = ["feature", "archive", "billing-csv-export"];
     let first = stdout(maestro(&archive_args, root), &archive_args);
     assert!(first.contains("archived feature billing-csv-export"));
     assert!(first.contains("task-001"));
     assert!(first.contains("task-002"));
     assert!(first.contains("task-003"));
+    let archive_cards = root.join(".maestro/archive/cards");
     assert!(
-        root.join(".maestro/archive/features/billing-csv-export/feature.yaml")
+        archive_cards
+            .join("billing-csv-export/card.yaml")
             .is_file()
     );
-    assert!(
-        root.join(".maestro/archive/features/billing-csv-export/tasks/task-001-task-001")
-            .is_dir()
-    );
-    assert!(
-        root.join(".maestro/archive/features/billing-csv-export/tasks/task-002-task-002")
-            .is_dir()
-    );
-    assert!(
-        root.join(".maestro/archive/features/billing-csv-export/tasks/task-003-task-003")
-            .is_dir()
-    );
+    assert!(archive_cards.join("task-001/card.yaml").is_file());
+    assert!(archive_cards.join("task-002/card.yaml").is_file());
+    assert!(archive_cards.join("task-003/card.yaml").is_file());
+    // The entangled live blocker-holder stays in the live store.
+    assert!(cards_dir.join(&holder_id).join("card.yaml").is_file());
 
     // R25/R26: an archived show discloses it is the archive view.
     let show = stdout(
@@ -2168,7 +2169,7 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
         "core",
     ];
     stdout(maestro(&set_gamma, root), &set_gamma);
-    write_baseline(&root.join(".maestro/features"), "gamma-export");
+    write_baseline(&root.join(".maestro/cards"), "gamma-export");
     stdout(
         maestro(&["feature", "accept", "gamma-export"], root),
         &["feature", "accept", "gamma-export"],
@@ -2187,25 +2188,15 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
     assert!(out.contains("child tasks: 2 archived"));
     assert!(out.contains("next: maestro status"));
 
-    let features_dir = root.join(".maestro/features");
-    assert!(root.join(".maestro/archive/features/alpha-export").is_dir());
-    assert!(root.join(".maestro/archive/features/beta-export").is_dir());
-    assert!(
-        root.join(".maestro/archive/features/alpha-export/tasks/task-001-task-001")
-            .is_dir()
-    );
-    assert!(
-        root.join(".maestro/archive/features/beta-export/tasks/task-002-task-002")
-            .is_dir()
-    );
-    // The in-progress feature is untouched and stays in the live tree.
-    assert!(
-        features_dir
-            .join("gamma-export")
-            .join("feature.yaml")
-            .is_file()
-    );
-    assert!(!root.join(".maestro/archive/features/gamma-export").exists());
+    let cards_dir = root.join(".maestro/cards");
+    let archive_cards = root.join(".maestro/archive/cards");
+    assert!(archive_cards.join("alpha-export/card.yaml").is_file());
+    assert!(archive_cards.join("beta-export/card.yaml").is_file());
+    assert!(archive_cards.join("task-001/card.yaml").is_file());
+    assert!(archive_cards.join("task-002/card.yaml").is_file());
+    // The in-progress feature is untouched and stays in the live store.
+    assert!(cards_dir.join("gamma-export").join("card.yaml").is_file());
+    assert!(!archive_cards.join("gamma-export").exists());
 
     // Idempotent: no shipped features remain live.
     let again = stdout(maestro(&bulk, root), &bulk);

@@ -1,10 +1,12 @@
+mod card_support;
 mod support;
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use maestro::task::lookup::resolve_task_yaml_path;
+use card_support::{id_by_title, task_record};
+use maestro::foundation::core::fs::ensure_dir;
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
@@ -72,22 +74,21 @@ fn run(repo: &Path, args: &[&str]) -> String {
     stdout(&output)
 }
 
+/// The folded task record (the old `task.yaml` shape) carried under `card.extra`,
+/// so an assertion written against `doc["state"]`/`doc["blockers"]` reads unchanged.
 fn task_yaml(repo: &Path, id: &str) -> YamlValue {
-    let raw = fs::read_to_string(task_dir(repo, id).join("task.yaml"))
-        .expect("invariant: task.yaml should be readable");
-    serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse")
+    task_record(repo, id)
 }
 
-fn task_dir(repo: &Path, id: &str) -> PathBuf {
-    resolve_task_yaml_path(&repo.join(".maestro/tasks"), id)
-        .expect("invariant: task.yaml should resolve")
-        .parent()
-        .expect("invariant: task.yaml should have a parent")
-        .to_path_buf()
+/// The flat card directory `.maestro/cards/<id>`; the task record is its `card.yaml`
+/// and a written resume artifact lands at `<card_dir>/resume.md`.
+fn card_dir(repo: &Path, id: &str) -> PathBuf {
+    repo.join(".maestro/cards").join(id)
 }
 
 fn write_baseline(repo: &Path, feature_id: &str) {
-    let dir = repo.join(".maestro/features").join(feature_id);
+    let dir = repo.join(".maestro/cards").join(feature_id);
+    ensure_dir(&dir).expect("invariant: card directory should be creatable");
     fs::write(
         dir.join("qa.md"),
         "---\namend_log_position: 0\n---\n\n### QA Baseline Contract\n\n- Scenario Matrix:\n  - [bl-001] csv export round-trips\n",
@@ -200,36 +201,31 @@ fn status_and_task_next_choose_current_task_before_ready_queue() {
         repo,
         &["task", "create", "Ready task", "--check", "ready check"],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
+    let ready = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &ready]);
+    run(repo, &["task", "accept", &ready]);
     run(repo, &["task", "create", "Draft task"]);
+    let draft = id_by_title(repo, "Draft task");
 
-    let next = maestro_with_env(
-        repo,
-        &["task", "next"],
-        &[("MAESTRO_CURRENT_TASK", "task-002")],
-    );
+    let next = maestro_with_env(repo, &["task", "next"], &[("MAESTRO_CURRENT_TASK", &draft)]);
 
     assert_success(&next, &["task", "next"]);
     let out = stdout(&next);
-    assert!(out.contains("template: maestro task set task-002 --check"));
-    assert!(out.contains("task: task-002"));
+    assert!(out.contains(&format!("template: maestro task set {draft} --check")));
+    assert!(out.contains(&format!("task: {draft}")));
 
-    let status = maestro_with_env(
-        repo,
-        &["status", "--json"],
-        &[("MAESTRO_CURRENT_TASK", "task-002")],
-    );
+    let status =
+        maestro_with_env(repo, &["status", "--json"], &[("MAESTRO_CURRENT_TASK", &draft)]);
     assert_success(&status, &["status", "--json"]);
     let json: JsonValue =
         serde_json::from_str(&stdout(&status)).expect("invariant: status JSON should parse");
     assert_eq!(json["schema"], "maestro.status.v1");
-    assert_eq!(json["current_task"], "task-002");
+    assert_eq!(json["current_task"], draft);
     assert_eq!(json["next_action"]["kind"], "add_task_check");
     assert_eq!(json["next_action"]["requires_input"], true);
     assert_eq!(
         json["next_action"]["command"]["display"],
-        "maestro task set task-002 --check \"<observable result>\""
+        format!("maestro task set {draft} --check \"<observable result>\"")
     );
     assert!(json["next_action"]["command"]["argv"].is_null());
     assert_eq!(
@@ -238,7 +234,7 @@ fn status_and_task_next_choose_current_task_before_ready_queue() {
             "maestro",
             "task",
             "set",
-            "task-002",
+            draft,
             "--check",
             "<observable result>"
         ])
@@ -269,28 +265,31 @@ fn status_points_to_resume_and_resume_default_is_compact_read_only() {
             "csv-export",
         ],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
-    run(repo, &["task", "claim", "task-001"]);
+    let id = id_by_title(repo, "Implement CSV writer");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
 
     let status = run(repo, &["status"]);
     assert!(status.contains("resume: maestro resume"), "{status}");
 
     let resume = run(repo, &["resume"]);
     assert!(
-        resume.contains("objective: continue task task-001 for feature csv-export"),
+        resume.contains(&format!(
+            "objective: continue task {id} for feature csv-export"
+        )),
         "{resume}"
     );
     assert!(resume.contains("state: in_progress"), "{resume}");
     assert!(resume.contains("blockers: none"), "{resume}");
     assert!(resume.contains("next:"), "{resume}");
     assert!(
-        resume.contains("run focused gate, then maestro task complete task-001"),
+        resume.contains(&format!("run focused gate, then maestro task complete {id}")),
         "{resume}"
     );
     assert!(resume.contains("required reads:"), "{resume}");
     assert!(
-        resume.contains("maestro task show task-001")
+        resume.contains(&format!("maestro task show {id}"))
             && resume.contains("maestro feature show csv-export")
             && resume.contains("IMPLEMENTATION_NOTES-csv-export.md"),
         "{resume}"
@@ -311,7 +310,7 @@ fn status_points_to_resume_and_resume_default_is_compact_read_only() {
         "default resume should stay compact: {resume}"
     );
     assert!(
-        !task_dir(repo, "task-001").join("resume.md").exists(),
+        !card_dir(repo, &id).join("resume.md").exists(),
         "default resume must not write a resume artifact"
     );
 
@@ -330,6 +329,7 @@ fn resume_full_handoff_and_write_are_explicit() {
     let repo = temp.path();
     run(repo, &["feature", "new", "CSV export"]);
     run(repo, &["decision", "new", "Use compact resume by default"]);
+    let decision = id_by_title(repo, "Use compact resume by default");
     run(
         repo,
         &[
@@ -340,45 +340,43 @@ fn resume_full_handoff_and_write_are_explicit() {
             "csv-export",
         ],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
-    run(repo, &["task", "claim", "task-001"]);
+    let id = id_by_title(repo, "Implement CSV writer");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
 
     let full = run(repo, &["resume", "--full"]);
     assert!(full.contains("prior decisions:"), "{full}");
     assert!(
-        full.contains("decision-001: Use compact resume by default"),
+        full.contains(&format!("{decision}: Use compact resume by default")),
         "{full}"
     );
     assert!(full.contains("source references:"), "{full}");
     assert!(!full.contains("handoff prompt:"), "{full}");
     assert!(
-        !task_dir(repo, "task-001").join("resume.md").exists(),
+        !card_dir(repo, &id).join("resume.md").exists(),
         "--full without --write must not write an artifact"
     );
 
     let handoff = run(repo, &["resume", "--handoff"]);
     assert!(handoff.contains("handoff prompt:"), "{handoff}");
     assert!(
-        !task_dir(repo, "task-001").join("resume.md").exists(),
+        !card_dir(repo, &id).join("resume.md").exists(),
         "--handoff without --write must not write an artifact"
     );
 
     let written = run(repo, &["resume", "--handoff", "--write"]);
     assert!(
-        written.contains(
-            "wrote: .maestro/features/csv-export/tasks/task-001-implement-csv-writer/resume.md"
-        ),
+        written.contains(&format!("wrote: .maestro/cards/{id}/resume.md")),
         "{written}"
     );
-    let resume_md = task_dir(repo, "task-001").join("resume.md");
+    let resume_md = card_dir(repo, &id).join("resume.md");
     let resume_doc = fs::read_to_string(&resume_md)
         .expect("invariant: explicit resume artifact should be readable");
     assert!(resume_doc.contains("generated_at:"), "{resume_doc}");
     assert!(resume_doc.contains("source references:"), "{resume_doc}");
     assert!(
-        resume_doc
-            .contains(".maestro/features/csv-export/tasks/task-001-implement-csv-writer/task.yaml"),
+        resume_doc.contains(&format!(".maestro/cards/{id}/card.yaml")),
         "{resume_doc}"
     );
     assert!(resume_doc.contains("handoff prompt:"), "{resume_doc}");
@@ -400,9 +398,10 @@ fn resume_feature_target_does_not_select_unrelated_tasks() {
             "search-ranking",
         ],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
-    run(repo, &["task", "claim", "task-001"]);
+    let id = id_by_title(repo, "Tune ranking scorer");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
 
     let resume = run(repo, &["resume", "--feature", "csv-export"]);
     assert!(
@@ -414,7 +413,7 @@ fn resume_feature_target_does_not_select_unrelated_tasks() {
         "{resume}"
     );
     assert!(
-        !resume.contains("task-001") && !resume.contains("search-ranking"),
+        !resume.contains(&id) && !resume.contains("search-ranking"),
         "explicit feature target must not leak unrelated task context: {resume}"
     );
 }
@@ -428,8 +427,9 @@ fn disabled_escalation_keeps_status_and_task_next_output_unchanged() {
         repo,
         &["task", "create", "Ready task", "--check", "ready check"],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
+    let id = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
 
     let status_before = run(repo, &["status"]);
     let next_before = run(repo, &["task", "next"]);
@@ -452,8 +452,9 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
         repo,
         &["task", "create", "Ready task", "--check", "ready proof"],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
+    let id = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
 
     let status = run(repo, &["status"]);
     assert!(status.contains("HARNESS FRICTION"), "{status}");
@@ -471,7 +472,7 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
         .find("HARNESS FRICTION")
         .expect("invariant: task next should show friction");
     let normal_at = next
-        .find("run: maestro task claim task-001")
+        .find(&format!("run: maestro task claim {id}"))
         .expect("invariant: task next should keep normal next action");
     assert!(friction_at < normal_at, "{next}");
 
@@ -482,13 +483,13 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
         "{list}"
     );
 
-    run(repo, &["task", "claim", "task-001"]);
+    run(repo, &["task", "claim", &id]);
     let complete = run(
         repo,
         &[
             "task",
             "complete",
-            "task-001",
+            &id,
             "--summary",
             "done",
             "--claim",
@@ -498,7 +499,7 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
         ],
     );
     assert!(
-        complete.contains("verification passed for task-001"),
+        complete.contains(&format!("verification passed for {id}")),
         "{complete}"
     );
     assert!(complete.contains("HARNESS FRICTION"), "{complete}");
@@ -517,22 +518,21 @@ fn hot_verbs_skip_detect_until_evidence_stamp_changes() {
     for _ in 0..3 {
         run(repo, &["status"]);
     }
-    let stamped = backlog_yaml(repo);
+    // In card mode the detected friction is persisted as an `idea` card
+    // (`.maestro/cards/hb-001`), not in `backlog.yaml.items` (which stays `[]`);
+    // its session evidence rides the card's folded `extra.sessions_hit`.
+    assert!(backlog_yaml(repo)["items"].as_sequence().unwrap().is_empty());
+    let friction = task_record(repo, "hb-001");
     assert_eq!(
-        stamped["items"][0]["sessions_hit"]
-            .as_sequence()
-            .unwrap()
-            .len(),
-        3
+        friction["sessions_hit"].as_sequence().unwrap().len(),
+        3,
+        "{friction:?}"
     );
 
-    let mut edited = stamped;
-    edited["items"] = YamlValue::Sequence(Vec::new());
-    fs::write(
-        repo.join(".maestro/harness/backlog.yaml"),
-        serde_yaml::to_string(&edited).expect("invariant: backlog should serialize"),
-    )
-    .expect("invariant: backlog should be writable");
+    // Hot verbs skip re-detection while the evidence stamp is unchanged: clearing
+    // the persisted friction card without bumping the stamp must not re-surface it.
+    fs::remove_dir_all(repo.join(".maestro/cards/hb-001"))
+        .expect("invariant: friction card should be removable");
     let skipped = run(repo, &["status"]);
     assert!(!skipped.contains("HARNESS FRICTION"), "{skipped}");
 
@@ -556,12 +556,13 @@ fn current_task_infers_feature_context_without_feature_env() {
             "csv-export",
         ],
     );
+    let id = id_by_title(repo, "Implement CSV writer");
 
     let status = maestro_with_env(
         repo,
         &["status", "--json"],
         &[
-            ("MAESTRO_CURRENT_TASK", "task-001"),
+            ("MAESTRO_CURRENT_TASK", &id),
             ("MAESTRO_CURRENT_FEATURE", "wrong-feature"),
         ],
     );
@@ -569,12 +570,12 @@ fn current_task_infers_feature_context_without_feature_env() {
     let json: JsonValue =
         serde_json::from_str(&stdout(&status)).expect("invariant: status JSON should parse");
 
-    assert_eq!(json["current_task"], "task-001");
+    assert_eq!(json["current_task"], id);
     assert_eq!(json["current_feature"], "csv-export");
     assert_eq!(json["next_action"]["feature_id"], "csv-export");
     assert_eq!(
         json["next_action"]["command"]["argv"],
-        serde_json::json!(["maestro", "task", "explore", "task-001"])
+        serde_json::json!(["maestro", "task", "explore", id])
     );
 
     let human = run(repo, &["status"]);
@@ -591,8 +592,9 @@ fn human_fallback_warnings_are_first_line_for_status_and_task_next() {
         repo,
         &["task", "create", "Ready task", "--check", "ready check"],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
+    let id = id_by_title(repo, "Ready task");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
 
     let status = maestro_with_env(repo, &["status"], &[("MAESTRO_CURRENT_TASK", "task-999")]);
     assert_success(&status, &["status"]);
@@ -613,7 +615,7 @@ fn human_fallback_warnings_are_first_line_for_status_and_task_next() {
         next_out.starts_with("warning: MAESTRO_CURRENT_TASK=task-999 was not found"),
         "{next_out}"
     );
-    assert!(next_out.contains("run: maestro task claim task-001"));
+    assert!(next_out.contains(&format!("run: maestro task claim {id}")));
 }
 
 #[test]
@@ -630,8 +632,9 @@ fn current_ready_task_next_claims_selected_task_not_generic_next() {
             "first check",
         ],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
+    let first = id_by_title(repo, "First ready task");
+    run(repo, &["task", "explore", &first]);
+    run(repo, &["task", "accept", &first]);
     run(
         repo,
         &[
@@ -642,18 +645,19 @@ fn current_ready_task_next_claims_selected_task_not_generic_next() {
             "second check",
         ],
     );
-    run(repo, &["task", "explore", "task-002"]);
-    run(repo, &["task", "accept", "task-002"]);
+    let current = id_by_title(repo, "Current ready task");
+    run(repo, &["task", "explore", &current]);
+    run(repo, &["task", "accept", &current]);
 
     let human = maestro_with_env(
         repo,
         &["task", "next"],
-        &[("MAESTRO_CURRENT_TASK", "task-002")],
+        &[("MAESTRO_CURRENT_TASK", &current)],
     );
     assert_success(&human, &["task", "next"]);
     let human_out = stdout(&human);
     assert!(
-        human_out.contains("run: maestro task claim task-002"),
+        human_out.contains(&format!("run: maestro task claim {current}")),
         "{human_out}"
     );
     assert!(
@@ -664,15 +668,15 @@ fn current_ready_task_next_claims_selected_task_not_generic_next() {
     let json = maestro_with_env(
         repo,
         &["task", "next", "--json"],
-        &[("MAESTRO_CURRENT_TASK", "task-002")],
+        &[("MAESTRO_CURRENT_TASK", &current)],
     );
     assert_success(&json, &["task", "next", "--json"]);
     let parsed: JsonValue =
         serde_json::from_str(&stdout(&json)).expect("invariant: task next JSON should parse");
-    assert_eq!(parsed["next_action"]["task_id"], "task-002");
+    assert_eq!(parsed["next_action"]["task_id"], current);
     assert_eq!(
         parsed["next_action"]["command"]["argv"],
-        serde_json::json!(["maestro", "task", "claim", "task-002"])
+        serde_json::json!(["maestro", "task", "claim", current])
     );
 }
 
@@ -706,15 +710,16 @@ fn ready_to_ship_status_json_and_task_next_broader_actions_are_structured() {
             "csv-export",
         ],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
-    run(repo, &["task", "claim", "task-001"]);
+    let id = id_by_title(repo, "Implement CSV writer");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
     let complete = run(
         repo,
         &[
             "task",
             "complete",
-            "task-001",
+            &id,
             "--summary",
             "done",
             "--claim",
@@ -782,43 +787,44 @@ fn manual_and_root_verify_pass_use_context_aware_handoff() {
             "manual proof passes",
         ],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
-    run(repo, &["task", "claim", "task-001"]);
+    let id = id_by_title(repo, "Manual proof task");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
     let complete = maestro(
         repo,
         &[
             "task",
             "complete",
-            "task-001",
+            &id,
             "--summary",
             "done",
             "--claim",
             "manual proof passes",
         ],
     );
-    assert_failure(&complete, &["task", "complete", "task-001"]);
+    assert_failure(&complete, &["task", "complete", &id]);
     run(
         repo,
         &[
             "event",
             "create",
             "--task-id",
-            "task-001",
+            &id,
             "--claim",
             "manual proof passes",
         ],
     );
 
-    let task_verify = run(repo, &["task", "verify", "task-001"]);
-    assert!(task_verify.contains("verification passed for task-001"));
-    assert!(task_verify.contains("task verified: task-001"));
+    let task_verify = run(repo, &["task", "verify", &id]);
+    assert!(task_verify.contains(&format!("verification passed for {id}")));
+    assert!(task_verify.contains(&format!("task verified: {id}")));
     assert!(task_verify.contains("next: maestro status"));
-    assert!(task_verify.contains("inspect: maestro task show task-001"));
+    assert!(task_verify.contains(&format!("inspect: maestro task show {id}")));
 
-    let root_verify = run(repo, &["verify", "task-001"]);
-    assert!(root_verify.contains("verification passed for task-001"));
-    assert!(root_verify.contains("task verified: task-001"));
+    let root_verify = run(repo, &["verify", &id]);
+    assert!(root_verify.contains(&format!("verification passed for {id}")));
+    assert!(root_verify.contains(&format!("task verified: {id}")));
     assert!(root_verify.contains("next: maestro status"));
 }
 
@@ -851,16 +857,17 @@ fn task_create_check_handoff_and_list_columns_are_actionable() {
             "cargo test passes",
         ],
     );
+    let id = id_by_title(repo, "Add export");
 
-    assert!(create.contains("created task-001 (draft)"));
+    assert!(create.contains(&format!("created {id} (draft)")));
     assert!(create.contains("verify+ locked:"));
-    assert!(create.contains("next: maestro task explore task-001"));
+    assert!(create.contains(&format!("next: maestro task explore {id}")));
 
     let list = run(repo, &["task", "list"]);
     assert!(list.contains("NEXT"));
     assert!(list.contains("INSPECT"));
     assert!(list.contains("run: explore"));
-    assert!(list.contains("maestro task show task-001"));
+    assert!(list.contains(&format!("maestro task show {id}")));
 }
 
 #[test]
@@ -869,12 +876,13 @@ fn task_list_next_column_uses_verify_contract_state_not_only_lifecycle_state() {
     let repo = temp.path();
 
     run(repo, &["task", "create", "Update README"]);
+    let id = id_by_title(repo, "Update README");
 
     let list = run(repo, &["task", "list"]);
     assert!(list.contains("template: add_check"), "{list}");
-    assert!(list.contains("maestro task show task-001"), "{list}");
+    assert!(list.contains(&format!("maestro task show {id}")), "{list}");
     assert!(
-        !list.contains("task-001\tdraft\trun: explore"),
+        !list.contains(&format!("{id}\tdraft\trun: explore")),
         "standalone draft without checks must not point at explore first: {list}"
     );
 }
@@ -894,15 +902,16 @@ fn complete_with_proof_records_proof_and_auto_verifies() {
             "cargo test passes",
         ],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
-    run(repo, &["task", "claim", "task-001"]);
+    let id = id_by_title(repo, "Add export");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
     let complete = run(
         repo,
         &[
             "task",
             "complete",
-            "task-001",
+            &id,
             "--summary",
             "done",
             "--claim",
@@ -913,10 +922,10 @@ fn complete_with_proof_records_proof_and_auto_verifies() {
     );
 
     assert!(complete.contains("auto: recorded task_proof event"));
-    assert!(complete.contains("auto: maestro task verify task-001"));
-    assert!(complete.contains("verification passed for task-001"));
+    assert!(complete.contains(&format!("auto: maestro task verify {id}")));
+    assert!(complete.contains(&format!("verification passed for {id}")));
     assert_eq!(
-        task_yaml(repo, "task-001")["state"],
+        task_yaml(repo, &id)["state"],
         YamlValue::String("verified".to_string())
     );
 }
@@ -937,15 +946,16 @@ fn feature_linked_complete_handoff_uses_existing_feature_command() {
             "csv-export",
         ],
     );
-    run(repo, &["task", "explore", "task-001"]);
-    run(repo, &["task", "accept", "task-001"]);
-    run(repo, &["task", "claim", "task-001"]);
+    let id = id_by_title(repo, "Implement CSV writer");
+    run(repo, &["task", "explore", &id]);
+    run(repo, &["task", "accept", &id]);
+    run(repo, &["task", "claim", &id]);
     let complete = run(
         repo,
         &[
             "task",
             "complete",
-            "task-001",
+            &id,
             "--summary",
             "done",
             "--claim",
@@ -1046,14 +1056,19 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
             plan.to_str().expect("invariant: plan path should be UTF-8"),
         ],
     );
+    // The prepare mints opaque ids; recover them by their plan-derived titles. The
+    // plan-local labels (T1/T2) stay in the blocker reason text, only the
+    // parenthetical id is now opaque.
+    let t1 = id_by_title(repo, "Implement protected read handlers");
+    let t2 = id_by_title(repo, "Implement operation handlers");
     assert!(prepare.contains("prepared 3 task(s)"), "{prepare}");
     assert!(
         prepare.contains("started serverless-news-backend -> in_progress"),
         "{prepare}"
     );
-    assert!(prepare.contains("task-002 ready / blocked"), "{prepare}");
+    assert!(prepare.contains(&format!("{t2} ready / blocked")), "{prepare}");
     assert!(
-        prepare.contains("after dependency: T1 (task-001) verified"),
+        prepare.contains(&format!("after dependency: T1 ({t1}) verified")),
         "{prepare}"
     );
     assert!(
@@ -1065,26 +1080,29 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         "{prepare}"
     );
 
-    let task_002 = task_yaml(repo, "task-002");
+    let task_002 = task_yaml(repo, &t2);
     assert_eq!(task_002["state"], YamlValue::String("ready".to_string()));
     assert_eq!(
         task_002["blockers"][0]["reason"],
-        YamlValue::String("after dependency: T1 (task-001) verified".to_string())
+        YamlValue::String(format!("after dependency: T1 ({t1}) verified"))
     );
 
     let claim = run(repo, &["task", "claim", "--next"]);
-    assert!(claim.contains("claimed task-001 -> in_progress"), "{claim}");
+    assert!(
+        claim.contains(&format!("claimed {t1} -> in_progress")),
+        "{claim}"
+    );
     assert!(
         claim.contains("feature: serverless-news-backend"),
         "{claim}"
     );
     assert!(claim.contains("chain:"), "{claim}");
     assert!(
-        claim.contains("task-001 current  Implement protected read handlers"),
+        claim.contains(&format!("{t1} current  Implement protected read handlers")),
         "{claim}"
     );
     assert!(
-        claim.contains("task-002 blocked  Implement operation handlers"),
+        claim.contains(&format!("{t2} blocked  Implement operation handlers")),
         "{claim}"
     );
     assert!(claim.contains("acceptance:"), "{claim}");
@@ -1099,7 +1117,7 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         &[
             "task",
             "complete",
-            "task-001",
+            &t1,
             "--summary",
             "read handlers done",
             "--claim",
@@ -1109,7 +1127,7 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         ],
     );
     assert!(
-        complete.contains("verification passed for task-001"),
+        complete.contains(&format!("verification passed for {t1}")),
         "{complete}"
     );
     assert!(
@@ -1117,7 +1135,7 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         "{complete}"
     );
 
-    let task_002_after = task_yaml(repo, "task-002");
+    let task_002_after = task_yaml(repo, &t2);
     assert_ne!(
         task_002_after["blockers"][0]["resolved_at"],
         YamlValue::Null
@@ -1125,15 +1143,15 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
 
     let next_claim = run(repo, &["task", "claim", "--next"]);
     assert!(
-        next_claim.contains("claimed task-002 -> in_progress"),
+        next_claim.contains(&format!("claimed {t2} -> in_progress")),
         "{next_claim}"
     );
     assert!(
-        next_claim.contains("task-001 verified Implement protected read handlers"),
+        next_claim.contains(&format!("{t1} verified Implement protected read handlers")),
         "{next_claim}"
     );
     assert!(
-        next_claim.contains("task-002 current  Implement operation handlers"),
+        next_claim.contains(&format!("{t2} current  Implement operation handlers")),
         "{next_claim}"
     );
 }
@@ -1180,7 +1198,8 @@ fn feature_prepare_does_not_infer_blockers_and_keeps_all_blocked_feature_ready()
         ],
     );
     assert!(vague_prepare.contains("started no-inferred-blockers -> in_progress"));
-    let vague_task = task_yaml(repo, "task-001");
+    let vague_id = id_by_title(repo, "Scaffold dependencies");
+    let vague_task = task_yaml(repo, &vague_id);
     assert_eq!(vague_task["blockers"], YamlValue::Null);
 
     run(repo, &["feature", "new", "All blocked setup"]);
@@ -1220,12 +1239,13 @@ fn feature_prepare_does_not_infer_blockers_and_keeps_all_blocked_feature_ready()
                 .expect("invariant: plan path should be UTF-8"),
         ],
     );
+    let blocked_id = id_by_title(repo, "Scaffold approved dependencies");
     assert!(
         blocked_prepare.contains("feature remains ready"),
         "{blocked_prepare}"
     );
     assert!(
-        blocked_prepare.contains("task-002 ready / blocked"),
+        blocked_prepare.contains(&format!("{blocked_id} ready / blocked")),
         "{blocked_prepare}"
     );
     let feature = run(repo, &["feature", "show", "all-blocked-setup"]);

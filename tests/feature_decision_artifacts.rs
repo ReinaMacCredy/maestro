@@ -17,13 +17,16 @@ fn created_feature_record_carries_v2_schema_version() {
     maestro::feature::create(&paths, "Billing CSV export")
         .expect("invariant: create should succeed");
 
+    // A feature is now a `feature`-typed card at `.maestro/cards/<slug>/card.yaml`;
+    // the verbatim v2 feature record rides under `extra`, not a per-feature
+    // `feature.yaml` directory.
     let yaml = fs::read_to_string(
         paths
-            .features_dir()
+            .cards_dir()
             .join("billing-csv-export")
-            .join("feature.yaml"),
+            .join("card.yaml"),
     )
-    .expect("invariant: per-feature feature.yaml should be readable");
+    .expect("invariant: feature card.yaml should be readable");
     assert!(yaml.contains("schema_version: maestro.feature.v2"));
     assert!(yaml.contains("status: proposed"));
 }
@@ -43,12 +46,20 @@ fn feature_records_do_not_store_task_counts() {
 }
 
 #[test]
-fn feature_task_counts_are_computed_from_task_yaml_files() {
+fn feature_task_counts_are_computed_from_task_cards() {
     let temp_dir = TestTempDir::new("maestro-feature-test");
+    // `count_tasks_for_feature` takes the `.maestro/tasks` anchor and resolves the
+    // repo root two parents up; the scan it drives now reads `Task`-typed cards
+    // from `.maestro/cards/`, grouping by `card.parent`.
     let tasks_dir = temp_dir.path().join(".maestro/tasks");
-    write_feature_task(&tasks_dir, "task-001", "billing-csv-export", "verified");
-    write_feature_task(&tasks_dir, "task-002", "billing-csv-export", "ready");
-    write_feature_task(&tasks_dir, "task-003", "other", "verified");
+    write_feature_task(
+        temp_dir.path(),
+        "task-001",
+        "billing-csv-export",
+        "verified",
+    );
+    write_feature_task(temp_dir.path(), "task-002", "billing-csv-export", "ready");
+    write_feature_task(temp_dir.path(), "task-003", "other", "verified");
 
     let counts = count_tasks_for_feature(&tasks_dir, "billing-csv-export")
         .expect("invariant: feature task counts should compute");
@@ -86,20 +97,18 @@ fn decision_markdown_matches_section_7_4_template() {
     assert!(markdown.contains("## Linked tasks"));
 }
 
-fn write_feature_task(tasks_dir: &std::path::Path, id: &str, feature_id: &str, state: &str) {
-    let dir = tasks_dir
-        .parent()
-        .expect("invariant: tasks dir should have parent")
-        .join("features")
-        .join(feature_id)
-        .join("tasks")
-        .join(id);
-    ensure_dir(&dir).expect("invariant: task directory should be creatable");
+/// Write a `Task`-typed card at `.maestro/cards/<id>/card.yaml` owned by
+/// `feature_id` via `card.parent` -- the flat layout the count scan reads after
+/// the card cutover. The verbatim task record rides under `extra`, mirroring the
+/// shape a real `task create` mints; only `id`/`title`/`state` vary per call.
+fn write_feature_task(repo: &std::path::Path, id: &str, feature_id: &str, state: &str) {
+    let dir = repo.join(".maestro/cards").join(id);
+    ensure_dir(&dir).expect("invariant: card directory should be creatable");
     fs::write(
-        dir.join("task.yaml"),
+        dir.join("card.yaml"),
         format!(
-            "schema_version: maestro.task.v2\nid: {id}\ntitle: {id}\nstate: {state}\nacceptance_locked: false\nverification: {{}}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\n"
+            "schema_version: maestro.card.v1\nid: {id}\ntype: task\ntitle: {id}\nstatus: {state}\nparent: {feature_id}\ncreated_at: \"2026-06-06T00:00:00.000Z\"\nupdated_at: \"2026-06-06T00:00:00.000Z\"\nextra:\n  schema_version: maestro.task.v2\n  id: {id}\n  title: {id}\n  state: {state}\n  acceptance_locked: false\n  acceptance: {{}}\n  verification: {{}}\n  created_at: \"2026-06-06T00:00:00.000Z\"\n  updated_at: \"2026-06-06T00:00:00.000Z\"\n"
         ),
     )
-    .expect("invariant: task.yaml should be writable");
+    .expect("invariant: card.yaml should be writable");
 }

@@ -32,8 +32,11 @@ pub fn cards_repo_with_harness(name: &str, harness_yml: &str) -> TestTempDir {
     let temp = cards_repo(name);
     fs::create_dir_all(temp.path().join(".maestro/harness"))
         .expect("invariant: harness dir should be creatable");
-    fs::write(temp.path().join(".maestro/harness/harness.yml"), harness_yml)
-        .expect("invariant: harness.yml should be writable");
+    fs::write(
+        temp.path().join(".maestro/harness/harness.yml"),
+        harness_yml,
+    )
+    .expect("invariant: harness.yml should be writable");
     temp
 }
 

@@ -333,7 +333,10 @@ fn blockers_terminal_transitions_and_claim_gate_behave_as_expected() {
         &maestro(repo, &["task", "unblock", &a, "--blocker", "blk-001"]),
         &["task", "unblock", &a, "--blocker", "blk-001"],
     );
-    assert_success(&maestro(repo, &["task", "claim", &a]), &["task", "claim", &a]);
+    assert_success(
+        &maestro(repo, &["task", "claim", &a]),
+        &["task", "claim", &a],
+    );
 
     assert_success(
         &maestro(repo, &["task", "create", "Task B"]),
@@ -376,25 +379,9 @@ fn blockers_terminal_transitions_and_claim_gate_behave_as_expected() {
     assert_success(
         &maestro(
             repo,
-            &[
-                "task",
-                "supersede",
-                &d,
-                "--by",
-                &e,
-                "--reason",
-                "replaced",
-            ],
+            &["task", "supersede", &d, "--by", &e, "--reason", "replaced"],
         ),
-        &[
-            "task",
-            "supersede",
-            &d,
-            "--by",
-            &e,
-            "--reason",
-            "replaced",
-        ],
+        &["task", "supersede", &d, "--by", &e, "--reason", "replaced"],
     );
     let superseded = task_record(repo, &d);
     assert_eq!(superseded["state"], Value::String("superseded".to_string()));
@@ -504,11 +491,17 @@ fn list_supports_basic_output_and_requested_filters() {
     );
 
     assert_success(
-        &maestro(repo, &["task", "create", "Task A", "--feature", "billing-csv"]),
+        &maestro(
+            repo,
+            &["task", "create", "Task A", "--feature", "billing-csv"],
+        ),
         &["task", "create", "Task A", "--feature", "billing-csv"],
     );
     assert_success(
-        &maestro(repo, &["task", "create", "Task B", "--feature", "billing-csv"]),
+        &maestro(
+            repo,
+            &["task", "create", "Task B", "--feature", "billing-csv"],
+        ),
         &["task", "create", "Task B", "--feature", "billing-csv"],
     );
     assert_success(
@@ -575,7 +568,10 @@ fn list_supports_basic_output_and_requested_filters() {
     assert!(feature_out.contains(&b));
     assert!(!feature_out.contains(&c));
 
-    assert_success(&maestro(repo, &["task", "claim", &a]), &["task", "claim", &a]);
+    assert_success(
+        &maestro(repo, &["task", "claim", &a]),
+        &["task", "claim", &a],
+    );
     assert_success(
         &maestro(
             repo,
@@ -1151,7 +1147,10 @@ fn task_update_rejects_an_empty_claim_so_no_blank_proof_is_recorded() {
         &maestro(repo, &["task", "accept", &id]),
         &["task", "accept", &id],
     );
-    assert_success(&maestro(repo, &["task", "claim", &id]), &["task", "claim", &id]);
+    assert_success(
+        &maestro(repo, &["task", "claim", &id]),
+        &["task", "claim", &id],
+    );
 
     let history_len = |repo: &Path| {
         task_record(repo, &id)["state_history"]
@@ -1189,7 +1188,15 @@ fn task_block_is_refused_on_a_done_task_so_no_open_blocker_is_baked_in() {
 
     // Block alone must not bypass the terminal guard the 5 sibling verbs honor:
     // a finished task cannot take an open blocker (e.g. "abandoned / blocked").
-    let args = &["task", "block", id.as_str(), "--reason", "needs dep", "--by", "task-002"];
+    let args = &[
+        "task",
+        "block",
+        id.as_str(),
+        "--reason",
+        "needs dep",
+        "--by",
+        "task-002",
+    ];
     let block = maestro(repo, args);
     assert_failure(&block, args);
     assert!(stderr(&block).contains(&format!("cannot block {id} — done")));
@@ -1247,9 +1254,13 @@ fn task_unblock_is_refused_on_an_already_resolved_blocker() {
     assert_success(
         &maestro(
             repo,
-            &["task", "block", &id, "--reason", "waiting", "--by", "task-999"],
+            &[
+                "task", "block", &id, "--reason", "waiting", "--by", "task-999",
+            ],
         ),
-        &["task", "block", &id, "--reason", "waiting", "--by", "task-999"],
+        &[
+            "task", "block", &id, "--reason", "waiting", "--by", "task-999",
+        ],
     );
     assert_success(
         &maestro(repo, &["task", "unblock", &id, "--blocker", "blk-001"]),

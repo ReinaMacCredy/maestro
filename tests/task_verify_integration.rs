@@ -1,5 +1,5 @@
+mod card_support;
 mod support;
-mod task_support;
 
 use std::fs;
 use std::io::Write;
@@ -7,11 +7,11 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use card_support::id_by_title;
 use serde_json::Value;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use sha2::{Digest, Sha256};
 use support::TestTempDir;
-use task_support::task_roots;
 
 fn maestro(cwd: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_maestro"))
@@ -51,8 +51,8 @@ fn stderr(output: &std::process::Output) -> String {
 
 fn setup_repo() -> TestTempDir {
     let temp = TestTempDir::new("maestro-task-verify-cli");
-    fs::create_dir_all(temp.path().join(".maestro"))
-        .expect("invariant: .maestro directory should be creatable");
+    fs::create_dir_all(temp.path().join(".maestro/cards"))
+        .expect("invariant: cards directory should be creatable");
     fs::create_dir_all(temp.path().join(".maestro/harness"))
         .expect("invariant: harness dir should be creatable");
     fs::write(
@@ -72,6 +72,8 @@ fn setup_repo() -> TestTempDir {
 
 fn setup_fail_closed_repo() -> TestTempDir {
     let temp = TestTempDir::new("maestro-task-verify-cli");
+    fs::create_dir_all(temp.path().join(".maestro/cards"))
+        .expect("invariant: cards directory should be creatable");
     fs::create_dir_all(temp.path().join(".maestro/harness"))
         .expect("invariant: harness dir should be creatable");
     fs::write(
@@ -99,17 +101,34 @@ fn sha256_prefixed_json(raw: &str) -> String {
     format!("sha256:{hex}")
 }
 
+/// Drive a fresh task to `needs_verification` with one pending `claim`, addressed
+/// by the stable literal id `task-001`.
+///
+/// Card creation mints an opaque content-hash id, so the verbs run against the
+/// minted id (recovered by title) and the card dir is then renamed to `task-001`
+/// with its `id`/`extra.id` rewritten -- this keeps every `task-001` literal in
+/// the suite (CLI args, event task_ids, on-disk paths) valid while exercising the
+/// real card store. The completion splice mirrors the legacy helper: rather than
+/// running `task complete` (which would verify inline), it hand-writes the
+/// `needs_verification` state + the pending claim into the card's folded `extra`
+/// record, so each test controls the proof the later `task verify` checks.
 fn create_completed_task(repo: &Path, claim: &str) {
+    let create = maestro(repo, &["task", "create", "Add CSV export"]);
+    assert_success(&create, &["task", "create", "Add CSV export"]);
+    let minted = id_by_title(repo, "Add CSV export");
     for args in [
-        vec!["task", "create", "Add CSV export"],
-        vec!["task", "set", "task-001", "--check", "CSV export verified"],
-        vec!["task", "explore", "task-001"],
-        vec!["task", "accept", "task-001"],
-        vec!["task", "claim", "task-001"],
+        vec!["task", "set", minted.as_str(), "--check", "CSV export verified"],
+        vec!["task", "explore", minted.as_str()],
+        vec!["task", "accept", minted.as_str()],
+        vec!["task", "claim", minted.as_str()],
     ] {
         let output = maestro(repo, &args);
         assert_success(&output, &args);
     }
+
+    // Remint the minted content-hash id to the suite's stable `task-001` so every
+    // literal id reference downstream still resolves.
+    rename_card(repo, &minted, "task-001");
 
     let mut task = task_yaml(repo, "task-001");
     task["state"] = YamlValue::String("needs_verification".to_string());
@@ -142,39 +161,61 @@ fn create_completed_task(repo: &Path, claim: &str) {
     write_task_yaml(repo, "task-001", &task);
 }
 
+/// The flat card store: every entity is a directory keyed by its id under
+/// `.maestro/cards/`, holding `card.yaml` plus any prose/proof sidecars.
+fn cards_dir(repo: &Path) -> PathBuf {
+    repo.join(".maestro/cards")
+}
+
+/// A task's card directory: in the flat store the directory name is the id
+/// verbatim (no `-<slug>` suffix), so the path is a direct join.
 fn task_dir(repo: &Path, id: &str) -> PathBuf {
-    let prefix = format!("{id}-");
-    for root in task_roots(repo) {
-        let Ok(entries) = fs::read_dir(&root) else {
-            continue;
-        };
-        for entry in entries {
-            let entry = entry.expect("invariant: task entry should be readable");
-            let name = entry
-                .file_name()
-                .to_str()
-                .expect("invariant: task entry should be UTF-8")
-                .to_string();
-            if name.starts_with(&prefix) {
-                return entry.path();
-            }
-        }
-    }
-    panic!("invariant: task directory should exist for {id}");
+    cards_dir(repo).join(id)
 }
 
-fn task_yaml(repo: &Path, id: &str) -> YamlValue {
-    let raw = fs::read_to_string(task_dir(repo, id).join("task.yaml"))
-        .expect("invariant: task.yaml should be readable");
-    serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse")
-}
-
-fn write_task_yaml(repo: &Path, id: &str, task: &YamlValue) {
-    fs::write(
-        task_dir(repo, id).join("task.yaml"),
-        serde_yaml::to_string(task).expect("invariant: task.yaml should serialize"),
+/// Rename a card directory and rewrite its `id`/`extra.id` so a freshly minted
+/// content-hash id can be addressed by a stable literal in the suite.
+fn rename_card(repo: &Path, from: &str, to: &str) {
+    fs::rename(task_dir(repo, from), task_dir(repo, to))
+        .expect("invariant: card dir should be renamable");
+    let path = task_dir(repo, to).join("card.yaml");
+    let mut doc: YamlValue = serde_yaml::from_str(
+        &fs::read_to_string(&path).expect("invariant: card.yaml should be readable"),
     )
-    .expect("invariant: task.yaml should be writable");
+    .expect("invariant: card.yaml should parse");
+    doc["id"] = YamlValue::String(to.to_string());
+    doc["extra"]["id"] = YamlValue::String(to.to_string());
+    fs::write(
+        &path,
+        serde_yaml::to_string(&doc).expect("invariant: card.yaml should serialize"),
+    )
+    .expect("invariant: card.yaml should be writable");
+}
+
+/// The folded task record under `card.extra`. Every assertion written against the
+/// legacy `task.yaml` shape (`task["state"]`, `task["verification"]`, ...) reads
+/// unchanged because the record was copied verbatim into `extra` by the cutover.
+fn task_yaml(repo: &Path, id: &str) -> YamlValue {
+    card_doc(repo, id)["extra"].clone()
+}
+
+fn card_doc(repo: &Path, id: &str) -> YamlValue {
+    let raw = fs::read_to_string(task_dir(repo, id).join("card.yaml"))
+        .expect("invariant: card.yaml should be readable");
+    serde_yaml::from_str(&raw).expect("invariant: card.yaml should parse")
+}
+
+/// Write the folded task record back into its card envelope, preserving the card
+/// header (`id`/`type`/`title`/`status`/timestamps) around the edited `extra`.
+fn write_task_yaml(repo: &Path, id: &str, task: &YamlValue) {
+    let path = task_dir(repo, id).join("card.yaml");
+    let mut doc = card_doc(repo, id);
+    doc["extra"] = task.clone();
+    fs::write(
+        &path,
+        serde_yaml::to_string(&doc).expect("invariant: card.yaml should serialize"),
+    )
+    .expect("invariant: card.yaml should be writable");
 }
 
 fn verification_json(repo: &Path, id: &str) -> Value {
@@ -246,10 +287,12 @@ fn write_event(repo: &Path, task_id: &str, message: &str) {
 }
 
 fn write_feature_baseline(repo: &Path, feature_id: &str) {
+    // The feature card owns its qa.md sidecar in the flat store, keyed by the
+    // feature's slug id under `.maestro/cards/`.
+    let card_dir = cards_dir(repo).join(feature_id);
+    fs::create_dir_all(&card_dir).expect("invariant: feature card dir should be creatable");
     fs::write(
-        repo.join(".maestro/features")
-            .join(feature_id)
-            .join("qa.md"),
+        card_dir.join("qa.md"),
         "---\namend_log_position: 0\n---\n\nbaseline\n",
     )
     .expect("invariant: feature baseline should be writable");
@@ -418,22 +461,27 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
         ),
         &["feature", "prepare", "cleanup-dependency", "--from"],
     );
+    // `feature prepare` mints opaque content-hash ids, so the two plan tasks are
+    // recovered by their unique plan titles.
+    let t1 = id_by_title(repo, "First dependency");
+    let t2 = id_by_title(repo, "Dependent task");
     assert_success(
-        &maestro(repo, &["task", "claim", "task-001"]),
-        &["task", "claim", "task-001"],
+        &maestro(repo, &["task", "claim", &t1]),
+        &["task", "claim", &t1],
     );
-    fs::write(
-        task_dir(repo, "task-002").join("task.yaml.lock"),
-        "locked\n",
-    )
-    .expect("invariant: dependent task lock should be writable");
+    // The dependent task is held open against the cleanup write: in the card store
+    // the write guard is an in-flight `.card.yaml.write-lock` reservation
+    // directory (the lockfile mechanism of the legacy `task.yaml` store is gone),
+    // so the after-dependency cleanup that resolves T2's blocker cannot land.
+    fs::create_dir(task_dir(repo, &t2).join(".card.yaml.write-lock"))
+        .expect("invariant: dependent task write-lock should be plantable");
 
-    let verify = maestro(
+    let complete = maestro(
         repo,
         &[
             "task",
             "complete",
-            "task-001",
+            &t1,
             "--summary",
             "first task done",
             "--claim",
@@ -443,11 +491,11 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
         ],
     );
 
-    assert_success(&verify, &["task", "complete", "task-001"]);
-    assert!(stdout(&verify).contains("verification passed for task-001"));
-    let err = stderr(&verify);
+    assert_success(&complete, &["task", "complete", &t1]);
+    assert!(stdout(&complete).contains(&format!("verification passed for {t1}")));
+    let err = stderr(&complete);
     assert!(
-        err.contains("warning: after-dependency cleanup incomplete for task-001"),
+        err.contains(&format!("warning: after-dependency cleanup incomplete for {t1}")),
         "{err}"
     );
     assert!(
@@ -455,11 +503,11 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
         "{err}"
     );
     assert_eq!(
-        task_yaml(repo, "task-001")["state"],
+        task_yaml(repo, &t1)["state"],
         YamlValue::String("verified".to_string())
     );
     assert_eq!(
-        task_yaml(repo, "task-002")["blockers"][0]["resolved_at"],
+        task_yaml(repo, &t2)["blockers"][0]["resolved_at"],
         YamlValue::Null
     );
 }
@@ -489,18 +537,18 @@ fn task_verify_passed_apply_failure_leaves_report_unapplied() {
     let repo = temp.path();
     create_completed_task(repo, "implemented transaction apply");
     write_event(repo, "task-001", "implemented transaction apply");
-    fs::write(
-        task_dir(repo, "task-001").join("task.yaml.lock"),
-        "locked\n",
-    )
-    .expect("invariant: task lock should be writable");
+    // Hold the card open against the apply-phase write: the card store guards
+    // writes with an in-flight `.card.yaml.write-lock` reservation directory, so
+    // the passed verification cannot be embedded.
+    fs::create_dir(task_dir(repo, "task-001").join(".card.yaml.write-lock"))
+        .expect("invariant: card write-lock should be plantable");
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);
 
     assert_failure(&verify, &["task", "verify", "task-001"]);
     let err = stderr(&verify);
-    assert!(err.contains("verification outcome was not embedded"));
-    assert!(err.contains("task is locked"));
+    assert!(err.contains("verification outcome was not embedded"), "{err}");
+    assert!(err.contains("failed to write"), "{err}");
     assert!(
         !task_dir(repo, "task-001")
             .join("verification.json")
@@ -526,19 +574,18 @@ fn task_verify_failed_apply_failure_leaves_report_unapplied() {
     let repo = temp.path();
     create_completed_task(repo, "implemented failed transaction apply");
     let before = task_yaml(repo, "task-001");
-    fs::write(
-        task_dir(repo, "task-001").join("task.yaml.lock"),
-        "locked\n",
-    )
-    .expect("invariant: task lock should be writable");
+    // The card store guards writes with an in-flight `.card.yaml.write-lock`
+    // reservation directory, so the failed verification cannot be embedded.
+    fs::create_dir(task_dir(repo, "task-001").join(".card.yaml.write-lock"))
+        .expect("invariant: card write-lock should be plantable");
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);
 
     assert_failure(&verify, &["task", "verify", "task-001"]);
     let err = stderr(&verify);
-    assert!(err.contains("verification failure: missing proof"));
-    assert!(err.contains("verification outcome was not embedded"));
-    assert!(err.contains("task is locked"));
+    assert!(err.contains("verification failure: missing proof"), "{err}");
+    assert!(err.contains("verification outcome was not embedded"), "{err}");
+    assert!(err.contains("failed to write"), "{err}");
     assert!(
         !task_dir(repo, "task-001")
             .join("verification.json")
@@ -571,8 +618,11 @@ fn task_verify_stale_snapshot_writes_unapplied_report_without_marking_verified()
 
     assert_failure(&verify, &["task", "verify", "task-001"]);
     let err = stderr(&verify);
-    assert!(err.contains("verification outcome was not embedded"));
-    assert!(err.contains("task was modified"));
+    assert!(err.contains("verification outcome was not embedded"), "{err}");
+    // The mid-flight `task update` changes the card on disk, so the card-store
+    // compare-and-set rejects the apply write (surfaced as the failed-write the
+    // CAS guard raises).
+    assert!(err.contains("failed to write"), "{err}");
     assert!(
         !task_dir(repo, "task-001")
             .join("verification.json")
@@ -609,7 +659,9 @@ fn concurrent_verify_does_not_overwrite_applied_canonical_report_with_stale_atte
     let verify = maestro(repo, &["task", "verify", "task-001"]);
 
     assert_failure(&verify, &["task", "verify", "task-001"]);
-    assert!(stderr(&verify).contains("task was modified"));
+    // The nested verify applied the canonical report first, so the outer apply's
+    // compare-and-set rejects its now-stale write (surfaced as a failed write).
+    assert!(stderr(&verify).contains("failed to write"), "{}", stderr(&verify));
     let task = task_yaml(repo, "task-001");
     assert_eq!(task["state"], YamlValue::String("verified".to_string()));
     let verification = verification_json(repo, "task-001");

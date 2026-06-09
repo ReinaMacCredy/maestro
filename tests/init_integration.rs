@@ -210,14 +210,7 @@ fn init_creates_minimal_artifact_tree() {
             .join(".maestro/harness/backlog.yaml")
             .is_file()
     );
-    assert!(temp_dir.path().join(".maestro/features").is_dir());
-    assert!(
-        !temp_dir
-            .path()
-            .join(".maestro/features/features.yaml")
-            .exists()
-    );
-    assert!(temp_dir.path().join(".maestro/decisions").is_dir());
+    assert!(temp_dir.path().join(".maestro/cards").is_dir());
     assert!(temp_dir.path().join(".maestro/skills").is_dir());
     for skill in BUNDLED_SKILLS {
         assert!(
@@ -475,7 +468,7 @@ fn init_bootstraps_empty_directory_without_git_marker() {
             .join(".maestro/harness/HARNESS.md")
             .is_file()
     );
-    assert!(temp_dir.path().join(".maestro/features").is_dir());
+    assert!(temp_dir.path().join(".maestro/cards").is_dir());
 }
 
 #[test]

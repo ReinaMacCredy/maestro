@@ -61,7 +61,7 @@ fn init_and_author(repo: &Path, id: &str, title: &str) {
 }
 
 fn feature_dir(repo: &Path, id: &str) -> std::path::PathBuf {
-    repo.join(".maestro/features").join(id)
+    repo.join(".maestro/cards").join(id)
 }
 
 fn write_baseline(repo: &Path, id: &str, position: usize, scenario_ids: &[&str]) {
@@ -146,7 +146,7 @@ fn feature_qa_gates_via_cli() {
     );
     assert!(stderr.contains("skill: qa-baseline"), "{stderr}");
     assert!(
-        stderr.contains("target: .maestro/features/report-builder/qa.md"),
+        stderr.contains("target: .maestro/cards/report-builder/qa.md"),
         "{stderr}"
     );
     assert!(
@@ -172,7 +172,7 @@ fn feature_qa_gates_via_cli() {
     assert!(stderr.contains("coverage incomplete"));
     assert!(stderr.contains("skill: qa-slice"), "{stderr}");
     assert!(
-        stderr.contains("target: .maestro/features/report-builder/qa.md"),
+        stderr.contains("target: .maestro/cards/report-builder/qa.md"),
         "{stderr}"
     );
     assert!(
