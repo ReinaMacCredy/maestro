@@ -468,8 +468,8 @@ fn feature_guarded_lifecycle_via_cli() {
     ];
     let create_output = stdout(maestro(&create_args, temp_dir.path()), &create_args);
     assert!(create_output.contains("created feature billing-csv-export"));
-    // The feature lands as a flat card; `feature new` no longer scaffolds the
-    // legacy `spec.md`/`decisions.yaml` sidecars (those are created on first write).
+    // The feature lands as a flat card with its spec scaffolded beside it; the
+    // per-feature decisions.yaml is retired (decisions are cards now).
     assert!(
         temp_dir
             .path()
@@ -812,8 +812,7 @@ fn feature_new_existing_slug_fails_without_clobbering_record() {
         &["feature", "new", "Billing CSV"],
     );
     let card_yaml = temp_dir.path().join(".maestro/cards/billing-csv/card.yaml");
-    let original =
-        fs::read_to_string(&card_yaml).expect("invariant: card.yaml should be readable");
+    let original = fs::read_to_string(&card_yaml).expect("invariant: card.yaml should be readable");
 
     let stderr = assert_failure(
         maestro(&["feature", "new", "Billing CSV"], temp_dir.path()),
@@ -1160,6 +1159,55 @@ fn decision_new_list_show_mint_card_ids_and_preserve_template() {
     assert!(
         doctor.contains("still contains decision template placeholder text"),
         "{doctor}"
+    );
+}
+
+/// S3d: `feature new` scaffolds `spec.md` beside the card and every spec
+/// surface (receipt, `feature spec` read, subsequent edits) resolves through
+/// `.maestro/cards/<id>/` -- with no legacy `features/` tree ever created.
+#[test]
+fn feature_new_scaffolds_spec_in_the_card_dir_and_feature_spec_reads_it() {
+    let temp_dir = TestTempDir::new("maestro-feature-spec-scaffold");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let create_args = ["feature", "new", "Billing CSV export"];
+    let receipt = stdout(maestro(&create_args, temp_dir.path()), &create_args);
+    assert!(
+        receipt.contains("spec: .maestro/cards/billing-csv-export/spec.md"),
+        "{receipt}"
+    );
+    assert!(
+        receipt.contains("decisions: maestro decision new"),
+        "the retired per-feature decisions.yaml must not be advertised: {receipt}"
+    );
+
+    let spec_path = temp_dir
+        .path()
+        .join(".maestro/cards/billing-csv-export/spec.md");
+    let scaffold = fs::read_to_string(&spec_path).expect("spec.md scaffolded beside the card");
+    assert!(scaffold.starts_with("# Billing CSV export"), "{scaffold}");
+
+    fs::write(
+        &spec_path,
+        "# Billing CSV export\n\n## Current state\n\nrows export by hand today\n",
+    )
+    .expect("invariant: spec.md should be writable");
+    let spec_args = ["feature", "spec", "billing-csv-export"];
+    let spec = stdout(maestro(&spec_args, temp_dir.path()), &spec_args);
+    assert!(
+        spec.contains("rows export by hand today"),
+        "feature spec must read the card-dir spec.md: {spec}"
+    );
+    assert!(spec.contains("## Contract"), "{spec}");
+    assert!(!spec.contains("(no spec.md found)"), "{spec}");
+
+    assert!(
+        !temp_dir.path().join(".maestro/features").exists(),
+        "no legacy features/ tree may reappear"
     );
 }
 
@@ -2040,12 +2088,7 @@ fn feature_archive_cascades_children_with_qa_and_round_trips() {
     assert!(restored.contains("task-001"));
     assert!(restored.contains("restore receipt:"));
     assert!(restored.contains("next: maestro status"));
-    assert!(
-        cards_dir
-            .join("billing-csv-export")
-            .join("qa.md")
-            .is_file()
-    );
+    assert!(cards_dir.join("billing-csv-export").join("qa.md").is_file());
     assert!(cards_dir.join("task-001").join("card.yaml").is_file());
     assert!(!archived_feature.exists());
 }
@@ -2119,11 +2162,7 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     assert!(first.contains("task-002"));
     assert!(first.contains("task-003"));
     let archive_cards = root.join(".maestro/archive/cards");
-    assert!(
-        archive_cards
-            .join("billing-csv-export/card.yaml")
-            .is_file()
-    );
+    assert!(archive_cards.join("billing-csv-export/card.yaml").is_file());
     assert!(archive_cards.join("task-001/card.yaml").is_file());
     assert!(archive_cards.join("task-002/card.yaml").is_file());
     assert!(archive_cards.join("task-003/card.yaml").is_file());
