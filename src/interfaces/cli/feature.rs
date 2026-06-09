@@ -1,5 +1,6 @@
 use anyhow::{Result, bail};
 
+use crate::domain::card::store::card_path;
 use crate::domain::decisions;
 use crate::domain::feature::{
     self, ContractAdditions, ContractChangeCounts, ContractEdits, FeatureStatus,
@@ -939,13 +940,13 @@ fn show_unreadable_feature_spec(
     id: &str,
     error: anyhow::Error,
 ) -> Result<()> {
-    let path = paths.features_dir().join(id).join("feature.yaml");
+    let path = card_path(paths, id);
     println!("status: unreadable");
     println!("feature: {id}");
     println!("path: {}", path.display());
     println!("error: {error:#}");
     println!();
-    println!("## Raw feature.yaml");
+    println!("## Raw card.yaml");
     match std::fs::read_to_string(&path) {
         Ok(contents) => {
             println!("```yaml");

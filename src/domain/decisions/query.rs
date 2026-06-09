@@ -101,9 +101,11 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<DecisionListEntry>> {
 
 pub fn list_tolerant(paths: &MaestroPaths) -> Vec<DecisionListEntry> {
     let mut entries = Vec::new();
-    // A corrupt card is skipped (the tolerant scan swallows it), not surfaced
-    // as an `unreadable` row -- a minor card-mode delta the P4 card-aware
-    // doctor refines, consistent with the feature list cutover.
+    // A corrupt decision card is skipped (the tolerant scan swallows it), not
+    // surfaced as an `unreadable` row. This now DIVERGES from the feature roster,
+    // which marks a schema-incompatible feature card Unreadable rather than
+    // dropping it; surfacing unreadable decision rows the same way is a net-new
+    // behavior left to the user as a follow-up card, not decided here.
     for (record, source, path) in cards::scan(paths, true).unwrap_or_default() {
         entries.push(decision_list_entry(record, source, path));
     }
