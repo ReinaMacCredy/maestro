@@ -673,7 +673,7 @@ pub fn note(paths: &MaestroPaths, id: &str, text: &str) -> Result<NoteReport> {
     if text.trim().is_empty() {
         bail!("feature note text cannot be empty");
     }
-    let path = feature_dir(paths, &record.id).join("notes.md");
+    let path = feature_sidecar_dir(paths, &record.id).join("notes.md");
     let append = append_note_file(&path, &record.title, text)?;
     Ok(NoteReport {
         id: record.id,
@@ -1020,7 +1020,7 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
     let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
     let acceptance_coverage =
         verification::acceptance_coverage_for_record_in_entries(&record, &task_entries);
-    let notes = read_notes_at(&feature_dir(paths, id))?;
+    let notes = read_notes_at(&feature_sidecar_dir(paths, id))?;
     let mut view = view_from_record(record, counts);
     view.acceptance_coverage = Some(acceptance_coverage);
     view.notes = notes;
@@ -1259,6 +1259,18 @@ fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> Feature
 
 pub(crate) fn feature_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
     paths.features_dir().join(id)
+}
+
+/// The directory holding a feature's prose sidecars (`notes.md`), mode-branched
+/// (SPEC-beads-model P1 dual-read cutover): card mode keeps them beside
+/// `card.yaml` at `cards/<id>/` (where migration copied them), legacy mode under
+/// `features/<id>/`. `spec.md`/`qa.md` still resolve through [`feature_dir`] until
+/// legacy removal routes them through here too.
+fn feature_sidecar_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
+    match store_mode(paths) {
+        StoreMode::Cards => paths.cards_dir().join(id),
+        StoreMode::Legacy => feature_dir(paths, id),
+    }
 }
 
 /// Read a feature's design notes (`notes.md`) from its directory, if present

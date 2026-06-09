@@ -183,10 +183,10 @@ fn lock_supersedes_across_the_global_feature_boundary_after_migration() {
         "feature store frozen across the lock write"
     );
 
-    // The owning feature's notes.md (still the legacy feature dir in card mode --
-    // feature::note has not yet cut over to cards/, deferred to P5d) carries the
-    // lock note under the reminted id.
-    let notes = std::fs::read_to_string(paths.features_dir().join(&feature_id).join("notes.md"))
+    // The owning feature's notes.md (cards/<feature>/notes.md in card mode now
+    // that feature::note/show have cut over to the card sidecar -- P5d-S1)
+    // carries the lock note under the reminted id.
+    let notes = std::fs::read_to_string(paths.cards_dir().join(&feature_id).join("notes.md"))
         .expect("feature notes.md written");
     assert!(
         notes.contains(&format!("{d2_id} locked")),
