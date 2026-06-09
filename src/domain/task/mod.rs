@@ -101,6 +101,21 @@ pub enum BlockerTarget {
     Human,
 }
 
+impl BlockerTarget {
+    /// Classify an optional `--by` reference into a typed target by its id
+    /// prefix; `None` is a manual/human block. The prefix-parse is the
+    /// transitional form -- P5c (SPEC-beads-model remint) swaps it for a card
+    /// type lookup in place.
+    pub fn from_ref(by: Option<String>) -> Self {
+        match by {
+            Some(by) if by.starts_with("task-") => Self::Task(by),
+            Some(by) if by.starts_with("decision-") => Self::Decision(by),
+            Some(by) => Self::External(by),
+            None => Self::Human,
+        }
+    }
+}
+
 /// Create a draft task and write its task artifacts.
 pub fn create_task(
     tasks_dir: &Path,
@@ -185,6 +200,33 @@ pub fn task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
 pub fn load_task_checks(tasks_dir: &Path, task: &TaskRecord) -> Result<Vec<String>> {
     let _ = tasks_dir;
     Ok(task.acceptance.checks.clone())
+}
+
+/// Of `tasks`, the unlinked Draft/Exploring ids that carry no verify-contract
+/// checks yet. The CLI and MCP list surfaces both annotate these, so the rule
+/// lives here once instead of being duplicated across the two adapters.
+pub fn missing_verify_contract_ids(
+    paths: &MaestroPaths,
+    tasks: &[TaskRecord],
+    archived_ids: &BTreeSet<String>,
+) -> Result<BTreeSet<String>> {
+    let mut missing = BTreeSet::new();
+    for task in tasks {
+        if task.feature_id.is_some()
+            || !matches!(task.state, TaskState::Draft | TaskState::Exploring)
+        {
+            continue;
+        }
+        let tasks_dir = if archived_ids.contains(&task.id) {
+            paths.archive_tasks_dir()
+        } else {
+            paths.tasks_dir()
+        };
+        if load_task_checks(&tasks_dir, task)?.is_empty() {
+            missing.insert(task.id.clone());
+        }
+    }
+    Ok(missing)
 }
 
 /// Filters applied to a task listing by the CLI and MCP surfaces.
@@ -1011,10 +1053,57 @@ fn blocker_descriptor(target: BlockerTarget) -> (BlockerKind, Option<BlockerRef>
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+    use std::path::Path;
+
     use super::{
-        TaskRecord, TaskState, VerificationBinding, VerificationOutcome, VerificationPassed,
-        VerificationStatus, apply_verification_outcome,
+        BlockerTarget, MaestroPaths, TaskRecord, TaskState, VerificationBinding,
+        VerificationOutcome, VerificationPassed, VerificationStatus, apply_verification_outcome,
+        missing_verify_contract_ids,
     };
+
+    #[test]
+    fn blocker_target_from_ref_classifies_by_prefix() {
+        assert_eq!(
+            BlockerTarget::from_ref(Some("task-001".to_string())),
+            BlockerTarget::Task("task-001".to_string())
+        );
+        assert_eq!(
+            BlockerTarget::from_ref(Some("decision-007".to_string())),
+            BlockerTarget::Decision("decision-007".to_string())
+        );
+        assert_eq!(
+            BlockerTarget::from_ref(Some("PR #42".to_string())),
+            BlockerTarget::External("PR #42".to_string())
+        );
+        assert_eq!(BlockerTarget::from_ref(None), BlockerTarget::Human);
+    }
+
+    #[test]
+    fn missing_verify_contract_ids_flags_only_unlinked_unchecked_drafts() {
+        let paths = MaestroPaths::new(Path::new("/nonexistent-missing-verify-test"));
+
+        let mut unchecked = TaskRecord::draft("task-001", "no checks yet", "t0");
+        unchecked.state = TaskState::Exploring;
+
+        let mut checked = TaskRecord::draft("task-002", "has a check", "t0");
+        checked.acceptance.checks = vec!["ac-1".to_string()];
+
+        let mut linked = TaskRecord::draft("task-003", "linked to a feature", "t0");
+        linked.feature_id = Some("agent-cli-ux".to_string());
+
+        let mut settled = TaskRecord::draft("task-004", "already ready", "t0");
+        settled.state = TaskState::Ready;
+
+        let missing = missing_verify_contract_ids(
+            &paths,
+            &[unchecked, checked, linked, settled],
+            &BTreeSet::new(),
+        )
+        .expect("missing-verify scan should not error");
+
+        assert_eq!(missing, BTreeSet::from(["task-001".to_string()]));
+    }
 
     #[test]
     fn verification_outcome_pass_sets_binding_and_history() {

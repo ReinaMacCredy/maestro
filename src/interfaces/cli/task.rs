@@ -797,7 +797,7 @@ fn block_task(
     actor: &str,
 ) -> Result<()> {
     let now = utc_now_timestamp();
-    let target = blocker_target(by);
+    let target = BlockerTarget::from_ref(by);
     let (task, blocker_id) = task::block_task(&paths.tasks_dir(), id, reason, target, actor, &now)?;
 
     println!("blocked {} ({blocker_id})", task.id);
@@ -905,7 +905,7 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         println!("no tasks found");
     } else {
         let missing_verify_contract_ids =
-            missing_verify_contract_ids(paths, &shown, &archived_ids)?;
+            task::missing_verify_contract_ids(paths, &shown, &archived_ids)?;
         print!(
             "{}",
             task::render_task_list_with_missing_checks(
@@ -923,30 +923,6 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn missing_verify_contract_ids(
-    paths: &MaestroPaths,
-    tasks: &[TaskRecord],
-    archived_ids: &std::collections::BTreeSet<String>,
-) -> Result<std::collections::BTreeSet<String>> {
-    let mut missing = std::collections::BTreeSet::new();
-    for task in tasks {
-        if task.feature_id.is_some()
-            || !matches!(task.state, TaskState::Draft | TaskState::Exploring)
-        {
-            continue;
-        }
-        let tasks_dir = if archived_ids.contains(&task.id) {
-            paths.archive_tasks_dir()
-        } else {
-            paths.tasks_dir()
-        };
-        if task::load_task_checks(&tasks_dir, task)?.is_empty() {
-            missing.insert(task.id.clone());
-        }
-    }
-    Ok(missing)
 }
 
 /// Build a [`task::TaskFilter`] from the CLI flags, choosing whether terminal
@@ -993,13 +969,4 @@ fn doctor_tasks(paths: &MaestroPaths) -> Result<()> {
         eprintln!("{line}");
     }
     bail!("task doctor found {} error(s)", report.errors.len())
-}
-
-fn blocker_target(by: Option<String>) -> BlockerTarget {
-    match by {
-        Some(by) if by.starts_with("task-") => BlockerTarget::Task(by),
-        Some(by) if by.starts_with("decision-") => BlockerTarget::Decision(by),
-        Some(by) => BlockerTarget::External(by),
-        None => BlockerTarget::Human,
-    }
 }
