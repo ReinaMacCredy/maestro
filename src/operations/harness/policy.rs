@@ -39,9 +39,9 @@ pub fn set_claims_only_verification(paths: &MaestroPaths) -> Result<()> {
 
 pub fn evidence_stamp(paths: &MaestroPaths) -> Result<String> {
     let runs = run_event_stamp(paths)?;
-    let tasks = tree_stamp(&managed_path(
+    let cards = card_stamp(&managed_path(
         paths,
-        ".maestro/tasks",
+        ".maestro/cards",
         SymlinkPolicy::RejectAllComponents,
     )?)?;
     let decisions = tree_stamp(&managed_path(
@@ -50,11 +50,11 @@ pub fn evidence_stamp(paths: &MaestroPaths) -> Result<String> {
         SymlinkPolicy::RejectAllComponents,
     )?)?;
     Ok(format!(
-        "runs={}:{};tasks={}:{};decisions={}:{}",
+        "runs={}:{};cards={}:{};decisions={}:{}",
         runs.count,
         runs.max_modified_nanos,
-        tasks.count,
-        tasks.max_modified_nanos,
+        cards.count,
+        cards.max_modified_nanos,
         decisions.count,
         decisions.max_modified_nanos
     ))
@@ -77,6 +77,28 @@ fn run_event_stamp(paths: &MaestroPaths) -> Result<Stamp> {
 fn tree_stamp(path: &Path) -> Result<Stamp> {
     let mut stamp = Stamp::default();
     visit_tree(path, &mut stamp)?;
+    Ok(stamp)
+}
+
+/// Stamp the card store, skipping detect-owned `hb-*` idea cards and the root
+/// dir's own mtime: detect's persisted friction output must not invalidate its
+/// own skip cache, while any task, decision, or feature card mutation must.
+fn card_stamp(cards_dir: &Path) -> Result<Stamp> {
+    let mut stamp = Stamp::default();
+    let entries = match fs::read_dir(cards_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(stamp),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {}", cards_dir.display()));
+        }
+    };
+    for entry in entries {
+        let entry = entry.with_context(|| format!("failed to list {}", cards_dir.display()))?;
+        if entry.file_name().to_string_lossy().starts_with("hb-") {
+            continue;
+        }
+        visit_tree(&entry.path(), &mut stamp)?;
+    }
     Ok(stamp)
 }
 
