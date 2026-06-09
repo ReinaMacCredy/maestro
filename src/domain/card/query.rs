@@ -106,8 +106,9 @@ fn is_ready(card: &Card, by_id: &HashMap<&str, &Card>) -> bool {
 }
 
 /// The `list` filter (SPEC G3): every supplied predicate must match (AND). An
-/// unset field does not constrain. `assignee` matches the claimant verbatim;
-/// `status` matches the COARSE word (SPEC DN3, the `--status` filter's form).
+/// unset field does not constrain. `assignee` matches a claim by full token or
+/// agent portion (see [`claim_matches`]); `status` matches the COARSE word
+/// (SPEC DN3, the `--status` filter's form).
 #[derive(Clone, Debug, Default)]
 pub struct ListFilter<'a> {
     pub parent: Option<&'a str>,
@@ -123,13 +124,27 @@ impl ListFilter<'_> {
             && self
                 .card_type
                 .is_none_or(|card_type| card.card_type == card_type)
-            && self
-                .assignee
-                .is_none_or(|assignee| card.claimed_by.as_deref() == Some(assignee))
+            && self.assignee.is_none_or(|assignee| {
+                card.claimed_by
+                    .as_deref()
+                    .is_some_and(|owner| claim_matches(owner, assignee))
+            })
             && self
                 .status
                 .is_none_or(|status| coarse_of(&card.status) == Some(status))
     }
+}
+
+/// Does claim `owner` answer to `--assignee <query>`? Claims are
+/// `<agent>#<session>` (SPEC DN8), so `--assignee claude` must find every
+/// `claude#...` session, while `--assignee claude#s1` still pins one session.
+/// Matches the full token or the agent portion; agent-TOKEN equality (split on
+/// `#`), not a raw prefix, so `claude` never bleeds into `claude-bot#s1`.
+fn claim_matches(owner: &str, query: &str) -> bool {
+    owner == query
+        || owner
+            .split_once('#')
+            .is_some_and(|(agent, _)| agent == query)
 }
 
 /// Filter the scanned card set (SPEC G3 `list`). Order is preserved from input.
@@ -334,6 +349,54 @@ mod tests {
         );
         assert_eq!(combined.len(), 1);
         assert_eq!(combined[0].id, "task-002");
+    }
+
+    #[test]
+    fn assignee_matches_full_token_and_agent_portion() {
+        let mut claude = card("task-001", CardType::Task, "in_progress");
+        claude.claimed_by = Some("claude#s1".to_string());
+        let mut codex = card("task-002", CardType::Task, "in_progress");
+        codex.claimed_by = Some("codex#s9".to_string());
+        // a similarly-prefixed agent must NOT match the bare `claude` query
+        let mut claude_bot = card("task-003", CardType::Task, "in_progress");
+        claude_bot.claimed_by = Some("claude-bot#s1".to_string());
+        let unclaimed = card("task-004", CardType::Task, "ready");
+        let cards = vec![claude, codex, claude_bot, unclaimed];
+
+        let by_agent = |q: &str| -> Vec<&str> {
+            query(
+                &cards,
+                &ListFilter {
+                    assignee: Some(q),
+                    ..Default::default()
+                },
+            )
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect()
+        };
+
+        assert_eq!(
+            by_agent("claude"),
+            vec!["task-001"],
+            "agent portion matches one session and does not bleed into claude-bot"
+        );
+        assert_eq!(
+            by_agent("claude#s1"),
+            vec!["task-001"],
+            "the full token still pins exactly one session"
+        );
+        assert_eq!(
+            by_agent("claude#s2"),
+            Vec::<&str>::new(),
+            "a non-matching session is empty even for the right agent"
+        );
+        assert_eq!(by_agent("codex"), vec!["task-002"]);
+        assert_eq!(
+            by_agent("nobody"),
+            Vec::<&str>::new(),
+            "no claim and no card matches; unclaimed cards never answer an assignee filter"
+        );
     }
 
     #[test]

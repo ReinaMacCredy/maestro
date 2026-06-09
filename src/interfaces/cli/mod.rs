@@ -249,7 +249,7 @@ pub struct ListArgs {
     /// Only cards of this type (feature, task, bug, chore, idea, decision).
     #[arg(long = "type", value_name = "TYPE")]
     pub card_type: Option<String>,
-    /// Only cards claimed by this `<agent>#<session>` (exact match).
+    /// Only cards claimed by this agent or full `<agent>#<session>` token.
     #[arg(long, value_name = "ASSIGNEE")]
     pub assignee: Option<String>,
     /// Only cards in this coarse status (open, in_progress, closed).

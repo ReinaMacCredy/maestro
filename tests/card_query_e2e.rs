@@ -179,6 +179,36 @@ fn ready_hides_a_blocked_card_until_its_blocker_closes() {
 }
 
 #[test]
+fn list_assignee_matches_the_agent_portion_of_a_claim() {
+    let temp = TestTempDir::new("p4b-assignee");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    // Claims are `<agent>#<session>` (DN8); `--assignee claude` must find the
+    // session-suffixed claim, not require the full token.
+    let mut claimed = Card::new("task-001", CardType::Task, "Claimed", "in_progress", NOW);
+    claimed.claimed_by = Some("claude#s1".to_string());
+    let free = Card::new("task-002", CardType::Task, "Free", "ready", NOW);
+    write_card(&paths, &claimed);
+    write_card(&paths, &free);
+
+    let by_agent = run(repo, &["list", "--assignee", "claude"]);
+    assert!(
+        by_agent.contains("task-001"),
+        "--assignee claude finds the claude#s1 claim:\n{by_agent}"
+    );
+    assert!(
+        !by_agent.contains("task-002"),
+        "the unclaimed card must not answer an assignee filter:\n{by_agent}"
+    );
+    let other_agent = run(repo, &["list", "--assignee", "codex"]);
+    assert!(
+        !other_agent.contains("task-001"),
+        "a different agent does not match the claude claim:\n{other_agent}"
+    );
+}
+
+#[test]
 fn ready_and_list_on_a_legacy_repo_print_the_guiding_notice() {
     let temp = TestTempDir::new("p4b-legacy");
     let repo = temp.path();
