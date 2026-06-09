@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
+use crate::domain::card::store::card_path;
 use crate::domain::{decisions, feature, proof, task};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
@@ -311,13 +312,11 @@ fn source_refs(
         refs.push(display_repo_relative(paths, task_yaml));
     }
     if let Some(feature) = feature {
+        let card_yaml = card_path(paths, &feature.id);
+        refs.push(display_repo_relative(paths, &card_yaml));
         refs.push(display_repo_relative(
             paths,
-            &paths.features_dir().join(&feature.id).join("feature.yaml"),
-        ));
-        refs.push(display_repo_relative(
-            paths,
-            &paths.features_dir().join(&feature.id).join("notes.md"),
+            &card_yaml.with_file_name("notes.md"),
         ));
     }
     Ok(refs)
