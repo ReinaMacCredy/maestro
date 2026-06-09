@@ -950,19 +950,48 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
         .collect())
 }
 
+/// Roster of every feature card for `status` / `feature list`. A feature card
+/// whose record is unparseable or schema-incompatible surfaces as `Unreadable`
+/// rather than being dropped, so a single bad artifact never silently shrinks
+/// the board. A card that fails to load at all (corrupt file, unknown type) is
+/// left to `doctor`; non-feature cards are skipped.
 pub fn list_tolerant(paths: &MaestroPaths) -> Vec<FeatureRosterEntry> {
     let counts_by_feature = count_tasks_by_feature(&paths.tasks_dir()).unwrap_or_default();
-    scan_feature_cards(paths, true)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|record| {
-            let counts = counts_by_feature
-                .get(&record.id)
-                .cloned()
-                .unwrap_or_default();
-            FeatureRosterEntry::Loaded(Box::new(view_from_record(record, counts)))
-        })
-        .collect()
+    let mut entries = Vec::new();
+    for id in feature_card_ids(paths).unwrap_or_default() {
+        let path = card_store::card_path(paths, &id);
+        match card_store::load(&path) {
+            Ok(Some(card)) if card.card_type == CardType::Feature => {
+                match record_from_card(card, path.display().to_string()) {
+                    Ok(record) => {
+                        let counts = counts_by_feature
+                            .get(&record.id)
+                            .cloned()
+                            .unwrap_or_default();
+                        entries.push(FeatureRosterEntry::Loaded(Box::new(view_from_record(
+                            record, counts,
+                        ))));
+                    }
+                    Err(error) => {
+                        let typed_error = error
+                            .chain()
+                            .find_map(|cause| cause.downcast_ref::<MaestroError>().cloned());
+                        let hint = typed_error.as_ref().and_then(MaestroError::hint);
+                        entries.push(FeatureRosterEntry::Unreadable {
+                            id,
+                            path,
+                            error: format!("{error:#}"),
+                            hint,
+                            typed_error,
+                        });
+                    }
+                }
+            }
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    }
+    entries
 }
 
 /// Show one feature joined with its on-demand task counts.
@@ -1419,11 +1448,14 @@ fn live_record_exists(paths: &MaestroPaths, id: &str) -> bool {
 /// and keeps `feature`-typed cards; legacy mode scans the per-feature
 /// directories. `tolerant` skips a card that fails to load (the strict callers
 /// surface the first such error). Sorted by id.
-fn scan_feature_cards(paths: &MaestroPaths, tolerant: bool) -> Result<Vec<FeatureRecord>> {
+/// Ids of feature-card directories in the flat store, sorted. Skips symlinked
+/// dirs and dirs without a `card.yaml`; an absent store yields no ids. Shared by
+/// the record scan and the roster reader so both walk the store identically.
+fn feature_card_ids(paths: &MaestroPaths) -> Result<Vec<String>> {
     let cards_dir = paths.cards_dir();
     let mut ids = Vec::new();
     if !cards_dir.is_dir() {
-        return Ok(Vec::new());
+        return Ok(ids);
     }
     for entry in fs::read_dir(&cards_dir)
         .with_context(|| format!("failed to read {}", cards_dir.display()))?
@@ -1443,9 +1475,12 @@ fn scan_feature_cards(paths: &MaestroPaths, tolerant: bool) -> Result<Vec<Featur
         }
     }
     ids.sort();
+    Ok(ids)
+}
 
+fn scan_feature_cards(paths: &MaestroPaths, tolerant: bool) -> Result<Vec<FeatureRecord>> {
     let mut records = Vec::new();
-    for id in ids {
+    for id in feature_card_ids(paths)? {
         let path = card_store::card_path(paths, &id);
         match card_store::load(&path) {
             Ok(Some(card)) if card.card_type == CardType::Feature => {
