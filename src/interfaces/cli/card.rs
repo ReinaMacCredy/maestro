@@ -2,7 +2,8 @@ use anyhow::{Result, anyhow};
 
 use crate::domain::card;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
-use crate::interfaces::cli::{ListArgs, ReadyArgs};
+use crate::foundation::core::time::utc_now_timestamp;
+use crate::interfaces::cli::{DepArgs, DepCommand, ListArgs, ReadyArgs};
 
 /// Execute `maestro ready`: workable cards with no open blockers.
 pub fn ready(args: ReadyArgs) -> Result<()> {
@@ -57,6 +58,27 @@ pub fn list(args: ListArgs) -> Result<()> {
     };
     let cards = card::query::scan(&paths)?;
     render_list(&card::query::query(&cards, &filter));
+    Ok(())
+}
+
+/// Execute `maestro dep add <child> <parent>`: author a blocking edge so the
+/// child waits on the parent (SPEC E1/DN6).
+pub fn dep(args: DepArgs) -> Result<()> {
+    let paths = repo_paths()?;
+    if card::store_mode(&paths) == card::StoreMode::Legacy {
+        legacy_notice();
+        return Ok(());
+    }
+    match args.command {
+        DepCommand::Add { child, parent } => {
+            let added = card::edit::add_blocks_dep(&paths, &child, &parent, &utc_now_timestamp())?;
+            if added {
+                println!("{child} is now blocked by {parent}");
+            } else {
+                println!("{child} is already blocked by {parent}");
+            }
+        }
+    }
     Ok(())
 }
 

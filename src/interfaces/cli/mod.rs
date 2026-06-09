@@ -125,6 +125,8 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro list --parent agent-cli-ux\n  maestro list --type bug --status open\n  maestro list --assignee claude#s1"
     )]
     List(ListArgs),
+    #[command(about = "Author dependency edges between cards (card store)")]
+    Dep(DepArgs),
     #[command(
         about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
     )]
@@ -722,6 +724,28 @@ pub enum DecisionCommand {
 }
 
 #[derive(Debug, Args)]
+pub struct DepArgs {
+    #[command(subcommand)]
+    pub command: DepCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DepCommand {
+    #[command(
+        about = "Add a blocking edge: CHILD waits until PARENT closes",
+        after_help = "Examples:\n  maestro dep add task-002 task-001   # task-002 is blocked by task-001"
+    )]
+    Add {
+        /// The dependent card; the edge is stored on it.
+        #[arg(value_name = "CHILD")]
+        child: String,
+        /// The blocker card the dependent waits on.
+        #[arg(value_name = "PARENT")]
+        parent: String,
+    },
+}
+
+#[derive(Debug, Args)]
 pub struct HarnessArgs {
     #[command(subcommand)]
     pub command: HarnessCommand,
@@ -876,6 +900,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Decision(args) => decision::run(args),
         RootCommand::Ready(args) => card::ready(args),
         RootCommand::List(args) => card::list(args),
+        RootCommand::Dep(args) => card::dep(args),
         RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
         RootCommand::Mcp(args) => mcp::run(args),

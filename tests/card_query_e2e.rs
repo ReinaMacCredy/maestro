@@ -1,10 +1,10 @@
-//! P4b end-to-end: the `maestro ready` and `maestro list` verbs drive the
-//! card query layer (scan -> workable/coarse/ready -> render) through the real
-//! binary. The first test runs against a genuinely migrated repo so the coarse
-//! mapping (DN3) is exercised on the actual status words migration emits, not
-//! synthetic ones; the second hand-builds a blocker chain to prove the `blocks`
-//! gating (E8) clears end-to-end; the third confirms the legacy store exits 0
-//! with a guiding notice rather than a dead-end error.
+//! P4b/P4c end-to-end: the `maestro ready`, `maestro list`, and `maestro dep`
+//! verbs drive the card query and edit layers through the real binary. Coverage:
+//! a genuinely migrated repo (coarse mapping DN3 over the real migrated status
+//! words); a hand-built blocker chain (E8 gating clears); `--assignee` matching
+//! the agent portion of a claim; `dep add` authoring a blocking edge that holds
+//! the dependent back (and rejecting a self-block); and the legacy store exiting
+//! 0 with a guiding notice rather than a dead-end error.
 
 mod support;
 
@@ -209,7 +209,64 @@ fn list_assignee_matches_the_agent_portion_of_a_claim() {
 }
 
 #[test]
-fn ready_and_list_on_a_legacy_repo_print_the_guiding_notice() {
+fn dep_add_blocks_the_dependent_through_the_binary() {
+    let temp = TestTempDir::new("p4c-dep-add");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    // two free, ready tasks
+    write_card(
+        &paths,
+        &Card::new("task-001", CardType::Task, "Blocker", "ready", NOW),
+    );
+    write_card(
+        &paths,
+        &Card::new("task-002", CardType::Task, "Dependent", "ready", NOW),
+    );
+
+    let before = run(repo, &["ready"]);
+    assert!(
+        before.contains("task-001") && before.contains("task-002"),
+        "both free cards are ready before any edge:\n{before}"
+    );
+
+    // `dep add <child> <parent>`: the edge is stored on the dependent (child).
+    let added = run(repo, &["dep", "add", "task-002", "task-001"]);
+    assert!(
+        added.contains("task-002 is now blocked by task-001"),
+        "the verb confirms the new edge:\n{added}"
+    );
+
+    let after = run(repo, &["ready"]);
+    assert!(
+        after.contains("task-001"),
+        "the open blocker stays ready:\n{after}"
+    );
+    assert!(
+        !after.contains("task-002"),
+        "the dependent is held back while its blocker is open (E8):\n{after}"
+    );
+
+    // idempotent: a second identical add is a no-op.
+    let again = run(repo, &["dep", "add", "task-002", "task-001"]);
+    assert!(
+        again.contains("already blocked by"),
+        "a duplicate edge reports already-present:\n{again}"
+    );
+
+    // a card cannot block itself -- the verb fails rather than writing a
+    // permanently-unready self-edge.
+    let self_block = maestro(repo, &["dep", "add", "task-001", "task-001"]);
+    assert!(
+        !self_block.status.success(),
+        "a self-block is rejected:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&self_block.stdout),
+        String::from_utf8_lossy(&self_block.stderr)
+    );
+}
+
+#[test]
+fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
     let temp = TestTempDir::new("p4b-legacy");
     let repo = temp.path();
     fs::create_dir(repo.join(".git")).expect("invariant: .git marker should be creatable");
@@ -223,5 +280,10 @@ fn ready_and_list_on_a_legacy_repo_print_the_guiding_notice() {
     assert!(
         list.contains("no card store"),
         "legacy repo gets a guiding notice, not an error:\n{list}"
+    );
+    let dep = run(repo, &["dep", "add", "task-002", "task-001"]);
+    assert!(
+        dep.contains("no card store"),
+        "dep add on a legacy repo also guides rather than erroring:\n{dep}"
     );
 }
