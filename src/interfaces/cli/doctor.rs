@@ -12,7 +12,7 @@ use crate::foundation::core::fs::{ALLOC_MARKER_PREFIX, child_dirs};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::{Compat, HARNESS_SCHEMA_VERSION, classify};
 use crate::harness::schema::HarnessConfig;
-use crate::operations;
+use crate::operations::harness;
 
 /// Execute `maestro doctor`.
 pub fn run() -> Result<()> {
@@ -239,7 +239,7 @@ fn display_relative(repo_root: &Path, path: &Path) -> String {
 fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
     // The backlog has no file of its own (D7): items live as idea cards, so the
     // check counts them through the same load every harness verb uses.
-    match operations::harness::load_backlog(paths) {
+    match harness::load_backlog(paths) {
         Ok(backlog) => {
             checks.push(DoctorCheck {
                 name: "backlog",
