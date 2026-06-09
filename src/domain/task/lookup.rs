@@ -190,7 +190,7 @@ pub fn valid_task_yaml_path(path: &Path) -> Result<bool> {
     Ok(metadata.is_file() && !metadata.file_type().is_symlink())
 }
 
-fn validate_task_lookup_id(id: &str) -> Result<()> {
+pub(super) fn validate_task_lookup_id(id: &str) -> Result<()> {
     let mut components = Path::new(id).components();
     if id.is_empty()
         || !matches!(components.next(), Some(Component::Normal(_)))

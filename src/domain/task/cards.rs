@@ -17,6 +17,7 @@ use serde_yaml::{Mapping, Value};
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot};
+use crate::domain::task::lookup;
 use crate::domain::task::template::{TaskRecord, TaskState};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::paths::MaestroPaths;
@@ -112,6 +113,29 @@ pub(crate) fn load_one(
     }
     let record = record_from_card(card, path.display().to_string())?;
     Ok(Some((record, snapshot, path)))
+}
+
+/// [`load_one`] over the archived card tree (`archive/cards/<id>/card.yaml`),
+/// read-only: archived tasks stay immutable, so no save snapshot is taken. The
+/// L6b proof read crosses the live/archive boundary through this seam.
+pub(crate) fn load_one_archived(
+    paths: &MaestroPaths,
+    id: &str,
+) -> Result<Option<(TaskRecord, PathBuf)>> {
+    lookup::validate_task_lookup_id(id)?;
+    let path = paths.archive_cards_dir().join(id).join("card.yaml");
+    let Some(card) = card_store::load(&path)? else {
+        return Ok(None);
+    };
+    if card.card_type != CardType::Task {
+        return Ok(None);
+    }
+    let task_dir = path
+        .parent()
+        .map(Path::to_path_buf)
+        .context("card path is missing parent directory")?;
+    let record = record_from_card(card, path.display().to_string())?;
+    Ok(Some((record, task_dir)))
 }
 
 /// Persist a task record to an explicit card path against its load-time snapshot

@@ -237,17 +237,16 @@ impl TaskVerification {
 /// through here; the verify transition uses a separate path, so archived tasks
 /// stay immutable.
 pub fn load_task_by_id(paths: &MaestroPaths, task_id: &str) -> Result<LoadedTask> {
-    let handle = match task::load_task_for_update(&paths.tasks_dir(), task_id) {
-        Ok(handle) => handle,
-        Err(live_err) => {
-            task::load_task_for_update(&paths.archive_tasks_dir(), task_id).map_err(|_| live_err)?
-        }
-    };
-
-    Ok(LoadedTask {
-        task: handle.task().clone(),
-        task_dir: handle.task_dir().to_path_buf(),
-    })
+    match task::load_task_for_update(&paths.tasks_dir(), task_id) {
+        Ok(handle) => Ok(LoadedTask {
+            task: handle.task().clone(),
+            task_dir: handle.task_dir().to_path_buf(),
+        }),
+        Err(live_err) => match task::cards::load_one_archived(paths, task_id) {
+            Ok(Some((task, task_dir))) => Ok(LoadedTask { task, task_dir }),
+            _ => Err(live_err),
+        },
+    }
 }
 
 /// Compute current proof freshness inputs for a task.
