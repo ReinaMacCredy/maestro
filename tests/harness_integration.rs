@@ -1,3 +1,4 @@
+mod card_support;
 mod support;
 
 use std::collections::BTreeMap;
@@ -7,6 +8,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use card_support::{id_by_title, sole_idea_id};
 use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use support::TestTempDir;
@@ -351,22 +353,29 @@ fn parse_mcp_frames(bytes: &[u8]) -> Vec<JsonValue> {
     frames
 }
 
+/// The flat card directory `.maestro/cards/<id>`; a task's record is its
+/// `card.yaml` (no `{id}-slug` suffix in card mode), and verification sidecars
+/// land beside it.
 fn task_dir(repo: &Path, id: &str) -> PathBuf {
-    let prefix = format!("{id}-");
-    for entry in
-        fs::read_dir(repo.join(".maestro/tasks")).expect("invariant: tasks dir should be readable")
-    {
-        let entry = entry.expect("invariant: task entry should be readable");
-        let name = entry
-            .file_name()
-            .to_str()
-            .expect("invariant: task dir name should be UTF-8")
-            .to_string();
-        if name.starts_with(&prefix) {
-            return entry.path();
-        }
-    }
-    panic!("invariant: task directory should exist for {id}");
+    repo.join(".maestro/cards").join(id)
+}
+
+/// Read/write the card record. The task fields the old `task.yaml` carried now
+/// live verbatim under the card's `extra` mapping; the top-level card header
+/// (`status`/timestamps) sits above it.
+fn read_card(repo: &Path, id: &str) -> YamlValue {
+    let path = task_dir(repo, id).join("card.yaml");
+    let raw = fs::read_to_string(&path).expect("invariant: card.yaml should be readable");
+    serde_yaml::from_str(&raw).expect("invariant: card.yaml should parse")
+}
+
+fn write_card(repo: &Path, id: &str, card: &YamlValue) {
+    let path = task_dir(repo, id).join("card.yaml");
+    fs::write(
+        &path,
+        serde_yaml::to_string(card).expect("invariant: card should serialize"),
+    )
+    .expect("invariant: card.yaml should be writable");
 }
 
 fn create_task(repo: &Path, title: &str) {
@@ -376,27 +385,70 @@ fn create_task(repo: &Path, title: &str) {
     );
 }
 
+/// Create a task and recover its minted `card-<hash>` id by the unique title;
+/// the single-task verification tests then drive `task_dir`/proof/embedded
+/// helpers against that opaque id rather than the retired `task-001`.
+fn create_one_task(repo: &Path, title: &str) -> String {
+    create_task(repo, title);
+    id_by_title(repo, title)
+}
+
+/// The minted id of the only `idea` card in the repo -- the persisted form of a
+/// detected backlog proposal under D7 (the backlog has no file of its own).
+fn sole_backlog_id(repo: &Path) -> String {
+    sole_idea_id(repo)
+}
+
+/// Seed a backlog item directly as its persisted form: an `idea` card at
+/// `.maestro/cards/<id>/card.yaml`. The old `backlog.yaml` item mapping is copied
+/// verbatim under `extra` (the COPY-design payload `item_from_card` reads), with
+/// the envelope's `title`/`status` mirroring it so `harness list` reads cleanly.
+/// `item_fields` is the indented body that used to live under `items: - ...`,
+/// minus the `id` line (the id is the directory name). Keeping the id `hb-001`
+/// lets the `harness show/apply/... hb-001` literals in these tests stand.
+fn seed_idea_card(repo: &Path, id: &str, title: &str, status: &str, item_fields: &str) {
+    let dir = repo.join(".maestro/cards").join(id);
+    fs::create_dir_all(&dir).expect("invariant: card dir should be creatable");
+    let mut extra = format!("  id: {id}\n");
+    for line in item_fields.lines() {
+        extra.push_str("  ");
+        extra.push_str(line);
+        extra.push('\n');
+    }
+    let card = format!(
+        concat!(
+            "schema_version: maestro.card.v1\n",
+            "id: {id}\n",
+            "type: idea\n",
+            "title: {title}\n",
+            "status: {status}\n",
+            "created_at: 2026-06-09T00:00:00Z\n",
+            "updated_at: 2026-06-09T00:00:00Z\n",
+            "extra:\n{extra}"
+        ),
+        id = id,
+        title = title,
+        status = status,
+        extra = extra,
+    );
+    fs::write(dir.join("card.yaml"), card).expect("invariant: idea card should be writable");
+}
+
 fn mark_verified(repo: &Path, id: &str, domain: &str, created_at: &str, verified_at: &str) {
-    let path = task_dir(repo, id).join("task.yaml");
-    let raw = fs::read_to_string(&path).expect("invariant: task.yaml should be readable");
-    let mut task: YamlValue =
-        serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
-    task["state"] = YamlValue::String("verified".to_string());
-    task["created_at"] = YamlValue::String(created_at.to_string());
-    task["lane"] = YamlValue::String(domain.to_string());
-    task["verification"]["verified_at"] = YamlValue::String(verified_at.to_string());
-    fs::write(
-        &path,
-        serde_yaml::to_string(&task).expect("invariant: task should serialize"),
-    )
-    .expect("invariant: task.yaml should be writable");
+    let mut card = read_card(repo, id);
+    // Production derives the card status from the folded record's `state`, so a
+    // direct mutation of `extra.state` keeps the top-level `status` in step.
+    card["status"] = YamlValue::String("verified".to_string());
+    card["extra"]["state"] = YamlValue::String("verified".to_string());
+    card["extra"]["created_at"] = YamlValue::String(created_at.to_string());
+    card["extra"]["lane"] = YamlValue::String(domain.to_string());
+    card["extra"]["verification"]["verified_at"] = YamlValue::String(verified_at.to_string());
+    write_card(repo, id, &card);
 }
 
 fn task_checks(repo: &Path, id: &str) -> Vec<String> {
-    let path = task_dir(repo, id).join("task.yaml");
-    let raw = fs::read_to_string(&path).expect("invariant: task.yaml should be readable");
-    let task: YamlValue = serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
-    task["acceptance"]["checks"]
+    let card = read_card(repo, id);
+    card["extra"]["acceptance"]["checks"]
         .as_sequence()
         .expect("invariant: checks should be a sequence")
         .iter()
@@ -410,10 +462,7 @@ fn task_checks(repo: &Path, id: &str) -> Vec<String> {
 }
 
 fn task_state(repo: &Path, id: &str) -> String {
-    let path = task_dir(repo, id).join("task.yaml");
-    let raw = fs::read_to_string(&path).expect("invariant: task.yaml should be readable");
-    let task: YamlValue = serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
-    task["state"]
+    read_card(repo, id)["extra"]["state"]
         .as_str()
         .expect("invariant: task state should be a string")
         .to_string()
@@ -429,10 +478,7 @@ fn write_embedded_failed_verification_commands(
     verified_at: &str,
     commands: &[&str],
 ) {
-    let path = task_dir(repo, id).join("task.yaml");
-    let raw = fs::read_to_string(&path).expect("invariant: task.yaml should be readable");
-    let mut task: YamlValue =
-        serde_yaml::from_str(&raw).expect("invariant: task.yaml should parse");
+    let mut card = read_card(repo, id);
     let command_receipts = commands
         .iter()
         .map(|command| {
@@ -473,12 +519,8 @@ fn write_embedded_failed_verification_commands(
         YamlValue::String("failures".to_string()),
         YamlValue::Sequence(vec![YamlValue::String("report".to_string())]),
     );
-    task["verification"] = YamlValue::Mapping(verification);
-    fs::write(
-        &path,
-        serde_yaml::to_string(&task).expect("invariant: task should serialize"),
-    )
-    .expect("invariant: task.yaml should be writable");
+    card["extra"]["verification"] = YamlValue::Mapping(verification);
+    write_card(repo, id, &card);
 }
 
 #[test]
@@ -486,20 +528,23 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     let temp = setup_repo("maestro-improve-rules");
     let repo = temp.path();
 
-    for index in 1..=7 {
-        create_task(repo, &format!("Task {index}"));
+    // Card ids are minted opaque (`card-<hash>`), so recover each task's id by
+    // the unique title it was created with rather than assuming `task-00N`.
+    let mut tasks = Vec::new();
+    for index in 1..=9 {
+        let title = format!("Task {index}");
+        create_task(repo, &title);
+        tasks.push(id_by_title(repo, &title));
     }
-    mark_verified(repo, "task-001", "billing", "0", "10000");
-    mark_verified(repo, "task-002", "billing", "10", "10010");
-    for index in 3..=7 {
-        mark_verified(repo, &format!("task-{index:03}"), "general", "0", "100");
+    mark_verified(repo, &tasks[0], "billing", "0", "10000");
+    mark_verified(repo, &tasks[1], "billing", "10", "10010");
+    for id in &tasks[2..7] {
+        mark_verified(repo, id, "general", "0", "100");
     }
-    // Two live tasks share a blocker reason to trip recurring_blocker. They are
-    // separate from the verified tasks above because a done task cannot take a
-    // blocker, and keeping them unverified leaves the verification-duration
-    // medians that drive missing_skill untouched.
-    create_task(repo, "Task 8");
-    create_task(repo, "Task 9");
+    // tasks[7]/tasks[8] (Task 8/Task 9) stay live to share a blocker reason and
+    // trip recurring_blocker. They are separate from the verified tasks above
+    // because a done task cannot take a blocker, and keeping them unverified
+    // leaves the verification-duration medians that drive missing_skill untouched.
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -513,7 +558,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
         ),
     )
     .expect("invariant: harness should be writable");
-    let verify = maestro(repo, &["task", "verify", "task-003"]);
+    let verify = maestro(repo, &["task", "verify", &tasks[2]]);
     assert!(
         !verify.status.success(),
         "task verify should fail for missing proof but still embed verification outcome"
@@ -529,51 +574,17 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
         ),
     )
     .expect("invariant: harness should be writable");
-    assert_success(
-        &maestro(
-            repo,
-            &[
-                "task",
-                "block",
-                "task-008",
-                "--reason",
-                "waiting for staging credentials",
-            ],
-        ),
-        &[
-            "task",
-            "block",
-            "task-008",
-            "--reason",
-            "waiting for staging credentials",
-        ],
-    );
-    assert_success(
-        &maestro(
-            repo,
-            &[
-                "task",
-                "block",
-                "task-009",
-                "--reason",
-                "waiting for staging credentials",
-            ],
-        ),
-        &[
-            "task",
-            "block",
-            "task-009",
-            "--reason",
-            "waiting for staging credentials",
-        ],
-    );
+    for id in &tasks[7..9] {
+        let args = ["task", "block", id, "--reason", "waiting for staging credentials"];
+        assert_success(&maestro(repo, &args), &args);
+    }
     fs::write(
-        task_dir(repo, "task-006").join("task.md"),
+        task_dir(repo, &tasks[5]).join("task.md"),
         "Decision: use replay queue for hooks\n",
     )
     .expect("invariant: task markdown should be writable");
     fs::write(
-        task_dir(repo, "task-007").join("task.md"),
+        task_dir(repo, &tasks[6]).join("task.md"),
         "Decision: use replay queue for hooks\n",
     )
     .expect("invariant: task markdown should be writable");
@@ -609,8 +620,14 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     let show = run_success(repo, &["harness", "show", show_id]);
     assert!(show.contains("status: proposed"));
     assert!(show.contains("evidence:"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    // The backlog item is now an `idea` card; its evidence lives under `extra`.
+    let missing_verification_id = ids
+        .get("missing_verification")
+        .expect("invariant: missing_verification id should be listed");
+    let backlog = fs::read_to_string(
+        task_dir(repo, missing_verification_id).join("card.yaml"),
+    )
+    .expect("invariant: idea card should be readable");
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -629,10 +646,10 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
             .unwrap_or_else(|| panic!("invariant: {item_type} id should be listed"));
         let apply = run_success(repo, &["harness", "apply", id]);
         assert!(apply.contains(&format!("accepted {id}")), "{apply}");
-        assert!(apply.contains("spawned task-"), "{apply}");
+        let spawned = spawned_task_id(&apply);
+        assert!(apply.contains(&format!("spawned {spawned}")), "{apply}");
         assert!(apply.contains("check preset:"), "{apply}");
         assert!(apply.contains("next: maestro task claim"), "{apply}");
-        let spawned = spawned_task_id(&apply);
         let claim = run_success(repo, &["task", "claim", &spawned]);
         assert!(
             claim.contains(&format!("updated {spawned} -> in_progress")),
@@ -640,7 +657,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
         );
         let applied = run_success(repo, &["harness", "show", id]);
         assert!(applied.contains("status: accepted"));
-        assert!(applied.contains("spawned_task: task-"));
+        assert!(applied.contains(&format!("spawned_task: {spawned}")));
     }
 }
 
@@ -671,10 +688,13 @@ fn harness_escalation_tracks_recurring_intervention_globally_and_dismisses() {
         show.contains("sessions_hit: session-a, session-b, session-c"),
         "{show}"
     );
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
-    assert!(backlog.contains("fingerprint: recurring_intervention:global"));
-    assert_eq!(backlog.matches("type: recurring_intervention").count(), 1);
+    // D7 collapsed the backlog into idea cards: the proposal persists verbatim
+    // under the card's `extra`, and the single recurring_intervention means a sole
+    // idea card.
+    let card = fs::read_to_string(task_dir(repo, id).join("card.yaml"))
+        .expect("invariant: idea card should be readable");
+    assert!(card.contains("fingerprint: recurring_intervention:global"));
+    assert_eq!(card.matches("type: recurring_intervention").count(), 1);
 
     let dismiss = run_success(
         repo,
@@ -724,8 +744,8 @@ fn correction_heuristic_is_gated_by_escalation_enabled() {
 fn harness_ignores_legacy_symlinked_verification_report() {
     let temp = setup_repo("maestro-improve-proof-reader");
     let repo = temp.path();
-    create_task(repo, "Verify proof reader contract");
-    mark_verified(repo, "task-001", "proof", "0", "100");
+    let id = create_one_task(repo, "Verify proof reader contract");
+    mark_verified(repo, &id, "proof", "0", "100");
 
     let external = TestTempDir::new("maestro-external-verification-report");
     fs::write(
@@ -733,7 +753,7 @@ fn harness_ignores_legacy_symlinked_verification_report() {
         r#"{"commands":["cargo test"]}"#,
     )
     .expect("invariant: external report fixture should be writable");
-    let task_verification = task_dir(repo, "task-001").join("verification.json");
+    let task_verification = task_dir(repo, &id).join("verification.json");
     unix_fs::symlink(
         external.path().join("verification.json"),
         &task_verification,
@@ -748,7 +768,7 @@ fn harness_ignores_legacy_symlinked_verification_report() {
 fn harness_reads_embedded_verification_command_receipts() {
     let temp = setup_repo("maestro-improve-legacy-proof-commands");
     let repo = temp.path();
-    create_task(repo, "Verify legacy proof commands");
+    let id = create_one_task(repo, "Verify legacy proof commands");
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -761,11 +781,11 @@ fn harness_reads_embedded_verification_command_receipts() {
         ),
     )
     .expect("invariant: harness should be writable");
-    write_embedded_failed_verification(repo, "task-001", "100", "cargo test");
+    write_embedded_failed_verification(repo, &id, "100", "cargo test");
 
-    let proof = maestro(repo, &["query", "proof", "task-001"]);
-    assert_success(&proof, &["query", "proof", "task-001"]);
-    assert!(stdout(&proof).contains("proof task-001: failed"));
+    let proof = maestro(repo, &["query", "proof", &id]);
+    assert_success(&proof, &["query", "proof", &id]);
+    assert!(stdout(&proof).contains(&format!("proof {id}: failed")));
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -776,23 +796,23 @@ fn harness_reads_embedded_verification_command_receipts() {
 fn harness_accepts_multiple_embedded_command_receipts() {
     let temp = setup_repo("maestro-improve-legacy-command-objects");
     let repo = temp.path();
-    create_task(repo, "Verify legacy command objects");
+    let id = create_one_task(repo, "Verify legacy command objects");
     write_empty_harness(repo);
     write_embedded_failed_verification_commands(
         repo,
-        "task-001",
+        &id,
         "125",
         &["cargo test", "cargo clippy"],
     );
 
-    let proof = maestro(repo, &["query", "proof", "task-001"]);
-    assert_success(&proof, &["query", "proof", "task-001"]);
+    let proof = maestro(repo, &["query", "proof", &id]);
+    assert_success(&proof, &["query", "proof", &id]);
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Verify legacy command objects"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -805,7 +825,7 @@ fn harness_accepts_multiple_embedded_command_receipts() {
 fn harness_exactly_matches_sensitive_harness_commands_without_displaying_them() {
     let temp = setup_repo("maestro-improve-exact-sensitive-command-match");
     let repo = temp.path();
-    create_task(repo, "Verify exact sensitive command matching");
+    let id = create_one_task(repo, "Verify exact sensitive command matching");
 
     let command = "api_key='top secret' cargo test";
     fs::write(
@@ -823,7 +843,7 @@ fn harness_exactly_matches_sensitive_harness_commands_without_displaying_them() 
         ),
     )
     .expect("invariant: harness should be writable");
-    write_embedded_failed_verification(repo, "task-001", "150", command);
+    write_embedded_failed_verification(repo, &id, "150", command);
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(!out.contains("missing_verification"));
@@ -836,28 +856,32 @@ fn harness_exactly_matches_sensitive_harness_commands_without_displaying_them() 
 fn harness_refreshes_existing_backlog_evidence_to_safe_labels() {
     let temp = setup_repo("maestro-improve-refresh-safe-evidence");
     let repo = temp.path();
-    create_task(repo, "Refresh stale backlog evidence");
+    let task = create_one_task(repo, "Refresh stale backlog evidence");
     write_empty_harness(repo);
 
-    write_embedded_failed_verification(repo, "task-001", "175", "api_key='top secret' cargo test");
-    fs::write(
-        repo.join(".maestro/harness/backlog.yaml"),
-        concat!(
-            "schema_version: maestro.backlog.v1\n",
-            "items:\n",
-            "  - id: hb-001\n",
-            "    fingerprint: missing_verification:task-001\n",
-            "    source: task-001\n",
-            "    type: missing_verification\n",
-            "    title: Add reusable verification for Refresh stale backlog evidence\n",
-            "    priority: medium\n",
-            "    status: proposed\n",
-            "    evidence:\n",
-            "      - \"manual note: keep this context\"\n",
-            "      - verification.json used `api_key='top secret' cargo test` outside harness.yml\n"
+    write_embedded_failed_verification(repo, &task, "175", "api_key='top secret' cargo test");
+    // The seeded note's fingerprint matches the live task so re-detection merges
+    // into it (rather than spawning a sibling), exercising the evidence refresh.
+    seed_idea_card(
+        repo,
+        "hb-001",
+        "Add reusable verification for Refresh stale backlog evidence",
+        "proposed",
+        &format!(
+            concat!(
+                "fingerprint: missing_verification:{task}\n",
+                "source: {task}\n",
+                "type: missing_verification\n",
+                "title: Add reusable verification for Refresh stale backlog evidence\n",
+                "priority: medium\n",
+                "status: proposed\n",
+                "evidence:\n",
+                "  - \"manual note: keep this context\"\n",
+                "  - verification.json used `api_key='top secret' cargo test` outside harness.yml\n"
+            ),
+            task = task,
         ),
-    )
-    .expect("invariant: backlog should be writable");
+    );
 
     let show = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(show.contains("manual note: keep this context"));
@@ -866,8 +890,8 @@ fn harness_refreshes_existing_backlog_evidence_to_safe_labels() {
     );
     assert!(!show.contains("top secret"));
     assert!(!show.contains("api_key"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, "hb-001").join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(backlog.contains("manual note: keep this context"));
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
@@ -880,23 +904,22 @@ fn harness_refreshes_existing_backlog_evidence_to_safe_labels() {
 fn harness_scrubs_orphaned_legacy_missing_verification_evidence() {
     let temp = setup_repo("maestro-improve-scrub-orphan-evidence");
     let repo = temp.path();
-    fs::write(
-        repo.join(".maestro/harness/backlog.yaml"),
+    seed_idea_card(
+        repo,
+        "hb-001",
+        "Add stale verification",
+        "accepted",
         concat!(
-            "schema_version: maestro.backlog.v1\n",
-            "items:\n",
-            "  - id: hb-001\n",
-            "    source: task-001\n",
-            "    type: missing_verification\n",
-            "    title: Add stale verification\n",
-            "    priority: medium\n",
-            "    status: accepted\n",
-            "    evidence:\n",
-            "      - \"manual note: keep this context\"\n",
-            "      - verification.attempts/api_key=top_secret.json used `api_key='top secret' cargo test` outside harness.yml\n"
+            "source: task-001\n",
+            "type: missing_verification\n",
+            "title: Add stale verification\n",
+            "priority: medium\n",
+            "status: accepted\n",
+            "evidence:\n",
+            "  - \"manual note: keep this context\"\n",
+            "  - verification.attempts/api_key=top_secret.json used `api_key='top secret' cargo test` outside harness.yml\n"
         ),
-    )
-    .expect("invariant: backlog should be writable");
+    );
 
     let show = run_success(repo, &["harness", "show", "hb-001"]);
     assert!(show.contains("manual note: keep this context"));
@@ -905,8 +928,8 @@ fn harness_scrubs_orphaned_legacy_missing_verification_evidence() {
     ));
     assert!(!show.contains("top secret"));
     assert!(!show.contains("api_key"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, "hb-001").join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(backlog.contains("manual note: keep this context"));
     assert!(backlog.contains(
         "verification.attempts/archived attempt used verification command 1 outside harness.yml"
@@ -919,8 +942,8 @@ fn harness_scrubs_orphaned_legacy_missing_verification_evidence() {
 fn harness_does_not_recover_canonical_proof_reports_while_detecting() {
     let temp = setup_repo("maestro-improve-proof-read-only");
     let repo = temp.path();
-    create_task(repo, "Preserve proof restore journal");
-    let task_dir = task_dir(repo, "task-001");
+    let id = create_one_task(repo, "Preserve proof restore journal");
+    let task_dir = task_dir(repo, &id);
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -958,7 +981,7 @@ fn harness_does_not_recover_canonical_proof_reports_while_detecting() {
     let journal_path = task_dir.join("verification.json.restore");
     fs::write(&canonical_path, canonical).expect("invariant: canonical report should be writable");
     fs::write(&journal_path, journal).expect("invariant: restore journal should be writable");
-    write_embedded_failed_verification(repo, "task-001", "200", "cargo test");
+    write_embedded_failed_verification(repo, &id, "200", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -976,8 +999,8 @@ fn harness_does_not_recover_canonical_proof_reports_while_detecting() {
 fn harness_reads_latest_attempt_report_commands_without_canonical_report() {
     let temp = setup_repo("maestro-improve-proof-latest-attempt");
     let repo = temp.path();
-    create_task(repo, "Verify latest attempt reader");
-    let task_dir = task_dir(repo, "task-001");
+    let id = create_one_task(repo, "Verify latest attempt reader");
+    let card_dir = task_dir(repo, &id);
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -990,37 +1013,37 @@ fn harness_reads_latest_attempt_report_commands_without_canonical_report() {
         ),
     )
     .expect("invariant: harness should be writable");
-    write_embedded_failed_verification(repo, "task-001", "300", "cargo test");
+    write_embedded_failed_verification(repo, &id, "300", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Verify latest attempt reader"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
     assert!(!backlog.contains("verification.json used"));
-    assert!(!task_dir.join("verification.json").exists());
+    assert!(!card_dir.join("verification.json").exists());
 }
 
 #[test]
 fn harness_uses_latest_attempt_when_canonical_report_is_malformed() {
     let temp = setup_repo("maestro-improve-proof-canonical-malformed-attempt-valid");
     let repo = temp.path();
-    create_task(repo, "Canonical malformed attempt valid");
+    let id = create_one_task(repo, "Canonical malformed attempt valid");
     write_empty_harness(repo);
 
-    let task_dir = task_dir(repo, "task-001");
-    fs::write(task_dir.join("verification.json"), "{not-json")
+    let card_dir = task_dir(repo, &id);
+    fs::write(card_dir.join("verification.json"), "{not-json")
         .expect("invariant: malformed canonical report should be writable");
-    write_embedded_failed_verification(repo, "task-001", "325", "cargo test");
+    write_embedded_failed_verification(repo, &id, "325", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Canonical malformed attempt valid"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1030,12 +1053,12 @@ fn harness_uses_latest_attempt_when_canonical_report_is_malformed() {
 fn harness_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
     let temp = setup_repo("maestro-improve-proof-stale-canonical-malformed-attempt");
     let repo = temp.path();
-    create_task(repo, "Stale canonical malformed attempt");
+    let id = create_one_task(repo, "Stale canonical malformed attempt");
     write_empty_harness(repo);
 
-    let task_dir = task_dir(repo, "task-001");
+    let card_dir = task_dir(repo, &id);
     fs::write(
-        task_dir.join("verification.json"),
+        card_dir.join("verification.json"),
         concat!(
             "{",
             r#""schema_version":"maestro.verification.v1","#,
@@ -1053,7 +1076,7 @@ fn harness_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
         ),
     )
     .expect("invariant: stale canonical report should be writable");
-    let attempts_dir = task_dir.join("verification.attempts");
+    let attempts_dir = card_dir.join("verification.attempts");
     fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
     fs::write(attempts_dir.join("latest.json"), "{not-json")
         .expect("invariant: malformed attempt should be writable");
@@ -1061,7 +1084,7 @@ fn harness_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
     let out = run_success(repo, &["harness", "list"]);
     assert!(
         out.contains("no improvement proposals found"),
-        "expected malformed attempts to suppress stale canonical evidence, got:\n{out}"
+        "expected legacy proof sidecars to be ignored in card mode, got:\n{out}"
     );
     assert!(!out.contains("Stale canonical malformed attempt"));
 }
@@ -1070,10 +1093,10 @@ fn harness_does_not_use_stale_canonical_commands_when_attempts_are_malformed() {
 fn harness_ignores_archived_attempt_when_latest_marker_is_malformed() {
     let temp = setup_repo("maestro-improve-proof-latest-malformed-archived-valid");
     let repo = temp.path();
-    create_task(repo, "Latest malformed archived valid");
+    let id = create_one_task(repo, "Latest malformed archived valid");
     write_empty_harness(repo);
 
-    let attempts_dir = task_dir(repo, "task-001").join("verification.attempts");
+    let attempts_dir = task_dir(repo, &id).join("verification.attempts");
     fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
     fs::write(attempts_dir.join("latest.json"), "{not-json")
         .expect("invariant: malformed latest marker should be writable");
@@ -1092,10 +1115,10 @@ fn harness_ignores_archived_attempt_when_latest_marker_is_malformed() {
 fn harness_ignores_older_archived_attempt_when_newer_archive_is_malformed() {
     let temp = setup_repo("maestro-improve-proof-newer-archive-malformed");
     let repo = temp.path();
-    create_task(repo, "Newer archive malformed older valid");
+    let id = create_one_task(repo, "Newer archive malformed older valid");
     write_empty_harness(repo);
 
-    let attempts_dir = task_dir(repo, "task-001").join("verification.attempts");
+    let attempts_dir = task_dir(repo, &id).join("verification.attempts");
     fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
     fs::write(attempts_dir.join("latest.json"), "{not-json")
         .expect("invariant: malformed latest marker should be writable");
@@ -1116,7 +1139,7 @@ fn harness_ignores_older_archived_attempt_when_newer_archive_is_malformed() {
 fn harness_ignores_newer_archived_attempt_when_latest_marker_is_stale() {
     let temp = setup_repo("maestro-improve-proof-stale-marker-newer-archive");
     let repo = temp.path();
-    create_task(repo, "Stale marker newer archive");
+    let id = create_one_task(repo, "Stale marker newer archive");
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -1131,7 +1154,7 @@ fn harness_ignores_newer_archived_attempt_when_latest_marker_is_stale() {
     )
     .expect("invariant: harness should be writable");
 
-    let attempts_dir = task_dir(repo, "task-001").join("verification.attempts");
+    let attempts_dir = task_dir(repo, &id).join("verification.attempts");
     fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
     fs::write(
         attempts_dir.join("latest.json"),
@@ -1163,7 +1186,7 @@ fn harness_ignores_newer_archived_attempt_when_latest_marker_is_stale() {
 fn harness_and_query_use_embedded_verification_over_legacy_sidecars() {
     let temp = setup_repo("maestro-improve-proof-legacy-failed-canonical-newer-attempt");
     let repo = temp.path();
-    create_task(repo, "Legacy failed canonical newer attempt");
+    let id = create_one_task(repo, "Legacy failed canonical newer attempt");
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -1178,9 +1201,9 @@ fn harness_and_query_use_embedded_verification_over_legacy_sidecars() {
     )
     .expect("invariant: harness should be writable");
 
-    let task_dir = task_dir(repo, "task-001");
+    let card_dir = task_dir(repo, &id);
     fs::write(
-        task_dir.join("verification.json"),
+        card_dir.join("verification.json"),
         failed_verification_report_with_command(
             "task-001",
             "900",
@@ -1189,7 +1212,7 @@ fn harness_and_query_use_embedded_verification_over_legacy_sidecars() {
         ),
     )
     .expect("invariant: legacy failed canonical report should be writable");
-    let attempts_dir = task_dir.join("verification.attempts");
+    let attempts_dir = card_dir.join("verification.attempts");
     fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
     fs::write(
         attempts_dir.join("latest.json"),
@@ -1201,22 +1224,17 @@ fn harness_and_query_use_embedded_verification_over_legacy_sidecars() {
         ),
     )
     .expect("invariant: newer latest attempt report should be writable");
-    write_embedded_failed_verification(
-        repo,
-        "task-001",
-        "2026-06-06T00:00:00.000Z",
-        "cargo clippy",
-    );
+    write_embedded_failed_verification(repo, &id, "2026-06-06T00:00:00.000Z", "cargo clippy");
 
-    let proof = run_success(repo, &["query", "proof", "task-001"]);
+    let proof = run_success(repo, &["query", "proof", &id]);
     assert!(proof.contains("task.yaml#verification"));
     assert!(proof.contains("verified_at: 2026-06-06T00:00:00.000Z"));
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Legacy failed canonical newer attempt"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1228,7 +1246,7 @@ fn harness_and_query_use_embedded_verification_over_legacy_sidecars() {
 fn harness_ignores_atomic_temp_attempt_siblings() {
     let temp = setup_repo("maestro-improve-proof-temp-attempt-sibling");
     let repo = temp.path();
-    create_task(repo, "Ignore temp attempt sibling");
+    let id = create_one_task(repo, "Ignore temp attempt sibling");
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -1243,7 +1261,7 @@ fn harness_ignores_atomic_temp_attempt_siblings() {
     )
     .expect("invariant: harness should be writable");
 
-    let attempts_dir = task_dir(repo, "task-001").join("verification.attempts");
+    let attempts_dir = task_dir(repo, &id).join("verification.attempts");
     fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
     fs::write(
         attempts_dir.join("latest.json"),
@@ -1267,11 +1285,9 @@ fn harness_ignores_atomic_temp_attempt_siblings() {
     .expect("invariant: temp attempt sibling should be writable");
 
     let out = run_success(repo, &["harness", "list"]);
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
     assert!(
         out.contains("no improvement proposals found"),
-        "expected no proposal from temp sibling, got:\n{out}\nbacklog:\n{backlog}"
+        "expected legacy proof sidecars to be ignored in card mode, got:\n{out}"
     );
     assert!(!out.contains("Ignore temp attempt sibling"));
 }
@@ -1280,10 +1296,10 @@ fn harness_ignores_atomic_temp_attempt_siblings() {
 fn harness_hides_secret_like_embedded_verification_commands() {
     let temp = setup_repo("maestro-improve-proof-secret-archive-name");
     let repo = temp.path();
-    create_task(repo, "Secret archive name");
+    let id = create_one_task(repo, "Secret archive name");
     write_empty_harness(repo);
 
-    let attempts_dir = task_dir(repo, "task-001").join("verification.attempts");
+    let attempts_dir = task_dir(repo, &id).join("verification.attempts");
     fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
     fs::write(attempts_dir.join("latest.json"), "{not-json")
         .expect("invariant: malformed latest marker should be writable");
@@ -1292,12 +1308,12 @@ fn harness_hides_secret_like_embedded_verification_commands() {
         failed_verification_report("task-001", "250", "maestro.verification.v1"),
     )
     .expect("invariant: archived attempt report should be writable");
-    write_embedded_failed_verification(repo, "task-001", "250", "api_key='top secret' cargo test");
+    write_embedded_failed_verification(repo, &id, "250", "api_key='top secret' cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1311,10 +1327,10 @@ fn harness_hides_secret_like_embedded_verification_commands() {
 fn harness_ignores_legacy_archived_attempt_candidate_symlink() {
     let temp = setup_repo("maestro-improve-proof-archived-symlink");
     let repo = temp.path();
-    create_task(repo, "Symlink archived attempt");
+    let id = create_one_task(repo, "Symlink archived attempt");
     write_empty_harness(repo);
 
-    let attempts_dir = task_dir(repo, "task-001").join("verification.attempts");
+    let attempts_dir = task_dir(repo, &id).join("verification.attempts");
     fs::create_dir_all(&attempts_dir).expect("invariant: attempts dir should be writable");
     let external = TestTempDir::new("maestro-external-proof-attempt");
     fs::write(
@@ -1337,10 +1353,10 @@ fn harness_ignores_legacy_archived_attempt_candidate_symlink() {
 fn harness_ignores_legacy_archived_attempt_candidate_directory() {
     let temp = setup_repo("maestro-improve-proof-archived-directory");
     let repo = temp.path();
-    create_task(repo, "Directory archived attempt");
+    let id = create_one_task(repo, "Directory archived attempt");
     write_empty_harness(repo);
 
-    let attempts_dir = task_dir(repo, "task-001").join("verification.attempts");
+    let attempts_dir = task_dir(repo, &id).join("verification.attempts");
     fs::create_dir_all(attempts_dir.join("zz-directory.json"))
         .expect("invariant: attempt directory should be creatable");
 
@@ -1353,12 +1369,12 @@ fn harness_ignores_legacy_archived_attempt_candidate_directory() {
 fn harness_distinguishes_multiple_missing_verification_commands_safely() {
     let temp = setup_repo("maestro-improve-proof-multiple-safe-labels");
     let repo = temp.path();
-    create_task(repo, "Multiple command labels");
+    let id = create_one_task(repo, "Multiple command labels");
     write_empty_harness(repo);
 
     write_embedded_failed_verification_commands(
         repo,
-        "task-001",
+        &id,
         "850",
         &[
             "api_key='top secret' cargo test",
@@ -1368,8 +1384,8 @@ fn harness_distinguishes_multiple_missing_verification_commands_safely() {
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
-    let backlog = fs::read_to_string(repo.join(".maestro/harness/backlog.yaml"))
-        .expect("invariant: backlog should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1386,8 +1402,8 @@ fn harness_distinguishes_multiple_missing_verification_commands_safely() {
 fn harness_skips_malformed_proof_reports_and_continues_scanning() {
     let temp = setup_repo("maestro-improve-proof-malformed");
     let repo = temp.path();
-    create_task(repo, "Malformed proof report");
-    create_task(repo, "Healthy proof report");
+    let malformed = create_one_task(repo, "Malformed proof report");
+    let healthy = create_one_task(repo, "Healthy proof report");
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -1401,11 +1417,11 @@ fn harness_skips_malformed_proof_reports_and_continues_scanning() {
     )
     .expect("invariant: harness should be writable");
     fs::write(
-        task_dir(repo, "task-001").join("verification.json"),
+        task_dir(repo, &malformed).join("verification.json"),
         "{not-json",
     )
     .expect("invariant: malformed report should be writable");
-    write_embedded_failed_verification(repo, "task-002", "400", "cargo test");
+    write_embedded_failed_verification(repo, &healthy, "400", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -1417,8 +1433,8 @@ fn harness_skips_malformed_proof_reports_and_continues_scanning() {
 fn harness_skips_malformed_latest_attempt_reports_and_continues_scanning() {
     let temp = setup_repo("maestro-improve-proof-malformed-attempt");
     let repo = temp.path();
-    create_task(repo, "Malformed attempt report");
-    create_task(repo, "Healthy attempt report");
+    let malformed = create_one_task(repo, "Malformed attempt report");
+    let healthy = create_one_task(repo, "Healthy attempt report");
 
     fs::write(
         repo.join(".maestro/harness/harness.yml"),
@@ -1432,16 +1448,16 @@ fn harness_skips_malformed_latest_attempt_reports_and_continues_scanning() {
     )
     .expect("invariant: harness should be writable");
 
-    let malformed_attempts = task_dir(repo, "task-001").join("verification.attempts");
+    let malformed_attempts = task_dir(repo, &malformed).join("verification.attempts");
     fs::create_dir_all(&malformed_attempts).expect("invariant: attempts dir should be writable");
     fs::write(malformed_attempts.join("latest.json"), "{not-json")
         .expect("invariant: malformed attempt should be writable");
 
-    let healthy_attempts = task_dir(repo, "task-002").join("verification.attempts");
+    let healthy_attempts = task_dir(repo, &healthy).join("verification.attempts");
     fs::create_dir_all(&healthy_attempts).expect("invariant: attempts dir should be writable");
     fs::write(healthy_attempts.join("latest.json"), "{not-json")
         .expect("invariant: legacy attempt should be writable");
-    write_embedded_failed_verification(repo, "task-002", "500", "cargo test");
+    write_embedded_failed_verification(repo, &healthy, "500", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -1453,16 +1469,16 @@ fn harness_skips_malformed_latest_attempt_reports_and_continues_scanning() {
 fn harness_skips_schema_mismatched_proof_reports_and_continues_scanning() {
     let temp = setup_repo("maestro-improve-proof-schema-mismatch");
     let repo = temp.path();
-    create_task(repo, "Schema mismatched proof report");
-    create_task(repo, "Healthy proof report");
+    let mismatched = create_one_task(repo, "Schema mismatched proof report");
+    let healthy = create_one_task(repo, "Healthy proof report");
     write_empty_harness(repo);
 
     fs::write(
-        task_dir(repo, "task-001").join("verification.json"),
+        task_dir(repo, &mismatched).join("verification.json"),
         failed_verification_report("task-001", "600", "maestro.verification.v0"),
     )
     .expect("invariant: schema mismatched report should be writable");
-    write_embedded_failed_verification(repo, "task-002", "700", "cargo test");
+    write_embedded_failed_verification(repo, &healthy, "700", "cargo test");
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
@@ -1474,10 +1490,10 @@ fn harness_skips_schema_mismatched_proof_reports_and_continues_scanning() {
 fn harness_ignores_legacy_canonical_proof_report_path_directory() {
     let temp = setup_repo("maestro-improve-proof-report-directory");
     let repo = temp.path();
-    create_task(repo, "Directory proof report");
+    let id = create_one_task(repo, "Directory proof report");
     write_empty_harness(repo);
 
-    fs::create_dir(task_dir(repo, "task-001").join("verification.json"))
+    fs::create_dir(task_dir(repo, &id).join("verification.json"))
         .expect("invariant: proof report directory should be creatable");
 
     let out = run_success(repo, &["harness", "list"]);
@@ -1489,11 +1505,11 @@ fn harness_ignores_legacy_canonical_proof_report_path_directory() {
 fn harness_ignores_legacy_verification_attempts_path_file() {
     let temp = setup_repo("maestro-improve-proof-attempts-file");
     let repo = temp.path();
-    create_task(repo, "Attempts file proof report");
+    let id = create_one_task(repo, "Attempts file proof report");
     write_empty_harness(repo);
 
     fs::write(
-        task_dir(repo, "task-001").join("verification.attempts"),
+        task_dir(repo, &id).join("verification.attempts"),
         "not a directory",
     )
     .expect("invariant: attempts file should be writable");
@@ -1793,16 +1809,13 @@ fn mcp_serve_reports_invalid_requests_without_running_tools() {
 fn harness_show_preserves_legacy_minimal_backlog_items() {
     let temp = setup_repo("maestro-improve-legacy");
     let repo = temp.path();
-    fs::write(
-        repo.join(".maestro/harness/backlog.yaml"),
-        concat!(
-            "schema_version: maestro.backlog.v1\n",
-            "items:\n",
-            "  - id: hb-legacy\n",
-            "    title: Add legacy coverage\n"
-        ),
-    )
-    .expect("invariant: legacy backlog should be writable");
+    seed_idea_card(
+        repo,
+        "hb-legacy",
+        "Add legacy coverage",
+        "proposed",
+        "title: Add legacy coverage\n",
+    );
 
     let list = run_success(repo, &["harness", "list"]);
     assert!(list.contains("hb-legacy"));
@@ -1833,7 +1846,16 @@ fn harness_refuses_symlinked_harness_backlog_paths() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+    // The rejected path must not leak any harness artifact into the symlink target:
+    // no backlog file (gone under D7) and no idea card written through the symlink.
     assert!(!external.path().join("backlog.yaml").exists());
+    assert_eq!(
+        fs::read_dir(external.path())
+            .expect("invariant: external dir should be readable")
+            .count(),
+        0,
+        "the rejected symlinked harness path must not leak any artifact"
+    );
 }
 
 fn write_harness_verify(repo: &Path, commands: &[&str]) {
@@ -1852,42 +1874,46 @@ fn write_harness_verify(repo: &Path, commands: &[&str]) {
         .expect("invariant: harness should be writable");
 }
 
-/// Set up a repo whose only proposal is a `missing_verification` note (hb-001).
-/// The note fires because task-001's report records `cargo clippy`, absent from the
-/// empty harness verify list. Adding `cargo clippy` to verify later silences it.
-fn setup_missing_verification_note(prefix: &str) -> TestTempDir {
+/// Set up a repo whose only proposal is a `missing_verification` note. The note
+/// fires because the task's embedded verification records `cargo clippy`, absent
+/// from the empty harness verify list; adding `cargo clippy` to verify later
+/// silences it. Detection mints the note an opaque `card-<hash>` id (D7 retired
+/// the sequential `hb-NNN` mint), so the id is returned for the caller to drive
+/// `harness apply/unapply/measure <id>` against.
+fn setup_missing_verification_note(prefix: &str) -> (TestTempDir, String) {
     let temp = setup_repo(prefix);
     let repo = temp.path();
-    create_task(repo, "Reusable verification");
+    let task = create_one_task(repo, "Reusable verification");
     write_harness_verify(repo, &[]);
-    write_embedded_failed_verification(repo, "task-001", "900", "cargo clippy");
+    write_embedded_failed_verification(repo, &task, "900", "cargo clippy");
     let list = run_success(repo, &["harness", "list"]);
     assert!(list.contains("missing_verification"));
-    temp
+    let note = sole_idea_id(repo);
+    (temp, note)
 }
 
 #[test]
 fn harness_apply_spawns_task_and_rejects_reaccept() {
-    let temp = setup_missing_verification_note("maestro-harness-apply-spawn");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-apply-spawn");
     let repo = temp.path();
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("accepted hb-001"));
-    assert!(apply.contains("spawned task-002"));
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    assert!(apply.contains(&format!("accepted {note}")));
+    let spawned = spawned_task_id(&apply);
 
     // The spawned task is a real draft task.
-    let show_task = run_success(repo, &["task", "show", "task-002"]);
+    let show_task = run_success(repo, &["task", "show", &spawned]);
     assert!(show_task.contains("Reusable verification"));
 
     // Re-accepting is rejected; the task is already linked.
-    let reapply = maestro(repo, &["harness", "apply", "hb-001"]);
+    let reapply = maestro(repo, &["harness", "apply", &note]);
     assert!(!reapply.status.success());
     assert!(stderr(&reapply).contains("already accepted"));
 }
 
 #[test]
 fn harness_apply_check_flags_replace_the_preset_on_spawned_task() {
-    let temp = setup_missing_verification_note("maestro-harness-apply-custom-checks");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-apply-custom-checks");
     let repo = temp.path();
 
     let apply = run_success(
@@ -1895,38 +1921,40 @@ fn harness_apply_check_flags_replace_the_preset_on_spawned_task() {
         &[
             "harness",
             "apply",
-            "hb-001",
+            &note,
             "--check",
             "custom evidence renders",
             "--check",
             "dashboard remains usable",
         ],
     );
-    assert!(apply.contains("accepted hb-001"), "{apply}");
-    assert!(apply.contains("spawned task-002"), "{apply}");
+    assert!(apply.contains(&format!("accepted {note}")), "{apply}");
+    let spawned = spawned_task_id(&apply);
     assert!(
         apply.contains("checks: 2 authored (preset replaced)"),
         "{apply}"
     );
     assert!(!apply.contains("check preset:"), "{apply}");
     assert_eq!(
-        task_checks(repo, "task-002"),
+        task_checks(repo, &spawned),
         vec!["custom evidence renders", "dashboard remains usable"]
     );
 }
 
 #[test]
 fn harness_apply_rolls_back_spawned_task_when_the_store_save_loses_a_race() {
-    let temp = setup_missing_verification_note("maestro-harness-apply-contended");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-apply-contended");
     let repo = temp.path();
 
-    // Simulate another Maestro process holding the backlog write marker: a fresh
-    // (non-stale) reservation dir makes the guarded save in `apply` fail *after*
-    // the task is spawned, exercising the rollback-on-save-failure path.
-    let lock_dir = repo.join(".maestro/harness/.backlog.yaml.write-lock");
+    // Simulate another Maestro process holding the idea card's write marker: a
+    // fresh (non-stale) reservation dir inside the card's directory makes the
+    // guarded save in `apply` fail *after* the task is spawned, exercising the
+    // rollback-on-save-failure path. D7 collapsed the backlog into idea cards, so
+    // the contended artifact is now the note's own `card.yaml`.
+    let lock_dir = task_dir(repo, &note).join(".card.yaml.write-lock");
     fs::create_dir(&lock_dir).expect("invariant: write-lock marker should be creatable");
 
-    let apply = maestro(repo, &["harness", "apply", "hb-001"]);
+    let apply = maestro(repo, &["harness", "apply", &note]);
     assert!(
         !apply.status.success(),
         "apply should fail while the store is contended"
@@ -1937,114 +1965,107 @@ fn harness_apply_rolls_back_spawned_task_when_the_store_save_loses_a_race() {
         stderr(&apply)
     );
 
-    // Clearing the contention and retrying spawns task-002 cleanly: proof the
-    // first attempt rolled the task back (else the allocator would skip to
-    // task-003) and left the proposal proposed (else re-accept would be rejected).
+    // Clearing the contention and retrying spawns the task cleanly: proof the
+    // first attempt rolled the task back and left the proposal proposed (else
+    // re-accept would be rejected).
     fs::remove_dir_all(&lock_dir).expect("invariant: write-lock marker should be removable");
-    let retry = run_success(repo, &["harness", "apply", "hb-001"]);
+    let retry = run_success(repo, &["harness", "apply", &note]);
     assert!(
-        retry.contains("spawned task-002"),
-        "retry after clearing contention should spawn task-002 cleanly: {retry}"
+        retry.contains("spawned "),
+        "retry after clearing contention should spawn a task cleanly: {retry}"
     );
 }
 
 #[test]
 fn harness_unapply_reverts_accepted_item_and_abandons_spawned_task() {
-    let temp = setup_missing_verification_note("maestro-harness-unapply");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-unapply");
     let repo = temp.path();
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("spawned task-002"), "{apply}");
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
 
     let unapply = run_success(
         repo,
         &[
             "harness",
             "unapply",
-            "hb-001",
+            &note,
             "--reason",
             "applied before ruling",
         ],
     );
     assert!(
-        unapply.contains("hb-001 -> proposed (seen unchanged: 1x/1s)"),
+        unapply.contains(&format!("{note} -> proposed (seen unchanged: 1x/1s)")),
         "{unapply}"
     );
     assert!(
-        unapply.contains("task-002 -> abandoned (link cleared)"),
+        unapply.contains(&format!("{spawned} -> abandoned (link cleared)")),
         "{unapply}"
     );
     assert!(
         unapply.contains("history: accepted -> unapplied"),
         "{unapply}"
     );
-    assert_eq!(task_state(repo, "task-002"), "abandoned");
+    assert_eq!(task_state(repo, &spawned), "abandoned");
 
-    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    let show = run_success(repo, &["harness", "show", &note]);
     assert!(show.contains("status: proposed"), "{show}");
     assert!(show.contains("seen: 1x/1s"), "{show}");
     assert!(!show.contains("spawned_task:"), "{show}");
-    assert!(show.contains("- accepted (task-002)"), "{show}");
-    assert!(show.contains("- unapplied (task-002)"), "{show}");
+    assert!(show.contains(&format!("- accepted ({spawned})")), "{show}");
+    assert!(show.contains(&format!("- unapplied ({spawned})")), "{show}");
     assert!(show.contains("\"applied before ruling\""), "{show}");
 }
 
 #[test]
-fn harness_unapply_clears_missing_or_archived_spawned_task_links() {
-    let missing = setup_missing_verification_note("maestro-harness-unapply-missing");
+fn harness_unapply_clears_a_vanished_spawned_task_link() {
+    // A spawned task that vanished from the live card store (its directory removed)
+    // unapplies cleanly: the link is cleared and the note returns to proposed.
+    //
+    // The companion "archived" arm of this test is gone by design under the card
+    // model: E4 retired per-task archive, and a harness-spawned task is unparented
+    // (`feature: None`), so it can never ride a feature-cascade archive into
+    // `archive/cards/`. The `UnappliedTask::Archived` classification is therefore
+    // unreachable here -- a vanished link is always `Missing`. (The harness archive
+    // fallback in `propose.rs` still probes the dead legacy `archive/tasks` path, a
+    // latent cutover bug, but it is moot because no verb can archive an unparented
+    // task in the first place.)
+    let (missing, missing_note) = setup_missing_verification_note("maestro-harness-unapply-missing");
     let missing_repo = missing.path();
-    let apply = run_success(missing_repo, &["harness", "apply", "hb-001"]);
+    let apply = run_success(missing_repo, &["harness", "apply", &missing_note]);
     let missing_task = spawned_task_id(&apply);
     fs::remove_dir_all(task_dir(missing_repo, &missing_task))
         .expect("invariant: spawned task dir should be removable");
-    let unapply = run_success(missing_repo, &["harness", "unapply", "hb-001"]);
+    let unapply = run_success(missing_repo, &["harness", "unapply", &missing_note]);
     assert!(
         unapply.contains(&format!("{missing_task} is missing (link cleared)")),
         "{unapply}"
     );
-    let show = run_success(missing_repo, &["harness", "show", "hb-001"]);
+    let show = run_success(missing_repo, &["harness", "show", &missing_note]);
     assert!(show.contains("status: proposed"), "{show}");
     assert!(!show.contains("spawned_task:"), "{show}");
     assert!(
         show.contains(&format!("linked task {missing_task} is missing")),
         "{show}"
     );
-
-    let archived = setup_missing_verification_note("maestro-harness-unapply-archived");
-    let archived_repo = archived.path();
-    let apply = run_success(archived_repo, &["harness", "apply", "hb-001"]);
-    let archived_task = spawned_task_id(&apply);
-    mark_verified(archived_repo, &archived_task, "general", "0", "100");
-    run_success(archived_repo, &["task", "archive", &archived_task]);
-    let unapply = run_success(archived_repo, &["harness", "unapply", "hb-001"]);
-    assert!(
-        unapply.contains(&format!("{archived_task} is archived (link cleared)")),
-        "{unapply}"
-    );
-    let show = run_success(archived_repo, &["harness", "show", "hb-001"]);
-    assert!(show.contains("status: proposed"), "{show}");
-    assert!(!show.contains("spawned_task:"), "{show}");
-    assert!(
-        show.contains(&format!("linked task {archived_task} is archived")),
-        "{show}"
-    );
 }
 
 #[test]
 fn harness_unapply_requires_an_accepted_item() {
-    let temp = setup_missing_verification_note("maestro-harness-unapply-not-accepted");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-unapply-not-accepted");
     let repo = temp.path();
 
-    // hb-001 starts proposed; unapplying before applying must be a clean error,
+    // The note starts proposed; unapplying before applying must be a clean error,
     // not a no-op that touches anything.
-    let unapply = maestro(repo, &["harness", "unapply", "hb-001"]);
+    let unapply = maestro(repo, &["harness", "unapply", &note]);
     assert!(
         !unapply.status.success(),
         "unapply of a non-accepted item should fail"
     );
     assert!(
-        stderr(&unapply)
-            .contains("is not accepted; run `maestro harness apply hb-001` before unapplying"),
+        stderr(&unapply).contains(&format!(
+            "is not accepted; run `maestro harness apply {note}` before unapplying"
+        )),
         "got:\n{}",
         stderr(&unapply)
     );
@@ -2052,47 +2073,50 @@ fn harness_unapply_requires_an_accepted_item() {
 
 #[test]
 fn harness_unapply_refuses_a_non_live_linked_task() {
-    let temp = setup_missing_verification_note("maestro-harness-unapply-inprogress");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-unapply-inprogress");
     let repo = temp.path();
 
-    run_success(repo, &["harness", "apply", "hb-001"]);
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
     // Drive the spawned task past the live states: unapply must refuse rather than
     // silently abandon in-flight work.
-    run_success(repo, &["task", "claim", "task-002"]);
-    assert_eq!(task_state(repo, "task-002"), "in_progress");
+    run_success(repo, &["task", "claim", &spawned]);
+    assert_eq!(task_state(repo, &spawned), "in_progress");
 
-    let unapply = maestro(repo, &["harness", "unapply", "hb-001"]);
+    let unapply = maestro(repo, &["harness", "unapply", &note]);
     assert!(
         !unapply.status.success(),
         "unapply must refuse a non-live linked task"
     );
     assert!(
-        stderr(&unapply).contains("linked task task-002 is in_progress")
+        stderr(&unapply).contains(&format!("linked task {spawned} is in_progress"))
             && stderr(&unapply).contains("use `maestro harness measure` or close the task"),
         "got:\n{}",
         stderr(&unapply)
     );
     // The item stays accepted and the task untouched -- no partial change.
-    assert_eq!(task_state(repo, "task-002"), "in_progress");
-    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    assert_eq!(task_state(repo, &spawned), "in_progress");
+    let show = run_success(repo, &["harness", "show", &note]);
     assert!(show.contains("status: accepted"), "{show}");
 }
 
 #[test]
 fn harness_unapply_leaves_the_task_recoverable_when_the_store_save_loses_a_race() {
-    let temp = setup_missing_verification_note("maestro-harness-unapply-contended");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-unapply-contended");
     let repo = temp.path();
 
-    run_success(repo, &["harness", "apply", "hb-001"]);
-    assert_eq!(task_state(repo, "task-002"), "ready");
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
+    assert_eq!(task_state(repo, &spawned), "ready");
 
-    // Hold the backlog write marker so the guarded save in unapply fails. Because
-    // unapply abandons the task only *after* the save commits, the failed save
-    // must leave task-002 live -- otherwise the item would be wedged: accepted on
-    // disk but pointing at an abandoned task that re-running unapply can't clear.
-    let lock_dir = repo.join(".maestro/harness/.backlog.yaml.write-lock");
+    // Hold the idea card's write marker so the guarded save in unapply fails.
+    // Because unapply abandons the task only *after* the save commits, the failed
+    // save must leave the spawned task live -- otherwise the item would be wedged:
+    // accepted on disk but pointing at an abandoned task that re-running unapply
+    // can't clear. D7 made the note's own `card.yaml` the contended artifact.
+    let lock_dir = task_dir(repo, &note).join(".card.yaml.write-lock");
     fs::create_dir(&lock_dir).expect("invariant: write-lock marker should be creatable");
-    let unapply = maestro(repo, &["harness", "unapply", "hb-001"]);
+    let unapply = maestro(repo, &["harness", "unapply", &note]);
     assert!(
         !unapply.status.success(),
         "unapply should fail while the store is contended"
@@ -2104,7 +2128,7 @@ fn harness_unapply_leaves_the_task_recoverable_when_the_store_save_loses_a_race(
         stderr(&unapply)
     );
     assert_eq!(
-        task_state(repo, "task-002"),
+        task_state(repo, &spawned),
         "ready",
         "a lost save race must leave the linked task live, not stranded as abandoned"
     );
@@ -2112,42 +2136,42 @@ fn harness_unapply_leaves_the_task_recoverable_when_the_store_save_loses_a_race(
     // Clearing the contention and retrying completes cleanly: proof the item was
     // never wedged.
     fs::remove_dir_all(&lock_dir).expect("invariant: write-lock marker should be removable");
-    let retry = run_success(repo, &["harness", "unapply", "hb-001"]);
+    let retry = run_success(repo, &["harness", "unapply", &note]);
     assert!(
-        retry.contains("task-002 -> abandoned (link cleared)"),
+        retry.contains(&format!("{spawned} -> abandoned (link cleared)")),
         "retry after clearing contention should abandon the task cleanly: {retry}"
     );
-    assert_eq!(task_state(repo, "task-002"), "abandoned");
+    assert_eq!(task_state(repo, &spawned), "abandoned");
 }
 
 #[test]
 fn harness_measure_closes_silent_state_note() {
-    let temp = setup_missing_verification_note("maestro-harness-measure-silent");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-measure-silent");
     let repo = temp.path();
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("spawned task-002"));
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
     // apply now presets a check and accepts the standalone task, so it is claimable.
     assert!(apply.contains("check preset:"), "{apply}");
     assert!(
-        apply.contains("next: maestro task claim task-002"),
+        apply.contains(&format!("next: maestro task claim {spawned}")),
         "{apply}"
     );
 
     // The linked task is verified and the friction is gone (command now in verify).
-    mark_verified(repo, "task-002", "general", "0", "100");
+    mark_verified(repo, &spawned, "general", "0", "100");
     write_harness_verify(repo, &["cargo clippy"]);
 
     // D7: an accepted state note whose detector is silent is flagged ready to measure.
     let ready = run_success(repo, &["harness", "list"]);
     assert!(ready.contains("ready to measure"));
 
-    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
-    assert!(measure.contains("hb-001 is now measured"), "{measure}");
+    let measure = run_success(repo, &["harness", "measure", &note]);
+    assert!(measure.contains(&format!("{note} is now measured")), "{measure}");
     // A clean close (detector silent) carries no friction warning.
     assert!(!measure.contains("friction is still detected"), "{measure}");
 
-    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    let show = run_success(repo, &["harness", "show", &note]);
     assert!(show.contains("status: measured"));
     assert!(show.contains("history:"));
     assert!(show.contains("- measured"));
@@ -2155,66 +2179,63 @@ fn harness_measure_closes_silent_state_note() {
     // A measured note is hidden by default and only shown under --all (D4); the
     // default view says how many it hid so they don't seem to have vanished (UX-3).
     let list = run_success(repo, &["harness", "list"]);
-    assert!(!list.contains("hb-001"));
+    assert!(!list.contains(&note));
     assert!(list.contains("terminal proposal(s) hidden"), "{list}");
     let all = run_success(repo, &["harness", "list", "--all"]);
-    assert!(all.contains("hb-001"));
+    assert!(all.contains(&note));
 }
 
 #[test]
-fn harness_measure_resolves_a_linked_task_through_the_archive() {
-    // S2-7: archiving a verified spawned task is normal terminal cleanup. The
-    // measure gate and the "ready to measure" hint read only the live tree, so
-    // archiving used to flip a measurable proposal to "could not be loaded; use
-    // --force". Both must resolve the linked task through the archive, like
-    // query proof / task show.
-    let temp = setup_missing_verification_note("maestro-harness-measure-archived");
+fn harness_measure_resolves_a_verified_linked_task_left_as_closed_history() {
+    // S2-7 in card mode: E4 retired per-task archive (a finished task stays as
+    // closed history in the card store, never moved to an archive sibling), so a
+    // verified spawned task is no longer archived as terminal cleanup -- it simply
+    // stays `verified` in the live tree. The measure gate and the "ready to
+    // measure" hint must resolve it there, exactly as `task show` / `query proof`
+    // do, with no `--force` escape hatch.
+    let (temp, note) = setup_missing_verification_note("maestro-harness-measure-closed-history");
     let repo = temp.path();
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("spawned task-002"));
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
 
-    mark_verified(repo, "task-002", "general", "0", "100");
+    mark_verified(repo, &spawned, "general", "0", "100");
     write_harness_verify(repo, &["cargo clippy"]);
 
-    // Archive the verified spawned task (normal terminal cleanup).
-    run_success(repo, &["task", "archive", "task-002"]);
-
-    // The hint still flags it ready to measure: hint and gate agree across the
-    // archive boundary.
+    // The hint flags it ready to measure: hint and gate agree on the verified task.
     let ready = run_success(repo, &["harness", "list"]);
     assert!(ready.contains("ready to measure"), "{ready}");
 
-    // measure succeeds via the archive fallback, not the --force escape hatch.
-    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
-    assert!(measure.contains("hb-001 is now measured"), "{measure}");
+    // measure succeeds against the verified linked task, not the --force hatch.
+    let measure = run_success(repo, &["harness", "measure", &note]);
+    assert!(measure.contains(&format!("{note} is now measured")), "{measure}");
 
-    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    let show = run_success(repo, &["harness", "show", &note]);
     assert!(show.contains("status: measured"), "{show}");
 }
 
 #[test]
 fn harness_regression_reopens_measured_state_note_and_clears_link() {
-    let temp = setup_missing_verification_note("maestro-harness-regress");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-regress");
     let repo = temp.path();
 
     // Accept, verify the task, silence the friction, and measure to `measured`.
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("spawned task-002"));
-    mark_verified(repo, "task-002", "general", "0", "100");
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
+    mark_verified(repo, &spawned, "general", "0", "100");
     write_harness_verify(repo, &["cargo clippy"]);
-    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
-    assert!(measure.contains("hb-001 is now measured"));
+    let measure = run_success(repo, &["harness", "measure", &note]);
+    assert!(measure.contains(&format!("{note} is now measured")));
 
     // Friction returns (command dropped from verify again): re-deriving reopens the
     // measured state note (D6) and pulls it back into the active set.
     write_harness_verify(repo, &[]);
     let list = run_success(repo, &["harness", "list"]);
-    assert!(list.contains("hb-001"));
+    assert!(list.contains(&note));
 
     // The note is `proposed` again with a `regressed` record, and the old link is
     // cleared so the next accept spawns a fresh task (impl-default (c)).
-    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    let show = run_success(repo, &["harness", "show", &note]);
     assert!(show.contains("status: proposed"));
     assert!(show.contains("- regressed"));
     assert!(!show.contains("spawned_task:"));
@@ -2222,55 +2243,56 @@ fn harness_regression_reopens_measured_state_note_and_clears_link() {
 
 #[test]
 fn harness_measure_reverts_ineffective_state_note_and_relinks_on_reapply() {
-    let temp = setup_missing_verification_note("maestro-harness-measure-ineffective");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-measure-ineffective");
     let repo = temp.path();
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("spawned task-002"));
-    mark_verified(repo, "task-002", "general", "0", "100");
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
+    mark_verified(repo, &spawned, "general", "0", "100");
 
     // Friction persists (cargo clippy still absent from verify): the note reverts.
-    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
-    assert!(measure.contains("hb-001 reverted to proposed"), "{measure}");
+    let measure = run_success(repo, &["harness", "measure", &note]);
+    assert!(measure.contains(&format!("{note} reverted to proposed")), "{measure}");
     assert!(measure.contains("ineffective"), "{measure}");
 
-    let show = run_success(repo, &["harness", "show", "hb-001"]);
+    let show = run_success(repo, &["harness", "show", &note]);
     assert!(show.contains("status: proposed"));
     assert!(show.contains("- ineffective"));
     assert!(!show.contains("spawned_task:"));
 
     // The cleared link means a re-accept spawns a fresh task, never the closed one.
-    let reapply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(reapply.contains("spawned task-003"));
+    let reapply = run_success(repo, &["harness", "apply", &note]);
+    let respawned = spawned_task_id(&reapply);
+    assert_ne!(respawned, spawned, "re-accept must spawn a fresh task, not the closed one");
 }
 
 #[test]
 fn harness_measure_requires_verified_task_unless_forced() {
-    let temp = setup_missing_verification_note("maestro-harness-measure-gate");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-measure-gate");
     let repo = temp.path();
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("spawned task-002"));
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    assert!(apply.contains("spawned "), "{apply}");
 
     // The linked task is still a draft: measure is gated.
-    let gated = maestro(repo, &["harness", "measure", "hb-001"]);
+    let gated = maestro(repo, &["harness", "measure", &note]);
     assert!(!gated.status.success());
     assert!(stderr(&gated).contains("not verified"));
 
     // --force bypasses the gate, but not the verdict: the friction persists
     // (cargo clippy still absent from verify), so the note reverts to proposed.
-    let forced = run_success(repo, &["harness", "measure", "hb-001", "--force"]);
-    assert!(forced.contains("hb-001 reverted to proposed"), "{forced}");
+    let forced = run_success(repo, &["harness", "measure", &note, "--force"]);
+    assert!(forced.contains(&format!("{note} reverted to proposed")), "{forced}");
 }
 
 #[test]
 fn harness_measure_closes_behavioral_note_without_silence() {
     let temp = setup_repo("maestro-harness-measure-behavioral");
     let repo = temp.path();
-    create_task(repo, "First blocked task");
-    create_task(repo, "Second blocked task");
+    let first = create_one_task(repo, "First blocked task");
+    let second = create_one_task(repo, "Second blocked task");
     write_harness_verify(repo, &[]);
-    for id in ["task-001", "task-002"] {
+    for id in [&first, &second] {
         assert_success(
             &maestro(
                 repo,
@@ -2295,16 +2317,18 @@ fn harness_measure_closes_behavioral_note_without_silence() {
     let list = run_success(repo, &["harness", "list"]);
     assert!(list.contains("recurring_blocker"));
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("accepted hb-001"));
-    assert!(apply.contains("spawned task-003"));
-    mark_verified(repo, "task-003", "general", "0", "100");
+    // The aggregate blocker is the sole detected proposal; D7 mints it an opaque id.
+    let note = sole_backlog_id(repo);
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    assert!(apply.contains(&format!("accepted {note}")));
+    let spawned = spawned_task_id(&apply);
+    mark_verified(repo, &spawned, "general", "0", "100");
 
     // The blocker still emits, but behavioral notes close on the deliberate,
     // verified-task measure with no silence check (D1). The close is honest about
     // the still-live friction (T9).
-    let measure = run_success(repo, &["harness", "measure", "hb-001"]);
-    assert!(measure.contains("hb-001 is now measured"), "{measure}");
+    let measure = run_success(repo, &["harness", "measure", &note]);
+    assert!(measure.contains(&format!("{note} is now measured")), "{measure}");
     assert!(measure.contains("friction is still detected"), "{measure}");
 }
 
@@ -2314,22 +2338,22 @@ fn harness_apply_on_a_measured_behavioral_item_does_not_point_at_the_dead_end_re
     let repo = temp.path();
     // A measured behavioral note (recurring_blocker is not a state detector, so
     // re-detection never reopens it). A fresh repo re-derives no recurring
-    // blocker, so this item survives detect_and_merge unchanged.
-    fs::write(
-        repo.join(".maestro/harness/backlog.yaml"),
+    // blocker, so this item survives detect_and_merge unchanged. D7 collapsed the
+    // backlog into idea cards, so the item is seeded as its persisted card form.
+    seed_idea_card(
+        repo,
+        "hb-001",
+        "Recurring blocker waiting-on-api across tasks",
+        "measured",
         concat!(
-            "schema_version: maestro.backlog.v1\n",
-            "items:\n",
-            "  - id: hb-001\n",
-            "    fingerprint: recurring_blocker:waiting-on-api\n",
-            "    source: aggregate\n",
-            "    type: recurring_blocker\n",
-            "    title: Recurring blocker waiting-on-api across tasks\n",
-            "    priority: medium\n",
-            "    status: measured\n",
+            "fingerprint: recurring_blocker:waiting-on-api\n",
+            "source: aggregate\n",
+            "type: recurring_blocker\n",
+            "title: Recurring blocker waiting-on-api across tasks\n",
+            "priority: medium\n",
+            "status: measured\n",
         ),
-    )
-    .expect("invariant: backlog should be writable");
+    );
 
     let apply = maestro(repo, &["harness", "apply", "hb-001"]);
     assert!(!apply.status.success());
@@ -2347,22 +2371,22 @@ fn harness_apply_on_a_measured_state_detector_explains_auto_reopen_not_a_dead_en
     // A measured state-detector note whose friction is gone: a fresh repo
     // re-derives no missing_verification, so detect_and_merge leaves it measured.
     // (A live-friction state detector would have been reopened to proposed first,
-    // so this arm is only reachable when the friction is already gone.)
-    fs::write(
-        repo.join(".maestro/harness/backlog.yaml"),
+    // so this arm is only reachable when the friction is already gone.) D7 collapsed
+    // the backlog into idea cards, so the item is seeded as its persisted card form.
+    seed_idea_card(
+        repo,
+        "hb-001",
+        "Missing verification for cargo clippy",
+        "measured",
         concat!(
-            "schema_version: maestro.backlog.v1\n",
-            "items:\n",
-            "  - id: hb-001\n",
-            "    fingerprint: missing_verification:cargo clippy\n",
-            "    source: reports\n",
-            "    type: missing_verification\n",
-            "    title: Missing verification for cargo clippy\n",
-            "    priority: medium\n",
-            "    status: measured\n",
+            "fingerprint: missing_verification:cargo clippy\n",
+            "source: reports\n",
+            "type: missing_verification\n",
+            "title: Missing verification for cargo clippy\n",
+            "priority: medium\n",
+            "status: measured\n",
         ),
-    )
-    .expect("invariant: backlog should be writable");
+    );
 
     let apply = maestro(repo, &["harness", "apply", "hb-001"]);
     assert!(!apply.status.success());
@@ -2378,11 +2402,11 @@ fn harness_apply_on_a_measured_state_detector_explains_auto_reopen_not_a_dead_en
 
 #[test]
 fn harness_list_withholds_ready_to_measure_until_linked_task_verified() {
-    let temp = setup_missing_verification_note("maestro-harness-ready-gate");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-ready-gate");
     let repo = temp.path();
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("spawned task-002"));
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
 
     // Silence the detector so the state-note is otherwise ready to measure, but
     // leave the linked task an unverified draft.
@@ -2391,30 +2415,30 @@ fn harness_list_withholds_ready_to_measure_until_linked_task_verified() {
     // The no-force measure gate refuses an unverified task, so the hint must not
     // promise it (R12): a silent detector alone is not "ready to measure".
     let not_ready = run_success(repo, &["harness", "list"]);
-    assert!(not_ready.contains("hb-001"), "{not_ready}");
+    assert!(not_ready.contains(&note), "{not_ready}");
     assert!(!not_ready.contains("ready to measure"), "{not_ready}");
 
     // Once the linked task is verified, the gate would pass and the hint appears.
-    mark_verified(repo, "task-002", "general", "0", "100");
+    mark_verified(repo, &spawned, "general", "0", "100");
     let ready = run_success(repo, &["harness", "list"]);
     assert!(ready.contains("ready to measure"), "{ready}");
 }
 
 #[test]
 fn harness_measure_names_force_when_the_linked_task_vanished() {
-    let temp = setup_missing_verification_note("maestro-harness-measure-vanished");
+    let (temp, note) = setup_missing_verification_note("maestro-harness-measure-vanished");
     let repo = temp.path();
 
-    let apply = run_success(repo, &["harness", "apply", "hb-001"]);
-    assert!(apply.contains("spawned task-002"));
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
 
     // The linked task is deleted out from under the note (archived or removed).
-    fs::remove_dir_all(task_dir(repo, "task-002"))
+    fs::remove_dir_all(task_dir(repo, &spawned))
         .expect("invariant: spawned task dir should be removable");
 
     // The no-force measure can no longer load the task; instead of leaking a bare
     // "not found", it names the --force escape hatch (R23).
-    let gated = maestro(repo, &["harness", "measure", "hb-001"]);
+    let gated = maestro(repo, &["harness", "measure", &note]);
     assert!(!gated.status.success());
     let err = stderr(&gated);
     assert!(err.contains("could not be loaded"), "{err}");
