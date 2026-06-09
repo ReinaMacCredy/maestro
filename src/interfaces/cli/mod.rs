@@ -138,6 +138,11 @@ pub enum RootCommand {
     )]
     Claim(ClaimArgs),
     #[command(
+        about = "Append a dated note to a card's notes.md (card store)",
+        after_help = "Examples:\n  maestro note task-0a1b2c \"chose option B; A breaks on reparent\""
+    )]
+    Note(NoteArgs),
+    #[command(
         about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
     )]
     Harness(HarnessArgs),
@@ -748,6 +753,16 @@ pub struct ClaimArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct NoteArgs {
+    /// The card to append a note to.
+    #[arg(value_name = "ID")]
+    pub id: String,
+    /// The note text; a dated line is appended to the card's notes.md.
+    #[arg(value_name = "TEXT")]
+    pub text: String,
+}
+
+#[derive(Debug, Args)]
 pub struct DepArgs {
     #[command(subcommand)]
     pub command: DepCommand,
@@ -927,6 +942,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Dep(args) => card::dep(args),
         RootCommand::Archive(args) => card::archive(args),
         RootCommand::Claim(args) => card::claim(args),
+        RootCommand::Note(args) => card::note(args),
         RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
         RootCommand::Mcp(args) => mcp::run(args),

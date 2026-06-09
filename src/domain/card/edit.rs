@@ -2,11 +2,12 @@
 //! change it, and persist through the CAS seam (D1). The read-side counterpart
 //! is `query`; both sit above the `store` persistence seam.
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::card::query::{Coarse, coarse_of};
 use crate::domain::card::schema::{Dep, DepKind};
-use crate::domain::card::store::{card_path, load_with_snapshot, save_with_snapshot};
+use crate::domain::card::store::{card_path, load, load_with_snapshot, save_with_snapshot};
+use crate::foundation::core::fs::append_text_file;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::timestamp_nanos;
 
@@ -128,6 +129,35 @@ fn claim_is_stale(claimed_at: &str, now: &str) -> bool {
         (Some(then), Some(now)) => now.saturating_sub(then) > STALE_CLAIM_AGE_NANOS,
         _ => true,
     }
+}
+
+/// Append one dated line to a card's `notes.md` sidecar (SPEC D5, the second
+/// half of the archive/note-append seam). The first write seeds the file with
+/// the card title as a header; later writes add `<date>  <text>` lines -- the
+/// exact convention the legacy `task note` / `feature note` verbs used, so a
+/// migrated card's notes read identically. The append touches only the sidecar,
+/// never `card.yaml`: prose is not card state, so it needs no CAS write and the
+/// card-mode repos that lack a legacy note path get one here. Returns whether
+/// `notes.md` was created by this append.
+pub fn append_note(paths: &MaestroPaths, id: &str, text: &str, now: &str) -> Result<bool> {
+    if text.trim().is_empty() {
+        bail!("note text cannot be empty");
+    }
+    let card_yaml = card_path(paths, id);
+    let Some(card) = load(&card_yaml)? else {
+        bail!("no card {id} to note");
+    };
+    let card_dir = card_yaml
+        .parent()
+        .with_context(|| format!("card path missing parent: {}", card_yaml.display()))?;
+    let date = now.split_once('T').map_or(now, |(date, _)| date);
+    let notes_path = card_dir.join("notes.md");
+    append_text_file(
+        &notes_path,
+        &format!("# {}\n\n", card.title),
+        &format!("{date}  {}\n", text.trim()),
+    )
+    .with_context(|| format!("failed to append card note {}", notes_path.display()))
 }
 
 #[cfg(test)]
@@ -352,5 +382,58 @@ mod tests {
 
         let err = claim(&paths, "task-001", "claude#s1", LATER).expect_err("closed not claimable");
         assert!(err.to_string().contains("closed"), "says it is closed");
+    }
+
+    #[test]
+    fn append_note_creates_then_appends_dated_lines() {
+        let paths = repo("note-append");
+        seed(&paths, "task-001");
+
+        let created = append_note(&paths, "task-001", "first finding", "2026-06-09T00:00:00Z")
+            .expect("first note");
+        assert!(created, "first append creates notes.md");
+        let again = append_note(&paths, "task-001", "second finding", "2026-06-10T09:30:00Z")
+            .expect("second note");
+        assert!(!again, "a later append does not re-create the file");
+
+        let notes = std::fs::read_to_string(
+            card_path(&paths, "task-001")
+                .parent()
+                .unwrap()
+                .join("notes.md"),
+        )
+        .expect("read notes.md");
+        assert!(
+            notes.starts_with("# task-001\n\n"),
+            "title header seeded once: {notes:?}"
+        );
+        assert!(
+            notes.contains("2026-06-09  first finding\n"),
+            "first dated line"
+        );
+        assert!(
+            notes.contains("2026-06-10  second finding\n"),
+            "second dated line"
+        );
+        assert_eq!(
+            notes.matches("# task-001").count(),
+            1,
+            "header written only once"
+        );
+    }
+
+    #[test]
+    fn append_note_rejects_empty_text_and_a_missing_card() {
+        let paths = repo("note-bad");
+        seed(&paths, "task-001");
+
+        assert!(
+            append_note(&paths, "task-001", "   ", NOW).is_err(),
+            "whitespace-only note text is refused"
+        );
+        assert!(
+            append_note(&paths, "ghost", "anything", NOW).is_err(),
+            "noting a missing card fails loud"
+        );
     }
 }

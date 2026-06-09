@@ -55,6 +55,7 @@ fn root_help_lists_top_level_commands() {
             "dep",
             "archive",
             "claim",
+            "note",
             "harness",
             "query",
             "mcp",
@@ -228,6 +229,10 @@ fn nested_help_lists_section_38_command_tree() {
     assert_contains_all(
         &maestro(&["claim", "--help"]),
         &["ID", "Examples:", "maestro claim"],
+    );
+    assert_contains_all(
+        &maestro(&["note", "--help"]),
+        &["ID", "TEXT", "Examples:", "maestro note"],
     );
     assert_contains_all(
         &maestro(&["dep", "add", "--help"]),

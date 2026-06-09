@@ -3,7 +3,9 @@ use anyhow::{Result, anyhow};
 use crate::domain::card;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
-use crate::interfaces::cli::{ArchiveArgs, ClaimArgs, DepArgs, DepCommand, ListArgs, ReadyArgs};
+use crate::interfaces::cli::{
+    ArchiveArgs, ClaimArgs, DepArgs, DepCommand, ListArgs, NoteArgs, ReadyArgs,
+};
 
 /// Execute `maestro ready`: workable cards with no open blockers.
 pub fn ready(args: ReadyArgs) -> Result<()> {
@@ -125,6 +127,23 @@ pub fn claim(args: ClaimArgs) -> Result<()> {
                 args.id
             )
         }
+    }
+    Ok(())
+}
+
+/// Execute `maestro note <id> <text>`: append a dated note to the card's
+/// `notes.md` sidecar (SPEC D5).
+pub fn note(args: NoteArgs) -> Result<()> {
+    let paths = repo_paths()?;
+    if card::store_mode(&paths) == card::StoreMode::Legacy {
+        legacy_notice();
+        return Ok(());
+    }
+    let created = card::edit::append_note(&paths, &args.id, &args.text, &utc_now_timestamp())?;
+    if created {
+        println!("noted {} (notes.md created)", args.id);
+    } else {
+        println!("noted {}", args.id);
     }
     Ok(())
 }

@@ -1,6 +1,6 @@
-//! P4b/P4c/P4d/P4e end-to-end: the `maestro ready`, `maestro list`, `maestro dep`,
-//! `maestro archive`, and `maestro claim` verbs drive the card query/edit/archive
-//! layers through the real binary. Coverage: a genuinely migrated repo (coarse
+//! P4b/P4c/P4d/P4e/P4f end-to-end: the `maestro ready`, `maestro list`, `maestro dep`,
+//! `maestro archive`, `maestro claim`, and `maestro note` verbs drive the card
+//! query/edit/archive layers through the real binary. Coverage: a genuinely migrated repo (coarse
 //! mapping DN3 over the real migrated status words); a hand-built blocker chain
 //! (E8 gating clears); `--assignee` matching the agent portion of a claim;
 //! `dep add` authoring a blocking edge that holds the dependent back (and
@@ -8,8 +8,9 @@
 //! `parent=<feature>` children to the archive sibling (E4 query-driven cascade)
 //! and refusing when a member is still open; `claim <id>` taking a free card under
 //! `<agent>#<session>` (DN8), staying idempotent for the same session, refusing a
-//! fresh foreign claim and reclaiming a stale one (E6/O2); and the legacy store
-//! exiting 0 with a guiding notice rather than a dead-end error.
+//! fresh foreign claim and reclaiming a stale one (E6/O2); `note <id>` appending
+//! dated lines to a card's notes.md sidecar (D5); and the legacy store exiting 0
+//! with a guiding notice rather than a dead-end error.
 
 mod support;
 
@@ -444,6 +445,58 @@ fn claim_reclaims_a_stale_foreign_claim_through_the_binary() {
 }
 
 #[test]
+fn note_appends_dated_lines_to_a_card_sidecar_through_the_binary() {
+    let temp = TestTempDir::new("p4f-note");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    write_card(
+        &paths,
+        &Card::new("task-001", CardType::Task, "Work", "ready", NOW),
+    );
+
+    let first = run(repo, &["note", "task-001", "chose option B"]);
+    assert!(
+        first.contains("noted task-001 (notes.md created)"),
+        "the first note creates the sidecar:\n{first}"
+    );
+    let second = run(repo, &["note", "task-001", "B breaks on reparent"]);
+    assert!(
+        second.contains("noted task-001") && !second.contains("created"),
+        "a later note appends without re-creating:\n{second}"
+    );
+
+    let notes = fs::read_to_string(
+        card_path(&paths, "task-001")
+            .parent()
+            .unwrap()
+            .join("notes.md"),
+    )
+    .expect("notes.md exists after the appends");
+    assert!(
+        notes.starts_with("# Work\n\n"),
+        "the title header is seeded once:\n{notes}"
+    );
+    assert!(
+        notes.contains("chose option B"),
+        "first note line present:\n{notes}"
+    );
+    assert!(
+        notes.contains("B breaks on reparent"),
+        "second note line present:\n{notes}"
+    );
+
+    // noting a card that does not exist fails loud rather than creating an orphan.
+    let missing = maestro(repo, &["note", "ghost", "anything"]);
+    assert!(
+        !missing.status.success(),
+        "noting a missing card is an error:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&missing.stdout),
+        String::from_utf8_lossy(&missing.stderr)
+    );
+}
+
+#[test]
 fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
     let temp = TestTempDir::new("p4b-legacy");
     let repo = temp.path();
@@ -473,5 +526,10 @@ fn ready_list_and_dep_on_a_legacy_repo_print_the_guiding_notice() {
     assert!(
         claim.contains("no card store"),
         "claim on a legacy repo also guides rather than erroring:\n{claim}"
+    );
+    let note = run(repo, &["note", "task-001", "anything"]);
+    assert!(
+        note.contains("no card store"),
+        "note on a legacy repo also guides rather than erroring:\n{note}"
     );
 }
