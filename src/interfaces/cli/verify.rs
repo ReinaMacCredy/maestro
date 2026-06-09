@@ -126,7 +126,7 @@ fn print_feature_ship_handoff(paths: &MaestroPaths, feature_id: &str) -> Result<
         println!("next: qa-slice skill -> replay affected baseline scenarios");
         println!("then: maestro feature ship {feature_id} --outcome \"<outcome>\"");
     } else if report.note.contains("qa-baseline") {
-        println!("next: qa-baseline skill -> .maestro/features/{feature_id}/qa.md");
+        println!("next: qa-baseline skill -> .maestro/cards/{feature_id}/qa.md");
         println!("then: maestro feature ship {feature_id} --outcome \"<outcome>\"");
     } else {
         println!("template: maestro feature ship {feature_id} --outcome \"<outcome>\"");

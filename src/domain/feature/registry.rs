@@ -1243,7 +1243,7 @@ fn view_from_record(record: FeatureRecord, counts: FeatureTaskCounts) -> Feature
 
 /// The directory holding a feature's prose sidecars (`spec.md`, `notes.md`,
 /// `qa.md`) beside its `card.yaml` at `cards/<id>/`, where migration copied them.
-pub(crate) fn feature_sidecar_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
+pub fn feature_sidecar_dir(paths: &MaestroPaths, id: &str) -> PathBuf {
     paths.cards_dir().join(id)
 }
 

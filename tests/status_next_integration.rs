@@ -214,8 +214,11 @@ fn status_and_task_next_choose_current_task_before_ready_queue() {
     assert!(out.contains(&format!("template: maestro task set {draft} --check")));
     assert!(out.contains(&format!("task: {draft}")));
 
-    let status =
-        maestro_with_env(repo, &["status", "--json"], &[("MAESTRO_CURRENT_TASK", &draft)]);
+    let status = maestro_with_env(
+        repo,
+        &["status", "--json"],
+        &[("MAESTRO_CURRENT_TASK", &draft)],
+    );
     assert_success(&status, &["status", "--json"]);
     let json: JsonValue =
         serde_json::from_str(&stdout(&status)).expect("invariant: status JSON should parse");
@@ -284,7 +287,9 @@ fn status_points_to_resume_and_resume_default_is_compact_read_only() {
     assert!(resume.contains("blockers: none"), "{resume}");
     assert!(resume.contains("next:"), "{resume}");
     assert!(
-        resume.contains(&format!("run focused gate, then maestro task complete {id}")),
+        resume.contains(&format!(
+            "run focused gate, then maestro task complete {id}"
+        )),
         "{resume}"
     );
     assert!(resume.contains("required reads:"), "{resume}");
@@ -521,7 +526,12 @@ fn hot_verbs_skip_detect_until_evidence_stamp_changes() {
     // In card mode the detected friction is persisted as an `idea` card
     // (`.maestro/cards/hb-001`), not in `backlog.yaml.items` (which stays `[]`);
     // its session evidence rides the card's folded `extra.sessions_hit`.
-    assert!(backlog_yaml(repo)["items"].as_sequence().unwrap().is_empty());
+    assert!(
+        backlog_yaml(repo)["items"]
+            .as_sequence()
+            .unwrap()
+            .is_empty()
+    );
     let friction = task_record(repo, "hb-001");
     assert_eq!(
         friction["sessions_hit"].as_sequence().unwrap().len(),
@@ -1006,7 +1016,7 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         &["feature", "prepare", "serverless-news-backend", "--draft"],
     );
     assert!(draft.contains("prepare-draft.md"), "{draft}");
-    let draft_path = repo.join(".maestro/features/serverless-news-backend/prepare-draft.md");
+    let draft_path = repo.join(".maestro/cards/serverless-news-backend/prepare-draft.md");
     let draft_contents =
         fs::read_to_string(draft_path).expect("invariant: prepare draft should be readable");
     assert!(
@@ -1066,7 +1076,10 @@ fn feature_prepare_builds_sequenced_queue_and_claim_next_shows_chain() {
         prepare.contains("started serverless-news-backend -> in_progress"),
         "{prepare}"
     );
-    assert!(prepare.contains(&format!("{t2} ready / blocked")), "{prepare}");
+    assert!(
+        prepare.contains(&format!("{t2} ready / blocked")),
+        "{prepare}"
+    );
     assert!(
         prepare.contains(&format!("after dependency: T1 ({t1}) verified")),
         "{prepare}"

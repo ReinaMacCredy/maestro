@@ -449,7 +449,7 @@ fn write_path(
             .join("resume.md"));
     }
     if let Some(feature) = feature {
-        return Ok(paths.features_dir().join(&feature.id).join("resume.md"));
+        return Ok(feature::feature_sidecar_dir(paths, &feature.id).join("resume.md"));
     }
     Ok(paths.maestro_dir().join("resume.md"))
 }

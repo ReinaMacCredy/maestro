@@ -61,7 +61,7 @@ struct PlanTask {
 pub fn write_draft(paths: &MaestroPaths, feature_id: &str) -> Result<DraftReport> {
     let view = feature::show(paths, feature_id)?;
     guard_feature_can_prepare(&view.status, &view.id)?;
-    let path = paths.features_dir().join(&view.id).join("prepare-draft.md");
+    let path = feature::feature_sidecar_dir(paths, &view.id).join("prepare-draft.md");
     if path.exists() {
         return Ok(DraftReport {
             path,
@@ -246,7 +246,7 @@ fn prepare_from_file_with_blocker(
 
     match result {
         Ok(report) => {
-            let draft_path = paths.features_dir().join(&view.id).join("prepare-draft.md");
+            let draft_path = feature::feature_sidecar_dir(paths, &view.id).join("prepare-draft.md");
             if same_path(plan_path, &draft_path) && draft_path.exists() {
                 fs::remove_file(&draft_path)
                     .with_context(|| format!("failed to remove {}", draft_path.display()))?;

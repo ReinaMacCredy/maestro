@@ -441,8 +441,8 @@ fn new_feature(
         )?;
     }
     println!("created feature {id} (proposed)");
-    println!("spec: .maestro/features/{id}/spec.md");
-    println!("decisions: .maestro/features/{id}/decisions.yaml");
+    println!("spec: .maestro/cards/{id}/spec.md");
+    println!("decisions: maestro decision new \"<title>\" --feature {id}");
     if initialized {
         println!("initialized contract fields");
     }
@@ -457,7 +457,7 @@ fn set_feature(paths: &MaestroPaths, id: &str, edits: ContractEdits) -> Result<(
     }
     let report = feature::set_with_report(paths, id, edits)?;
     print_set_report(id, &report);
-    println!("next: qa-baseline skill -> .maestro/features/{id}/qa.md");
+    println!("next: qa-baseline skill -> .maestro/cards/{id}/qa.md");
     println!("or: maestro feature accept {id} --qa none --reason \"<why no behavior>\"");
     println!("then: maestro feature accept {id}");
     if !report.view.open_questions.is_empty() {
@@ -855,7 +855,7 @@ fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
     println!("status: {}", feature::status_label(&view.status));
     println!("feature: {}", view.id);
     println!();
-    let spec_path = paths.features_dir().join(&view.id).join("spec.md");
+    let spec_path = feature::feature_sidecar_dir(paths, &view.id).join("spec.md");
     match std::fs::read_to_string(&spec_path) {
         Ok(spec) => print!("{}", spec.trim_end()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
