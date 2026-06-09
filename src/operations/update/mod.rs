@@ -26,7 +26,7 @@ use replace::{
     cleanup_prepared_binary, prepare_binary_update, prepared_release, replace_prepared_binary,
 };
 
-/// Options for one `maestro update` operation.
+/// Options for one `maestro upgrade` operation.
 #[derive(Debug)]
 pub struct UpdateOptions<'a> {
     /// Repository-local Maestro paths, when the command runs inside a discovered repo.

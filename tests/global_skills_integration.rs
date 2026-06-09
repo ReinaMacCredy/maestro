@@ -264,7 +264,7 @@ fn update_check_does_not_mutate_global_skills_but_update_refreshes_existing_glob
     let global_task = home.join(".maestro/skills/maestro-task/SKILL.md");
     fs::remove_file(&global_task).expect("invariant: global skill should be removable");
 
-    let check = maestro(&["update", "--check"], &repo, &home);
+    let check = maestro(&["upgrade", "--check"], &repo, &home);
 
     assert_success(&check);
     assert!(
@@ -272,7 +272,7 @@ fn update_check_does_not_mutate_global_skills_but_update_refreshes_existing_glob
         "update --check must not restore or mutate global skills"
     );
 
-    let update = maestro(&["update"], &repo, &home);
+    let update = maestro(&["upgrade"], &repo, &home);
 
     assert_success(&update);
     assert_eq!(

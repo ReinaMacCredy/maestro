@@ -40,7 +40,7 @@ fn root_help_lists_top_level_commands() {
             "Usage: maestro",
             "init",
             "install",
-            "update",
+            "upgrade",
             "sync",
             "uninstall",
             "doctor",
@@ -56,6 +56,10 @@ fn root_help_lists_top_level_commands() {
             "archive",
             "claim",
             "note",
+            "create",
+            "show",
+            "update",
+            "close",
             "harness",
             "query",
             "mcp",
@@ -82,7 +86,7 @@ fn top_level_help_fills_descriptions_and_examples() {
     );
 
     // The refresh trio documents real invocations under an Examples block.
-    for command in ["init", "sync", "update"] {
+    for command in ["init", "sync", "upgrade"] {
         let help = maestro(&[command, "--help"]);
         assert!(
             help.contains("Examples:") && help.contains(&format!("maestro {command}")),

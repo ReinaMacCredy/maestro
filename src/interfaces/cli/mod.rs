@@ -81,9 +81,9 @@ pub enum RootCommand {
     Install(AgentArgs),
     #[command(
         about = "Upgrade the maestro binary and refresh bundled resources",
-        after_help = "Examples:\n  maestro update               # upgrade to the latest release and refresh resources\n  maestro update --check       # report whether an update is available, install nothing\n  maestro update --force       # reinstall the latest even when already up to date"
+        after_help = "Examples:\n  maestro upgrade               # upgrade to the latest release and refresh resources\n  maestro upgrade --check       # report whether an update is available, install nothing\n  maestro upgrade --force       # reinstall the latest even when already up to date"
     )]
-    Update(UpdateArgs),
+    Upgrade(UpgradeArgs),
     #[command(
         about = "Resync bundled resources to this binary's versions (offline)",
         after_help = "Examples:\n  maestro sync                 # resync repo bundled resources to this binary, preserving edits\n  maestro sync --global-skills # resync user-level Maestro skill cache and links\n  maestro sync --dry-run       # preview the resync, write nothing"
@@ -142,6 +142,20 @@ pub enum RootCommand {
         after_help = "Examples:\n  maestro note task-0a1b2c \"chose option B; A breaks on reparent\""
     )]
     Note(NoteArgs),
+    #[command(
+        about = "Create a card of any type (card store)",
+        after_help = "Examples:\n  maestro create -t task \"Add CSV export\" --parent csv-export\n  maestro create -t bug \"Fix ordering race\"\n  maestro create -t feature \"CSV export\""
+    )]
+    Create(CreateArgs),
+    #[command(about = "Show a card's header, edges, and body (card store)")]
+    Show(ShowArgs),
+    #[command(
+        about = "Update a card's status, title, description, or claim (card store)",
+        after_help = "Examples:\n  maestro update card-0a1b2c --status needs_verification\n  maestro update card-0a1b2c --claim\n  maestro update card-0a1b2c --title \"New title\""
+    )]
+    Update(UpdateArgs),
+    #[command(about = "Close a card: status -> closed (card store)")]
+    Close(CloseArgs),
     #[command(
         about = "List, show, apply, unapply, dismiss, and measure harness improvement suggestions"
     )]
@@ -211,7 +225,7 @@ impl AgentArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct UpdateArgs {
+pub struct UpgradeArgs {
     #[arg(
         long,
         help = "Check for an update without downloading or installing it"
@@ -763,6 +777,58 @@ pub struct NoteArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct CreateArgs {
+    /// Card type: feature, task, bug, chore, idea, or decision.
+    #[arg(short = 't', long = "type", value_name = "TYPE")]
+    pub card_type: String,
+    /// Card title.
+    #[arg(value_name = "TITLE")]
+    pub title: String,
+    /// Parent card id; sets the new card's one-level `parent`.
+    #[arg(long, value_name = "PARENT")]
+    pub parent: Option<String>,
+    /// Longer description stored on the card.
+    #[arg(long, value_name = "TEXT")]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct ShowArgs {
+    /// The card to show.
+    #[arg(value_name = "ID")]
+    pub id: String,
+    /// Print the card as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct UpdateArgs {
+    /// The card to update; omit to print usage.
+    #[arg(value_name = "ID")]
+    pub id: Option<String>,
+    /// Set the card's status (free per-type word).
+    #[arg(long, value_name = "STATUS")]
+    pub status: Option<String>,
+    /// Set the card's title.
+    #[arg(long, value_name = "TITLE")]
+    pub title: Option<String>,
+    /// Set the card's description.
+    #[arg(long, value_name = "TEXT")]
+    pub description: Option<String>,
+    /// Claim the card for this session (same seam as `maestro claim`).
+    #[arg(long)]
+    pub claim: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct CloseArgs {
+    /// The card to close (status -> closed).
+    #[arg(value_name = "ID")]
+    pub id: String,
+}
+
+#[derive(Debug, Args)]
 pub struct DepArgs {
     #[command(subcommand)]
     pub command: DepCommand,
@@ -925,7 +991,7 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         RootCommand::Init(args) => init::run(args),
         RootCommand::Install(args) => install::run(args),
-        RootCommand::Update(args) => update::run(args),
+        RootCommand::Upgrade(args) => update::run(args),
         RootCommand::Sync(args) => sync::run(args),
         RootCommand::MigrateV2 => migrate::run(),
         RootCommand::Uninstall(args) => uninstall::run(args),
@@ -943,6 +1009,10 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Archive(args) => card::archive(args),
         RootCommand::Claim(args) => card::claim(args),
         RootCommand::Note(args) => card::note(args),
+        RootCommand::Create(args) => card::create(args),
+        RootCommand::Show(args) => card::show(args),
+        RootCommand::Update(args) => card::update(args),
+        RootCommand::Close(args) => card::close(args),
         RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
         RootCommand::Mcp(args) => mcp::run(args),

@@ -49,7 +49,7 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
     fs::write(&skill_path, "edited bundled skill\n")
         .expect("invariant: bundled skill should be editable");
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -86,7 +86,7 @@ fn update_reports_restored_missing_bundled_resources() {
     let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
     fs::remove_file(&skill_path).expect("invariant: bundled skill should be removable");
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -121,7 +121,7 @@ fn unavailable_update_cleans_stale_stage_directory() {
     )
     .expect("invariant: stale update file should be writable");
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     assert!(!paths.maestro_dir().join("update").exists());
@@ -142,7 +142,7 @@ fn update_accepts_check_verbose_and_force_flags_without_writing() {
     .expect("invariant: stale update file should be writable");
 
     let update = maestro(
-        &["update", "--check", "--verbose", "--force"],
+        &["upgrade", "--check", "--verbose", "--force"],
         temp_dir.path(),
     );
 
@@ -169,7 +169,7 @@ fn update_check_auto_check_and_update_preserve_user_owned_harness_artifacts() {
     mark_user_owned_harness_artifacts(&paths);
     let before = snapshot_files(&user_owned_harness_artifacts(&paths));
 
-    let check = maestro(&["update", "--check"], temp_dir.path());
+    let check = maestro(&["upgrade", "--check"], temp_dir.path());
 
     assert_success(&check);
     assert_files_unchanged(&before);
@@ -206,18 +206,18 @@ printf '{{"tag_name":"v{}","published_at":"2026-05-26T05:16:16.000Z","assets":[{
         ),
     );
     let curl_update = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .arg("update")
+        .arg("upgrade")
         .current_dir(temp_dir.path())
         .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", curl_update_path)
         .output()
-        .expect("invariant: maestro update should run");
+        .expect("invariant: maestro upgrade should run");
 
     assert_success(&curl_update);
     assert_files_unchanged(&before);
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     assert_files_unchanged(&before);
@@ -241,13 +241,13 @@ printf '{{"tag_name":"v0.0.0.1-golder","published_at":"2026-05-26T05:16:16.000Z"
     );
 
     let update = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .arg("update")
+        .arg("upgrade")
         .current_dir(temp_dir.path())
         .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", path)
         .output()
-        .expect("invariant: maestro update should run");
+        .expect("invariant: maestro upgrade should run");
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -268,12 +268,12 @@ fn update_reports_manager_commands_for_cargo_installs() {
     assert_success(&maestro(&["init", "--yes"], temp_dir.path()));
 
     let cargo = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .args(["update", "--check"])
+        .args(["upgrade", "--check"])
         .current_dir(temp_dir.path())
         .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "cargo")
         .output()
-        .expect("invariant: maestro update should run");
+        .expect("invariant: maestro upgrade should run");
     assert_success(&cargo);
     let stdout = String::from_utf8_lossy(&cargo.stdout);
     assert!(stdout.contains("Update unavailable for this install"));
@@ -288,7 +288,7 @@ fn update_reports_manager_commands_for_cargo_installs() {
 fn update_runs_outside_maestro_or_git_root_without_scaffolding() {
     let temp_dir = TestTempDir::new("maestro-update-rootless-test");
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -630,7 +630,7 @@ fn schema_mismatch_reports_incompatible_and_does_not_mutate_harness_files() {
     .expect("invariant: harness schema should be writable");
     let before = snapshot_files(&user_owned_harness_artifacts(&paths));
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
 
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
@@ -691,7 +691,7 @@ fn update_in_a_never_initialized_repo_does_not_scaffold_and_points_at_init() {
     let temp_dir = TestTempDir::new("maestro-update-test");
     init_git_marker(temp_dir.path());
 
-    let update = maestro(&["update"], temp_dir.path());
+    let update = maestro(&["upgrade"], temp_dir.path());
     assert_success(&update);
     let stdout = String::from_utf8_lossy(&update.stdout);
     assert!(
@@ -736,13 +736,13 @@ exit 18
         ),
     );
     let output = Command::new(env!("CARGO_BIN_EXE_maestro"))
-        .arg("update")
+        .arg("upgrade")
         .current_dir(temp_dir.path())
         .env("HOME", temp_dir.path().join("home"))
         .env("MAESTRO_INSTALL_METHOD", "curl")
         .env("PATH", path)
         .output()
-        .expect("invariant: maestro update should run");
+        .expect("invariant: maestro upgrade should run");
 
     assert!(!output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -783,7 +783,7 @@ printf '{{"tag_name":"v9.9.9-gfuture","published_at":"2026-05-26T05:16:16.000Z",
     let stderr = String::from_utf8_lossy(&first.stderr);
     assert!(!stdout.contains("Update available: 9.9.9-gfuture"));
     assert!(stderr.contains("Update available: 9.9.9-gfuture"));
-    assert!(stderr.contains("Run `maestro update` to install."));
+    assert!(stderr.contains("Run `maestro upgrade` to install."));
 
     let second = Command::new(env!("CARGO_BIN_EXE_maestro"))
         .arg("doctor")

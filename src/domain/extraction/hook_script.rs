@@ -33,15 +33,15 @@ pub fn extract_hook_script(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Resul
 /// command to invoke.
 ///
 /// Install emits `sh ".../.maestro/hooks/record.sh"` for each event, but only
-/// `maestro init`/`maestro update` (through [`extract_hook_script`]) ever
+/// `maestro init`/`maestro upgrade` (through [`extract_hook_script`]) ever
 /// materialize the script. A `.maestro/` left over from a pre-recorder install,
 /// or one whose `hooks/` directory was hand-pruned, can still satisfy the
 /// harness guard while lacking the recorder, which would install hooks that
-/// silently point at a missing file. Fail closed pointing at `maestro update`,
+/// silently point at a missing file. Fail closed pointing at `maestro upgrade`,
 /// not `maestro init`: this guard only trips once the harness guard has passed,
 /// so `.maestro/` already holds the harness and skills, and a plain `maestro
 /// init` would bail on those existing files (`--merge`/`--force` aside).
-/// `maestro update` refreshes the missing recorder in place.
+/// `maestro upgrade` refreshes the missing recorder in place.
 pub fn ensure_hook_script_exists(paths: &MaestroPaths) -> Result<()> {
     let path = hook_file_path(paths, RECORD_SH_NAME)?;
     if path.is_file() {
@@ -49,7 +49,7 @@ pub fn ensure_hook_script_exists(paths: &MaestroPaths) -> Result<()> {
     }
 
     bail!(
-        "Maestro hook recorder is not initialized: {} is missing; run `maestro update` to extract it",
+        "Maestro hook recorder is not initialized: {} is missing; run `maestro upgrade` to extract it",
         path.display()
     )
 }

@@ -10,7 +10,7 @@ use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
 use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::interfaces::cli::UpdateArgs;
+use crate::interfaces::cli::UpgradeArgs;
 use crate::operations::update;
 
 const AUTO_CHECK_INTERVAL_SECONDS: u64 = 24 * 60 * 60;
@@ -27,8 +27,8 @@ impl std::fmt::Display for ReportedError {
 
 impl std::error::Error for ReportedError {}
 
-/// Execute `maestro update`.
-pub fn run(args: UpdateArgs) -> Result<()> {
+/// Execute `maestro upgrade`.
+pub fn run(args: UpgradeArgs) -> Result<()> {
     let paths = optional_repo_paths()?;
     let executable_path = env::current_exe()?;
     let backup_timestamp = backup_operation_timestamp()?;
@@ -123,7 +123,7 @@ pub fn run_auto_check() -> Result<()> {
         eprintln!(
             "{}",
             colors.info(&format!(
-                "Update available: {}. Run `maestro update` to install.",
+                "Update available: {}. Run `maestro upgrade` to install.",
                 release_summary_short(&release)
             ))
         );

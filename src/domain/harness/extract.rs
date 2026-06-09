@@ -3,7 +3,7 @@
 //! `HARNESS.md` is the agent-facing protocol Maestro ships. It rides the shared
 //! version-gated extraction core alongside skills and the hook script: a
 //! `version:` field in its Markdown frontmatter plays the same role `SKILL.md`'s
-//! frontmatter plays for skills, so local edits survive `maestro update` until
+//! frontmatter plays for skills, so local edits survive `maestro upgrade` until
 //! the shipped version changes. Harness and skills share the Markdown `version:`
 //! convention, so the harness gate reuses the skills frontmatter reader.
 

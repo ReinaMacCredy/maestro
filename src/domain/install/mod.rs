@@ -304,9 +304,9 @@ mod tests {
         );
         // The guard trips after the harness guard passes, so `.maestro/` already
         // holds files a plain `maestro init` would bail on; the remedy must name
-        // the self-healing path, `maestro update`.
+        // the self-healing path, `maestro upgrade`.
         assert!(
-            error.to_string().contains("maestro update"),
+            error.to_string().contains("maestro upgrade"),
             "guard must point at the self-healing command: {error}"
         );
         assert!(
