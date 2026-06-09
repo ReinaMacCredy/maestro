@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -36,6 +37,22 @@ pub fn load(path: &Path) -> Result<Option<Card>> {
 
 /// Load a card together with the raw bytes backing the next CAS write.
 pub fn load_with_snapshot(path: &Path) -> Result<CardSnapshot> {
+    // Refuse to follow a symlinked card directory. A `.maestro/cards/<id>` that is
+    // a symlink could redirect this load to a card.yaml outside the store; this is
+    // the single-load mirror of `cards::scan`'s symlink skip, placed on the shared
+    // store seam so feature/decision/harness single-loads are covered too. An
+    // absent directory is not a symlink, so card creation (which loads the absent
+    // path to obtain a None snapshot) is unaffected.
+    if let Some(parent) = path.parent()
+        && fs::symlink_metadata(parent)
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(false)
+    {
+        return Ok(CardSnapshot {
+            card: None,
+            raw: None,
+        });
+    }
     let Some(contents) = read_to_string_if_exists(path)? else {
         return Ok(CardSnapshot {
             card: None,

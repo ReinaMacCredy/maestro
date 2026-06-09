@@ -138,29 +138,11 @@ pub fn run(args: TaskArgs) -> Result<()> {
         ),
         TaskCommand::Watch { id, interval } => watch_tasks(&paths, id, interval),
         TaskCommand::Doctor => doctor_tasks(&paths),
-        TaskCommand::Archive { id, dry_run } => {
-            let note = match task::archive_task(
-                &paths.tasks_dir(),
-                &paths.archive_tasks_dir(),
-                &id,
-                dry_run,
-            ) {
-                Ok(note) => note,
-                Err(error) => bail!("{}", task_archive_error_message(&id, &error.to_string())),
-            };
-            print_task_archive_note(&id, &note);
-            Ok(())
+        TaskCommand::Archive { id, dry_run: _ } => {
+            bail!("{}", per_task_archive_retired(&id))
         }
         TaskCommand::Unarchive { id } => {
-            let note =
-                match task::unarchive_task(&paths.tasks_dir(), &paths.archive_tasks_dir(), &id) {
-                    Ok(note) => note,
-                    Err(error) => {
-                        bail!("{}", task_unarchive_error_message(&id, &error.to_string()))
-                    }
-                };
-            print_task_unarchive_note(&id, &note);
-            Ok(())
+            bail!("{}", per_task_archive_retired(&id))
         }
     }
 }
@@ -687,106 +669,18 @@ fn terminal_verb(task: &TaskRecord) -> &'static str {
     }
 }
 
-fn print_task_archive_note(id: &str, note: &str) {
-    if note.starts_with("would archive ") {
-        println!("dry-run: would archive {id} (live -> archive)");
-        println!("archive receipt preview:");
-        println!("  live path: .maestro/tasks/<task-dir>");
-        println!("  archive path: .maestro/archive/tasks/<task-dir>");
-        println!("writes: none");
-        println!("run: maestro task archive {id}");
-    } else if note.starts_with("already archived: ") {
-        println!("unchanged: {id} already archived");
-        println!("inspect: maestro task show {id}");
-        println!("next: maestro status");
-        println!("restore: maestro task unarchive {id}");
-    } else if note.starts_with("archived ") {
-        println!("archived {id} (live -> archive)");
-        println!("archive receipt:");
-        println!("  archive path: .maestro/archive/tasks/<task-dir>");
-        println!("inspect: maestro task show {id}");
-        println!("next: maestro status");
-        println!("restore: maestro task unarchive {id}");
-    } else {
-        println!("{note}");
-    }
-}
-
-fn print_task_unarchive_note(id: &str, note: &str) {
-    if note.starts_with("already live: ") {
-        println!("unchanged: {id} already live");
-        println!("inspect: maestro task show {id}");
-        println!("next: maestro status");
-        println!("archive: maestro task archive {id}");
-    } else if note.starts_with("unarchived ") {
-        println!("unarchived {id} (archive -> live)");
-        println!("restore receipt:");
-        println!("  live path: .maestro/tasks/<task-dir>");
-        println!("inspect: maestro task show {id}");
-        println!("next: maestro status");
-        println!("archive again: maestro task archive {id}");
-    } else {
-        println!("{note}");
-    }
-}
-
-fn task_archive_error_message(id: &str, error: &str) -> String {
-    if error.contains("not done") {
-        return format!(
-            "blocked: task is not done\n\
-             task: {id}\n\
-             reason: {error}\n\
-             inspect: maestro task show {id}\n\
-             finish first: maestro task complete {id} --summary \"<summary>\" --claim \"<claim>\" --proof \"<observed evidence>\"\n\
-             or close: maestro task reject {id} --reason \"<reason>\""
-        );
-    }
-    if error.contains("blocked by it") {
-        return format!(
-            "blocked: live task still references this task\n\
-             task: {id}\n\
-             reason: {error}\n\
-             inspect: maestro task show {id}\n\
-             fix: clear the live blocker named above\n\
-             retry: maestro task archive {id}"
-        );
-    }
-    if error.contains("task not found") {
-        return format!(
-            "blocked: task not found\n\
-             task: {id}\n\
-             next: maestro task list --all"
-        );
-    }
-    if error.contains("archived copy already exists") {
-        return format!(
-            "blocked: archived copy already exists\n\
-             task: {id}\n\
-             inspect: maestro task show {id}\n\
-             next: maestro task list --all"
-        );
-    }
-    error.to_string()
-}
-
-fn task_unarchive_error_message(id: &str, error: &str) -> String {
-    if error.contains("archived task not found") {
-        return format!(
-            "blocked: archived task not found\n\
-             task: {id}\n\
-             next: maestro task list --all"
-        );
-    }
-    if error.contains("live task already occupies") {
-        return format!(
-            "blocked: live task already occupies this id\n\
-             task: {id}\n\
-             inspect live: maestro task show {id}\n\
-             archive live first: maestro task archive {id}\n\
-             retry: maestro task unarchive {id}"
-        );
-    }
-    error.to_string()
+/// Per-task archive was retired (SPEC E4: archive is a feature-cascade only).
+/// A finished task stays as closed history; a whole feature and its child tasks
+/// archive together. Redirect rather than leave the legacy "task not found"
+/// dead-end on an existing card.
+fn per_task_archive_retired(id: &str) -> String {
+    format!(
+        "blocked: per-task archive removed\n\
+         task: {id}\n\
+         why: archive is now a feature-level cascade; a finished task stays as closed history\n\
+         close instead: maestro close {id}\n\
+         archive a feature and its tasks: maestro archive <feature>"
+    )
 }
 
 fn block_task(

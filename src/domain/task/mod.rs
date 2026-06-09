@@ -179,9 +179,19 @@ pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     Ok(task)
 }
 
-/// Resolve a task's current `task.yaml` path by id or id prefix.
+/// Resolve a task's on-disk record path (`cards/<id>/card.yaml`) by canonical id.
+///
+/// Card-routed: the legacy `.maestro/tasks` tree no longer exists, so this joins
+/// the card store path and confirms the record is present, bailing a clean
+/// not-found otherwise. Callers take `.parent()` to reach the card directory.
 pub fn task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
-    lookup::resolve_task_yaml_path(tasks_dir, id)
+    let paths = lookup::paths_for_tasks_dir(tasks_dir)
+        .context("cannot resolve maestro paths from tasks dir")?;
+    let path = card_store::card_path(&paths, id);
+    if !path.is_file() {
+        bail!("task not found: {id}");
+    }
+    Ok(path)
 }
 
 /// Read a task's inline acceptance checks for display.
