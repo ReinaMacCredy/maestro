@@ -3,7 +3,7 @@ use anyhow::{Context, Result, bail};
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::task;
-use crate::domain::task::{BlockerTarget, TaskRecord, TaskState, TransitionDetails};
+use crate::domain::task::{BlockerKind, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::time::utc_now_timestamp;
 use crate::interfaces::cli::status;
@@ -343,29 +343,39 @@ fn print_claim_next_context(paths: &MaestroPaths, task: &TaskRecord) -> Result<(
         return Ok(());
     };
     println!("feature: {feature_id}");
-    let mut feature_tasks: Vec<TaskRecord> = task::load_task_records(&paths.tasks_dir())?
+    let feature_tasks: Vec<TaskRecord> = task::load_task_records(&paths.tasks_dir())?
         .into_iter()
         .filter(|candidate| candidate.feature_id.as_deref() == Some(feature_id))
         .collect();
-    feature_tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    let Some(index) = feature_tasks
+    // Opaque card ids don't sort in plan order, so the chain follows the
+    // dependency edges instead of id adjacency: the task this one waits on and
+    // the first task waiting on this one.
+    let prev = task
+        .blockers
         .iter()
-        .position(|candidate| candidate.id == task.id)
-    else {
+        .filter_map(|blocker| blocker.blocked_ref.as_ref())
+        .filter(|target| target.kind == BlockerKind::Task)
+        .find_map(|target| feature_tasks.iter().find(|c| c.id == target.id));
+    let next = feature_tasks.iter().find(|candidate| {
+        candidate.id != task.id
+            && candidate.blockers.iter().any(|blocker| {
+                blocker
+                    .blocked_ref
+                    .as_ref()
+                    .is_some_and(|target| target.kind == BlockerKind::Task && target.id == task.id)
+            })
+    });
+    if prev.is_none() && next.is_none() {
         return Ok(());
-    };
-    let start = index.saturating_sub(1);
-    let end = (index + 2).min(feature_tasks.len());
-    if end > start {
-        println!("chain:");
-        for candidate in &feature_tasks[start..end] {
-            println!(
-                "  {} {:<8} {}",
-                candidate.id,
-                task_chain_state(candidate, &task.id),
-                candidate.title
-            );
-        }
+    }
+    println!("chain:");
+    for candidate in [prev, Some(task), next].into_iter().flatten() {
+        println!(
+            "  {} {:<8} {}",
+            candidate.id,
+            task_chain_state(candidate, &task.id),
+            candidate.title
+        );
     }
     Ok(())
 }
