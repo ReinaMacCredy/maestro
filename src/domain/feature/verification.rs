@@ -72,14 +72,12 @@ pub fn acceptance_coverage_archived(
     paths: &MaestroPaths,
     feature_id: &str,
 ) -> Result<Vec<AcceptanceCoverage>> {
-    let record = registry::load_record_at(
-        &paths
-            .archive_features_dir()
-            .join(feature_id)
-            .join("feature.yaml"),
-        feature_id,
-    )?;
-    acceptance_coverage_for_record_in_task_root(&record, &paths.archive_tasks_dir())
+    let record = registry::load_archived_record(paths, feature_id)?;
+    let task_entries = task::load_archived_task_entries(paths)?;
+    Ok(acceptance_coverage_for_record_in_entries(
+        &record,
+        &task_entries,
+    ))
 }
 
 pub fn uncovered_acceptance(paths: &MaestroPaths, feature_id: &str) -> Result<Vec<String>> {
@@ -211,8 +209,7 @@ fn sweep_acceptance(
     let explicit = latest_explicit_evidence(record);
     let task_proofs = task_proofs_by_acceptance_in_entries(task_entries, &record.id);
     let qa_proofs = qa::acceptance_ids_covered_by_counting_slices(&registry::feature_sidecar_dir(
-        paths,
-        &record.id,
+        paths, &record.id,
     ))?;
     let mut items = Vec::new();
     for (index, text) in record.acceptance.iter().enumerate() {

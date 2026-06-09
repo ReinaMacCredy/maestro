@@ -4,11 +4,12 @@
 //! verbs that surface them are a thin adapter layer.
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use anyhow::Result;
 
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::{card_path, load};
+use crate::domain::card::store::load;
 use crate::foundation::core::fs::child_dirs;
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -65,12 +66,15 @@ pub fn coarse_of(status: &str) -> Option<Coarse> {
 /// Fails loud on a malformed or schema-mismatched card; tolerant scans that need
 /// to survive one bad artifact filter at their own layer.
 pub fn scan(paths: &MaestroPaths) -> Result<Vec<Card>> {
+    scan_dir(&paths.cards_dir())
+}
+
+/// [`scan`] over an explicit card tree root, so the archive reads
+/// (`archive/cards/`) ride the same seam as the live store.
+pub fn scan_dir(root: &Path) -> Result<Vec<Card>> {
     let mut cards = Vec::new();
-    for (dir, _modified) in child_dirs(&paths.cards_dir())? {
-        let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if let Some(card) = load(&card_path(paths, name))? {
+    for (dir, _modified) in child_dirs(root)? {
+        if let Some(card) = load(&dir.join("card.yaml"))? {
             cards.push(card);
         }
     }

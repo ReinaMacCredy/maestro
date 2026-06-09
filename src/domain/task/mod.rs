@@ -24,8 +24,8 @@ pub use archive::{archive_task, unarchive_task};
 pub use blockers::has_unresolved_blockers;
 pub use display::{render_task, render_task_list, render_task_list_with_missing_checks};
 pub use doctor::{
-    TaskDoctorReport, TaskEntry, check_blocker_graph, load_task_entries, load_task_records,
-    render_report,
+    TaskDoctorReport, TaskEntry, check_blocker_graph, load_archived_task_entries,
+    load_task_entries, load_task_records, render_report,
 };
 pub use lifecycle::TransitionDetails;
 pub(crate) use lookup::task_roots;
@@ -1005,8 +1005,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("invariant: test clock after Unix epoch")
             .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("maestro-task-setfeat-{label}-{}-{nanos}", process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "maestro-task-setfeat-{label}-{}-{nanos}",
+            process::id()
+        ));
         let paths = MaestroPaths::new(&root);
         crate::foundation::core::fs::ensure_dir(paths.cards_dir()).expect("create cards dir");
         paths
@@ -1044,8 +1046,14 @@ mod tests {
         let counts = crate::feature::query::count_tasks_by_feature(&tasks_dir).expect("count");
         assert_eq!(counts.get(&feature_id).map(|c| c.total), Some(1));
 
-        set_feature(&tasks_dir, &task.id, None, "maestro", "2026-06-09T12:00:00Z")
-            .expect("detach the feature");
+        set_feature(
+            &tasks_dir,
+            &task.id,
+            None,
+            "maestro",
+            "2026-06-09T12:00:00Z",
+        )
+        .expect("detach the feature");
 
         let card: Card = serde_yaml::from_str(
             &std::fs::read_to_string(card_path(&paths, &task.id)).expect("card readable"),

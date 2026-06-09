@@ -7,6 +7,7 @@ use crate::domain::decisions;
 use crate::domain::task::cards;
 use crate::domain::task::lookup::paths_for_tasks_dir;
 use crate::domain::task::template::{BlockerKind, TaskRecord};
+use crate::foundation::core::paths::MaestroPaths;
 
 /// Result of scanning task blocker references.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -47,6 +48,18 @@ pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
     let paths =
         paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
     let mut entries = cards::scan(&paths)?
+        .into_iter()
+        .map(|(task, task_dir)| TaskEntry { task, task_dir })
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
+    Ok(entries)
+}
+
+/// [`load_task_entries`] over the archived card tree (`archive/cards/`), for
+/// the archived feature reads -- the live loader above never sees an archived
+/// card, so archived task counts must scan the archive tree explicitly.
+pub fn load_archived_task_entries(paths: &MaestroPaths) -> Result<Vec<TaskEntry>> {
+    let mut entries = cards::scan_dir(&paths.archive_cards_dir())?
         .into_iter()
         .map(|(task, task_dir)| TaskEntry { task, task_dir })
         .collect::<Vec<_>>();

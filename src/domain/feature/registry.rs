@@ -22,12 +22,13 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use serde_yaml::{Mapping, Value};
 
+use crate::domain::card::fold;
+use crate::domain::card::query as card_query;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot};
-use crate::domain::card::fold;
 use crate::domain::feature::qa;
 use crate::domain::feature::query::{
     FeatureTaskCounts, count_tasks_by_feature, count_tasks_for_feature,
@@ -296,7 +297,7 @@ pub fn create(paths: &MaestroPaths, title: &str) -> Result<String> {
         bail!("feature {id} already exists");
     }
     // L6a: an archived feature still owns its slug — refuse to reissue it.
-    if archived_feature_yaml_path(paths, &id).exists() {
+    if archived_card_path(paths, &id).is_file() {
         bail!(
             "feature {id} already exists in the archive; `maestro feature unarchive {id}` or choose a different title"
         );
@@ -1022,12 +1023,12 @@ pub fn show(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
 /// Errors when no archived feature has the given id, or the record is
 /// unparseable / schema-incompatible.
 pub fn show_archived(paths: &MaestroPaths, id: &str) -> Result<FeatureView> {
-    let record = load_record_at(&archived_feature_yaml_path(paths, id), id)?;
-    let task_entries = task::load_task_entries(&paths.archive_tasks_dir())?;
+    let record = load_archived_record(paths, id)?;
+    let task_entries = task::load_archived_task_entries(paths)?;
     let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
     let acceptance_coverage =
         verification::acceptance_coverage_for_record_in_entries(&record, &task_entries);
-    let notes = read_notes_at(&paths.archive_features_dir().join(id))?;
+    let notes = read_notes_at(&paths.archive_cards_dir().join(id))?;
     let mut view = view_from_record(record, counts);
     view.acceptance_coverage = Some(acceptance_coverage);
     view.notes = notes;
@@ -1046,16 +1047,15 @@ pub fn ensure_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
 ///
 /// Errors when an archived feature record is unparseable or schema-incompatible.
 pub fn list_archived(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
-    let archive_features_dir = paths.archive_features_dir();
-    let counts_by_feature = count_tasks_by_feature(&paths.archive_tasks_dir())?;
-    feature_ids(&archive_features_dir)?
-        .iter()
-        .map(|id| {
-            let record = load_record_at(&archive_features_dir.join(id).join("feature.yaml"), id)?;
-            let counts = counts_by_feature
-                .get(&record.id)
-                .cloned()
-                .unwrap_or_default();
+    let archive_cards_dir = paths.archive_cards_dir();
+    let task_entries = task::load_archived_task_entries(paths)?;
+    card_query::scan_dir(&archive_cards_dir)?
+        .into_iter()
+        .filter(|card| card.card_type == CardType::Feature)
+        .map(|card| {
+            let artifact = archive_cards_dir.join(&card.id).join("card.yaml");
+            let record = record_from_card(card, artifact.display().to_string())?;
+            let counts = count_tasks_for_feature_in_entries(&task_entries, &record.id);
             Ok(view_from_record(record, counts))
         })
         .collect()
@@ -1284,9 +1284,9 @@ fn scaffold_spec_file(paths: &MaestroPaths, id: &str, title: &str) -> Result<()>
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
-/// Path to a feature's record under the archive tree (`.maestro/archive/features/<id>/feature.yaml`).
-fn archived_feature_yaml_path(paths: &MaestroPaths, id: &str) -> PathBuf {
-    paths.archive_features_dir().join(id).join("feature.yaml")
+/// Path to a feature's archived card (`.maestro/archive/cards/<id>/card.yaml`).
+fn archived_card_path(paths: &MaestroPaths, id: &str) -> PathBuf {
+    paths.archive_cards_dir().join(id).join("card.yaml")
 }
 
 /// Reject a feature id that is not a single normal path component, so a verb
@@ -1311,7 +1311,7 @@ pub(crate) fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecor
     validate_feature_id(id)?;
     let path = card_store::card_path(paths, id);
     let Some(card) = card_store::load(&path)? else {
-        bail!("feature not found: {id}");
+        return Err(feature_not_found(paths, id));
     };
     record_from_card(card, path.display().to_string())
 }
@@ -1328,10 +1328,39 @@ pub(crate) fn load_record_for_update(
     let path = card_store::card_path(paths, id);
     let snapshot = card_store::load_with_snapshot(&path)?;
     let Some(card) = snapshot.card.clone() else {
-        bail!("feature not found: {id}");
+        return Err(feature_not_found(paths, id));
     };
     let record = record_from_card(card, path.display().to_string())?;
     Ok((record, snapshot))
+}
+
+/// The not-found error for a live feature read. When the id resolves in the
+/// archive instead, point at the inspect/restore path (L6b) rather than a
+/// dead-end "not found".
+fn feature_not_found(paths: &MaestroPaths, id: &str) -> anyhow::Error {
+    match load_archived_record(paths, id) {
+        Ok(record) => anyhow!(
+            "feature {id} is archived ({})\n  inspect: maestro feature show {id}\n  restore: maestro feature unarchive {id}\n  then: retry the command",
+            record.status.as_str()
+        ),
+        Err(_) => anyhow!("feature not found: {id}"),
+    }
+}
+
+/// Load one archived feature record from its card under `archive/cards/`,
+/// erroring on absence, a non-feature card, or schema incompatibility. Lets the
+/// archive reads (§5.9 L6b) load from the archive tree with the same strictness
+/// as the live tree.
+pub(crate) fn load_archived_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecord> {
+    validate_feature_id(id)?;
+    let path = archived_card_path(paths, id);
+    let Some(card) = card_store::load(&path)? else {
+        bail!("feature not found: {id}");
+    };
+    if card.card_type != CardType::Feature {
+        bail!("feature not found: {id}");
+    }
+    record_from_card(card, path.display().to_string())
 }
 
 /// Reconstruct a [`FeatureRecord`] from a feature card's verbatim source mapping
@@ -1384,27 +1413,6 @@ fn record_to_mapping(record: &FeatureRecord) -> Result<Mapping> {
         Value::Mapping(map) => Ok(map),
         _ => bail!("feature record did not serialize to a mapping"),
     }
-}
-
-/// Load a feature record from an explicit `feature.yaml` path, erroring on
-/// absence or schema incompatibility. Lets the archive reads (§5.9) load from
-/// the archive tree with the same strictness as the live tree.
-pub(crate) fn load_record_at(path: &Path, id: &str) -> Result<FeatureRecord> {
-    validate_feature_id(id)?;
-    let Some(contents) = read_to_string_if_exists(path)? else {
-        bail!("feature not found: {id}");
-    };
-    let record: FeatureRecord = serde_yaml::from_str(&contents)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    if classify(&record.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
-        return Err(MaestroError::SchemaMismatch {
-            artifact: path.display().to_string(),
-            expected: FEATURE_SCHEMA_VERSION,
-            found: record.schema_version,
-        }
-        .into());
-    }
-    Ok(record)
 }
 
 /// Persist a feature record against its load-time card snapshot, so the write is
@@ -1500,33 +1508,6 @@ fn scan_feature_cards(paths: &MaestroPaths, tolerant: bool) -> Result<Vec<Featur
         }
     }
     Ok(records)
-}
-
-/// Ids of feature directories that contain a real `feature.yaml`, sorted.
-fn feature_ids(features_dir: &Path) -> Result<Vec<String>> {
-    let mut ids = Vec::new();
-    if !features_dir.is_dir() {
-        return Ok(ids);
-    }
-    for entry in fs::read_dir(features_dir)
-        .with_context(|| format!("failed to read {}", features_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", features_dir.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        if !entry.path().join("feature.yaml").is_file() {
-            continue;
-        }
-        if let Some(name) = entry.file_name().to_str() {
-            ids.push(name.to_string());
-        }
-    }
-    ids.sort();
-    Ok(ids)
 }
 
 /// Strict scan: every present card must parse and be schema-`Exact`.

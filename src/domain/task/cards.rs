@@ -126,12 +126,17 @@ pub(crate) fn save_at(path: &Path, record: &TaskRecord, snapshot: &CardSnapshot)
 /// id. `feature_id` is recovered from `card.parent`, so the scan consumers
 /// (counts, projections) group correctly with no directory to read.
 pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
-    let cards_dir = paths.cards_dir();
+    scan_dir(&paths.cards_dir())
+}
+
+/// [`scan`] over an explicit card tree root, so archived task reads
+/// (`archive/cards/`) ride the same seam as the live store.
+pub(crate) fn scan_dir(cards_dir: &Path) -> Result<Vec<(TaskRecord, PathBuf)>> {
     if !cards_dir.is_dir() {
         return Ok(Vec::new());
     }
     let mut ids = Vec::new();
-    for entry in fs::read_dir(&cards_dir)
+    for entry in fs::read_dir(cards_dir)
         .with_context(|| format!("failed to read {}", cards_dir.display()))?
     {
         let entry = entry.with_context(|| format!("failed to list {}", cards_dir.display()))?;
@@ -152,14 +157,14 @@ pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
 
     let mut records = Vec::new();
     for id in ids {
-        let path = card_store::card_path(paths, &id);
+        let path = cards_dir.join(&id).join("card.yaml");
         if let Some(card) = card_store::load(&path)?
             && card.card_type == CardType::Task
         {
             let task_dir = path
                 .parent()
                 .map(Path::to_path_buf)
-                .unwrap_or_else(|| cards_dir.clone());
+                .unwrap_or_else(|| cards_dir.to_path_buf());
             records.push((
                 record_from_card(card, path.display().to_string())?,
                 task_dir,

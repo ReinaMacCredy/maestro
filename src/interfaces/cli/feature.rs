@@ -713,7 +713,7 @@ fn feature_archive_error_message(id: &str, error: &str) -> String {
     }
     if error.contains("archived copy already exists") {
         return format!(
-            "cannot archive {id}:\n  archived copy already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/features/{id}\nnext:\n  resolve the duplicate archive, then retry: maestro feature archive {id}"
+            "cannot archive {id}:\n  archived copy already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/cards/{id}\nnext:\n  resolve the duplicate archive, then retry: maestro feature archive {id}"
         );
     }
     error.to_string()
@@ -727,7 +727,7 @@ fn feature_unarchive_error_message(id: &str, error: &str) -> String {
     }
     if error.contains("live feature already occupies") {
         return format!(
-            "cannot unarchive {id}:\n  live feature already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/features/{id}\nnext:\n  resolve the live feature conflict, then retry: maestro feature unarchive {id}"
+            "cannot unarchive {id}:\n  live feature already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/cards/{id}\nnext:\n  resolve the live feature conflict, then retry: maestro feature unarchive {id}"
         );
     }
     error.to_string()
