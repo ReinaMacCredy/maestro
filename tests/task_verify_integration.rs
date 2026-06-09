@@ -117,7 +117,13 @@ fn create_completed_task(repo: &Path, claim: &str) {
     assert_success(&create, &["task", "create", "Add CSV export"]);
     let minted = id_by_title(repo, "Add CSV export");
     for args in [
-        vec!["task", "set", minted.as_str(), "--check", "CSV export verified"],
+        vec![
+            "task",
+            "set",
+            minted.as_str(),
+            "--check",
+            "CSV export verified",
+        ],
         vec!["task", "explore", minted.as_str()],
         vec!["task", "accept", minted.as_str()],
         vec!["task", "claim", minted.as_str()],
@@ -495,7 +501,9 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
     assert!(stdout(&complete).contains(&format!("verification passed for {t1}")));
     let err = stderr(&complete);
     assert!(
-        err.contains(&format!("warning: after-dependency cleanup incomplete for {t1}")),
+        err.contains(&format!(
+            "warning: after-dependency cleanup incomplete for {t1}"
+        )),
         "{err}"
     );
     assert!(
@@ -547,7 +555,10 @@ fn task_verify_passed_apply_failure_leaves_report_unapplied() {
 
     assert_failure(&verify, &["task", "verify", "task-001"]);
     let err = stderr(&verify);
-    assert!(err.contains("verification outcome was not embedded"), "{err}");
+    assert!(
+        err.contains("verification outcome was not embedded"),
+        "{err}"
+    );
     assert!(err.contains("failed to write"), "{err}");
     assert!(
         !task_dir(repo, "task-001")
@@ -584,7 +595,10 @@ fn task_verify_failed_apply_failure_leaves_report_unapplied() {
     assert_failure(&verify, &["task", "verify", "task-001"]);
     let err = stderr(&verify);
     assert!(err.contains("verification failure: missing proof"), "{err}");
-    assert!(err.contains("verification outcome was not embedded"), "{err}");
+    assert!(
+        err.contains("verification outcome was not embedded"),
+        "{err}"
+    );
     assert!(err.contains("failed to write"), "{err}");
     assert!(
         !task_dir(repo, "task-001")
@@ -618,7 +632,10 @@ fn task_verify_stale_snapshot_writes_unapplied_report_without_marking_verified()
 
     assert_failure(&verify, &["task", "verify", "task-001"]);
     let err = stderr(&verify);
-    assert!(err.contains("verification outcome was not embedded"), "{err}");
+    assert!(
+        err.contains("verification outcome was not embedded"),
+        "{err}"
+    );
     // The mid-flight `task update` changes the card on disk, so the card-store
     // compare-and-set rejects the apply write (surfaced as the failed-write the
     // CAS guard raises).
@@ -661,7 +678,11 @@ fn concurrent_verify_does_not_overwrite_applied_canonical_report_with_stale_atte
     assert_failure(&verify, &["task", "verify", "task-001"]);
     // The nested verify applied the canonical report first, so the outer apply's
     // compare-and-set rejects its now-stale write (surfaced as a failed write).
-    assert!(stderr(&verify).contains("failed to write"), "{}", stderr(&verify));
+    assert!(
+        stderr(&verify).contains("failed to write"),
+        "{}",
+        stderr(&verify)
+    );
     let task = task_yaml(repo, "task-001");
     assert_eq!(task["state"], YamlValue::String("verified".to_string()));
     let verification = verification_json(repo, "task-001");

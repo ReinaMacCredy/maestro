@@ -575,7 +575,13 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     )
     .expect("invariant: harness should be writable");
     for id in &tasks[7..9] {
-        let args = ["task", "block", id, "--reason", "waiting for staging credentials"];
+        let args = [
+            "task",
+            "block",
+            id,
+            "--reason",
+            "waiting for staging credentials",
+        ];
         assert_success(&maestro(repo, &args), &args);
     }
     fs::write(
@@ -624,10 +630,8 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     let missing_verification_id = ids
         .get("missing_verification")
         .expect("invariant: missing_verification id should be listed");
-    let backlog = fs::read_to_string(
-        task_dir(repo, missing_verification_id).join("card.yaml"),
-    )
-    .expect("invariant: idea card should be readable");
+    let backlog = fs::read_to_string(task_dir(repo, missing_verification_id).join("card.yaml"))
+        .expect("invariant: idea card should be readable");
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -798,12 +802,7 @@ fn harness_accepts_multiple_embedded_command_receipts() {
     let repo = temp.path();
     let id = create_one_task(repo, "Verify legacy command objects");
     write_empty_harness(repo);
-    write_embedded_failed_verification_commands(
-        repo,
-        &id,
-        "125",
-        &["cargo test", "cargo clippy"],
-    );
+    write_embedded_failed_verification_commands(repo, &id, "125", &["cargo test", "cargo clippy"]);
 
     let proof = maestro(repo, &["query", "proof", &id]);
     assert_success(&proof, &["query", "proof", &id]);
@@ -2030,7 +2029,8 @@ fn harness_unapply_clears_a_vanished_spawned_task_link() {
     // fallback in `propose.rs` still probes the dead legacy `archive/tasks` path, a
     // latent cutover bug, but it is moot because no verb can archive an unparented
     // task in the first place.)
-    let (missing, missing_note) = setup_missing_verification_note("maestro-harness-unapply-missing");
+    let (missing, missing_note) =
+        setup_missing_verification_note("maestro-harness-unapply-missing");
     let missing_repo = missing.path();
     let apply = run_success(missing_repo, &["harness", "apply", &missing_note]);
     let missing_task = spawned_task_id(&apply);
@@ -2167,7 +2167,10 @@ fn harness_measure_closes_silent_state_note() {
     assert!(ready.contains("ready to measure"));
 
     let measure = run_success(repo, &["harness", "measure", &note]);
-    assert!(measure.contains(&format!("{note} is now measured")), "{measure}");
+    assert!(
+        measure.contains(&format!("{note} is now measured")),
+        "{measure}"
+    );
     // A clean close (detector silent) carries no friction warning.
     assert!(!measure.contains("friction is still detected"), "{measure}");
 
@@ -2208,7 +2211,10 @@ fn harness_measure_resolves_a_verified_linked_task_left_as_closed_history() {
 
     // measure succeeds against the verified linked task, not the --force hatch.
     let measure = run_success(repo, &["harness", "measure", &note]);
-    assert!(measure.contains(&format!("{note} is now measured")), "{measure}");
+    assert!(
+        measure.contains(&format!("{note} is now measured")),
+        "{measure}"
+    );
 
     let show = run_success(repo, &["harness", "show", &note]);
     assert!(show.contains("status: measured"), "{show}");
@@ -2252,7 +2258,10 @@ fn harness_measure_reverts_ineffective_state_note_and_relinks_on_reapply() {
 
     // Friction persists (cargo clippy still absent from verify): the note reverts.
     let measure = run_success(repo, &["harness", "measure", &note]);
-    assert!(measure.contains(&format!("{note} reverted to proposed")), "{measure}");
+    assert!(
+        measure.contains(&format!("{note} reverted to proposed")),
+        "{measure}"
+    );
     assert!(measure.contains("ineffective"), "{measure}");
 
     let show = run_success(repo, &["harness", "show", &note]);
@@ -2263,7 +2272,10 @@ fn harness_measure_reverts_ineffective_state_note_and_relinks_on_reapply() {
     // The cleared link means a re-accept spawns a fresh task, never the closed one.
     let reapply = run_success(repo, &["harness", "apply", &note]);
     let respawned = spawned_task_id(&reapply);
-    assert_ne!(respawned, spawned, "re-accept must spawn a fresh task, not the closed one");
+    assert_ne!(
+        respawned, spawned,
+        "re-accept must spawn a fresh task, not the closed one"
+    );
 }
 
 #[test]
@@ -2282,7 +2294,10 @@ fn harness_measure_requires_verified_task_unless_forced() {
     // --force bypasses the gate, but not the verdict: the friction persists
     // (cargo clippy still absent from verify), so the note reverts to proposed.
     let forced = run_success(repo, &["harness", "measure", &note, "--force"]);
-    assert!(forced.contains(&format!("{note} reverted to proposed")), "{forced}");
+    assert!(
+        forced.contains(&format!("{note} reverted to proposed")),
+        "{forced}"
+    );
 }
 
 #[test]
@@ -2328,7 +2343,10 @@ fn harness_measure_closes_behavioral_note_without_silence() {
     // verified-task measure with no silence check (D1). The close is honest about
     // the still-live friction (T9).
     let measure = run_success(repo, &["harness", "measure", &note]);
-    assert!(measure.contains(&format!("{note} is now measured")), "{measure}");
+    assert!(
+        measure.contains(&format!("{note} is now measured")),
+        "{measure}"
+    );
     assert!(measure.contains("friction is still detected"), "{measure}");
 }
 

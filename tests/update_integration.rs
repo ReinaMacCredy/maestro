@@ -660,11 +660,8 @@ fn detect_schema_mismatches_reports_advisory_mismatches_without_erroring() {
     .expect("invariant: harness schema should be writable");
     // ... and an unknown version are both incompatible and must surface as
     // advisory mismatches; the detector classifies but never aborts.
-    fs::write(
-        paths.install_lock_file(),
-        "schema_version: totally-bogus\n",
-    )
-    .expect("invariant: install lock schema should be writable");
+    fs::write(paths.install_lock_file(), "schema_version: totally-bogus\n")
+        .expect("invariant: install lock schema should be writable");
 
     let mismatches = detect_schema_mismatches(&paths)
         .expect("invariant: schema-mismatch detection stays advisory and never errors");

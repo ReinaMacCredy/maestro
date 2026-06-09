@@ -86,7 +86,13 @@ fn create_verified_task_with_proof(repo: &Path) -> String {
         &maestro(repo, &["feature", "new", "Billing CSV export"]),
         &["feature", "new", "Billing CSV export"],
     );
-    let create = ["task", "create", "Add CSV export", "--feature", "billing-csv-export"];
+    let create = [
+        "task",
+        "create",
+        "Add CSV export",
+        "--feature",
+        "billing-csv-export",
+    ];
     assert_success(&maestro(repo, &create), &create);
     let task_id = id_by_title(repo, "Add CSV export");
     for args in [
@@ -234,10 +240,7 @@ fn doctor_collects_a_corrupt_task_error_without_aborting_the_rest_of_the_report(
     );
 
     let task_id = id_by_title(repo, "probe");
-    let card_yaml = repo
-        .join(".maestro/cards")
-        .join(&task_id)
-        .join("card.yaml");
+    let card_yaml = repo.join(".maestro/cards").join(&task_id).join("card.yaml");
     fs::write(
         &card_yaml,
         format!(
@@ -514,7 +517,9 @@ fn doctor_warns_on_dangling_structured_decision_refs_without_failing() {
     let out = stdout(&doctor);
     assert!(out.contains("warning:"), "{out}");
     assert!(
-        out.contains(&format!("notes.md references missing decision {decision_id}")),
+        out.contains(&format!(
+            "notes.md references missing decision {decision_id}"
+        )),
         "{out}"
     );
     assert!(out.contains("fix:"), "{out}");
@@ -570,7 +575,10 @@ fn doctor_warns_on_dangling_supersedes_but_ignores_prose_mentions() {
     // a dangling `supersedes: decision-999` under the card's `extra` (the last block,
     // so the deeper indent nests cleanly) to drive the dangling-supersedes gate.
     let decision_id = id_by_title(repo, "Global decision");
-    let decision_card = repo.join(".maestro/cards").join(&decision_id).join("card.yaml");
+    let decision_card = repo
+        .join(".maestro/cards")
+        .join(&decision_id)
+        .join("card.yaml");
     let mut yaml =
         fs::read_to_string(&decision_card).expect("invariant: decision card should be readable");
     yaml.push_str("  supersedes:\n  - decision-999\n");
@@ -664,7 +672,10 @@ fn query_views_scan_current_artifacts_without_writing_cache_files() {
     let decision_id = id_by_title(repo, "Use computed query views");
     // The backlog now reads `idea` cards (the harness backlog folded into the flat
     // store), not `backlog.yaml#items`, so seed a backlog item as an idea card.
-    run_success(repo, &["create", "-t", "idea", "Add query regression coverage"]);
+    run_success(
+        repo,
+        &["create", "-t", "idea", "Add query regression coverage"],
+    );
 
     let before = maestro_files(repo);
 

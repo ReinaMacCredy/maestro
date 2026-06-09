@@ -253,9 +253,15 @@ mod tests {
             .expect("reconcile the idea cards");
         let merged = item_from_card(merged, "merged idea card").expect("reconstruct the item");
 
-        assert_eq!(merged.id, existing.id, "identity stays with the existing card");
+        assert_eq!(
+            merged.id, existing.id,
+            "identity stays with the existing card"
+        );
         assert_eq!(merged.title, existing.title, "the existing title is kept");
-        assert_eq!(merged.status, "accepted", "a non-regressed status is preserved");
+        assert_eq!(
+            merged.status, "accepted",
+            "a non-regressed status is preserved"
+        );
         assert_eq!(merged.spawned_task.as_deref(), Some("card-abc123"));
         assert_eq!(merged.last_seen, "2026-06-10T00:00:00Z");
         assert_eq!(merged.occurrences, 5);

@@ -715,8 +715,7 @@ fn field_or_default<'a>(value: &'a str, fallback: &'a str) -> &'a str {
 mod tests {
     use super::*;
 
-    const SAVE_ERROR: &str =
-        ".maestro/cards/card-a1b2c3/card.yaml is being written by another Maestro process; re-run the command";
+    const SAVE_ERROR: &str = ".maestro/cards/card-a1b2c3/card.yaml is being written by another Maestro process; re-run the command";
 
     #[test]
     fn save_failure_after_spawn_returns_the_save_error_when_rollback_succeeds() {
