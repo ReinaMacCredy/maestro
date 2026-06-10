@@ -15,8 +15,9 @@ Only three project record types map cleanly onto the Rust model. Everything else
 left intact in the backup and listed in the report. The Rust maestro is intentionally leaner
 (repo-local feature / task / decision / qa) and has no home for the rest.
 
-The Rust target model lives under `.maestro/`: features in `.maestro/features/<id>/`
-(feature.yaml, baseline.md, qa-slices.yaml, notes.md), tasks in `.maestro/tasks/<id>/`.
+The Rust target model lives under `.maestro/`: one flat card store at
+`.maestro/cards/<id>/card.yaml` (features, tasks, decisions, ideas), with prose and QA
+sidecars (`spec.md`, `notes.md`, `qa.md`) beside feature cards.
 
 | TypeScript source (in `.maestro/`) | Key fields | Rust target | How |
 | --- | --- | --- | --- |
