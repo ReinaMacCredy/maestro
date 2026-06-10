@@ -239,6 +239,17 @@ pub enum CardHome {
     Entry(PathBuf),
 }
 
+impl CardHome {
+    /// The file backing this home: the card's own yaml record, or the
+    /// container list file holding its entry.
+    pub fn path(&self) -> &Path {
+        match self {
+            Self::Dir(yaml) => yaml,
+            Self::Entry(file) => file,
+        }
+    }
+}
+
 /// The home a NEW card of this type/parent is created at. Features mint their
 /// own container dir; workable cards land in the `tasks/` pool of their
 /// parent feature's container, decisions in its `decisions.yaml`; ideas are
@@ -499,32 +510,49 @@ pub fn save_resolved(card: &Card, basis: &ResolvedCard) -> Result<()> {
     }
 }
 
-/// Create a brand-new card at the home its type/parent dictates. Fails when
-/// the id already exists anywhere; the write itself is a CAS create (absent
-/// record / unchanged entry file), so a racing create of the same id loses
-/// cleanly (SPEC D1).
-pub fn create_card(paths: &MaestroPaths, card: &Card) -> Result<()> {
+/// Create a brand-new card at the home its type/parent dictates, returning
+/// that home. Fails when the id already exists anywhere; the write itself is
+/// a CAS create (absent record / unchanged entry file), so a racing create of
+/// the same id loses cleanly (SPEC D1).
+pub fn create_card(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
     if locate(paths, &card.id)?.is_some() {
         bail!("card {} already exists", card.id);
     }
-    match home_for_new(paths, card)? {
+    let home = home_for_new(paths, card)?;
+    match &home {
         CardHome::Dir(yaml) => {
-            let snapshot = load_with_snapshot(&yaml)?;
+            let snapshot = load_with_snapshot(yaml)?;
             if snapshot.card.is_some() {
                 bail!("card {} already exists", card.id);
             }
-            save_with_snapshot(&yaml, card, &snapshot)
+            save_with_snapshot(yaml, card, &snapshot)?;
         }
         CardHome::Entry(file) => {
-            let snapshot = load_entries(&file)?;
+            let snapshot = load_entries(file)?;
             if snapshot.cards.iter().any(|entry| entry.id == card.id) {
                 bail!("card {} already exists", card.id);
             }
             let mut cards = snapshot.cards.clone();
             cards.push(card.clone());
-            save_entries(&file, &cards, &snapshot)
+            save_entries(file, &cards, &snapshot)?;
         }
     }
+    Ok(home)
+}
+
+/// [`save_resolved`] for a card rebuilt by a typed-record fold: carry the
+/// card-only fields (`deps`, `lane`, a card-set `description`) from the
+/// resolved card before the write would wipe them -- the resolved twin of
+/// [`save_folded_with_snapshot`].
+pub(crate) fn save_folded_resolved(mut card: Card, basis: &ResolvedCard) -> Result<()> {
+    card.deps = basis.card.deps.clone();
+    if card.lane.is_none() {
+        card.lane = basis.card.lane.clone();
+    }
+    if card.description.is_none() {
+        card.description = basis.card.description.clone();
+    }
+    save_resolved(&card, basis)
 }
 
 /// Remove a resolved card from its home: a dir-backed card's whole directory

@@ -16,14 +16,14 @@
 //! (the version lives on the enclosing `DecisionStore`), so the card-store load
 //! already validates the only version present.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use serde_yaml::{Mapping, Value};
 
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::{self as card_store, CardSnapshot};
+use crate::domain::card::store::{self as card_store, CardHome, ResolvedCard};
 use crate::domain::decisions::query::DecisionSource;
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
 use crate::foundation::core::paths::MaestroPaths;
@@ -135,62 +135,61 @@ pub(crate) fn source_from_parent(parent: Option<&str>) -> DecisionSource {
     }
 }
 
-/// Load one decision for a read-modify-write: `Some((record, source, snapshot,
-/// card path))` when a `Decision`-typed card exists for `id`, else `None`. The
-/// snapshot is the CAS basis the matching save checks (SPEC D1).
+/// Load one decision for a read-modify-write: `Some((record, source,
+/// resolved))` when a `Decision`-typed card exists for `id` -- in any home the
+/// resolver covers (a container `decisions.yaml` entry or a pre-migration
+/// flat dir) -- else `None`. The resolved card is the CAS basis the matching
+/// save checks (SPEC D1).
 pub(crate) fn load_one(
     paths: &MaestroPaths,
     id: &str,
-) -> Result<Option<(DecisionRecord, DecisionSource, CardSnapshot, PathBuf)>> {
-    card_store::validate_card_id(id)?;
-    let path = card_store::card_path(paths, id);
-    let snapshot = card_store::load_with_snapshot(&path)?;
-    let Some(card) = snapshot.card.clone() else {
+) -> Result<Option<(DecisionRecord, DecisionSource, ResolvedCard)>> {
+    let Some(resolved) = card_store::resolve(paths, id)? else {
         return Ok(None);
     };
-    if card.card_type != CardType::Decision {
+    if resolved.card.card_type != CardType::Decision {
         return Ok(None);
     }
-    let source = source_from_parent(card.parent.as_deref());
-    let record = record_from_card(card, path.display().to_string())?;
-    Ok(Some((record, source, snapshot, path)))
+    let source = source_from_parent(resolved.card.parent.as_deref());
+    let record = record_from_card(resolved.card.clone(), resolved.path().display().to_string())?;
+    Ok(Some((record, source, resolved)))
 }
 
-/// Persist a decision record to an explicit card path against its load-time
-/// snapshot (the card-store CAS rejects a racing writer, SPEC D1).
-pub(crate) fn save_at(path: &Path, record: &DecisionRecord, snapshot: &CardSnapshot) -> Result<()> {
+/// Persist a decision record back to the home it was resolved from (the
+/// card-store CAS rejects a racing writer, SPEC D1).
+pub(crate) fn save(record: &DecisionRecord, resolved: &ResolvedCard) -> Result<()> {
     let card = card_for(record)?;
-    card_store::save_folded_with_snapshot(path, card, snapshot)
+    card_store::save_folded_resolved(card, resolved)
 }
 
-/// Reconstruct every live `Decision`-typed card with its home and card path,
-/// sorted by id. `tolerant` skips a card that fails to load or parse (the strict
-/// callers surface the first such error), mirroring `scan_feature_cards`.
+/// Reconstruct every live `Decision`-typed card with its home and backing
+/// path (the container file for an entry-backed decision), sorted by id.
+/// `tolerant` skips a card that fails to load or parse (the strict callers
+/// surface the first such error), mirroring `scan_feature_cards`.
 pub(crate) fn scan(
     paths: &MaestroPaths,
     tolerant: bool,
 ) -> Result<Vec<(DecisionRecord, DecisionSource, PathBuf)>> {
+    let cards = if tolerant {
+        crate::domain::card::query::scan_with_failures(paths)?.cards
+    } else {
+        crate::domain::card::query::scan_with_paths(paths)?
+    };
     let mut decisions = Vec::new();
-    for id in card_store::card_dir_ids(&paths.cards_dir())? {
-        let path = card_store::card_path(paths, &id);
-        match card_store::load(&path) {
-            Ok(Some(card)) if card.card_type == CardType::Decision => {
-                let source = source_from_parent(card.parent.as_deref());
-                match record_from_card(card, path.display().to_string()) {
-                    Ok(record) => decisions.push((record, source, path)),
-                    Err(error) if tolerant => {
-                        let _ = error;
-                    }
-                    Err(error) => return Err(error),
-                }
-            }
-            Ok(_) => {}
+    for (card, path) in cards {
+        if card.card_type != CardType::Decision {
+            continue;
+        }
+        let source = source_from_parent(card.parent.as_deref());
+        match record_from_card(card, path.display().to_string()) {
+            Ok(record) => decisions.push((record, source, path)),
             Err(error) if tolerant => {
                 let _ = error;
             }
             Err(error) => return Err(error),
         }
     }
+    decisions.sort_by(|a, b| a.0.id.cmp(&b.0.id));
     Ok(decisions)
 }
 
@@ -217,17 +216,13 @@ pub(crate) fn records_in_cards(
     Ok(decisions)
 }
 
-/// Create a new decision card from a record. The write is a CAS against the
-/// absent snapshot, so a concurrent create of the same id is rejected. The id is
-/// reserved by the caller.
-pub(crate) fn create(paths: &MaestroPaths, record: &DecisionRecord) -> Result<()> {
-    let path = card_store::card_path(paths, &record.id);
-    let snapshot = card_store::load_with_snapshot(&path)?;
-    if snapshot.card.is_some() {
-        bail!("decision {} already exists", record.id);
-    }
+/// Create a new decision card from a record, landing in the container home its
+/// parent dictates (a feature's `decisions.yaml` or the global one). The write
+/// is a CAS create, so a concurrent create of the same id is rejected. Returns
+/// the home so callers can report the landing path.
+pub(crate) fn create(paths: &MaestroPaths, record: &DecisionRecord) -> Result<CardHome> {
     let card = card_for(record)?;
-    card_store::save_with_snapshot(&path, &card, &snapshot)
+    card_store::create_card(paths, &card)
 }
 
 #[cfg(test)]
@@ -326,21 +321,29 @@ mod tests {
     #[test]
     fn card_mode_save_rejects_a_stale_decision_writer() {
         let paths = card_mode_repo("stale-writer");
-        create(&paths, &feature_decision()).expect("create the decision card");
+        // A global decision (no feature parent) so the create needs no feature
+        // container; it lands as an entry in the root decisions.yaml.
+        let mut record = feature_decision();
+        record.feature = None;
+        let home = create(&paths, &record).expect("create the decision card");
+        assert!(
+            home.path().ends_with("decisions.yaml"),
+            "a global decision lands in the root decisions.yaml: {}",
+            home.path().display()
+        );
 
-        let (mut winner, _, winner_snapshot, winner_path) = load_one(&paths, "decision-002")
+        let (mut winner, _, winner_resolved) = load_one(&paths, "decision-002")
             .expect("first read")
             .expect("card exists");
-        let (mut loser, _, loser_snapshot, loser_path) = load_one(&paths, "decision-002")
+        let (mut loser, _, loser_resolved) = load_one(&paths, "decision-002")
             .expect("second read")
             .expect("card exists");
 
         winner.title = "winner".to_string();
-        save_at(&winner_path, &winner, &winner_snapshot).expect("first writer commits");
+        save(&winner, &winner_resolved).expect("first writer commits");
 
         loser.title = "stale writer".to_string();
-        let error = save_at(&loser_path, &loser, &loser_snapshot)
-            .expect_err("the stale writer must be rejected");
+        let error = save(&loser, &loser_resolved).expect_err("the stale writer must be rejected");
         assert!(
             format!("{error:#}").contains("changed since it was read"),
             "{error:#}"

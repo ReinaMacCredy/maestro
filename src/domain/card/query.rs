@@ -137,6 +137,13 @@ pub fn scan_with_failures(paths: &MaestroPaths) -> Result<StoreScan> {
     walk(&paths.cards_dir(), false)
 }
 
+/// Strict [`scan`] that keeps each card's backing path (its own yaml for a
+/// dir-backed card, the container list file for an entry), for the per-type
+/// scans that report artifact locations.
+pub(crate) fn scan_with_paths(paths: &MaestroPaths) -> Result<Vec<(Card, PathBuf)>> {
+    Ok(walk(&paths.cards_dir(), true)?.cards)
+}
+
 /// One walk over a card tree root in the container layout, shared by the
 /// strict and tolerant scans: root entry files, the root `tasks/` pool, then
 /// each container dir's record (a feature -- or a pre-migration flat leaf

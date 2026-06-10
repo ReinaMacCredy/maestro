@@ -189,11 +189,11 @@ fn find_decision_content(paths: &MaestroPaths, id: &str) -> Result<Option<Decisi
     // card-mode repo still reads `.maestro/decisions/*.md` (the migration never
     // folds it), and `lock`'s frozen-legacy guard and the supersedes validation
     // both depend on this resolving a markdown decision.
-    if let Some((record, source, _snapshot, path)) = cards::load_one(paths, id)? {
+    if let Some((record, source, resolved)) = cards::load_one(paths, id)? {
         return Ok(Some(DecisionContent::Structured {
             record: Box::new(record),
             source,
-            path,
+            path: resolved.path().to_path_buf(),
         }));
     }
 

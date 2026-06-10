@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::card::store::{self as card_store, card_path};
+use crate::domain::card::store as card_store;
 use crate::domain::decisions::cards;
 use crate::domain::decisions::query::{DecisionSource, decision_exists, normalize_decision_id};
 use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus, DecisionStore};
@@ -56,11 +56,10 @@ fn create_open_card(
     // O3'), no reservation marker -- the create-time CAS (D1) guards collisions.
     let id = card_store::mint_card_id(paths, title);
     let record = open_record(id, title, context, feature);
-    cards::create(paths, &record)?;
-    let path = card_path(paths, &record.id);
+    let home = cards::create(paths, &record)?;
     Ok(DecisionWriteReport {
         record,
-        path,
+        path: home.path().to_path_buf(),
         source: cards::source_from_parent(feature),
     })
 }
@@ -118,7 +117,7 @@ fn lock_card(
     preview: Option<&str>,
     supersedes: &[String],
 ) -> Result<DecisionLockReport> {
-    let Some((mut record, source, snapshot, path)) = cards::load_one(paths, id)? else {
+    let Some((mut record, source, resolved)) = cards::load_one(paths, id)? else {
         // The card lookup already failed, so a hit here is a frozen legacy
         // markdown decision (the migration never folds markdown). Same guard the
         // legacy path gives, reached via the cards-union `decision_exists`.
@@ -144,7 +143,7 @@ fn lock_card(
         &supersedes,
         utc_now_timestamp(),
     );
-    cards::save_at(&path, &record, &snapshot)?;
+    cards::save(&record, &resolved)?;
 
     for target in &supersedes {
         mark_superseded(paths, target, &record.id)?;
@@ -153,7 +152,7 @@ fn lock_card(
     let note_line = note_locked_feature(paths, &record)?;
     Ok(DecisionLockReport {
         record,
-        path,
+        path: resolved.path().to_path_buf(),
         source,
         note_line,
     })
@@ -230,10 +229,10 @@ fn ensure_decision_exists(paths: &MaestroPaths, id: &str) -> Result<()> {
 }
 
 fn mark_superseded(paths: &MaestroPaths, id: &str, by: &str) -> Result<()> {
-    if let Some((mut record, _source, snapshot, path)) = cards::load_one(paths, id)? {
+    if let Some((mut record, _source, resolved)) = cards::load_one(paths, id)? {
         record.status = DecisionStatus::Superseded;
         record.superseded_by = Some(by.to_string());
-        cards::save_at(&path, &record, &snapshot)?;
+        cards::save(&record, &resolved)?;
     }
     Ok(())
 }

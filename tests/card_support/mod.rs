@@ -13,6 +13,7 @@ use std::path::Path;
 
 use maestro::domain::card::query;
 use maestro::domain::card::schema::CardType;
+use maestro::domain::card::store::{CardHome, locate};
 use maestro::foundation::core::paths::MaestroPaths;
 use serde_yaml::Value;
 
@@ -69,15 +70,37 @@ pub fn sole_idea_id(repo: &Path) -> String {
     ideas.remove(0)
 }
 
-/// The raw `card.yaml` for a card id, parsed as YAML. Top-level carries the card
-/// header (`id`/`type`/`title`/`status`/timestamps); a card minted by a legacy
-/// entity verb (e.g. `task create`) also carries the verbatim source record under
-/// `extra`. Use [`task_record`] to read the task fields directly.
+/// The raw persisted card record for an id, parsed as YAML and resolved through
+/// the same store probe production uses -- a dir-backed card's whole file, or
+/// the card's own entry from its container file (`decisions.yaml`/`ideas.yaml`).
+/// Top-level carries the card header (`id`/`type`/`title`/`status`/timestamps);
+/// a card minted by a legacy entity verb (e.g. `task create`) also carries the
+/// verbatim source record under `extra`. Use [`task_record`] to read the task
+/// fields directly.
 pub fn card_doc(repo: &Path, id: &str) -> Value {
-    let path = repo.join(".maestro/cards").join(id).join("card.yaml");
-    let raw = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("card.yaml for {id} should be readable: {e}"));
-    serde_yaml::from_str(&raw).expect("invariant: card.yaml should parse as YAML")
+    let paths = MaestroPaths::new(repo);
+    let home = locate(&paths, id)
+        .expect("invariant: card lookup should succeed")
+        .unwrap_or_else(|| panic!("no card home found for {id}"));
+    let raw = fs::read_to_string(home.path()).unwrap_or_else(|e| {
+        panic!(
+            "card record for {id} should be readable at {}: {e}",
+            home.path().display()
+        )
+    });
+    match home {
+        CardHome::Dir(_) => {
+            serde_yaml::from_str(&raw).expect("invariant: card.yaml should parse as YAML")
+        }
+        CardHome::Entry(_) => {
+            let entries: Vec<Value> = serde_yaml::from_str(&raw)
+                .expect("invariant: container file should parse as a YAML sequence");
+            entries
+                .into_iter()
+                .find(|entry| entry["id"] == id)
+                .unwrap_or_else(|| panic!("no entry for {id} in its container file"))
+        }
+    }
 }
 
 /// The folded task record carried under `card.extra` for a card minted by the

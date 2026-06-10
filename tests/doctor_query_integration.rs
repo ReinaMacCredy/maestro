@@ -546,11 +546,12 @@ fn doctor_warns_on_dangling_structured_decision_refs_without_failing() {
         ],
     );
     // Locking stamps a `<id> locked` pointer into the feature card's notes.md. In
-    // card mode the decision IS a card, so dangling that note ref means deleting the
-    // decision card directory; the feature card's notes.md then references a missing
-    // decision and the dangling-ref gate warns (without failing).
-    fs::remove_dir_all(repo.join(".maestro/cards").join(&decision_id))
-        .expect("invariant: decision card should be removable");
+    // card mode the decision IS a card -- an entry in the feature container's
+    // decisions.yaml -- so dangling that note ref means deleting the container
+    // file; the feature card's notes.md then references a missing decision and
+    // the dangling-ref gate warns (without failing).
+    fs::remove_file(repo.join(".maestro/cards/decision-ref-integrity/decisions.yaml"))
+        .expect("invariant: decision container file should be removable");
 
     let doctor = maestro(repo, &["doctor"]);
     assert_success(&doctor, &["doctor"]);
@@ -611,17 +612,14 @@ fn doctor_warns_on_dangling_supersedes_but_ignores_prose_mentions() {
 
     run_success(repo, &["feature", "new", "Supersede Integrity"]);
     run_success(repo, &["decision", "new", "Global decision"]);
-    // The decision is a card; its folded record carries the supersedes list. Append
-    // a dangling `supersedes: decision-999` under the card's `extra` (the last block,
-    // so the deeper indent nests cleanly) to drive the dangling-supersedes gate.
-    let decision_id = id_by_title(repo, "Global decision");
-    let decision_card = repo
-        .join(".maestro/cards")
-        .join(&decision_id)
-        .join("card.yaml");
+    // The decision is a card -- the sole entry in the root decisions.yaml; its
+    // folded record carries the supersedes list. Append a dangling
+    // `supersedes: decision-999` under the entry's `extra` (the last block, so
+    // the deeper indent nests cleanly) to drive the dangling-supersedes gate.
+    let decision_card = repo.join(".maestro/cards/decisions.yaml");
     let mut yaml =
         fs::read_to_string(&decision_card).expect("invariant: decision card should be readable");
-    yaml.push_str("  supersedes:\n  - decision-999\n");
+    yaml.push_str("    supersedes:\n    - decision-999\n");
     fs::write(&decision_card, yaml).expect("invariant: decision card should be writable");
     // notes.md is the file the dangling-ref scan actually reads. Seed the feature
     // card's notes.md with both a structured dangling ref (which MUST be flagged --
