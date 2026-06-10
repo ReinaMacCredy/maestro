@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use crate::domain::card::query::{Coarse, coarse_of};
 use crate::domain::card::schema::{Dep, DepKind};
 use crate::domain::card::store::{
-    card_path, load, load_with_snapshot, save_with_snapshot, validate_card_id,
+    CARD_FILE, TASK_FILE, load, locate, resolve, save_resolved, validate_card_id,
 };
 use crate::foundation::core::fs::append_text_file;
 use crate::foundation::core::paths::MaestroPaths;
@@ -33,18 +33,14 @@ pub fn add_blocks_dep(paths: &MaestroPaths, child: &str, parent: &str, now: &str
     if child == parent {
         bail!("a card cannot block itself: {child}");
     }
-    if load_with_snapshot(&card_path(paths, parent))?
-        .card
-        .is_none()
-    {
+    if locate(paths, parent)?.is_none() {
         bail!("no card {parent} to depend on");
     }
 
-    let child_path = card_path(paths, child);
-    let snapshot = load_with_snapshot(&child_path)?;
-    let Some(mut card) = snapshot.card.clone() else {
+    let Some(resolved) = resolve(paths, child)? else {
         bail!("no card {child} to add a dependency to");
     };
+    let mut card = resolved.card.clone();
     if card
         .deps
         .iter()
@@ -58,7 +54,7 @@ pub fn add_blocks_dep(paths: &MaestroPaths, child: &str, parent: &str, now: &str
         target: parent.to_string(),
     });
     card.updated_at = now.to_string();
-    save_with_snapshot(&child_path, &card, &snapshot)?;
+    save_resolved(&card, &resolved)?;
     Ok(true)
 }
 
@@ -83,11 +79,10 @@ pub enum ClaimOutcome {
 /// moves the card to `in_progress`.
 pub fn claim(paths: &MaestroPaths, id: &str, claimed_by: &str, now: &str) -> Result<ClaimOutcome> {
     validate_card_id(id)?;
-    let path = card_path(paths, id);
-    let snapshot = load_with_snapshot(&path)?;
-    let Some(mut card) = snapshot.card.clone() else {
+    let Some(resolved) = resolve(paths, id)? else {
         bail!("no card {id} to claim");
     };
+    let mut card = resolved.card.clone();
     if !card.card_type.workable() {
         bail!(
             "{id} is a {}, not a workable card; only task/bug/chore are claimable",
@@ -122,7 +117,7 @@ pub fn claim(paths: &MaestroPaths, id: &str, claimed_by: &str, now: &str) -> Res
     card.claimed_at = Some(now.to_string());
     card.status = "in_progress".to_string();
     card.updated_at = now.to_string();
-    save_with_snapshot(&path, &card, &snapshot)?;
+    save_resolved(&card, &resolved)?;
     Ok(outcome)
 }
 
@@ -137,31 +132,47 @@ fn claim_is_stale(claimed_at: &str, now: &str) -> bool {
 }
 
 /// Append one dated line to a card's `notes.md` sidecar (SPEC D5, the second
-/// half of the archive/note-append seam). The first write seeds the file with
-/// the card title as a header; later writes add `<date>  <text>` lines -- the
-/// exact convention the legacy `task note` / `feature note` verbs used, so a
-/// migrated card's notes read identically. The append touches only the sidecar,
-/// never `card.yaml`: prose is not card state, so it needs no CAS write and the
-/// card-mode repos that lack a legacy note path get one here. Returns whether
-/// `notes.md` was created by this append.
+/// half of the archive/note-append seam). A dir-backed card owns its sidecar:
+/// the first write seeds the file with the card title as a header; later
+/// writes add `<date>  <text>` lines -- the exact convention the legacy `task
+/// note` / `feature note` verbs used, so a migrated card's notes read
+/// identically. An entry-backed card (a decision/idea in a container list
+/// file) has no dir of its own, so its note lands in the CONTAINER's
+/// `notes.md` as `<date>  [<id>] <text>` -- the id prefix keeps shared-log
+/// lines attributable, and a feature container's log is seeded with the
+/// feature title so it reads the same whichever verb wrote first. The append
+/// touches only the sidecar, never the record: prose is not card state, so it
+/// needs no CAS write. Returns whether `notes.md` was created by this append.
 pub fn append_note(paths: &MaestroPaths, id: &str, text: &str, now: &str) -> Result<bool> {
     validate_card_id(id)?;
     if text.trim().is_empty() {
         bail!("note text cannot be empty");
     }
-    let card_yaml = card_path(paths, id);
-    let Some(card) = load(&card_yaml)? else {
+    let Some(resolved) = resolve(paths, id)? else {
         bail!("no card {id} to note");
     };
-    let card_dir = card_yaml
+    let record = resolved.path();
+    let dir = record
         .parent()
-        .with_context(|| format!("card path missing parent: {}", card_yaml.display()))?;
+        .with_context(|| format!("card path missing parent: {}", record.display()))?;
+    let dir_backed = matches!(
+        record.file_name().and_then(|name| name.to_str()),
+        Some(CARD_FILE | TASK_FILE)
+    );
     let date = now.split_once('T').map_or(now, |(date, _)| date);
-    let notes_path = card_dir.join("notes.md");
+    let (header, line) = if dir_backed {
+        (resolved.card.title.clone(), text.trim().to_string())
+    } else {
+        let container_title = load(&dir.join(CARD_FILE))?
+            .map(|container| container.title)
+            .unwrap_or_else(|| "Notes".to_string());
+        (container_title, format!("[{id}] {}", text.trim()))
+    };
+    let notes_path = dir.join("notes.md");
     append_text_file(
         &notes_path,
-        &format!("# {}\n\n", card.title),
-        &format!("{date}  {}\n", text.trim()),
+        &format!("# {header}\n\n"),
+        &format!("{date}  {line}\n"),
     )
     .with_context(|| format!("failed to append card note {}", notes_path.display()))
 }
@@ -170,7 +181,9 @@ pub fn append_note(paths: &MaestroPaths, id: &str, text: &str, now: &str) -> Res
 mod tests {
     use super::*;
     use crate::domain::card::schema::{Card, CardType};
-    use crate::domain::card::store::load;
+    use crate::domain::card::store::{
+        card_path, create_card, load_with_snapshot, save_with_snapshot,
+    };
     use crate::foundation::core::fs::ensure_dir;
     use std::process;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -425,6 +438,26 @@ mod tests {
             notes.matches("# task-001").count(),
             1,
             "header written only once"
+        );
+    }
+
+    #[test]
+    fn append_note_on_an_entry_backed_card_lands_in_the_container_log() {
+        let paths = repo("note-entry");
+        let card = Card::new("card-d1", CardType::Decision, "Pick the lock", "open", NOW);
+        create_card(&paths, &card).expect("create decision entry");
+
+        let created = append_note(&paths, "card-d1", "ruling rationale", NOW).expect("note");
+        assert!(created, "first shared-log append creates notes.md");
+        let notes = std::fs::read_to_string(paths.cards_dir().join("notes.md"))
+            .expect("read the container log");
+        assert!(
+            notes.starts_with("# Notes\n\n"),
+            "a root container log seeds the fallback header: {notes:?}"
+        );
+        assert!(
+            notes.contains("2026-06-09  [card-d1] ruling rationale\n"),
+            "the id prefix keeps shared-log lines attributable: {notes:?}"
         );
     }
 

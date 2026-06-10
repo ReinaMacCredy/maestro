@@ -139,11 +139,6 @@ pub fn create(args: CreateArgs) -> Result<()> {
         card::schema::CardType::Feature => slugify_ascii(&args.title),
         _ => card::store::mint_card_id(&paths, &args.title),
     };
-    let path = card::store::card_path(&paths, &id);
-    let snapshot = card::store::load_with_snapshot(&path)?;
-    if snapshot.card.is_some() {
-        return Err(anyhow!("card {id} already exists"));
-    }
     let mut new_card = card::schema::Card::new(&id, card_type, &args.title, "open", &now);
     if let Some(parent) = args.parent {
         // SPEC G1/E1: `parent` docks a card under a feature container. Features
@@ -155,8 +150,9 @@ pub fn create(args: CreateArgs) -> Result<()> {
             ));
         }
         card::store::validate_card_id(&parent)?;
-        let parent_card =
-            card::store::load(&card::store::card_path(&paths, &parent))?.ok_or_else(|| {
+        let parent_card = card::store::resolve(&paths, &parent)?
+            .map(|resolved| resolved.card)
+            .ok_or_else(|| {
                 anyhow!(
                     "parent {parent} not found; create the feature first \
                      (`maestro create -t feature \"<title>\"`)"
@@ -171,7 +167,7 @@ pub fn create(args: CreateArgs) -> Result<()> {
         new_card.parent = Some(parent);
     }
     new_card.description = args.description;
-    card::store::save_with_snapshot(&path, &new_card, &snapshot)?;
+    card::store::create_card(&paths, &new_card)?;
     println!("created {id} ({}): {}", card_type.as_str(), args.title);
     Ok(())
 }
@@ -183,12 +179,8 @@ pub fn show(args: ShowArgs) -> Result<()> {
         return Ok(());
     };
     card::store::validate_card_id(&args.id)?;
-    let path = card::store::card_path(&paths, &args.id);
-    let Some(c) = card::store::load(&path)? else {
-        println!(
-            "no card {} (.maestro/cards/{}/card.yaml not found)",
-            args.id, args.id
-        );
+    let Some(c) = card::store::resolve(&paths, &args.id)?.map(|resolved| resolved.card) else {
+        println!("no card {} in the card store (.maestro/cards)", args.id);
         return Ok(());
     };
     if args.json {
@@ -220,12 +212,11 @@ pub fn update(args: UpdateArgs) -> Result<()> {
     card::store::validate_card_id(id)?;
     let now = utc_now_timestamp();
     if has_fields {
-        let path = card::store::card_path(&paths, id);
-        let snapshot = card::store::load_with_snapshot(&path)?;
-        let Some(mut c) = snapshot.card.clone() else {
-            println!("no card {id} (.maestro/cards/{id}/card.yaml not found)");
+        let Some(resolved) = card::store::resolve(&paths, id)? else {
+            println!("no card {id} in the card store (.maestro/cards)");
             return Ok(());
         };
+        let mut c = resolved.card.clone();
         if let Some(status) = args.status.as_deref() {
             // SPEC E3: feature/idea/decision keep their per-type lifecycle
             // verbs; a generic status write would bypass their gates (ship/QA,
@@ -252,7 +243,7 @@ pub fn update(args: UpdateArgs) -> Result<()> {
             c.description = Some(description.to_string());
         }
         c.updated_at = now.clone();
-        card::store::save_with_snapshot(&path, &c, &snapshot)?;
+        card::store::save_resolved(&c, &resolved)?;
         println!("updated {id}");
     }
     if args.claim {
@@ -271,15 +262,11 @@ pub fn close(args: CloseArgs) -> Result<()> {
         return Ok(());
     };
     card::store::validate_card_id(&args.id)?;
-    let path = card::store::card_path(&paths, &args.id);
-    let snapshot = card::store::load_with_snapshot(&path)?;
-    let Some(mut c) = snapshot.card.clone() else {
-        println!(
-            "no card {} (.maestro/cards/{}/card.yaml not found)",
-            args.id, args.id
-        );
+    let Some(resolved) = card::store::resolve(&paths, &args.id)? else {
+        println!("no card {} in the card store (.maestro/cards)", args.id);
         return Ok(());
     };
+    let mut c = resolved.card.clone();
     // SPEC E3: only task/bug/chore are closeable; feature/idea/decision keep
     // their per-type terminal verbs (and their gates).
     if !c.card_type.workable() {
@@ -296,7 +283,7 @@ pub fn close(args: CloseArgs) -> Result<()> {
     }
     c.status = "closed".to_string();
     c.updated_at = utc_now_timestamp();
-    card::store::save_with_snapshot(&path, &c, &snapshot)?;
+    card::store::save_resolved(&c, &resolved)?;
     println!("closed {}", args.id);
     Ok(())
 }
