@@ -517,8 +517,12 @@ mod tests {
         stale_detected.provenance = "detector".to_string();
         config.items = vec![user_idea, stale_detected];
 
-        backlog::merge_proposals(&paths, &mut config, vec![item("card-new1", "fresh detection")])
-            .expect("merge fresh proposals");
+        backlog::merge_proposals(
+            &paths,
+            &mut config,
+            vec![item("card-new1", "fresh detection")],
+        )
+        .expect("merge fresh proposals");
 
         let ids: Vec<&str> = config.items.iter().map(|i| i.id.as_str()).collect();
         assert!(

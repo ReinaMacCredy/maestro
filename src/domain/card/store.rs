@@ -259,10 +259,7 @@ mod tests {
     #[test]
     fn validate_card_id_rejects_path_escapes() {
         for bad in ["", ".", "..", "../x", "/etc/passwd", "a/b", "a/../b"] {
-            assert!(
-                validate_card_id(bad).is_err(),
-                "{bad:?} must be rejected"
-            );
+            assert!(validate_card_id(bad).is_err(), "{bad:?} must be rejected");
         }
         for good in ["card-a1b2", "csv-export", "task-001"] {
             assert!(validate_card_id(good).is_ok(), "{good:?} must be accepted");

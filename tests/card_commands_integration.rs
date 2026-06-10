@@ -348,7 +348,10 @@ fn create_validates_the_parent_dock() {
     let temp = cards_repo("s2-parent-guards");
     let repo = temp.path();
 
-    let dangling = run_err(repo, &["create", "-t", "task", "Orphan", "--parent", "ghost"]);
+    let dangling = run_err(
+        repo,
+        &["create", "-t", "task", "Orphan", "--parent", "ghost"],
+    );
     assert!(
         dangling.contains("ghost not found") && dangling.contains("create the feature first"),
         "a dangling parent names the fix:\n{dangling}"
@@ -356,7 +359,10 @@ fn create_validates_the_parent_dock() {
 
     run(repo, &["create", "-t", "task", "Plain task"]);
     let task_id = id_by_title(repo, "Plain task");
-    let non_feature = run_err(repo, &["create", "-t", "task", "Child", "--parent", &task_id]);
+    let non_feature = run_err(
+        repo,
+        &["create", "-t", "task", "Child", "--parent", &task_id],
+    );
     assert!(
         non_feature.contains("not a feature"),
         "a non-feature parent is refused:\n{non_feature}"
@@ -372,7 +378,10 @@ fn create_validates_the_parent_dock() {
         "a feature refuses a parent:\n{nested}"
     );
 
-    run(repo, &["create", "-t", "task", "Docked", "--parent", "csv-export"]);
+    run(
+        repo,
+        &["create", "-t", "task", "Docked", "--parent", "csv-export"],
+    );
     let docked = run(repo, &["show", &id_by_title(repo, "Docked")]);
     assert!(
         docked.contains("parent: csv-export"),
