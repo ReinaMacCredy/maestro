@@ -118,7 +118,7 @@ pub enum RootCommand {
     Event(EventArgs),
     #[command(about = "Manage features: the product contract and its lifecycle")]
     Feature(FeatureArgs),
-    #[command(about = "Create, show, and list decision records in .maestro/decisions/")]
+    #[command(about = "Create, show, and list decision cards in the card store")]
     Decision(DecisionArgs),
     #[command(
         about = "List workable cards with no open blockers (card store)",
@@ -728,7 +728,7 @@ pub struct DecisionArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum DecisionCommand {
-    #[command(about = "Open a structured decision fork (-> decision-NN)")]
+    #[command(about = "Open a structured decision fork (mints a decision card)")]
     New {
         title: String,
         #[arg(long, help = "Why this fork exists")]
@@ -751,9 +751,9 @@ pub enum DecisionCommand {
         )]
         supersedes: Vec<String>,
     },
-    #[command(about = "Show a decision record by id (decision-NN)")]
+    #[command(about = "Show a decision card by id")]
     Show { id: String },
-    #[command(about = "List decision records")]
+    #[command(about = "List decision cards")]
     List,
 }
 
@@ -930,7 +930,7 @@ pub enum QueryCommand {
     Matrix,
     #[command(about = "Summarize recorded run friction (events, prompts, corrections)")]
     Friction,
-    #[command(about = "List decision records (ID/FILE/TITLE)")]
+    #[command(about = "List decision cards (ID/STATUS/HOME/TITLE)")]
     Decisions,
     #[command(about = "List improvement backlog items (ID/TITLE)")]
     Backlog,
