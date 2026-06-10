@@ -101,7 +101,7 @@ fn root_about_strings_name_every_subcommand() {
     assert_contains_all(
         &maestro(&["--help"]),
         &[
-            "Create, show, and list decision records in .maestro/decisions/",
+            "Create, show, and list decision cards in the card store",
             "List, show, apply, unapply, dismiss, and measure harness improvement suggestions",
             "Query computed read models (matrix, friction, decisions, proof, backlog)",
             "Run or inspect the MCP server (serve, stdin, tools, list)",
