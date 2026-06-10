@@ -6,7 +6,9 @@ use anyhow::{Context, Result, bail};
 
 use crate::domain::card::query::{Coarse, coarse_of};
 use crate::domain::card::schema::{Dep, DepKind};
-use crate::domain::card::store::{card_path, load, load_with_snapshot, save_with_snapshot};
+use crate::domain::card::store::{
+    card_path, load, load_with_snapshot, save_with_snapshot, validate_card_id,
+};
 use crate::foundation::core::fs::append_text_file;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::timestamp_nanos;
@@ -26,6 +28,8 @@ const STALE_CLAIM_AGE_NANOS: i128 = 15 * 60 * 1_000_000_000;
 /// at all). Idempotent: a second identical edge is a no-op. Returns whether a
 /// new edge was written.
 pub fn add_blocks_dep(paths: &MaestroPaths, child: &str, parent: &str, now: &str) -> Result<bool> {
+    validate_card_id(child)?;
+    validate_card_id(parent)?;
     if child == parent {
         bail!("a card cannot block itself: {child}");
     }
@@ -78,6 +82,7 @@ pub enum ClaimOutcome {
 /// forever (SPEC E6/O2). A successful claim stamps `claimed_at`/`updated_at` and
 /// moves the card to `in_progress`.
 pub fn claim(paths: &MaestroPaths, id: &str, claimed_by: &str, now: &str) -> Result<ClaimOutcome> {
+    validate_card_id(id)?;
     let path = card_path(paths, id);
     let snapshot = load_with_snapshot(&path)?;
     let Some(mut card) = snapshot.card.clone() else {
@@ -140,6 +145,7 @@ fn claim_is_stale(claimed_at: &str, now: &str) -> bool {
 /// card-mode repos that lack a legacy note path get one here. Returns whether
 /// `notes.md` was created by this append.
 pub fn append_note(paths: &MaestroPaths, id: &str, text: &str, now: &str) -> Result<bool> {
+    validate_card_id(id)?;
     if text.trim().is_empty() {
         bail!("note text cannot be empty");
     }

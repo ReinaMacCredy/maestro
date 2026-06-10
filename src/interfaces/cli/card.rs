@@ -173,6 +173,7 @@ pub fn create(args: CreateArgs) -> Result<()> {
                 "a feature card cannot take --parent; features are top-level containers"
             ));
         }
+        card::store::validate_card_id(&parent)?;
         let parent_card = card::store::load(&card::store::card_path(&paths, &parent))?
             .ok_or_else(|| {
                 anyhow!(
@@ -202,6 +203,7 @@ pub fn show(args: ShowArgs) -> Result<()> {
         legacy_notice();
         return Ok(());
     }
+    card::store::validate_card_id(&args.id)?;
     let path = card::store::card_path(&paths, &args.id);
     let Some(c) = card::store::load(&path)? else {
         println!(
@@ -238,6 +240,7 @@ pub fn update(args: UpdateArgs) -> Result<()> {
         println!("nothing to update for {id}; pass --status, --title, --description, or --claim");
         return Ok(());
     }
+    card::store::validate_card_id(id)?;
     let now = utc_now_timestamp();
     if has_fields {
         let path = card::store::card_path(&paths, id);
@@ -292,6 +295,7 @@ pub fn close(args: CloseArgs) -> Result<()> {
         legacy_notice();
         return Ok(());
     }
+    card::store::validate_card_id(&args.id)?;
     let path = card::store::card_path(&paths, &args.id);
     let snapshot = card::store::load_with_snapshot(&path)?;
     let Some(mut c) = snapshot.card.clone() else {

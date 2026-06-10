@@ -808,14 +808,22 @@ fn query_proof_reads_an_archived_task_through_the_archive_fallback() {
     //
     // Card mode: per-task archive was retired (SPEC E4); archiving is now a
     // feature-level cascade that moves the feature card and its `parent=` children
-    // to `.maestro/archive/cards/<id>/`. Drive a verified child task, close it, ship
-    // the feature, then `archive <feature>` so the task card lands in the archive
-    // tree -- and `query proof` must read it through the archive fallback.
+    // to `.maestro/archive/cards/<id>/`. Drive a verified child task, close it,
+    // terminal-ize the feature through its gated verb (a generic `update --status`
+    // on a feature is refused, SPEC E3), then `archive <feature>` so the task card
+    // lands in the archive tree -- and `query proof` must read it through the
+    // archive fallback.
     let task_id = create_verified_task_with_proof(repo);
     for args in [
         vec!["task", "verify", &task_id],
         vec!["close", &task_id],
-        vec!["update", "billing-csv-export", "--status", "shipped"],
+        vec![
+            "feature",
+            "cancel",
+            "billing-csv-export",
+            "--reason",
+            "test fixture: terminal-ize for archive",
+        ],
         vec!["archive", "billing-csv-export"],
     ] {
         assert_success(&maestro(repo, &args), &args);

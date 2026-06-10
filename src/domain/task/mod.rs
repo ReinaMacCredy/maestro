@@ -97,12 +97,25 @@ impl BlockerTarget {
     /// content-addressed `card-<hash>` id no longer encodes its type, so in card
     /// mode the referenced card's own `card_type` decides the routing; the
     /// id-prefix parse is the fallback for an absent card or legacy mode. `None`
-    /// is a manual/human block.
-    pub fn from_ref(paths: &MaestroPaths, by: Option<String>) -> Self {
+    /// is a manual/human block. A `--by` naming a feature or idea card errors:
+    /// silently filing it as External would hide a graph edge the card store
+    /// can track.
+    pub fn from_ref(paths: &MaestroPaths, by: Option<String>) -> Result<Self> {
         let Some(by) = by else {
-            return Self::Human;
+            return Ok(Self::Human);
         };
-        card_blocker_target(paths, &by).unwrap_or_else(|| Self::from_prefix(by))
+        let card = card_store::load(&card_store::card_path(paths, &by))
+            .ok()
+            .flatten();
+        match card.map(|card| card.card_type) {
+            Some(CardType::Task | CardType::Bug | CardType::Chore) => Ok(Self::Task(by)),
+            Some(CardType::Decision) => Ok(Self::Decision(by)),
+            Some(kind @ (CardType::Feature | CardType::Idea)) => bail!(
+                "cannot block on {by}: it is a {} card, not a task or decision\n  record the dependency as a card edge instead: maestro dep add <task> {by}",
+                kind.as_str()
+            ),
+            None => Ok(Self::from_prefix(by)),
+        }
     }
 
     fn from_prefix(by: String) -> Self {
@@ -113,23 +126,6 @@ impl BlockerTarget {
         } else {
             Self::External(by)
         }
-    }
-}
-
-/// Route a `--by` id to a typed target by the referenced card's type, or `None`
-/// when no card resolves it (the caller falls back to the id-prefix parse). A
-/// Feature/Idea card is not a Task/Decision blocker target, so it also yields
-/// `None` and is left to the prefix parse.
-fn card_blocker_target(paths: &MaestroPaths, by: &str) -> Option<BlockerTarget> {
-    let card = card_store::load(&card_store::card_path(paths, by))
-        .ok()
-        .flatten()?;
-    match card.card_type {
-        CardType::Task | CardType::Bug | CardType::Chore => {
-            Some(BlockerTarget::Task(by.to_string()))
-        }
-        CardType::Decision => Some(BlockerTarget::Decision(by.to_string())),
-        CardType::Feature | CardType::Idea => None,
     }
 }
 
@@ -876,18 +872,56 @@ mod tests {
         // the legacy id-prefix parse -- the card-type lookup is exercised e2e.
         let paths = MaestroPaths::new(Path::new("/nonexistent-maestro-from-ref"));
         assert_eq!(
-            BlockerTarget::from_ref(&paths, Some("task-001".to_string())),
+            BlockerTarget::from_ref(&paths, Some("task-001".to_string())).expect("task ref"),
             BlockerTarget::Task("task-001".to_string())
         );
         assert_eq!(
-            BlockerTarget::from_ref(&paths, Some("decision-007".to_string())),
+            BlockerTarget::from_ref(&paths, Some("decision-007".to_string()))
+                .expect("decision ref"),
             BlockerTarget::Decision("decision-007".to_string())
         );
         assert_eq!(
-            BlockerTarget::from_ref(&paths, Some("PR #42".to_string())),
+            BlockerTarget::from_ref(&paths, Some("PR #42".to_string())).expect("external ref"),
             BlockerTarget::External("PR #42".to_string())
         );
-        assert_eq!(BlockerTarget::from_ref(&paths, None), BlockerTarget::Human);
+        assert_eq!(
+            BlockerTarget::from_ref(&paths, None).expect("human ref"),
+            BlockerTarget::Human
+        );
+    }
+
+    /// A `--by` naming a feature card must error toward `dep add`, not silently
+    /// classify as an External blocker the card graph can never resolve.
+    #[test]
+    fn blocker_target_refuses_a_feature_card_ref() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "maestro-from-ref-feature-{}-{nanos}",
+            std::process::id()
+        ));
+        let paths = MaestroPaths::new(&root);
+        let path = crate::domain::card::store::card_path(&paths, "csv-export");
+        let snapshot = crate::domain::card::store::load_with_snapshot(&path).expect("snapshot");
+        let card = crate::domain::card::schema::Card::new(
+            "csv-export",
+            crate::domain::card::schema::CardType::Feature,
+            "CSV export",
+            "open",
+            "2026-06-10T00:00:00Z",
+        );
+        crate::domain::card::store::save_with_snapshot(&path, &card, &snapshot).expect("save");
+
+        let error = BlockerTarget::from_ref(&paths, Some("csv-export".to_string()))
+            .expect_err("a feature ref is not a blocker target");
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("maestro dep add") && message.contains("feature"),
+            "error routes to the dep edge: {message}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

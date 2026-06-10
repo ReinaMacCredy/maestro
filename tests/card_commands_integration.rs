@@ -380,6 +380,29 @@ fn create_validates_the_parent_dock() {
     );
 }
 
+/// A card id is joined into `.maestro/cards/<id>/`, so a traversal-shaped id
+/// must be refused at the verb boundary instead of addressing a path outside
+/// the store.
+#[test]
+fn traversal_shaped_ids_are_refused() {
+    let temp = cards_repo("s2-traversal");
+    let repo = temp.path();
+
+    for args in [
+        vec!["show", "../../outside"],
+        vec!["update", "../../outside", "--status", "ready"],
+        vec!["close", "../../outside"],
+        vec!["note", "../../outside", "text"],
+        vec!["claim", "../../outside"],
+    ] {
+        let refused = run_err(repo, &args);
+        assert!(
+            refused.contains("invalid card id"),
+            "{args:?} refuses the traversal id:\n{refused}"
+        );
+    }
+}
+
 #[test]
 fn update_without_id_or_flags_guides_rather_than_erroring() {
     let temp = cards_repo("s2-update-guides");

@@ -588,6 +588,39 @@ fn tolerant_roster_marks_incompatible_record_without_dropping_healthy_rows() {
     );
 }
 
+/// A card.yaml that fails to even parse as a card must still surface on the
+/// roster (outer load error), while a corrupt non-feature card stays off the
+/// feature board -- its own surfaces report it.
+#[test]
+fn tolerant_roster_surfaces_a_card_that_fails_to_load() {
+    let temp = TestTempDir::new("maestro-feature-tolerant-load-err");
+    let paths = MaestroPaths::new(temp.path());
+
+    feature::create(&paths, "Healthy Feature").expect("invariant: create should succeed");
+    write_feature(&paths, "billing-csv", "type: feature\nbroken: [");
+    write_feature(&paths, "card-broken1", "type: task\nbroken: [");
+
+    let roster = feature::list_tolerant(&paths);
+    assert!(
+        roster
+            .iter()
+            .any(|entry| matches!(entry, feature::FeatureRosterEntry::Loaded(view) if view.id == "healthy-feature")),
+        "healthy rows must survive a sibling load failure: {roster:#?}"
+    );
+    assert!(
+        roster
+            .iter()
+            .any(|entry| matches!(entry, feature::FeatureRosterEntry::Unreadable { id, .. } if id == "billing-csv")),
+        "a feature card that fails to load is marked, not dropped: {roster:#?}"
+    );
+    assert!(
+        !roster
+            .iter()
+            .any(|entry| matches!(entry, feature::FeatureRosterEntry::Unreadable { id, .. } if id == "card-broken1")),
+        "a corrupt card declaring a non-feature type stays off the feature board: {roster:#?}"
+    );
+}
+
 #[test]
 fn diagnose_reports_count_on_compatible_store() {
     let temp = TestTempDir::new("maestro-feature-diag-ok");

@@ -701,7 +701,7 @@ fn block_task(
     actor: &str,
 ) -> Result<()> {
     let now = utc_now_timestamp();
-    let target = BlockerTarget::from_ref(paths, by);
+    let target = BlockerTarget::from_ref(paths, by)?;
     let (task, blocker_id) = task::block_task(&paths.tasks_dir(), id, reason, target, actor, &now)?;
 
     println!("blocked {} ({blocker_id})", task.id);

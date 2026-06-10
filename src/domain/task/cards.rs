@@ -136,6 +136,7 @@ pub(crate) fn load_one(
     paths: &MaestroPaths,
     id: &str,
 ) -> Result<Option<(TaskRecord, CardSnapshot, PathBuf)>> {
+    card_store::validate_card_id(id)?;
     let path = card_store::card_path(paths, id);
     let snapshot = card_store::load_with_snapshot(&path)?;
     let Some(card) = snapshot.card.clone() else {

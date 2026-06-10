@@ -951,10 +951,10 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
 }
 
 /// Roster of every feature card for `status` / `feature list`. A feature card
-/// whose record is unparseable or schema-incompatible surfaces as `Unreadable`
-/// rather than being dropped, so a single bad artifact never silently shrinks
-/// the board. A card that fails to load at all (corrupt file, unknown type) is
-/// left to `doctor`; non-feature cards are skipped.
+/// whose record is unparseable or schema-incompatible -- or whose card file
+/// fails to load at all -- surfaces as `Unreadable` rather than being dropped,
+/// so a single bad artifact never silently shrinks the board. Non-feature
+/// cards are skipped.
 pub fn list_tolerant(paths: &MaestroPaths) -> Vec<FeatureRosterEntry> {
     let task_entries = task::load_task_entries(&paths.tasks_dir()).unwrap_or_default();
     list_tolerant_with_entries(paths, &task_entries)
@@ -983,26 +983,51 @@ pub fn list_tolerant_with_entries(
                             record, counts,
                         ))));
                     }
-                    Err(error) => {
-                        let typed_error = error
-                            .chain()
-                            .find_map(|cause| cause.downcast_ref::<MaestroError>().cloned());
-                        let hint = typed_error.as_ref().and_then(MaestroError::hint);
-                        entries.push(FeatureRosterEntry::Unreadable {
-                            id,
-                            path,
-                            error: format!("{error:#}"),
-                            hint,
-                            typed_error,
-                        });
-                    }
+                    Err(error) => entries.push(unreadable_entry(id, path, &error)),
                 }
             }
             Ok(_) => {}
-            Err(_) => {}
+            Err(error) => {
+                // The card failed to parse, so its declared type is unknowable
+                // from the typed load. Skip only when the raw text clearly
+                // declares a non-feature type (that card's own surfaces report
+                // it); anything else stays on the board as unreadable.
+                if !raw_card_declares_non_feature(&path) {
+                    entries.push(unreadable_entry(id, path, &error));
+                }
+            }
         }
     }
     entries
+}
+
+fn unreadable_entry(id: String, path: PathBuf, error: &anyhow::Error) -> FeatureRosterEntry {
+    let typed_error = error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<MaestroError>().cloned());
+    let hint = typed_error.as_ref().and_then(MaestroError::hint);
+    FeatureRosterEntry::Unreadable {
+        id,
+        path,
+        error: format!("{error:#}"),
+        hint,
+        typed_error,
+    }
+}
+
+/// Best-effort `type:` sniff of a card file that failed to load as a `Card`.
+/// True only when the raw YAML clearly declares a non-feature type; an
+/// unreadable file or an undeclared type counts as a possible feature.
+fn raw_card_declares_non_feature(path: &Path) -> bool {
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    raw.lines().any(|line| {
+        line.strip_prefix("type:").is_some_and(|value| {
+            let value = value.trim();
+            !value.is_empty() && value != "feature"
+        })
+    })
 }
 
 /// Show one feature joined with its on-demand task counts.

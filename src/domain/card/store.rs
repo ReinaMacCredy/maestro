@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::domain::card::schema::Card;
 use crate::foundation::core::error::MaestroError;
@@ -28,6 +28,21 @@ pub struct CardSnapshot {
 /// Path to a card's record file: `.maestro/cards/<id>/card.yaml`.
 pub fn card_path(paths: &MaestroPaths, id: &str) -> PathBuf {
     paths.cards_dir().join(id).join("card.yaml")
+}
+
+/// Reject an id that is not a single normal path component, so a verb id like
+/// `../../x` or `/etc/x` cannot escape the card store when it is joined into a
+/// path. Minted ids are safe by construction, but the read/verb surface
+/// accepts arbitrary ids; this mirrors the task and feature id guards.
+pub fn validate_card_id(id: &str) -> Result<()> {
+    let mut components = Path::new(id).components();
+    if id.is_empty()
+        || !matches!(components.next(), Some(std::path::Component::Normal(_)))
+        || components.next().is_some()
+    {
+        bail!("invalid card id: {id}");
+    }
+    Ok(())
 }
 
 /// Sorted ids of the card-bearing child directories of `cards_dir` -- the one
@@ -236,6 +251,21 @@ mod tests {
                 "legacy_field: kept\nstate_history:\n  - draft\n  - ready\n",
             )
             .expect("invariant: fixture extra parses"),
+        }
+    }
+
+    /// An id joined into `cards/<id>/card.yaml` must be a single normal path
+    /// component, or a verb id could address a file outside the store.
+    #[test]
+    fn validate_card_id_rejects_path_escapes() {
+        for bad in ["", ".", "..", "../x", "/etc/passwd", "a/b", "a/../b"] {
+            assert!(
+                validate_card_id(bad).is_err(),
+                "{bad:?} must be rejected"
+            );
+        }
+        for good in ["card-a1b2", "csv-export", "task-001"] {
+            assert!(validate_card_id(good).is_ok(), "{good:?} must be accepted");
         }
     }
 
