@@ -358,6 +358,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "FeatureView".to_string(),
             "NoteReport".to_string(),
             "SetReport".to_string(),
+            "SpecSectionReport".to_string(),
             "TransitionReport".to_string(),
             "accept".to_string(),
             "accept_with_qa_none".to_string(),
@@ -390,6 +391,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "unarchive_feature".to_string(),
             "uncovered_acceptance".to_string(),
             "verify_feature".to_string(),
+            "write_spec_section".to_string(),
         ]),
         "src/domain/feature/mod.rs should expose only the deliberate feature facade surface"
     );

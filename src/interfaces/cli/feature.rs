@@ -130,7 +130,12 @@ pub fn run(args: FeatureArgs) -> Result<()> {
             dry_run,
         } => cancel_feature(&paths, &id, &reason, dry_run),
         FeatureCommand::Show { id } => show_feature(&paths, &id),
-        FeatureCommand::Spec { id } => show_feature_spec(&paths, &id),
+        FeatureCommand::Spec {
+            id,
+            section,
+            append,
+            replace,
+        } => feature_spec(&paths, &id, section, append, replace),
         FeatureCommand::List { all } => list_features(&paths, all),
         FeatureCommand::Archive {
             id,
@@ -443,6 +448,7 @@ fn new_feature(
     }
     println!("created feature {id} (proposed)");
     println!("spec: .maestro/cards/{id}/spec.md");
+    println!("fill: maestro feature spec {id} --section \"Current state\" --append \"<text>\"");
     println!("decisions: maestro decision new \"<title>\" --feature {id}");
     if initialized {
         println!("initialized contract fields");
@@ -845,6 +851,47 @@ fn print_decision_summary(paths: &MaestroPaths, id: &str) -> Result<()> {
         "decisions: {} (open: {open}, locked: {locked}, superseded: {superseded})",
         records.len()
     );
+    Ok(())
+}
+
+fn feature_spec(
+    paths: &MaestroPaths,
+    id: &str,
+    section: Option<String>,
+    append: Option<String>,
+    replace: Option<String>,
+) -> Result<()> {
+    match (section, append, replace) {
+        (None, None, None) => show_feature_spec(paths, id),
+        (Some(section), Some(text), None) => write_feature_spec(paths, id, &section, &text, false),
+        (Some(section), None, Some(text)) => write_feature_spec(paths, id, &section, &text, true),
+        (Some(section), None, None) => bail!(
+            "--section needs the text to write\n  append: maestro feature spec {id} --section \"{section}\" --append \"<text>\"\n  replace: maestro feature spec {id} --section \"{section}\" --replace \"<text>\""
+        ),
+        (None, _, _) => bail!(
+            "--append/--replace need --section\n  maestro feature spec {id} --section \"<name>\" --append \"<text>\""
+        ),
+        (Some(_), Some(_), Some(_)) => unreachable!("clap rejects --append with --replace"),
+    }
+}
+
+fn write_feature_spec(
+    paths: &MaestroPaths,
+    id: &str,
+    section: &str,
+    text: &str,
+    replace: bool,
+) -> Result<()> {
+    let report = feature::write_spec_section(paths, id, section, text, replace)?;
+    let verb = if replace { "replaced" } else { "appended to" };
+    let created = if report.created_section {
+        " (new section)"
+    } else {
+        ""
+    };
+    println!("{verb} section \"{}\"{created}", section.trim());
+    println!("spec: .maestro/cards/{id}/spec.md");
+    println!("inspect: maestro feature spec {id}");
     Ok(())
 }
 

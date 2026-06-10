@@ -1,6 +1,6 @@
 ---
 name: maestro-design
-version: 1.7.0
+version: 1.8.0
 description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
@@ -19,7 +19,10 @@ Activate:
    `maestro feature new "<topic>" --description "<problem>" --question "<loose question>"`.
 2. Map the current state from real evidence before options:
    files, commands, outputs, screenshots, or repo artifacts with `file:line`
-   where code is involved.
+   where code is involved. Write what you map into the spec as you go:
+   `maestro feature spec <id> --section "Current state" --append "<finding>"`.
+   The same verb fills `Problem` and creates any new section; `--replace`
+   rewrites a section wholesale.
 3. Put the problem and open questions on the feature:
    `maestro feature set <id> --description "<problem>" --question "<loose question>"`.
 4. Decide one fork at a time. For each fork, give the concrete example, the

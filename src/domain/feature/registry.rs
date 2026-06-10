@@ -1324,10 +1324,95 @@ fn scaffold_spec_file(paths: &MaestroPaths, id: &str, title: &str) -> Result<()>
     if path.exists() {
         return Ok(());
     }
-    let contents =
-        format!("# {title}\n\n## Current state\n\n## Problem\n\n## Fork walkthroughs\n\n");
+    // S8: only the two sections every design starts from; fork walkthroughs
+    // are composable from decision cards and land via `feature spec --section`.
+    let contents = format!("# {title}\n\n## Current state\n\n## Problem\n\n");
     write_string_atomic(&path, &contents)
         .with_context(|| format!("failed to write {}", path.display()))
+}
+
+/// Outcome of a spec-section write, for the verb echo.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SpecSectionReport {
+    /// Whether the section heading was newly added by this write.
+    pub created_section: bool,
+}
+
+/// Write prose into one `## <section>` of a feature's `spec.md` (S8): append
+/// to or replace the section body, scaffolding the file and creating the
+/// section when absent. The spec is owner-edited prose, not record state, so
+/// the write is an atomic replace without a CAS.
+pub fn write_spec_section(
+    paths: &MaestroPaths,
+    id: &str,
+    section: &str,
+    text: &str,
+    replace: bool,
+) -> Result<SpecSectionReport> {
+    let record = load_record(paths, id)?;
+    let section = section.trim();
+    if section.is_empty() || section.contains('\n') {
+        bail!("section name must be one non-empty line");
+    }
+    let text = text.trim();
+    if text.is_empty() {
+        bail!("section text must not be empty");
+    }
+    scaffold_spec_file(paths, id, &record.title)?;
+    let path = feature_sidecar_dir(paths, id).join("spec.md");
+    let original = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    let (contents, created_section) = patch_spec_section(&original, section, text, replace);
+    write_string_atomic(&path, &contents)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(SpecSectionReport { created_section })
+}
+
+/// Patch one `## <section>` body in spec prose. A missing section is appended
+/// at the end of the file. The section body runs to the next heading; blank
+/// padding inside it is normalized to single blank lines around the content.
+fn patch_spec_section(original: &str, section: &str, text: &str, replace: bool) -> (String, bool) {
+    let heading = format!("## {section}");
+    let lines: Vec<&str> = original.lines().collect();
+    let Some(start) = lines
+        .iter()
+        .position(|line| line.trim_end() == heading.as_str())
+    else {
+        let mut out = original.trim_end().to_string();
+        if !out.is_empty() {
+            out.push_str("\n\n");
+        }
+        out.push_str(&format!("{heading}\n\n{text}\n"));
+        return (out, true);
+    };
+    let end = lines[start + 1..]
+        .iter()
+        .position(|line| line.starts_with("## ") || line.starts_with("# "))
+        .map(|offset| start + 1 + offset)
+        .unwrap_or(lines.len());
+    let existing = lines[start + 1..end].join("\n");
+    let existing = existing.trim();
+    let body = if replace || existing.is_empty() {
+        text.to_string()
+    } else {
+        format!("{existing}\n\n{text}")
+    };
+    let mut out = String::new();
+    for line in &lines[..=start] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out.push('\n');
+    out.push_str(&body);
+    out.push('\n');
+    if end < lines.len() {
+        out.push('\n');
+        for line in &lines[end..] {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    (out, false)
 }
 
 /// Path to a feature's archived card (`.maestro/archive/cards/<id>/card.yaml`).
@@ -1640,6 +1725,59 @@ mod cutover_tests {
                 .contains(&format!("feature {id} already exists")),
             "{error}"
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// S8: the spec verb fills sections during brainstorm/plan -- appends
+    /// accumulate, replace overwrites, an unknown section is created, and the
+    /// rest of the file is left byte-identical.
+    #[test]
+    fn spec_section_writes_fill_the_scaffold() {
+        let (root, paths) = card_mode_repo("spec-section");
+        let id = create(&paths, "Csv export").expect("create scaffolds spec.md");
+        let spec_path = feature_sidecar_dir(&paths, &id).join("spec.md");
+
+        let first = write_spec_section(&paths, &id, "Current state", "One writer.", false)
+            .expect("append into a scaffold section");
+        assert!(!first.created_section);
+        write_spec_section(&paths, &id, "Current state", "Two formats.", false)
+            .expect("second append accumulates");
+        let appended = std::fs::read_to_string(&spec_path).expect("spec");
+        assert_eq!(
+            appended,
+            "# Csv export\n\n## Current state\n\nOne writer.\n\nTwo formats.\n\n## Problem\n\n"
+        );
+
+        write_spec_section(&paths, &id, "Current state", "Rewritten.", true)
+            .expect("replace overwrites the body");
+        let replaced = std::fs::read_to_string(&spec_path).expect("spec");
+        assert_eq!(
+            replaced,
+            "# Csv export\n\n## Current state\n\nRewritten.\n\n## Problem\n\n"
+        );
+
+        let created = write_spec_section(&paths, &id, "Fork walkthroughs", "F1 vs F2.", false)
+            .expect("an unknown section is created at the end");
+        assert!(created.created_section);
+        let grown = std::fs::read_to_string(&spec_path).expect("spec");
+        assert_eq!(
+            grown,
+            "# Csv export\n\n## Current state\n\nRewritten.\n\n## Problem\n\n## Fork walkthroughs\n\nF1 vs F2.\n"
+        );
+
+        let error = write_spec_section(&paths, &id, "Current state", "   ", false)
+            .expect_err("blank text is refused");
+        assert!(
+            format!("{error:#}").contains("must not be empty"),
+            "{error:#}"
+        );
+        let error = write_spec_section(&paths, "ghost", "Current state", "text", false)
+            .expect_err("a missing feature is refused");
+        assert!(
+            format!("{error:#}").contains("feature not found"),
+            "{error:#}"
+        );
+
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -689,8 +689,23 @@ pub enum FeatureCommand {
     },
     #[command(about = "Show a feature's status, full contract, and task counts")]
     Show { id: String },
-    #[command(about = "Render a feature's spec-of-record with decisions and notes")]
-    Spec { id: String },
+    #[command(
+        about = "Render a feature's spec-of-record, or fill one section (--section with --append/--replace)"
+    )]
+    Spec {
+        id: String,
+        #[arg(long, help = "Spec section to write, e.g. \"Current state\"")]
+        section: Option<String>,
+        #[arg(long, help = "Append text to the section body", value_name = "TEXT")]
+        append: Option<String>,
+        #[arg(
+            long,
+            help = "Replace the section body with the text",
+            value_name = "TEXT",
+            conflicts_with = "append"
+        )]
+        replace: Option<String>,
+    },
     #[command(about = "List features with their statuses and task counts")]
     List {
         #[arg(

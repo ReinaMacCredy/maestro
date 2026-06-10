@@ -1211,6 +1211,101 @@ fn feature_new_scaffolds_spec_in_the_card_dir_and_feature_spec_reads_it() {
     );
 }
 
+/// S8: `feature spec --section --append/--replace` fills the spec during
+/// brainstorm/plan -- appends accumulate, replace overwrites, an unknown
+/// section is created, and the bare verb renders what was written.
+#[test]
+fn feature_spec_section_writes_fill_the_spec_from_the_cli() {
+    let temp_dir = TestTempDir::new("maestro-feature-spec-write");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+
+    let create_args = ["feature", "new", "Billing CSV export"];
+    let receipt = stdout(maestro(&create_args, temp_dir.path()), &create_args);
+    assert!(
+        receipt.contains(
+            "fill: maestro feature spec billing-csv-export --section \"Current state\" --append"
+        ),
+        "feature new must advertise the spec write verb: {receipt}"
+    );
+
+    let id = "billing-csv-export";
+    let append_args = [
+        "feature",
+        "spec",
+        id,
+        "--section",
+        "Current state",
+        "--append",
+        "rows export by hand today",
+    ];
+    let appended = stdout(maestro(&append_args, temp_dir.path()), &append_args);
+    assert!(
+        appended.contains("appended to section \"Current state\""),
+        "{appended}"
+    );
+    stdout(
+        maestro(
+            &[
+                "feature",
+                "spec",
+                id,
+                "--section",
+                "Problem",
+                "--replace",
+                "no streaming path",
+            ],
+            temp_dir.path(),
+        ),
+        &["feature", "spec", id, "--section", "Problem", "--replace"],
+    );
+    let created = stdout(
+        maestro(
+            &[
+                "feature",
+                "spec",
+                id,
+                "--section",
+                "Fork walkthroughs",
+                "--append",
+                "F1: stream vs buffer",
+            ],
+            temp_dir.path(),
+        ),
+        &["feature", "spec", id, "--section", "Fork walkthroughs"],
+    );
+    assert!(created.contains("(new section)"), "{created}");
+
+    let spec = fs::read_to_string(
+        temp_dir
+            .path()
+            .join(".maestro/cards/billing-csv-export/spec.md"),
+    )
+    .expect("spec.md present");
+    assert_eq!(
+        spec,
+        "# Billing CSV export\n\n## Current state\n\nrows export by hand today\n\n## Problem\n\nno streaming path\n\n## Fork walkthroughs\n\nF1: stream vs buffer\n"
+    );
+
+    let render_args = ["feature", "spec", id];
+    let render = stdout(maestro(&render_args, temp_dir.path()), &render_args);
+    assert!(render.contains("rows export by hand today"), "{render}");
+    assert!(render.contains("F1: stream vs buffer"), "{render}");
+
+    let orphan_args = ["feature", "spec", id, "--append", "text without a section"];
+    let orphan = assert_failure(maestro(&orphan_args, temp_dir.path()), &orphan_args);
+    assert!(
+        orphan.contains("--append/--replace need --section"),
+        "{orphan}"
+    );
+    let bare_args = ["feature", "spec", id, "--section", "Current state"];
+    let bare = assert_failure(maestro(&bare_args, temp_dir.path()), &bare_args);
+    assert!(bare.contains("--section needs the text to write"), "{bare}");
+}
+
 #[test]
 fn feature_spec_renders_multiline_decision_preview() {
     let temp_dir = TestTempDir::new("maestro-feature-spec-preview");
