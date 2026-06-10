@@ -617,7 +617,7 @@ fn feature_guarded_lifecycle_via_cli() {
     assert!(list_all.contains("NEXT"));
     assert!(list_all.contains("INSPECT"));
     assert!(list_all.contains("maestro feature show billing-csv-export"));
-    assert!(list_all.contains("\t3\t3\t"));
+    assert!(untabify(&list_all).contains("\t3\t3\t"));
     // the outcome rides the title column in `list --all`.
     assert!(list_all.contains("csv export shipped"));
 }
@@ -1140,8 +1140,8 @@ fn decision_new_list_show_mint_card_ids_and_preserve_template() {
         maestro(&["decision", "list"], temp_dir.path()),
         &["decision", "list"],
     );
-    assert!(list_output.contains("decision-007\tlegacy\tlegacy-md"));
-    assert!(list_output.contains(&format!("{decision_id}\topen\tglobal")));
+    assert!(untabify(&list_output).contains("decision-007\tlegacy\tlegacy-md"));
+    assert!(untabify(&list_output).contains(&format!("{decision_id}\topen\tglobal")));
 
     let show_output = stdout(
         maestro(&["decision", "show", &decision_id], temp_dir.path()),
@@ -1281,7 +1281,10 @@ fn status_and_feature_list_degrade_when_one_feature_record_is_incompatible() {
 
     let status = stdout(maestro(&["status"], temp_dir.path()), &["status"]);
     assert!(status.contains("healthy-feature"), "{status}");
-    assert!(status.contains("bad-feature\tunreadable"), "{status}");
+    assert!(
+        untabify(&status).contains("bad-feature\tunreadable"),
+        "{status}"
+    );
     assert!(status.contains("fix: run maestro migrate-v2"), "{status}");
 
     let list = stdout(
@@ -1289,7 +1292,10 @@ fn status_and_feature_list_degrade_when_one_feature_record_is_incompatible() {
         &["feature", "list", "--all"],
     );
     assert!(list.contains("healthy-feature"), "{list}");
-    assert!(list.contains("bad-feature\tunreadable"), "{list}");
+    assert!(
+        untabify(&list).contains("bad-feature\tunreadable"),
+        "{list}"
+    );
     assert!(list.contains("fix: run maestro migrate-v2"), "{list}");
 }
 
@@ -1359,7 +1365,7 @@ fn feature_spec_and_decision_list_degrade_per_record() {
         &["decision", "list"],
     );
     assert!(
-        decisions.contains(&format!(
+        untabify(&decisions).contains(&format!(
             "{healthy_decision}\topen\tfeature:healthy-feature"
         )),
         "{decisions}"
@@ -2288,4 +2294,20 @@ fn feature_set_on_a_terminal_feature_does_not_recommend_the_dead_end_amend() {
     let err = assert_failure(maestro(&set_args, temp_dir.path()), &set_args);
     assert!(err.contains("terminal (status: cancelled)"));
     assert!(!err.contains("feature amend"));
+}
+
+/// Collapse aligned-table padding (runs of 2+ spaces) back to tabs so cell
+/// assertions stay width-independent.
+fn untabify(output: &str) -> String {
+    output
+        .lines()
+        .map(|line| {
+            line.split("  ")
+                .map(str::trim)
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

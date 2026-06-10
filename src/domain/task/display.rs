@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use crate::domain::task::blockers::has_unresolved_blockers;
 use crate::domain::task::template::{StateHistoryEntry, TaskRecord, TaskState};
+use crate::foundation::core::table;
 use crate::foundation::core::time::{render_timestamp, timestamp_nanos};
 
 /// Render one task for `maestro task show`. `checks` is the task's acceptance
@@ -138,23 +139,23 @@ pub fn render_task_list_with_missing_checks(
     archived_ids: &BTreeSet<String>,
     missing_verify_contract_ids: &BTreeSet<String>,
 ) -> String {
-    let mut out = String::new();
-    out.push_str("ID\tSTATE\tNEXT\tINSPECT\tTITLE\n");
-    for task in tasks {
-        let mut state = state_label(task);
-        if archived_ids.contains(&task.id) {
-            state.push_str(" (archived)");
-        }
-        out.push_str(&format!(
-            "{}\t{}\t{}\tmaestro task show {}\t{}\n",
-            task.id,
-            state,
-            compact_next(task, missing_verify_contract_ids.contains(&task.id)),
-            task.id,
-            task.title
-        ));
-    }
-    out
+    let rows: Vec<Vec<String>> = tasks
+        .iter()
+        .map(|task| {
+            let mut state = state_label(task);
+            if archived_ids.contains(&task.id) {
+                state.push_str(" (archived)");
+            }
+            vec![
+                task.id.clone(),
+                state,
+                compact_next(task, missing_verify_contract_ids.contains(&task.id)).to_string(),
+                format!("maestro task show {}", task.id),
+                task.title.clone(),
+            ]
+        })
+        .collect();
+    table::render_table(&["ID", "STATE", "NEXT", "INSPECT", "TITLE"], &rows)
 }
 
 fn state_label(task: &TaskRecord) -> String {

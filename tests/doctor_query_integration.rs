@@ -720,7 +720,7 @@ fn query_views_scan_current_artifacts_without_writing_cache_files() {
     let before = maestro_files(repo);
 
     let decisions = run_success(repo, &["query", "decisions"]);
-    assert!(decisions.contains(&format!("{decision_id}\topen\tglobal")));
+    assert!(untabify(&decisions).contains(&format!("{decision_id}\topen\tglobal")));
     assert!(decisions.contains("Use computed query views"));
 
     let backlog = run_success(repo, &["query", "backlog"]);
@@ -911,7 +911,7 @@ fn query_matrix_reports_an_empty_state_line_when_no_features_or_tasks_exist() {
 
     let matrix = run_success(repo, &["query", "matrix"]);
     assert!(matrix.contains("no features or tasks found"));
-    assert!(!matrix.contains("FEATURE\tTASK"));
+    assert!(!matrix.contains("FEATURE"));
 }
 
 fn maestro_files(repo: &Path) -> BTreeSet<PathBuf> {
@@ -934,4 +934,20 @@ fn collect_files(dir: &Path, repo: &Path, files: &mut BTreeSet<PathBuf>) {
             );
         }
     }
+}
+
+/// Collapse aligned-table padding (runs of 2+ spaces) back to tabs so cell
+/// assertions stay width-independent.
+fn untabify(output: &str) -> String {
+    output
+        .lines()
+        .map(|line| {
+            line.split("  ")
+                .map(str::trim)
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

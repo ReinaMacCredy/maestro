@@ -477,9 +477,12 @@ fn harness_friction_surfaces_in_status_task_next_list_and_complete() {
     assert!(friction_at < normal_at, "{next}");
 
     let list = run(repo, &["harness", "list"]);
-    assert!(list.contains("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE"), "{list}");
     assert!(
-        list.contains(&format!(
+        untabify(&list).contains("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE"),
+        "{list}"
+    );
+    assert!(
+        untabify(&list).contains(&format!(
             "{friction}\t!\tproposed\trecurring_intervention\t9x/3s"
         )),
         "{list}"
@@ -892,7 +895,7 @@ fn task_list_next_column_uses_verify_contract_state_not_only_lifecycle_state() {
     assert!(list.contains("template: add_check"), "{list}");
     assert!(list.contains(&format!("maestro task show {id}")), "{list}");
     assert!(
-        !list.contains(&format!("{id}\tdraft\trun: explore")),
+        !untabify(&list).contains(&format!("{id}\tdraft\trun: explore")),
         "standalone draft without checks must not point at explore first: {list}"
     );
 }
@@ -1263,4 +1266,20 @@ fn feature_prepare_does_not_infer_blockers_and_keeps_all_blocked_feature_ready()
     );
     let feature = run(repo, &["feature", "show", "all-blocked-setup"]);
     assert!(feature.contains("status: ready"), "{feature}");
+}
+
+/// Collapse aligned-table padding (runs of 2+ spaces) back to tabs so cell
+/// assertions stay width-independent.
+fn untabify(output: &str) -> String {
+    output
+        .lines()
+        .map(|line| {
+            line.split("  ")
+                .map(str::trim)
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

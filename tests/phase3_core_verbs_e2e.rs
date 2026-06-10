@@ -83,10 +83,10 @@ fn phase3_core_verbs_demo_path_runs_end_to_end() {
     assert!(feature_list.contains("NEXT"));
     assert!(feature_list.contains("INSPECT"));
     assert!(feature_list.contains("maestro feature show billing-csv-export"));
-    assert!(feature_list.contains("\t1\t1\t"));
+    assert!(untabify(&feature_list).contains("\t1\t1\t"));
 
     let decision_list = stdout(run(repo, &["decision", "list"]));
-    assert!(decision_list.contains(&format!(
+    assert!(untabify(&decision_list).contains(&format!(
         "{decision_id}\topen\tglobal\tUse computed query views"
     )));
 
@@ -123,4 +123,20 @@ fn run_with_env(repo: &Path, args: &[&str], key: &str, value: &str) -> std::proc
         .expect("invariant: compiled maestro binary should run in integration tests");
     assert_success(&output, args);
     output
+}
+
+/// Collapse aligned-table padding (runs of 2+ spaces) back to tabs so cell
+/// assertions stay width-independent.
+fn untabify(output: &str) -> String {
+    output
+        .lines()
+        .map(|line| {
+            line.split("  ")
+                .map(str::trim)
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

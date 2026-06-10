@@ -271,9 +271,19 @@ fn write_correction_session(repo: &Path, session: &str) {
 fn ids_by_type(list: &str) -> BTreeMap<String, String> {
     let mut ids = BTreeMap::new();
     for line in list.lines().skip(1) {
-        let fields = line.split('\t').collect::<Vec<_>>();
-        if fields.len() >= 4 {
-            ids.insert(fields[3].to_string(), fields[0].to_string());
+        let fields = untabify(line)
+            .split('\t')
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        // The aligned renderer drops the empty `!` cell under untabify, so an
+        // over-threshold row has TYPE at index 3 and a quiet row at index 2.
+        let type_index = if fields.get(1).map(String::as_str) == Some("!") {
+            3
+        } else {
+            2
+        };
+        if let Some(item_type) = fields.get(type_index) {
+            ids.insert(item_type.clone(), fields[0].clone());
         }
     }
     ids
@@ -675,9 +685,12 @@ fn harness_escalation_tracks_recurring_intervention_globally_and_dismisses() {
     write_correction_session(repo, "session-c");
 
     let list = run_success(repo, &["harness", "list"]);
-    assert!(list.contains("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE"), "{list}");
     assert!(
-        list.contains("!\tproposed\trecurring_intervention\t9x/3s"),
+        untabify(&list).contains("ID\t!\tSTATUS\tTYPE\tSEEN\tTITLE"),
+        "{list}"
+    );
+    assert!(
+        untabify(&list).contains("!\tproposed\trecurring_intervention\t9x/3s"),
         "{list}"
     );
     let ids = ids_by_type(&list);
@@ -708,7 +721,10 @@ fn harness_escalation_tracks_recurring_intervention_globally_and_dismisses() {
     let active = run_success(repo, &["harness", "list"]);
     assert!(!active.contains("recurring_intervention"), "{active}");
     let all = run_success(repo, &["harness", "list", "--all"]);
-    assert!(all.contains("dismissed\trecurring_intervention"), "{all}");
+    assert!(
+        untabify(&all).contains("dismissed\trecurring_intervention"),
+        "{all}"
+    );
     assert_eq!(all.matches("recurring_intervention").count(), 1);
 }
 
@@ -2461,4 +2477,20 @@ fn harness_measure_names_force_when_the_linked_task_vanished() {
     let err = stderr(&gated);
     assert!(err.contains("could not be loaded"), "{err}");
     assert!(err.contains("use --force to measure anyway"), "{err}");
+}
+
+/// Collapse aligned-table padding (runs of 2+ spaces) back to tabs so cell
+/// assertions stay width-independent.
+fn untabify(output: &str) -> String {
+    output
+        .lines()
+        .map(|line| {
+            line.split("  ")
+                .map(str::trim)
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

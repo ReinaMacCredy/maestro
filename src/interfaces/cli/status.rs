@@ -7,6 +7,7 @@ use serde::Serialize;
 use crate::domain::feature::{self, FeatureRosterEntry, FeatureStatus};
 use crate::domain::task::{self, TaskRecord, TaskState};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::interfaces::cli::{StatusArgs, feature_next_label, recovery_label};
 use crate::operations::harness;
 
@@ -97,13 +98,24 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     if !report.task_rows.is_empty() {
         println!("ACTIONS");
-        println!("NEXT\tTASK\tSTATE\tINSPECT\tTITLE");
-        for row in report.task_rows.iter().take(STATUS_TASK_ROW_LIMIT) {
-            println!(
-                "{}\t{}\t{}\t{}\t{}",
-                row.next, row.id, row.state, row.inspect, row.title
-            );
-        }
+        let rows: Vec<Vec<String>> = report
+            .task_rows
+            .iter()
+            .take(STATUS_TASK_ROW_LIMIT)
+            .map(|row| {
+                vec![
+                    row.next.clone(),
+                    row.id.clone(),
+                    row.state.clone(),
+                    row.inspect.clone(),
+                    row.title.clone(),
+                ]
+            })
+            .collect();
+        print!(
+            "{}",
+            table::render_table(&["NEXT", "TASK", "STATE", "INSPECT", "TITLE"], &rows)
+        );
         if report.task_rows.len() > STATUS_TASK_ROW_LIMIT {
             println!(
                 "... {} more active task(s); run maestro task list",
@@ -113,22 +125,38 @@ fn print_status(report: StatusReport, json: bool) -> Result<()> {
     }
     if !report.active_features.is_empty() {
         println!("ACTIVE FEATURES");
-        println!("FEATURE\tSTATE\tNEXT\tINSPECT\tTITLE");
-        for row in &report.active_features {
-            println!(
-                "{}\t{}\t{}\t{}\t{}",
-                row.id, row.state, row.next, row.inspect, row.title
-            );
-        }
+        let rows: Vec<Vec<String>> = report
+            .active_features
+            .iter()
+            .map(|row| {
+                vec![
+                    row.id.clone(),
+                    row.state.clone(),
+                    row.next.clone(),
+                    row.inspect.clone(),
+                    row.title.clone(),
+                ]
+            })
+            .collect();
+        print!(
+            "{}",
+            table::render_table(&["FEATURE", "STATE", "NEXT", "INSPECT", "TITLE"], &rows)
+        );
     }
     if !report.ready_to_ship_features.is_empty() {
         println!("FEATURES READY TO SHIP");
-        for feature in &report.ready_to_ship_features {
-            println!(
-                "{}\tverified={}/{}\ttemplate: {}",
-                feature.id, feature.verified, feature.total, feature.next_action.command.display
-            );
-        }
+        let rows: Vec<Vec<String>> = report
+            .ready_to_ship_features
+            .iter()
+            .map(|feature| {
+                vec![
+                    feature.id.clone(),
+                    format!("verified={}/{}", feature.verified, feature.total),
+                    format!("template: {}", feature.next_action.command.display),
+                ]
+            })
+            .collect();
+        print!("{}", table::render_table(&[], &rows));
     }
     Ok(())
 }

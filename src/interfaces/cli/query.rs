@@ -9,6 +9,7 @@ use crate::domain::run;
 use crate::domain::task;
 use crate::foundation::core::git;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::interfaces::cli::{QueryArgs, QueryCommand};
 use crate::operations::harness;
 
@@ -70,24 +71,37 @@ fn query_matrix(paths: &MaestroPaths) -> Result<()> {
         return Ok(());
     }
 
-    println!("FEATURE\tTASK\tSTATE\tPROOF\tTITLE");
     let mut features_with_tasks = std::collections::HashSet::new();
+    let mut rows: Vec<Vec<String>> = Vec::new();
     for row in &task_rows {
         if row.feature_id != "<none>" {
             features_with_tasks.insert(row.feature_id.clone());
         }
-        println!(
-            "{}\t{}\t{}\t{}\t{}",
-            row.feature_id, row.id, row.state, row.proof, row.title
-        );
+        rows.push(vec![
+            row.feature_id.clone(),
+            row.id.clone(),
+            row.state.to_string(),
+            row.proof.to_string(),
+            row.title.clone(),
+        ]);
     }
 
     for view in features
         .iter()
         .filter(|view| !features_with_tasks.contains(&view.id))
     {
-        println!("{}\t<none>\t<none>\t<none>\t{}", view.id, view.title);
+        rows.push(vec![
+            view.id.clone(),
+            "<none>".to_string(),
+            "<none>".to_string(),
+            "<none>".to_string(),
+            view.title.clone(),
+        ]);
     }
+    print!(
+        "{}",
+        table::render_table(&["FEATURE", "TASK", "STATE", "PROOF", "TITLE"], &rows)
+    );
     Ok(())
 }
 
@@ -140,16 +154,21 @@ fn query_decisions(paths: &MaestroPaths) -> Result<()> {
         return Ok(());
     }
 
-    println!("ID\tSTATUS\tHOME\tTITLE");
-    for entry in entries {
-        println!(
-            "{}\t{}\t{}\t{}",
-            entry.id,
-            entry.status,
-            decision_home(&entry.source),
-            entry.title
-        );
-    }
+    let rows: Vec<Vec<String>> = entries
+        .iter()
+        .map(|entry| {
+            vec![
+                entry.id.clone(),
+                entry.status.clone(),
+                decision_home(&entry.source),
+                entry.title.clone(),
+            ]
+        })
+        .collect();
+    print!(
+        "{}",
+        table::render_table(&["ID", "STATUS", "HOME", "TITLE"], &rows)
+    );
     Ok(())
 }
 
@@ -168,10 +187,12 @@ fn query_backlog(paths: &MaestroPaths) -> Result<()> {
         return Ok(());
     }
 
-    println!("ID\tTITLE");
-    for item in backlog.items {
-        println!("{}\t{}", item.id, item.title);
-    }
+    let rows: Vec<Vec<String>> = backlog
+        .items
+        .iter()
+        .map(|item| vec![item.id.clone(), item.title.clone()])
+        .collect();
+    print!("{}", table::render_table(&["ID", "TITLE"], &rows));
     Ok(())
 }
 

@@ -7,6 +7,7 @@ use crate::domain::feature::{
 };
 use crate::domain::task;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::foundation::core::time::render_timestamp;
 use crate::interfaces::cli::{FeatureArgs, FeatureCommand, feature_next_label, recovery_label};
 use crate::operations::feature_prepare;
@@ -1076,32 +1077,44 @@ fn list_features(paths: &MaestroPaths, all: bool) -> Result<()> {
     if shown.is_empty() && unreadable.is_empty() {
         println!("no features found");
     } else {
-        println!("ID\tSTATE\tNEXT\tINSPECT\tTASKS\tVERIFIED\tTITLE");
-        for view in &shown {
-            let title = match view.outcome.as_deref() {
-                Some(outcome) => format!("{} -- {outcome}", view.title),
-                None => view.title.clone(),
-            };
-            println!(
-                "{}\t{}\t{}\tmaestro feature show {}\t{}\t{}\t{}",
-                view.id,
-                feature::status_label(&view.status),
-                feature_next_label(view),
-                view.id,
-                view.counts.total,
-                view.counts.verified,
-                title
-            );
-        }
+        let mut rows: Vec<Vec<String>> = shown
+            .iter()
+            .map(|view| {
+                let title = match view.outcome.as_deref() {
+                    Some(outcome) => format!("{} -- {outcome}", view.title),
+                    None => view.title.clone(),
+                };
+                vec![
+                    view.id.clone(),
+                    feature::status_label(&view.status).to_string(),
+                    feature_next_label(view).to_string(),
+                    format!("maestro feature show {}", view.id),
+                    view.counts.total.to_string(),
+                    view.counts.verified.to_string(),
+                    title,
+                ]
+            })
+            .collect();
         for (id, error, hint) in &unreadable {
-            println!(
-                "{}\tunreadable\t{}\tmaestro feature spec {}\t0\t0\t{}",
-                id,
-                recovery_label(hint.as_deref()),
-                id,
-                error
-            );
+            rows.push(vec![
+                id.clone(),
+                "unreadable".to_string(),
+                recovery_label(hint.as_deref()).to_string(),
+                format!("maestro feature spec {id}"),
+                "0".to_string(),
+                "0".to_string(),
+                error.clone(),
+            ]);
         }
+        print!(
+            "{}",
+            table::render_table(
+                &[
+                    "ID", "STATE", "NEXT", "INSPECT", "TASKS", "VERIFIED", "TITLE"
+                ],
+                &rows
+            )
+        );
     }
 
     if !all && hidden > 0 {

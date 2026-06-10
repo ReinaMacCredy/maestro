@@ -534,7 +534,7 @@ fn list_supports_basic_output_and_requested_filters() {
     let all = maestro(repo, &["task", "list"]);
     assert_success(&all, &["task", "list"]);
     let all_out = stdout(&all);
-    assert!(all_out.contains("ID\tSTATE\tNEXT\tINSPECT\tTITLE"));
+    assert!(untabify(&all_out).contains("ID\tSTATE\tNEXT\tINSPECT\tTITLE"));
     assert!(all_out.contains(&format!("maestro task show {a}")));
     assert!(all_out.contains(&a));
     assert!(all_out.contains(&b));
@@ -1476,4 +1476,20 @@ fn task_archive_and_unarchive_redirect_to_the_feature_cascade() {
             "`task {verb}` must not dead-end on an existing card: {message}"
         );
     }
+}
+
+/// Collapse aligned-table padding (runs of 2+ spaces) back to tabs so cell
+/// assertions stay width-independent.
+fn untabify(output: &str) -> String {
+    output
+        .lines()
+        .map(|line| {
+            line.split("  ")
+                .map(str::trim)
+                .filter(|cell| !cell.is_empty())
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

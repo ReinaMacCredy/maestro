@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 
 use crate::domain::decisions;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
+use crate::foundation::core::table;
 use crate::interfaces::cli::{DecisionArgs, DecisionCommand};
 
 /// Execute `maestro decision`.
@@ -93,16 +94,21 @@ fn list_decisions(paths: &MaestroPaths) -> Result<()> {
         return Ok(());
     }
 
-    println!("ID\tSTATUS\tHOME\tTITLE");
-    for entry in entries {
-        println!(
-            "{}\t{}\t{}\t{}",
-            entry.id,
-            entry.status,
-            home(&entry.source),
-            entry.title
-        );
-    }
+    let rows: Vec<Vec<String>> = entries
+        .iter()
+        .map(|entry| {
+            vec![
+                entry.id.clone(),
+                entry.status.clone(),
+                home(&entry.source),
+                entry.title.clone(),
+            ]
+        })
+        .collect();
+    print!(
+        "{}",
+        table::render_table(&["ID", "STATUS", "HOME", "TITLE"], &rows)
+    );
 
     Ok(())
 }
