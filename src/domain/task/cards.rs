@@ -37,8 +37,16 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
     if card.extra.is_empty() {
         return Ok(record_from_native_card(card));
     }
-    let parent = card.parent.clone();
-    let mut record: TaskRecord = serde_yaml::from_value(Value::Mapping(card.extra))
+    let Card {
+        title,
+        status,
+        parent,
+        claimed_by,
+        claimed_at,
+        extra,
+        ..
+    } = card;
+    let mut record: TaskRecord = serde_yaml::from_value(Value::Mapping(extra))
         .with_context(|| format!("failed to parse {artifact}"))?;
     if classify(&record.schema_version, TASK_SCHEMA_VERSION) != Compat::Exact {
         return Err(MaestroError::SchemaMismatch {
@@ -49,7 +57,37 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
         .into());
     }
     record.feature_id = parent;
+    // The card verbs (`update`, `close`, `claim`) write only the top-level copy
+    // fields, so they are the freshest source for what they own (SPEC DN3: the
+    // card status is the single source of truth). The overlay is conservative:
+    // an unrecognized status word and an absent claim keep the record's own.
+    record.title = title;
+    if let Some(state) = task_state_from_status(&status) {
+        record.state = state;
+    }
+    if claimed_by.is_some() {
+        record.claimed_by = claimed_by;
+        record.claimed_at = claimed_at;
+    }
     Ok(record)
+}
+
+/// Map a card status word to the task state it denotes (SPEC DN3 vocabulary).
+/// `closed` is the DN3b uniform terminal word (`card close`), folded onto
+/// `verified`; an unknown word maps to `None` so callers keep a better source.
+fn task_state_from_status(status: &str) -> Option<TaskState> {
+    Some(match status {
+        "draft" => TaskState::Draft,
+        "exploring" => TaskState::Exploring,
+        "ready" => TaskState::Ready,
+        "in_progress" => TaskState::InProgress,
+        "needs_verification" => TaskState::NeedsVerification,
+        "verified" | "closed" => TaskState::Verified,
+        "rejected" => TaskState::Rejected,
+        "abandoned" => TaskState::Abandoned,
+        "superseded" => TaskState::Superseded,
+        _ => return None,
+    })
 }
 
 /// Build a [`TaskRecord`] from a native card's own fields (no `extra` carrier).
@@ -63,11 +101,7 @@ fn record_from_native_card(card: Card) -> TaskRecord {
     record.updated_at = card.updated_at;
     record.claimed_by = card.claimed_by;
     record.claimed_at = card.claimed_at;
-    record.state = match card.status.as_str() {
-        "in_progress" => TaskState::InProgress,
-        "closed" => TaskState::Verified,
-        _ => TaskState::Draft,
-    };
+    record.state = task_state_from_status(&card.status).unwrap_or(TaskState::Draft);
     record
 }
 
@@ -142,7 +176,7 @@ pub(crate) fn load_one_archived(
 /// path, not `paths`, because the snapshot already carries it.
 pub(crate) fn save_at(path: &Path, record: &TaskRecord, snapshot: &CardSnapshot) -> Result<()> {
     let card = card_for(record)?;
-    card_store::save_with_snapshot(path, &card, snapshot)
+    card_store::save_folded_with_snapshot(path, card, snapshot)
 }
 
 /// Reconstruct every live `Task`-typed card with its card directory, sorted by
@@ -193,6 +227,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
+    use crate::domain::card::schema::{Dep, DepKind};
     use crate::domain::task::template::TaskState;
     use crate::foundation::core::fs::ensure_dir;
 
@@ -246,6 +281,93 @@ mod tests {
             reconstructed, record,
             "every field, including the recovered feature_id, survives the round-trip"
         );
+    }
+
+    /// The card verbs (`update --status`, `claim`, `update --title`) write only
+    /// the top-level copy; the typed read treats that copy as the freshest
+    /// source (SPEC DN3) across the FULL fine-state vocabulary -- a
+    /// `needs_verification` card must not collapse to draft.
+    #[test]
+    fn typed_read_overlays_top_level_status_claim_and_title() {
+        let record = parented_draft();
+        let mut card = card_for(&record).expect("fold record into card");
+        card.status = "needs_verification".to_string();
+        card.claimed_by = Some("claude#s1".to_string());
+        card.claimed_at = Some("2026-06-08T02:00:00Z".to_string());
+        card.title = "Add CSV export (retitled)".to_string();
+
+        let reconstructed =
+            record_from_card(card, "test".to_string()).expect("reconstruct the record");
+        assert_eq!(reconstructed.state, TaskState::NeedsVerification);
+        assert_eq!(reconstructed.claimed_by.as_deref(), Some("claude#s1"));
+        assert_eq!(
+            reconstructed.claimed_at.as_deref(),
+            Some("2026-06-08T02:00:00Z")
+        );
+        assert_eq!(reconstructed.title, "Add CSV export (retitled)");
+    }
+
+    /// Conservative overlay: an unrecognized top-level word keeps the
+    /// extra-carried state, and the DN3b uniform terminal word (`card close`)
+    /// folds onto verified.
+    #[test]
+    fn status_overlay_is_conservative_and_maps_closed_to_verified() {
+        let record = parented_draft();
+
+        let mut typo = card_for(&record).expect("fold record into card");
+        typo.status = "in-progress".to_string();
+        let reconstructed = record_from_card(typo, "test".to_string()).expect("reconstruct");
+        assert_eq!(
+            reconstructed.state,
+            TaskState::InProgress,
+            "an unknown word keeps the record's own state"
+        );
+
+        let mut closed = card_for(&record).expect("fold record into card");
+        closed.status = "closed".to_string();
+        let reconstructed = record_from_card(closed, "test".to_string()).expect("reconstruct");
+        assert_eq!(reconstructed.state, TaskState::Verified);
+    }
+
+    /// A typed save must not destroy the card-only fields -- dep edges
+    /// (`dep add`) and a card-set description carry no record home -- and the
+    /// typed claim must lift into the top-level copy so `list`/`ready`/`show`
+    /// see it.
+    #[test]
+    fn typed_save_preserves_card_only_fields_and_lifts_the_claim() {
+        let paths = card_mode_repo("preserve-fields");
+        create(&paths, &parented_draft()).expect("create the task card");
+
+        let path = card_store::card_path(&paths, "task-001");
+        let snap = card_store::load_with_snapshot(&path).expect("load the card");
+        let mut card = snap.card.clone().expect("card exists");
+        card.deps.push(Dep {
+            kind: DepKind::Blocks,
+            target: "card-9f7d".to_string(),
+        });
+        card.description = Some("Stream rows to stdout.".to_string());
+        card_store::save_with_snapshot(&path, &card, &snap).expect("card-verb save");
+
+        let (mut record, snapshot, path) = load_one(&paths, "task-001")
+            .expect("typed read")
+            .expect("card exists");
+        record.claimed_by = Some("claude#s1".to_string());
+        record.claimed_at = Some("2026-06-08T02:00:00Z".to_string());
+        save_at(&path, &record, &snapshot).expect("typed save");
+
+        let saved = card_store::load(&path)
+            .expect("reload the card")
+            .expect("card present");
+        assert_eq!(saved.deps.len(), 1, "the dep edge survives the typed save");
+        assert_eq!(saved.deps[0].target, "card-9f7d");
+        assert_eq!(saved.description.as_deref(), Some("Stream rows to stdout."));
+        assert_eq!(
+            saved.claimed_by.as_deref(),
+            Some("claude#s1"),
+            "the typed claim is lifted to the top-level copy"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
     }
 
     /// SPEC D1 in card mode: two readers each take a load-time snapshot; the first

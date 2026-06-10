@@ -26,7 +26,7 @@ pub fn feature_card(id: String, source: Mapping, now: &str) -> Card {
         claimed_at: None,
         created_at: created_at_or(&source, "created_at", now),
         updated_at: updated_at_or(&source, "updated_at", "created_at", now),
-        description: None,
+        description: string_field(&source, "description"),
         id,
         extra: source,
     }
@@ -46,8 +46,8 @@ pub fn task_card(id: String, source: Mapping, parent: Option<String>, now: &str)
         parent: parent.or_else(|| string_field(&source, "feature_id")),
         deps: Vec::new(),
         lane: None,
-        claimed_by: None,
-        claimed_at: None,
+        claimed_by: string_field(&source, "claimed_by"),
+        claimed_at: string_field(&source, "claimed_at"),
         created_at: created_at_or(&source, "created_at", now),
         updated_at: updated_at_or(&source, "updated_at", "created_at", now),
         description: None,
@@ -77,7 +77,7 @@ pub fn decision_card(
         claimed_at: None,
         created_at: created_at_or(&source, "created_at", now),
         updated_at: updated_at_or(&source, "locked_at", "created_at", now),
-        description: None,
+        description: string_field(&source, "context"),
         id,
         extra: source,
     }

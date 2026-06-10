@@ -35,6 +35,16 @@ fn run(cwd: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8")
 }
 
+fn run_err(cwd: &Path, args: &[&str]) -> String {
+    let output = maestro(cwd, args);
+    assert!(
+        !output.status.success(),
+        "maestro {args:?} unexpectedly succeeded\nstdout:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
 #[test]
 fn create_mints_a_card_and_show_round_trips_it() {
     let temp = cards_repo("s2-create-show");
@@ -293,6 +303,39 @@ fn ready_and_list_render_the_beads_structure() {
     assert!(
         list.contains("1.") && list.contains("open"),
         "numbered rows carry the real status:\n{list}"
+    );
+}
+
+/// SPEC E3: `close` and `update --status` are workable-card verbs. A decision
+/// or feature keeps its per-type lifecycle (the generic write would bypass its
+/// gates), and a typo'd status word is rejected loudly instead of silently
+/// poisoning the coarse derivation.
+#[test]
+fn close_and_status_writes_are_guarded_per_type() {
+    let temp = cards_repo("s2-status-guards");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "decision", "Pick a queue"]);
+    let decision = id_by_title(repo, "Pick a queue");
+    let refused = run_err(repo, &["close", &decision]);
+    assert!(
+        refused.contains("maestro decision lock"),
+        "close on a decision points at the per-type verb:\n{refused}"
+    );
+
+    run(repo, &["create", "-t", "feature", "CSV export"]);
+    let refused = run_err(repo, &["update", "csv-export", "--status", "shipped"]);
+    assert!(
+        refused.contains("maestro feature ship"),
+        "a generic status write on a feature points at the gated verb:\n{refused}"
+    );
+
+    run(repo, &["create", "-t", "task", "Wire the verb"]);
+    let task = id_by_title(repo, "Wire the verb");
+    let refused = run_err(repo, &["update", &task, "--status", "in-progress"]);
+    assert!(
+        refused.contains("unknown --status") && refused.contains("in_progress"),
+        "a typo'd word is rejected naming the legal vocabulary:\n{refused}"
     );
 }
 

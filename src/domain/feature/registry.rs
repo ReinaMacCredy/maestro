@@ -1383,7 +1383,14 @@ fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
     if card.extra.is_empty() {
         return Ok(record_from_native_card(card));
     }
-    let record: FeatureRecord = serde_yaml::from_value(Value::Mapping(card.extra))
+    let Card {
+        title,
+        status,
+        description,
+        extra,
+        ..
+    } = card;
+    let mut record: FeatureRecord = serde_yaml::from_value(Value::Mapping(extra))
         .with_context(|| format!("failed to parse {artifact}"))?;
     if classify(&record.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
         return Err(MaestroError::SchemaMismatch {
@@ -1393,7 +1400,32 @@ fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
         }
         .into());
     }
+    // The card verbs (`update`) write only the top-level copy fields, so they
+    // are the freshest source for what they own (SPEC DN3: the card status is
+    // the single source of truth). The overlay is conservative: an unrecognized
+    // status word and an absent description keep the record's own.
+    record.title = title;
+    if let Some(mapped) = feature_status_from_word(&status) {
+        record.status = mapped;
+    }
+    if description.is_some() {
+        record.description = description;
+    }
     Ok(record)
+}
+
+/// Map a card status word to the feature status it denotes. `closed` is the
+/// DN3b spelling of shipped (the SPEC renames the terminal word); an unknown
+/// word maps to `None` so callers keep a better source.
+fn feature_status_from_word(status: &str) -> Option<FeatureStatus> {
+    Some(match status {
+        "proposed" => FeatureStatus::Proposed,
+        "ready" => FeatureStatus::Ready,
+        "in_progress" => FeatureStatus::InProgress,
+        "shipped" | "closed" => FeatureStatus::Shipped,
+        "cancelled" => FeatureStatus::Cancelled,
+        _ => return None,
+    })
 }
 
 /// Build a [`FeatureRecord`] from a native card's own fields (no `extra`
@@ -1405,13 +1437,7 @@ fn record_from_native_card(card: Card) -> FeatureRecord {
     let mut record = FeatureRecord::proposed(&card.id, &card.title, &card.created_at);
     record.updated_at = card.updated_at;
     record.description = card.description;
-    record.status = match card.status.as_str() {
-        "ready" => FeatureStatus::Ready,
-        "in_progress" => FeatureStatus::InProgress,
-        "shipped" | "closed" => FeatureStatus::Shipped,
-        "cancelled" => FeatureStatus::Cancelled,
-        _ => FeatureStatus::Proposed,
-    };
+    record.status = feature_status_from_word(&card.status).unwrap_or(FeatureStatus::Proposed);
     record
 }
 
@@ -1437,7 +1463,7 @@ pub(crate) fn save_record(
         record_to_mapping(record)?,
         &utc_now_timestamp(),
     );
-    card_store::save_with_snapshot(&card_store::card_path(paths, &record.id), &card, snapshot)
+    card_store::save_folded_with_snapshot(&card_store::card_path(paths, &record.id), card, snapshot)
 }
 
 /// Create a new feature card against an absent snapshot, so a concurrent create

@@ -35,8 +35,21 @@ pub(crate) fn item_from_card(card: Card, artifact: &str) -> Result<BacklogItem> 
     if card.extra.is_empty() {
         return Ok(item_from_native_card(card));
     }
-    serde_yaml::from_value(Value::Mapping(card.extra))
-        .with_context(|| format!("failed to parse {artifact}"))
+    let Card {
+        title,
+        status,
+        extra,
+        ..
+    } = card;
+    let mut item: BacklogItem = serde_yaml::from_value(Value::Mapping(extra))
+        .with_context(|| format!("failed to parse {artifact}"))?;
+    // The card verbs (`update`) write only the top-level copy fields, so they
+    // are the freshest source for the title and status they own (SPEC DN3).
+    item.title = title;
+    if !status.is_empty() {
+        item.status = status;
+    }
+    Ok(item)
 }
 
 /// Build a [`BacklogItem`] from a native idea card's own fields (no `extra`
@@ -122,7 +135,7 @@ pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(BacklogItem, CardSnapsho
 /// create of the same id will then fail.
 pub(crate) fn save_at(path: &Path, item: &BacklogItem, snapshot: &CardSnapshot) -> Result<()> {
     let card = card_for(item)?;
-    card_store::save_with_snapshot(path, &card, snapshot)
+    card_store::save_folded_with_snapshot(path, card, snapshot)
 }
 
 /// Remove the card for a backlog item dropped by the merge (D4 ephemeral

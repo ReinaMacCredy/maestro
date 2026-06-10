@@ -224,6 +224,22 @@ pub fn update(args: UpdateArgs) -> Result<()> {
             return Ok(());
         };
         if let Some(status) = args.status.as_deref() {
+            // SPEC E3: feature/idea/decision keep their per-type lifecycle
+            // verbs; a generic status write would bypass their gates (ship/QA,
+            // lock stamps, backlog reconciliation).
+            if !c.card_type.workable() {
+                return Err(anyhow!(
+                    "cannot set --status on {id} -- a {} keeps its own lifecycle verbs; {}",
+                    c.card_type.as_str(),
+                    per_type_verbs_hint(c.card_type)
+                ));
+            }
+            if !card::query::WORKABLE_STATUS_WORDS.contains(&status) {
+                return Err(anyhow!(
+                    "unknown --status {status:?}; expected one of: {}",
+                    card::query::WORKABLE_STATUS_WORDS.join(", ")
+                ));
+            }
             c.status = status.to_string();
         }
         if let Some(title) = args.title.as_deref() {
@@ -262,6 +278,16 @@ pub fn close(args: CloseArgs) -> Result<()> {
         );
         return Ok(());
     };
+    // SPEC E3: only task/bug/chore are closeable; feature/idea/decision keep
+    // their per-type terminal verbs (and their gates).
+    if !c.card_type.workable() {
+        return Err(anyhow!(
+            "cannot close {} -- a {} keeps its own terminal verbs; {}",
+            args.id,
+            c.card_type.as_str(),
+            per_type_verbs_hint(c.card_type)
+        ));
+    }
     if card::query::coarse_of(&c.status) == Some(card::query::Coarse::Closed) {
         println!("{} is already closed (status: {})", args.id, c.status);
         return Ok(());
@@ -271,6 +297,21 @@ pub fn close(args: CloseArgs) -> Result<()> {
     card::store::save_with_snapshot(&path, &c, &snapshot)?;
     println!("closed {}", args.id);
     Ok(())
+}
+
+/// Where to send a non-workable card's lifecycle instead of `close`/`update
+/// --status` (SPEC E3: feature/idea/decision keep per-type terminal verbs).
+fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
+    match card_type {
+        card::schema::CardType::Feature => {
+            "use `maestro feature ship` or `maestro feature cancel`"
+        }
+        card::schema::CardType::Decision => "use `maestro decision lock`",
+        card::schema::CardType::Idea => "use `maestro harness apply/dismiss/measure`",
+        card::schema::CardType::Task | card::schema::CardType::Bug | card::schema::CardType::Chore => {
+            "use `maestro close`"
+        }
+    }
 }
 
 /// Parse a `--type`/`-t` word into a [`card::schema::CardType`], shared by
@@ -388,7 +429,7 @@ fn render_show(c: &card::schema::Card, alias: Option<&str>) {
     render_edges(c, card::schema::DepKind::Related, "related");
     render_edges(c, card::schema::DepKind::Supersedes, "supersedes");
     println!("created: {}  updated: {}", c.created_at, c.updated_at);
-    if let Some(description) = &c.description {
+    if let Some(description) = card::query::body_of(c) {
         println!();
         println!("{description}");
     }

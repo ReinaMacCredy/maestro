@@ -137,6 +137,28 @@ pub(crate) fn mint_card_id(paths: &MaestroPaths, title: &str) -> String {
     mint_hash_id(&input, |id| card_path(paths, id).exists())
 }
 
+/// [`save_with_snapshot`] for a card rebuilt by a typed-record fold. The fold
+/// derives the copy fields from the record mapping, but the card-level fields a
+/// record does not carry -- `deps` edges (`dep add`), `lane`, and a card-set
+/// `description` -- live only on the existing card, so carry them over before
+/// the CAS write would wipe them.
+pub(crate) fn save_folded_with_snapshot(
+    path: &Path,
+    mut card: Card,
+    snapshot: &CardSnapshot,
+) -> Result<()> {
+    if let Some(existing) = &snapshot.card {
+        card.deps = existing.deps.clone();
+        if card.lane.is_none() {
+            card.lane = existing.lane.clone();
+        }
+        if card.description.is_none() {
+            card.description = existing.description.clone();
+        }
+    }
+    save_with_snapshot(path, &card, snapshot)
+}
+
 /// Write a card, but only when its file still matches the snapshot it was read
 /// from (SPEC D1, the single save-CAS seam). Creates the card directory first
 /// so the write-lock marker lands inside it.

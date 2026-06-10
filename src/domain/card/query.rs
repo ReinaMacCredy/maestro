@@ -59,6 +59,33 @@ pub fn coarse_of(status: &str) -> Option<Coarse> {
     }
 }
 
+/// The status words `update --status` accepts on a workable card: the task
+/// fine states (SPEC DN3) plus the uniform create/close words `open`/`closed`.
+/// The `update` error message prints this list, so keep the two in step.
+pub const WORKABLE_STATUS_WORDS: &[&str] = &[
+    "open",
+    "draft",
+    "exploring",
+    "ready",
+    "in_progress",
+    "needs_verification",
+    "verified",
+    "rejected",
+    "abandoned",
+    "superseded",
+    "closed",
+];
+
+/// The card's prose body for `show`: the top-level description, falling back to
+/// the legacy record's own field inside `extra` (`description`, or a decision's
+/// `context`) for a migrated card folded before the description lift existed.
+pub fn body_of(card: &Card) -> Option<String> {
+    card.description
+        .clone()
+        .or_else(|| crate::domain::card::fold::nonempty_field(&card.extra, "description"))
+        .or_else(|| crate::domain::card::fold::nonempty_field(&card.extra, "context"))
+}
+
 /// The single card scan seam (SPEC D4): every card in the store, symlink-safe.
 /// Built on `child_dirs` (which skips symlinked directories) and skips any
 /// directory without a `card.yaml` -- the `.alloc-` id-reservation markers are

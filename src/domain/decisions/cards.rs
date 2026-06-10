@@ -42,8 +42,40 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<DecisionR
     if card.extra.is_empty() {
         return Ok(record_from_native_card(card));
     }
-    serde_yaml::from_value(Value::Mapping(card.extra))
-        .with_context(|| format!("failed to parse {artifact}"))
+    let Card {
+        title,
+        status,
+        description,
+        extra,
+        ..
+    } = card;
+    let mut record: DecisionRecord = serde_yaml::from_value(Value::Mapping(extra))
+        .with_context(|| format!("failed to parse {artifact}"))?;
+    // The card verbs (`update`) write only the top-level copy fields, so they
+    // are the freshest source for what they own (SPEC DN3: the card status is
+    // the single source of truth). The overlay is conservative: an unrecognized
+    // status word and an absent description keep the record's own.
+    record.title = title;
+    if let Some(mapped) = decision_status_from_word(&status) {
+        record.status = mapped;
+    }
+    if description.is_some() {
+        record.context = description;
+    }
+    Ok(record)
+}
+
+/// Map a card status word to the decision status it denotes. `closed` -- the
+/// DN3b uniform terminal word a pre-guard `card close` may have written -- folds
+/// onto `locked`: a settled decision must not silently read as open. An unknown
+/// word maps to `None` so callers keep a better source.
+fn decision_status_from_word(status: &str) -> Option<DecisionStatus> {
+    Some(match status {
+        "open" => DecisionStatus::Open,
+        "locked" | "closed" => DecisionStatus::Locked,
+        "superseded" => DecisionStatus::Superseded,
+        _ => return None,
+    })
 }
 
 /// Build a [`DecisionRecord`] from a native card's own fields (no `extra`
@@ -55,11 +87,7 @@ fn record_from_native_card(card: Card) -> DecisionRecord {
     DecisionRecord {
         id: card.id,
         title: card.title,
-        status: match card.status.as_str() {
-            "locked" => DecisionStatus::Locked,
-            "superseded" => DecisionStatus::Superseded,
-            _ => DecisionStatus::Open,
-        },
+        status: decision_status_from_word(&card.status).unwrap_or(DecisionStatus::Open),
         feature: card.parent,
         context: card.description,
         decision: None,
@@ -131,7 +159,7 @@ pub(crate) fn load_one(
 /// snapshot (the card-store CAS rejects a racing writer, SPEC D1).
 pub(crate) fn save_at(path: &Path, record: &DecisionRecord, snapshot: &CardSnapshot) -> Result<()> {
     let card = card_for(record)?;
-    card_store::save_with_snapshot(path, &card, snapshot)
+    card_store::save_folded_with_snapshot(path, card, snapshot)
 }
 
 /// Reconstruct every live `Decision`-typed card with its home and card path,
@@ -246,6 +274,26 @@ mod tests {
             reconstructed, record,
             "every field survives the round-trip through card.extra"
         );
+    }
+
+    /// The card verbs write only the top-level copy; the typed read treats it
+    /// as the freshest source (SPEC DN3). A pre-guard `card close` wrote the
+    /// uniform terminal word on decision cards -- it folds onto locked so a
+    /// settled decision never silently reads as open.
+    #[test]
+    fn typed_read_overlays_card_verb_writes() {
+        let mut record = feature_decision();
+        record.status = DecisionStatus::Open;
+        let mut card = card_for(&record).expect("fold record into card");
+        card.status = "closed".to_string();
+        card.title = "retitled".to_string();
+        card.description = Some("fresh context".to_string());
+
+        let reconstructed =
+            record_from_card(card, "test".to_string()).expect("reconstruct the record");
+        assert_eq!(reconstructed.status, DecisionStatus::Locked);
+        assert_eq!(reconstructed.title, "retitled");
+        assert_eq!(reconstructed.context.as_deref(), Some("fresh context"));
     }
 
     /// SPEC D1 in card mode: two readers each take a load-time snapshot; the
