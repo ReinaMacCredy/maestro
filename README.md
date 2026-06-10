@@ -32,99 +32,61 @@ The flat query verbs give agents a Beads-style operating surface:
 
 ## Why
 
-Coding agents are fast but forgetful. They lose the thread across sessions, ship work that
-was never verified, and leave no trail you can audit. maestro fixes that by making the work
-itself durable and gated:
+Coding agents are fast but forgetful. They lose the thread across sessions, collide on
+numbered work items, ship work that was never verified, and leave no trail you can audit.
+maestro fixes that by making the work itself durable, queryable, and gated:
 
-- A **feature** carries the product contract and walks a real lifecycle: `proposed -> ready -> in_progress -> shipped`.
-- A **task** cannot be called done until its claim is backed by **proof** that you can read.
-- **QA** (baseline plus slices) gates a ship, so "shipped" means covered, not just compiled.
-- **Decisions** are recorded as files, so the why survives the agent's context window.
+- One flat card store replaces scattered feature, task, decision, and harness trees.
+- A **feature card** owns the contract; work cards dock to it through `parent`.
+- `maestro ready` computes unblocked work from card dependencies instead of a global counter.
+- `maestro claim` stamps the current `agent#session`, so multi-session work stays visible.
+- **Proof** and **QA** gates keep "done" and "shipped" evidence-backed.
+- Harness suggestions and decisions are cards too, so tool-improvement and reasoning survive context loss.
 
 Everything is repo-local and reviewable in a diff.
 
-## Lifecycle
+## How It Works
 
-Features, tasks, and harness improvements each walk an explicit, gated state machine. The
-agent drives the transitions through the CLI; the gates are enforced, not advisory.
-
-A **feature** carries the product contract:
-
-```mermaid
-stateDiagram-v2
-    [*] --> proposed: feature new
-    proposed --> ready: accept
-    ready --> in_progress: start
-    in_progress --> shipped: ship
-    proposed --> cancelled: cancel
-    ready --> cancelled: cancel
-    in_progress --> cancelled: cancel
-    shipped --> [*]: archive
-    cancelled --> [*]: archive
-```
-
-`accept` is gated on a frozen contract plus a behavior baseline. `ship` is gated on no live
-child tasks plus QA coverage. `amend` grows a frozen contract additively with an audit reason.
-
-A **task** is a unit of work, gated by proof:
+Everything durable is a card. The agent uses flat card queries to find and claim work, then
+uses typed lifecycle verbs only where gates matter: feature contract gates, task proof gates,
+decision locks, and harness measurement.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> draft: create
-    note right of draft : created directly, under a feature, or spawned by harness apply
-    draft --> in_progress: claim
-    in_progress --> needs_verification: complete
-    needs_verification --> verified: verify
-    in_progress --> abandoned: abandon
-    needs_verification --> rejected: reject
-    verified --> [*]: archive
-```
+flowchart LR
+    A[Human request] --> B[feature card]
+    B --> C[spec.md + qa.md]
+    C --> D[feature accept]
+    D --> E[feature prepare]
+    E --> F[work cards]
+    F --> G[maestro ready]
+    G --> H[maestro claim]
+    H --> I[task complete with proof]
+    I --> J[task verify]
+    J --> K[feature verify + ship]
+    K --> L[archive card tree]
 
-The task is the shared unit of work: a feature spins off child tasks (`task create --feature`)
-and the harness spins off a standalone task (`harness apply`), both landing here in `draft`.
-`claim` fast-tracks the internal accept steps when the feature contract or task checks are
-present (a standalone task needs at least one `--check` first). `verify` is the evidence gate:
-it passes only when the claim is backed by recorded proof.
+    R[run events + hooks] --> I
 
-A **harness improvement** is a self-improvement proposal the harness surfaces from the run log
-and task history; it walks its own lifecycle behind features and tasks:
-
-```mermaid
-stateDiagram-v2
-    [*] --> proposed: detector
-    proposed --> accepted: apply
-    accepted --> measured: measure (friction gone)
-    accepted --> proposed: measure (ineffective)
-    measured --> proposed: regressed
-```
-
-`apply` accepts a proposal and spawns a linked task, so the fix runs through the task lifecycle
-above. `measure` re-runs the originating detector to close the loop: it reaches `measured` only
-when the friction is actually gone, reverts to `proposed` if the fix was ineffective, and
-reopens a `measured` item if the friction later returns. `measure` requires the linked task
-verified unless `--force`.
-
-### How the three fit together
-
-Features and the harness are the two things that produce tasks, and both only reach their
-terminal state once those tasks are verified. The task lifecycle is the hub:
-
-```mermaid
-flowchart TB
-    subgraph feature [Feature]
-        F1[proposed] --> F2[ready] --> F3[in_progress] --> F4[shipped]
+    subgraph Harness loop
+        M[friction recurs] --> N[idea card]
+        N --> O[harness apply]
+        O --> P[work card]
+        P --> Q[harness measure]
     end
-    subgraph harness [Harness]
-        H1[proposed] --> H2[accepted] --> H3[measured]
-    end
-    subgraph task [Task]
-        T1[draft] --> T2[in_progress] --> T3[needs_verification] --> T4[verified]
-    end
-    F3 -->|"task create --feature"| T1
-    H2 -->|"apply spawns"| T1
-    T4 -->|"child tasks done + QA"| F4
-    T4 -->|"linked task verified"| H3
 ```
+
+The card type controls which verbs are valid:
+
+| Type | Role | Main verbs |
+| --- | --- | --- |
+| `feature` | Product contract and parent container | `feature accept`, `feature prepare`, `feature verify`, `feature ship`, `archive` |
+| `task` / `bug` / `chore` | Workable implementation cards | `ready`, `claim`, `task complete`, `task verify`, `close` |
+| `idea` | Harness/self-improvement proposal | `harness list`, `harness apply`, `harness dismiss`, `harness measure` |
+| `decision` | Durable reasoning record | `decision new`, `decision lock`, `decision show` |
+
+`parent` is hierarchy, not a blocker. A card appears in `ready` only when it is workable
+and every `blocks` dependency is closed. `related` and `supersedes` carry context without
+blocking the board.
 
 ## Install
 
@@ -154,15 +116,16 @@ Verify with `maestro version` and `maestro doctor`.
 ## Let your agent set it up
 
 maestro is meant to be driven by your coding agent. The installer wires agent skills and hooks
-into your repo — including a `maestro-setup` skill that tunes the harness to your build/test
-commands and conventions — so the agent learns the lifecycle and records its own work. Point
+into your repo, including a `maestro-setup` skill that tunes the harness to your build/test
+commands and conventions, so the agent learns the lifecycle and records its own work. Point
 your agent (Claude Code, Codex, or any CLI agent) at the repo and paste:
 
 ```
 Set up maestro in this repo: run `maestro init --yes`, then `maestro install --agent claude`
 (or `--agent codex`). Then follow the maestro-setup skill it installs to tune the harness to
-this repo. Start each session with `maestro status`, then drive the feature and task lifecycle
-through the `maestro` CLI from there.
+this repo. Start each session with `maestro status`, inspect available work with
+`maestro ready` and `maestro show <id>`, then claim and close cards through the `maestro`
+CLI from there.
 ```
 
 ## Quickstart
@@ -176,24 +139,8 @@ maestro doctor                     # check the installation
 maestro status                     # resume with the next agent action
 ```
 
-The smallest loop is a single task. A standalone task (no feature) carries its own
-acceptance check, and closes once a recorded run backs its claim:
-
-```
-maestro task create "Patch null deref in parser" --check "regression test passes"  # -> draft (card-<hex>)
-maestro task explore <task-card-id>                          # -> exploring
-maestro task accept <task-card-id>                           # locks the check -> ready
-maestro task claim --next                                    # -> in_progress
-maestro task complete <task-card-id> --summary "guard the None case" \
-  --claim "cargo test parser passes" --proof "observed: cargo test parser passes"
-```
-
-`task complete` records the inline proof and runs `task verify` automatically. Verify checks
-the claim against your repo's `harness.yml` verify stack; a fresh repo has none, so set one
-(or `maestro harness set --claims-only`) before the gate can pass. If the proof is missing or
-stale, the task stays in `needs_verification`; run `maestro query proof <id>` for the repair path.
-
-For a larger change, wrap the work in a feature contract and spin off child tasks:
+The smallest useful loop is a feature card with one child work card. The feature owns the
+contract and QA sidecar; the work card is what an agent claims and proves:
 
 ````
 maestro feature new "CSV export"                         # -> proposed
@@ -218,7 +165,8 @@ cat > PLAN-csv-export.md <<'EOF'
 check: cargo test export passes
 EOF
 maestro feature prepare csv-export --from PLAN-csv-export.md   # spawns ready child cards
-maestro task claim --next
+maestro ready csv-export                                      # show unblocked child work
+maestro claim <task-card-id>                                  # stamp agent#session
 maestro task complete <task-card-id> --summary "wrote csv writer" \
   --claim "cargo test export passes" --proof "observed: cargo test export passes"
 
@@ -252,7 +200,7 @@ same task loop:
 ```
 maestro harness list                          # what friction the run log surfaced
 maestro harness apply <proposal-id>           # accept a proposal -> spawns a task with a check preset
-maestro task claim <task-card-id>
+maestro claim <task-card-id>
 maestro task complete <task-card-id> --summary "stabilized the suite" \
   --claim "cargo test integration passes" --proof "observed: cargo test integration passes"
 maestro harness measure <proposal-id>         # close the loop once that task is verified
@@ -264,13 +212,13 @@ linked task is verified (pass `--force` to close it anyway).
 
 ### Suggested workflow
 
-The three lifecycles compose into one operating rhythm. The [Quickstart](#quickstart) above is the
-terse command path; this section narrates it — the agent prompt you hand off for each flow, and what
+The card model composes into one operating rhythm. The [Quickstart](#quickstart) above is the
+terse command path; this section narrates it: the agent prompt you hand off for each flow, and what
 the run actually looks like, gates and all. `maestro install` puts the matching skills in your repo:
 `maestro-card` bundles the work, feature, verify, qa-baseline, and qa-slice references, and
 `maestro-design` / `maestro-setup` / `maestro-audit` stay separate. Each prompt below hands off to the
-reference that owns that flow rather than spelling out every verb. Every transcript below is real
-output from the current binary.
+reference that owns that flow rather than spelling out every verb. The command surface below is
+checked against the current source tree.
 
 #### From a high-level idea to a shipped product
 
@@ -278,7 +226,7 @@ One feature, start to finish: a raw idea becomes a frozen contract, the work is 
 and it ships only once QA covers the baseline. This is the prompt you paste into a fresh agent session:
 
 > We want to add rate limiting to the public API: requests over a key's limit should get an HTTP 429.
-> Set it up as a maestro feature, driving each step through the right skill reference — `maestro-design`
+> Set it up as a maestro feature, driving each step through the right skill reference: `maestro-design`
 > to map the contract and record the fixed-window-vs-token-bucket decision, the maestro-card skill's
 > qa-baseline reference to capture a behavior baseline, then its work and verify references to drive it
 > to shipped through proof-gated tasks, and its qa-slice reference for the ship gate. Don't skip the gates.
@@ -309,7 +257,7 @@ $ maestro decision new "Fixed-window counter, not a token bucket, for v1" --feat
 opened card-8eb078 (status: open)
 store: .maestro/cards/card-8eb078/card.yaml
 
-# (write .maestro/cards/api-rate-limiting/qa.md first — see flow 1) — accept then succeeds:
+# (write .maestro/cards/api-rate-limiting/qa.md first; see flow 1) accept then succeeds:
 $ maestro feature accept api-rate-limiting
 accepted api-rate-limiting (-> ready); contract frozen (acceptance=2, areas=1); note: 1 open question(s) carried (non-blocking)
 $ maestro feature prepare api-rate-limiting --from PLAN-api-rate-limiting.md
@@ -317,9 +265,12 @@ prepared 1 task(s)
 started api-rate-limiting -> in_progress
 prepared:
   card-764dd7 ready           Fixed-window counter middleware
-next: maestro task claim --next
-$ maestro task claim --next
-claimed card-764dd7 -> in_progress
+next: maestro ready api-rate-limiting
+$ maestro ready api-rate-limiting
+Ready work (1 card, no blockers):
+  1. [P1] card-764dd7  task  Fixed-window counter middleware  (unclaimed)
+$ maestro claim card-764dd7
+# prints: claimed card-764dd7 as <agent>#<session>
 $ maestro task complete card-764dd7 --summary "fixed-window counter in the request middleware" --claim "cargo test ratelimit passes" --proof "observed: cargo test ratelimit passes"
 completed card-764dd7 -> needs_verification
 auto: recorded task_proof event
@@ -327,19 +278,19 @@ auto: maestro task verify card-764dd7
 verification passed for card-764dd7 (1 claim(s), 1 proof source(s))
 next: maestro-card skill (qa-slice) -> replay affected baseline scenarios
 
-# (write the qa.md slices block + sweep the contract first — see flow 3) — ship then succeeds:
+# (write the qa.md slices block + sweep the contract first; see flow 3) ship then succeeds:
 $ maestro feature ship api-rate-limiting --outcome "Shipped fixed-window rate limiting"
 shipped api-rate-limiting (-> shipped)
 ```
 
-The same journey, flow by flow — each leads with the gate that blocks you until the evidence exists,
+The same journey, flow by flow: each leads with the gate that blocks you until the evidence exists,
 because that gate is the point.
 
 #### 1. Design as a feature
 
 `feature new` then `feature set` map the contract (acceptance, affected areas, non-goals, open
 questions); `decision new` records each fork as a durable card. `feature accept` freezes the contract
-into `ready` — but only once you have captured a behavior baseline — and `feature prepare` turns a
+into `ready`, but only once you have captured a behavior baseline, and `feature prepare` turns a
 reviewed plan file into ready child tasks.
 
 *Prompt:* "Follow the `maestro-design` skill to set up <idea> as a maestro feature: `feature new`, then
@@ -348,11 +299,11 @@ each fork with `decision new --feature <id>`. Capture the `[bl-NNN]` behavior ba
 `.maestro/cards/<id>/qa.md` with the maestro-card skill's qa-baseline reference, then `feature accept`,
 `feature prepare --draft`, and `feature prepare --from <plan-file>`."
 
-The gate: `accept` refuses until a baseline exists, and names the file it wants.
+The gate: `accept` refuses until a baseline exists and names the file it wants.
 
 ```
 $ maestro feature accept api-rate-limiting
-Error: cannot accept api-rate-limiting — contract incomplete:
+Error: cannot accept api-rate-limiting - contract incomplete:
   qa-baseline (.maestro/cards/api-rate-limiting/qa.md missing)
     skill: maestro-card (qa-baseline)
     target: .maestro/cards/api-rate-limiting/qa.md
@@ -363,16 +314,18 @@ Error: cannot accept api-rate-limiting — contract incomplete:
 
 `feature prepare --from <plan-file>` creates the feature's child task queue from explicit `## Task`,
 `check:`, `blocker:`, and `after:` lines. Then drive every task through the same gated loop:
-`task claim --next` -> work -> `task complete --summary "..." --claim "..." --proof "..."`.
+`maestro ready <feature>` -> `maestro claim <id>` -> work ->
+`task complete --summary "..." --claim "..." --proof "..."`.
 Completion records the inline proof and runs `task verify`; a `verified` task is always evidence
 you can open.
 
-*Prompt:* "Follow the maestro-card skill's work reference: claim the next ready task with
-`task claim --next`, do the work, then `task complete` with a `--claim` stating what proves it and
-`--proof` containing the observed evidence. Use the maestro-card skill's verify reference and
+*Prompt:* "Follow the maestro-card skill's work reference: inspect ready cards with
+`maestro ready`, claim one with `maestro claim <id>`, do the work, then `task complete`
+with a `--claim` stating what proves it and `--proof` containing the observed evidence.
+Use the maestro-card skill's verify reference and
 `maestro query proof` if verification fails."
 
-The gate: `verify` refuses until the claim is backed by recorded proof — and prints the exact command
+The gate: `verify` refuses until the claim is backed by recorded proof and prints the exact command
 to record it.
 
 ```
@@ -385,7 +338,7 @@ Error: verification failed for card-cad8af
 #### 3. Ship the feature once QA is proven
 
 A feature ships only when it has no live child tasks *and* its QA coverage is green: every `[bl-NNN]`
-scenario in the baseline must be matched by a slice in the qa.md slices block carrying non-empty
+scenario in the baseline must be matched by a slice in the `qa.md` slices block carrying non-empty
 evidence, *and* every acceptance item must have fresh evidence from the contract sweep
 (`maestro feature verify`). Coverage is checked, not asserted, so a green ship is a real signal.
 
@@ -400,20 +353,20 @@ lacks fresh evidence, and lists which.
 ```
 $ maestro feature ship api-rate-limiting --outcome "Shipped fixed-window rate limiting"
 Error: cannot ship api-rate-limiting:
-  qa-slice coverage incomplete — 2 baseline scenario(s) without a counting slice: bl-001, bl-002
+  qa-slice coverage incomplete - 2 baseline scenario(s) without a counting slice: bl-001, bl-002
     skill: maestro-card (qa-slice)
     target: .maestro/cards/api-rate-limiting/qa.md
     retry: maestro feature ship api-rate-limiting --outcome "<outcome>"
-  contract sweep missing — 2 acceptance item(s) need feature-level evidence
+  contract sweep missing - 2 acceptance item(s) need feature-level evidence
     fix: maestro feature verify api-rate-limiting
     retry: maestro feature ship api-rate-limiting --outcome "<outcome>"
 ```
 
-#### 4. Improve the harness — maestro's self-improvement
+#### 4. Improve the harness - maestro's self-improvement
 
 The first three flows build the product; this one sharpens the tool that builds it, through the very
 same proof loop. maestro watches its own run log and task history, and surfaces a proposal when the
-same friction *recurs* — that is, when work keeps going wrong the same way. It never acts on its own:
+same friction *recurs*, which means work keeps going wrong the same way. It never acts on its own:
 proposals are listed on demand and only become work when you apply them.
 
 What it catches (the rule-based detectors, no LLM calls): the same blocker reason across two or more
@@ -424,11 +377,11 @@ across tasks with no decision on record (`rediscovered_decision`).
 
 *Prompt:* "Follow the maestro-card skill's work reference for the harness loop: run
 `maestro harness list`, and for each proposal worth doing, `harness apply <id>` to spawn the fix task
-(it arrives with a check preset), close that task through the proof loop (claim, complete `--claim`,
+(it arrives with a check preset), close that task through the proof loop (`maestro claim <id>`, complete `--claim`,
 record proof, `verify`), then `harness measure <id>` to record the outcome."
 
-A fresh repo has no history, so nothing is proposed. Here two tasks hit the same blocker — that *is* the
-recurring friction — and the detector turns it into a tracked proposal:
+A fresh repo has no history, so nothing is proposed. Here two tasks hit the same blocker, which is the
+recurring friction, and the detector turns it into a tracked proposal:
 
 ```
 $ maestro harness list
@@ -446,11 +399,11 @@ card-5eb94a		proposed	recurring_blocker	2x/2s	Reduce recurring blocker: staging 
 $ maestro harness apply card-5eb94a            # accept -> spawns the fix task with a check preset
 accepted card-5eb94a (spawned card-01d0fd)
   check preset: "Reduce recurring blocker: staging credentials missing is resolved and detector is silent"
-next: maestro task claim card-01d0fd
+next: maestro claim card-01d0fd
 
 # close the spawned task through the proof loop (it already has its check)
-$ maestro task claim card-01d0fd
-claimed card-01d0fd -> in_progress
+$ maestro claim card-01d0fd
+# prints: claimed card-01d0fd as <agent>#<session>
 $ maestro task complete card-01d0fd --summary "added staging creds to onboarding" --claim "onboarding doc lists staging creds" --proof "observed: onboarding doc lists staging creds"
 completed card-01d0fd -> needs_verification
 auto: recorded task_proof event
@@ -462,25 +415,27 @@ card-5eb94a is now measured
 note: friction is still detected; this behavioral item was closed by judgment, not by a silence check
 ```
 
-That closing note is the honest part: `measure` confirms the friction is *gone* only for the
-state-based detectors (`missing_verification`, `rediscovered_decision`), which it re-runs and expects to
-fall silent. A behavioral item like `recurring_blocker` is drawn from history, so `measure` closes it by
-*your* judgment that you addressed the root cause, and says so rather than pretending the signal
-vanished. Either way, the improvement is tracked and backed by a verified task — never a silent edit.
+That closing note is the honest part: `measure` confirms the friction is *gone* only for
+state-based detectors (`missing_verification`, `rediscovered_decision`), which it re-runs
+and expects to fall silent. A behavioral item like `recurring_blocker` is drawn from
+history, so `measure` closes it by *your* judgment that you addressed the root cause, and says so rather than pretending the signal
+vanished. Either way, the improvement is tracked and backed by a verified task, never a silent edit.
 
-### Feature lifecycle
+### Feature Cards
 
-A feature is the product contract. `proposed` is the design state where the contract is
-editable; `accept` freezes it into `ready` (and requires a behavior baseline); `start` moves
-it to `in_progress`; `ship` requires no live child tasks plus QA coverage and a passing contract
-sweep. Each feature is a card under `.maestro/cards/<id>/`: `card.yaml` holds the frozen contract,
-state, and amend log; `qa.md` holds the behavior baseline and the appended slices block; `spec.md`
-is the design write-up; and a free-form `notes.md` accumulates the running design log.
+A feature card is the product contract and the parent container for work. `proposed` is the
+editable design state; `accept` freezes the contract into `ready` and requires a behavior baseline;
+`prepare` turns a reviewed plan into child work cards; `verify` records feature-level evidence; and
+`ship` requires no live child work plus QA coverage and a passing contract sweep. Each feature is a
+card under `.maestro/cards/<id>/`: `card.yaml` holds typed state, `qa.md` holds the behavior baseline
+and slices block, `spec.md` is the design write-up, and `notes.md` accumulates the running design log.
 
-### Tasks gated by proof
+### Work Cards Gated by Proof
 
-Tasks move `draft -> in_progress -> needs_verification -> verified`. `verify` reads the proof
-recorded for the task and checks it against the claim; a task with no checks cannot be claimed.
+`task`, `bug`, and `chore` are the workable card types. They can be discovered with `maestro ready`,
+claimed with `maestro claim <id>`, blocked with `maestro dep add <child> <blocker>`, and closed with
+the proof-gated task flow. Typed task verbs still own proof: `task complete` records the summary,
+claim, and observed proof, then `task verify` checks that evidence before the card counts as done.
 The result is that "done" is always backed by evidence you can open.
 
 ### QA: baseline and slices
@@ -500,19 +455,19 @@ checked, not asserted, so a green ship is a real signal.
 
 The harness is the part of maestro that improves the tool you build with, through the same
 proof loop the product work uses. It watches its own run log and task history and proposes a
-fix when the same friction *recurs*. It is rule-based — no LLM calls — and passive: nothing is
-detected or acted on in the background. `maestro harness list` surfaces the backlog on demand,
-`maestro harness apply <id>` accepts a proposal and spawns a real task to do the work, and
+fix when the same friction *recurs*. It is rule-based, no LLM calls, and passive: nothing is
+detected or acted on in the background. `maestro harness list` surfaces idea cards on demand,
+`maestro harness apply <id>` accepts one and spawns a real task to do the work, and
 `maestro harness measure <id>` records the outcome.
 
 The loop, end to end: your run log and task history feed the detectors; a recurring friction
-becomes a `proposed` item; `apply` accepts it and spins off a linked task; you close that task
+becomes a proposed `idea` card; `apply` accepts it and spins off a linked task; you close that task
 through the normal proof loop; and `measure` confirms the outcome.
 
 ```mermaid
 flowchart LR
     H[run log + task history] --> D{detectors}
-    D -->|"friction recurs"| P[proposed]
+    D -->|"friction recurs"| P[idea card: proposed]
     P -->|"harness apply"| A[accepted: spawns a linked task]
     A -->|"task closed by proof"| M[harness measure]
     M -->|"friction gone / judged fixed"| V[measured]
@@ -521,7 +476,7 @@ flowchart LR
 ```
 
 **What it catches.** Five detectors run, in two classes. **State detectors** read current repo
-state, so their silence reliably means the friction is fixed — `measure` re-runs them and
+state, so their silence reliably means the friction is fixed. `measure` re-runs them and
 closes the item automatically once they fall silent. **Behavioral detectors** are drawn from
 history, so `measure` closes them on your judgment that you fixed the root cause, and says so
 rather than pretending the signal vanished.
@@ -534,16 +489,16 @@ rather than pretending the signal vanished.
 | `recurring_intervention` | behavioral | a session full of correction-like prompts | 3+ in one session |
 | `missing_skill` | behavioral | a work domain far slower to verify than the rest | 2+ tasks, domain median > 2x overall |
 
-**Identity and lifecycle.** Each proposal carries a stable fingerprint — `<detector>:<subject>`
-— so re-running detection never piles up duplicates: the same friction stays one tracked item
+**Identity and lifecycle.** Each proposal carries a stable fingerprint,
+`<detector>:<subject>`, so re-running detection never piles up duplicates: the same friction stays one tracked item
 as it moves `proposed -> accepted -> measured`. `measure` sends an ineffective fix back to
 `proposed`, and reopens a `measured` *state* item to `proposed` if its friction later returns (a
 regression). `measure` requires the linked task verified unless you pass `--force`.
 
-**What it looks like.** A fresh repo proposes nothing. Here two tasks hit the same blocker —
-`maestro task block <task-card-id> --reason "staging credentials missing"` on two different tasks —
-which is the recurring friction the `recurring_blocker` detector watches for. This transcript is real
-output from the current binary:
+**What it looks like.** A fresh repo proposes nothing. Here two tasks hit the same blocker:
+`maestro task block <task-card-id> --reason "staging credentials missing"` on two different tasks,
+which is the recurring friction the `recurring_blocker` detector watches for. This is the command
+shape from the current source tree:
 
 ```
 $ maestro harness list
@@ -554,11 +509,11 @@ $ maestro harness list
 ID	!	STATUS	TYPE	SEEN	TITLE
 card-5eb94a		proposed	recurring_blocker	2x/2s	Reduce recurring blocker: staging credentials missing
 
-# accept it — maestro spawns the fix task with a check preset, and tells you the next step:
+# accept it: maestro spawns the fix task with a check preset and tells you the next step:
 $ maestro harness apply card-5eb94a
 accepted card-5eb94a (spawned card-01d0fd)
   check preset: "Reduce recurring blocker: staging credentials missing is resolved and detector is silent"
-next: maestro task claim card-01d0fd
+next: maestro claim card-01d0fd
 
 # show reveals the evidence, the fingerprint's spawned task, and the append-only history:
 $ maestro harness show card-5eb94a
@@ -584,7 +539,7 @@ history:
 $ maestro task verify card-01d0fd
 verification passed for card-01d0fd (1 claim(s), 1 proof source(s))
 
-# with the linked task verified, close the loop — no --force needed:
+# with the linked task verified, close the loop; no --force needed:
 $ maestro harness measure card-5eb94a
 card-5eb94a is now measured
 note: friction is still detected; this behavioral item was closed by judgment, not by a silence check
@@ -627,25 +582,37 @@ edits. `maestro sync --global-skills` refreshes only the user-level global skill
 | `sync` | Resync repo-local bundled resources, or global skills with `--global-skills` |
 | `upgrade` | Upgrade the binary and refresh resources |
 | `doctor` | Diagnose the installation |
+| `status` / `resume` | Print the current handoff, next action, or clean-session resume packet |
+| `migrate-v2` | Fold old v1 artifacts into the reduced v2 layout |
+| `migrate` | Snapshot `.maestro/` and fold legacy feature/task/decision/harness trees into `.maestro/cards/` |
 | `feature` | Manage the product contract and its lifecycle |
-| `task` | Create, claim, complete, verify, and query tasks |
+| `task` | Complete, verify, block, and query proof-gated work cards |
 | `verify` | Verify a task against its recorded proof |
-| `decision` | Create, show, and list decision records |
-| `harness` | List, show, apply, and measure self-improvement proposals |
-| `ready` / `list` / `show` | Discover and inspect cards in the flat store (filter by `--parent/--type/--assignee/--status`) |
-| `claim` / `note` / `dep` / `archive` | Claim a card, append a note, add a dependency edge, or archive a card |
+| `decision` | Create, lock, show, and list decision cards |
+| `harness` | List, show, apply, dismiss, and measure self-improvement idea cards |
+| `create` / `update` / `close` | Create generic cards, mutate workable-card fields, or close workable cards |
+| `ready` / `list` / `show` | Discover and inspect cards in the flat store (`--parent`, `--type`, `--assignee`, `--status`) |
+| `claim` / `note` / `dep` / `archive` | Claim a workable card, append a note, add a blocking edge, or archive a feature tree |
+| `event` / `query` | Record harness events and inspect computed read models |
+| `mcp` / `hook` / `watch` | Advanced integrations for MCP, agent hooks, and task snapshots |
 | `version` | Print the version and binary path |
 
 The entity verbs (`feature`, `task`, `harness`, `decision`, `verify`) are the only surface for the
-proof- and QA-gated lifecycle; the flat card verbs are for discovery and lightweight edits. Run
-`maestro <command> --help` for the full surface.
+proof- and QA-gated lifecycle; the flat card verbs are for discovery and lightweight edits. `ready`
+only shows workable cards (`task`, `bug`, `chore`) whose `blocks` dependencies are closed. `list`
+accepts the coarse status filter `open`, `in_progress`, or `closed`. Run
+`maestro <command> --help` from the checked-out source build for the full surface.
 
-## Migrating from the TypeScript maestro
+## Migration
+
+There are two migration paths, depending on what produced the existing `.maestro/` data.
+
+### From the TypeScript maestro
 
 Earlier maestro was a TypeScript build. The Rust rewrite is a different, leaner, repo-local
-product, so moving an existing repo over is a best-effort, agent-driven step (the binary does
-no data conversion itself). [MIGRATE.md](./MIGRATE.md) is written as an instruction for a
-coding agent.
+product, so moving TypeScript-era data over is still a best-effort, agent-driven step.
+[MIGRATE.md](./MIGRATE.md) is written as an instruction for a coding agent: back up the old
+TypeScript data, map what has a clean Rust home, and leave skipped files in the backup.
 
 Install the Rust binary, then paste this into a fresh agent session (Claude Code, Codex, or
 any CLI agent):
@@ -656,6 +623,25 @@ https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/MIGRATE.md: back up
 first, map it into the new `.maestro/` model, and write me the mapping report. Never delete
 the original data.
 ```
+
+### From pre-card Rust maestro
+
+Repos already using the Rust v2 artifact layout can use the source command `maestro migrate`.
+It snapshots `.maestro/` under `.maestro/backups/<timestamp>-card-migrate/`, folds legacy
+`features/`, `tasks/`, `decisions`, and harness backlog entries into `.maestro/cards/`, copies
+feature sidecars beside the feature card, remints non-feature records to stable `card-<hash>` ids,
+rewrites structured references, and then prints `next: maestro doctor`.
+
+Run it from the source build or an updated installed binary:
+
+```
+cargo run -- migrate
+maestro doctor
+```
+
+The migration is idempotent: a later run skips cards it already folded. The source trees are left
+in place for rollback and inspection; the card store becomes the flat query surface used by
+`ready`, `list`, `show`, `claim`, `note`, `dep`, and `archive`.
 
 ## Project layout
 
