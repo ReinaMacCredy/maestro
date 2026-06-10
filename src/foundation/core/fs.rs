@@ -347,6 +347,29 @@ pub(crate) fn child_dirs(parent: &Path) -> Result<Vec<(PathBuf, SystemTime)>> {
     Ok(dirs)
 }
 
+/// List non-symlink child directories of `parent`, sorted by path. A missing
+/// `parent` yields an empty list.
+pub(crate) fn sorted_child_dirs(parent: &Path) -> Result<Vec<PathBuf>> {
+    let mut dirs: Vec<PathBuf> = child_dirs(parent)?
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect();
+    dirs.sort();
+    Ok(dirs)
+}
+
+/// Read a YAML file and require a top-level mapping.
+pub(crate) fn read_yaml_mapping(path: &Path) -> Result<serde_yaml::Mapping> {
+    let raw =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let value: serde_yaml::Value = serde_yaml::from_str(&raw)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    value
+        .as_mapping()
+        .cloned()
+        .with_context(|| format!("expected mapping in {}", path.display()))
+}
+
 /// Read a UTF-8 file if it exists.
 pub fn read_to_string_if_exists(path: impl AsRef<Path>) -> Result<Option<String>> {
     let path = path.as_ref();

@@ -34,7 +34,7 @@ use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{card_path, load_with_snapshot, mint_hash_id, save_with_snapshot};
 use crate::domain::decisions::normalize_decision_id;
 use crate::domain::run::managed_event_logs;
-use crate::foundation::core::fs::{child_dirs as fs_child_dirs, ensure_dir};
+use crate::foundation::core::fs::{ensure_dir, read_yaml_mapping, sorted_child_dirs};
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Per-type tally of a card-fold run.
@@ -92,13 +92,13 @@ pub fn run(paths: &MaestroPaths, now: &str) -> Result<CardMigrateReport> {
 
     // E2/O3: assign stable opaque ids -- non-feature cards become `card-<hash>`,
     // feature cards keep their slug -- and build the legacy-id -> new-id remap.
-    let remap = assign_ids(&mut pending);
+    let remap = assign_ids(&mut pending)?;
 
     // E5: rewrite the structured refs (own id + typed cross-refs) to the new
     // ids, then run the authoritative dangling-ref gate over the rewritten set.
     rewrite_refs(&mut pending, &remap);
     let final_ids: HashSet<String> = pending.iter().map(|entry| entry.card.id.clone()).collect();
-    validate_refs(&final_ids, &remap, &refs)?;
+    validate_refs(&final_ids, &frozen_legacy_ids(paths)?, &remap, &refs)?;
 
     // Pass 2: writes happen only after the rewrite + gate pass.
     let mut minted: HashSet<String> = HashSet::new();
@@ -283,7 +283,10 @@ fn collect_ideas(
 /// seed `taken`, guaranteeing a hash can never alias a slug); every other card
 /// becomes `card-<hash>`. The remap is keyed by `normalize_ref` so a legacy
 /// short-form decision ref (`decision-1`) resolves against the canonical id.
-fn assign_ids(pending: &mut [PendingCard]) -> HashMap<String, String> {
+/// Two source artifacts carrying the same legacy id abort loud: the salt-bump
+/// would mint them apart, but every cross-ref to that id could then silently
+/// rewire to whichever card claimed the remap entry last.
+fn assign_ids(pending: &mut [PendingCard]) -> Result<HashMap<String, String>> {
     let mut taken: HashSet<String> = pending
         .iter()
         .filter(|entry| entry.card.card_type == CardType::Feature)
@@ -298,10 +301,18 @@ fn assign_ids(pending: &mut [PendingCard]) -> HashMap<String, String> {
         // assigned so far), then claim the result so the next mint bumps past it.
         let new_id = mint_hash_id(&entry.kept_id, |candidate| taken.contains(candidate));
         taken.insert(new_id.clone());
-        remap.insert(normalize_ref(&entry.kept_id), new_id.clone());
+        if remap
+            .insert(normalize_ref(&entry.kept_id), new_id.clone())
+            .is_some()
+        {
+            bail!(
+                "duplicate legacy id '{}': two source artifacts both carry this id, so references to it are ambiguous; resolve the duplicate before migrating",
+                entry.kept_id
+            );
+        }
         entry.card.id = new_id;
     }
-    remap
+    Ok(remap)
 }
 
 /// E5: rewrite every structured id field in each card's `extra` to its new id --
@@ -501,22 +512,69 @@ fn rewrite_run_events(paths: &MaestroPaths, task_remap: &[(String, String)]) -> 
 /// Fail loud when any captured reference does not resolve after the remint (SPEC
 /// E5). Each ref's legacy target is mapped through the remint the same way the
 /// rewrite mapped it (`normalize_ref` collapses decision aliasing); the resulting
-/// id must be one of the cards this run produced, or the run aborts naming the
-/// original target. This is the authoritative dangling-ref gate.
+/// id must be one of the cards this run produced -- or an id frozen in the
+/// legacy archive trees -- or the run aborts naming the original target. This
+/// is the authoritative dangling-ref gate.
 fn validate_refs(
     final_ids: &HashSet<String>,
+    frozen: &HashSet<String>,
     remap: &HashMap<String, String>,
     refs: &[CardRef],
 ) -> Result<()> {
     for reference in refs {
         let resolved = remap_target(remap, &reference.target);
-        if !final_ids.contains(&resolved) {
-            bail!(
-                "dangling reference: card '{}' {} points at '{}', which no migrated card provides",
-                reference.from,
-                reference.field,
-                reference.target
-            );
+        if final_ids.contains(&resolved) || frozen.contains(&normalize_ref(&reference.target)) {
+            continue;
+        }
+        bail!(
+            "dangling reference: card '{}' {} points at '{}', which no migrated card provides",
+            reference.from,
+            reference.field,
+            reference.target
+        );
+    }
+    Ok(())
+}
+
+/// Ids of artifacts frozen in the legacy archive trees: `archive/tasks/`, plus
+/// each archived feature's nested `tasks/` and `decisions.yaml`. A live ref to
+/// one is valid history -- the target was archived, not lost -- so the gate
+/// admits it and the rewrite leaves the legacy id in place. Only task and
+/// decision ids can land here: External/Human blockers carry no `blocked_ref`.
+fn frozen_legacy_ids(paths: &MaestroPaths) -> Result<HashSet<String>> {
+    let mut ids: HashSet<String> = HashSet::new();
+    let archive = paths.archive_dir();
+    collect_archived_task_ids(&archive.join("tasks"), &mut ids)?;
+    for feature_dir in sorted_child_dirs(&archive.join("features"))? {
+        collect_archived_task_ids(&feature_dir.join("tasks"), &mut ids)?;
+        let store_path = feature_dir.join("decisions.yaml");
+        if !store_path.is_file() {
+            continue;
+        }
+        let store = read_yaml_mapping(&store_path)?;
+        let Some(items) = sequence_field(&store, "decisions") else {
+            continue;
+        };
+        for item in items {
+            if let Some(id) = item
+                .as_mapping()
+                .and_then(|record| string_field(record, "id"))
+            {
+                ids.insert(normalize_ref(&id));
+            }
+        }
+    }
+    Ok(ids)
+}
+
+fn collect_archived_task_ids(tree: &Path, ids: &mut HashSet<String>) -> Result<()> {
+    for task_dir in sorted_child_dirs(tree)? {
+        let yaml = task_dir.join("task.yaml");
+        if !yaml.is_file() {
+            continue;
+        }
+        if let Some(id) = string_field(&read_yaml_mapping(&yaml)?, "id") {
+            ids.insert(normalize_ref(&id));
         }
     }
     Ok(())
@@ -544,9 +602,17 @@ fn collect_task_refs(from: &str, record: &Mapping, refs: &mut Vec<CardRef>) {
         return;
     };
     for blocker in blockers {
+        let Some(blocker) = blocker.as_mapping() else {
+            continue;
+        };
+        // A resolved blocker is history: nothing gates on it anymore and its
+        // target may be long archived or deleted, so it never aborts the run.
+        // The rewrite still remints it when the target did migrate.
+        if string_field(blocker, "resolved_at").is_some_and(|at| !at.is_empty()) {
+            continue;
+        }
         let target = blocker
-            .as_mapping()
-            .and_then(|blocker| blocker.get(Value::String("blocked_ref".to_string())))
+            .get(Value::String("blocked_ref".to_string()))
             .and_then(Value::as_mapping)
             .and_then(|blocked_ref| string_field(blocked_ref, "id"));
         push_ref(refs, from, "blocker", target);
@@ -682,29 +748,9 @@ fn sanitize_label(now: &str) -> String {
         .collect()
 }
 
-fn sorted_child_dirs(parent: &Path) -> Result<Vec<PathBuf>> {
-    let mut dirs: Vec<PathBuf> = fs_child_dirs(parent)?
-        .into_iter()
-        .map(|(path, _)| path)
-        .collect();
-    dirs.sort();
-    Ok(dirs)
-}
-
 fn dir_name(dir: &Path) -> Option<String> {
     dir.file_name()
         .map(|name| name.to_string_lossy().into_owned())
-}
-
-fn read_yaml_mapping(path: &Path) -> Result<Mapping> {
-    let raw =
-        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let value: Value = serde_yaml::from_str(&raw)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    value
-        .as_mapping()
-        .cloned()
-        .with_context(|| format!("expected mapping in {}", path.display()))
 }
 
 fn sequence_field<'a>(map: &'a Mapping, key: &str) -> Option<&'a Vec<Value>> {
@@ -1134,6 +1180,136 @@ mod tests {
         assert!(
             error.to_string().contains("decision-999"),
             "error names the dangling target: {error}"
+        );
+
+        cleanup(&root);
+    }
+
+    #[test]
+    fn resolved_blocker_to_a_vanished_target_does_not_abort() {
+        let root = temp_repo("resolved-blocker");
+        let paths = brownfield(&root);
+
+        // The blocker was resolved while its decision still existed; the
+        // decision is gone now. History must not abort the migration.
+        let mut task = TaskRecord::draft("task-003", "Old work", "2026-06-01T10:00:00Z");
+        task.blockers = vec![Blocker {
+            id: "b9".to_string(),
+            kind: BlockerKind::Decision,
+            blocked_ref: Some(BlockerRef {
+                kind: BlockerKind::Decision,
+                id: "decision-999".to_string(),
+            }),
+            title: "awaited a long-gone decision".to_string(),
+            reason: "resolved years ago".to_string(),
+            source: BlockerSource::Command,
+            created_at: "2026-06-01T10:00:00Z".to_string(),
+            resolved_at: Some("2026-06-02T10:00:00Z".to_string()),
+        }];
+        write_record(
+            &paths
+                .tasks_dir()
+                .join(task.directory_name())
+                .join("task.yaml"),
+            &task,
+        );
+
+        run(&paths, NOW).expect("a resolved blocker never gates the migration");
+
+        // The vanished target is not remapped: the historical ref is left as-is.
+        let migrated: TaskRecord = serde_yaml::from_value(Value::Mapping(
+            load(&paths, &hash_id("task-003")).extra.clone(),
+        ))
+        .expect("reconstruct task-003");
+        assert_eq!(
+            migrated.blockers[0]
+                .blocked_ref
+                .as_ref()
+                .expect("ref kept")
+                .id,
+            "decision-999",
+            "the resolved blocker's legacy ref is frozen, not rewritten"
+        );
+
+        cleanup(&root);
+    }
+
+    #[test]
+    fn live_ref_to_an_archived_task_is_admitted_frozen() {
+        let root = temp_repo("archived-ref");
+        let paths = brownfield(&root);
+
+        // task-009 was archived by the legacy verb; a live blocker still points
+        // at it. The gate admits the frozen id instead of aborting.
+        let archived = TaskRecord::draft("task-009", "Shipped long ago", "2026-05-01T00:00:00Z");
+        write_record(
+            &paths
+                .archive_dir()
+                .join("tasks")
+                .join(archived.directory_name())
+                .join("task.yaml"),
+            &archived,
+        );
+        let mut task = TaskRecord::draft("task-003", "Follow-up", "2026-06-01T10:00:00Z");
+        task.blockers = vec![Blocker {
+            id: "b9".to_string(),
+            kind: BlockerKind::Task,
+            blocked_ref: Some(BlockerRef {
+                kind: BlockerKind::Task,
+                id: "task-009".to_string(),
+            }),
+            title: "depends on archived work".to_string(),
+            reason: "still open".to_string(),
+            source: BlockerSource::Command,
+            created_at: "2026-06-01T10:00:00Z".to_string(),
+            resolved_at: None,
+        }];
+        write_record(
+            &paths
+                .tasks_dir()
+                .join(task.directory_name())
+                .join("task.yaml"),
+            &task,
+        );
+
+        run(&paths, NOW).expect("a ref into the legacy archive is valid history");
+
+        let migrated: TaskRecord = serde_yaml::from_value(Value::Mapping(
+            load(&paths, &hash_id("task-003")).extra.clone(),
+        ))
+        .expect("reconstruct task-003");
+        assert_eq!(
+            migrated.blockers[0]
+                .blocked_ref
+                .as_ref()
+                .expect("ref kept")
+                .id,
+            "task-009",
+            "the archived target's id stays frozen in the legacy form"
+        );
+
+        cleanup(&root);
+    }
+
+    #[test]
+    fn duplicate_legacy_ids_abort_loud() {
+        let root = temp_repo("dup-ids");
+        let paths = brownfield(&root);
+
+        // decision-003 already lives in the feature store; a second artifact
+        // carrying the same id makes every ref to it ambiguous.
+        let mut global = DecisionStore::empty();
+        global.decisions = vec![
+            decision("decision-001", DecisionStatus::Locked, None),
+            decision("decision-003", DecisionStatus::Open, None),
+        ];
+        write_record(&paths.decisions_file(), &global);
+
+        let error = run(&paths, NOW).expect_err("duplicate legacy ids must abort");
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("duplicate legacy id 'decision-003'"),
+            "error names the duplicated id: {message}"
         );
 
         cleanup(&root);
