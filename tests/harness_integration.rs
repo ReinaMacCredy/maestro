@@ -8,7 +8,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use card_support::{card_dir, card_record_path, id_by_title, sole_idea_id};
+use card_support::{card_dir, card_doc, card_record_path, id_by_title, sole_idea_id};
 use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use support::TestTempDir;
@@ -409,6 +409,14 @@ fn sole_backlog_id(repo: &Path) -> String {
     sole_idea_id(repo)
 }
 
+/// One idea card's persisted record serialized on its own: the card's entry
+/// plucked from `ideas.yaml`, or a flat fixture dir's whole `card.yaml`.
+/// Content assertions stay precise -- sibling entries in the container file
+/// can neither satisfy nor trip them.
+fn idea_record(repo: &Path, id: &str) -> String {
+    serde_yaml::to_string(&card_doc(repo, id)).expect("invariant: idea card should serialize")
+}
+
 /// Seed a backlog item directly as its persisted form: an `idea` card at
 /// `.maestro/cards/<id>/card.yaml`. The old `backlog.yaml` item mapping is copied
 /// verbatim under `extra` (the COPY-design payload `item_from_card` reads), with
@@ -640,8 +648,7 @@ fn harness_detects_all_rule_based_backlog_proposals_and_applies_one() {
     let missing_verification_id = ids
         .get("missing_verification")
         .expect("invariant: missing_verification id should be listed");
-    let backlog = fs::read_to_string(task_dir(repo, missing_verification_id).join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, missing_verification_id);
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -708,8 +715,7 @@ fn harness_escalation_tracks_recurring_intervention_globally_and_dismisses() {
     // D7 collapsed the backlog into idea cards: the proposal persists verbatim
     // under the card's `extra`, and the single recurring_intervention means a sole
     // idea card.
-    let card = fs::read_to_string(task_dir(repo, id).join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let card = idea_record(repo, id);
     assert!(card.contains("fingerprint: recurring_intervention:global"));
     assert_eq!(card.matches("type: recurring_intervention").count(), 1);
 
@@ -826,8 +832,7 @@ fn harness_accepts_multiple_embedded_command_receipts() {
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Verify legacy command objects"));
-    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, &sole_backlog_id(repo));
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -905,8 +910,7 @@ fn harness_refreshes_existing_backlog_evidence_to_safe_labels() {
     );
     assert!(!show.contains("top secret"));
     assert!(!show.contains("api_key"));
-    let backlog = fs::read_to_string(task_dir(repo, "hb-001").join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, "hb-001");
     assert!(backlog.contains("manual note: keep this context"));
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
@@ -943,8 +947,7 @@ fn harness_scrubs_orphaned_legacy_missing_verification_evidence() {
     ));
     assert!(!show.contains("top secret"));
     assert!(!show.contains("api_key"));
-    let backlog = fs::read_to_string(task_dir(repo, "hb-001").join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, "hb-001");
     assert!(backlog.contains("manual note: keep this context"));
     assert!(backlog.contains(
         "verification.attempts/archived attempt used verification command 1 outside harness.yml"
@@ -1033,8 +1036,7 @@ fn harness_reads_latest_attempt_report_commands_without_canonical_report() {
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Verify latest attempt reader"));
-    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, &sole_backlog_id(repo));
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1057,8 +1059,7 @@ fn harness_uses_latest_attempt_when_canonical_report_is_malformed() {
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Canonical malformed attempt valid"));
-    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, &sole_backlog_id(repo));
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1248,8 +1249,7 @@ fn harness_and_query_use_embedded_verification_over_legacy_sidecars() {
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
     assert!(out.contains("Add reusable verification for Legacy failed canonical newer attempt"));
-    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, &sole_backlog_id(repo));
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1327,8 +1327,7 @@ fn harness_hides_secret_like_embedded_verification_commands() {
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
-    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, &sole_backlog_id(repo));
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1399,8 +1398,7 @@ fn harness_distinguishes_multiple_missing_verification_commands_safely() {
 
     let out = run_success(repo, &["harness", "list"]);
     assert!(out.contains("missing_verification"));
-    let backlog = fs::read_to_string(task_dir(repo, &sole_backlog_id(repo)).join("card.yaml"))
-        .expect("invariant: idea card should be readable");
+    let backlog = idea_record(repo, &sole_backlog_id(repo));
     assert!(
         backlog.contains("task.yaml#verification used verification command 1 outside harness.yml")
     );
@@ -1961,12 +1959,12 @@ fn harness_apply_rolls_back_spawned_task_when_the_store_save_loses_a_race() {
     let (temp, note) = setup_missing_verification_note("maestro-harness-apply-contended");
     let repo = temp.path();
 
-    // Simulate another Maestro process holding the idea card's write marker: a
-    // fresh (non-stale) reservation dir inside the card's directory makes the
-    // guarded save in `apply` fail *after* the task is spawned, exercising the
-    // rollback-on-save-failure path. D7 collapsed the backlog into idea cards, so
-    // the contended artifact is now the note's own `card.yaml`.
-    let lock_dir = task_dir(repo, &note).join(".card.yaml.write-lock");
+    // Simulate another Maestro process holding the backlog's write marker: a
+    // fresh (non-stale) reservation dir beside `ideas.yaml` makes the guarded
+    // save in `apply` fail *after* the task is spawned, exercising the
+    // rollback-on-save-failure path. The container layout collapsed the backlog
+    // into `ideas.yaml` entries, so the contended artifact is that one file.
+    let lock_dir = repo.join(".maestro/cards/.ideas.yaml.write-lock");
     fs::create_dir(&lock_dir).expect("invariant: write-lock marker should be creatable");
 
     let apply = maestro(repo, &["harness", "apply", &note]);
@@ -2125,12 +2123,12 @@ fn harness_unapply_leaves_the_task_recoverable_when_the_store_save_loses_a_race(
     let spawned = spawned_task_id(&apply);
     assert_eq!(task_state(repo, &spawned), "ready");
 
-    // Hold the idea card's write marker so the guarded save in unapply fails.
+    // Hold the backlog's write marker so the guarded save in unapply fails.
     // Because unapply abandons the task only *after* the save commits, the failed
     // save must leave the spawned task live -- otherwise the item would be wedged:
     // accepted on disk but pointing at an abandoned task that re-running unapply
-    // can't clear. D7 made the note's own `card.yaml` the contended artifact.
-    let lock_dir = task_dir(repo, &note).join(".card.yaml.write-lock");
+    // can't clear. The container layout made `ideas.yaml` the contended artifact.
+    let lock_dir = repo.join(".maestro/cards/.ideas.yaml.write-lock");
     fs::create_dir(&lock_dir).expect("invariant: write-lock marker should be creatable");
     let unapply = maestro(repo, &["harness", "unapply", &note]);
     assert!(

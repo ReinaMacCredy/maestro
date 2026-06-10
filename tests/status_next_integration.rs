@@ -556,8 +556,10 @@ fn hot_verbs_persist_the_detect_stamp_and_self_heal_when_the_cards_tree_changes(
 
     // The stamp covers the whole cards tree, so clearing the persisted friction
     // card invalidates it: the next hot verb re-detects and the friction
-    // re-surfaces (self-healing) instead of staying silently skipped.
-    fs::remove_dir_all(repo.join(".maestro/cards").join(&friction))
+    // re-surfaces (self-healing) instead of staying silently skipped. The
+    // friction idea lives as an `ideas.yaml` entry, so its record file is the
+    // container file itself.
+    fs::remove_file(card_record_path(repo, &friction))
         .expect("invariant: friction card should be removable");
     let healed = run(repo, &["status"]);
     assert!(healed.contains("HARNESS FRICTION"), "{healed}");

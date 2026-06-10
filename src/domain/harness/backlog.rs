@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::{self as card_store, CardSnapshot, card_path};
+use crate::domain::card::store::{self as card_store, CardSnapshot, EntriesSnapshot, card_path};
 use crate::domain::harness::cards;
 use crate::domain::harness::schema::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
@@ -34,25 +34,37 @@ pub fn items_in_cards(cards: &[(Card, PathBuf)]) -> Result<BacklogConfig> {
     Ok(BacklogConfig { items })
 }
 
-/// The CAS basis the matching save checks: each item's `idea` card (D7 -- the
+/// The CAS basis the matching save checks: the `ideas.yaml` container file as
+/// a whole, plus one card snapshot per pre-migration flat idea dir (D7 -- the
 /// card store is the only store; there is no metadata file).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct BacklogSnapshot {
     pub backlog: BacklogConfig,
-    cards: Vec<(String, CardSnapshot)>,
+    dirs: Vec<(String, CardSnapshot)>,
+    entries: EntriesSnapshot,
 }
 
-/// Load the Harness backlog with the exact card bytes used for optimistic save.
+/// Load the Harness backlog with the exact store bytes used for optimistic
+/// save: flat straggler dirs plus the `ideas.yaml` entry list, sorted by id
+/// (the order the per-dir store read in).
 pub(crate) fn load_with_snapshot(paths: &MaestroPaths) -> Result<BacklogSnapshot> {
     let mut items = Vec::new();
-    let mut snapshots = Vec::new();
+    let mut dirs = Vec::new();
     for (item, snapshot, _) in cards::scan(paths)? {
-        snapshots.push((item.id.clone(), snapshot));
+        dirs.push((item.id.clone(), snapshot));
         items.push(item);
     }
+    let ideas_file = paths.cards_dir().join(card_store::IDEAS_FILE);
+    let entries = card_store::load_entries(&ideas_file)?;
+    for card in entries.cards.clone() {
+        let artifact = format!("{}#{}", ideas_file.display(), card.id);
+        items.push(cards::item_from_card(card, &artifact)?);
+    }
+    items.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(BacklogSnapshot {
         backlog: BacklogConfig { items },
-        cards: snapshots,
+        dirs,
+        entries,
     })
 }
 
@@ -69,41 +81,40 @@ pub(crate) fn save_with_snapshot(
     backlog: &BacklogConfig,
     snapshot: &BacklogSnapshot,
 ) -> Result<()> {
-    save_cards(paths, backlog, &snapshot.cards)
+    save_cards(paths, backlog, snapshot)
 }
 
-/// Each item folds to its card under per-card CAS (a merge-minted id CAS-creates
-/// against its absent snapshot, so a concurrent mint of the same id loses), and
-/// reconciled-away items have their cards removed (D4).
+/// A pre-migration flat-dir item saves in place under per-card CAS; every
+/// other item -- existing entries and merge-minted ids alike -- folds into
+/// `ideas.yaml` through ONE whole-file CAS write (the F7 rider: a per-entry
+/// save would self-conflict after the first write invalidated the snapshot,
+/// and a concurrent writer of any entry trips the same check). A
+/// reconciled-away dir item has its dir removed (D4); an entry item simply
+/// leaves the list.
 fn save_cards(
     paths: &MaestroPaths,
     backlog: &BacklogConfig,
-    loaded: &[(String, CardSnapshot)],
+    snapshot: &BacklogSnapshot,
 ) -> Result<()> {
+    let dir_ids: BTreeSet<&str> = snapshot.dirs.iter().map(|(id, _)| id.as_str()).collect();
+    let mut entry_cards = Vec::new();
     for item in &backlog.items {
-        let path = card_path(paths, &item.id);
-        let snapshot = match loaded.iter().find(|(id, _)| id == &item.id) {
-            Some((_, snapshot)) => snapshot.clone(),
-            None => {
-                // A merge-minted id absent from the load snapshot must CAS-create
-                // against an empty card. If a concurrent writer already committed
-                // it, the fresh load returns a matching card and the create would
-                // silently overwrite it -- bail so the racing mint loses instead.
-                let fresh = card_store::load_with_snapshot(&path)?;
-                if fresh.card.is_some() {
-                    bail!(
-                        "backlog item {} was created concurrently; reload and retry",
-                        item.id
-                    );
-                }
-                fresh
+        match snapshot.dirs.iter().find(|(id, _)| id == &item.id) {
+            Some((_, dir_snapshot)) => {
+                cards::save_at(&card_path(paths, &item.id), item, dir_snapshot)?;
             }
-        };
-        cards::save_at(&path, item, &snapshot)?;
+            None => entry_cards.push(cards::card_for(item)?),
+        }
+    }
+    // Skip creating an empty ideas.yaml when the store had none and the save
+    // adds none; an existing file is rewritten even when emptied.
+    if !entry_cards.is_empty() || snapshot.entries.exists() {
+        let ideas_file = paths.cards_dir().join(card_store::IDEAS_FILE);
+        card_store::save_entries(&ideas_file, &entry_cards, &snapshot.entries)?;
     }
     let kept: BTreeSet<&str> = backlog.items.iter().map(|item| item.id.as_str()).collect();
-    for (id, _) in loaded {
-        if !kept.contains(id.as_str()) {
+    for id in dir_ids {
+        if !kept.contains(id) {
             cards::remove(paths, id)?;
         }
     }
@@ -434,8 +445,9 @@ mod tests {
         (root, paths)
     }
 
-    /// A whole-store save folds the items to cards and removes the card for an
-    /// item the caller dropped (the merge's D4 reconciliation surfaces here).
+    /// A whole-store save folds the items into the `ideas.yaml` container file
+    /// and drops the entry for an item the caller removed (the merge's D4
+    /// reconciliation surfaces here).
     #[test]
     fn card_mode_save_moves_items_to_cards_and_drops_removed() {
         let (_root, paths) = card_mode_paths("backlog-card-roundtrip");
@@ -445,17 +457,22 @@ mod tests {
 
         let reloaded = backlog::load(&paths).expect("reload from cards");
         assert_eq!(reloaded.items.len(), 2, "items read back from the cards");
-        assert!(paths.cards_dir().join("hb-001").join("card.yaml").is_file());
-        assert!(paths.cards_dir().join("hb-002").join("card.yaml").is_file());
+        let ideas_file = paths.cards_dir().join("ideas.yaml");
+        let raw = fs::read_to_string(&ideas_file).expect("ideas.yaml holds the saved entries");
+        assert!(raw.contains("hb-001") && raw.contains("hb-002"), "{raw}");
+        assert!(
+            !paths.cards_dir().join("hb-001").exists(),
+            "a fresh save mints no flat dirs"
+        );
 
         let mut snapshot = backlog::load_with_snapshot(&paths).expect("load snapshot");
         snapshot.backlog.items.retain(|item| item.id == "hb-001");
         backlog::save_with_snapshot(&paths, &snapshot.backlog, &snapshot).expect("save with drop");
 
-        assert!(paths.cards_dir().join("hb-001").join("card.yaml").is_file());
+        let raw = fs::read_to_string(&ideas_file).expect("ideas.yaml survives the drop");
         assert!(
-            !paths.cards_dir().join("hb-002").exists(),
-            "the dropped item's card is removed"
+            raw.contains("hb-001") && !raw.contains("hb-002"),
+            "the dropped item's entry is removed: {raw}"
         );
         let after = backlog::load(&paths).expect("reload after drop");
         assert_eq!(after.items.len(), 1);
@@ -489,9 +506,9 @@ mod tests {
     }
 
     /// SPEC D1 for the new-item branch: two readers snapshot the empty store and
-    /// mint the same id. The per-card edit CAS cannot catch this -- the id is in
-    /// neither snapshot -- so the create path's existence guard must reject the
-    /// second mint instead of silently overwriting the first writer's card.
+    /// mint the same id. The whole-file `ideas.yaml` CAS catches this without a
+    /// bespoke guard -- the first writer's save changes the file, so the second
+    /// writer's snapshot no longer matches and its create is rejected.
     #[test]
     fn card_mode_save_rejects_a_concurrent_new_item_with_the_same_id() {
         let (_root, paths) = card_mode_paths("backlog-card-concurrent-create");
@@ -506,7 +523,7 @@ mod tests {
         let error = backlog::save_with_snapshot(&paths, &second.backlog, &second)
             .expect_err("concurrent create must be rejected");
         assert!(
-            format!("{error:#}").contains("created concurrently"),
+            format!("{error:#}").contains("changed since it was read"),
             "{error:#}"
         );
 

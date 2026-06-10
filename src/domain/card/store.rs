@@ -362,6 +362,14 @@ pub struct EntriesSnapshot {
     raw: Option<String>,
 }
 
+impl EntriesSnapshot {
+    /// Whether the container file existed when this snapshot was read, so an
+    /// aggregate save can skip creating an empty file for an empty store.
+    pub fn exists(&self) -> bool {
+        self.raw.is_some()
+    }
+}
+
 /// Load every entry of a container list file (`decisions.yaml`/`ideas.yaml`).
 /// An absent or empty file is an empty list; a symlinked file or container
 /// dir is refused like a symlinked card dir. One malformed or

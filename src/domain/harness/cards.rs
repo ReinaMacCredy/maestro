@@ -3,7 +3,9 @@
 //! Unlike feature/task/decision -- per-record stores whose verbs each touch one
 //! record -- the harness backlog is an AGGREGATE: its verbs load a whole
 //! `BacklogConfig`, run an item-retaining merge, and save it back. Each item is
-//! an `idea`-typed `.maestro/cards/<id>/card.yaml`; the card store is the only
+//! an `idea`-typed card: an entry in `.maestro/cards/ideas.yaml` (the
+//! container-layout home), or a pre-migration flat
+//! `.maestro/cards/<id>/card.yaml` straggler dir. The card store is the only
 //! store (D7), with no metadata file beside it. The detect-skip evidence stamp
 //! lives in `.maestro/harness/detect-stamp` (a cache, not a store).
 
@@ -107,10 +109,12 @@ pub(crate) fn reconcile_idea(existing: Card, incoming: Card) -> Result<Card> {
     card_for(&existing_item)
 }
 
-/// Reconstruct every live `Idea`-typed card with its load-time CAS snapshot and
-/// card path, sorted by id. The first card that fails to load or parse surfaces
-/// its error: an aggregate save must see the whole backlog, so a partial scan
-/// would silently drop items.
+/// Reconstruct every PRE-MIGRATION flat-dir `Idea` card with its load-time CAS
+/// snapshot and card path, sorted by id; entry-backed ideas live in
+/// `ideas.yaml` and are read by `backlog::load_with_snapshot` alongside this.
+/// The first card that fails to load or parse surfaces its error: an aggregate
+/// save must see the whole backlog, so a partial scan would silently drop
+/// items.
 pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(BacklogItem, CardSnapshot, PathBuf)>> {
     let mut items = Vec::new();
     for id in card_store::card_dir_ids(&paths.cards_dir())? {
