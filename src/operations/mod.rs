@@ -4,6 +4,7 @@
 //! while legacy operation-like roots stay re-exported during the migration.
 
 pub mod card_migrate;
+pub mod container_migrate;
 pub mod feature_prepare;
 pub mod harness;
 pub mod init;

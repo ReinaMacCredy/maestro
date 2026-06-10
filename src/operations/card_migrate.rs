@@ -31,7 +31,9 @@ use serde_yaml::{Mapping, Value};
 
 use crate::domain::card::fold::{self, string_field};
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::{card_path, load_with_snapshot, mint_hash_id, save_with_snapshot};
+use crate::domain::card::store::{
+    card_path, load_with_snapshot, locate, mint_hash_id, save_with_snapshot,
+};
 use crate::domain::decisions::normalize_decision_id;
 use crate::domain::run::managed_event_logs;
 use crate::foundation::core::fs::{ensure_dir, read_yaml_mapping, sorted_child_dirs};
@@ -408,13 +410,16 @@ fn mint(
             card.id
         );
     }
-    let path = card_path(paths, &card.id);
-    let snapshot = load_with_snapshot(&path)
-        .with_context(|| format!("failed to read card snapshot {}", path.display()))?;
-    if snapshot.card.is_some() {
+    // The idempotency probe asks the resolver, not the flat path: a prior run's
+    // card may since have been folded into the container layout (an entry or a
+    // pooled task dir), and re-minting it flat would resurrect a stale copy.
+    if locate(paths, &card.id)?.is_some() {
         report.skipped += 1;
         return Ok(false);
     }
+    let path = card_path(paths, &card.id);
+    let snapshot = load_with_snapshot(&path)
+        .with_context(|| format!("failed to read card snapshot {}", path.display()))?;
     save_with_snapshot(&path, card, &snapshot)
         .with_context(|| format!("failed to write card {}", card.id))?;
     if let Some(src) = prose_src {
@@ -475,18 +480,21 @@ fn rewrite_note_line(line: &str, remap: &HashMap<String, String>) -> (String, bo
 }
 
 /// E5: rewrite run-event `task_id`s for migrated tasks. Scoped per task to "no
-/// live card exists at the old id": a migrated task lives at `card-<hash>`, so
-/// `cards/<old>/` is absent and its historical events are rewritten; a
-/// post-migration `task create` that reuses the old id mints `cards/<old>/`, so
-/// its events are left alone; a crash-then-rerun still rewrites (notes 53). The
+/// live card resolves at the old id": a migrated task lives at `card-<hash>`,
+/// so the old id resolves to nothing and its historical events are rewritten; a
+/// post-migration `task create` that reuses the old id resolves live (flat or
+/// pooled), so its events are left alone; a crash-then-rerun still rewrites
+/// (notes 53). The
 /// token swap is targeted, not a parse-and-reserialize, so every other byte of
 /// the append-only log is preserved.
 fn rewrite_run_events(paths: &MaestroPaths, task_remap: &[(String, String)]) -> Result<()> {
-    let active: Vec<(&str, &str)> = task_remap
-        .iter()
-        .filter(|(old, _)| !card_path(paths, old).exists())
-        .map(|(old, new)| (old.as_str(), new.as_str()))
-        .collect();
+    let mut active: Vec<(&str, &str)> = Vec::new();
+    for (old, new) in task_remap {
+        // Resolver, not the flat path: a recreated task may live pooled now.
+        if locate(paths, old)?.is_none() {
+            active.push((old.as_str(), new.as_str()));
+        }
+    }
     if active.is_empty() {
         return Ok(());
     }
@@ -694,7 +702,7 @@ fn backup_maestro(paths: &MaestroPaths, now: &str) -> Result<Option<PathBuf>> {
     Ok(Some(target))
 }
 
-fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
+pub(crate) fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
     let metadata = fs::symlink_metadata(src)
         .with_context(|| format!("failed to inspect {}", src.display()))?;
     if metadata.file_type().is_symlink() {

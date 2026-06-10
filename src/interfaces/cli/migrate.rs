@@ -31,6 +31,12 @@ pub fn run_card_fold() -> Result<()> {
         Some(path) => println!("backup: {}", path.display()),
         None => println!("backup: none (.maestro had nothing to snapshot)"),
     }
+    let containers = operations::container_migrate::run(&paths)?;
+    println!("folded flat card dirs into containers");
+    println!("decisions: {}", containers.decisions);
+    println!("ideas: {}", containers.ideas);
+    println!("tasks: {}", containers.tasks);
+    println!("finished interrupted moves: {}", containers.finished);
     println!("next: maestro doctor");
     Ok(())
 }
