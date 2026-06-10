@@ -91,6 +91,11 @@ pub enum RootCommand {
     Sync(SyncArgs),
     #[command(about = "Migrate v1 Maestro artifacts to the reduced v2 layout")]
     MigrateV2,
+    #[command(
+        about = "Fold the legacy v2 trees (features/tasks/decisions/backlog) into the card store",
+        after_help = "Examples:\n  maestro migrate              # snapshot .maestro, then mint cards from the legacy trees"
+    )]
+    Migrate,
     #[command(about = "Remove maestro hooks and config for an agent")]
     Uninstall(AgentArgs),
     #[command(about = "Diagnose the maestro installation and report problems")]
@@ -994,6 +999,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Upgrade(args) => update::run(args),
         RootCommand::Sync(args) => sync::run(args),
         RootCommand::MigrateV2 => migrate::run(),
+        RootCommand::Migrate => migrate::run_card_fold(),
         RootCommand::Uninstall(args) => uninstall::run(args),
         RootCommand::Doctor => doctor::run(),
         RootCommand::ShellInit => shell_init::run(),
