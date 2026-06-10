@@ -164,7 +164,30 @@ pub fn create(args: CreateArgs) -> Result<()> {
         return Err(anyhow!("card {id} already exists"));
     }
     let mut new_card = card::schema::Card::new(&id, card_type, &args.title, "open", &now);
-    new_card.parent = args.parent;
+    if let Some(parent) = args.parent {
+        // SPEC G1/E1: `parent` docks a card under a feature container. Features
+        // are roots, and a dangling parent ref would poison the display alias
+        // and parent-filtered queries, so the dock is validated at the door.
+        if card_type == card::schema::CardType::Feature {
+            return Err(anyhow!(
+                "a feature card cannot take --parent; features are top-level containers"
+            ));
+        }
+        let parent_card = card::store::load(&card::store::card_path(&paths, &parent))?
+            .ok_or_else(|| {
+                anyhow!(
+                    "parent {parent} not found; create the feature first \
+                     (`maestro create -t feature \"<title>\"`)"
+                )
+            })?;
+        if parent_card.card_type != card::schema::CardType::Feature {
+            return Err(anyhow!(
+                "parent {parent} is a {}, not a feature; cards dock under feature parents",
+                parent_card.card_type.as_str()
+            ));
+        }
+        new_card.parent = Some(parent);
+    }
     new_card.description = args.description;
     card::store::save_with_snapshot(&path, &new_card, &snapshot)?;
     println!("created {id} ({}): {}", card_type.as_str(), args.title);

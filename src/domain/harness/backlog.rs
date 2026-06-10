@@ -200,8 +200,12 @@ fn reopen_if_regressed(existing: &mut BacklogItem) {
 
 /// D4: drop a `proposed` note with no durable history that the current
 /// detection run no longer produces. Durable = a spawned task or any history.
+/// Only fingerprinted items qualify: a detector always stamps a fingerprint,
+/// so a fingerprint-less item is a user-authored idea card (`create -t idea`)
+/// that no detection run produces -- reconciling it away would delete it.
 fn is_ephemeral_reconcilable(item: &BacklogItem, fresh_fingerprints: &BTreeSet<String>) -> bool {
-    item.status == "proposed"
+    !item.fingerprint.is_empty()
+        && item.status == "proposed"
         && item.spawned_task.is_none()
         && item.history.is_empty()
         && (item.provenance.is_empty() || item.provenance == "detector")
@@ -495,5 +499,35 @@ mod tests {
             "only the first writer's card landed"
         );
         assert_eq!(reloaded.find("hb-001").expect("item").title, "first writer");
+    }
+
+    /// D4 reconciliation only drops fingerprinted detector items. A
+    /// fingerprint-less `proposed` item is a user-authored idea card (`create
+    /// -t idea` yields no fingerprint and no provenance) that no detection run
+    /// re-produces; a refresh must not delete it.
+    #[test]
+    fn merge_proposals_keeps_fingerprintless_user_ideas_on_reconcile() {
+        let (_root, paths) = card_mode_paths("backlog-reconcile-user-idea");
+        let mut config = BacklogConfig::empty();
+
+        let mut user_idea = item("card-user1", "user idea");
+        user_idea.fingerprint = String::new();
+        user_idea.provenance = String::new();
+        let mut stale_detected = item("card-det1", "stale detection");
+        stale_detected.provenance = "detector".to_string();
+        config.items = vec![user_idea, stale_detected];
+
+        backlog::merge_proposals(&paths, &mut config, vec![item("card-new1", "fresh detection")])
+            .expect("merge fresh proposals");
+
+        let ids: Vec<&str> = config.items.iter().map(|i| i.id.as_str()).collect();
+        assert!(
+            ids.contains(&"card-user1"),
+            "the fingerprint-less user idea survives: {ids:?}"
+        );
+        assert!(
+            !ids.contains(&"card-det1"),
+            "the absent fingerprinted detector item is reconciled away: {ids:?}"
+        );
     }
 }

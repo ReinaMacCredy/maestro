@@ -50,6 +50,7 @@ fn create_mints_a_card_and_show_round_trips_it() {
     let temp = cards_repo("s2-create-show");
     let repo = temp.path();
 
+    run(repo, &["create", "-t", "feature", "CSV export"]);
     let created = run(
         repo,
         &[
@@ -336,6 +337,46 @@ fn close_and_status_writes_are_guarded_per_type() {
     assert!(
         refused.contains("unknown --status") && refused.contains("in_progress"),
         "a typo'd word is rejected naming the legal vocabulary:\n{refused}"
+    );
+}
+
+/// SPEC G1/E1: `--parent` docks a card under a feature. A dangling or
+/// non-feature parent is refused at create time with the fix named, and a
+/// feature itself cannot take a parent.
+#[test]
+fn create_validates_the_parent_dock() {
+    let temp = cards_repo("s2-parent-guards");
+    let repo = temp.path();
+
+    let dangling = run_err(repo, &["create", "-t", "task", "Orphan", "--parent", "ghost"]);
+    assert!(
+        dangling.contains("ghost not found") && dangling.contains("create the feature first"),
+        "a dangling parent names the fix:\n{dangling}"
+    );
+
+    run(repo, &["create", "-t", "task", "Plain task"]);
+    let task_id = id_by_title(repo, "Plain task");
+    let non_feature = run_err(repo, &["create", "-t", "task", "Child", "--parent", &task_id]);
+    assert!(
+        non_feature.contains("not a feature"),
+        "a non-feature parent is refused:\n{non_feature}"
+    );
+
+    run(repo, &["create", "-t", "feature", "CSV export"]);
+    let nested = run_err(
+        repo,
+        &["create", "-t", "feature", "Sub", "--parent", "csv-export"],
+    );
+    assert!(
+        nested.contains("cannot take --parent"),
+        "a feature refuses a parent:\n{nested}"
+    );
+
+    run(repo, &["create", "-t", "task", "Docked", "--parent", "csv-export"]);
+    let docked = run(repo, &["show", &id_by_title(repo, "Docked")]);
+    assert!(
+        docked.contains("parent: csv-export"),
+        "a valid feature parent docks:\n{docked}"
     );
 }
 
