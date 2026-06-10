@@ -1,0 +1,24 @@
+schema_version: maestro.card.v1
+id: card-2cdf26
+type: idea
+title: Run events do not record which harness/agent fired them; the agent field is inconsistent and unsurfaced
+status: proposed
+created_at: 2026-06-08T06:55:53.795Z
+updated_at: 2026-06-08T06:55:53.795Z
+extra:
+  id: card-2cdf26
+  fingerprint: agent_audit:run-event-harness-attribution
+  source: cli-2026-06-08
+  provenance: agent-audit
+  topic: run-event-harness-attribution
+  type: agent_audit
+  title: Run events do not record which harness/agent fired them; the agent field is inconsistent and unsurfaced
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-08
+  first_seen: 2026-06-08T06:55:53.795Z
+  last_seen: 2026-06-08T06:55:53.795Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-08: run events carry no harness identity (claude vs codex). The ''agent'' field is copied through at src/domain/run/record.rs:80 but the CLI sets it at src/interfaces/cli/hook.rs:40 to super::actor() -- it names the recording actor (e.g. ''maestro''), NOT the driving harness; it is present on CLI-issued events (.maestro/runs/cli-2026-06-07/events.jsonl line 1) and absent on hook-recorded task_proof events (lines 2-3) because the hook payload has no ''agent''. embedded/hooks/record.sh is a thin ''exec maestro hook record'' shim forwarding the raw stdin payload (the $CLAUDE_PROJECT_DIR vs git-rev-parse detail is per-agent INVOCATION wiring noted in events.yaml comments, not something record.sh stamps). Run dirs key on session_id only; ''unattributed'' (event.rs:42) means missing session, not missing agent. No reader/status/decision surfaces ''agent'' (zero consumers). Idea source: oh-my-openagent boulder session_origins ''direct''|''appended'' + codex:/opencode: prefixes (boulder-state types.ts:12,19). IMPLEMENTER FIRST STEP (falsify ''never encodes'' before coding): capture one real Claude and one real Codex hook payload side by side -- they may already differ (cwd, transcript_path, env). Then choose stamp-at-install (the harness is known when writing .claude/settings.local.json vs .codex/hooks.json) OR surface a discriminator already in the payload. Do not assume record.sh is the edit site.'

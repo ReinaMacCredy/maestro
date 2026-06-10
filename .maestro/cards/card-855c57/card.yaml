@@ -1,0 +1,22 @@
+schema_version: maestro.card.v1
+id: card-855c57
+type: decision
+title: Advisor gate lives in the skill, not the CLI
+status: locked
+parent: design-session-spec-workflow
+created_at: 2026-06-07T15:45:14.886Z
+updated_at: 2026-06-07T15:45:14.909Z
+description: 'The maestro-design skill has no adversarial-review step before locking hard forks; sessions without the operator global protocol lock straight (decision-002 ghost duplicate is the live exhibit). Meta-evidence: the user typed advisor at four forks in this one session -- the gate is wanted at every hard fork, and human-memory-each-time is the fragile carrier a skill step replaces. Maestro is passive: only the skill can PROMPT the behavior; a CLI flag could only capture a result after the fact, and the existing --context field already does that capture for free (decision-009 context records what its advisor pass changed).'
+extra:
+  id: card-855c57
+  title: Advisor gate lives in the skill, not the CLI
+  status: locked
+  feature: design-session-spec-workflow
+  context: 'The maestro-design skill has no adversarial-review step before locking hard forks; sessions without the operator global protocol lock straight (decision-002 ghost duplicate is the live exhibit). Meta-evidence: the user typed advisor at four forks in this one session -- the gate is wanted at every hard fork, and human-memory-each-time is the fragile carrier a skill step replaces. Maestro is passive: only the skill can PROMPT the behavior; a CLI flag could only capture a result after the fact, and the existing --context field already does that capture for free (decision-009 context records what its advisor pass changed).'
+  decision: 'add a step to the bundled maestro-design skill, scoped to decision locks only (accept/ship are already gated): before locking a fork with material or hard-to-reverse consequences, obtain an independent adversarial review from a fresh context -- e.g. an advisor-class review tool or a fresh-context skeptic sub-agent, as peers -- and incorporate or rebut its points in the decision context. No new CLI surface. Contract must carry the skill version bump + tests/resources_version_guard.rs re-record per AGENTS.md'
+  rejected:
+  - 'CLI-enforced --reviewed flag: not theater (all decision fields are agent-typed assertions), but redundant -- --context already captures review outcomes, and a passive CLI cannot prompt the review or know which forks are hard'
+  - 'status quo (operator protocol only): gate exists only for sessions carrying the global CLAUDE.md; codex and bare sessions lock straight'
+  preview: 'SKILL.md step 5b: "Hard fork? get an independent adversarial review from a fresh context (advisor-class tool or skeptic sub-agent), then incorporate or rebut in the lock context." decision-009 shows the pattern: its context names what the advisor pass changed'
+  created_at: 2026-06-07T15:45:14.886Z
+  locked_at: 2026-06-07T15:45:14.909Z

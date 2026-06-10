@@ -1,0 +1,74 @@
+schema_version: maestro.card.v1
+id: repo-audit-proposals
+type: feature
+title: Repo audit proposals
+status: shipped
+created_at: 2026-06-06T12:28:22.048Z
+updated_at: 2026-06-07T15:01:01.607Z
+description: 'User wants a propose command: periodically or automatically re-read the whole project from scratch and suggest improvements. Binary detectors are rule-based over maestro state only (no repo code, no LLM); doctor checks maestro-artifact integrity only (doctor.rs:63-100); the harness backlog has the full proposal lifecycle but is detector-authored only. C1 (no cron/daemon) means the trigger must be verb-time surfacing or external. Audit = agent work; storage + cadence = maestro work.'
+extra:
+  schema_version: maestro.feature.v2
+  id: repo-audit-proposals
+  title: Repo audit proposals
+  description: 'User wants a propose command: periodically or automatically re-read the whole project from scratch and suggest improvements. Binary detectors are rule-based over maestro state only (no repo code, no LLM); doctor checks maestro-artifact integrity only (doctor.rs:63-100); the harness backlog has the full proposal lifecycle but is detector-authored only. C1 (no cron/daemon) means the trigger must be verb-time surfacing or external. Audit = agent work; storage + cadence = maestro work.'
+  status: shipped
+  created_at: 2026-06-06T12:28:22.048Z
+  updated_at: 2026-06-07T15:01:01.607Z
+  affected_areas:
+  - src/interfaces/cli + src/operations/harness (propose verb, merge+count, provenance, audit recency + overdue hint)
+  - 'src/domain/harness (schema: audit block, item source field — shared schema change with explicit-intervention-capture, after v1 lands)'
+  - embedded/skills/maestro-audit (new skill) + install/extract wiring
+  acceptance:
+  - maestro harness propose --title <t> --evidence <e> [--topic <slug>] files a backlog item with agent-audit provenance that rides the existing lifecycle (list/show/apply/dismiss)
+  - propose with a fingerprint/topic matching an existing item merges into it and adds the current session to sessions_hit; escalation thresholds apply to audit items exactly as to detector items
+  - measure on an agent-audit item closes on audit silence (no re-proposal since apply) and reverts with a still-detected warning when the topic was re-proposed since apply
+  - agent-audit items render their provenance in harness list/show, distinct from detector items
+  - 'a bundled maestro-audit skill (installed + versioned + guard-recorded like the other six) walks: known state -> fresh repo re-read -> maestro-state cross-check -> re-propose every finding still seen (verb merges); proposals only, never implements'
+  - harness.yml supports audit.every_sessions; when N distinct sessions pass without audit activity, status and task next print an overdue hint naming the maestro-audit skill
+  - absent audit block = feature off; status/next output byte-identical to today
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: 'sandbox: harness propose --title --evidence --topic -> hb-001 provenance agent-audit; rides lifecycle: list/show work, apply spawned task-001, dismiss is the generic by-id verb (src/operations/harness/propose.rs:338)'
+    at: 2026-06-07T15:01:01.452Z
+  - ac_id: ac-2
+    kind: explicit
+    text: 'sandbox: 2nd propose same --topic in new session merged into hb-001 seen 2x/2s sessions_hit audit-a,audit-b with both evidence lines; escalation parity via apply_escalation_policy propose.rs:149 + threshold filter :209-213 (no item_type gate)'
+    at: 2026-06-07T15:01:01.470Z
+  - ac_id: ac-3
+    kind: explicit
+    text: 'sandbox: measure on audit silence -> measured; after apply, re-propose same topic then measure -> reverted to proposed with ineffective/still-detected warning (propose.rs:387,414,503 audit_reproposed_since_apply)'
+    at: 2026-06-07T15:01:01.489Z
+  - ac_id: ac-4
+    kind: explicit
+    text: 'harness list --all TYPE column renders agent_audit distinct from detector rows; show renders provenance: agent-audit + topic: build-gate'
+    at: 2026-06-07T15:01:01.512Z
+  - ac_id: ac-5
+    kind: explicit
+    text: embedded/skills/maestro-audit/SKILL.md tracked, in catalog (src/domain/skills/catalog.rs:44), guard-recorded (tests/resources_version_guard.rs:68), installed byte-identical by init; body has version 1.0.0, 4-step walk, proposals-only Stop section
+    at: 2026-06-07T15:01:01.531Z
+  - ac_id: ac-6
+    kind: explicit
+    text: 'sandbox: audit.every_sessions=1 with 2 recorded sessions -> status AND task next print repo audit overdue: 2 session(s) ... (threshold 1) + skill: maestro-audit (propose.rs:158 audit_overdue_hint)'
+    at: 2026-06-07T15:01:01.549Z
+  - ac_id: ac-7
+    kind: explicit
+    text: 'sandbox: absent audit: block -> status/next byte-identical to baseline, no AUDIT section (early return propose.rs:162 on config.audit None)'
+    at: 2026-06-07T15:01:01.569Z
+  acceptance_sweeps:
+  - at: 2026-06-07T15:01:01.588Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+    - ac-6
+    - ac-7
+  qa:
+    surface: none
+    reason: 'retroactive record: implemented in 84ad96f1 and shipped before the record lifecycle; audited 2026-06-07 vs binary g5af7f5a'
+    amend_log_position: 0
+  non_goals:
+  - no cron, no daemon, no background process; the binary never runs the audit (C1)
+  outcome: agent-authored audit proposals ride the harness backlog lifecycle with overdue cadence hints; shipped in 84ad96f1, record closed retroactively after 7/7 audit 2026-06-07

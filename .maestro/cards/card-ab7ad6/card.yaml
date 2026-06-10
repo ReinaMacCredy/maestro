@@ -1,0 +1,24 @@
+schema_version: maestro.card.v1
+id: card-ab7ad6
+type: idea
+title: Proof command execution has no timeout; a hung verify command blocks task_verify forever
+status: proposed
+created_at: 2026-06-08T06:55:53.768Z
+updated_at: 2026-06-08T06:55:53.768Z
+extra:
+  id: card-ab7ad6
+  fingerprint: agent_audit:proof-command-timeout
+  source: cli-2026-06-08
+  provenance: agent-audit
+  topic: proof-command-timeout
+  type: agent_audit
+  title: Proof command execution has no timeout; a hung verify command blocks task_verify forever
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-08
+  first_seen: 2026-06-08T06:55:53.768Z
+  last_seen: 2026-06-08T06:55:53.768Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-08: src/domain/proof/commands.rs:94 spawns ''sh -c <cmd>'' and commands.rs:32 records exit_code (verify_task.rs:405 fails on non-zero), but no timeout/kill path exists anywhere in src/domain/proof/. A wedged check (watch process, stdin-waiting prompt, hung test runner) hangs ''maestro feature verify --prove'' / task_verify with no recovery. Idea source: oh-my-openagent comment-checker runner.ts:29-57 bounds each gate at 30s with SIGTERM then a 1s grace then SIGKILL. Fix: wrap the existing spawn in a bounded wait (config default a few minutes) that escalates SIGTERM->SIGKILL and records a ''timeout'' outcome distinct from exit!=0.'

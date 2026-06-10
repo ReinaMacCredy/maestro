@@ -1,0 +1,24 @@
+schema_version: maestro.card.v1
+id: card-ad9f83
+type: idea
+title: feature set needs a targeted single-item acceptance edit
+status: proposed
+created_at: 2026-06-07T15:22:45.606Z
+updated_at: 2026-06-07T15:22:45.606Z
+extra:
+  id: card-ad9f83
+  fingerprint: agent_audit:targeted-acceptance-edit
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: targeted-acceptance-edit
+  type: agent_audit
+  title: feature set needs a targeted single-item acceptance edit
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:22:45.606Z
+  last_seen: 2026-06-07T15:22:45.606Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: amending one acceptance item (agent-cli-ux AC2 supersession note; whole-spec-verification task new -> task create typo) required re-passing the FULL list: 14 and 8 --acceptance flags respectively. A --edit-acceptance ac-N "<new text>" on proposed contracts would remove the replay risk of corrupting 13 untouched items to fix 1'

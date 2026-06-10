@@ -1,0 +1,26 @@
+schema_version: maestro.card.v1
+id: card-2234cf
+type: decision
+title: 'Approval capture: route constraints by type, accept grows nothing'
+status: locked
+parent: design-session-spec-workflow
+created_at: 2026-06-07T15:56:08.307Z
+updated_at: 2026-06-07T15:56:08.327Z
+description: 'feature accept is the approval moment but records only the QA declaration; this session smuggled authorization into --qa reason 7 times. Advisor narrowed the lean: constraints split by TYPE. Scope constraints (no bail! conversion, no MCP) fit non_goals and ARE gate-read. Directive/sequencing constraints (land reorg first as zero-behavior commit) are process facts, not observable end-state -- they cannot be acceptance or non_goals. Authorization provenance (who/when) is low-value in this solo agent-driven repo; the ghost-002 actor gap was a parallel-fork artifact; actor stamps stay the deferred cross-cutting question on decision-ref-integrity.'
+extra:
+  id: card-2234cf
+  title: 'Approval capture: route constraints by type, accept grows nothing'
+  status: locked
+  feature: design-session-spec-workflow
+  context: 'feature accept is the approval moment but records only the QA declaration; this session smuggled authorization into --qa reason 7 times. Advisor narrowed the lean: constraints split by TYPE. Scope constraints (no bail! conversion, no MCP) fit non_goals and ARE gate-read. Directive/sequencing constraints (land reorg first as zero-behavior commit) are process facts, not observable end-state -- they cannot be acceptance or non_goals. Authorization provenance (who/when) is low-value in this solo agent-driven repo; the ghost-002 actor gap was a parallel-fork artifact; actor stamps stay the deferred cross-cutting question on decision-ref-integrity.'
+  decision: 'skill convention, no CLI change: at the approval moment, BEFORE accept -- (1) scope constraints become contract text via feature set --add-non-goal (frozen + gate-read); (2) directive/sequencing constraints AND the authorization line (who/when, scope summary) go into one dated feature note -- recorded but NOT gate-enforced, an accepted limitation; (3) then feature accept, unchanged. Actor stamping deferred to the decision-ref-integrity open question'
+  rejected:
+  - 'accept --authorized-by/--constraint flags: new schema on a just-shrunk surface; gates never read side fields, so stored constraints would be unenforced anyway'
+  - 'status quo --qa reason triple duty: QA declaration + authorization + audit trail in one field, unfindable later'
+  - 'claiming all constraints become contract text: directive/sequencing constraints are process facts that fit neither acceptance nor non_goals; pretending otherwise hides the gap'
+  preview: |-
+    feature set x --add-non-goal "no MCP surface"  (scope -> contract)
+    feature note x "accept authorized by Reina 2026-06-14: hint()+main.rs only; land reorg commit first"  (directive + who/when -> note)
+    feature accept x --qa none --reason "<QA-only reason>"  (unchanged)
+  created_at: 2026-06-07T15:56:08.307Z
+  locked_at: 2026-06-07T15:56:08.327Z

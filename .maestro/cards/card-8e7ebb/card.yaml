@@ -1,0 +1,33 @@
+schema_version: maestro.card.v1
+id: card-8e7ebb
+type: idea
+title: status and feature list must degrade gracefully on one bad artifact
+status: measured
+created_at: 2026-06-07T15:22:45.520Z
+updated_at: 2026-06-07T15:40:04.447Z
+extra:
+  id: card-8e7ebb
+  fingerprint: agent_audit:graceful-list-degradation
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: graceful-list-degradation
+  type: agent_audit
+  title: status and feature list must degrade gracefully on one bad artifact
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T15:22:45.520Z
+  last_seen: 2026-06-07T15:40:04.447Z
+  status: measured
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: one v1 feature.yaml (agent-cli-ux) made maestro status AND feature list exit 1 wholesale (schema mismatch for .maestro/features/agent-cli-ux/feature.yaml); 7 healthy features and 2 live tasks became invisible until migrate-v2. The dashboard should render healthy entries and mark the broken one inline like doctor does'
+  - 'cli-2026-06-07: advisor widen 2026-06-07: roster degradation alone does not clear the bootstrapping hazard -- the design-reading path (feature spec <id>, decision list) must ALSO degrade per-record (render raw on-disk fields when schema parse fails) or a mid-design feature record stays unreadable exactly when its design context is needed; gate item for decision A-hardened on design-session-spec-workflow'
+  spawned_task: card-3ff4ab
+  history:
+  - result: accepted
+    task: card-3ff4ab
+    at: 2026-06-07T16:10:50.431Z
+  - result: measured
+    task: card-3ff4ab
+    at: 2026-06-07T16:52:41.992Z

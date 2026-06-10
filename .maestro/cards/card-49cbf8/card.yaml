@@ -1,0 +1,24 @@
+schema_version: maestro.card.v1
+id: card-49cbf8
+type: idea
+title: harness apply spawns tasks with acceptance already locked, rejecting design refinements
+status: proposed
+created_at: 2026-06-07T16:12:13.399Z
+updated_at: 2026-06-07T16:12:13.399Z
+extra:
+  id: card-49cbf8
+  fingerprint: agent_audit:apply-spawned-task-locked
+  source: cli-2026-06-07
+  provenance: agent-audit
+  topic: apply-spawned-task-locked
+  type: agent_audit
+  title: harness apply spawns tasks with acceptance already locked, rejecting design refinements
+  priority: medium
+  occurrences: 1
+  sessions_hit:
+  - cli-2026-06-07
+  first_seen: 2026-06-07T16:12:13.399Z
+  last_seen: 2026-06-07T16:12:13.399Z
+  status: proposed
+  evidence:
+  - 'cli-2026-06-07: session 2026-06-07: harness apply hb-001 spawned task-001 pre-accepted with only the generic preset check; the design ruling produced in the same walk (sick-row rendering + exit-code semantics) could not become real checks -- task set task-001 --check errored "acceptance is locked; checks cannot be changed after accept" -- and had to ride task note, which the verify gate never reads. The natural moment to refine a spawned task is immediately after apply, but the lifecycle slams the acceptance lock first'

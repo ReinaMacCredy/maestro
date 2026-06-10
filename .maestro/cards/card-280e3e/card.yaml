@@ -1,0 +1,21 @@
+schema_version: maestro.card.v1
+id: card-280e3e
+type: decision
+title: Cutoff kills the whole process group, not just the shell
+status: locked
+parent: proof-command-timeout
+created_at: 2026-06-08T07:14:49.789Z
+updated_at: 2026-06-08T07:14:56.823Z
+description: shell_command runs 'sh -c <cmd>' (src/domain/proof/commands.rs:94). Killing only the sh maestro started leaves its children (cargo test and below) running orphaned -- the timeout would stop maestro waiting but not stop the runaway. Killing the whole tree requires starting each command in its own process group and signalling the group.
+extra:
+  id: card-280e3e
+  title: Cutoff kills the whole process group, not just the shell
+  status: locked
+  feature: proof-command-timeout
+  context: shell_command runs 'sh -c <cmd>' (src/domain/proof/commands.rs:94). Killing only the sh maestro started leaves its children (cargo test and below) running orphaned -- the timeout would stop maestro waiting but not stop the runaway. Killing the whole tree requires starting each command in its own process group and signalling the group.
+  decision: 'Each verify command is started in its own process group; on cutoff maestro kills the entire group (Unix: setpgid via pre_exec then signal the negative pgid; Windows: job object / taskkill /T) so the command and everything it spawned stop.'
+  rejected:
+  - 'Kill only the shell: std .kill() on the sh process leaves cargo test and its children running in the background; the timeout fires but the runaway survives.'
+  preview: start sh in its own process group; cutoff -> kill the GROUP -> maestro X sh X cargo X children all gone; no orphaned runaway
+  created_at: 2026-06-08T07:14:49.789Z
+  locked_at: 2026-06-08T07:14:56.823Z

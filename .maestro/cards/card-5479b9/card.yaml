@@ -1,0 +1,22 @@
+schema_version: maestro.card.v1
+id: card-5479b9
+type: decision
+title: ASCII is the preview format for maestro design records
+status: locked
+parent: design-session-spec-workflow
+created_at: 2026-06-07T15:47:44.572Z
+updated_at: 2026-06-07T15:47:44.600Z
+description: 'Previews per design fork: maestro --preview is free text (multi-line ASCII verified round-trip via decision show in sandbox); the record consumer is an agent in a terminal; the user set the session preference that visual means inline ASCII; and reduce-maestro-artifact-surface just shrank the artifact surface binary assets would re-bloat. Four independent constraints point the same way -- this is one decision with a documented exception, not a live 3-way fork. The operator global protocol mandates ASCII AND a richer visual when possible; locking ASCII-only for .maestro records narrows that, so the rich-visual case is explicitly routed, not dropped.'
+extra:
+  id: card-5479b9
+  title: ASCII is the preview format for maestro design records
+  status: locked
+  feature: design-session-spec-workflow
+  context: 'Previews per design fork: maestro --preview is free text (multi-line ASCII verified round-trip via decision show in sandbox); the record consumer is an agent in a terminal; the user set the session preference that visual means inline ASCII; and reduce-maestro-artifact-surface just shrank the artifact surface binary assets would re-bloat. Four independent constraints point the same way -- this is one decision with a documented exception, not a live 3-way fork. The operator global protocol mandates ASCII AND a richer visual when possible; locking ASCII-only for .maestro records narrows that, so the rich-visual case is explicitly routed, not dropped.'
+  decision: 'ASCII sketches are THE preview format for maestro design records: every fork option gets an inline ASCII sketch during the walk; the chosen sketch is written into decision lock --preview (multiline). Named exception: when a session produces a rich visual (image/diagram), it lives in the operator/root layer per the home seam deferred in decision-009 -- never in .maestro. Contract must verify the preview through feature spec (the design-of-record render), not just decision show'
+  rejected:
+  - 'assets folder in .maestro: binary blobs the terminal consumer cannot read, undiffable, re-bloats the surface reduce-maestro-artifact-surface removed'
+  - 'ASCII default + optional in-repo assets: the judgment seam belongs to the operator layer (decision-009), not to per-decision drift inside .maestro'
+  preview: 'walk: each option drawn inline -> user picks -> lock: preview: | (chosen sketch, multiline) -> feature spec renders it with the decision'
+  created_at: 2026-06-07T15:47:44.572Z
+  locked_at: 2026-06-07T15:47:44.600Z

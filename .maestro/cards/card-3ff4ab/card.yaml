@@ -1,0 +1,94 @@
+schema_version: maestro.card.v1
+id: card-3ff4ab
+type: task
+title: status and feature list must degrade gracefully on one bad artifact
+status: verified
+claimed_by: maestro
+claimed_at: 2026-06-07T16:29:33.866Z
+created_at: 2026-06-07T16:10:50.378Z
+updated_at: 2026-06-07T16:43:01.979Z
+extra:
+  schema_version: maestro.task.v2
+  id: card-3ff4ab
+  title: status and feature list must degrade gracefully on one bad artifact
+  lane: normal
+  risk: medium
+  state: verified
+  acceptance_locked: true
+  acceptance:
+    checks:
+    - graceful-list-degradation improvement is implemented and a fresh maestro-audit pass does not re-propose it
+    locked_by: maestro-harness
+    locked_at: 2026-06-07T16:10:50.378Z
+  claims:
+  - status and feature list degrade with a sick feature while preserving healthy rows
+  claimed_by: maestro
+  claimed_at: 2026-06-07T16:29:33.866Z
+  state_history:
+  - state: draft
+    at: 2026-06-07T16:10:50.378Z
+    by: maestro
+  - state: exploring
+    at: 2026-06-07T16:10:50.378Z
+    by: maestro-harness
+  - state: ready
+    at: 2026-06-07T16:10:50.378Z
+    by: maestro-harness
+  - state: in_progress
+    at: 2026-06-07T16:29:33.866Z
+    by: maestro
+  - state: needs_verification
+    at: 2026-06-07T16:29:40.557Z
+    by: maestro
+    summary: implemented tolerant feature roster degradation
+    claims:
+    - status and feature list degrade with a sick feature while preserving healthy rows
+  - state: needs_verification
+    at: 2026-06-07T16:29:40.573Z
+    by: maestro
+    summary: 'verification failed: verify command failed: cargo test (exit 101)'
+    open_items:
+    - 'verify command failed: cargo test (exit 101)'
+    - 'verify command failed: cargo clippy -- -D warnings (exit 101)'
+  - state: needs_verification
+    at: 2026-06-07T16:36:32.807Z
+    by: maestro
+    summary: 'verification failed: verify command failed: cargo test (exit 101)'
+    open_items:
+    - 'verify command failed: cargo test (exit 101)'
+  - state: verified
+    at: 2026-06-07T16:43:01.979Z
+    by: maestro
+    summary: 'verification passed: 1 claim(s), 3 proof source(s)'
+  verification:
+    status: passed
+    verified_at: 2026-06-07T16:43:01.979Z
+    verified_commit: 5af7f5ac7607bcda627145849a55aaa1124d5328
+    verified_by_run: .maestro/runs/cli-2026-06-07/events.jsonl
+    contract_hash: 8777b2972cbc59c8242c7800d2a1af1c7999e9095395a6246851664df1ca1e0a
+    claim_checks:
+    - claim: status and feature list degrade with a sick feature while preserving healthy rows
+      matched: true
+      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-07/events.jsonl
+    commands:
+    - cmd: cargo build
+      exit_code: 0
+      duration_ms: 170
+    - cmd: cargo test
+      exit_code: 0
+      duration_ms: 125264
+    - cmd: cargo clippy -- -D warnings
+      exit_code: 0
+      duration_ms: 199
+    proof_sources:
+    - kind: event
+      path: .maestro/runs/cli-2026-06-07/events.jsonl
+      hash: db80f9e9d461de0f4d38a2e976ed7df2e3f82653b2dc7f4f7af96b5bd551c1b1
+    - kind: event
+      path: .maestro/runs/manual/events.jsonl
+      hash: 4c45a87b4dab599326b06f40760083b8238ffca744d5c71dda18058d317e1e2c
+    - kind: event
+      path: .maestro/runs/run-001/events.jsonl
+      hash: 2ca1a44c11c3a364a513606b37bde92b8a504b497d84df3212e282da4b9f2d2e
+  created_at: 2026-06-07T16:10:50.378Z
+  updated_at: 2026-06-07T16:43:01.979Z

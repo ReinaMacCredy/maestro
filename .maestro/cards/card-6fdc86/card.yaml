@@ -1,0 +1,21 @@
+schema_version: maestro.card.v1
+id: card-6fdc86
+type: decision
+title: Maestro offers full Design-Session-Protocol parity natively
+status: locked
+parent: design-session-spec-workflow
+created_at: 2026-06-07T15:30:40.535Z
+updated_at: 2026-06-07T15:30:40.557Z
+description: 'Parity mapping 2026-06-07: the protocol spine already shipped (spec.md scaffold, decision open/lock with supersedes, notes pointers, feature spec render, per-ac verify sweep, archive bundle); three bounded deltas remain (advisor-before-hard-lock skill step, preview-asset convention, authorization capture at accept). Advisor pass split the original fork: parity is a product-design choice; retiring root SPEC files is an operator governance call and is NOT decided here.'
+extra:
+  id: card-6fdc86
+  title: Maestro offers full Design-Session-Protocol parity natively
+  status: locked
+  feature: design-session-spec-workflow
+  context: 'Parity mapping 2026-06-07: the protocol spine already shipped (spec.md scaffold, decision open/lock with supersedes, notes pointers, feature spec render, per-ac verify sweep, archive bundle); three bounded deltas remain (advisor-before-hard-lock skill step, preview-asset convention, authorization capture at accept). Advisor pass split the original fork: parity is a product-design choice; retiring root SPEC files is an operator governance call and is NOT decided here.'
+  decision: maestro natively supports the full protocol arc (map -> walk forks w/ previews -> advisor gate on hard forks -> lock w/ chosen preview -> contract -> accept-as-approval w/ authorization -> implement -> per-ac verify -> ship -> archive); the three deltas become this feature contract. Home question (replace vs coexist with root SPEC files) deliberately left open for the operator
+  rejected:
+  - 'bundling root-SPEC retirement into this lock: operator-mandated governance cannot be retired on an agent lean; also the bootstrapping hazard argues for an independent ruling'
+  preview: 'one design session, one maestro feature: spec.md narrative + decisions.yaml locks + notes.md log + verify sweep gate + archive bundle, no parallel record system required by maestro itself'
+  created_at: 2026-06-07T15:30:40.535Z
+  locked_at: 2026-06-07T15:30:40.557Z

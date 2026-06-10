@@ -1,0 +1,46 @@
+schema_version: maestro.card.v1
+id: resume-prior-task-context
+type: feature
+title: Resume prior task context
+status: proposed
+created_at: 2026-06-06T05:32:50.249Z
+updated_at: 2026-06-08T07:28:27.431Z
+description: Design the source of truth and user flow for fresh-chat resume across a day gap, beyond the existing clean-session resume packet.
+extra:
+  schema_version: maestro.feature.v2
+  id: resume-prior-task-context
+  title: Resume prior task context
+  description: Design the source of truth and user flow for fresh-chat resume across a day gap, beyond the existing clean-session resume packet.
+  status: proposed
+  created_at: 2026-06-06T05:32:50.249Z
+  updated_at: 2026-06-08T07:28:27.431Z
+  raw_request: Brainstorm enhanced Maestro resume so a fresh chat can say 'resume maestro task' or 'resume maestro feat' and continue from the prior working state.
+  input_type: design
+  affected_areas:
+  - src/interfaces/cli/resume.rs
+  - src/interfaces/cli/mod.rs
+  - src/domain/task/template.rs
+  - src/domain/run/record.rs
+  - src/domain/run/evidence.rs
+  - src/domain/feature/registry.rs
+  - embedded/skills
+  - embedded/harness/HARNESS.md
+  - tests
+  - 'src/domain/task/template.rs (task.md brief: Upstream learnings element)'
+  - src/domain/task/lookup.rs (gather earlier same-feature tasks)
+  acceptance:
+  - Task task.md becomes the agent-readable task brief with Goal, State, Acceptance, Resume, and Proof; task.yaml remains machine truth and acceptance.yaml remains the locked acceptance contract.
+  - maestro resume source refs include task.md alongside task.yaml and acceptance.yaml, and fresh agents are directed to open task.md first.
+  - Scoped resume.md checkpoint files are the durable fresh-chat resume authority at task and feature scope, with only a concise latest-checkpoint line merged into notes.md.
+  - Bare resume flows show a dashboard with recommendation, candidates, and exact follow-up command; they do not silently auto-continue.
+  - Scoped resume.md stores only sanitized operational content and omits raw command output, raw tool input, prompts/transcripts, environment variables, tokens/secrets, pasted user data, and full diffs.
+  - 'Checkpoint write timing uses guarded hybrid behavior: explicit --write works, Stop auto-writes only with one confident target and sanitized content, and ambiguous Stop skips.'
+  - 'Fresh-chat resume uses a tiered freshness gate: fatal incoherence blocks checkpoint resume, while normal drift is shown as warnings with reconcile commands.'
+  - A task's task.md brief includes an 'Upstream learnings' element listing concise, sanitized excerpts from earlier tasks under the same feature, in sequence order; standalone tasks (no feature) show nothing.
+  - Surfaced upstream excerpts obey the same sanitization as resume.md (no raw command output, tool input, prompts/transcripts, env, secrets, pasted data, or full diffs) and are kept short to stay scannable.
+  non_goals:
+  - No transcript/session replay in v1.
+  - No global .maestro/resume/latest.md pointer in v1.
+  - No append-only checkpoint history in v1.
+  - No durable storage of raw prompts, raw tool inputs, raw command output, secrets, pasted user data, or full diffs.
+  - No silent auto-continue from a bare resume command.

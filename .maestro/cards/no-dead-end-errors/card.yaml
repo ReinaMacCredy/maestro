@@ -1,0 +1,73 @@
+schema_version: maestro.card.v1
+id: no-dead-end-errors
+type: feature
+title: No dead-end errors
+status: shipped
+created_at: 2026-06-07T15:04:09.033Z
+updated_at: 2026-06-07T16:55:40.486Z
+description: 'Errors with a known recovery must name it. Live failure 2026-06-07: maestro status on a v1-artifact repo exited 1 with schema mismatch for ... expected maestro.feature.v2, found maestro.feature.v1 and no fix line; the recovery (migrate-v2) was only discoverable via git log. Typed errors live in MaestroError (src/foundation/core/error.rs, 8 variants, no hints); all CLI errors funnel through one print site (src/main.rs:8-10); some surfaces already hand-roll fix: lines (task/doctor.rs:152, verify fail-closed). Drift evidence: src/domain/decisions/query.rs:336 hand-formats a duplicate of the SchemaMismatch message.'
+extra:
+  schema_version: maestro.feature.v2
+  id: no-dead-end-errors
+  title: No dead-end errors
+  description: 'Errors with a known recovery must name it. Live failure 2026-06-07: maestro status on a v1-artifact repo exited 1 with schema mismatch for ... expected maestro.feature.v2, found maestro.feature.v1 and no fix line; the recovery (migrate-v2) was only discoverable via git log. Typed errors live in MaestroError (src/foundation/core/error.rs, 8 variants, no hints); all CLI errors funnel through one print site (src/main.rs:8-10); some surfaces already hand-roll fix: lines (task/doctor.rs:152, verify fail-closed). Drift evidence: src/domain/decisions/query.rs:336 hand-formats a duplicate of the SchemaMismatch message.'
+  status: shipped
+  created_at: 2026-06-07T15:04:09.033Z
+  updated_at: 2026-06-07T16:55:40.486Z
+  affected_areas:
+  - src/foundation/core/error.rs (hint method + test)
+  - src/main.rs (error print site)
+  - src/domain/decisions/query.rs (dedupe ad-hoc message)
+  acceptance:
+  - MaestroError exposes hint() -> Option<String> naming the recovery command; a unit test enforces every variant has an explicit Some/None mapping so new variants cannot skip the decision
+  - 'the single CLI error print site (src/main.rs) appends a fix: <hint> line when the error chain downcasts to a hinted MaestroError; unhinted errors render unchanged'
+  - 'SchemaMismatch hints fix: run maestro migrate-v2 when a v1 task/feature artifact meets a v2-expecting binary; other schema mismatches hint maestro doctor'
+  - the ad-hoc schema-mismatch message at src/domain/decisions/query.rs:336 is repointed to the typed MaestroError::SchemaMismatch (no hand-formatted duplicates)
+  - 'real case: maestro status in a repo with v1 feature artifacts exits non-zero and stderr contains fix: run maestro migrate-v2'
+  acceptance_evidence:
+  - ac_id: ac-1
+    kind: explicit
+    text: cargo test --test core_schema_error typed_errors_have_explicit_hint_decisions passed; the test enumerates MaestroError variants through HintCase and fails to compile when a new variant lacks an explicit Some/None hint decision
+    at: 2026-06-07T16:53:24.283Z
+  - ac_id: ac-2
+    kind: explicit
+    text: 'cargo test --test feature_decision_commands_integration status_on_only_v1_feature_records_fails_with_migrate_hint passed; stderr preserves the original Error line and appends fix: run maestro migrate-v2 at the main print site'
+    at: 2026-06-07T16:53:29.822Z
+  - ac_id: ac-3
+    kind: explicit
+    text: cargo test --test core_schema_error typed_errors_have_explicit_hint_decisions and cargo test --test feature_decision_commands_integration status_on_only_v1_feature_records_fails_with_migrate_hint passed; SchemaMismatch maps v1 task/feature artifacts to run maestro migrate-v2 and other schema mismatch cases to run maestro doctor
+    at: 2026-06-07T16:53:35.159Z
+  - ac_id: ac-4
+    kind: explicit
+    text: rg -n 'expected .* found|schema mismatch for' src/domain/decisions/query.rs src/foundation/core/error.rs shows only src/foundation/core/error.rs owns the schema mismatch string; decisions/query.rs now constructs MaestroError::SchemaMismatch
+    at: 2026-06-07T16:53:46.962Z
+  - ac_id: ac-5
+    kind: explicit
+    text: 'cargo test --test feature_decision_commands_integration status_on_only_v1_feature_records_fails_with_migrate_hint passed; sandbox with only a v1 feature.yaml makes maestro status exit non-zero and stderr contains fix: run maestro migrate-v2'
+    at: 2026-06-07T16:53:51.922Z
+  - ac_id: ac-2
+    kind: explicit
+    text: 'cargo test --test feature_decision_commands_integration status_on_only_v1_feature_records_fails_with_migrate_hint and unhinted_errors_do_not_print_fix_line passed; hinted schema errors append fix: run maestro migrate-v2, ordinary validation errors keep the Error line without a fix: suffix'
+    at: 2026-06-07T16:57:16.253Z
+  acceptance_sweeps:
+  - at: 2026-06-07T16:53:56.694Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+  - at: 2026-06-07T16:57:21.282Z
+    resolved:
+    - ac-1
+    - ac-2
+    - ac-3
+    - ac-4
+    - ac-5
+  qa:
+    surface: none
+    reason: implementation verified by enhancement-walk real-entry checks
+    amend_log_position: 0
+  non_goals:
+  - wholesale conversion of ~150 ad-hoc bail!/anyhow! sites to typed errors; most are argument validation where clap/context already guides recovery
+  outcome: Implemented typed recovery hints, one CLI fix-line append, schema-mismatch migrate guidance, and decision-query schema mismatch dedupe with focused regression coverage.
