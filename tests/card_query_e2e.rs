@@ -357,6 +357,48 @@ fn archive_moves_a_shipped_feature_and_its_children_through_the_binary() {
 }
 
 #[test]
+fn archived_task_still_renders_in_show_and_list_all() {
+    let temp = TestTempDir::new("p4d-archive-read");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    write_card(
+        &paths,
+        &Card::new(
+            "csv-export",
+            CardType::Feature,
+            "CSV export",
+            "shipped",
+            NOW,
+        ),
+    );
+    let mut child = Card::new("task-001", CardType::Task, "One", "verified", NOW);
+    child.parent = Some("csv-export".to_string());
+    write_card(&paths, &child);
+    run(repo, &["archive", "csv-export"]);
+
+    // L6b: a historical reference to an archived task still renders through
+    // `task show`, disclosed as archived so it cannot pass for live work.
+    let show = run(repo, &["task", "show", "task-001"]);
+    assert!(
+        show.contains("One") && show.contains("archived: true"),
+        "an archived task renders with the archive marker:\n{show}"
+    );
+
+    // The bare list stays live-tree only; `--all` reads the card archive.
+    let live = run(repo, &["task", "list"]);
+    assert!(
+        !live.contains("task-001"),
+        "an archived task stays out of the bare list:\n{live}"
+    );
+    let all = run(repo, &["task", "list", "--all"]);
+    assert!(
+        all.contains("task-001"),
+        "`--all` includes the archived task:\n{all}"
+    );
+}
+
+#[test]
 fn archive_refuses_a_feature_with_open_work() {
     let temp = TestTempDir::new("p4d-archive-open");
     let paths = MaestroPaths::new(temp.path());

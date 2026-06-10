@@ -1,16 +1,10 @@
-use std::error::Error;
-use std::fmt;
-use std::fs::{self, OpenOptions};
-use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::card::store::CardSnapshot;
 use crate::domain::task::cards;
-use crate::foundation::core::fs::write_new_dir_atomic;
-use crate::foundation::core::safe_write::write_string_atomic;
 use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
 use crate::foundation::core::slug::slugify_ascii;
 
@@ -228,32 +222,17 @@ pub struct AcceptanceFile {
     pub locked_at: Option<String>,
 }
 
-/// Optimistic-concurrency snapshot for a loaded task, dispatched by store mode
-/// (SPEC-beads-model P1 dual-read cutover). The snapshot is the CAS basis the
-/// matching save checks; carrying the mode here -- rather than a separate write
-/// token -- works because the save seam takes no `paths`, so the snapshot is the
-/// natural carrier of both the write target and the proof.
+/// Optimistic-concurrency snapshot for a loaded task. The snapshot is the CAS
+/// basis the matching save checks: the card store's raw-string CAS is the
+/// guard, and `path` is the `card.yaml` the save writes back to. The save seam
+/// takes no `paths`, so the snapshot is the natural carrier of both the write
+/// target and the proof.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TaskSnapshot {
-    /// Legacy `task.yaml`: the CAS compares `updated_at` against a fresh reload.
-    Legacy { path: PathBuf, updated_at: String },
-    /// Migrated card: the card store's raw-string CAS is the guard. `path` is the
-    /// `card.yaml` the save writes back to.
     Card {
         path: PathBuf,
         snapshot: Box<CardSnapshot>,
     },
-}
-
-struct TaskSaveLock {
-    path: PathBuf,
-}
-
-/// Typed optimistic-save failure from Task-owned persistence.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum TaskSaveError {
-    Modified,
-    Locked,
 }
 
 impl TaskRecord {
@@ -308,149 +287,11 @@ impl AcceptanceFile {
     }
 }
 
-/// Write task.yaml and task.md for a task.
-pub fn write_task_artifacts(
-    tasks_dir: &Path,
-    task: &TaskRecord,
-    acceptance: &AcceptanceFile,
-) -> Result<PathBuf> {
-    let task_dir = tasks_dir.join(task.directory_name());
-    let mut record = task.clone();
-    record.acceptance = acceptance.clone();
-    let temp_root = tasks_dir.parent().unwrap_or(tasks_dir).join(".tmp-create");
-    write_new_dir_atomic(&task_dir, temp_root, "task", |temp_dir| {
-        write_string_atomic(temp_dir.join("task.md"), &task_markdown(&record))
-            .context("failed to write task.md")?;
-        write_string_atomic(temp_dir.join("task.yaml"), &serde_yaml::to_string(&record)?)
-            .context("failed to write task.yaml")?;
-        Ok(())
-    })?;
-
-    Ok(task_dir)
-}
-
-/// Load a task and return its optimistic concurrency snapshot.
-pub fn load_task(path: &Path) -> Result<(TaskRecord, TaskSnapshot)> {
-    let contents =
-        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
-    let task: TaskRecord = serde_yaml::from_str(&contents)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    let snapshot = TaskSnapshot::Legacy {
-        path: path.to_path_buf(),
-        updated_at: task.updated_at.clone(),
-    };
-
-    Ok((task, snapshot))
-}
-
-/// Save a task only if `updated_at` still matches the loaded snapshot.
+/// Save a task against its load-time snapshot. The card store's raw-string
+/// compare-and-set is the whole guard -- no lock or reload here.
 pub fn save_task_with_snapshot(task: &TaskRecord, snapshot: &TaskSnapshot) -> Result<()> {
-    save_task_with_snapshot_after(task, snapshot, || Ok(NoopSaveTaskHook))
-}
-
-/// Save a task under its optimistic-concurrency lock after a caller-owned pre-save step.
-pub(crate) fn save_task_with_snapshot_after<F, C>(
-    task: &TaskRecord,
-    snapshot: &TaskSnapshot,
-    before_save: F,
-) -> Result<()>
-where
-    F: FnOnce() -> Result<C>,
-    C: SaveTaskHook,
-{
     match snapshot {
-        TaskSnapshot::Legacy { path, updated_at } => {
-            // Legacy CAS: hold the per-task lock, reload, and compare `updated_at`
-            // before the bare write.
-            let _lock = TaskSaveLock::acquire(path)?;
-            let (current, _) = load_task(path)?;
-            if &current.updated_at != updated_at {
-                return Err(TaskSaveError::Modified.into());
-            }
-            let serialized = serde_yaml::to_string(task)?;
-            let hook = before_save()?;
-            finish_save(
-                hook,
-                write_string_atomic(path, &serialized)
-                    .with_context(|| format!("failed to write {}", path.display())),
-            )
-        }
-        // Card CAS lives inside the store's raw-string compare-and-set, so there
-        // is no lock or `updated_at` reload here -- `save_at` is the whole guard.
-        TaskSnapshot::Card { path, snapshot } => {
-            let hook = before_save()?;
-            finish_save(hook, cards::save_at(path, task, snapshot))
-        }
-    }
-}
-
-/// Commit the caller-owned pre-save step on a successful write, or roll it back
-/// on failure, so both store-mode arms share one commit/rollback contract.
-fn finish_save<C: SaveTaskHook>(mut hook: C, write_result: Result<()>) -> Result<()> {
-    match write_result {
-        Ok(()) => {
-            hook.commit();
-            Ok(())
-        }
-        Err(write_error) => {
-            if let Err(rollback_error) = hook.rollback() {
-                return Err(write_error).context(format!(
-                    "failed to roll back caller-owned pre-save step: {rollback_error}"
-                ));
-            }
-            Err(write_error)
-        }
-    }
-}
-
-pub(crate) trait SaveTaskHook {
-    fn commit(self);
-
-    fn rollback(&mut self) -> Result<()>;
-}
-
-struct NoopSaveTaskHook;
-
-impl SaveTaskHook for NoopSaveTaskHook {
-    fn commit(self) {}
-
-    fn rollback(&mut self) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl TaskSaveLock {
-    fn acquire(task_path: &Path) -> Result<Self> {
-        let lock_path = task_path.with_extension("yaml.lock");
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&lock_path)
-        {
-            Ok(_) => Ok(Self { path: lock_path }),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                Err(TaskSaveError::Locked.into())
-            }
-            Err(error) => Err(error)
-                .with_context(|| format!("failed to create task lock {}", lock_path.display())),
-        }
-    }
-}
-
-impl fmt::Display for TaskSaveError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TaskSaveError::Modified => formatter.write_str("task was modified, please retry"),
-            TaskSaveError::Locked => formatter.write_str("task is locked, please retry"),
-        }
-    }
-}
-
-impl Error for TaskSaveError {}
-
-impl Drop for TaskSaveLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
+        TaskSnapshot::Card { path, snapshot } => cards::save_at(path, task, snapshot),
     }
 }
 

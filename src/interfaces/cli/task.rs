@@ -18,8 +18,8 @@ pub fn run(args: TaskArgs) -> Result<()> {
     let paths = MaestroPaths::new(repo_root);
     // Read verbs (list/show/doctor) must not scaffold: a pure inspect should leave
     // disk untouched, matching feature/decision/query. The sole first-write mutator,
-    // `create`, ensures `.maestro/tasks` itself via write_task_artifacts; every other
-    // mutator loads an existing task, and archive/unarchive ensure their own targets.
+    // `create`, mints its card via the card store; every other mutator loads an
+    // existing task.
     let actor = super::actor();
 
     match args.command {
@@ -754,18 +754,16 @@ fn show_task(paths: &MaestroPaths, id: Option<String>) -> Result<()> {
             _ => bail!("task id is required or set MAESTRO_CURRENT_TASK for `maestro task show`"),
         },
     };
-    // L6b: reads cross the boundary — fall through to the archive so a
-    // historical reference to an archived task still renders. Track which tree
-    // resolved so the acceptance checks load from the same place.
-    let (task, tasks_dir, archived) = match task::load_task_record(&paths.tasks_dir(), &task_id) {
-        Ok(task) => (task, paths.tasks_dir(), false),
-        Err(live_err) => {
-            let archive_dir = paths.archive_tasks_dir();
-            let task = task::load_task_record(&archive_dir, &task_id).map_err(|_| live_err)?;
-            (task, archive_dir, true)
-        }
+    // L6b: reads cross the boundary — fall through to the archived card tree so
+    // a historical reference to an archived task still renders.
+    let (task, archived) = match task::load_task_record(&paths.tasks_dir(), &task_id) {
+        Ok(task) => (task, false),
+        Err(live_err) => match task::load_archived_task_record(paths, &task_id) {
+            Ok(Some((task, _))) => (task, true),
+            _ => return Err(live_err),
+        },
     };
-    let checks = task::load_task_checks(&tasks_dir, &task)?;
+    let checks = task::load_task_checks(&paths.tasks_dir(), &task)?;
     print!("{}", task::render_task(&task, &checks));
     // Disclose an archive-resolved view so a user cannot mistake an archived task
     // for a live one (mirrors `feature show`'s `archived: true` marker).
@@ -798,7 +796,10 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
     let mut all_tasks = task::load_task_records(&paths.tasks_dir())?;
     let mut archived_ids = std::collections::BTreeSet::new();
     if filters.all {
-        let archived = task::load_task_records(&paths.archive_tasks_dir())?;
+        let archived: Vec<TaskRecord> = task::load_archived_task_entries(paths)?
+            .into_iter()
+            .map(|entry| entry.task)
+            .collect();
         archived_ids.extend(archived.iter().map(|t| t.id.clone()));
         all_tasks.extend(archived);
     }
@@ -808,8 +809,7 @@ fn list_tasks(paths: &MaestroPaths, filters: TaskListFilters) -> Result<()> {
         // instead of leaving a bare header (T8).
         println!("no tasks found");
     } else {
-        let missing_verify_contract_ids =
-            task::missing_verify_contract_ids(paths, &shown, &archived_ids)?;
+        let missing_verify_contract_ids = task::missing_verify_contract_ids(paths, &shown)?;
         print!(
             "{}",
             task::render_task_list_with_missing_checks(

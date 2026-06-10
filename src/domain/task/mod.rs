@@ -11,7 +11,6 @@ use crate::foundation::core::fs::append_text_file;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::{parse_utc_timestamp, utc_now_timestamp};
 
-pub(crate) mod archive;
 pub(crate) mod blockers;
 pub(crate) mod cards;
 pub(crate) mod display;
@@ -20,7 +19,6 @@ pub(crate) mod lifecycle;
 pub(crate) mod lookup;
 pub(crate) mod template;
 
-pub use archive::{archive_task, unarchive_task};
 pub use blockers::has_unresolved_blockers;
 pub use display::{render_task, render_task_list, render_task_list_with_missing_checks};
 pub use doctor::{
@@ -28,8 +26,6 @@ pub use doctor::{
     load_task_entries, load_task_records, render_report,
 };
 pub use lifecycle::TransitionDetails;
-pub(crate) use lookup::task_roots;
-pub(crate) use template::TaskSaveError;
 pub use template::{
     AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, ClaimCheckReceipt,
     ProofSourceReceipt, TaskRecord, TaskState, VerificationBinding, VerificationCommandReceipt,
@@ -216,7 +212,6 @@ pub fn load_task_checks(tasks_dir: &Path, task: &TaskRecord) -> Result<Vec<Strin
 pub fn missing_verify_contract_ids(
     paths: &MaestroPaths,
     tasks: &[TaskRecord],
-    archived_ids: &BTreeSet<String>,
 ) -> Result<BTreeSet<String>> {
     let mut missing = BTreeSet::new();
     for task in tasks {
@@ -225,12 +220,7 @@ pub fn missing_verify_contract_ids(
         {
             continue;
         }
-        let tasks_dir = if archived_ids.contains(&task.id) {
-            paths.archive_tasks_dir()
-        } else {
-            paths.tasks_dir()
-        };
-        if load_task_checks(&tasks_dir, task)?.is_empty() {
+        if load_task_checks(&paths.tasks_dir(), task)?.is_empty() {
             missing.insert(task.id.clone());
         }
     }
@@ -916,12 +906,8 @@ mod tests {
         let mut settled = TaskRecord::draft("task-004", "already ready", "t0");
         settled.state = TaskState::Ready;
 
-        let missing = missing_verify_contract_ids(
-            &paths,
-            &[unchecked, checked, linked, settled],
-            &BTreeSet::new(),
-        )
-        .expect("missing-verify scan should not error");
+        let missing = missing_verify_contract_ids(&paths, &[unchecked, checked, linked, settled])
+            .expect("missing-verify scan should not error");
 
         assert_eq!(missing, BTreeSet::from(["task-001".to_string()]));
     }

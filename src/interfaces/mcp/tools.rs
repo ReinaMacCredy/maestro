@@ -185,7 +185,10 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
     let mut tasks = task::load_task_records(&paths.tasks_dir())?;
     let mut archived_ids = std::collections::BTreeSet::new();
     if all {
-        let archived = task::load_task_records(&paths.archive_tasks_dir())?;
+        let archived: Vec<_> = task::load_archived_task_entries(paths)?
+            .into_iter()
+            .map(|entry| entry.task)
+            .collect();
         archived_ids.extend(archived.iter().map(|t| t.id.clone()));
         tasks.extend(archived);
     }
@@ -199,8 +202,7 @@ fn task_list(paths: &MaestroPaths, arguments: &Value) -> Result<String> {
         include_terminal,
     };
     let shown = task::filter_tasks(tasks.clone(), &filter(all));
-    let missing_verify_contract_ids =
-        task::missing_verify_contract_ids(paths, &shown, &archived_ids)?;
+    let missing_verify_contract_ids = task::missing_verify_contract_ids(paths, &shown)?;
     let mut out = task::render_task_list_with_missing_checks(
         &shown,
         &archived_ids,

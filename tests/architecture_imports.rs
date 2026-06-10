@@ -113,7 +113,6 @@ fn selected_compatibility_smoke_paths_resolve() {
 
     let _ = std::any::type_name::<maestro::interfaces::cli::Cli>();
     let _ = std::any::type_name::<maestro::task::template::TaskRecord>();
-    let _legacy_load_task = |path: &Path| maestro::task::template::load_task(path);
     let _legacy_load_task_with_snapshot =
         |tasks_dir: &Path, id: &str| maestro::task::lookup::load_task_with_snapshot(tasks_dir, id);
     let _legacy_render_task: fn(&maestro::task::template::TaskRecord, &[String]) -> String =
@@ -132,10 +131,6 @@ fn selected_compatibility_smoke_paths_resolve() {
         maestro::task::doctor::render_report;
     let _legacy_resolve_task_yaml_path =
         |tasks_dir: &Path, id: &str| maestro::task::lookup::resolve_task_yaml_path(tasks_dir, id);
-    let _legacy_task_yaml_path_for_entry =
-        |entry: &std::fs::DirEntry| maestro::task::lookup::task_yaml_path_for_entry(entry);
-    let _legacy_valid_task_yaml_path =
-        |path: &Path| maestro::task::lookup::valid_task_yaml_path(path);
     let _ = std::any::type_name::<maestro::domain::task::TaskRecord>();
     let _ = std::any::type_name::<maestro::domain::proof::ProofStatusKind>();
 

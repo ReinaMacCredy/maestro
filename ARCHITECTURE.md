@@ -97,11 +97,11 @@ harness item -> `type:idea` · decision -> `type:decision` · plus new `bug`/`ch
 | D6 | cross-card rules into the card domain | guards/ref-typing leaking into cli/mcp adapters |
 | D7 | one store | harness 2-store txn + hand-rolled rollback gone (ideas are cards) |
 
-Known remainder (tracked, not yet removed): legacy entity CLI verb handlers
-(`task ...`/`feature ...` proof + QA machinery), `SaveTaskHook`, and the
-`TaskSnapshot::Legacy` archive-read arm coexist with the flat card verbs until the
-legacy-verb deletion slice lands. The entity verbs are still the only surface for the
-proof-gated lifecycle (complete/verify, accept/prepare/amend/ship).
+The entity verbs (`task ...`/`feature ...` proof + QA machinery) coexist with the flat
+card verbs by design: they are the only surface for the proof-gated lifecycle
+(complete/verify, accept/prepare/amend/ship), and every handler operates on the card
+store. The legacy persistence plumbing behind them (`SaveTaskHook`, the
+`TaskSnapshot::Legacy` arm, the `task.yaml` tree readers) is gone.
 
 ---
 

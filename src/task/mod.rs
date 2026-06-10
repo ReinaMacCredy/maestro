@@ -112,7 +112,6 @@ pub mod lifecycle {
 }
 
 pub mod lookup {
-    use std::fs;
     use std::path::{Path, PathBuf};
 
     use anyhow::Result;
@@ -124,14 +123,6 @@ pub mod lookup {
         crate::domain::task::task_yaml_path(tasks_dir, id)
     }
 
-    pub fn task_yaml_path_for_entry(entry: &fs::DirEntry) -> Result<Option<PathBuf>> {
-        crate::domain::task::lookup::task_yaml_path_for_entry(entry)
-    }
-
-    pub fn valid_task_yaml_path(path: &Path) -> Result<bool> {
-        crate::domain::task::lookup::valid_task_yaml_path(path)
-    }
-
     pub fn load_task_with_snapshot(
         tasks_dir: &Path,
         id: &str,
@@ -141,8 +132,6 @@ pub mod lookup {
 }
 
 pub mod template {
-    use std::path::{Path, PathBuf};
-
     use anyhow::Result;
 
     pub use crate::domain::task::template::{StateHistoryEntry, TaskSnapshot};
@@ -150,18 +139,6 @@ pub mod template {
         AcceptanceFile, Blocker, BlockerKind, BlockerRef, BlockerSource, TaskRecord, TaskState,
         VerificationBinding,
     };
-
-    pub fn write_task_artifacts(
-        tasks_dir: &Path,
-        task: &TaskRecord,
-        acceptance: &AcceptanceFile,
-    ) -> Result<PathBuf> {
-        crate::domain::task::template::write_task_artifacts(tasks_dir, task, acceptance)
-    }
-
-    pub fn load_task(path: &Path) -> Result<(TaskRecord, TaskSnapshot)> {
-        crate::domain::task::template::load_task(path)
-    }
 
     pub fn save_task_with_snapshot(task: &TaskRecord, snapshot: &TaskSnapshot) -> Result<()> {
         crate::domain::task::template::save_task_with_snapshot(task, snapshot)

@@ -191,16 +191,10 @@ fn check_features(
 }
 
 fn recordless_task_dir_warnings(paths: &MaestroPaths) -> Result<Vec<String>> {
-    let mut warnings = Vec::new();
-    for root in task::task_roots(&paths.tasks_dir())? {
-        warnings.extend(recordless_dir_warnings(
-            paths.repo_root(),
-            &root,
-            "task.yaml",
-        )?);
-    }
-    warnings.sort();
-    Ok(warnings)
+    // Task cards live in the flat card store; like the features sweep above,
+    // this only catches a legacy ghost `tasks/` dir left behind by a brownfield
+    // migration (it reads as empty when the dir is absent).
+    recordless_dir_warnings(paths.repo_root(), &paths.tasks_dir(), "task.yaml")
 }
 
 fn recordless_dir_warnings(

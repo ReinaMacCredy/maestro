@@ -263,8 +263,12 @@ fn ready_to_measure(item: &BacklogItem, fresh: &BTreeSet<String>) -> bool {
 /// `(ready to measure)` hint and the `measure` gate share this so they never
 /// disagree about whether a closed task can be measured.
 fn load_linked_task(paths: &MaestroPaths, task_id: &str) -> Result<task::TaskRecord> {
-    task::load_task_record(&paths.tasks_dir(), task_id)
-        .or_else(|_| task::load_task_record(&paths.archive_tasks_dir(), task_id))
+    task::load_task_record(&paths.tasks_dir(), task_id).or_else(|live_err| {
+        match task::load_archived_task_record(paths, task_id) {
+            Ok(Some((task, _))) => Ok(task),
+            _ => Err(live_err),
+        }
+    })
 }
 
 /// True when the note's linked task exists and is verified -- the precondition the
@@ -514,7 +518,7 @@ fn inspect_linked_task(paths: &MaestroPaths, task_id: &str) -> Result<UnappliedT
             Ok(UnappliedTask::Abandoned(task_id.to_string()))
         }
         Err(_) => {
-            if task::load_task_record(&paths.archive_tasks_dir(), task_id).is_ok() {
+            if matches!(task::load_archived_task_record(paths, task_id), Ok(Some(_))) {
                 Ok(UnappliedTask::Archived(task_id.to_string()))
             } else {
                 Ok(UnappliedTask::Missing(task_id.to_string()))

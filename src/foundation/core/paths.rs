@@ -87,16 +87,6 @@ impl MaestroPaths {
         self.maestro_dir().join("archive")
     }
 
-    /// Return the archived-tasks directory (`.maestro/archive/tasks`).
-    pub fn archive_tasks_dir(&self) -> PathBuf {
-        self.archive_dir().join("tasks")
-    }
-
-    /// Return the archived-features directory (`.maestro/archive/features`).
-    pub fn archive_features_dir(&self) -> PathBuf {
-        self.archive_dir().join("features")
-    }
-
     /// Return the archived-cards directory (`.maestro/archive/cards`).
     ///
     /// The card-model archive sibling of `cards/`; `archive <feature>` moves the
