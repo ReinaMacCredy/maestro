@@ -1,7 +1,7 @@
 ---
 name: maestro-design
-version: 1.6.0
-description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-feature."
+version: 1.7.0
+description: "Use for design or brainstorming in a Maestro repo before implementation starts. Map current behavior, decide one fork at a time, record decisions and notes, then hand the approved contract to maestro-card."
 ---
 
 # Maestro Design
@@ -64,11 +64,11 @@ structure, or other judgment-heavy forks.
 - Do not keep a contradicted decision silently. Reopen or supersede it in the
   Decision record.
 - Do not resume from chat memory. Resume from `maestro feature spec <id>`,
-  `.maestro/features/<id>/notes.md`, and `maestro decision list`.
+  `.maestro/cards/<id>/notes.md`, and `maestro decision list`.
 
 ## Hand-off
 
-Pipeline: `[maestro-design] -> qa-baseline -> maestro-feature -> maestro-task -> maestro-verify -> qa-slice -> feature ship`
+Pipeline: `[maestro-design] -> maestro-card (qa-baseline -> feature accept -> work -> verify -> qa-slice -> feature ship)`
 
-Next: decisions locked and contract authored -> `qa-baseline`, then
-`maestro-feature` for `feature accept`.
+Next: decisions locked and contract authored -> `maestro-card` (its
+qa-baseline reference, then `feature accept`).

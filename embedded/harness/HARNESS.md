@@ -1,5 +1,5 @@
 ---
-version: 1.8.2
+version: 1.9.0
 ---
 
 # Maestro Harness Protocol
@@ -45,7 +45,7 @@ When stuck:
     maestro task block <id> --reason "<why>" [--by task-NN|decision-NN|<external>]
     maestro task unblock <id> --blocker blk-NN     # use the blocker's own blk- id, not the target
 
-Terminal verbs (reject / abandon / supersede), plus doctor and watch -> see the maestro-task skill.
+Terminal verbs (reject / abandon / supersede), plus doctor and watch -> see the maestro-card skill (work reference).
 
 ## Design work (the brainstorm loop)
 
@@ -58,24 +58,24 @@ open questions ONE at a time - lock each as a decision + a notes.md line, never 
     maestro feature show <id>                      # resume point
     maestro feature set <id> --acceptance "<criterion>" --area "<surface>"   # then author the contract
 
-Full method -> the maestro-design skill; lifecycle -> maestro-feature.
+Full method -> the maestro-design skill; lifecycle -> maestro-card (feature reference).
 
 ## Harness self-improvement
 
 Passive friction backlog: `maestro harness list / apply / measure`.
 Over-threshold friction surfaced by status/next/complete: apply and claim it before new work, or dismiss it with a reason when noise.
-Binary only counts and shows; the agent acts. Full method -> the maestro-task skill.
+Binary only counts and shows; the agent acts. Full method -> the maestro-card skill (work reference).
 
 ## Orchestration (when work can fan out)
 
 Parallel sub-agents pay off when contexts must stay clean or work is
 independent. The recipes live in the skills; this is the menu:
 
-    2+ independent ready tasks on a feature  -> feature fan-out      (maestro-feature)
-    contested / high-stakes verification     -> adversarial fan-out  (maestro-verify)
+    2+ independent ready tasks on a feature  -> feature fan-out      (maestro-card)
+    contested / high-stakes verification     -> adversarial fan-out  (maestro-card)
     taste-based design fork (naming, UX)     -> generate-and-filter  (maestro-design)
-    unstructured backlog to triage           -> intake triage        (maestro-task)
-    unknown amount of work                   -> loop until done      (maestro-task)
+    unstructured backlog to triage           -> intake triage        (maestro-card)
+    unknown amount of work                   -> loop until done      (maestro-card)
 
 Results land through the verbs (task / decision / event), never only in conversation.
 Claude Code: author a Workflow script. Codex: parallel sub-agents directly (worktree

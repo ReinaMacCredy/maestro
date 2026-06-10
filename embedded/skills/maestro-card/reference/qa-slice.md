@@ -1,17 +1,8 @@
----
-name: qa-slice
-version: 1.1.2
-description: "Use after implementation waves to replay affected baseline scenarios and record qa-slices.yaml evidence for every shipped behavioral bl-NNN."
----
-
 # QA Slice
 
 Replay affected baseline scenarios after an implementation wave and record the
-evidence in `.maestro/features/<id>/qa-slices.yaml`. The ship gate counts only
-slices with scenario ids and non-empty evidence.
-
-Activate:
-`maestro hook record --event skill_activation --skill qa-slice`
+evidence as counting slices in `.maestro/cards/<id>/qa.md`. The ship gate
+counts only slices with scenario ids and non-empty evidence.
 
 ## Use
 
@@ -21,8 +12,8 @@ Activate:
 
 ## Do
 
-1. Read changed files/commands, `maestro feature show <id>`, and
-   `.maestro/features/<id>/baseline.md`.
+1. Read changed files/commands, `maestro feature show <id>`, and the baseline
+   contract in `.maestro/cards/<id>/qa.md`.
 2. Select the affected `[bl-NNN]` scenarios. If the wave adds behavior, extend
    the baseline with a new id instead of hiding it behind a unit test.
 3. Run the smallest useful probes:
@@ -30,15 +21,17 @@ Activate:
    when composition risk exists.
 4. Compare against the baseline. Unexplained output, schema, state, permission,
    performance, compatibility, or UI drift is a blocker.
-5. Append a counting slice to `qa-slices.yaml`.
+5. Append a counting slice to the fenced `slices:` block at the end of
+   `qa.md` (create the block on first slice).
 6. If blocked, return a tracker entry with expected vs actual, reproduction,
-   evidence, and fix path. Do not fix code from this skill.
+   evidence, and fix path. Do not fix code from this reference.
 
-## qa-slices.yaml
+## The slices block
 
-Keep this append-only shape. Scenario ids must match baseline digits exactly:
-`bl-001` and `bl-1` are different.
+One fenced yaml block inside `qa.md`, append-only. Scenario ids must match
+baseline digits exactly: `bl-001` and `bl-1` are different.
 
+````markdown
 ```yaml
 slices:
   - at: "2026-05-31T00:00:00Z"
@@ -49,10 +42,11 @@ slices:
       - "feature_domain: 12 passed; 0 failed"
       - "manual: feature new -> accept -> ship round-trips on temp .maestro"
 ```
+````
 
 Required for the gate: `scenarios` and `evidence`. Other fields are optional.
-If the file does not parse, the ship gate prints the path, parse error, and the
-expected shape.
+If the block does not parse, the ship gate prints the path, parse error, and
+the expected shape.
 
 ## Output When Blocked
 
@@ -93,5 +87,5 @@ If clean:
 
 ## Hand-off
 
-Next: all behavioral baseline ids covered -> `maestro-feature` for
+Next: all behavioral baseline ids covered -> [feature.md](feature.md) for
 `feature ship --outcome "<one line>"`.

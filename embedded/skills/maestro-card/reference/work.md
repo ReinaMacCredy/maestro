@@ -1,29 +1,21 @@
----
-name: maestro-task
-version: 1.9.4
-description: "Use for the Maestro task loop: create, explore, accept, claim, update, complete, block, verify, terminal task verbs, and harness self-improvement tasks."
----
+# Work Cards
 
-# Maestro Task
-
-Use this for task work. A task is the proof-gated unit of implementation; a
-feature is the product contract it may deliver against.
-
-Activate:
-`maestro hook record --event skill_activation --skill maestro-task`
+The work loop for task/bug/chore cards. A work card is the proof-gated unit of
+implementation; a feature card is the product contract it may deliver against.
 
 ## Use
 
-- Create or prepare work: `create`, `explore`, `accept`.
-- Pick up work: `claim --next` or `claim <id>`.
-- Record progress: `update --summary` and/or `--claim`.
-- Finish work: `complete --summary --claim --proof`, then verify.
+- Find work: `maestro ready [<feature>]`, `maestro list --parent <feature>`.
+- Create or prepare work: `task create`, `task explore`, `task accept`.
+- Pick up work: `task claim --next` (sequenced queue with dependency context)
+  or `maestro claim <id>` (any ready card).
+- Record progress: `task update --summary` and/or `--claim`;
+  `maestro note <id> "<text>"` for running notes.
+- Finish work: `task complete --summary --claim --proof`, then verify.
 - Handle pauses or terminal outcomes: `block`, `unblock`, `reject`,
   `abandon`, `supersede`.
 - Act on harness improvement proposals surfaced by `status`, `task next`, or
   `harness list`.
-- When the user corrects your behavior, record it with
-  `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
 
 ## Do
 
@@ -43,7 +35,7 @@ Use `--lane` as a routing convention, not a schema enum. Standard lanes are
 `implement`, `explore`, `review`, `audit`, and `normal` for unrouted default
 work; extend the vocabulary only by team convention. Existing states still own
 workflow meaning: exploring is a task state, brainstorm/design work belongs in
-a feature or SPEC, and planning usually happens before `feature prepare`.
+a feature card or SPEC, and planning usually happens before `feature prepare`.
 
 ## Evidence Gate
 
@@ -73,7 +65,8 @@ add manual evidence after the default proof path is insufficient.
 ## Blockers And Terminal Verbs
 
 ```sh
-maestro task block <id> --reason "<why>" [--by <task-NN|decision-NN|external>]
+maestro dep add <child> <blocker>        # child waits on blocker (card edge)
+maestro task block <id> --reason "<why>" [--by <card id|external>]
 maestro task unblock <id> --blocker blk-NN
 maestro task reject <id> --reason "<why>"
 maestro task abandon <id> --reason "<why>"
@@ -91,15 +84,16 @@ For unstructured audit/review/user-feedback backlogs:
 
 1. Use read-only classifiers for raw untrusted items. They return severity,
    area, duplicate-or-new, and fixable-or-escalate only.
-2. The conductor dedupes against `task list --all` and `feature list --all`.
+2. The conductor dedupes against `maestro list` and `maestro list --type
+   feature`.
 3. Create or block real work through task verbs. The agent that read untrusted
    content does not run privileged actions.
 
 For unknown-size work:
 
-- Stop on a query, not a feeling: no ready tasks, or K discovery sweeps with
-  zero new findings.
-- Turn each new finding into a task immediately so it survives context loss.
+- Stop on a query, not a feeling: `maestro ready` empty, or K discovery sweeps
+  with zero new findings.
+- Turn each new finding into a card immediately so it survives context loss.
 - Claim, work, complete, verify, then re-check the stop condition.
 
 ## Harness Improvement
@@ -120,8 +114,8 @@ proposal regresses, it reopens.
 
 ## Stop
 
-- Do not hand-edit `.maestro/tasks/<id>/task.yaml` or state history.
-- Do not skip states. `claim` expects a ready task; verification owns
+- Do not hand-edit `.maestro/cards/<id>/card.yaml` or state history.
+- Do not skip states. `claim` expects a ready card; verification owns
   `verified`.
 - Do not use terminal verbs for "blocked, resume later"; use `block`.
 - Do not complete with empty or unprovable `--claim`.
@@ -130,7 +124,5 @@ proposal regresses, it reopens.
 
 ## Hand-off
 
-Pipeline: `maestro-design -> qa-baseline -> maestro-feature -> [maestro-task] -> maestro-verify -> qa-slice -> feature ship`
-
-Next: task completed or proof failed -> `maestro-verify`; feature children all
-verified -> `qa-slice`.
+Next: task completed or proof failed -> [verify.md](verify.md); feature
+children all verified -> [qa-slice.md](qa-slice.md).

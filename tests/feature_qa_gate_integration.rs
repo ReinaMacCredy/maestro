@@ -144,7 +144,10 @@ fn feature_qa_gates_via_cli() {
         stderr.contains("qa-baseline"),
         "accept should name the missing baseline: {stderr}"
     );
-    assert!(stderr.contains("skill: qa-baseline"), "{stderr}");
+    assert!(
+        stderr.contains("skill: maestro-card (qa-baseline)"),
+        "{stderr}"
+    );
     assert!(
         stderr.contains("target: .maestro/cards/report-builder/qa.md"),
         "{stderr}"
@@ -170,7 +173,10 @@ fn feature_qa_gates_via_cli() {
         "ship should name the uncovered scenario: {stderr}"
     );
     assert!(stderr.contains("coverage incomplete"));
-    assert!(stderr.contains("skill: qa-slice"), "{stderr}");
+    assert!(
+        stderr.contains("skill: maestro-card (qa-slice)"),
+        "{stderr}"
+    );
     assert!(
         stderr.contains("target: .maestro/cards/report-builder/qa.md"),
         "{stderr}"
@@ -219,7 +225,10 @@ fn feature_qa_gates_via_cli() {
         stderr.contains("stale"),
         "behavioral amend should stale the baseline: {stderr}"
     );
-    assert!(stderr.contains("skill: qa-baseline"), "{stderr}");
+    assert!(
+        stderr.contains("skill: maestro-card (qa-baseline)"),
+        "{stderr}"
+    );
 
     // Refresh the baseline past the amend and add the new scenario; coverage now
     // demands a slice for [bl-002].

@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.0.0
+version: 1.1.0
 description: "Use for read-only Maestro repo audits that propose harness backlog improvements without implementing them."
 ---
 
@@ -40,7 +40,7 @@ impact and a way to verify the improvement.
 
 ## Hand-off
 
-Pipeline: `[maestro-audit] -> maestro harness apply -> maestro-task`
+Pipeline: `[maestro-audit] -> maestro harness apply -> maestro-card`
 
 Next: proposals filed -> inspect with `maestro harness list`; accepted proposals
 spawn normal tasks through `maestro harness apply <id>`.

@@ -21,30 +21,12 @@ const HARNESS_MD: &str = include_str!("../embedded/harness/HARNESS.md");
 const RECOVERY_MD: &str = include_str!("../embedded/harness/RECOVERY.md");
 
 /// `(group, name, shipped version, sha256 tree-hash of the resource files)`.
-const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
+const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 6] = [
     (
         "skill",
-        "maestro-task",
-        "1.9.4",
-        "cadf11b9bf4361002715de92dbef53a5a0d1a2a3d1aba5e938703756813e46db",
-    ),
-    (
-        "skill",
-        "maestro-feature",
-        "1.8.0",
-        "85c3bbefb6e76ade9298389b29e4b943bc09b3a17eeb24764eb5361e93874466",
-    ),
-    (
-        "skill",
-        "qa-baseline",
-        "1.1.2",
-        "f2574e5cdb57e29986683dfd1a8329528b5849cb3b0815f0648dd00863cea21e",
-    ),
-    (
-        "skill",
-        "qa-slice",
-        "1.1.2",
-        "d8b41fd1aa14b4954e23e968a88ebfdf7f536ca64e3291cf1ee65379a7a03274",
+        "maestro-card",
+        "1.0.0",
+        "df769828d0a44da774b0f5f003acdf4fc381c9a8b9f5e161b92a23827fdbdd0f",
     ),
     (
         "skill",
@@ -54,21 +36,15 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
     ),
     (
         "skill",
-        "maestro-verify",
-        "1.5.2",
-        "f25e70497b8bc324edd1612aa2044a08a5a69feea316211d749f0cfbf79acf51",
-    ),
-    (
-        "skill",
         "maestro-design",
-        "1.6.0",
-        "49b6cbb569f613f1ad9499636d1ee3f2f2acd1248117d8e262693e72ca60f5a6",
+        "1.7.0",
+        "97df6930a3abf96c86060adc1b40894cdbc07b4852c99e672daf421546d177b2",
     ),
     (
         "skill",
         "maestro-audit",
-        "1.0.0",
-        "d41877a7cf852db156ee4cbec40f9104e60d2a7b58a3b3c3d66d82af89bb905a",
+        "1.1.0",
+        "8b902cd0fe2085ad026008a9dfeb47c1263964fa47582564f803de61d2e59155",
     ),
     (
         "hook",
@@ -79,8 +55,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 10] = [
     (
         "harness",
         "HARNESS.md",
-        "1.8.2",
-        "83b12f3385e502e27e616d00c97803ddcd4cf8e0f08b429741f3539383043be4",
+        "1.9.0",
+        "cff24562b647e56b44b1b4952859d5705b70e1a3dd549c44146fb71f6d805176",
     ),
 ];
 

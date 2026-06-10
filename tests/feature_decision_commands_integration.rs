@@ -492,7 +492,7 @@ fn feature_guarded_lifecycle_via_cli() {
     let accept_stderr = assert_failure(maestro(&accept_args, temp_dir.path()), &accept_args);
     assert!(accept_stderr.contains("acceptance"));
     assert!(accept_stderr.contains("affected_areas"));
-    assert!(accept_stderr.contains("skill: qa-baseline"));
+    assert!(accept_stderr.contains("skill: maestro-card (qa-baseline)"));
     assert!(accept_stderr.contains("target: .maestro/cards/billing-csv-export/qa.md"));
     assert!(accept_stderr.contains("retry: maestro feature accept billing-csv-export"));
 

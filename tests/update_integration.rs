@@ -43,8 +43,8 @@ fn update_reextracts_bundled_skills_and_backs_up_edited_skill() {
 
     let skill = skills()
         .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled");
+        .find(|skill| skill.name == "maestro-card")
+        .expect("invariant: maestro-card should be bundled");
     let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
     fs::write(&skill_path, "edited bundled skill\n")
         .expect("invariant: bundled skill should be editable");
@@ -81,8 +81,8 @@ fn update_reports_restored_missing_bundled_resources() {
 
     let skill = skills()
         .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled");
+        .find(|skill| skill.name == "maestro-card")
+        .expect("invariant: maestro-card should be bundled");
     let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
     fs::remove_file(&skill_path).expect("invariant: bundled skill should be removable");
 
@@ -359,8 +359,8 @@ fn simulated_download_failure_preserves_edited_bundled_skills_and_cleans_stage()
         .expect("invariant: current binary should be writable");
     let skill = skills()
         .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled");
+        .find(|skill| skill.name == "maestro-card")
+        .expect("invariant: maestro-card should be bundled");
     let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
     fs::create_dir_all(
         skill_path
@@ -519,8 +519,8 @@ fn simulated_replace_failure_rolls_back_bundled_skill_writes() {
         .expect("invariant: current binary should be writable");
     let skill = skills()
         .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled");
+        .find(|skill| skill.name == "maestro-card")
+        .expect("invariant: maestro-card should be bundled");
     let skill_path = paths.skills_dir().join(skill.name).join("SKILL.md");
     fs::create_dir_all(
         skill_path
@@ -612,7 +612,7 @@ fn late_global_skill_sync_failure_warns_without_reverting_installed_update() {
         .as_deref()
         .expect("late global skill failure should be reported as a warning");
     assert!(warning.contains("global Maestro skill sync skipped"));
-    assert!(warning.contains("maestro-task"), "{warning}");
+    assert!(warning.contains("maestro-card"), "{warning}");
 }
 
 #[test]
@@ -1073,7 +1073,7 @@ struct LateGlobalCollisionReplacer {
 impl BinaryReplacer for LateGlobalCollisionReplacer {
     fn replace(&self, current: &Path, candidate: &Path) -> Result<()> {
         fs::copy(candidate, current)?;
-        let global_skill_link = self.home.join(".claude/skills/maestro-task");
+        let global_skill_link = self.home.join(".claude/skills/maestro-card");
         if fs::symlink_metadata(&global_skill_link).is_ok() {
             fs::remove_file(&global_skill_link)?;
         }

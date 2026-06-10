@@ -31,14 +31,14 @@ fn init(repo: &Path) {
 }
 
 fn task_skill_md(paths: &MaestroPaths) -> PathBuf {
-    paths.skills_dir().join("maestro-task").join("SKILL.md")
+    paths.skills_dir().join("maestro-card").join("SKILL.md")
 }
 
 fn bundled_task_skill_md() -> String {
     skills()
         .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled")
+        .find(|skill| skill.name == "maestro-card")
+        .expect("invariant: maestro-card should be bundled")
         .skill_md()
         .to_string()
 }
@@ -108,7 +108,7 @@ fn sync_dry_run_previews_drift_without_writing() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("maestro sync would resync:"), "{stdout}");
-    assert!(stdout.contains("refresh  maestro-task"), "{stdout}");
+    assert!(stdout.contains("refresh  maestro-card"), "{stdout}");
     assert!(stdout.contains("skip     RECOVERY.md"), "{stdout}");
 
     // Dry-run wrote nothing: the edit stands and no backup directory exists.
@@ -138,7 +138,7 @@ fn sync_refreshes_drifted_resource_and_backs_up_the_edit() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("refresh  maestro-task"), "{stdout}");
+    assert!(stdout.contains("refresh  maestro-card"), "{stdout}");
     assert!(stdout.contains("1 refreshed"), "{stdout}");
     assert!(stdout.contains("edited files backed up"), "{stdout}");
 
@@ -148,7 +148,7 @@ fn sync_refreshes_drifted_resource_and_backs_up_the_edit() {
         bundled_task_skill_md()
     );
     // ...and the local edit survives in the backup.
-    let backup = sync_backup_for(&paths, "maestro-task");
+    let backup = sync_backup_for(&paths, "maestro-card");
     assert_eq!(
         fs::read_to_string(backup).expect("invariant: backup should be readable"),
         "edited bundled skill\n"

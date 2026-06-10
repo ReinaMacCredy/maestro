@@ -8,45 +8,25 @@ use maestro::foundation::core::backup::backup_operation_timestamp;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
 
-const BUNDLED_SKILL_NAMES: [&str; 8] = [
-    "maestro-task",
-    "maestro-feature",
+const BUNDLED_SKILL_NAMES: [&str; 4] = [
+    "maestro-card",
     "maestro-setup",
-    "maestro-verify",
     "maestro-design",
-    "qa-baseline",
-    "qa-slice",
     "maestro-audit",
 ];
 
-const BUNDLED_SKILL_RESOURCES: [(&str, &str); 8] = [
+const BUNDLED_SKILL_RESOURCES: [(&str, &str); 4] = [
     (
-        "maestro-task",
-        include_str!("../embedded/skills/maestro-task/SKILL.md"),
-    ),
-    (
-        "maestro-feature",
-        include_str!("../embedded/skills/maestro-feature/SKILL.md"),
+        "maestro-card",
+        include_str!("../embedded/skills/maestro-card/SKILL.md"),
     ),
     (
         "maestro-setup",
         include_str!("../embedded/skills/maestro-setup/SKILL.md"),
     ),
     (
-        "maestro-verify",
-        include_str!("../embedded/skills/maestro-verify/SKILL.md"),
-    ),
-    (
         "maestro-design",
         include_str!("../embedded/skills/maestro-design/SKILL.md"),
-    ),
-    (
-        "qa-baseline",
-        include_str!("../embedded/skills/qa-baseline/SKILL.md"),
-    ),
-    (
-        "qa-slice",
-        include_str!("../embedded/skills/qa-slice/SKILL.md"),
     ),
     (
         "maestro-audit",
@@ -90,6 +70,18 @@ fn extract_bundled_skills_writes_each_skill_without_index() {
         assert!(contents.contains(&format!("name: {}", skill.name)));
         assert!(contents.contains("description: "));
     }
+    // maestro-card is the first shipped multi-file skill; its reference tree
+    // extracts alongside SKILL.md.
+    for reference in ["work", "feature", "verify", "qa-baseline", "qa-slice"] {
+        assert!(
+            paths
+                .skills_dir()
+                .join("maestro-card/reference")
+                .join(format!("{reference}.md"))
+                .is_file(),
+            "maestro-card reference/{reference}.md should extract"
+        );
+    }
     assert!(!paths.maestro_dir().join("skill-index.yaml").exists());
     assert!(!paths.skills_dir().join("skill-index.yaml").exists());
 }
@@ -130,7 +122,7 @@ fn extract_bundled_skills_rejects_symlinked_skill_tree() {
         .expect_err("invariant: symlinked skills dir should be rejected");
 
     assert!(error.to_string().contains("symlink"));
-    assert!(!external.path().join("maestro-task/SKILL.md").exists());
+    assert!(!external.path().join("maestro-card/SKILL.md").exists());
 }
 
 #[cfg(unix)]
@@ -149,7 +141,7 @@ fn extract_bundled_skills_rejects_symlinked_maestro_root() {
     assert!(
         !external
             .path()
-            .join("skills/maestro-task/SKILL.md")
+            .join("skills/maestro-card/SKILL.md")
             .exists()
     );
 }
@@ -178,24 +170,32 @@ fn thin_bundled_skills_include_operational_runbooks() {
     assert!(setup.contains("maestro install --agent codex"));
     assert!(setup.contains("maestro init --yes` keeps existing files"));
 
-    let verify = skills()
+    let card = skills()
         .iter()
-        .find(|skill| skill.name == "maestro-verify")
-        .expect("invariant: maestro-verify should be bundled")
-        .skill_md();
-    assert!(verify.contains("version: 1.5.2"));
+        .find(|skill| skill.name == "maestro-card")
+        .expect("invariant: maestro-card should be bundled");
+    let router = card.skill_md();
+    assert!(router.contains("version: 1.0.0"));
+    assert!(router.contains("reference/work.md"));
+    assert!(router.contains("maestro ready"));
+
+    let reference = |path: &str| -> &str {
+        let file = card
+            .files
+            .iter()
+            .find(|file| file.relative_path == path)
+            .unwrap_or_else(|| panic!("invariant: maestro-card should ship {path}"));
+        std::str::from_utf8(file.contents).expect("invariant: reference file is UTF-8")
+    };
+
+    let verify = reference("reference/verify.md");
     assert!(verify.contains("maestro task next"));
     assert!(verify.contains("--proof \"<observed evidence>\""));
     assert!(verify.contains("maestro query proof <id>"));
     assert!(verify.contains("qa-baseline"));
     assert!(verify.contains("qa-slice"));
 
-    let feature = skills()
-        .iter()
-        .find(|skill| skill.name == "maestro-feature")
-        .expect("invariant: maestro-feature should be bundled")
-        .skill_md();
-    assert!(feature.contains("version: 1.8.0"));
+    let feature = reference("reference/feature.md");
     assert!(feature.contains("Use append flags while proposed"));
     assert!(feature.contains("feature spec <id>"));
     assert!(feature.contains("feature prepare <id> --from <plan-file>"));
@@ -209,7 +209,7 @@ fn extract_bundled_skills_rejects_symlinked_skill_parent() {
     let external = TestTempDir::new("maestro-skills-external");
     let paths = MaestroPaths::new(temp_dir.path());
     fs::create_dir_all(paths.skills_dir()).expect("invariant: skills dir should be creatable");
-    std::os::unix::fs::symlink(external.path(), paths.skills_dir().join("maestro-task"))
+    std::os::unix::fs::symlink(external.path(), paths.skills_dir().join("maestro-card"))
         .expect("invariant: symlinked skill dir should be creatable");
 
     let error = extract_skills(&paths, ExtractMode::Create)
@@ -223,7 +223,7 @@ fn extract_bundled_skills_rejects_symlinked_skill_parent() {
 fn extract_bundled_skills_refuses_existing_bundled_file_by_default() {
     let temp_dir = TestTempDir::new("maestro-skills-test");
     let paths = MaestroPaths::new(temp_dir.path());
-    let existing = paths.skills_dir().join("maestro-task").join("SKILL.md");
+    let existing = paths.skills_dir().join("maestro-card").join("SKILL.md");
     fs::create_dir_all(
         existing
             .parent()
@@ -259,7 +259,7 @@ fn extract_bundled_skills_create_preflights_before_writing() {
         .expect_err("invariant: existing bundled skill should be rejected");
 
     assert!(error.to_string().contains("already exists"));
-    assert!(!paths.skills_dir().join("maestro-task/SKILL.md").exists());
+    assert!(!paths.skills_dir().join("maestro-card/SKILL.md").exists());
     assert_eq!(
         fs::read_to_string(existing).expect("invariant: existing skill should be readable"),
         "custom setup\n"
@@ -270,7 +270,7 @@ fn extract_bundled_skills_create_preflights_before_writing() {
 fn extract_bundled_skills_merge_preserves_existing_bundled_file() {
     let temp_dir = TestTempDir::new("maestro-skills-test");
     let paths = MaestroPaths::new(temp_dir.path());
-    let existing = paths.skills_dir().join("maestro-task").join("SKILL.md");
+    let existing = paths.skills_dir().join("maestro-card").join("SKILL.md");
     fs::create_dir_all(
         existing
             .parent()
@@ -292,7 +292,7 @@ fn extract_bundled_skills_merge_preserves_existing_bundled_file() {
 fn extract_bundled_skills_force_backs_up_existing_bundled_file() {
     let temp_dir = TestTempDir::new("maestro-skills-test");
     let paths = MaestroPaths::new(temp_dir.path());
-    let existing = paths.skills_dir().join("maestro-task").join("SKILL.md");
+    let existing = paths.skills_dir().join("maestro-card").join("SKILL.md");
     fs::create_dir_all(
         existing
             .parent()
@@ -318,7 +318,7 @@ fn extract_bundled_skills_force_backs_up_existing_bundled_file() {
     let backup = paths
         .backups_dir()
         .join(format!("{backup_timestamp}-init"))
-        .join(".maestro/skills/maestro-task/SKILL.md");
+        .join(".maestro/skills/maestro-card/SKILL.md");
     assert_eq!(
         fs::read_to_string(backup).expect("invariant: backed up skill should be readable"),
         "custom task\n"
@@ -359,14 +359,14 @@ fn extract_skills_update_preserves_local_edit_when_version_matches() {
         .expect("invariant: initial extraction should succeed");
 
     // Locally edit an installed skill while keeping the shipped version.
-    let installed = paths.skills_dir().join("maestro-task").join("SKILL.md");
+    let installed = paths.skills_dir().join("maestro-design").join("SKILL.md");
     let original =
         fs::read_to_string(&installed).expect("invariant: installed skill should be readable");
     let version_line = original
         .lines()
         .find(|line| line.starts_with("version: "))
         .expect("invariant: installed skill should declare a version");
-    let edited = format!("---\nname: maestro-task\n{version_line}\n---\n\nlocal edit\n");
+    let edited = format!("---\nname: maestro-design\n{version_line}\n---\n\nlocal edit\n");
     fs::write(&installed, &edited).expect("invariant: installed skill should be writable");
     let backup_timestamp =
         backup_operation_timestamp().expect("invariant: backup timestamp should be available");
@@ -394,8 +394,8 @@ fn extract_skills_update_refreshes_and_backs_up_when_version_differs() {
     extract_skills(&paths, ExtractMode::Create)
         .expect("invariant: initial extraction should succeed");
 
-    let installed = paths.skills_dir().join("maestro-task").join("SKILL.md");
-    let stale = "---\nname: maestro-task\nversion: 0.9.0\n---\n\nstale\n";
+    let installed = paths.skills_dir().join("maestro-design").join("SKILL.md");
+    let stale = "---\nname: maestro-design\nversion: 0.9.0\n---\n\nstale\n";
     fs::write(&installed, stale).expect("invariant: installed skill should be writable");
     let backup_timestamp =
         backup_operation_timestamp().expect("invariant: backup timestamp should be available");
@@ -410,8 +410,8 @@ fn extract_skills_update_refreshes_and_backs_up_when_version_differs() {
 
     let shipped = skills()
         .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should ship");
+        .find(|skill| skill.name == "maestro-design")
+        .expect("invariant: maestro-design should ship");
     assert_eq!(
         fs::read_to_string(&installed).expect("invariant: installed skill should be readable"),
         shipped.skill_md(),
@@ -421,11 +421,57 @@ fn extract_skills_update_refreshes_and_backs_up_when_version_differs() {
     let backup = paths
         .backups_dir()
         .join(format!("{backup_timestamp}-update"))
-        .join(".maestro/skills/maestro-task/SKILL.md");
+        .join(".maestro/skills/maestro-design/SKILL.md");
     assert_eq!(
         fs::read_to_string(backup).expect("invariant: backup should be readable"),
         stale,
         "the stale local copy must be backed up before refresh"
+    );
+}
+
+#[test]
+fn extract_skills_update_restores_a_deleted_anchor_without_touching_survivors() {
+    let temp_dir = TestTempDir::new("maestro-skills-test");
+    let paths = MaestroPaths::new(temp_dir.path());
+    extract_skills(&paths, ExtractMode::Create)
+        .expect("invariant: initial extraction should succeed");
+
+    // Delete the multi-file skill's anchor but leave (and edit) a sibling: a
+    // partial install with no version left to compare.
+    let skill_dir = paths.skills_dir().join("maestro-card");
+    fs::remove_file(skill_dir.join("SKILL.md")).expect("invariant: anchor should be removable");
+    fs::write(skill_dir.join("reference/work.md"), "local edit\n")
+        .expect("invariant: sibling should be writable");
+    let backup_timestamp =
+        backup_operation_timestamp().expect("invariant: backup timestamp should be available");
+
+    let report = extract_skills(
+        &paths,
+        ExtractMode::Update {
+            backup_timestamp: &backup_timestamp,
+        },
+    )
+    .expect("invariant: update over a partial install should succeed");
+
+    let shipped = skills()
+        .iter()
+        .find(|skill| skill.name == "maestro-card")
+        .expect("invariant: maestro-card should ship");
+    assert_eq!(
+        fs::read_to_string(skill_dir.join("SKILL.md"))
+            .expect("invariant: restored anchor should be readable"),
+        shipped.skill_md(),
+        "the missing anchor must be restored"
+    );
+    assert_eq!(
+        fs::read_to_string(skill_dir.join("reference/work.md"))
+            .expect("invariant: surviving sibling should be readable"),
+        "local edit\n",
+        "surviving tree files must be preserved, not refreshed"
+    );
+    assert!(
+        report.backups.is_empty(),
+        "restoring missing files must not create backup noise"
     );
 }
 
@@ -438,8 +484,8 @@ fn extract_skills_update_refreshes_a_pre_version_install() {
 
     // A pre-versioning install whose frontmatter carries no `version:` reads as
     // None, which differs from the shipped Some(..) and must refresh once.
-    let installed = paths.skills_dir().join("maestro-task").join("SKILL.md");
-    let pre_version = "---\nname: maestro-task\n---\n\npre-version\n";
+    let installed = paths.skills_dir().join("maestro-design").join("SKILL.md");
+    let pre_version = "---\nname: maestro-design\n---\n\npre-version\n";
     fs::write(&installed, pre_version).expect("invariant: installed skill should be writable");
     let backup_timestamp =
         backup_operation_timestamp().expect("invariant: backup timestamp should be available");
@@ -454,8 +500,8 @@ fn extract_skills_update_refreshes_a_pre_version_install() {
 
     let shipped = skills()
         .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should ship");
+        .find(|skill| skill.name == "maestro-design")
+        .expect("invariant: maestro-design should ship");
     assert_eq!(
         fs::read_to_string(&installed).expect("invariant: installed skill should be readable"),
         shipped.skill_md(),
@@ -468,9 +514,9 @@ const SYNTHETIC_SKILL_MD: &[u8] =
     b"---\nname: synthetic\nversion: 1.0.0\n---\n\nsynthetic skill body\n";
 
 /// Build a synthetic multi-file skill: a versioned `SKILL.md` plus a nested
-/// `reference/guide.md` and a `scripts/run.sh`. Multi-file skills are not yet
-/// shipped, so this drives the tree writer through the `extract_skills_from`
-/// seam to prove the directory-tree write path.
+/// `reference/guide.md` and a `scripts/run.sh`. This drives the tree writer
+/// through the `extract_skills_from` seam with a controlled fixture,
+/// independent of the shipped catalog.
 fn synthetic_multi_file_skill() -> Skill {
     Skill {
         name: "synthetic",

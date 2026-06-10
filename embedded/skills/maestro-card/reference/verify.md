@@ -1,16 +1,7 @@
----
-name: maestro-verify
-version: 1.5.2
-description: "Use to prove a Maestro task or feature gate with recorded evidence, repair failed proof, and run adversarial verification for high-risk claims."
----
+# Verify
 
-# Maestro Verify
-
-Use this when a task needs verification, proof failed, or a feature gate asks
-for QA evidence.
-
-Activate:
-`maestro hook record --event skill_activation --skill maestro-verify`
+Use this when a work card needs verification, proof failed, or a feature gate
+asks for QA evidence.
 
 ## Do
 
@@ -20,7 +11,7 @@ Activate:
    `maestro feature show <id>` for feature QA blockers.
 3. Run the smallest checks that can falsify the claim from the repo root.
    Record exact command/manual probe and outcome.
-4. Complete with matching claim and proof when the task is not yet completed:
+4. Complete with matching claim and proof when the card is not yet completed:
 
    ```sh
    maestro task complete <id> \
@@ -34,7 +25,7 @@ Activate:
 
 ## Repair
 
-- Missing claim: complete or update the task with the exact observable claim
+- Missing claim: complete or update the card with the exact observable claim
   that was proven.
 - Missing proof: add `--proof` through `task complete`, or record manual proof:
   `maestro event create --task-id <id> --claim "<claim>"`.
@@ -44,18 +35,18 @@ Activate:
 
 ## Adversarial Fan-out
 
-Use when a task failed verify twice, risk is high, or many tasks support a
+Use when a card failed verify twice, risk is high, or many cards support a
 feature ship.
 
-1. Rubric is `acceptance.yaml` plus completion claims. Do not invent softer
-   checks.
+1. Rubric is the locked acceptance checks plus completion claims. Do not
+   invent softer checks.
 2. Spawn one fresh verifier per claim/check. Give only the claim, the check, and
    the repo. Ask it to refute and default to refuted if uncertain.
 3. Each verifier returns one line:
    `upheld|refuted: <check> - <observed evidence>`.
 4. Record upheld verdicts as evidence:
    `maestro event create --task-id <id> --claim "<verdict line>"`.
-5. For reproducible refutations, block the task:
+5. For reproducible refutations, block the card:
    `maestro task block <id> --reason "adversarial verifier refuted: <what>"`.
    Do not run `task verify` over a refutation.
 6. All upheld -> `maestro task verify <id>`.
@@ -64,10 +55,11 @@ Never message a running verifier with new context. Start a fresh verifier.
 
 ## Feature QA
 
-- Accept blocker says `qa-baseline` -> write
-  `.maestro/features/<id>/baseline.md` with that skill, then rerun accept.
-- Ship blocker says `qa-slice` -> write/update
-  `.maestro/features/<id>/qa-slices.yaml` with that skill, then rerun ship.
+- Accept blocker says `qa-baseline` -> write `.maestro/cards/<id>/qa.md` with
+  [qa-baseline.md](qa-baseline.md), then rerun accept.
+- Ship blocker says `qa-slice` -> append counting slices to the fenced
+  `slices:` block of `.maestro/cards/<id>/qa.md` with
+  [qa-slice.md](qa-slice.md), then rerun ship.
 - Do not report a feature shipped until
   `maestro feature ship <id> --outcome "<one line>"` passes.
 
@@ -80,7 +72,5 @@ Never message a running verifier with new context. Start a fresh verifier.
 
 ## Hand-off
 
-Pipeline: `maestro-design -> qa-baseline -> maestro-feature -> maestro-task -> [maestro-verify] -> qa-slice -> feature ship`
-
-Next: verified task with live siblings -> `maestro-task`; all children verified
--> `qa-slice`, then `maestro-feature`.
+Next: verified card with live siblings -> [work.md](work.md); all children
+verified -> [qa-slice.md](qa-slice.md), then [feature.md](feature.md).

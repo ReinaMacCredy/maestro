@@ -1,20 +1,11 @@
----
-name: qa-baseline
-version: 1.1.2
-description: "Use before feature accept to capture baseline.md: a short real-scenario behavior contract with stable bl-NNN ids for the later ship gate."
----
-
 # QA Baseline
 
-Create `.maestro/features/<id>/baseline.md` before feature edits start. This is
-the behavior oracle for `feature ship`, not a list of tests.
-
-Activate:
-`maestro hook record --event skill_activation --skill qa-baseline`
+Create `.maestro/cards/<id>/qa.md` before feature edits start. This is the
+behavior oracle for `feature ship`, not a list of tests.
 
 ## Use
 
-- `maestro feature accept` is blocked on missing or empty `baseline.md`.
+- `maestro feature accept` is blocked on missing or empty `qa.md`.
 - A behavioral amend added acceptance or area and the baseline must be fresh.
 - The feature touches user-visible, data, security, persistence,
   compatibility, release, or workflow behavior.
@@ -32,14 +23,16 @@ Activate:
    auth, parsers, schemas, install ownership, migration, and destructive guards.
 4. Give each behavioral scenario a stable `[bl-NNN]` id. These ids are the ship
    coverage units. No behavioral surface means record that explicitly and use
-   no ids.
+   no ids. A scenario line may declare `(covers: ac-N)` to tie it to an
+   acceptance criterion.
 5. Capture the current-behavior oracle: setup, action, expected observable
    result, evidence to capture, and reproduction steps.
-6. Write the contract below to `.maestro/features/<id>/baseline.md`.
+6. Write the contract below to `.maestro/cards/<id>/qa.md`.
 
 ## Freshness
 
-The frontmatter tracks how far through `amend-log.yaml` this baseline is fresh:
+The frontmatter tracks how far through the feature's amend log this baseline
+is fresh:
 
 ```markdown
 ---
@@ -48,7 +41,7 @@ amend_log_position: 0
 ```
 
 At first accept, use `0`. After behavioral amends, set it to the current count
-of amend-log entries after adding the new scenarios. Missing or invalid
+of amend entries after adding the new scenarios. Missing or invalid
 frontmatter is treated as `0`.
 
 ## Output Shape
@@ -88,7 +81,7 @@ amend_log_position: 0
 
 ## Stop
 
-- Do not edit implementation code from this skill.
+- Do not edit implementation code from this reference.
 - Do not use "tests pass" as the baseline by itself. Name the observable
   behavior or artifact the tests protect.
 - Do not add scenarios to pad coverage. Add `[bl-NNN]` only for real behavior
@@ -98,4 +91,4 @@ amend_log_position: 0
 
 ## Hand-off
 
-Next: baseline written -> `maestro-feature` for `feature accept`.
+Next: baseline written -> [feature.md](feature.md) for `feature accept`.

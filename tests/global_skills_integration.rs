@@ -66,8 +66,8 @@ fn init_install_prereqs(repo: &Path) {
 fn bundled_task_skill_md() -> String {
     skills()
         .iter()
-        .find(|skill| skill.name == "maestro-task")
-        .expect("invariant: maestro-task should be bundled")
+        .find(|skill| skill.name == "maestro-card")
+        .expect("invariant: maestro-card should be bundled")
         .skill_md()
         .to_string()
 }
@@ -94,7 +94,7 @@ fn install_points_to_explicit_sync_which_creates_global_cache_lock_and_supported
     fs::create_dir(&home).expect("invariant: home should be creatable");
     init_repo(&repo, &home);
     fs::write(
-        repo.join(".maestro/skills/maestro-task/SKILL.md"),
+        repo.join(".maestro/skills/maestro-card/SKILL.md"),
         "repo-local edit must not feed global cache\n",
     )
     .expect("invariant: repo-local skill should be editable");
@@ -113,7 +113,7 @@ fn install_points_to_explicit_sync_which_creates_global_cache_lock_and_supported
         "{stdout}"
     );
     assert!(
-        !home.join(".maestro/skills/maestro-task/SKILL.md").exists(),
+        !home.join(".maestro/skills/maestro-card/SKILL.md").exists(),
         "install must not write global skill cache"
     );
 
@@ -142,24 +142,24 @@ fn install_points_to_explicit_sync_which_creates_global_cache_lock_and_supported
     );
 
     assert_eq!(
-        fs::read_to_string(home.join(".maestro/skills/maestro-task/SKILL.md"))
+        fs::read_to_string(home.join(".maestro/skills/maestro-card/SKILL.md"))
             .expect("invariant: global task skill should be readable"),
         bundled_task_skill_md()
     );
     assert_symlink_target(
-        &home.join(".agents/skills/maestro-task"),
-        &home.join(".maestro/skills/maestro-task"),
+        &home.join(".agents/skills/maestro-card"),
+        &home.join(".maestro/skills/maestro-card"),
     );
     assert_symlink_target(
-        &home.join(".claude/skills/maestro-task"),
-        &home.join(".maestro/skills/maestro-task"),
+        &home.join(".claude/skills/maestro-card"),
+        &home.join(".maestro/skills/maestro-card"),
     );
-    assert!(!home.join(".codex/skills/maestro-task").exists());
+    assert!(!home.join(".codex/skills/maestro-card").exists());
 
     let lock = fs::read_to_string(home.join(".maestro/skills-lock.yaml"))
         .expect("invariant: global lock should be readable");
     assert!(lock.contains("schema_version: maestro.global_skills_lock.v1"));
-    assert!(lock.contains("codex:maestro-task"));
+    assert!(lock.contains("codex:maestro-card"));
     assert!(lock.contains("display_path:"));
     assert!(lock.contains("resolved_path:"));
 
@@ -170,7 +170,7 @@ fn install_points_to_explicit_sync_which_creates_global_cache_lock_and_supported
     let uninstall = maestro(&["uninstall", "--agent", "codex"], &repo, &home);
     assert_success(&uninstall);
     assert!(
-        home.join(".maestro/skills/maestro-task/SKILL.md").is_file(),
+        home.join(".maestro/skills/maestro-card/SKILL.md").is_file(),
         "repo-local uninstall must not remove global skills"
     );
 }
@@ -185,7 +185,7 @@ fn install_leaves_global_collision_for_explicit_sync() {
     init_install_prereqs(&repo);
     fs::create_dir_all(home.join(".agents/skills"))
         .expect("invariant: global root should be creatable");
-    fs::write(home.join(".agents/skills/maestro-task"), "user skill\n")
+    fs::write(home.join(".agents/skills/maestro-card"), "user skill\n")
         .expect("invariant: collision should be writable");
 
     let output = maestro(&["install", "--agent", "codex"], &repo, &home);
@@ -203,7 +203,7 @@ fn install_leaves_global_collision_for_explicit_sync() {
     assert!(repo.join(".maestro/install-lock.yaml").exists());
     assert!(repo.join(".codex/config.toml").exists());
     assert!(repo.join(".codex/skills").is_symlink());
-    assert!(!home.join(".maestro/skills/maestro-task/SKILL.md").exists());
+    assert!(!home.join(".maestro/skills/maestro-card/SKILL.md").exists());
 
     let sync = maestro(&["sync", "--global-skills"], &repo, &home);
 
@@ -217,7 +217,7 @@ fn install_leaves_global_collision_for_explicit_sync() {
         sync_output.contains("refusing global skill install"),
         "{sync_output}"
     );
-    assert!(sync_output.contains("maestro-task"), "{sync_output}");
+    assert!(sync_output.contains("maestro-card"), "{sync_output}");
 }
 
 #[test]
@@ -229,24 +229,24 @@ fn sync_global_skills_refreshes_global_cache_without_touching_repo_local_skills(
     fs::create_dir(&home).expect("invariant: home should be creatable");
     init_repo(&repo, &home);
     fs::write(
-        repo.join(".maestro/skills/maestro-task/SKILL.md"),
+        repo.join(".maestro/skills/maestro-card/SKILL.md"),
         "repo-local edit must remain\n",
     )
     .expect("invariant: repo-local skill should be editable");
     assert_success(&maestro(&["sync", "--global-skills"], &repo, &home));
-    fs::remove_file(home.join(".maestro/skills/maestro-task/SKILL.md"))
+    fs::remove_file(home.join(".maestro/skills/maestro-card/SKILL.md"))
         .expect("invariant: global skill should be removable");
 
     let output = maestro(&["sync", "--global-skills"], &repo, &home);
 
     assert_success(&output);
     assert_eq!(
-        fs::read_to_string(home.join(".maestro/skills/maestro-task/SKILL.md"))
+        fs::read_to_string(home.join(".maestro/skills/maestro-card/SKILL.md"))
             .expect("invariant: global task skill should be readable"),
         bundled_task_skill_md()
     );
     assert_eq!(
-        fs::read_to_string(repo.join(".maestro/skills/maestro-task/SKILL.md"))
+        fs::read_to_string(repo.join(".maestro/skills/maestro-card/SKILL.md"))
             .expect("invariant: repo-local task skill should be readable"),
         "repo-local edit must remain\n"
     );
@@ -261,7 +261,7 @@ fn update_check_does_not_mutate_global_skills_but_update_refreshes_existing_glob
     fs::create_dir(&home).expect("invariant: home should be creatable");
     init_repo(&repo, &home);
     assert_success(&maestro(&["sync", "--global-skills"], &repo, &home));
-    let global_task = home.join(".maestro/skills/maestro-task/SKILL.md");
+    let global_task = home.join(".maestro/skills/maestro-card/SKILL.md");
     fs::remove_file(&global_task).expect("invariant: global skill should be removable");
 
     let check = maestro(&["upgrade", "--check"], &repo, &home);

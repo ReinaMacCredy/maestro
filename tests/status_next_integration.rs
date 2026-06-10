@@ -738,7 +738,8 @@ fn ready_to_ship_status_json_and_task_next_broader_actions_are_structured() {
         ],
     );
     assert!(
-        complete.contains("next: qa-slice skill -> replay affected baseline scenarios"),
+        complete
+            .contains("next: maestro-card skill (qa-slice) -> replay affected baseline scenarios"),
         "{complete}"
     );
     assert!(

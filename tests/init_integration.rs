@@ -7,14 +7,10 @@ use std::process::Command;
 
 use support::TestTempDir;
 
-const BUNDLED_SKILLS: [&str; 8] = [
-    "maestro-task",
-    "maestro-feature",
+const BUNDLED_SKILLS: [&str; 4] = [
+    "maestro-card",
     "maestro-setup",
-    "maestro-verify",
     "maestro-design",
-    "qa-baseline",
-    "qa-slice",
     "maestro-audit",
 ];
 
@@ -97,7 +93,7 @@ fn init_dry_run_previews_bundled_extraction() {
     let stdout = String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8");
     // The dry-run reuses the extraction-preview machinery, so every bundled
     // folder is enumerated with its `create` verb (the tree is empty here).
-    assert!(stdout.contains("create   maestro-task"), "{stdout}");
+    assert!(stdout.contains("create   maestro-card"), "{stdout}");
     assert!(stdout.contains("create   HARNESS.md"), "{stdout}");
     assert!(stdout.contains("create   RECOVERY.md"), "{stdout}");
     assert!(stdout.contains("create   record.sh"), "{stdout}");
@@ -150,7 +146,7 @@ fn init_merge_hints_sync_when_a_folder_is_behind() {
     // it is now behind the binary's shipped version.
     let skill = temp_dir
         .path()
-        .join(".maestro/skills/maestro-task/SKILL.md");
+        .join(".maestro/skills/maestro-card/SKILL.md");
     fs::write(&skill, "edited bundled skill\n").expect("invariant: skill should be writable");
 
     let output = maestro(&["init", "--merge"], temp_dir.path());
@@ -313,7 +309,7 @@ fn init_yes_is_idempotent_keeps_edits_and_restores_missing() {
     // Locally customize a managed skill file, and delete a managed init file.
     let skill = temp_dir
         .path()
-        .join(".maestro/skills/maestro-task/SKILL.md");
+        .join(".maestro/skills/maestro-card/SKILL.md");
     fs::write(&skill, "custom skill\n").expect("invariant: skill should be writable");
     let harness_yml = temp_dir.path().join(".maestro/harness/harness.yml");
     fs::remove_file(&harness_yml).expect("invariant: harness.yml should be removable");
@@ -478,7 +474,7 @@ fn init_preflights_bundled_skill_conflicts_before_writing_harness() {
     init_git_marker(temp_dir.path());
     let skill = temp_dir
         .path()
-        .join(".maestro/skills/maestro-task/SKILL.md");
+        .join(".maestro/skills/maestro-card/SKILL.md");
     fs::create_dir_all(
         skill
             .parent()

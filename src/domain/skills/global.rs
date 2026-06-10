@@ -864,34 +864,34 @@ mod tests {
 
         let outcome = sync_global_skills_at(&home).expect("global sync should succeed");
 
-        assert!(outcome.cache_dir.join("maestro-task/SKILL.md").is_file());
+        assert!(outcome.cache_dir.join("maestro-card/SKILL.md").is_file());
         assert!(outcome.lock_path.is_file());
         assert_eq!(outcome.roots.len(), 2);
-        assert!(home.join(".agents/skills/maestro-task").is_symlink());
-        assert!(home.join(".claude/skills/maestro-task").is_symlink());
-        assert!(!home.join(".codex/skills/maestro-task").exists());
+        assert!(home.join(".agents/skills/maestro-card").is_symlink());
+        assert!(home.join(".claude/skills/maestro-card").is_symlink());
+        assert!(!home.join(".codex/skills/maestro-card").exists());
 
         let lock = load_lock_if_exists(&outcome.lock_path)
             .expect("lock should load")
             .expect("lock should exist");
         assert_eq!(lock.schema_version, GLOBAL_SKILLS_LOCK_SCHEMA_VERSION);
-        assert!(lock.skills.contains_key("maestro-task"));
+        assert!(lock.skills.contains_key("maestro-card"));
         assert!(lock.roots.contains_key("codex"));
         assert!(lock.roots.contains_key("claude"));
-        assert!(lock.links.contains_key("codex:maestro-task"));
+        assert!(lock.links.contains_key("codex:maestro-card"));
     }
 
     #[test]
     fn preflight_refuses_user_owned_root_collision_before_writes() {
         let home = temp_home("global-skills-collision");
         fs::create_dir_all(home.join(".agents/skills")).expect("root should be creatable");
-        fs::write(home.join(".agents/skills/maestro-task"), "user skill\n")
+        fs::write(home.join(".agents/skills/maestro-card"), "user skill\n")
             .expect("collision should be writable");
 
         let error = prepare_global_skills_at(&home).expect_err("collision should fail preflight");
 
         assert!(error.to_string().contains("refusing global skill install"));
-        assert!(!home.join(".maestro/skills/maestro-task/SKILL.md").exists());
+        assert!(!home.join(".maestro/skills/maestro-card/SKILL.md").exists());
         assert!(!home.join(".maestro/skills-lock.yaml").exists());
     }
 
@@ -900,7 +900,7 @@ mod tests {
         let home = temp_home("global-skills-rollback");
         let prepared = prepare_global_skills_at(&home).expect("preflight should succeed");
         fs::create_dir_all(home.join(".claude/skills")).expect("root should be creatable");
-        fs::write(home.join(".claude/skills/maestro-task"), "late collision\n")
+        fs::write(home.join(".claude/skills/maestro-card"), "late collision\n")
             .expect("late collision should be writable");
 
         let error =
@@ -908,11 +908,11 @@ mod tests {
 
         assert!(!error.to_string().contains("failed to roll back"));
         assert!(
-            !home.join(".maestro/skills/maestro-task/SKILL.md").exists(),
+            !home.join(".maestro/skills/maestro-card/SKILL.md").exists(),
             "new cache files should be rolled back"
         );
         assert!(
-            !home.join(".agents/skills/maestro-task").exists(),
+            !home.join(".agents/skills/maestro-card").exists(),
             "new codex links should be rolled back"
         );
         assert!(
@@ -920,7 +920,7 @@ mod tests {
             "new global lock should be rolled back"
         );
         assert_eq!(
-            fs::read_to_string(home.join(".claude/skills/maestro-task"))
+            fs::read_to_string(home.join(".claude/skills/maestro-card"))
                 .expect("late collision should survive"),
             "late collision\n"
         );
@@ -930,7 +930,7 @@ mod tests {
     fn sync_refreshes_managed_drift_but_refuses_unmanaged_cache_edits() {
         let home = temp_home("global-skills-managed-drift");
         sync_global_skills_at(&home).expect("initial sync should succeed");
-        let task = home.join(".maestro/skills/maestro-task/SKILL.md");
+        let task = home.join(".maestro/skills/maestro-card/SKILL.md");
         fs::write(&task, "user edit\n").expect("skill should be writable");
 
         let error = prepare_global_skills_at(&home).expect_err("user edit should be refused");
@@ -984,7 +984,7 @@ mod tests {
                 .canonicalize()
                 .expect("target should canonicalize")
         );
-        assert!(home.join(".claude/skills/maestro-task").is_symlink());
+        assert!(home.join(".claude/skills/maestro-card").is_symlink());
     }
 
     fn temp_home(prefix: &str) -> PathBuf {

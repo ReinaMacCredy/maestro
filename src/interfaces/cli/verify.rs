@@ -123,10 +123,10 @@ pub(super) fn render_verified_handoff(paths: &MaestroPaths, task_id: &str) -> Re
 fn print_feature_ship_handoff(paths: &MaestroPaths, feature_id: &str) -> Result<()> {
     let report = feature::ship(paths, feature_id, None, true)?;
     if report.note.contains("qa-slice coverage incomplete") {
-        println!("next: qa-slice skill -> replay affected baseline scenarios");
+        println!("next: maestro-card skill (qa-slice) -> replay affected baseline scenarios");
         println!("then: maestro feature ship {feature_id} --outcome \"<outcome>\"");
     } else if report.note.contains("qa-baseline") {
-        println!("next: qa-baseline skill -> .maestro/cards/{feature_id}/qa.md");
+        println!("next: maestro-card skill (qa-baseline) -> .maestro/cards/{feature_id}/qa.md");
         println!("then: maestro feature ship {feature_id} --outcome \"<outcome>\"");
     } else {
         println!("template: maestro feature ship {feature_id} --outcome \"<outcome>\"");
