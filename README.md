@@ -11,25 +11,6 @@ unit of work, what is being built, who is doing it, and the proof it was done, l
 plain files under `.maestro/` in your repo. No daemon, no hidden service state, no cloud.
 The agent runs the lifecycle through the CLI; you review the artifacts.
 
-![Maestro card model](docs/assets/maestro-card-model.png)
-
-## Card model
-
-maestro's durable unit is a **card**. Features, tasks, bugs, chores, ideas, and
-decisions all live under `.maestro/cards/<id>/`; `card.yaml` carries the typed
-state, parent, dependencies, claim, and timestamps, while sidecars such as
-`spec.md`, `qa.md`, and `notes.md` carry the human-readable contract and evidence.
-
-Feature cards are the containers. Workable cards (`task`, `bug`, `chore`) dock
-under a feature through `parent`, enter `maestro ready` when their blocking
-dependencies are closed, and can be claimed by an agent session. Ideas and
-decisions are cards too, but they keep their own typed lifecycle verbs through
-the harness and decision flows.
-
-The flat query verbs give agents a Beads-style operating surface:
-`maestro ready`, `maestro list`, `maestro show`, `maestro claim`,
-`maestro note`, `maestro dep`, and `maestro archive`.
-
 ## Why
 
 Coding agents are fast but forgetful. They lose the thread across sessions, collide on
@@ -44,6 +25,25 @@ maestro fixes that by making the work itself durable, queryable, and gated:
 - Harness suggestions and decisions are cards too, so tool-improvement and reasoning survive context loss.
 
 Everything is repo-local and reviewable in a diff.
+
+## Card model
+
+maestro's durable unit is a **card**. Features, tasks, bugs, chores, ideas, and
+decisions all live under `.maestro/cards/<id>/`; `card.yaml` carries the typed
+state, parent, dependencies, claim, and timestamps, while sidecars such as
+`spec.md`, `qa.md`, and `notes.md` carry the human-readable contract and evidence.
+
+![Maestro card model](docs/readme/maestro-card-model.png)
+
+Feature cards are the containers. Workable cards (`task`, `bug`, `chore`) dock
+under a feature through `parent`, enter `maestro ready` when their blocking
+dependencies are closed, and can be claimed by an agent session. Ideas and
+decisions are cards too, but they keep their own typed lifecycle verbs through
+the harness and decision flows.
+
+The flat query verbs give agents a Beads-style operating surface:
+`maestro ready`, `maestro list`, `maestro show`, `maestro claim`,
+`maestro note`, `maestro dep`, and `maestro archive`.
 
 ## How It Works
 
