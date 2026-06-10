@@ -217,6 +217,13 @@ fn write_task_yaml(repo: &Path, id: &str, task: &YamlValue) {
     let path = task_dir(repo, id).join("card.yaml");
     let mut doc = card_doc(repo, id);
     doc["extra"] = task.clone();
+    // The top-level status is the source of truth (SPEC DN3) and typed readers
+    // overlay it onto the record, so a state splice must refresh the derived
+    // copy the way a real fold does -- else the card is split-brain and the
+    // spliced state is clobbered on the next load.
+    if let Some(state) = task["state"].as_str() {
+        doc["status"] = YamlValue::String(state.to_string());
+    }
     fs::write(
         &path,
         serde_yaml::to_string(&doc).expect("invariant: card.yaml should serialize"),
