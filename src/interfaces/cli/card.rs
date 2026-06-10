@@ -12,11 +12,9 @@ use crate::interfaces::cli::{
 
 /// Execute `maestro ready`: workable cards with no open blockers.
 pub fn ready(args: ReadyArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     let cards = card::query::scan(&paths)?;
     let mut ready = card::query::ready(&cards);
     if let Some(feature) = args.feature.as_deref() {
@@ -28,11 +26,9 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
 
 /// Execute `maestro list`: cards filtered by parent, type, assignee, or coarse status.
 pub fn list(args: ListArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
 
     let card_type = args.card_type.as_deref().map(parse_card_type).transpose()?;
     let status = args
@@ -59,11 +55,9 @@ pub fn list(args: ListArgs) -> Result<()> {
 /// Execute `maestro dep add <child> <parent>`: author a blocking edge so the
 /// child waits on the parent (SPEC E1/DN6).
 pub fn dep(args: DepArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     match args.command {
         DepCommand::Add { child, parent } => {
             let added = card::edit::add_blocks_dep(&paths, &child, &parent, &utc_now_timestamp())?;
@@ -83,11 +77,9 @@ pub fn dep(args: DepArgs) -> Result<()> {
 /// feature archive`, so the typed terminal gate, sweep re-run, and no-clobber
 /// pre-flight hold on both spellings.
 pub fn archive(args: ArchiveArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     let report = feature::archive_feature(&paths, &args.feature, false)?;
     println!("{}", report.note);
     Ok(())
@@ -96,11 +88,9 @@ pub fn archive(args: ArchiveArgs) -> Result<()> {
 /// Execute `maestro claim <id>`: take a workable card for this session, stamping
 /// the `<agent>#<session>` identity and moving it to `in_progress` (SPEC E6/DN8).
 pub fn claim(args: ClaimArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     let identity = claim_identity();
     let outcome = card::edit::claim(&paths, &args.id, &identity, &utc_now_timestamp())?;
     print_claim_outcome(&args.id, &identity, &outcome);
@@ -123,11 +113,9 @@ fn print_claim_outcome(id: &str, identity: &str, outcome: &card::edit::ClaimOutc
 /// Execute `maestro note <id> <text>`: append a dated note to the card's
 /// `notes.md` sidecar (SPEC D5).
 pub fn note(args: NoteArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     let created = card::edit::append_note(&paths, &args.id, &args.text, &utc_now_timestamp())?;
     if created {
         println!("noted {} (notes.md created)", args.id);
@@ -142,11 +130,9 @@ pub fn note(args: NoteArgs) -> Result<()> {
 /// creation slug (SPEC E2). The initial status is the uniform coarse-open word
 /// `open`, so a workable card is immediately `ready` once it has no open blocker.
 pub fn create(args: CreateArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     let card_type = parse_card_type(&args.card_type)?;
     let now = utc_now_timestamp();
     let id = match card_type {
@@ -193,11 +179,9 @@ pub fn create(args: CreateArgs) -> Result<()> {
 /// Execute `maestro show <id>`: the card's header, parent, edges, and body (DN9).
 /// `--json` prints the raw card; a missing card exits 0 with a guiding line.
 pub fn show(args: ShowArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     card::store::validate_card_id(&args.id)?;
     let path = card::store::card_path(&paths, &args.id);
     let Some(c) = card::store::load(&path)? else {
@@ -221,11 +205,9 @@ pub fn show(args: ShowArgs) -> Result<()> {
 /// delegates to the same `card::edit::claim` the standalone `claim` verb uses.
 /// A bare `update` (no id) or an update with no flags exits 0 with usage.
 pub fn update(args: UpdateArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     let Some(id) = args.id.as_deref() else {
         println!("usage: maestro update <id> [--status S] [--title T] [--description D] [--claim]");
         return Ok(());
@@ -285,11 +267,9 @@ pub fn update(args: UpdateArgs) -> Result<()> {
 /// `closed` (coarse Closed) through the D1 CAS seam (DN9). Already-closed and
 /// missing cards exit 0 with a guiding line.
 pub fn close(args: CloseArgs) -> Result<()> {
-    let paths = repo_paths()?;
-    if !paths.cards_dir().is_dir() {
-        legacy_notice();
+    let Some(paths) = card_paths()? else {
         return Ok(());
-    }
+    };
     card::store::validate_card_id(&args.id)?;
     let path = card::store::card_path(&paths, &args.id);
     let snapshot = card::store::load_with_snapshot(&path)?;
@@ -355,6 +335,15 @@ fn claim_identity() -> String {
 
 fn repo_paths() -> Result<MaestroPaths> {
     Ok(MaestroPaths::new(discover_repo_root()?))
+}
+
+fn card_paths() -> Result<Option<MaestroPaths>> {
+    let paths = repo_paths()?;
+    if !paths.cards_dir().is_dir() {
+        legacy_notice();
+        return Ok(None);
+    }
+    Ok(Some(paths))
 }
 
 /// The card verbs read `.maestro/cards/`; an unmigrated repo has none. Exit 0

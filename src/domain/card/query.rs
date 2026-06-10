@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::load;
+use crate::domain::card::store::{card_dir_ids, load};
 use crate::foundation::core::fs::child_dirs;
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -100,12 +100,11 @@ pub fn scan(paths: &MaestroPaths) -> Result<Vec<Card>> {
 /// (`archive/cards/`) ride the same seam as the live store.
 pub fn scan_dir(root: &Path) -> Result<Vec<Card>> {
     let mut cards = Vec::new();
-    for (dir, _modified) in child_dirs(root)? {
-        if let Some(card) = load(&dir.join("card.yaml"))? {
+    for id in card_dir_ids(root)? {
+        if let Some(card) = load(&root.join(&id).join("card.yaml"))? {
             cards.push(card);
         }
     }
-    cards.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(cards)
 }
 

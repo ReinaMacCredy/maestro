@@ -664,8 +664,13 @@ mod tests {
 
         let global = create_open(&paths, "Use fire-and-forget hooks", None, None)
             .expect("create global decision");
-        let feature = create_open(&paths, "Use a replay queue for hooks", None, Some(&feature_id))
-            .expect("create feature decision");
+        let feature = create_open(
+            &paths,
+            "Use a replay queue for hooks",
+            None,
+            Some(&feature_id),
+        )
+        .expect("create feature decision");
 
         let scoped =
             super::decisions_for_feature(&paths, &feature_id).expect("decisions for feature");
