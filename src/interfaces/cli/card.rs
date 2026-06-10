@@ -169,8 +169,8 @@ pub fn create(args: CreateArgs) -> Result<()> {
             ));
         }
         card::store::validate_card_id(&parent)?;
-        let parent_card = card::store::load(&card::store::card_path(&paths, &parent))?
-            .ok_or_else(|| {
+        let parent_card =
+            card::store::load(&card::store::card_path(&paths, &parent))?.ok_or_else(|| {
                 anyhow!(
                     "parent {parent} not found; create the feature first \
                      (`maestro create -t feature \"<title>\"`)"
@@ -325,14 +325,12 @@ pub fn close(args: CloseArgs) -> Result<()> {
 /// --status` (SPEC E3: feature/idea/decision keep per-type terminal verbs).
 fn per_type_verbs_hint(card_type: card::schema::CardType) -> &'static str {
     match card_type {
-        card::schema::CardType::Feature => {
-            "use `maestro feature ship` or `maestro feature cancel`"
-        }
+        card::schema::CardType::Feature => "use `maestro feature ship` or `maestro feature cancel`",
         card::schema::CardType::Decision => "use `maestro decision lock`",
         card::schema::CardType::Idea => "use `maestro harness apply/dismiss/measure`",
-        card::schema::CardType::Task | card::schema::CardType::Bug | card::schema::CardType::Chore => {
-            "use `maestro close`"
-        }
+        card::schema::CardType::Task
+        | card::schema::CardType::Bug
+        | card::schema::CardType::Chore => "use `maestro close`",
     }
 }
 
