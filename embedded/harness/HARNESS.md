@@ -1,5 +1,5 @@
 ---
-version: 1.9.0
+version: 1.10.0
 ---
 
 # Maestro Harness Protocol
@@ -9,11 +9,19 @@ uses Maestro. Follow these rules.
 
 ## Shared protocol (all agents)
 1. Start with `maestro status`; honor MAESTRO_CURRENT_TASK env or `maestro task show <id>` when a current task is set.
-2. Read acceptance.yaml - those criteria are locked.
+2. Acceptance criteria live in the card (`maestro show <id>`) - they are locked.
 3. Use the skills active for this task.
 4. Complete tasks with `maestro task complete <id> --summary "<what>" --claim "<claim>" --proof "<observed evidence>"`; Maestro records the proof and auto-runs verification.
 5. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
 6. When the user corrects your behavior, record it: `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
+
+## Where to look
+
+    starting a session     -> maestro status
+    picking up work        -> maestro-card skill (work)
+    brainstorm / design    -> maestro-design skill
+    proof failed / verify  -> maestro-card skill (verify)
+    before accept / ship   -> maestro-card skill (qa-baseline / qa-slice)
 
 ## Task commands (the loop)
 
@@ -24,7 +32,7 @@ Orient and find work:
 
     maestro status                                # repo handoff and next action
     maestro task next                             # one best task action
-    maestro task list --ready                     # claimable work (ready + unblocked)
+    maestro ready                                 # claimable work (ready + unblocked)
     maestro task show <id>                        # task detail: state, claim, blockers
 
 Make a task claimable (intake):
@@ -42,7 +50,7 @@ Execute:
 
 When stuck:
 
-    maestro task block <id> --reason "<why>" [--by task-NN|decision-NN|<external>]
+    maestro task block <id> --reason "<why>" [--by <card id>|<external>]
     maestro task unblock <id> --blocker blk-NN     # use the blocker's own blk- id, not the target
 
 Terminal verbs (reject / abandon / supersede), plus doctor and watch -> see the maestro-card skill (work reference).
