@@ -5,10 +5,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::card::schema::Card;
+use crate::domain::card::schema::{Card, CardType};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{
-    child_dirs, ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
+    child_dirs, ensure_dir, read_to_string_if_exists, sorted_child_dirs, write_string_if_unchanged,
 };
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
@@ -149,7 +149,13 @@ pub(crate) fn mint_card_id(paths: &MaestroPaths, title: &str) -> String {
     let ts = utc_now_millis_timestamp();
     let seq = CREATION_COUNTER.fetch_add(1, Ordering::Relaxed);
     let input = format!("{title}|{ts}|{}|{seq}", process::id());
-    mint_hash_id(&input, |id| card_path(paths, id).exists())
+    // An unreadable store reads as free rather than salt-bumping forever; the
+    // create-time CAS stays the real collision guard either way.
+    mint_hash_id(&input, |id| {
+        locate(paths, id)
+            .map(|home| home.is_some())
+            .unwrap_or(false)
+    })
 }
 
 /// [`save_with_snapshot`] for a card rebuilt by a typed-record fold. The fold
@@ -184,6 +190,364 @@ pub fn save_with_snapshot(path: &Path, card: &Card, snapshot: &CardSnapshot) -> 
     let contents = serde_yaml::to_string(card).context("failed to serialize card")?;
     write_string_if_unchanged(path, snapshot.raw.as_deref(), &contents)
         .with_context(|| format!("failed to write {}", path.display()))
+}
+
+// ---------------------------------------------------------------------------
+// Container layout (SPEC-card-sprawl): the id -> (container, entry) resolver
+// that replaced `cards/<id>/card.yaml` as the universal addressing layer
+// (advisor F1). Features own a container dir; workable cards keep per-task
+// dirs grouped under a `tasks/` pool (S5'); decisions and ideas are entries
+// in per-container list files (S2-S4). Pre-migration flat leaf dirs keep
+// reading as dir-backed homes until `maestro migrate` folds them.
+// ---------------------------------------------------------------------------
+
+/// In-dir record file of a feature container (and of a pre-migration flat
+/// leaf card dir).
+pub(crate) const CARD_FILE: &str = "card.yaml";
+/// In-dir record file of a workable card under a `tasks/` pool (S5').
+pub(crate) const TASK_FILE: &str = "task.yaml";
+/// Per-container pool dir for workable cards (S5').
+pub(crate) const TASKS_DIR: &str = "tasks";
+/// Per-container decision entries file (S2/S3).
+pub(crate) const DECISIONS_FILE: &str = "decisions.yaml";
+/// Store-root idea entries file (S4).
+pub(crate) const IDEAS_FILE: &str = "ideas.yaml";
+
+/// Names the container layout claims inside every container dir: a feature id
+/// equal to one of these would shadow the work pool, an entry file, or the
+/// container's own record/prose files.
+const RESERVED_CONTAINER_NAMES: &[&str] = &[
+    TASKS_DIR,
+    DECISIONS_FILE,
+    IDEAS_FILE,
+    CARD_FILE,
+    "notes.md",
+    "spec.md",
+];
+
+/// Where a card lives in the container layout.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CardHome {
+    /// Dir-backed: the yaml record inside the card's own directory. Feature
+    /// containers (`cards/<slug>/card.yaml`), pooled task dirs
+    /// (`[<feature>/]tasks/<id>/task.yaml`), and pre-migration flat leaf dirs
+    /// all load and save through this arm.
+    Dir(PathBuf),
+    /// Entry-backed: one entry in a container list file
+    /// (`[<feature>/]decisions.yaml` or `ideas.yaml`), written back under
+    /// whole-file CAS (the S2/S4 single-file contention rider).
+    Entry(PathBuf),
+}
+
+/// The home a NEW card of this type/parent is created at. Features mint their
+/// own container dir; workable cards land in the `tasks/` pool of their
+/// parent feature's container, decisions in its `decisions.yaml`; ideas are
+/// entries in the root `ideas.yaml`.
+pub fn home_for_new(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
+    validate_card_id(&card.id)?;
+    Ok(match card.card_type {
+        CardType::Feature => {
+            if RESERVED_CONTAINER_NAMES.contains(&card.id.as_str()) {
+                bail!(
+                    "feature id {} is reserved by the card store layout",
+                    card.id
+                );
+            }
+            CardHome::Dir(paths.cards_dir().join(&card.id).join(CARD_FILE))
+        }
+        CardType::Task | CardType::Bug | CardType::Chore => CardHome::Dir(
+            container_dir(paths, card.parent.as_deref())?
+                .join(TASKS_DIR)
+                .join(&card.id)
+                .join(TASK_FILE),
+        ),
+        CardType::Decision => {
+            CardHome::Entry(container_dir(paths, card.parent.as_deref())?.join(DECISIONS_FILE))
+        }
+        CardType::Idea => CardHome::Entry(paths.cards_dir().join(IDEAS_FILE)),
+    })
+}
+
+/// The container a parented card belongs to: the parent's feature dir when
+/// `parent` names an existing feature container, else the store root. The
+/// parent's TYPE is read (not just dir existence) so a pre-migration flat
+/// leaf dir -- e.g. a decision card's -- never becomes a nesting point; a
+/// task parent, an archived feature, or a dangling id all fall back to the
+/// root container.
+fn container_dir(paths: &MaestroPaths, parent: Option<&str>) -> Result<PathBuf> {
+    let root = paths.cards_dir();
+    let Some(parent) = parent else {
+        return Ok(root);
+    };
+    validate_card_id(parent)?;
+    let yaml = root.join(parent).join(CARD_FILE);
+    match load(&yaml)? {
+        Some(card) if card.card_type == CardType::Feature => Ok(root.join(parent)),
+        _ => Ok(root),
+    }
+}
+
+/// Find the home of an existing card id anywhere in the layout. Probe order
+/// is deterministic: dir-backed homes first (the root dir -- features and
+/// pre-migration flat leaf cards -- then the root `tasks/` pool, then each
+/// container's `tasks/`), then the entry files (root `decisions.yaml`, root
+/// `ideas.yaml`, then each container's `decisions.yaml`). `None` when no
+/// home holds the id.
+pub fn locate(paths: &MaestroPaths, id: &str) -> Result<Option<CardHome>> {
+    validate_card_id(id)?;
+    let root = paths.cards_dir();
+
+    let flat = root.join(id).join(CARD_FILE);
+    if dir_card_exists(&flat) {
+        return Ok(Some(CardHome::Dir(flat)));
+    }
+    let pooled = root.join(TASKS_DIR).join(id).join(TASK_FILE);
+    if dir_card_exists(&pooled) {
+        return Ok(Some(CardHome::Dir(pooled)));
+    }
+    let containers: Vec<PathBuf> = sorted_child_dirs(&root)?
+        .into_iter()
+        .filter(|dir| dir.file_name().is_none_or(|name| name != TASKS_DIR))
+        .collect();
+    for dir in &containers {
+        let nested = dir.join(TASKS_DIR).join(id).join(TASK_FILE);
+        if dir_card_exists(&nested) {
+            return Ok(Some(CardHome::Dir(nested)));
+        }
+    }
+
+    let mut entry_files = vec![root.join(DECISIONS_FILE), root.join(IDEAS_FILE)];
+    entry_files.extend(containers.iter().map(|dir| dir.join(DECISIONS_FILE)));
+    for file in entry_files {
+        if load_entries(&file)?.cards.iter().any(|card| card.id == id) {
+            return Ok(Some(CardHome::Entry(file)));
+        }
+    }
+    Ok(None)
+}
+
+/// Whether a dir-backed record file exists, honoring the symlinked-dir
+/// rejection [`load_with_snapshot`] applies -- a probe must never say
+/// "present" for a record the load refuses to read.
+fn dir_card_exists(yaml: &Path) -> bool {
+    let symlinked = yaml.parent().is_some_and(|dir| {
+        fs::symlink_metadata(dir)
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(false)
+    });
+    !symlinked && yaml.is_file()
+}
+
+/// All entries of a container list file plus the exact bytes backing the next
+/// whole-file CAS write. `raw` is `None` when the file is absent.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EntriesSnapshot {
+    pub cards: Vec<Card>,
+    raw: Option<String>,
+}
+
+/// Load every entry of a container list file (`decisions.yaml`/`ideas.yaml`).
+/// An absent or empty file is an empty list; a symlinked file or container
+/// dir is refused like a symlinked card dir. One malformed or
+/// schema-mismatched entry fails the whole file -- the container file is the
+/// failure grain.
+pub fn load_entries(file: &Path) -> Result<EntriesSnapshot> {
+    let symlinked = fs::symlink_metadata(file)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false)
+        || file.parent().is_some_and(|dir| {
+            fs::symlink_metadata(dir)
+                .map(|metadata| metadata.file_type().is_symlink())
+                .unwrap_or(false)
+        });
+    if symlinked {
+        return Ok(EntriesSnapshot {
+            cards: Vec::new(),
+            raw: None,
+        });
+    }
+    let Some(contents) = read_to_string_if_exists(file)? else {
+        return Ok(EntriesSnapshot {
+            cards: Vec::new(),
+            raw: None,
+        });
+    };
+    let cards: Vec<Card> = if contents.trim().is_empty() {
+        Vec::new()
+    } else {
+        serde_yaml::from_str(&contents)
+            .with_context(|| format!("failed to parse {}", file.display()))?
+    };
+    for card in &cards {
+        if classify(&card.schema_version, CARD_SCHEMA_VERSION) != Compat::Exact {
+            return Err(MaestroError::SchemaMismatch {
+                artifact: format!("{}#{}", file.display(), card.id),
+                expected: CARD_SCHEMA_VERSION,
+                found: card.schema_version.clone(),
+            }
+            .into());
+        }
+    }
+    Ok(EntriesSnapshot {
+        cards,
+        raw: Some(contents),
+    })
+}
+
+/// Write the full entry list of a container file, but only when the file
+/// still matches the snapshot it was read from -- the whole file is the CAS
+/// unit (the S2/S4 contention rider).
+pub fn save_entries(file: &Path, cards: &[Card], snapshot: &EntriesSnapshot) -> Result<()> {
+    if let Some(parent) = file.parent() {
+        ensure_dir(parent)?;
+    }
+    let contents = serde_yaml::to_string(cards).context("failed to serialize card entries")?;
+    write_string_if_unchanged(file, snapshot.raw.as_deref(), &contents)
+        .with_context(|| format!("failed to write {}", file.display()))
+}
+
+/// A card found by [`resolve`] plus the exact backing-store state for writing
+/// it back: a one-card CAS basis for a dir-backed home, the whole entry list
+/// for an entry-backed one.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResolvedCard {
+    pub card: Card,
+    basis: ResolvedBasis,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum ResolvedBasis {
+    Dir {
+        yaml: PathBuf,
+        // Boxed for variant-size parity with `Entry` (clippy).
+        snapshot: Box<CardSnapshot>,
+    },
+    Entry {
+        file: PathBuf,
+        snapshot: EntriesSnapshot,
+    },
+}
+
+impl ResolvedCard {
+    /// The file backing this card: its own yaml for a dir-backed home, the
+    /// container list file for an entry-backed one.
+    pub fn path(&self) -> &Path {
+        match &self.basis {
+            ResolvedBasis::Dir { yaml, .. } => yaml,
+            ResolvedBasis::Entry { file, .. } => file,
+        }
+    }
+}
+
+/// Load a card by id from wherever it lives (locate + read in one step).
+/// `None` when no home holds the id. The returned basis backs the matching
+/// [`save_resolved`]/[`remove_resolved`] CAS.
+pub fn resolve(paths: &MaestroPaths, id: &str) -> Result<Option<ResolvedCard>> {
+    let Some(home) = locate(paths, id)? else {
+        return Ok(None);
+    };
+    match home {
+        CardHome::Dir(yaml) => {
+            let snapshot = load_with_snapshot(&yaml)?;
+            let Some(card) = snapshot.card.clone() else {
+                return Ok(None);
+            };
+            Ok(Some(ResolvedCard {
+                card,
+                basis: ResolvedBasis::Dir {
+                    yaml,
+                    snapshot: Box::new(snapshot),
+                },
+            }))
+        }
+        CardHome::Entry(file) => {
+            let snapshot = load_entries(&file)?;
+            let Some(card) = snapshot.cards.iter().find(|card| card.id == id).cloned() else {
+                return Ok(None);
+            };
+            Ok(Some(ResolvedCard {
+                card,
+                basis: ResolvedBasis::Entry { file, snapshot },
+            }))
+        }
+    }
+}
+
+/// Write a mutated card back to the home it was resolved from, under that
+/// home's CAS basis. This writes in place and never moves a card between
+/// homes -- re-homing on a parent change is a migration-grade move, not a
+/// field save (beads E2 amendment).
+pub fn save_resolved(card: &Card, basis: &ResolvedCard) -> Result<()> {
+    if card.id != basis.card.id {
+        bail!(
+            "resolved save id mismatch: {} resolved, {} saved",
+            basis.card.id,
+            card.id
+        );
+    }
+    match &basis.basis {
+        ResolvedBasis::Dir { yaml, snapshot } => save_with_snapshot(yaml, card, snapshot),
+        ResolvedBasis::Entry { file, snapshot } => {
+            let mut cards = snapshot.cards.clone();
+            let slot = cards
+                .iter_mut()
+                .find(|entry| entry.id == card.id)
+                .expect("invariant: resolved entry present in its own snapshot");
+            *slot = card.clone();
+            save_entries(file, &cards, snapshot)
+        }
+    }
+}
+
+/// Create a brand-new card at the home its type/parent dictates. Fails when
+/// the id already exists anywhere; the write itself is a CAS create (absent
+/// record / unchanged entry file), so a racing create of the same id loses
+/// cleanly (SPEC D1).
+pub fn create_card(paths: &MaestroPaths, card: &Card) -> Result<()> {
+    if locate(paths, &card.id)?.is_some() {
+        bail!("card {} already exists", card.id);
+    }
+    match home_for_new(paths, card)? {
+        CardHome::Dir(yaml) => {
+            let snapshot = load_with_snapshot(&yaml)?;
+            if snapshot.card.is_some() {
+                bail!("card {} already exists", card.id);
+            }
+            save_with_snapshot(&yaml, card, &snapshot)
+        }
+        CardHome::Entry(file) => {
+            let snapshot = load_entries(&file)?;
+            if snapshot.cards.iter().any(|entry| entry.id == card.id) {
+                bail!("card {} already exists", card.id);
+            }
+            let mut cards = snapshot.cards.clone();
+            cards.push(card.clone());
+            save_entries(&file, &cards, &snapshot)
+        }
+    }
+}
+
+/// Remove a resolved card from its home: a dir-backed card's whole directory
+/// (record and sidecars -- notes, evidence, proof -- travel with the dir), or
+/// its entry rewritten out of the container file under whole-file CAS.
+pub fn remove_resolved(basis: &ResolvedCard) -> Result<()> {
+    match &basis.basis {
+        ResolvedBasis::Dir { yaml, .. } => {
+            let dir = yaml
+                .parent()
+                .with_context(|| format!("card path missing parent: {}", yaml.display()))?;
+            fs::remove_dir_all(dir).with_context(|| format!("failed to remove {}", dir.display()))
+        }
+        ResolvedBasis::Entry { file, snapshot } => {
+            let cards: Vec<Card> = snapshot
+                .cards
+                .iter()
+                .filter(|entry| entry.id != basis.card.id)
+                .cloned()
+                .collect();
+            save_entries(file, &cards, snapshot)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -349,5 +713,336 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(path.parent().expect("card path has a parent"));
+    }
+
+    fn typed_card(id: &str, card_type: CardType, parent: Option<&str>) -> Card {
+        let mut card = Card::new(id, card_type, id, "open", "2026-06-10T00:00:00Z");
+        card.parent = parent.map(str::to_string);
+        card
+    }
+
+    /// Seed a card the pre-migration way: a flat `cards/<id>/card.yaml` dir.
+    fn seed_flat(paths: &MaestroPaths, card: &Card) {
+        let path = card_path(paths, &card.id);
+        let snapshot = load_with_snapshot(&path).expect("absent loads None");
+        save_with_snapshot(&path, card, &snapshot).expect("seed flat card");
+    }
+
+    /// SPEC-card-sprawl final layout: each type's creation home.
+    #[test]
+    fn home_for_new_places_each_type_per_the_container_layout() {
+        let paths = temp_cards_repo("home-for-new");
+        let root = paths.cards_dir();
+        create_card(&paths, &typed_card("csv-export", CardType::Feature, None))
+            .expect("create the feature container");
+        // a pre-migration flat NON-feature dir: never a nesting point
+        seed_flat(&paths, &typed_card("card-dec001", CardType::Decision, None));
+
+        let home = |card: &Card| home_for_new(&paths, card).expect("home resolves");
+        assert_eq!(
+            home(&typed_card("new-feat", CardType::Feature, None)),
+            CardHome::Dir(root.join("new-feat").join("card.yaml"))
+        );
+        assert_eq!(
+            home(&typed_card(
+                "card-t00001",
+                CardType::Task,
+                Some("csv-export")
+            )),
+            CardHome::Dir(
+                root.join("csv-export")
+                    .join("tasks")
+                    .join("card-t00001")
+                    .join("task.yaml")
+            ),
+            "feature work pools under the container"
+        );
+        assert_eq!(
+            home(&typed_card("card-t00002", CardType::Bug, None)),
+            CardHome::Dir(root.join("tasks").join("card-t00002").join("task.yaml")),
+            "standalone work pools at the root"
+        );
+        assert_eq!(
+            home(&typed_card(
+                "card-t00003",
+                CardType::Chore,
+                Some("card-dec001")
+            )),
+            CardHome::Dir(root.join("tasks").join("card-t00003").join("task.yaml")),
+            "a non-feature parent falls back to the root pool"
+        );
+        assert_eq!(
+            home(&typed_card(
+                "card-d00001",
+                CardType::Decision,
+                Some("csv-export")
+            )),
+            CardHome::Entry(root.join("csv-export").join("decisions.yaml"))
+        );
+        assert_eq!(
+            home(&typed_card("card-d00002", CardType::Decision, None)),
+            CardHome::Entry(root.join("decisions.yaml")),
+            "a global decision is an entry in the root container file"
+        );
+        assert_eq!(
+            home(&typed_card("card-i00001", CardType::Idea, None)),
+            CardHome::Entry(root.join("ideas.yaml"))
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn home_for_new_rejects_reserved_feature_ids() {
+        let paths = temp_cards_repo("home-reserved");
+        for reserved in ["tasks", "decisions.yaml", "ideas.yaml", "card.yaml"] {
+            assert!(
+                home_for_new(&paths, &typed_card(reserved, CardType::Feature, None)).is_err(),
+                "{reserved:?} must be rejected as a feature id"
+            );
+        }
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    /// S1/S2: a feature's decisions are entries in ONE container file; the
+    /// resolver round-trips them (create -> resolve -> save) without minting
+    /// any top-level dir beyond the feature slug.
+    #[test]
+    fn entry_cards_round_trip_inside_the_container_file() {
+        let paths = temp_cards_repo("entry-round-trip");
+        let root = paths.cards_dir();
+        create_card(&paths, &typed_card("csv-export", CardType::Feature, None))
+            .expect("create the feature");
+        create_card(
+            &paths,
+            &typed_card("card-d00001", CardType::Decision, Some("csv-export")),
+        )
+        .expect("create the first decision");
+        create_card(
+            &paths,
+            &typed_card("card-d00002", CardType::Decision, Some("csv-export")),
+        )
+        .expect("create the second decision");
+
+        let file = root.join("csv-export").join("decisions.yaml");
+        let entries = load_entries(&file).expect("load the container file");
+        let ids: Vec<&str> = entries.cards.iter().map(|card| card.id.as_str()).collect();
+        assert_eq!(ids, vec!["card-d00001", "card-d00002"]);
+        let top_level: Vec<String> = sorted_child_dirs(&root)
+            .expect("list store root")
+            .iter()
+            .filter_map(|dir| dir.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .collect();
+        assert_eq!(
+            top_level,
+            vec!["csv-export".to_string()],
+            "no top-level dir beyond the feature container"
+        );
+
+        let resolved = resolve(&paths, "card-d00001")
+            .expect("resolve")
+            .expect("the entry resolves");
+        assert_eq!(resolved.path(), file.as_path());
+        let mut card = resolved.card.clone();
+        card.status = "locked".to_string();
+        save_resolved(&card, &resolved).expect("save the mutated entry");
+
+        let again = resolve(&paths, "card-d00001")
+            .expect("re-resolve")
+            .expect("still present");
+        assert_eq!(again.card.status, "locked");
+        let sibling = resolve(&paths, "card-d00002")
+            .expect("resolve sibling")
+            .expect("sibling present");
+        assert_eq!(
+            sibling.card.status, "open",
+            "the sibling entry is untouched"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// SPEC D1 on the entry arm: the whole container file is the CAS unit
+    /// (the S2/S4 rider), so a stale writer to ANY entry is rejected.
+    #[test]
+    fn entry_save_rejects_a_stale_writer_via_whole_file_cas() {
+        let paths = temp_cards_repo("entry-stale-writer");
+        create_card(&paths, &typed_card("card-d00001", CardType::Decision, None))
+            .expect("create a global decision");
+
+        let first = resolve(&paths, "card-d00001")
+            .expect("first read")
+            .expect("present");
+        let second = resolve(&paths, "card-d00001")
+            .expect("second read")
+            .expect("present");
+
+        let mut winner = second.card.clone();
+        winner.title = "winner".to_string();
+        save_resolved(&winner, &second).expect("first writer commits");
+
+        let mut loser = first.card.clone();
+        loser.title = "stale writer".to_string();
+        let error = save_resolved(&loser, &first).expect_err("the stale writer must be rejected");
+        assert!(
+            format!("{error:#}").contains("changed since it was read"),
+            "{error:#}"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    #[test]
+    fn create_card_rejects_an_id_that_exists_anywhere() {
+        let paths = temp_cards_repo("create-unique");
+        create_card(&paths, &typed_card("csv-export", CardType::Feature, None))
+            .expect("create the feature");
+        create_card(&paths, &typed_card("card-d00001", CardType::Decision, None))
+            .expect("create a global decision entry");
+        seed_flat(&paths, &typed_card("card-old001", CardType::Task, None));
+
+        for taken in ["csv-export", "card-d00001", "card-old001"] {
+            let error = create_card(&paths, &typed_card(taken, CardType::Idea, None))
+                .expect_err("a taken id must be rejected whatever home it lives in");
+            assert!(format!("{error:#}").contains("already exists"), "{error:#}");
+        }
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    /// S5': workable cards keep per-task dirs, grouped under `tasks/` pools.
+    #[test]
+    fn task_cards_live_in_per_task_dirs_under_the_pool() {
+        let paths = temp_cards_repo("task-pool");
+        let root = paths.cards_dir();
+        create_card(&paths, &typed_card("csv-export", CardType::Feature, None))
+            .expect("create the feature");
+        create_card(
+            &paths,
+            &typed_card("card-t00001", CardType::Task, Some("csv-export")),
+        )
+        .expect("create the feature task");
+        create_card(&paths, &typed_card("card-t00002", CardType::Task, None))
+            .expect("create the standalone task");
+
+        assert!(
+            root.join("csv-export")
+                .join("tasks")
+                .join("card-t00001")
+                .join("task.yaml")
+                .is_file()
+        );
+        assert!(
+            root.join("tasks")
+                .join("card-t00002")
+                .join("task.yaml")
+                .is_file()
+        );
+
+        let resolved = resolve(&paths, "card-t00001")
+            .expect("resolve the pooled task")
+            .expect("present");
+        let mut card = resolved.card.clone();
+        card.status = "in_progress".to_string();
+        save_resolved(&card, &resolved).expect("save in place");
+        assert_eq!(
+            resolve(&paths, "card-t00001")
+                .expect("re-resolve")
+                .expect("present")
+                .card
+                .status,
+            "in_progress"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn remove_resolved_drops_the_entry_and_keeps_siblings() {
+        let paths = temp_cards_repo("remove-entry");
+        create_card(&paths, &typed_card("card-i00001", CardType::Idea, None))
+            .expect("create first idea");
+        create_card(&paths, &typed_card("card-i00002", CardType::Idea, None))
+            .expect("create second idea");
+
+        let resolved = resolve(&paths, "card-i00001")
+            .expect("resolve")
+            .expect("present");
+        remove_resolved(&resolved).expect("remove the entry");
+
+        assert!(
+            resolve(&paths, "card-i00001")
+                .expect("re-resolve")
+                .is_none(),
+            "the removed entry is gone"
+        );
+        assert!(
+            resolve(&paths, "card-i00002")
+                .expect("resolve sibling")
+                .is_some(),
+            "the sibling entry survives"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    #[test]
+    fn remove_resolved_removes_a_dir_backed_card_dir() {
+        let paths = temp_cards_repo("remove-dir");
+        create_card(&paths, &typed_card("card-t00001", CardType::Task, None))
+            .expect("create a pooled task");
+        let dir = paths.cards_dir().join("tasks").join("card-t00001");
+        assert!(dir.is_dir());
+
+        let resolved = resolve(&paths, "card-t00001")
+            .expect("resolve")
+            .expect("present");
+        remove_resolved(&resolved).expect("remove the dir");
+        assert!(!dir.exists(), "the whole task dir is removed");
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    /// Probe order is deterministic: a dir-backed home shadows an entry with
+    /// the same id (a store corruption the doctor flags; reads stay stable).
+    #[test]
+    fn locate_prefers_a_dir_home_over_an_entry() {
+        let paths = temp_cards_repo("locate-precedence");
+        create_card(&paths, &typed_card("card-x00001", CardType::Decision, None))
+            .expect("create the entry");
+        seed_flat(&paths, &typed_card("card-x00001", CardType::Task, None));
+
+        let home = locate(&paths, "card-x00001")
+            .expect("locate")
+            .expect("present");
+        assert_eq!(
+            home,
+            CardHome::Dir(card_path(&paths, "card-x00001")),
+            "the flat dir wins the probe order"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    #[test]
+    fn load_entries_tolerates_an_empty_file_and_flags_schema_mismatch() {
+        let paths = temp_cards_repo("entries-edges");
+        let file = paths.cards_dir().join("decisions.yaml");
+
+        std::fs::write(&file, "").expect("write empty file");
+        let empty = load_entries(&file).expect("an empty file loads");
+        assert!(empty.cards.is_empty());
+
+        let mut bad = typed_card("card-bad001", CardType::Decision, None);
+        bad.schema_version = "not-a-version".to_string();
+        let contents = serde_yaml::to_string(&vec![bad]).expect("invariant: fixture serializes");
+        std::fs::write(&file, contents).expect("write mismatched entry");
+        let error = load_entries(&file).expect_err("schema mismatch fails the file");
+        assert!(
+            format!("{error:#}").contains("card-bad001"),
+            "the failing entry is named: {error:#}"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
     }
 }

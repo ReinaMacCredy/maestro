@@ -9,8 +9,10 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::{card_dir_ids, load};
-use crate::foundation::core::fs::child_dirs;
+use crate::domain::card::store::{
+    CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, load, load_entries,
+};
+use crate::foundation::core::fs::sorted_child_dirs;
 use crate::foundation::core::paths::MaestroPaths;
 
 /// The coarse, board-level status every card maps to (SPEC DN3, LOCKED). The
@@ -87,11 +89,14 @@ pub fn body_of(card: &Card) -> Option<String> {
 }
 
 /// The single card scan seam (SPEC D4): every card in the store, symlink-safe.
-/// Built on `child_dirs` (which skips symlinked directories) and skips any
-/// directory without a `card.yaml` -- the `.alloc-` id-reservation markers are
-/// `card.yaml`-less by design. Returned sorted by id for deterministic output.
-/// Fails loud on a malformed or schema-mismatched card; tolerant scans that need
-/// to survive one bad artifact filter at their own layer.
+/// Walks the container layout (SPEC-card-sprawl) -- root entry files, the
+/// root `tasks/` pool, then each container dir's record, `decisions.yaml`,
+/// and `tasks/` pool; a pre-migration flat leaf dir reads like a container
+/// record, so an unmigrated store scans identically. The `.alloc-`
+/// id-reservation markers are record-less by design and skipped. Returned
+/// sorted by id for deterministic output. Fails loud on a malformed or
+/// schema-mismatched card; tolerant scans that need to survive one bad
+/// artifact filter at their own layer.
 pub fn scan(paths: &MaestroPaths) -> Result<Vec<Card>> {
     scan_dir(&paths.cards_dir())
 }
@@ -99,13 +104,11 @@ pub fn scan(paths: &MaestroPaths) -> Result<Vec<Card>> {
 /// [`scan`] over an explicit card tree root, so the archive reads
 /// (`archive/cards/`) ride the same seam as the live store.
 pub fn scan_dir(root: &Path) -> Result<Vec<Card>> {
-    let mut cards = Vec::new();
-    for id in card_dir_ids(root)? {
-        if let Some(card) = load(&root.join(&id).join("card.yaml"))? {
-            cards.push(card);
-        }
-    }
-    Ok(cards)
+    Ok(walk(root, true)?
+        .cards
+        .into_iter()
+        .map(|(card, _)| card)
+        .collect())
 }
 
 /// One tolerant walk over the store for the card-aware doctor: every loadable
@@ -126,29 +129,90 @@ pub struct StoreScanFailure {
     pub error: String,
 }
 
-/// [`scan`], but collecting per-card load failures instead of failing loud on
-/// the first one. `Err` only when the store root itself cannot be walked.
+/// [`scan`], but collecting per-location load failures instead of failing
+/// loud on the first one. The failure grain of an entry file is the whole
+/// file (one failure per broken `decisions.yaml`/`ideas.yaml`). `Err` only
+/// when the store root itself cannot be walked.
 pub fn scan_with_failures(paths: &MaestroPaths) -> Result<StoreScan> {
-    let mut cards = Vec::new();
-    let mut failures = Vec::new();
-    for (dir, _modified) in child_dirs(&paths.cards_dir())? {
-        let path = dir.join("card.yaml");
-        match load(&path) {
-            Ok(Some(card)) => cards.push((card, path)),
-            Ok(None) => {}
-            Err(error) => failures.push(StoreScanFailure {
-                id: dir
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                path,
-                error: format!("{error:#}"),
-            }),
+    walk(&paths.cards_dir(), false)
+}
+
+/// One walk over a card tree root in the container layout, shared by the
+/// strict and tolerant scans: root entry files, the root `tasks/` pool, then
+/// each container dir's record (a feature -- or a pre-migration flat leaf
+/// card, which keeps reading until `maestro migrate` folds it), nested
+/// `decisions.yaml`, and nested `tasks/` pool. In strict mode the first
+/// failure propagates verbatim; tolerant mode collects it and keeps walking.
+fn walk(root: &Path, strict: bool) -> Result<StoreScan> {
+    let mut scan = StoreScan {
+        cards: Vec::new(),
+        failures: Vec::new(),
+    };
+    collect_entry_file(&root.join(DECISIONS_FILE), root, strict, &mut scan)?;
+    collect_entry_file(&root.join(IDEAS_FILE), root, strict, &mut scan)?;
+    collect_task_pool(&root.join(TASKS_DIR), strict, &mut scan)?;
+    for dir in sorted_child_dirs(root)? {
+        if dir.file_name().is_some_and(|name| name == TASKS_DIR) {
+            continue;
         }
+        collect_record(&dir.join(CARD_FILE), strict, &mut scan)?;
+        collect_entry_file(&dir.join(DECISIONS_FILE), root, strict, &mut scan)?;
+        collect_task_pool(&dir.join(TASKS_DIR), strict, &mut scan)?;
     }
-    cards.sort_by(|a, b| a.0.id.cmp(&b.0.id));
-    failures.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(StoreScan { cards, failures })
+    scan.cards.sort_by(|a, b| a.0.id.cmp(&b.0.id));
+    scan.failures.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(scan)
+}
+
+/// Read one dir-backed record into the scan. An absent record (a marker dir,
+/// or a container without a pool) contributes nothing.
+fn collect_record(yaml: &Path, strict: bool, scan: &mut StoreScan) -> Result<()> {
+    match load(yaml) {
+        Ok(Some(card)) => scan.cards.push((card, yaml.to_path_buf())),
+        Ok(None) => {}
+        Err(error) if strict => return Err(error),
+        Err(error) => scan.failures.push(StoreScanFailure {
+            id: yaml
+                .parent()
+                .and_then(|dir| dir.file_name())
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            path: yaml.to_path_buf(),
+            error: format!("{error:#}"),
+        }),
+    }
+    Ok(())
+}
+
+/// Read every entry of one container list file into the scan; each entry
+/// card carries the container file as its path.
+fn collect_entry_file(file: &Path, root: &Path, strict: bool, scan: &mut StoreScan) -> Result<()> {
+    match load_entries(file) {
+        Ok(snapshot) => {
+            for card in snapshot.cards {
+                scan.cards.push((card, file.to_path_buf()));
+            }
+        }
+        Err(error) if strict => return Err(error),
+        Err(error) => scan.failures.push(StoreScanFailure {
+            id: file
+                .strip_prefix(root)
+                .map(|relative| relative.display().to_string())
+                .unwrap_or_else(|_| file.display().to_string()),
+            path: file.to_path_buf(),
+            error: format!("{error:#}"),
+        }),
+    }
+    Ok(())
+}
+
+/// Read every per-task dir of one `tasks/` pool into the scan. A missing
+/// pool contributes nothing.
+fn collect_task_pool(pool: &Path, strict: bool, scan: &mut StoreScan) -> Result<()> {
+    for dir in sorted_child_dirs(pool)? {
+        collect_record(&dir.join(TASK_FILE), strict, scan)?;
+    }
+    Ok(())
 }
 
 /// The `ready` rule (SPEC E3/E8): a card is ready when it is a workable type,
@@ -546,6 +610,98 @@ mod tests {
             ids,
             vec!["agent-cli-ux", "decision-001", "task-002"],
             "every card.yaml-bearing dir, sorted by id; the marker dir is skipped"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// SPEC-card-sprawl final layout: one scan covers entry files, both
+    /// `tasks/` pools, feature containers, AND a pre-migration flat leaf dir
+    /// (dual-read until `maestro migrate` folds it).
+    #[test]
+    fn scan_walks_the_container_layout() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-scan-layout-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+
+        let typed = |id: &str, card_type: CardType, parent: Option<&str>| {
+            let mut card = Card::new(id, card_type, id, "open", "2026-06-10T00:00:00Z");
+            card.parent = parent.map(str::to_string);
+            card
+        };
+        let create = |card: &Card| {
+            crate::domain::card::store::create_card(&paths, card).expect("create card")
+        };
+        create(&typed("csv-export", CardType::Feature, None));
+        create(&typed(
+            "card-d00001",
+            CardType::Decision,
+            Some("csv-export"),
+        ));
+        create(&typed("card-d00002", CardType::Decision, None));
+        create(&typed("card-i00001", CardType::Idea, None));
+        create(&typed("card-t00001", CardType::Task, Some("csv-export")));
+        create(&typed("card-t00002", CardType::Task, None));
+        // a pre-migration flat leaf dir keeps scanning
+        let flat = typed("card-old001", CardType::Task, None);
+        let path = card_path(&paths, "card-old001");
+        let snap = load_with_snapshot(&path).expect("absent loads None");
+        save_with_snapshot(&path, &flat, &snap).expect("seed flat card");
+
+        let scanned = scan(&paths).expect("scan");
+        let ids: Vec<&str> = scanned.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec![
+                "card-d00001",
+                "card-d00002",
+                "card-i00001",
+                "card-old001",
+                "card-t00001",
+                "card-t00002",
+                "csv-export",
+            ],
+            "every home contributes, sorted by id"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The failure grain of an entry file is the whole file: one failure per
+    /// broken `ideas.yaml`, named by its store-relative path, and every
+    /// dir-backed card survives it.
+    #[test]
+    fn scan_with_failures_isolates_a_broken_entry_file() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-scan-entry-fail-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+
+        let healthy = card("task-001", CardType::Task, "ready");
+        let path = card_path(&paths, "task-001");
+        let snap = load_with_snapshot(&path).expect("absent loads None");
+        save_with_snapshot(&path, &healthy, &snap).expect("seed healthy card");
+        std::fs::write(paths.cards_dir().join("ideas.yaml"), "type: [")
+            .expect("write broken entry file");
+
+        let scan = scan_with_failures(&paths).expect("walkable store");
+        let ids: Vec<&str> = scan.cards.iter().map(|(c, _)| c.id.as_str()).collect();
+        assert_eq!(ids, vec!["task-001"], "dir-backed cards survive");
+        assert_eq!(scan.failures.len(), 1);
+        assert_eq!(scan.failures[0].id, "ideas.yaml");
+        assert!(
+            scan.failures[0].error.contains("failed to parse"),
+            "{}",
+            scan.failures[0].error
         );
 
         let _ = std::fs::remove_dir_all(&root);
