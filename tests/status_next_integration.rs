@@ -2,10 +2,10 @@ mod card_support;
 mod support;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-use card_support::{card_record_path, id_by_title, sole_idea_id, task_record};
+use card_support::{card_dir, card_record_path, id_by_title, sole_idea_id, task_record};
 use maestro::foundation::core::fs::ensure_dir;
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
@@ -78,15 +78,6 @@ fn run(repo: &Path, args: &[&str]) -> String {
 /// so an assertion written against `doc["state"]`/`doc["blockers"]` reads unchanged.
 fn task_yaml(repo: &Path, id: &str) -> YamlValue {
     task_record(repo, id)
-}
-
-/// The card's directory, located through the store probe; a written resume
-/// artifact lands at `<card_dir>/resume.md`.
-fn card_dir(repo: &Path, id: &str) -> PathBuf {
-    card_record_path(repo, id)
-        .parent()
-        .expect("invariant: a card record path always has a parent")
-        .to_path_buf()
 }
 
 fn write_baseline(repo: &Path, feature_id: &str) {

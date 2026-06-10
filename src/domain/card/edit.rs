@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use crate::domain::card::query::{Coarse, coarse_of};
 use crate::domain::card::schema::{Dep, DepKind};
 use crate::domain::card::store::{
-    CARD_FILE, TASK_FILE, load, locate, resolve, save_resolved, validate_card_id,
+    CARD_FILE, load, locate, resolve, save_resolved, validate_card_id,
 };
 use crate::foundation::core::fs::append_text_file;
 use crate::foundation::core::paths::MaestroPaths;
@@ -155,10 +155,7 @@ pub fn append_note(paths: &MaestroPaths, id: &str, text: &str, now: &str) -> Res
     let dir = record
         .parent()
         .with_context(|| format!("card path missing parent: {}", record.display()))?;
-    let dir_backed = matches!(
-        record.file_name().and_then(|name| name.to_str()),
-        Some(CARD_FILE | TASK_FILE)
-    );
+    let dir_backed = resolved.is_dir_backed();
     let date = now.split_once('T').map_or(now, |(date, _)| date);
     let (header, line) = if dir_backed {
         (resolved.card.title.clone(), text.trim().to_string())

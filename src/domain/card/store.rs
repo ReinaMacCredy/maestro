@@ -68,6 +68,14 @@ pub fn load(path: &Path) -> Result<Option<Card>> {
     Ok(load_with_snapshot(path)?.card)
 }
 
+/// Whether the path itself is a symlink. The store refuses symlinked card
+/// dirs and container files wholesale; see [`load_with_snapshot`].
+fn is_symlink(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false)
+}
+
 /// Load a card together with the raw bytes backing the next CAS write.
 pub fn load_with_snapshot(path: &Path) -> Result<CardSnapshot> {
     // Refuse to follow a symlinked card directory. A `.maestro/cards/<id>` that is
@@ -76,11 +84,7 @@ pub fn load_with_snapshot(path: &Path) -> Result<CardSnapshot> {
     // store seam so feature/decision/harness single-loads are covered too. An
     // absent directory is not a symlink, so card creation (which loads the absent
     // path to obtain a None snapshot) is unaffected.
-    if let Some(parent) = path.parent()
-        && fs::symlink_metadata(parent)
-            .map(|metadata| metadata.file_type().is_symlink())
-            .unwrap_or(false)
-    {
+    if path.parent().is_some_and(is_symlink) {
         return Ok(CardSnapshot {
             card: None,
             raw: None,
@@ -169,15 +173,22 @@ pub(crate) fn save_folded_with_snapshot(
     snapshot: &CardSnapshot,
 ) -> Result<()> {
     if let Some(existing) = &snapshot.card {
-        card.deps = existing.deps.clone();
-        if card.lane.is_none() {
-            card.lane = existing.lane.clone();
-        }
-        if card.description.is_none() {
-            card.description = existing.description.clone();
-        }
+        carry_card_only_fields(&mut card, existing);
     }
     save_with_snapshot(path, &card, snapshot)
+}
+
+/// Carry the card-only fields a typed-record fold cannot derive (`deps`
+/// edges, `lane`, a card-set `description`) from the existing card, so the
+/// rebuilt copy does not wipe them.
+fn carry_card_only_fields(card: &mut Card, existing: &Card) {
+    card.deps = existing.deps.clone();
+    if card.lane.is_none() {
+        card.lane = existing.lane.clone();
+    }
+    if card.description.is_none() {
+        card.description = existing.description.clone();
+    }
 }
 
 /// Write a card, but only when its file still matches the snapshot it was read
@@ -311,15 +322,29 @@ pub fn locate(paths: &MaestroPaths, id: &str) -> Result<Option<CardHome>> {
 /// [`locate`] over an explicit store root, so the archive tree
 /// (`archive/cards/`) probes through the same layout walk as the live store.
 pub(crate) fn locate_in(root: &Path, id: &str) -> Result<Option<CardHome>> {
+    Ok(locate_basis_in(root, id)?.map(|basis| match basis {
+        LocatedBasis::Dir(yaml) => CardHome::Dir(yaml),
+        LocatedBasis::Entry(file, _) => CardHome::Entry(file),
+    }))
+}
+
+/// A located home carrying the entry snapshot the probe already parsed, so
+/// [`resolve_in`] does not re-read the container file the walk just loaded.
+enum LocatedBasis {
+    Dir(PathBuf),
+    Entry(PathBuf, EntriesSnapshot),
+}
+
+fn locate_basis_in(root: &Path, id: &str) -> Result<Option<LocatedBasis>> {
     validate_card_id(id)?;
 
     let flat = root.join(id).join(CARD_FILE);
     if dir_card_exists(&flat) {
-        return Ok(Some(CardHome::Dir(flat)));
+        return Ok(Some(LocatedBasis::Dir(flat)));
     }
     let pooled = root.join(TASKS_DIR).join(id).join(TASK_FILE);
     if dir_card_exists(&pooled) {
-        return Ok(Some(CardHome::Dir(pooled)));
+        return Ok(Some(LocatedBasis::Dir(pooled)));
     }
     let containers: Vec<PathBuf> = sorted_child_dirs(root)?
         .into_iter()
@@ -328,15 +353,16 @@ pub(crate) fn locate_in(root: &Path, id: &str) -> Result<Option<CardHome>> {
     for dir in &containers {
         let nested = dir.join(TASKS_DIR).join(id).join(TASK_FILE);
         if dir_card_exists(&nested) {
-            return Ok(Some(CardHome::Dir(nested)));
+            return Ok(Some(LocatedBasis::Dir(nested)));
         }
     }
 
     let mut entry_files = vec![root.join(DECISIONS_FILE), root.join(IDEAS_FILE)];
     entry_files.extend(containers.iter().map(|dir| dir.join(DECISIONS_FILE)));
     for file in entry_files {
-        if load_entries(&file)?.cards.iter().any(|card| card.id == id) {
-            return Ok(Some(CardHome::Entry(file)));
+        let entries = load_entries(&file)?;
+        if entries.cards.iter().any(|card| card.id == id) {
+            return Ok(Some(LocatedBasis::Entry(file, entries)));
         }
     }
     Ok(None)
@@ -346,12 +372,7 @@ pub(crate) fn locate_in(root: &Path, id: &str) -> Result<Option<CardHome>> {
 /// rejection [`load_with_snapshot`] applies -- a probe must never say
 /// "present" for a record the load refuses to read.
 fn dir_card_exists(yaml: &Path) -> bool {
-    let symlinked = yaml.parent().is_some_and(|dir| {
-        fs::symlink_metadata(dir)
-            .map(|metadata| metadata.file_type().is_symlink())
-            .unwrap_or(false)
-    });
-    !symlinked && yaml.is_file()
+    !yaml.parent().is_some_and(is_symlink) && yaml.is_file()
 }
 
 /// All entries of a container list file plus the exact bytes backing the next
@@ -376,15 +397,7 @@ impl EntriesSnapshot {
 /// schema-mismatched entry fails the whole file -- the container file is the
 /// failure grain.
 pub fn load_entries(file: &Path) -> Result<EntriesSnapshot> {
-    let symlinked = fs::symlink_metadata(file)
-        .map(|metadata| metadata.file_type().is_symlink())
-        .unwrap_or(false)
-        || file.parent().is_some_and(|dir| {
-            fs::symlink_metadata(dir)
-                .map(|metadata| metadata.file_type().is_symlink())
-                .unwrap_or(false)
-        });
-    if symlinked {
+    if is_symlink(file) || file.parent().is_some_and(is_symlink) {
         return Ok(EntriesSnapshot {
             cards: Vec::new(),
             raw: None,
@@ -461,6 +474,22 @@ impl ResolvedCard {
             ResolvedBasis::Entry { file, .. } => file,
         }
     }
+
+    /// Whether this card resolved to a record file of its own rather than an
+    /// entry in a container list file.
+    pub fn is_dir_backed(&self) -> bool {
+        matches!(self.basis, ResolvedBasis::Dir { .. })
+    }
+}
+
+/// Whether a record path is a dir-backed card file (`card.yaml`/`task.yaml`)
+/// rather than an entry in a container list file. The seam owns this cut;
+/// callers holding a bare path must ask it instead of matching filenames.
+pub(crate) fn is_dir_backed(record: &Path) -> bool {
+    matches!(
+        record.file_name().and_then(|name| name.to_str()),
+        Some(CARD_FILE | TASK_FILE)
+    )
 }
 
 /// Load a card by id from wherever it lives (locate + read in one step).
@@ -474,11 +503,11 @@ pub fn resolve(paths: &MaestroPaths, id: &str) -> Result<Option<ResolvedCard>> {
 /// spirit: the basis still backs a CAS save, but archive callers only take
 /// the card and its path.
 pub(crate) fn resolve_in(root: &Path, id: &str) -> Result<Option<ResolvedCard>> {
-    let Some(home) = locate_in(root, id)? else {
+    let Some(basis) = locate_basis_in(root, id)? else {
         return Ok(None);
     };
-    match home {
-        CardHome::Dir(yaml) => {
+    match basis {
+        LocatedBasis::Dir(yaml) => {
             let snapshot = load_with_snapshot(&yaml)?;
             let Some(card) = snapshot.card.clone() else {
                 return Ok(None);
@@ -491,8 +520,7 @@ pub(crate) fn resolve_in(root: &Path, id: &str) -> Result<Option<ResolvedCard>> 
                 },
             }))
         }
-        CardHome::Entry(file) => {
-            let snapshot = load_entries(&file)?;
+        LocatedBasis::Entry(file, snapshot) => {
             let Some(card) = snapshot.cards.iter().find(|card| card.id == id).cloned() else {
                 return Ok(None);
             };
@@ -565,13 +593,7 @@ pub fn create_card(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
 /// resolved card before the write would wipe them -- the resolved twin of
 /// [`save_folded_with_snapshot`].
 pub(crate) fn save_folded_resolved(mut card: Card, basis: &ResolvedCard) -> Result<()> {
-    card.deps = basis.card.deps.clone();
-    if card.lane.is_none() {
-        card.lane = basis.card.lane.clone();
-    }
-    if card.description.is_none() {
-        card.description = basis.card.description.clone();
-    }
+    carry_card_only_fields(&mut card, &basis.card);
     save_resolved(&card, basis)
 }
 

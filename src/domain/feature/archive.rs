@@ -15,8 +15,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::query::{Coarse, coarse_of, scan_dir_with_paths, scan_with_paths};
-use crate::domain::card::schema::CardType;
-use crate::domain::card::store::{CARD_FILE, TASK_FILE};
+use crate::domain::card::store::is_dir_backed;
 use crate::domain::feature::registry::{load_archived_record, load_record, validate_feature_id};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
@@ -78,10 +77,7 @@ pub fn archive_feature(
         if card.parent.as_deref() != Some(id) {
             continue;
         }
-        if !matches!(
-            card.card_type,
-            CardType::Task | CardType::Bug | CardType::Chore
-        ) {
+        if !card.card_type.workable() {
             continue;
         }
         if coarse_of(&card.status) == Some(Coarse::Closed) {
@@ -171,13 +167,7 @@ pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
     // Same task-kind cut as the archive side, so round-trip receipts agree.
     let mut children: Vec<(String, PathBuf)> = scan_dir_with_paths(&paths.archive_cards_dir())?
         .into_iter()
-        .filter(|(card, _)| {
-            card.parent.as_deref() == Some(id)
-                && matches!(
-                    card.card_type,
-                    CardType::Task | CardType::Bug | CardType::Chore
-                )
-        })
+        .filter(|(card, _)| card.parent.as_deref() == Some(id) && card.card_type.workable())
         .map(|(card, path)| (card.id, path))
         .collect();
     children.sort();
@@ -230,8 +220,7 @@ fn child_move(
     from_root: &Path,
     to_root: &Path,
 ) -> Result<(PathBuf, PathBuf)> {
-    let file = record.file_name().and_then(|name| name.to_str());
-    if !matches!(file, Some(CARD_FILE | TASK_FILE)) {
+    if !is_dir_backed(record) {
         bail!(
             "cannot cascade {child} — it is an entry in {}; move it by hand",
             record.display()
