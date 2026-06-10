@@ -222,10 +222,12 @@ fn print_next_action(action: &NextAction) {
 }
 
 fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
-    let tasks = task::load_task_records(&paths.tasks_dir())?;
+    // One task scan feeds both the report and the per-feature counts inside the
+    // roster (list_tolerant would otherwise re-scan the same cards).
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
     let mut features = Vec::new();
     let mut unreadable_features = Vec::new();
-    for entry in feature::list_tolerant(paths) {
+    for entry in feature::list_tolerant_with_entries(paths, &task_entries) {
         match entry {
             FeatureRosterEntry::Loaded(view) => features.push(*view),
             FeatureRosterEntry::Unreadable {
@@ -249,12 +251,12 @@ fn build_status_report(paths: &MaestroPaths) -> Result<StatusReport> {
     let mut current_task = None;
     let mut current_feature = None;
 
-    let mut live_tasks: Vec<TaskRecord> = tasks
+    let tasks: Vec<TaskRecord> = task_entries.into_iter().map(|entry| entry.task).collect();
+    let live_tasks: Vec<TaskRecord> = tasks
         .iter()
         .filter(|task| task.state.is_live())
         .cloned()
         .collect();
-    live_tasks.sort_by(|left, right| left.id.cmp(&right.id));
 
     let current_task_action = match env::var("MAESTRO_CURRENT_TASK") {
         Ok(id) if !id.trim().is_empty() => match task::load_task_record(&paths.tasks_dir(), &id) {

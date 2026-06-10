@@ -374,6 +374,7 @@ fn feature_domain_facade_exposes_the_deliberate_surface() {
             "list".to_string(),
             "list_archived".to_string(),
             "list_tolerant".to_string(),
+            "list_tolerant_with_entries".to_string(),
             "normalize_acceptance_id".to_string(),
             "note".to_string(),
             "set".to_string(),

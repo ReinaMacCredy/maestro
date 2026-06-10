@@ -30,15 +30,15 @@ use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot};
 use crate::domain::feature::qa;
 use crate::domain::feature::query::{
-    FeatureTaskCounts, count_tasks_by_feature, count_tasks_for_feature,
-    count_tasks_for_feature_in_entries, live_child_task_ids,
+    FeatureTaskCounts, count_tasks_by_feature, count_tasks_by_feature_in_entries,
+    count_tasks_for_feature, count_tasks_for_feature_in_entries, live_child_task_ids,
 };
 use crate::domain::feature::schema::{
     AmendAdditions, AmendEntry, AmendLog, FeatureRecord, FeatureStatus, QaDeclaration,
     normalize_acceptance_id,
 };
 use crate::domain::feature::verification;
-use crate::domain::task::{self, TaskState, TransitionDetails};
+use crate::domain::task::{self, TaskEntry, TaskState, TransitionDetails};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{append_text_file, read_to_string_if_exists};
 use crate::foundation::core::paths::MaestroPaths;
@@ -956,7 +956,18 @@ pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
 /// the board. A card that fails to load at all (corrupt file, unknown type) is
 /// left to `doctor`; non-feature cards are skipped.
 pub fn list_tolerant(paths: &MaestroPaths) -> Vec<FeatureRosterEntry> {
-    let counts_by_feature = count_tasks_by_feature(&paths.tasks_dir()).unwrap_or_default();
+    let task_entries = task::load_task_entries(&paths.tasks_dir()).unwrap_or_default();
+    list_tolerant_with_entries(paths, &task_entries)
+}
+
+/// [`list_tolerant`] over an already-loaded task entry set, so a caller that
+/// scanned the tasks for its own report (`status`) does not trigger a second
+/// scan of the same cards for the per-feature counts.
+pub fn list_tolerant_with_entries(
+    paths: &MaestroPaths,
+    task_entries: &[TaskEntry],
+) -> Vec<FeatureRosterEntry> {
+    let counts_by_feature = count_tasks_by_feature_in_entries(task_entries);
     let mut entries = Vec::new();
     for id in feature_card_ids(paths).unwrap_or_default() {
         let path = card_store::card_path(paths, &id);
