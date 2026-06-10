@@ -1508,21 +1508,16 @@ pub(crate) fn save_record(
     card_store::save_folded_with_snapshot(&card_store::card_path(paths, &record.id), card, snapshot)
 }
 
-/// Create a new feature card against an absent snapshot, so a concurrent create
-/// is rejected by the CAS (the card-store analogue of the legacy `.alloc-`
-/// atomic-create guard).
+/// Create a new feature card through the store seam, which rejects a reserved
+/// container name (e.g. `tasks`), an id already taken anywhere in the store,
+/// and a concurrent create (CAS against an absent snapshot).
 fn save_new_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
-    let path = card_store::card_path(paths, &record.id);
-    let snapshot = card_store::load_with_snapshot(&path)?;
-    if snapshot.card.is_some() {
-        bail!("feature {} already exists", record.id);
-    }
     let card = fold::feature_card(
         record.id.clone(),
         record_to_mapping(record)?,
         &utc_now_timestamp(),
     );
-    card_store::save_with_snapshot(&path, &card, &snapshot)
+    card_store::create_card(paths, &card).map(|_| ())
 }
 
 /// Whether a live feature card exists for `id`.
@@ -1644,6 +1639,24 @@ mod cutover_tests {
                 .to_string()
                 .contains(&format!("feature {id} already exists")),
             "{error}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A title that slugs to a reserved container name (`tasks`) must be
+    /// refused, or the new feature's card.yaml would land inside the root task
+    /// pool dir and turn it into a phantom container.
+    #[test]
+    fn card_mode_create_refuses_a_reserved_container_slug() {
+        let (root, paths) = card_mode_repo("reserved-slug");
+        let error = create(&paths, "Tasks").expect_err("reserved slug must be refused");
+        assert!(
+            error.to_string().contains("reserved by the card store"),
+            "{error}"
+        );
+        assert!(
+            !paths.cards_dir().join("tasks").join("card.yaml").exists(),
+            "no card.yaml may be planted in the pool dir"
         );
         let _ = std::fs::remove_dir_all(&root);
     }
