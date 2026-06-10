@@ -4,14 +4,14 @@
 //! title (content-hash ids do not sort by creation order). The legacy guard for
 //! the new verbs (exit 0 with a guiding line) is covered too.
 
+mod card_support;
 mod support;
 
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
 
-use maestro::domain::card::query;
-use maestro::foundation::core::paths::MaestroPaths;
+use card_support::{cards_repo, id_by_title};
 use support::TestTempDir;
 
 fn maestro(cwd: &Path, args: &[&str]) -> Output {
@@ -33,28 +33,6 @@ fn run(cwd: &Path, args: &[&str]) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout).expect("invariant: stdout should be UTF-8")
-}
-
-/// A repo already in card mode: `.maestro/cards/` exists, so `store_mode` is
-/// Cards and `discover_repo_root` finds `.maestro/`.
-fn cards_repo(name: &str) -> TestTempDir {
-    let temp = TestTempDir::new(name);
-    fs::create_dir_all(temp.path().join(".maestro/cards"))
-        .expect("invariant: cards dir should be creatable");
-    temp
-}
-
-/// Recover a freshly created card's content-hash id by its unique title -- the
-/// ONE S2 helper, generalizing decision_card_cutover's by-title recovery, since
-/// content-hash ids do not sort by creation order.
-fn id_by_title(repo: &Path, title: &str) -> String {
-    let paths = MaestroPaths::new(repo);
-    query::scan(&paths)
-        .expect("invariant: card scan should succeed")
-        .into_iter()
-        .find(|card| card.title == title)
-        .unwrap_or_else(|| panic!("no card titled {title:?}"))
-        .id
 }
 
 #[test]
