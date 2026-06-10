@@ -32,7 +32,7 @@ use serde_yaml::{Mapping, Value};
 use crate::domain::card::fold::{self, string_field};
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{
-    card_path, load_with_snapshot, locate, mint_hash_id, save_with_snapshot,
+    card_path, hash_id, load_with_snapshot, locate, mint_hash_id, save_with_snapshot,
 };
 use crate::domain::decisions::normalize_decision_id;
 use crate::domain::run::managed_event_logs;
@@ -92,6 +92,28 @@ pub fn run(paths: &MaestroPaths, now: &str) -> Result<CardMigrateReport> {
     collect_decisions(paths, now, &mut pending, &mut refs)?;
     collect_ideas(paths, now, &mut pending, &mut refs)?;
 
+    // A re-run over a partially cleaned legacy store: an artifact whose
+    // reminted card already lives in the store (flat or folded) drops out
+    // here, refs and all -- its card is the store's truth now and its refs
+    // were validated when it migrated. The reminted id is reproducible
+    // because the mint is deterministic (O6).
+    let mut already_migrated: HashSet<String> = HashSet::new();
+    let mut fresh: Vec<PendingCard> = Vec::new();
+    for entry in pending {
+        let minted = match entry.card.card_type {
+            CardType::Feature => entry.kept_id.clone(),
+            _ => hash_id(&entry.kept_id),
+        };
+        if locate(paths, &minted)?.is_some() {
+            report.skipped += 1;
+            already_migrated.insert(normalize_ref(&entry.kept_id));
+        } else {
+            fresh.push(entry);
+        }
+    }
+    let mut pending = fresh;
+    refs.retain(|reference| !already_migrated.contains(&normalize_ref(&reference.from)));
+
     // E2/O3: assign stable opaque ids -- non-feature cards become `card-<hash>`,
     // feature cards keep their slug -- and build the legacy-id -> new-id remap.
     let remap = assign_ids(&mut pending)?;
@@ -100,7 +122,13 @@ pub fn run(paths: &MaestroPaths, now: &str) -> Result<CardMigrateReport> {
     // ids, then run the authoritative dangling-ref gate over the rewritten set.
     rewrite_refs(&mut pending, &remap);
     let final_ids: HashSet<String> = pending.iter().map(|entry| entry.card.id.clone()).collect();
-    validate_refs(&final_ids, &frozen_legacy_ids(paths)?, &remap, &refs)?;
+    validate_refs(
+        &final_ids,
+        &frozen_legacy_ids(paths)?,
+        &already_migrated,
+        &remap,
+        &refs,
+    )?;
 
     // Pass 2: writes happen only after the rewrite + gate pass.
     let mut minted: HashSet<String> = HashSet::new();
@@ -521,17 +549,23 @@ fn rewrite_run_events(paths: &MaestroPaths, task_remap: &[(String, String)]) -> 
 /// E5). Each ref's legacy target is mapped through the remint the same way the
 /// rewrite mapped it (`normalize_ref` collapses decision aliasing); the resulting
 /// id must be one of the cards this run produced -- or an id frozen in the
-/// legacy archive trees -- or the run aborts naming the original target. This
-/// is the authoritative dangling-ref gate.
+/// legacy archive trees, or an artifact this run skipped as already migrated --
+/// or the run aborts naming the original target. This is the authoritative
+/// dangling-ref gate.
 fn validate_refs(
     final_ids: &HashSet<String>,
     frozen: &HashSet<String>,
+    migrated: &HashSet<String>,
     remap: &HashMap<String, String>,
     refs: &[CardRef],
 ) -> Result<()> {
     for reference in refs {
         let resolved = remap_target(remap, &reference.target);
-        if final_ids.contains(&resolved) || frozen.contains(&normalize_ref(&reference.target)) {
+        let normalized = normalize_ref(&reference.target);
+        if final_ids.contains(&resolved)
+            || frozen.contains(&normalized)
+            || migrated.contains(&normalized)
+        {
             continue;
         }
         bail!(
@@ -1152,6 +1186,32 @@ mod tests {
             sorted_child_dirs(&paths.cards_dir()).expect("cards").len(),
             7,
             "no duplicate cards"
+        );
+
+        cleanup(&root);
+    }
+
+    /// A re-run after the legacy feature/task trees were deleted but the
+    /// harness backlog (and its cross-tree `spawned_task` refs) survived --
+    /// the already-migrated cards admit those refs instead of aborting.
+    #[test]
+    fn rerun_over_a_partially_cleaned_legacy_store_skips_quietly() {
+        let root = temp_repo("partial-clean");
+        let paths = brownfield(&root);
+
+        run(&paths, NOW).expect("first migrate");
+        fs::remove_dir_all(paths.features_dir()).expect("drop legacy features");
+        fs::remove_dir_all(paths.tasks_dir()).expect("drop legacy tasks");
+
+        let report = run(&paths, "2026-06-11T00:00:00Z")
+            .expect("a surviving backlog ref to a cleaned tree is not dangling");
+        assert_eq!(
+            report.features + report.tasks + report.decisions + report.ideas,
+            0
+        );
+        assert_eq!(
+            report.skipped, 3,
+            "the surviving global decisions and backlog item count as skipped"
         );
 
         cleanup(&root);
