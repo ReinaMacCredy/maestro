@@ -16,7 +16,6 @@
 //! (the version lives on the enclosing `DecisionStore`), so the card-store load
 //! already validates the only version present.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -142,32 +141,8 @@ pub(crate) fn scan(
     paths: &MaestroPaths,
     tolerant: bool,
 ) -> Result<Vec<(DecisionRecord, DecisionSource, PathBuf)>> {
-    let cards_dir = paths.cards_dir();
-    if !cards_dir.is_dir() {
-        return Ok(Vec::new());
-    }
-    let mut ids = Vec::new();
-    for entry in fs::read_dir(&cards_dir)
-        .with_context(|| format!("failed to read {}", cards_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", cards_dir.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        if !entry.path().join("card.yaml").is_file() {
-            continue;
-        }
-        if let Some(name) = entry.file_name().to_str() {
-            ids.push(name.to_string());
-        }
-    }
-    ids.sort();
-
     let mut decisions = Vec::new();
-    for id in ids {
+    for id in card_store::card_dir_ids(&paths.cards_dir())? {
         let path = card_store::card_path(paths, &id);
         match card_store::load(&path) {
             Ok(Some(card)) if card.card_type == CardType::Decision => {

@@ -99,32 +99,8 @@ pub(crate) fn reconcile_idea(existing: Card, incoming: Card) -> Result<Card> {
 /// its error: an aggregate save must see the whole backlog, so a partial scan
 /// would silently drop items.
 pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(BacklogItem, CardSnapshot, PathBuf)>> {
-    let cards_dir = paths.cards_dir();
-    if !cards_dir.is_dir() {
-        return Ok(Vec::new());
-    }
-    let mut ids = Vec::new();
-    for entry in fs::read_dir(&cards_dir)
-        .with_context(|| format!("failed to read {}", cards_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", cards_dir.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        if !entry.path().join("card.yaml").is_file() {
-            continue;
-        }
-        if let Some(name) = entry.file_name().to_str() {
-            ids.push(name.to_string());
-        }
-    }
-    ids.sort();
-
     let mut items = Vec::new();
-    for id in ids {
+    for id in card_store::card_dir_ids(&paths.cards_dir())? {
         let path = card_store::card_path(paths, &id);
         let snapshot = card_store::load_with_snapshot(&path)?;
         let Some(card) = snapshot.card.clone() else {

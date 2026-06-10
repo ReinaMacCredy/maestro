@@ -8,7 +8,6 @@
 //! `TaskRecord.feature_id` is `#[serde(skip)]` and never appears in the record
 //! mapping (`record_from_card` / `record_to_mapping`).
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -156,31 +155,8 @@ pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
 /// [`scan`] over an explicit card tree root, so archived task reads
 /// (`archive/cards/`) ride the same seam as the live store.
 pub(crate) fn scan_dir(cards_dir: &Path) -> Result<Vec<(TaskRecord, PathBuf)>> {
-    if !cards_dir.is_dir() {
-        return Ok(Vec::new());
-    }
-    let mut ids = Vec::new();
-    for entry in fs::read_dir(cards_dir)
-        .with_context(|| format!("failed to read {}", cards_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", cards_dir.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        if !entry.path().join("card.yaml").is_file() {
-            continue;
-        }
-        if let Some(name) = entry.file_name().to_str() {
-            ids.push(name.to_string());
-        }
-    }
-    ids.sort();
-
     let mut records = Vec::new();
-    for id in ids {
+    for id in card_store::card_dir_ids(cards_dir)? {
         let path = cards_dir.join(&id).join("card.yaml");
         if let Some(card) = card_store::load(&path)?
             && card.card_type == CardType::Task

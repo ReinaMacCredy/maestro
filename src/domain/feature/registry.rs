@@ -19,7 +19,6 @@
 //! errors that name the gap and the fix command.
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -1452,40 +1451,16 @@ fn live_record_exists(paths: &MaestroPaths, id: &str) -> bool {
     card_store::card_path(paths, id).exists()
 }
 
-/// Reconstruct every live feature record. Card mode reads the flat card store
-/// and keeps `feature`-typed cards; legacy mode scans the per-feature
-/// directories. `tolerant` skips a card that fails to load (the strict callers
-/// surface the first such error). Sorted by id.
-/// Ids of feature-card directories in the flat store, sorted. Skips symlinked
-/// dirs and dirs without a `card.yaml`; an absent store yields no ids. Shared by
-/// the record scan and the roster reader so both walk the store identically.
+/// Ids of card directories in the flat store, sorted (the shared store walk).
+/// Shared by the record scan and the roster reader so both walk the store
+/// identically.
 fn feature_card_ids(paths: &MaestroPaths) -> Result<Vec<String>> {
-    let cards_dir = paths.cards_dir();
-    let mut ids = Vec::new();
-    if !cards_dir.is_dir() {
-        return Ok(ids);
-    }
-    for entry in fs::read_dir(&cards_dir)
-        .with_context(|| format!("failed to read {}", cards_dir.display()))?
-    {
-        let entry = entry.with_context(|| format!("failed to list {}", cards_dir.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-        if !entry.path().join("card.yaml").is_file() {
-            continue;
-        }
-        if let Some(name) = entry.file_name().to_str() {
-            ids.push(name.to_string());
-        }
-    }
-    ids.sort();
-    Ok(ids)
+    card_store::card_dir_ids(&paths.cards_dir())
 }
 
+/// Reconstruct every live feature record from `feature`-typed cards in the flat
+/// card store. `tolerant` skips a card that fails to load (the strict callers
+/// surface the first such error). Sorted by id.
 fn scan_feature_cards(paths: &MaestroPaths, tolerant: bool) -> Result<Vec<FeatureRecord>> {
     let mut records = Vec::new();
     for id in feature_card_ids(paths)? {

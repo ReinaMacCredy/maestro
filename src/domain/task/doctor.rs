@@ -32,12 +32,10 @@ impl TaskDoctorReport {
 
 /// Load all task records under standalone and feature-owned task roots.
 pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
-    let mut tasks = load_task_entries(tasks_dir)?
+    Ok(load_task_entries(tasks_dir)?
         .into_iter()
         .map(|entry| entry.task)
-        .collect::<Vec<_>>();
-    tasks.sort_by(|left, right| left.id.cmp(&right.id));
-    Ok(tasks)
+        .collect())
 }
 
 /// Load all task records with their directories. This is the single task scan
@@ -47,24 +45,20 @@ pub fn load_task_records(tasks_dir: &Path) -> Result<Vec<TaskRecord>> {
 pub fn load_task_entries(tasks_dir: &Path) -> Result<Vec<TaskEntry>> {
     let paths =
         paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
-    let mut entries = cards::scan(&paths)?
+    Ok(cards::scan(&paths)?
         .into_iter()
         .map(|(task, task_dir)| TaskEntry { task, task_dir })
-        .collect::<Vec<_>>();
-    entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
-    Ok(entries)
+        .collect())
 }
 
 /// [`load_task_entries`] over the archived card tree (`archive/cards/`), for
 /// the archived feature reads -- the live loader above never sees an archived
 /// card, so archived task counts must scan the archive tree explicitly.
 pub fn load_archived_task_entries(paths: &MaestroPaths) -> Result<Vec<TaskEntry>> {
-    let mut entries = cards::scan_dir(&paths.archive_cards_dir())?
+    Ok(cards::scan_dir(&paths.archive_cards_dir())?
         .into_iter()
         .map(|(task, task_dir)| TaskEntry { task, task_dir })
-        .collect::<Vec<_>>();
-    entries.sort_by(|left, right| left.task.id.cmp(&right.task.id));
-    Ok(entries)
+        .collect())
 }
 
 /// Check unresolved task blocker references for missing nodes, self-blocks, and cycles.

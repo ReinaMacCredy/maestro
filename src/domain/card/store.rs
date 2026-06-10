@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use crate::domain::card::schema::Card;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{
-    ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
+    child_dirs, ensure_dir, read_to_string_if_exists, write_string_if_unchanged,
 };
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
@@ -28,6 +28,24 @@ pub struct CardSnapshot {
 /// Path to a card's record file: `.maestro/cards/<id>/card.yaml`.
 pub fn card_path(paths: &MaestroPaths, id: &str) -> PathBuf {
     paths.cards_dir().join(id).join("card.yaml")
+}
+
+/// Sorted ids of the card-bearing child directories of `cards_dir` -- the one
+/// walk every per-type scan shares. Symlink-safe via `child_dirs`; skips dirs
+/// without a `card.yaml` (the `.alloc-` id-reservation markers are
+/// `card.yaml`-less by design). A missing store yields no ids.
+pub(crate) fn card_dir_ids(cards_dir: &Path) -> Result<Vec<String>> {
+    let mut ids = Vec::new();
+    for (dir, _modified) in child_dirs(cards_dir)? {
+        if !dir.join("card.yaml").is_file() {
+            continue;
+        }
+        if let Some(name) = dir.file_name().and_then(|name| name.to_str()) {
+            ids.push(name.to_string());
+        }
+    }
+    ids.sort();
+    Ok(ids)
 }
 
 /// Load a card, or `None` when its file does not exist.
