@@ -5,7 +5,6 @@
 //! Slice 1 (P1) is the additive data container plus its CAS-backed store; the
 //! four existing entities are untouched until the migration and cutover slices.
 
-pub mod archive;
 pub mod edit;
 pub mod fold;
 pub mod query;

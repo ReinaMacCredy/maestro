@@ -32,14 +32,6 @@ pub use template::{
     VerificationStatus, task_markdown,
 };
 
-/// Minimal Task projection for feature rollups.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FeatureTaskProjection {
-    pub id: String,
-    pub feature_id: Option<String>,
-    pub state: Option<TaskState>,
-}
-
 /// Result of appending a task note.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NoteReport {
@@ -291,18 +283,6 @@ pub fn filter_tasks(mut tasks: Vec<TaskRecord>, filter: &TaskFilter) -> Vec<Task
 
     tasks.sort_by(|left, right| left.id.cmp(&right.id));
     tasks
-}
-
-/// Load minimal task projections for feature read models without full record sorting.
-pub fn load_feature_task_projections(tasks_dir: &Path) -> Result<Vec<FeatureTaskProjection>> {
-    Ok(load_task_entries(tasks_dir)?
-        .into_iter()
-        .map(|entry| FeatureTaskProjection {
-            id: entry.task.id,
-            feature_id: entry.task.feature_id,
-            state: Some(entry.task.state),
-        })
-        .collect())
 }
 
 /// Return per-task verification durations for loaded task entries.

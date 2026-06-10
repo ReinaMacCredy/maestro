@@ -163,8 +163,8 @@ pub fn verify_feature(
 }
 
 pub(crate) fn acceptance_ship_gap(
-    paths: &MaestroPaths,
     record: &FeatureRecord,
+    task_entries: &[TaskEntry],
 ) -> Result<Option<String>> {
     if record.acceptance.is_empty() {
         return Ok(None);
@@ -177,8 +177,7 @@ pub(crate) fn acceptance_ship_gap(
             record.id
         )));
     };
-    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
-    let invalidated_by = invalidations_since(record, &latest.at, &task_entries);
+    let invalidated_by = invalidations_since(record, &latest.at, task_entries);
     if !invalidated_by.is_empty() {
         return Ok(Some(format!(
             "contract sweep stale — {}\n    fix: maestro feature verify {}\n    retry: maestro feature ship {} --outcome \"<outcome>\"",

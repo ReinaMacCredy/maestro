@@ -435,6 +435,32 @@ fn archive_refuses_a_feature_with_open_work() {
     );
 }
 
+/// `archive` takes a feature id; a workable card is closed history, not an
+/// archive root (the cascade is feature-scoped, SPEC E4).
+#[test]
+fn archive_refuses_a_non_feature_id() {
+    let temp = TestTempDir::new("p4d-archive-nonfeature");
+    let paths = MaestroPaths::new(temp.path());
+    let repo = temp.path();
+
+    write_card(
+        &paths,
+        &Card::new("task-001", CardType::Task, "One", "closed", NOW),
+    );
+
+    let out = maestro(repo, &["archive", "task-001"]);
+    assert!(
+        !out.status.success(),
+        "a task id is refused:\nstdout:\n{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("not a feature"),
+        "the refusal names the type mismatch:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 #[test]
 fn claim_takes_a_free_card_is_idempotent_and_refuses_a_fresh_foreign_claim() {
     let temp = TestTempDir::new("p4e-claim");

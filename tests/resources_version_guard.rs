@@ -49,8 +49,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 6] = [
     (
         "hook",
         "record.sh",
-        "1.0.0",
-        "9f002dc8744763598966c99f9af7f5713535341aeca0935f63157a69986422b7",
+        "1.0.1",
+        "dce2075128eac1b35a425e88f8e26e03d72d9b78f0e39c6663cb260258ddf4a8",
     ),
     (
         "harness",

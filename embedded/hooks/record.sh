@@ -1,5 +1,5 @@
 #!/bin/sh
-# maestro:hook-version: 1.0.0
+# maestro:hook-version: 1.0.1
 #
 # Maestro hook recorder entry point.
 #
@@ -10,7 +10,7 @@
 # .maestro/runs/<session>/events.jsonl (writing run_evidence.yaml on Stop).
 #
 # This file is yours to edit: wrap or extend recording as you like. It survives
-# `maestro update` until the shipped `maestro:hook-version` above changes, at
+# `maestro upgrade` until the shipped `maestro:hook-version` above changes, at
 # which point your copy is backed up and the bundled version restored. Delete it
 # and re-run `maestro init` to recover the bundled script.
 exec maestro hook record

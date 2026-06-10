@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn bundled_record_script_declares_a_hook_version() {
-        assert_eq!(hook_script_version(RECORD_SH).as_deref(), Some("1.0.0"));
+        assert_eq!(hook_script_version(RECORD_SH).as_deref(), Some("1.0.1"));
     }
 
     #[test]

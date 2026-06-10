@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 
 use crate::domain::card;
+use crate::domain::feature;
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
@@ -77,24 +78,18 @@ pub fn dep(args: DepArgs) -> Result<()> {
 }
 
 /// Execute `maestro archive <feature>`: move the feature card and its
-/// `parent=<feature>` children to the archive sibling tree (SPEC E4/D5).
+/// `parent=<feature>` children to the archive sibling tree (SPEC E4/D5). The
+/// flat verb drives the same `feature::archive_feature` cascade as `maestro
+/// feature archive`, so the typed terminal gate, sweep re-run, and no-clobber
+/// pre-flight hold on both spellings.
 pub fn archive(args: ArchiveArgs) -> Result<()> {
     let paths = repo_paths()?;
     if !paths.cards_dir().is_dir() {
         legacy_notice();
         return Ok(());
     }
-    let report = card::archive::archive_feature(&paths, &args.feature)?;
-    if report.children.is_empty() {
-        println!("archived feature {} (no child cards)", report.feature);
-    } else {
-        println!(
-            "archived feature {} + {} child card(s): {}",
-            report.feature,
-            report.children.len(),
-            report.children.join(", ")
-        );
-    }
+    let report = feature::archive_feature(&paths, &args.feature, false)?;
+    println!("{}", report.note);
     Ok(())
 }
 

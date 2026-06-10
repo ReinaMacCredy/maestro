@@ -32,6 +32,7 @@ use crate::domain::feature::qa;
 use crate::domain::feature::query::{
     FeatureTaskCounts, count_tasks_by_feature, count_tasks_by_feature_in_entries,
     count_tasks_for_feature, count_tasks_for_feature_in_entries, live_child_task_ids,
+    live_child_task_ids_in_entries,
 };
 use crate::domain::feature::schema::{
     AmendAdditions, AmendEntry, AmendLog, FeatureRecord, FeatureStatus, QaDeclaration,
@@ -794,8 +795,9 @@ fn ship_gaps_for_record(
     record: &FeatureRecord,
 ) -> Result<ShipGateReport> {
     let mut gaps = Vec::new();
+    let task_entries = task::load_task_entries(&paths.tasks_dir())?;
     // D5 cond 1 -- no live child task may outlive its shipped feature.
-    let live = live_child_task_ids(&paths.tasks_dir(), &record.id)?;
+    let live = live_child_task_ids_in_entries(&task_entries, &record.id);
     if !live.is_empty() {
         gaps.push(format!(
             "{} live child task(s): {}\n    fix: verify or abandon them, then re-ship",
@@ -833,7 +835,7 @@ fn ship_gaps_for_record(
     }
     // D5 cond 4 -- the full feature acceptance contract must have a fresh
     // sweep run that resolved every ac-N item.
-    if let Some(gap) = verification::acceptance_ship_gap(paths, record)? {
+    if let Some(gap) = verification::acceptance_ship_gap(record, &task_entries)? {
         gaps.push(gap);
     }
     Ok(ShipGateReport {
@@ -1348,6 +1350,9 @@ pub(crate) fn load_record(paths: &MaestroPaths, id: &str) -> Result<FeatureRecor
     let Some(card) = card_store::load(&path)? else {
         return Err(feature_not_found(paths, id));
     };
+    if card.card_type != CardType::Feature {
+        bail!("{id} is a {}, not a feature", card.card_type.as_str());
+    }
     record_from_card(card, path.display().to_string())
 }
 
@@ -1365,6 +1370,9 @@ pub(crate) fn load_record_for_update(
     let Some(card) = snapshot.card.clone() else {
         return Err(feature_not_found(paths, id));
     };
+    if card.card_type != CardType::Feature {
+        bail!("{id} is a {}, not a feature", card.card_type.as_str());
+    }
     let record = record_from_card(card, path.display().to_string())?;
     Ok((record, snapshot))
 }
