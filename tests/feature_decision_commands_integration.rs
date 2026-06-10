@@ -2276,6 +2276,62 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     assert!(again.contains("already archived"));
 }
 
+/// A decision entry is a record, not a workable child: an open (never-locked)
+/// fork must not block archive, and it rides the container move inside
+/// `decisions.yaml` rather than counting as a cascaded child task.
+#[test]
+fn feature_archive_ignores_open_decisions_and_moves_them_with_the_container() {
+    let temp_dir = TestTempDir::new("maestro-feature-archive-open-decision");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], root),
+        &["feature", "new", "Billing CSV export"],
+    );
+    let decision_args = [
+        "decision",
+        "new",
+        "Pick the writer",
+        "--feature",
+        "billing-csv-export",
+        "--context",
+        "csv crate vs hand-rolled",
+    ];
+    stdout(maestro(&decision_args, root), &decision_args);
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope dropped",
+    ];
+    stdout(maestro(&cancel_args, root), &cancel_args);
+
+    let archive_args = ["feature", "archive", "billing-csv-export"];
+    let archived = stdout(maestro(&archive_args, root), &archive_args);
+    assert!(archived.contains("archived feature billing-csv-export"));
+    assert!(archived.contains("child tasks: 0 archived"));
+
+    // The whole container moved, the open fork still inside it.
+    let archived_feature = root.join(".maestro/archive/cards/billing-csv-export");
+    assert!(archived_feature.join("card.yaml").is_file());
+    let decisions = fs::read_to_string(archived_feature.join("decisions.yaml"))
+        .expect("invariant: archived container should keep its decisions.yaml");
+    assert!(decisions.contains("Pick the writer"));
+    assert!(!root.join(".maestro/cards/billing-csv-export").exists());
+
+    // Round-trip: the decision rides back without counting as a child task.
+    let unarchive_args = ["feature", "unarchive", "billing-csv-export"];
+    let restored = stdout(maestro(&unarchive_args, root), &unarchive_args);
+    assert!(restored.contains("child tasks: 0 restored"));
+    let live_decisions =
+        fs::read_to_string(root.join(".maestro/cards/billing-csv-export/decisions.yaml"))
+            .expect("invariant: restored container should keep its decisions.yaml");
+    assert!(live_decisions.contains("Pick the writer"));
+}
+
 /// `feature archive --shipped` archives every shipped feature (each cascading its
 /// children) and leaves non-shipped features in the live tree.
 #[test]

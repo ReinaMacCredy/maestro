@@ -2,7 +2,7 @@
 //! from the archive sibling tree (§5 L2/L3/L6 + §5.9 child cascade).
 //!
 //! The cascade is a query (SPEC E4): the move set is the feature card plus
-//! every live card whose `parent` is the feature. In the container layout the
+//! every task-kind card whose `parent` is the feature. In the container layout the
 //! feature's own directory already bundles its pooled tasks, decision entries,
 //! and prose, so moving `cards/<id>` moves them all; a child living OUTSIDE
 //! the container (a pre-migration flat dir, or a root-pooled task) moves as
@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::query::{Coarse, coarse_of, scan_dir_with_paths, scan_with_paths};
+use crate::domain::card::schema::CardType;
 use crate::domain::card::store::{CARD_FILE, TASK_FILE};
 use crate::domain::feature::registry::{load_archived_record, load_record, validate_feature_id};
 use crate::foundation::core::fs::ensure_dir;
@@ -29,8 +30,8 @@ pub struct FeatureArchiveReport {
 /// Archive a terminal feature and its settled child cards (§5.9).
 ///
 /// Resolves the record from the live tree, or the archive tree on a sweep
-/// re-run. Children are the live cards whose `parent` is the feature; every
-/// member must be settled (coarse-closed) before anything moves.
+/// re-run. Children are the task-kind cards whose `parent` is the feature;
+/// every member must be settled (coarse-closed) before anything moves.
 ///
 /// Idempotent (§5.4): re-running on an already-archived feature with nothing
 /// left to sweep is a no-op at exit 0.
@@ -66,11 +67,21 @@ pub fn archive_feature(
 
     // Children are linked by `parent`, wherever they live. Partition by
     // coarse liveness so the set moves only after every member is settled.
+    // Only task-kind children gate the move: decision/idea entries are records
+    // of rulings, not workable children — an open fork on a cancelled feature
+    // must not wedge archive. They live in the container files and ride the
+    // directory move.
     let container = paths.cards_dir().join(id);
     let mut live_children = Vec::new();
     let mut terminal_children = Vec::new();
     for (card, path) in scan_with_paths(paths)? {
         if card.parent.as_deref() != Some(id) {
+            continue;
+        }
+        if !matches!(
+            card.card_type,
+            CardType::Task | CardType::Bug | CardType::Chore
+        ) {
             continue;
         }
         if coarse_of(&card.status) == Some(Coarse::Closed) {
@@ -139,9 +150,9 @@ pub fn archive_feature(
 
 /// Restore an archived feature and its archived child cards (§5.9, symmetric).
 ///
-/// Children are the archived cards whose `parent` is the feature; each member
-/// directory moves back to the live store. Idempotent: an already-live feature
-/// with no archived children is a no-op at exit 0.
+/// Children are the archived task-kind cards whose `parent` is the feature;
+/// each member directory moves back to the live store. Idempotent: an
+/// already-live feature with no archived children is a no-op at exit 0.
 ///
 /// # Errors
 ///
@@ -157,9 +168,16 @@ pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
         bail!("archived feature not found: {id}");
     }
 
+    // Same task-kind cut as the archive side, so round-trip receipts agree.
     let mut children: Vec<(String, PathBuf)> = scan_dir_with_paths(&paths.archive_cards_dir())?
         .into_iter()
-        .filter(|(card, _)| card.parent.as_deref() == Some(id))
+        .filter(|(card, _)| {
+            card.parent.as_deref() == Some(id)
+                && matches!(
+                    card.card_type,
+                    CardType::Task | CardType::Bug | CardType::Chore
+                )
+        })
         .map(|(card, path)| (card.id, path))
         .collect();
     children.sort();
