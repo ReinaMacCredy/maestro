@@ -4,7 +4,7 @@
 //! verbs that surface them are a thin adapter layer.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
@@ -107,6 +107,49 @@ pub fn scan_dir(root: &Path) -> Result<Vec<Card>> {
     }
     cards.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(cards)
+}
+
+/// One tolerant walk over the store for the card-aware doctor: every loadable
+/// card paired with its `card.yaml` path, plus the cards that failed to load.
+/// A failed card's type is unknowable, so failures carry no `CardType`; the
+/// caller owns reporting each one exactly once.
+#[derive(Debug)]
+pub struct StoreScan {
+    pub cards: Vec<(Card, PathBuf)>,
+    pub failures: Vec<StoreScanFailure>,
+}
+
+#[derive(Debug)]
+pub struct StoreScanFailure {
+    pub id: String,
+    pub path: PathBuf,
+    /// Full error chain (`{error:#}`), ready for a diagnostic line.
+    pub error: String,
+}
+
+/// [`scan`], but collecting per-card load failures instead of failing loud on
+/// the first one. `Err` only when the store root itself cannot be walked.
+pub fn scan_with_failures(paths: &MaestroPaths) -> Result<StoreScan> {
+    let mut cards = Vec::new();
+    let mut failures = Vec::new();
+    for (dir, _modified) in child_dirs(&paths.cards_dir())? {
+        let path = dir.join("card.yaml");
+        match load(&path) {
+            Ok(Some(card)) => cards.push((card, path)),
+            Ok(None) => {}
+            Err(error) => failures.push(StoreScanFailure {
+                id: dir
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                path,
+                error: format!("{error:#}"),
+            }),
+        }
+    }
+    cards.sort_by(|a, b| a.0.id.cmp(&b.0.id));
+    failures.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(StoreScan { cards, failures })
 }
 
 /// The `ready` rule (SPEC E3/E8): a card is ready when it is a workable type,
@@ -504,6 +547,51 @@ mod tests {
             ids,
             vec!["agent-cli-ux", "decision-001", "task-002"],
             "every card.yaml-bearing dir, sorted by id; the marker dir is skipped"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn scan_with_failures_collects_the_bad_card_and_keeps_the_rest() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-scan-fail-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+
+        for id in ["task-001", "task-002"] {
+            let c = card(id, CardType::Task, "ready");
+            let path = card_path(&paths, id);
+            let snap = load_with_snapshot(&path).expect("absent loads None");
+            save_with_snapshot(&path, &c, &snap).expect("save card");
+        }
+        let broken_dir = paths.cards_dir().join("broken");
+        ensure_dir(&broken_dir).expect("create broken card dir");
+        std::fs::write(broken_dir.join("card.yaml"), "type: [").expect("write broken card");
+
+        let scan = scan_with_failures(&paths).expect("walkable store");
+        let ids: Vec<&str> = scan.cards.iter().map(|(c, _)| c.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["task-001", "task-002"],
+            "healthy cards survive a corrupt sibling"
+        );
+        assert!(
+            scan.cards
+                .iter()
+                .all(|(_, path)| path.ends_with("card.yaml")),
+            "each card carries its card.yaml path"
+        );
+        assert_eq!(scan.failures.len(), 1, "one failure for the corrupt card");
+        assert_eq!(scan.failures[0].id, "broken");
+        assert!(
+            scan.failures[0].error.contains("failed to parse"),
+            "failure carries the full load error chain: {}",
+            scan.failures[0].error
         );
 
         let _ = std::fs::remove_dir_all(&root);

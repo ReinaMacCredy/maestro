@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card;
 use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
@@ -105,25 +106,48 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
     }
 
     check_harness(paths, &mut checks, &mut errors);
-    check_features(paths, &mut checks, &mut warnings, &mut errors);
-    check_backlog(paths, &mut checks, &mut errors);
-    check_decisions(paths, &mut checks, &mut warnings, &mut errors);
+
+    // One walk of the card store backs every card-typed check below (features,
+    // backlog, decisions, task blockers). A card that fails to load has an
+    // unknowable type, so it is reported here exactly once instead of once per
+    // per-type scan; the typed checks then see only the loadable cards.
+    let scan = match card::query::scan_with_failures(paths) {
+        Ok(scan) => {
+            for failure in &scan.failures {
+                errors.push(failure.error.clone());
+            }
+            Some(scan)
+        }
+        Err(error) => {
+            errors.push(format!("{error:#}"));
+            None
+        }
+    };
+
+    if let Some(scan) = &scan {
+        check_features(paths, &scan.cards, &mut checks, &mut warnings, &mut errors);
+        check_backlog(&scan.cards, &mut checks, &mut errors);
+        check_decisions(paths, &scan.cards, &mut checks, &mut warnings, &mut errors);
+    }
     check_install(paths, &mut checks, &mut errors);
 
-    // Collect a corrupt-task error into the report rather than aborting via `?`: a
-    // single malformed task.yaml must not suppress every other doctor check, and
-    // its full cause should surface like the other corrupt-artifact diagnostics.
     match recordless_task_dir_warnings(paths) {
         Ok(found) => warnings.extend(found),
         Err(error) => errors.push(format!("{error:#}")),
     }
-    match task::check_blocker_graph(&paths.tasks_dir()) {
-        Ok(task_report) if task_report.is_ok() => checks.push(DoctorCheck {
-            name: "task-blockers",
-            detail: format!("{} tasks scanned", task_report.tasks_scanned),
-        }),
-        Ok(task_report) => errors.extend(task_report.errors),
-        Err(error) => errors.push(format!("{error:#}")),
+    if let Some(scan) = &scan {
+        // Collect a corrupt-task error into the report rather than aborting via
+        // `?`: a single malformed task record must not suppress every other
+        // doctor check, and its full cause should surface like the other
+        // corrupt-artifact diagnostics.
+        match task::check_blocker_graph_in_cards(paths, &scan.cards) {
+            Ok(task_report) if task_report.is_ok() => checks.push(DoctorCheck {
+                name: "task-blockers",
+                detail: format!("{} tasks scanned", task_report.tasks_scanned),
+            }),
+            Ok(task_report) => errors.extend(task_report.errors),
+            Err(error) => errors.push(format!("{error:#}")),
+        }
     }
 
     Ok(DoctorReport {
@@ -169,6 +193,7 @@ fn check_harness(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &m
 
 fn check_features(
     paths: &MaestroPaths,
+    cards: &[(card::schema::Card, PathBuf)],
     checks: &mut Vec<DoctorCheck>,
     warnings: &mut Vec<String>,
     errors: &mut Vec<String>,
@@ -181,7 +206,7 @@ fn check_features(
         Ok(found) => warnings.extend(found),
         Err(error) => errors.push(format!("{error:#}")),
     }
-    match feature::diagnose(paths).found {
+    match feature::diagnose(cards).found {
         Ok(count) => checks.push(DoctorCheck {
             name: "features",
             detail: format!("{count} feature(s)"),
@@ -230,10 +255,14 @@ fn display_relative(repo_root: &Path, path: &Path) -> String {
         .to_string()
 }
 
-fn check_backlog(paths: &MaestroPaths, checks: &mut Vec<DoctorCheck>, errors: &mut Vec<String>) {
+fn check_backlog(
+    cards: &[(card::schema::Card, PathBuf)],
+    checks: &mut Vec<DoctorCheck>,
+    errors: &mut Vec<String>,
+) {
     // The backlog has no file of its own (D7): items live as idea cards, so the
-    // check counts them through the same load every harness verb uses.
-    match harness::load_backlog(paths) {
+    // check counts them through the same conversion every harness verb uses.
+    match harness::load_backlog_in_cards(cards) {
         Ok(backlog) => {
             checks.push(DoctorCheck {
                 name: "backlog",
@@ -259,6 +288,7 @@ fn schema_diagnostic(path: &std::path::Path, expected: &str, found: &str) -> Str
 
 fn check_decisions(
     paths: &MaestroPaths,
+    cards: &[(card::schema::Card, PathBuf)],
     checks: &mut Vec<DoctorCheck>,
     warnings: &mut Vec<String>,
     errors: &mut Vec<String>,
@@ -267,9 +297,9 @@ fn check_decisions(
     // legacy markdown), so there is no `decisions/` directory to require;
     // `diagnose` and the dangling-ref scan both read an absent legacy dir as
     // empty.
-    let report = decisions::diagnose(paths);
+    let report = decisions::diagnose(paths, cards);
     warnings.extend(report.warnings);
-    warnings.extend(decisions::dangling_reference_warnings(paths));
+    warnings.extend(decisions::dangling_reference_warnings(paths, cards));
     errors.extend(report.errors);
     checks.push(DoctorCheck {
         name: "decisions",

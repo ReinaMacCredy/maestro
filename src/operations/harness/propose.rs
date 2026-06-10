@@ -1,8 +1,10 @@
 use std::collections::BTreeSet;
 use std::fs;
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::schema::Card;
 use crate::domain::harness::backlog;
 use crate::domain::harness::{
     BacklogConfig, BacklogItem, EscalationPolicy, HistoryEntry, is_state_detector,
@@ -19,6 +21,12 @@ use super::{detect, policy};
 /// cleanly instead of leaking a `failed to read` IO error to the interface.
 pub fn load_backlog(paths: &MaestroPaths) -> Result<BacklogConfig> {
     backlog::load(paths)
+}
+
+/// [`load_backlog`] from an already-loaded card set, for the card-aware doctor's
+/// one store walk.
+pub fn load_backlog_in_cards(cards: &[(Card, PathBuf)]) -> Result<BacklogConfig> {
+    backlog::items_in_cards(cards)
 }
 
 /// Refresh rule-based proposals into the backlog and return the full backlog

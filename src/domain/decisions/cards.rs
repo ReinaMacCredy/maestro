@@ -194,6 +194,29 @@ pub(crate) fn scan(
     Ok(decisions)
 }
 
+/// [`scan`] from an already-loaded card set, so the card-aware doctor walks the
+/// store once for every check. Envelope failures never reach this (the shared
+/// scan's caller owns them); `tolerant` only governs conversion errors on
+/// `Decision`-typed cards.
+pub(crate) fn records_in_cards(
+    cards: &[(Card, PathBuf)],
+    tolerant: bool,
+) -> Result<Vec<(DecisionRecord, DecisionSource, PathBuf)>> {
+    let mut decisions = Vec::new();
+    for (card, path) in cards {
+        if card.card_type != CardType::Decision {
+            continue;
+        }
+        let source = source_from_parent(card.parent.as_deref());
+        match record_from_card(card.clone(), path.display().to_string()) {
+            Ok(record) => decisions.push((record, source, path.clone())),
+            Err(_) if tolerant => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(decisions)
+}
+
 /// Create a new decision card from a record. The write is a CAS against the
 /// absent snapshot, so a concurrent create of the same id is rejected. The id is
 /// reserved by the caller.

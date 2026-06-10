@@ -2,6 +2,7 @@ mod support;
 
 use std::fs;
 
+use maestro::domain::card::schema::Card;
 use maestro::domain::feature::{self, ContractAdditions, ContractEdits};
 use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::paths::MaestroPaths;
@@ -621,6 +622,14 @@ fn tolerant_roster_surfaces_a_card_that_fails_to_load() {
     );
 }
 
+/// Load the card set the way doctor does (one shared store walk), keeping only
+/// the loadable cards -- envelope failures are the walk's caller's to report.
+fn loaded_cards(paths: &MaestroPaths) -> Vec<(Card, std::path::PathBuf)> {
+    maestro::domain::card::query::scan_with_failures(paths)
+        .expect("invariant: card store should be walkable")
+        .cards
+}
+
 #[test]
 fn diagnose_reports_count_on_compatible_store() {
     let temp = TestTempDir::new("maestro-feature-diag-ok");
@@ -628,7 +637,7 @@ fn diagnose_reports_count_on_compatible_store() {
 
     feature::create(&paths, "Billing CSV").expect("invariant: create should succeed");
 
-    assert_eq!(feature::diagnose(&paths).found, Ok(1));
+    assert_eq!(feature::diagnose(&loaded_cards(&paths)).found, Ok(1));
 }
 
 #[test]
@@ -639,7 +648,7 @@ fn diagnose_reports_absent_card_store_as_zero_features() {
     // Feature cards live in the flat card store, not a per-entity directory, so an
     // absent store reads as zero features rather than a missing-directory error
     // (the directory-shaped diagnostic retired with the cutover).
-    assert_eq!(feature::diagnose(&paths).found, Ok(0));
+    assert_eq!(feature::diagnose(&loaded_cards(&paths)).found, Ok(0));
 }
 
 #[test]
@@ -649,21 +658,27 @@ fn diagnose_reports_incompatible_record_as_error_data() {
     write_feature(&paths, "billing-csv", BAD_RECORD);
 
     assert!(
-        feature::diagnose(&paths).found.is_err(),
+        feature::diagnose(&loaded_cards(&paths)).found.is_err(),
         "an incompatible record must report as error data"
     );
 }
 
 #[test]
-fn diagnose_reports_parse_error_as_error_data() {
+fn unparseable_envelope_is_the_shared_walks_failure_not_a_feature_error() {
     let temp = TestTempDir::new("maestro-feature-diag-parse");
     let paths = MaestroPaths::new(temp.path());
     write_feature(&paths, "billing-csv", "this: is: not: valid: yaml: [");
 
-    assert!(
-        feature::diagnose(&paths).found.is_err(),
-        "a parse failure must report as error data"
+    // An unparseable card.yaml has an unknowable type, so it surfaces once as
+    // the shared walk's failure; diagnose only sees the loadable cards.
+    let scan = maestro::domain::card::query::scan_with_failures(&paths)
+        .expect("invariant: card store should be walkable");
+    assert_eq!(
+        scan.failures.len(),
+        1,
+        "the corrupt envelope is the walk's failure"
     );
+    assert_eq!(feature::diagnose(&scan.cards).found, Ok(0));
 }
 
 #[test]

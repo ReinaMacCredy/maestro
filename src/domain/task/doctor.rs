@@ -3,6 +3,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crate::domain::card::schema::Card;
 use crate::domain::decisions;
 use crate::domain::task::cards;
 use crate::domain::task::lookup::paths_for_tasks_dir;
@@ -64,10 +65,6 @@ pub fn load_archived_task_entries(paths: &MaestroPaths) -> Result<Vec<TaskEntry>
 /// Check unresolved task blocker references for missing nodes, self-blocks, and cycles.
 pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
     let tasks = load_task_records(tasks_dir)?;
-    let task_ids: HashSet<String> = tasks.iter().map(|task| task.id.clone()).collect();
-    let mut edges: HashMap<String, Vec<String>> = HashMap::new();
-    let mut errors = Vec::new();
-
     // Decision blockers point at the Maestro decision stores under the sibling
     // `.maestro` dir; resolving refs through the domain facade surfaces a dangling
     // `--by decision-NNN` like a missing task ref (T4).
@@ -75,8 +72,29 @@ pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
         .parent()
         .and_then(|maestro| maestro.parent())
         .map(crate::foundation::core::paths::MaestroPaths::new);
+    graph_report(decision_paths.as_ref(), &tasks)
+}
 
-    for task in &tasks {
+/// [`check_blocker_graph`] from an already-loaded card set (the card-aware
+/// doctor's one store walk). Strict on conversion: a task card whose folded
+/// record fails to convert surfaces its error, same bucket as the path form.
+pub fn check_blocker_graph_in_cards(
+    paths: &MaestroPaths,
+    cards: &[(Card, std::path::PathBuf)],
+) -> Result<TaskDoctorReport> {
+    let tasks = cards::records_in_cards(cards)?;
+    graph_report(Some(paths), &tasks)
+}
+
+fn graph_report(
+    decision_paths: Option<&MaestroPaths>,
+    tasks: &[TaskRecord],
+) -> Result<TaskDoctorReport> {
+    let task_ids: HashSet<String> = tasks.iter().map(|task| task.id.clone()).collect();
+    let mut edges: HashMap<String, Vec<String>> = HashMap::new();
+    let mut errors = Vec::new();
+
+    for task in tasks {
         for blocker in task
             .blockers
             .iter()
@@ -89,7 +107,7 @@ pub fn check_blocker_graph(tasks_dir: &Path) -> Result<TaskDoctorReport> {
                 // External and human blockers are free-form by design and cannot be validated.
                 BlockerKind::External | BlockerKind::Human => continue,
                 BlockerKind::Decision => {
-                    if let Some(paths) = decision_paths.as_ref()
+                    if let Some(paths) = decision_paths
                         && !decisions::decision_exists(paths, &blocked_ref.id)?
                     {
                         errors.push(format!(

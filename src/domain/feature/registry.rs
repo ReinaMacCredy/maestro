@@ -1112,18 +1112,27 @@ pub fn titles(paths: &MaestroPaths) -> BTreeMap<String, String> {
 
 /// Report the feature store's schema verdict as data for `maestro doctor`.
 ///
-/// Never errors: an absent features dir or an unparseable / schema-incompatible
-/// record is carried in [`FeatureDiagnostic::found`] as `Err`.
-pub fn diagnose(paths: &MaestroPaths) -> FeatureDiagnostic {
-    // Feature cards live in the flat card store, not a per-entity directory, so
-    // count them by scanning the store; an absent store reads as zero features,
-    // not a missing-directory error.
-    let found = scan_records_strict(paths)
-        .map(|records| records.len())
-        .map_err(|error| format!("{error:#}"));
+/// Never errors: an unparseable / schema-incompatible feature record is carried
+/// in [`FeatureDiagnostic::found`] as `Err`. Counts `Feature`-typed cards from
+/// the doctor's one shared store walk; envelope failures are reported centrally
+/// there, so only a feature record that fails to convert lands here.
+pub fn diagnose(cards: &[(Card, PathBuf)]) -> FeatureDiagnostic {
+    let mut count = 0_usize;
+    for (card, path) in cards {
+        if card.card_type != CardType::Feature {
+            continue;
+        }
+        if let Err(error) = record_from_card(card.clone(), path.display().to_string()) {
+            return FeatureDiagnostic {
+                expected: FEATURE_SCHEMA_VERSION,
+                found: Err(format!("{error:#}")),
+            };
+        }
+        count += 1;
+    }
     FeatureDiagnostic {
         expected: FEATURE_SCHEMA_VERSION,
-        found,
+        found: Ok(count),
     }
 }
 

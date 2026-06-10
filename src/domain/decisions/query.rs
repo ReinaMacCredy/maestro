@@ -4,6 +4,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::schema::Card;
 use crate::domain::decisions::cards;
 use crate::domain::decisions::schema::DecisionRecord;
 use crate::foundation::core::fs::read_to_string_if_exists;
@@ -234,16 +235,16 @@ pub fn decision_bodies(paths: &MaestroPaths) -> Result<Vec<String>> {
     Ok(bodies)
 }
 
-pub fn diagnose(paths: &MaestroPaths) -> DecisionDiagnostic {
+pub fn diagnose(paths: &MaestroPaths, cards: &[(Card, PathBuf)]) -> DecisionDiagnostic {
     let mut structured_count = 0_usize;
     let mut legacy_count = 0_usize;
     let mut warnings = Vec::new();
     let mut errors = Vec::new();
 
-    // One scan over the card store; the strict scan stops at the first
-    // unparseable card and reports it -- the P4 card-aware doctor refines this,
-    // same bucket as the feature scan.
-    match cards::scan(paths, false) {
+    // Decision cards come from the doctor's one shared store walk; envelope
+    // failures are reported centrally there, so only a Decision-typed card
+    // whose folded record fails to convert lands in this bucket.
+    match cards::records_in_cards(cards, false) {
         Ok(decisions) => structured_count += decisions.len(),
         Err(error) => errors.push(format!("{error:#}")),
     }
@@ -281,13 +282,13 @@ pub fn diagnose(paths: &MaestroPaths) -> DecisionDiagnostic {
     }
 }
 
-pub fn dangling_reference_warnings(paths: &MaestroPaths) -> Vec<String> {
+pub fn dangling_reference_warnings(paths: &MaestroPaths, cards: &[(Card, PathBuf)]) -> Vec<String> {
     let mut warnings = Vec::new();
-    // Load every structured decision once; both the resolvable-id set and the
-    // supersedes scan derive from the same parse rather than re-reading.
-    let records = decision_records_with_path(paths);
+    // Both the resolvable-id set and the supersedes scan derive from the
+    // doctor's one shared store walk rather than re-reading the store.
+    let records = decision_records_with_path(cards);
     let existing = resolvable_decision_ids(paths, &records);
-    warn_dangling_note_pointers(paths, &existing, &mut warnings);
+    warn_dangling_note_pointers(paths, cards, &existing, &mut warnings);
     warn_dangling_supersedes(&records, &existing, &mut warnings);
     warnings.sort();
     warnings.dedup();
@@ -295,10 +296,11 @@ pub fn dangling_reference_warnings(paths: &MaestroPaths) -> Vec<String> {
 }
 
 /// Every structured decision paired with the card path it lives in, read
-/// tolerantly (a corrupt card just drops from the scan). The legacy markdown is
-/// folded into the resolvable set separately (it has no supersedes to validate).
-fn decision_records_with_path(paths: &MaestroPaths) -> Vec<(PathBuf, DecisionRecord)> {
-    cards::scan(paths, true)
+/// tolerantly (a corrupt decision record just drops from the scan). The legacy
+/// markdown is folded into the resolvable set separately (it has no supersedes
+/// to validate).
+fn decision_records_with_path(cards: &[(Card, PathBuf)]) -> Vec<(PathBuf, DecisionRecord)> {
+    cards::records_in_cards(cards, true)
         .unwrap_or_default()
         .into_iter()
         .map(|(record, _source, path)| (path, record))
@@ -452,14 +454,11 @@ fn resolvable_decision_ids(
 
 fn warn_dangling_note_pointers(
     paths: &MaestroPaths,
+    cards: &[(Card, PathBuf)],
     existing: &BTreeSet<String>,
     warnings: &mut Vec<String>,
 ) {
-    // The feature prose sidecars moved with the card model: legacy mode keeps
-    // them under `features/<feat>/notes.md`, card mode under `cards/<feat>/notes.md`.
-    // Reading the wrong root would make this gate vacuously pass (no notes found
-    // -> no warnings), so the path source is mode-branched.
-    for path in feature_note_paths(paths) {
+    for path in feature_note_paths(paths, cards) {
         let Ok(Some(contents)) = read_to_string_if_exists(&path) else {
             continue;
         };
@@ -475,13 +474,12 @@ fn warn_dangling_note_pointers(
 }
 
 /// Every feature card's `notes.md` sidecar that may carry structured decision
-/// pointers.
-fn feature_note_paths(paths: &MaestroPaths) -> Vec<PathBuf> {
-    crate::domain::card::query::scan(paths)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|card| card.card_type == crate::domain::card::schema::CardType::Feature)
-        .map(|card| paths.cards_dir().join(card.id).join("notes.md"))
+/// pointers, derived from the shared store walk.
+fn feature_note_paths(paths: &MaestroPaths, cards: &[(Card, PathBuf)]) -> Vec<PathBuf> {
+    cards
+        .iter()
+        .filter(|(card, _)| card.card_type == crate::domain::card::schema::CardType::Feature)
+        .map(|(card, _)| paths.cards_dir().join(&card.id).join("notes.md"))
         .collect()
 }
 
@@ -629,14 +627,18 @@ mod tests {
         )
         .expect("write notes");
 
+        let cards = crate::domain::card::query::scan_with_failures(&paths)
+            .expect("walk store")
+            .cards;
         assert!(
-            dangling_reference_warnings(&paths).is_empty(),
+            dangling_reference_warnings(&paths, &cards).is_empty(),
             "a resolvable card-<hash> pointer must not warn"
         );
 
         // Repoint at a decision that does not exist: the gate must now fire.
+        // Only notes.md changed, so the loaded card set is still current.
         fs::write(&notes, "- card-deadbe locked -- points at nothing\n").expect("rewrite notes");
-        let warnings = dangling_reference_warnings(&paths);
+        let warnings = dangling_reference_warnings(&paths, &cards);
         assert!(
             warnings
                 .iter()

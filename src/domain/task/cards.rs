@@ -209,6 +209,20 @@ pub(crate) fn scan_dir(cards_dir: &Path) -> Result<Vec<(TaskRecord, PathBuf)>> {
     Ok(records)
 }
 
+/// [`scan`] from an already-loaded card set (the card-aware doctor's one store
+/// walk). Strict like `scan`: the first task record that fails to convert
+/// surfaces its error.
+pub(crate) fn records_in_cards(cards: &[(Card, PathBuf)]) -> Result<Vec<TaskRecord>> {
+    let mut records = Vec::new();
+    for (card, path) in cards {
+        if card.card_type != CardType::Task {
+            continue;
+        }
+        records.push(record_from_card(card.clone(), path.display().to_string())?);
+    }
+    Ok(records)
+}
+
 /// Create a new task card from a draft record. The write is a CAS against the
 /// absent snapshot, so a concurrent create of the same id is rejected (matching
 /// the legacy `.alloc-` atomic-create guard). The id is reserved by the caller.

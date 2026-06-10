@@ -652,6 +652,7 @@ fn harness_operation_owns_implementation() {
             "dismiss".to_string(),
             "detect".to_string(),
             "load_backlog".to_string(),
+            "load_backlog_in_cards".to_string(),
             "looks_like_correction".to_string(),
             "measure".to_string(),
             "over_threshold_items".to_string(),

@@ -1,8 +1,9 @@
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 
-use crate::domain::card::schema::CardType;
+use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardSnapshot, card_path};
 use crate::domain::harness::cards;
 use crate::domain::harness::schema::{
@@ -14,6 +15,23 @@ use crate::foundation::core::time::utc_now_timestamp;
 /// Load the Harness backlog, returning an empty backlog when no idea cards exist.
 pub fn load(paths: &MaestroPaths) -> Result<BacklogConfig> {
     Ok(load_with_snapshot(paths)?.backlog)
+}
+
+/// Read the backlog from an already-loaded card set (the card-aware doctor's
+/// one store walk). Read-only: it carries no CAS snapshots, so it can never
+/// back a save.
+pub fn items_in_cards(cards: &[(Card, PathBuf)]) -> Result<BacklogConfig> {
+    let mut items = Vec::new();
+    for (card, path) in cards {
+        if card.card_type != CardType::Idea {
+            continue;
+        }
+        items.push(cards::item_from_card(
+            card.clone(),
+            &path.display().to_string(),
+        )?);
+    }
+    Ok(BacklogConfig { items })
 }
 
 /// The CAS basis the matching save checks: each item's `idea` card (D7 -- the

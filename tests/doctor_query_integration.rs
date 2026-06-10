@@ -266,6 +266,46 @@ fn doctor_collects_a_corrupt_task_error_without_aborting_the_rest_of_the_report(
 }
 
 #[test]
+fn doctor_reports_an_unparseable_envelope_once_and_keeps_every_check() {
+    // The card-aware doctor walks the store once; a card.yaml that fails to
+    // parse has an unknowable type, so it must surface as ONE central error --
+    // not once per per-type scan -- and the typed check lines (features,
+    // backlog, decisions, task-blockers) must still print from the loadable
+    // cards.
+    let temp = setup_repo("maestro-doctor-corrupt-envelope");
+    let repo = temp.path();
+    assert_success(
+        &maestro(repo, &["feature", "new", "Billing CSV"]),
+        &["feature", "new", "Billing CSV"],
+    );
+
+    let broken = repo.join(".maestro/cards/broken");
+    fs::create_dir_all(&broken).expect("invariant: card dir should be creatable");
+    fs::write(broken.join("card.yaml"), "type: [").expect("invariant: card.yaml writable");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_failure(&doctor, &["doctor"]);
+    let out = stdout(&doctor);
+    for check in [
+        "check features: ok (1 feature(s))",
+        "check backlog: ok",
+        "check decisions: ok",
+        "check task-blockers: ok",
+    ] {
+        assert!(
+            out.contains(check),
+            "{check} must survive a corrupt envelope:\n{out}"
+        );
+    }
+    let err = stderr(&doctor);
+    assert_eq!(
+        err.matches("failed to parse").count(),
+        1,
+        "the corrupt envelope is reported exactly once:\n{err}"
+    );
+}
+
+#[test]
 fn doctor_and_task_doctor_fail_on_bad_blocker_graph() {
     let temp = setup_repo("maestro-doctor-bad-blockers");
     let repo = temp.path();
