@@ -141,7 +141,12 @@ pub fn scan_with_failures(paths: &MaestroPaths) -> Result<StoreScan> {
 /// dir-backed card, the container list file for an entry), for the per-type
 /// scans that report artifact locations.
 pub(crate) fn scan_with_paths(paths: &MaestroPaths) -> Result<Vec<(Card, PathBuf)>> {
-    Ok(walk(&paths.cards_dir(), true)?.cards)
+    scan_dir_with_paths(&paths.cards_dir())
+}
+
+/// [`scan_with_paths`] over an explicit card tree root (the archive tree).
+pub(crate) fn scan_dir_with_paths(root: &Path) -> Result<Vec<(Card, PathBuf)>> {
+    Ok(walk(root, true)?.cards)
 }
 
 /// One walk over a card tree root in the container layout, shared by the

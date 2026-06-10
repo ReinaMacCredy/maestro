@@ -8,7 +8,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use card_support::{id_by_title, sole_idea_id};
+use card_support::{card_dir, card_record_path, id_by_title, sole_idea_id};
 use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use support::TestTempDir;
@@ -363,29 +363,29 @@ fn parse_mcp_frames(bytes: &[u8]) -> Vec<JsonValue> {
     frames
 }
 
-/// The flat card directory `.maestro/cards/<id>`; a task's record is its
-/// `card.yaml` (no `{id}-slug` suffix in card mode), and verification sidecars
-/// land beside it.
+/// The card's directory, located through the store probe (a pooled task's
+/// `tasks/<id>/` dir, or a flat `.maestro/cards/<id>` fixture); verification
+/// sidecars land beside the record.
 fn task_dir(repo: &Path, id: &str) -> PathBuf {
-    repo.join(".maestro/cards").join(id)
+    card_dir(repo, id)
 }
 
 /// Read/write the card record. The task fields the old `task.yaml` carried now
 /// live verbatim under the card's `extra` mapping; the top-level card header
 /// (`status`/timestamps) sits above it.
 fn read_card(repo: &Path, id: &str) -> YamlValue {
-    let path = task_dir(repo, id).join("card.yaml");
-    let raw = fs::read_to_string(&path).expect("invariant: card.yaml should be readable");
-    serde_yaml::from_str(&raw).expect("invariant: card.yaml should parse")
+    let path = card_record_path(repo, id);
+    let raw = fs::read_to_string(&path).expect("invariant: card record should be readable");
+    serde_yaml::from_str(&raw).expect("invariant: card record should parse")
 }
 
 fn write_card(repo: &Path, id: &str, card: &YamlValue) {
-    let path = task_dir(repo, id).join("card.yaml");
+    let path = card_record_path(repo, id);
     fs::write(
         &path,
         serde_yaml::to_string(card).expect("invariant: card should serialize"),
     )
-    .expect("invariant: card.yaml should be writable");
+    .expect("invariant: card record should be writable");
 }
 
 fn create_task(repo: &Path, title: &str) {

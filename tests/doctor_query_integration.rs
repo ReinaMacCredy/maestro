@@ -7,7 +7,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use card_support::id_by_title;
+use card_support::{card_record_path, id_by_title};
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;
 
@@ -240,14 +240,14 @@ fn doctor_collects_a_corrupt_task_error_without_aborting_the_rest_of_the_report(
     );
 
     let task_id = id_by_title(repo, "probe");
-    let card_yaml = repo.join(".maestro/cards").join(&task_id).join("card.yaml");
+    let card_yaml = card_record_path(repo, &task_id);
     fs::write(
         &card_yaml,
         format!(
             "schema_version: maestro.card.v1\nid: {task_id}\ntype: task\ntitle: probe\nstatus: draft\ncreated_at: \"1\"\nupdated_at: \"1\"\nextra:\n  state:\n    - oops\n"
         ),
     )
-    .expect("invariant: card.yaml should be writable");
+    .expect("invariant: card record should be writable");
 
     let doctor = maestro(repo, &["doctor"]);
     assert_failure(&doctor, &["doctor"]);
@@ -747,7 +747,7 @@ fn query_views_scan_current_artifacts_without_writing_cache_files() {
     // The task record is folded under the card's `extra`; changing its acceptance
     // contract re-derives a contract hash that no longer matches the recorded
     // verification, so the matrix proof column reads `stale`.
-    let card_path = repo.join(".maestro/cards").join(&task_id).join("card.yaml");
+    let card_path = card_record_path(repo, &task_id);
     let mut card: YamlValue = serde_yaml::from_str(
         &fs::read_to_string(&card_path).expect("invariant: card.yaml should be readable"),
     )
@@ -845,12 +845,12 @@ fn query_proof_reads_an_archived_task_through_the_archive_fallback() {
     // must fall through to the archive tree instead of erroring "not found".
     //
     // Card mode: per-task archive was retired (SPEC E4); archiving is now a
-    // feature-level cascade that moves the feature card and its `parent=` children
-    // to `.maestro/archive/cards/<id>/`. Drive a verified child task, close it,
-    // terminal-ize the feature through its gated verb (a generic `update --status`
-    // on a feature is refused, SPEC E3), then `archive <feature>` so the task card
-    // lands in the archive tree -- and `query proof` must read it through the
-    // archive fallback.
+    // feature-level cascade that moves the feature container -- its pooled child
+    // tasks ride inside -- to `.maestro/archive/cards/<feature>/`. Drive a
+    // verified child task, close it, terminal-ize the feature through its gated
+    // verb (a generic `update --status` on a feature is refused, SPEC E3), then
+    // `archive <feature>` so the task record lands in the archive tree -- and
+    // `query proof` must read it through the archive fallback.
     let task_id = create_verified_task_with_proof(repo);
     for args in [
         vec!["task", "verify", &task_id],
@@ -867,13 +867,13 @@ fn query_proof_reads_an_archived_task_through_the_archive_fallback() {
         assert_success(&maestro(repo, &args), &args);
     }
     assert!(
-        repo.join(".maestro/archive/cards")
+        repo.join(".maestro/archive/cards/billing-csv-export/tasks")
             .join(&task_id)
-            .join("card.yaml")
+            .join("task.yaml")
             .is_file(),
-        "the verified task card moved to the archive tree"
+        "the pooled task record moved to the archive tree inside its feature container"
     );
-    assert!(!repo.join(".maestro/cards").join(&task_id).exists());
+    assert!(!repo.join(".maestro/cards/billing-csv-export").exists());
 
     let proof = run_success(repo, &["query", "proof", &task_id]);
     assert!(proof.contains(&format!("proof {task_id}:")));

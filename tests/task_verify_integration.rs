@@ -7,7 +7,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use card_support::id_by_title;
+use card_support::{card_dir, card_record_path, id_by_title};
 use serde_json::Value;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use sha2::{Digest, Sha256};
@@ -167,35 +167,64 @@ fn create_completed_task(repo: &Path, claim: &str) {
     write_task_yaml(repo, "task-001", &task);
 }
 
-/// The flat card store: every entity is a directory keyed by its id under
-/// `.maestro/cards/`, holding `card.yaml` plus any prose/proof sidecars.
+/// The card store root, for fixture plants keyed by a path the store has not
+/// minted yet (e.g. a feature's `qa.md` sidecar).
 fn cards_dir(repo: &Path) -> PathBuf {
     repo.join(".maestro/cards")
 }
 
-/// A task's card directory: in the flat store the directory name is the id
-/// verbatim (no `-<slug>` suffix), so the path is a direct join.
+/// A task's record directory, located through the store probe so the helper
+/// survives both homes (pooled `tasks/<id>/` and pre-migration flat `<id>/`).
 fn task_dir(repo: &Path, id: &str) -> PathBuf {
-    cards_dir(repo).join(id)
+    card_dir(repo, id)
 }
 
-/// Rename a card directory and rewrite its `id`/`extra.id` so a freshly minted
-/// content-hash id can be addressed by a stable literal in the suite.
+/// The in-flight write reservation guarding a card's record file. The lock
+/// name derives from the record file name (`.{file}.write-lock`), so a pooled
+/// `task.yaml` home locks differently from a flat `card.yaml` one.
+fn write_lock_dir(repo: &Path, id: &str) -> PathBuf {
+    let record = card_record_path(repo, id);
+    let file = record
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("invariant: a card record path always has a file name");
+    record
+        .parent()
+        .expect("invariant: a card record path always has a parent")
+        .join(format!(".{file}.write-lock"))
+}
+
+/// Rename a card's record directory in place and rewrite its `id`/`extra.id`
+/// so a freshly minted content-hash id can be addressed by a stable literal in
+/// the suite. The directory moves within its pool (`tasks/<from>` ->
+/// `tasks/<to>`), keeping the home shape the store expects.
 fn rename_card(repo: &Path, from: &str, to: &str) {
-    fs::rename(task_dir(repo, from), task_dir(repo, to))
-        .expect("invariant: card dir should be renamable");
-    let path = task_dir(repo, to).join("card.yaml");
+    let record = card_record_path(repo, from);
+    let file = record
+        .file_name()
+        .expect("invariant: a card record path always has a file name")
+        .to_os_string();
+    let from_dir = record
+        .parent()
+        .expect("invariant: a card record path always has a parent")
+        .to_path_buf();
+    let to_dir = from_dir
+        .parent()
+        .expect("invariant: a card dir always has a parent")
+        .join(to);
+    fs::rename(&from_dir, &to_dir).expect("invariant: card dir should be renamable");
+    let path = to_dir.join(file);
     let mut doc: YamlValue = serde_yaml::from_str(
-        &fs::read_to_string(&path).expect("invariant: card.yaml should be readable"),
+        &fs::read_to_string(&path).expect("invariant: card record should be readable"),
     )
-    .expect("invariant: card.yaml should parse");
+    .expect("invariant: card record should parse");
     doc["id"] = YamlValue::String(to.to_string());
     doc["extra"]["id"] = YamlValue::String(to.to_string());
     fs::write(
         &path,
-        serde_yaml::to_string(&doc).expect("invariant: card.yaml should serialize"),
+        serde_yaml::to_string(&doc).expect("invariant: card record should serialize"),
     )
-    .expect("invariant: card.yaml should be writable");
+    .expect("invariant: card record should be writable");
 }
 
 /// The folded task record under `card.extra`. Every assertion written against the
@@ -206,15 +235,15 @@ fn task_yaml(repo: &Path, id: &str) -> YamlValue {
 }
 
 fn card_doc(repo: &Path, id: &str) -> YamlValue {
-    let raw = fs::read_to_string(task_dir(repo, id).join("card.yaml"))
-        .expect("invariant: card.yaml should be readable");
-    serde_yaml::from_str(&raw).expect("invariant: card.yaml should parse")
+    let raw = fs::read_to_string(card_record_path(repo, id))
+        .expect("invariant: card record should be readable");
+    serde_yaml::from_str(&raw).expect("invariant: card record should parse")
 }
 
 /// Write the folded task record back into its card envelope, preserving the card
 /// header (`id`/`type`/`title`/`status`/timestamps) around the edited `extra`.
 fn write_task_yaml(repo: &Path, id: &str, task: &YamlValue) {
-    let path = task_dir(repo, id).join("card.yaml");
+    let path = card_record_path(repo, id);
     let mut doc = card_doc(repo, id);
     doc["extra"] = task.clone();
     // The top-level status is the source of truth (SPEC DN3) and typed readers
@@ -482,11 +511,11 @@ fn task_verify_warns_when_after_dependency_cleanup_fails_after_apply() {
         &maestro(repo, &["task", "claim", &t1]),
         &["task", "claim", &t1],
     );
-    // The dependent task is held open against the cleanup write: in the card store
-    // the write guard is an in-flight `.card.yaml.write-lock` reservation
-    // directory (the lockfile mechanism of the legacy `task.yaml` store is gone),
-    // so the after-dependency cleanup that resolves T2's blocker cannot land.
-    fs::create_dir(task_dir(repo, &t2).join(".card.yaml.write-lock"))
+    // The dependent task is held open against the cleanup write: the card
+    // store's write guard is an in-flight `.{record}.write-lock` reservation
+    // directory, so the after-dependency cleanup that resolves T2's blocker
+    // cannot land.
+    fs::create_dir(write_lock_dir(repo, &t2))
         .expect("invariant: dependent task write-lock should be plantable");
 
     let complete = maestro(
@@ -553,9 +582,9 @@ fn task_verify_passed_apply_failure_leaves_report_unapplied() {
     create_completed_task(repo, "implemented transaction apply");
     write_event(repo, "task-001", "implemented transaction apply");
     // Hold the card open against the apply-phase write: the card store guards
-    // writes with an in-flight `.card.yaml.write-lock` reservation directory, so
+    // writes with an in-flight `.{record}.write-lock` reservation directory, so
     // the passed verification cannot be embedded.
-    fs::create_dir(task_dir(repo, "task-001").join(".card.yaml.write-lock"))
+    fs::create_dir(write_lock_dir(repo, "task-001"))
         .expect("invariant: card write-lock should be plantable");
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);
@@ -592,9 +621,9 @@ fn task_verify_failed_apply_failure_leaves_report_unapplied() {
     let repo = temp.path();
     create_completed_task(repo, "implemented failed transaction apply");
     let before = task_yaml(repo, "task-001");
-    // The card store guards writes with an in-flight `.card.yaml.write-lock`
+    // The card store guards writes with an in-flight `.{record}.write-lock`
     // reservation directory, so the failed verification cannot be embedded.
-    fs::create_dir(task_dir(repo, "task-001").join(".card.yaml.write-lock"))
+    fs::create_dir(write_lock_dir(repo, "task-001"))
         .expect("invariant: card write-lock should be plantable");
 
     let verify = maestro(repo, &["task", "verify", "task-001"]);

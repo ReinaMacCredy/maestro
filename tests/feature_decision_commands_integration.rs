@@ -6,7 +6,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
-use card_support::{card_doc, id_by_title};
+use card_support::{card_dir, card_doc, id_by_title};
 use maestro::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
 use serde_yaml::Value as YamlValue;
@@ -1645,14 +1645,8 @@ fn feature_and_task_note_create_dated_notes_on_first_write() {
         task_note.contains(&format!("noted {task_id} (notes.md created)")),
         "{task_note}"
     );
-    let task_notes = fs::read_to_string(
-        temp_dir
-            .path()
-            .join(".maestro/cards")
-            .join(&task_id)
-            .join("notes.md"),
-    )
-    .expect("invariant: task notes should be readable");
+    let task_notes = fs::read_to_string(card_dir(temp_dir.path(), &task_id).join("notes.md"))
+        .expect("invariant: task notes should be readable");
     assert!(task_notes.starts_with("# Add CSV export\n\n"));
     assert_dated_note_line(&task_notes, "proved: csv opens");
 }
@@ -2173,7 +2167,7 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     assert!(archive_cards.join("task-002/card.yaml").is_file());
     assert!(archive_cards.join("task-003/card.yaml").is_file());
     // The entangled live blocker-holder stays in the live store.
-    assert!(cards_dir.join(&holder_id).join("card.yaml").is_file());
+    assert!(card_support::card_record_path(root, &holder_id).is_file());
 
     // R25/R26: an archived show discloses it is the archive view.
     let show = stdout(

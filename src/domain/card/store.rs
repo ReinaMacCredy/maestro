@@ -305,8 +305,13 @@ fn container_dir(paths: &MaestroPaths, parent: Option<&str>) -> Result<PathBuf> 
 /// `ideas.yaml`, then each container's `decisions.yaml`). `None` when no
 /// home holds the id.
 pub fn locate(paths: &MaestroPaths, id: &str) -> Result<Option<CardHome>> {
+    locate_in(&paths.cards_dir(), id)
+}
+
+/// [`locate`] over an explicit store root, so the archive tree
+/// (`archive/cards/`) probes through the same layout walk as the live store.
+pub(crate) fn locate_in(root: &Path, id: &str) -> Result<Option<CardHome>> {
     validate_card_id(id)?;
-    let root = paths.cards_dir();
 
     let flat = root.join(id).join(CARD_FILE);
     if dir_card_exists(&flat) {
@@ -316,7 +321,7 @@ pub fn locate(paths: &MaestroPaths, id: &str) -> Result<Option<CardHome>> {
     if dir_card_exists(&pooled) {
         return Ok(Some(CardHome::Dir(pooled)));
     }
-    let containers: Vec<PathBuf> = sorted_child_dirs(&root)?
+    let containers: Vec<PathBuf> = sorted_child_dirs(root)?
         .into_iter()
         .filter(|dir| dir.file_name().is_none_or(|name| name != TASKS_DIR))
         .collect();
@@ -454,7 +459,14 @@ impl ResolvedCard {
 /// `None` when no home holds the id. The returned basis backs the matching
 /// [`save_resolved`]/[`remove_resolved`] CAS.
 pub fn resolve(paths: &MaestroPaths, id: &str) -> Result<Option<ResolvedCard>> {
-    let Some(home) = locate(paths, id)? else {
+    resolve_in(&paths.cards_dir(), id)
+}
+
+/// [`resolve`] over an explicit store root (the archive tree), read-only in
+/// spirit: the basis still backs a CAS save, but archive callers only take
+/// the card and its path.
+pub(crate) fn resolve_in(root: &Path, id: &str) -> Result<Option<ResolvedCard>> {
+    let Some(home) = locate_in(root, id)? else {
         return Ok(None);
     };
     match home {

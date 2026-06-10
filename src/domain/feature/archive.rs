@@ -1,18 +1,21 @@
 //! Move terminal feature cards, including their settled child cards, to and
 //! from the archive sibling tree (§5 L2/L3/L6 + §5.9 child cascade).
 //!
-//! The flat card store has no nested child directories, so the cascade is a
-//! query (SPEC E4): the move set is the feature card plus every live card whose
-//! `parent` is the feature, and each member's whole directory -- `card.yaml`
-//! plus any sidecars -- moves as a unit between `cards/<id>` and
-//! `archive/cards/<id>`.
+//! The cascade is a query (SPEC E4): the move set is the feature card plus
+//! every live card whose `parent` is the feature. In the container layout the
+//! feature's own directory already bundles its pooled tasks, decision entries,
+//! and prose, so moving `cards/<id>` moves them all; a child living OUTSIDE
+//! the container (a pre-migration flat dir, or a root-pooled task) moves as
+//! its own directory, mirrored to the same store-relative path under
+//! `archive/cards/`.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::domain::card::query::{Coarse, coarse_of, scan, scan_dir};
+use crate::domain::card::query::{Coarse, coarse_of, scan_dir_with_paths, scan_with_paths};
+use crate::domain::card::store::{CARD_FILE, TASK_FILE};
 use crate::domain::feature::registry::{load_archived_record, load_record, validate_feature_id};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
@@ -61,16 +64,17 @@ pub fn archive_feature(
         );
     }
 
-    // Children live as flat sibling cards linked by `parent`. Partition by
+    // Children are linked by `parent`, wherever they live. Partition by
     // coarse liveness so the set moves only after every member is settled.
+    let container = paths.cards_dir().join(id);
     let mut live_children = Vec::new();
     let mut terminal_children = Vec::new();
-    for card in scan(paths)? {
+    for (card, path) in scan_with_paths(paths)? {
         if card.parent.as_deref() != Some(id) {
             continue;
         }
         if coarse_of(&card.status) == Some(Coarse::Closed) {
-            terminal_children.push(card.id);
+            terminal_children.push((card.id, path));
         } else {
             live_children.push(card.id);
         }
@@ -85,23 +89,24 @@ pub fn archive_feature(
     }
     terminal_children.sort();
 
-    let archived = terminal_children;
-
     if !dry_run {
         // Pre-flight no-clobber over the whole move set, so a collision aborts
-        // the run before anything moves.
+        // the run before anything moves. A child inside the feature container
+        // rides the container move; only outside homes move individually.
         let mut moves: Vec<(PathBuf, PathBuf)> = Vec::new();
         if feature_live {
-            moves.push((
-                paths.cards_dir().join(id),
-                paths.archive_cards_dir().join(id),
-            ));
+            moves.push((container.clone(), paths.archive_cards_dir().join(id)));
         }
-        for child in &archived {
-            moves.push((
-                paths.cards_dir().join(child),
-                paths.archive_cards_dir().join(child),
-            ));
+        for (child, path) in &terminal_children {
+            if path.starts_with(&container) {
+                continue;
+            }
+            moves.push(child_move(
+                child,
+                path,
+                &paths.cards_dir(),
+                &paths.archive_cards_dir(),
+            )?);
         }
         for (_, target) in &moves {
             if target.exists() {
@@ -115,11 +120,16 @@ pub fn archive_feature(
             ensure_dir(paths.archive_cards_dir())?;
         }
         for (src, dst) in &moves {
+            if let Some(parent) = dst.parent() {
+                ensure_dir(parent)?;
+            }
             fs::rename(src, dst).with_context(|| {
                 format!("failed to move {} to {}", src.display(), dst.display())
             })?;
         }
     }
+
+    let archived: Vec<String> = terminal_children.into_iter().map(|(id, _)| id).collect();
 
     Ok(FeatureArchiveReport {
         note: archive_note(id, dry_run, feature_live, &archived),
@@ -147,24 +157,27 @@ pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
         bail!("archived feature not found: {id}");
     }
 
-    let mut restored: Vec<String> = scan_dir(&paths.archive_cards_dir())?
+    let mut children: Vec<(String, PathBuf)> = scan_dir_with_paths(&paths.archive_cards_dir())?
         .into_iter()
-        .filter(|card| card.parent.as_deref() == Some(id))
-        .map(|card| card.id)
+        .filter(|(card, _)| card.parent.as_deref() == Some(id))
+        .map(|(card, path)| (card.id, path))
         .collect();
-    restored.sort();
+    children.sort();
 
     // Pre-flight no-clobber over the whole restore set before anything moves.
+    // A child inside the archived container rides the container move back.
     let mut moves: Vec<(PathBuf, PathBuf)> = Vec::new();
     if feature_archived {
         if live_dir.exists() {
             bail!("cannot unarchive {id} — a live feature already occupies that id");
         }
-        moves.push((archive_dir, live_dir));
+        moves.push((archive_dir.clone(), live_dir));
     }
-    for child in &restored {
-        let src = paths.archive_cards_dir().join(child);
-        let dst = paths.cards_dir().join(child);
+    for (child, path) in &children {
+        if path.starts_with(&archive_dir) {
+            continue;
+        }
+        let (src, dst) = child_move(child, path, &paths.archive_cards_dir(), &paths.cards_dir())?;
         if dst.exists() {
             bail!(
                 "cannot unarchive {id} — a live copy of {child} already occupies {}",
@@ -177,11 +190,45 @@ pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
         ensure_dir(paths.cards_dir())?;
     }
     for (src, dst) in &moves {
+        if let Some(parent) = dst.parent() {
+            ensure_dir(parent)?;
+        }
         fs::rename(src, dst)
             .with_context(|| format!("failed to move {} to {}", src.display(), dst.display()))?;
     }
 
+    let restored: Vec<String> = children.into_iter().map(|(id, _)| id).collect();
     Ok(unarchive_note(id, feature_archived, &restored))
+}
+
+/// The movable directory pair for a child living outside the feature
+/// container: its own record dir, mirrored at the same store-relative path
+/// under the destination root. An entry-backed child has no directory of its
+/// own to move -- only reachable by hand-editing a parent onto a root entry --
+/// so the cascade aborts loud rather than guessing.
+fn child_move(
+    child: &str,
+    record: &Path,
+    from_root: &Path,
+    to_root: &Path,
+) -> Result<(PathBuf, PathBuf)> {
+    let file = record.file_name().and_then(|name| name.to_str());
+    if !matches!(file, Some(CARD_FILE | TASK_FILE)) {
+        bail!(
+            "cannot cascade {child} — it is an entry in {}; move it by hand",
+            record.display()
+        );
+    }
+    let dir = record
+        .parent()
+        .with_context(|| format!("record path missing parent: {}", record.display()))?;
+    let relative = dir.strip_prefix(from_root).with_context(|| {
+        format!(
+            "child {child} lives outside the store root: {}",
+            dir.display()
+        )
+    })?;
+    Ok((dir.to_path_buf(), to_root.join(relative)))
 }
 
 /// Compose the `feature archive` summary across first-run, sweep-re-run,

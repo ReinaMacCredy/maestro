@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::store as card_store;
 use crate::domain::feature::{self, FeatureStatus};
 use crate::domain::task::{self, BlockerTarget, TaskRecord, TaskState, TransitionDetails};
 use crate::foundation::core::fs::ensure_dir;
@@ -683,10 +684,9 @@ fn reload_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Result<
 
 fn rollback_created_tasks(paths: &MaestroPaths, created: &[TaskRecord]) -> Result<()> {
     for task in created.iter().rev() {
-        let task_dir = paths.cards_dir().join(&task.id);
-        if task_dir.exists() {
-            fs::remove_dir_all(&task_dir)
-                .with_context(|| format!("failed to remove {}", task_dir.display()))?;
+        if let Some(resolved) = card_store::resolve(paths, &task.id)? {
+            card_store::remove_resolved(&resolved)
+                .with_context(|| format!("failed to remove task card {}", task.id))?;
         }
     }
     Ok(())

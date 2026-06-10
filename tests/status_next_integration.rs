@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use card_support::{id_by_title, sole_idea_id, task_record};
+use card_support::{card_record_path, id_by_title, sole_idea_id, task_record};
 use maestro::foundation::core::fs::ensure_dir;
 use serde_json::Value as JsonValue;
 use serde_yaml::Value as YamlValue;
@@ -80,10 +80,13 @@ fn task_yaml(repo: &Path, id: &str) -> YamlValue {
     task_record(repo, id)
 }
 
-/// The flat card directory `.maestro/cards/<id>`; the task record is its `card.yaml`
-/// and a written resume artifact lands at `<card_dir>/resume.md`.
+/// The card's directory, located through the store probe; a written resume
+/// artifact lands at `<card_dir>/resume.md`.
 fn card_dir(repo: &Path, id: &str) -> PathBuf {
-    repo.join(".maestro/cards").join(id)
+    card_record_path(repo, id)
+        .parent()
+        .expect("invariant: a card record path always has a parent")
+        .to_path_buf()
 }
 
 fn write_baseline(repo: &Path, feature_id: &str) {
@@ -365,17 +368,24 @@ fn resume_full_handoff_and_write_are_explicit() {
     );
 
     let written = run(repo, &["resume", "--handoff", "--write"]);
+    let resume_md = card_dir(repo, &id).join("resume.md");
+    let resume_rel = resume_md
+        .strip_prefix(repo)
+        .expect("invariant: resume artifact lives under the repo");
     assert!(
-        written.contains(&format!("wrote: .maestro/cards/{id}/resume.md")),
+        written.contains(&format!("wrote: {}", resume_rel.display())),
         "{written}"
     );
-    let resume_md = card_dir(repo, &id).join("resume.md");
     let resume_doc = fs::read_to_string(&resume_md)
         .expect("invariant: explicit resume artifact should be readable");
     assert!(resume_doc.contains("generated_at:"), "{resume_doc}");
     assert!(resume_doc.contains("source references:"), "{resume_doc}");
+    let record_rel = card_record_path(repo, &id);
+    let record_rel = record_rel
+        .strip_prefix(repo)
+        .expect("invariant: card record lives under the repo");
     assert!(
-        resume_doc.contains(&format!(".maestro/cards/{id}/card.yaml")),
+        resume_doc.contains(&record_rel.display().to_string()),
         "{resume_doc}"
     );
     assert!(resume_doc.contains("handoff prompt:"), "{resume_doc}");

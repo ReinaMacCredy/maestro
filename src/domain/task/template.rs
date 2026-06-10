@@ -1,9 +1,7 @@
-use std::path::PathBuf;
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::card::store::CardSnapshot;
+use crate::domain::card::store::ResolvedCard;
 use crate::domain::task::cards;
 use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
 use crate::foundation::core::slug::slugify_ascii;
@@ -224,15 +222,12 @@ pub struct AcceptanceFile {
 
 /// Optimistic-concurrency snapshot for a loaded task. The snapshot is the CAS
 /// basis the matching save checks: the card store's raw-string CAS is the
-/// guard, and `path` is the `card.yaml` the save writes back to. The save seam
-/// takes no `paths`, so the snapshot is the natural carrier of both the write
-/// target and the proof.
+/// guard, and the resolved card carries the home the save writes back to. The
+/// save seam takes no `paths`, so the snapshot is the natural carrier of both
+/// the write target and the proof.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TaskSnapshot {
-    Card {
-        path: PathBuf,
-        snapshot: Box<CardSnapshot>,
-    },
+    Card(Box<ResolvedCard>),
 }
 
 impl TaskRecord {
@@ -291,7 +286,7 @@ impl AcceptanceFile {
 /// compare-and-set is the whole guard -- no lock or reload here.
 pub fn save_task_with_snapshot(task: &TaskRecord, snapshot: &TaskSnapshot) -> Result<()> {
     match snapshot {
-        TaskSnapshot::Card { path, snapshot } => cards::save_at(path, task, snapshot),
+        TaskSnapshot::Card(resolved) => cards::save(task, resolved),
     }
 }
 

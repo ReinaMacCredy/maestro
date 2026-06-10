@@ -96,9 +96,10 @@ impl BlockerTarget {
         let Some(by) = by else {
             return Ok(Self::Human);
         };
-        let card = card_store::load(&card_store::card_path(paths, &by))
+        let card = card_store::resolve(paths, &by)
             .ok()
-            .flatten();
+            .flatten()
+            .map(|resolved| resolved.card);
         match card.map(|card| card.card_type) {
             Some(CardType::Task | CardType::Bug | CardType::Chore) => Ok(Self::Task(by)),
             Some(CardType::Decision) => Ok(Self::Decision(by)),
@@ -173,19 +174,17 @@ pub fn load_archived_task_record(
     cards::load_one_archived(paths, id)
 }
 
-/// Resolve a task's on-disk record path (`cards/<id>/card.yaml`) by canonical id.
-///
-/// Card-routed: the legacy `.maestro/tasks` tree no longer exists, so this joins
-/// the card store path and confirms the record is present, bailing a clean
-/// not-found otherwise. Callers take `.parent()` to reach the card directory.
+/// Resolve a task's on-disk record path by canonical id, probing every home
+/// the resolver covers (a `tasks/` pool dir or a pre-migration flat dir).
+/// Bails a clean not-found when no home holds the id. Callers take
+/// `.parent()` to reach the card directory.
 pub fn task_yaml_path(tasks_dir: &Path, id: &str) -> Result<PathBuf> {
     let paths = lookup::paths_for_tasks_dir(tasks_dir)
         .context("cannot resolve maestro paths from tasks dir")?;
-    let path = card_store::card_path(&paths, id);
-    if !path.is_file() {
+    let Some(home) = card_store::locate(&paths, id)? else {
         bail!("task not found: {id}");
-    }
-    Ok(path)
+    };
+    Ok(home.path().to_path_buf())
 }
 
 /// Read a task's inline acceptance checks for display.
@@ -1031,9 +1030,6 @@ mod tests {
     /// collision tests in task_commands cover a path that no longer exists.)
     #[test]
     fn card_mode_set_feature_retargets_parent_in_place_and_drops_the_count() {
-        use crate::domain::card::schema::Card;
-        use crate::domain::card::store::card_path;
-
         let paths = card_mode_repo("detach");
         let tasks_dir = paths.tasks_dir();
 
@@ -1065,10 +1061,10 @@ mod tests {
         )
         .expect("detach the feature");
 
-        let card: Card = serde_yaml::from_str(
-            &std::fs::read_to_string(card_path(&paths, &task.id)).expect("card readable"),
-        )
-        .expect("card parses");
+        let card = crate::domain::card::store::resolve(&paths, &task.id)
+            .expect("card resolvable")
+            .expect("card present")
+            .card;
         assert_eq!(card.parent, None, "the parent field is cleared in place");
 
         let counts = crate::feature::query::count_tasks_by_feature(&tasks_dir).expect("recount");

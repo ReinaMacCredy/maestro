@@ -29,8 +29,8 @@ pub(super) fn validate_task_lookup_id(id: &str) -> Result<()> {
 }
 
 /// Load a task by id with its optimistic save snapshot. Reads the `Task`-typed
-/// card at `cards/<id>/card.yaml` (no archive fallback -- the card archive tree
-/// is its own scan).
+/// card from whatever home the resolver finds (no archive fallback -- the card
+/// archive tree is its own scan).
 pub fn load_task_with_snapshot(
     tasks_dir: &Path,
     id: &str,
@@ -38,19 +38,13 @@ pub fn load_task_with_snapshot(
     let paths =
         paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
     validate_task_lookup_id(id)?;
-    let Some((task, snapshot, path)) = cards::load_one(&paths, id)? else {
+    let Some((task, resolved)) = cards::load_one(&paths, id)? else {
         bail!("task not found: {id}");
     };
-    let task_dir = path
+    let task_dir = resolved
+        .path()
         .parent()
         .map(Path::to_path_buf)
         .context("card path is missing parent directory")?;
-    Ok((
-        task,
-        TaskSnapshot::Card {
-            path,
-            snapshot: Box::new(snapshot),
-        },
-        task_dir,
-    ))
+    Ok((task, TaskSnapshot::Card(Box::new(resolved)), task_dir))
 }

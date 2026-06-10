@@ -9,7 +9,7 @@
 #![allow(dead_code)]
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use maestro::domain::card::query;
 use maestro::domain::card::schema::CardType;
@@ -68,6 +68,28 @@ pub fn sole_idea_id(repo: &Path) -> String {
         .collect();
     assert_eq!(ideas.len(), 1, "expected exactly one idea card: {ideas:?}");
     ideas.remove(0)
+}
+
+/// The file backing a card's persisted record, located through the same store
+/// probe production uses (a flat dir's `card.yaml`, a pooled task's
+/// `task.yaml`, or the container list file holding its entry). Falls back to
+/// the flat `cards/<id>/card.yaml` for an id that does not exist yet, so
+/// fixture-planting tests keep writing there and the store dual-reads it.
+pub fn card_record_path(repo: &Path, id: &str) -> PathBuf {
+    let paths = MaestroPaths::new(repo);
+    locate(&paths, id)
+        .expect("invariant: card lookup should succeed")
+        .map(|home| home.path().to_path_buf())
+        .unwrap_or_else(|| repo.join(".maestro/cards").join(id).join("card.yaml"))
+}
+
+/// The directory holding a card's record file and sidecars (notes, proof,
+/// verification artifacts).
+pub fn card_dir(repo: &Path, id: &str) -> PathBuf {
+    card_record_path(repo, id)
+        .parent()
+        .expect("invariant: a card record path always has a parent")
+        .to_path_buf()
 }
 
 /// The raw persisted card record for an id, parsed as YAML and resolved through

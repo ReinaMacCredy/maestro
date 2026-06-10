@@ -6,7 +6,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::process::Command;
 
-use card_support::{card_doc, id_by_title, task_record};
+use card_support::{card_dir, card_doc, card_record_path, id_by_title, task_record};
 use serde_yaml::{Mapping, Value};
 use support::TestTempDir;
 
@@ -721,8 +721,8 @@ fn set_on_a_settled_task_refuses_the_link_change_before_writing_checks() {
     assert!(stderr(&set).contains("settled history"));
 
     // The refused set wrote no check: inline acceptance carries nothing from it.
-    let raw = fs::read_to_string(repo.join(".maestro/cards").join(&id).join("card.yaml"))
-        .expect("invariant: card.yaml should be readable");
+    let raw = fs::read_to_string(card_record_path(repo, &id))
+        .expect("invariant: card record should be readable");
     assert!(
         !raw.contains("must not persist"),
         "a refused set must not persist its checks: {raw}"
@@ -872,11 +872,11 @@ fn set_check_honors_an_on_disk_acceptance_lock_even_when_the_task_snapshot_is_st
     // Simulate a partially-written inline contract lock: the task stays draft
     // (`acceptance_locked = false`), but the nested acceptance record (under the
     // card's folded `extra`) is frozen.
-    let card_path = repo.join(".maestro/cards").join(&id).join("card.yaml");
+    let card_path = card_record_path(repo, &id);
     let mut doc: Value = serde_yaml::from_str(
-        &fs::read_to_string(&card_path).expect("invariant: card.yaml should be readable"),
+        &fs::read_to_string(&card_path).expect("invariant: card record should be readable"),
     )
-    .expect("invariant: card.yaml should parse");
+    .expect("invariant: card record should parse");
     let mut acceptance = Mapping::new();
     acceptance.insert(
         Value::String("locked_by".to_string()),
@@ -1430,7 +1430,7 @@ fn task_show_rejects_a_symlinked_card_dir() {
     // card load must refuse to follow the symlinked dir (the single-load mirror of
     // the bulk-scan symlink skip), so `task show` reports not-found rather than
     // reading a record from outside the store.
-    let card_dir = repo.join(".maestro/cards").join(&id);
+    let card_dir = card_dir(repo, &id);
     let external = repo.join("external-card");
     fs::rename(&card_dir, &external).expect("invariant: card dir should be movable");
     unix_fs::symlink(&external, &card_dir).expect("invariant: symlink should be creatable");

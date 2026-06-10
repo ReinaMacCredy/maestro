@@ -15,7 +15,7 @@ use serde_yaml::{Mapping, Value};
 
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
-use crate::domain::card::store::{self as card_store, CardSnapshot};
+use crate::domain::card::store::{self as card_store, CardHome, ResolvedCard};
 use crate::domain::task::lookup;
 use crate::domain::task::template::{TaskRecord, TaskState};
 use crate::foundation::core::error::MaestroError;
@@ -128,61 +128,61 @@ fn card_for(record: &TaskRecord) -> Result<Card> {
     ))
 }
 
-/// Load one task for a read-modify-write: `Some((record, snapshot, card path))`
-/// when a `Task`-typed card exists for `id`, else `None`. No archive fallback --
-/// the card archive tree is P4 -- so a missing card is simply "task not found".
-/// The snapshot is the CAS basis the matching save checks (SPEC D1).
+/// Load one task for a read-modify-write: `Some((record, resolved))` when a
+/// `Task`-typed card exists for `id` -- in any home the resolver covers (a
+/// `tasks/` pool dir or a pre-migration flat dir) -- else `None`. No archive
+/// fallback -- the card archive tree is its own scan -- so a missing card is
+/// simply "task not found". The resolved card is the CAS basis the matching
+/// save checks (SPEC D1).
 pub(crate) fn load_one(
     paths: &MaestroPaths,
     id: &str,
-) -> Result<Option<(TaskRecord, CardSnapshot, PathBuf)>> {
-    card_store::validate_card_id(id)?;
-    let path = card_store::card_path(paths, id);
-    let snapshot = card_store::load_with_snapshot(&path)?;
-    let Some(card) = snapshot.card.clone() else {
+) -> Result<Option<(TaskRecord, ResolvedCard)>> {
+    let Some(resolved) = card_store::resolve(paths, id)? else {
         return Ok(None);
     };
-    if card.card_type != CardType::Task {
+    if resolved.card.card_type != CardType::Task {
         return Ok(None);
     }
-    let record = record_from_card(card, path.display().to_string())?;
-    Ok(Some((record, snapshot, path)))
+    let record = record_from_card(resolved.card.clone(), resolved.path().display().to_string())?;
+    Ok(Some((record, resolved)))
 }
 
-/// [`load_one`] over the archived card tree (`archive/cards/<id>/card.yaml`),
-/// read-only: archived tasks stay immutable, so no save snapshot is taken. The
-/// L6b proof read crosses the live/archive boundary through this seam.
+/// [`load_one`] over the archived card tree (`archive/cards/`), read-only:
+/// archived tasks stay immutable, so the resolve basis is dropped and only
+/// the record and its artifact directory return. The L6b proof read crosses
+/// the live/archive boundary through this seam.
 pub(crate) fn load_one_archived(
     paths: &MaestroPaths,
     id: &str,
 ) -> Result<Option<(TaskRecord, PathBuf)>> {
     lookup::validate_task_lookup_id(id)?;
-    let path = paths.archive_cards_dir().join(id).join("card.yaml");
-    let Some(card) = card_store::load(&path)? else {
+    let Some(resolved) = card_store::resolve_in(&paths.archive_cards_dir(), id)? else {
         return Ok(None);
     };
-    if card.card_type != CardType::Task {
+    if resolved.card.card_type != CardType::Task {
         return Ok(None);
     }
-    let task_dir = path
+    let task_dir = resolved
+        .path()
         .parent()
         .map(Path::to_path_buf)
         .context("card path is missing parent directory")?;
-    let record = record_from_card(card, path.display().to_string())?;
+    let record = record_from_card(resolved.card.clone(), resolved.path().display().to_string())?;
     Ok(Some((record, task_dir)))
 }
 
-/// Persist a task record to an explicit card path against its load-time snapshot
-/// (the card-store CAS rejects a racing writer, SPEC D1). The save seam takes a
-/// path, not `paths`, because the snapshot already carries it.
-pub(crate) fn save_at(path: &Path, record: &TaskRecord, snapshot: &CardSnapshot) -> Result<()> {
+/// Persist a task record back to the home it was resolved from (the
+/// card-store CAS rejects a racing writer, SPEC D1).
+pub(crate) fn save(record: &TaskRecord, resolved: &ResolvedCard) -> Result<()> {
     let card = card_for(record)?;
-    card_store::save_folded_with_snapshot(path, card, snapshot)
+    card_store::save_folded_resolved(card, resolved)
 }
 
-/// Reconstruct every live `Task`-typed card with its card directory, sorted by
-/// id. `feature_id` is recovered from `card.parent`, so the scan consumers
-/// (counts, projections) group correctly with no directory to read.
+/// Reconstruct every live `Task`-typed card with its artifact directory (the
+/// dir holding its record -- a `tasks/<id>/` pool dir or a pre-migration flat
+/// dir), sorted by id. `feature_id` is recovered from `card.parent`, so the
+/// scan consumers (counts, projections) group correctly.
 pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
     scan_dir(&paths.cards_dir())
 }
@@ -191,20 +191,18 @@ pub(crate) fn scan(paths: &MaestroPaths) -> Result<Vec<(TaskRecord, PathBuf)>> {
 /// (`archive/cards/`) ride the same seam as the live store.
 pub(crate) fn scan_dir(cards_dir: &Path) -> Result<Vec<(TaskRecord, PathBuf)>> {
     let mut records = Vec::new();
-    for id in card_store::card_dir_ids(cards_dir)? {
-        let path = cards_dir.join(&id).join("card.yaml");
-        if let Some(card) = card_store::load(&path)?
-            && card.card_type == CardType::Task
-        {
-            let task_dir = path
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_else(|| cards_dir.to_path_buf());
-            records.push((
-                record_from_card(card, path.display().to_string())?,
-                task_dir,
-            ));
+    for (card, path) in crate::domain::card::query::scan_dir_with_paths(cards_dir)? {
+        if card.card_type != CardType::Task {
+            continue;
         }
+        let task_dir = path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| cards_dir.to_path_buf());
+        records.push((
+            record_from_card(card, path.display().to_string())?,
+            task_dir,
+        ));
     }
     Ok(records)
 }
@@ -223,17 +221,14 @@ pub(crate) fn records_in_cards(cards: &[(Card, PathBuf)]) -> Result<Vec<TaskReco
     Ok(records)
 }
 
-/// Create a new task card from a draft record. The write is a CAS against the
-/// absent snapshot, so a concurrent create of the same id is rejected (matching
-/// the legacy `.alloc-` atomic-create guard). The id is reserved by the caller.
-pub(crate) fn create(paths: &MaestroPaths, record: &TaskRecord) -> Result<()> {
-    let path = card_store::card_path(paths, &record.id);
-    let snapshot = card_store::load_with_snapshot(&path)?;
-    if snapshot.card.is_some() {
-        bail!("task {} already exists", record.id);
-    }
+/// Create a new task card from a draft record, landing in the `tasks/` pool
+/// its parent dictates (a feature container's or the root one). The write is
+/// a CAS create, so a concurrent create of the same id is rejected (matching
+/// the legacy `.alloc-` atomic-create guard). Returns the home so callers can
+/// report the landing path.
+pub(crate) fn create(paths: &MaestroPaths, record: &TaskRecord) -> Result<CardHome> {
     let card = card_for(record)?;
-    card_store::save_with_snapshot(&path, &card, &snapshot)
+    card_store::create_card(paths, &card)
 }
 
 #[cfg(test)]
@@ -347,32 +342,40 @@ mod tests {
     /// A typed save must not destroy the card-only fields -- dep edges
     /// (`dep add`) and a card-set description carry no record home -- and the
     /// typed claim must lift into the top-level copy so `list`/`ready`/`show`
-    /// see it.
+    /// see it. The draft's parent names no feature container, so the create
+    /// falls back to the root `tasks/` pool.
     #[test]
     fn typed_save_preserves_card_only_fields_and_lifts_the_claim() {
         let paths = card_mode_repo("preserve-fields");
-        create(&paths, &parented_draft()).expect("create the task card");
+        let home = create(&paths, &parented_draft()).expect("create the task card");
+        assert!(
+            home.path().ends_with("tasks/task-001/task.yaml"),
+            "an unparented-in-practice task pools at the root: {}",
+            home.path().display()
+        );
 
-        let path = card_store::card_path(&paths, "task-001");
-        let snap = card_store::load_with_snapshot(&path).expect("load the card");
-        let mut card = snap.card.clone().expect("card exists");
+        let resolved = card_store::resolve(&paths, "task-001")
+            .expect("resolve the card")
+            .expect("card exists");
+        let mut card = resolved.card.clone();
         card.deps.push(Dep {
             kind: DepKind::Blocks,
             target: "card-9f7d".to_string(),
         });
         card.description = Some("Stream rows to stdout.".to_string());
-        card_store::save_with_snapshot(&path, &card, &snap).expect("card-verb save");
+        card_store::save_resolved(&card, &resolved).expect("card-verb save");
 
-        let (mut record, snapshot, path) = load_one(&paths, "task-001")
+        let (mut record, resolved) = load_one(&paths, "task-001")
             .expect("typed read")
             .expect("card exists");
         record.claimed_by = Some("claude#s1".to_string());
         record.claimed_at = Some("2026-06-08T02:00:00Z".to_string());
-        save_at(&path, &record, &snapshot).expect("typed save");
+        save(&record, &resolved).expect("typed save");
 
-        let saved = card_store::load(&path)
+        let saved = card_store::resolve(&paths, "task-001")
             .expect("reload the card")
-            .expect("card present");
+            .expect("card present")
+            .card;
         assert_eq!(saved.deps.len(), 1, "the dep edge survives the typed save");
         assert_eq!(saved.deps[0].target, "card-9f7d");
         assert_eq!(saved.description.as_deref(), Some("Stream rows to stdout."));
@@ -393,19 +396,18 @@ mod tests {
         let paths = card_mode_repo("stale-writer");
         create(&paths, &parented_draft()).expect("create the task card");
 
-        let (mut winner, winner_snapshot, winner_path) = load_one(&paths, "task-001")
+        let (mut winner, winner_resolved) = load_one(&paths, "task-001")
             .expect("first read")
             .expect("card exists");
-        let (mut loser, loser_snapshot, loser_path) = load_one(&paths, "task-001")
+        let (mut loser, loser_resolved) = load_one(&paths, "task-001")
             .expect("second read")
             .expect("card exists");
 
         winner.title = "winner".to_string();
-        save_at(&winner_path, &winner, &winner_snapshot).expect("first writer commits");
+        save(&winner, &winner_resolved).expect("first writer commits");
 
         loser.title = "stale writer".to_string();
-        let error = save_at(&loser_path, &loser, &loser_snapshot)
-            .expect_err("the stale writer must be rejected");
+        let error = save(&loser, &loser_resolved).expect_err("the stale writer must be rejected");
         assert!(
             format!("{error:#}").contains("changed since it was read"),
             "{error:#}"
