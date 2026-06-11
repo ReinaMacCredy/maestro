@@ -242,6 +242,7 @@ fn collect_one_task(
         .with_context(|| format!("task missing id: {}", yaml.display()))?;
     collect_task_refs(&id, &source, refs);
     let card = fold::task_card(id.clone(), source, parent_from_dir, now);
+    push_ref(refs, &id, "parent", card.parent.clone());
     pending.push(PendingCard {
         kept_id: id,
         card,
@@ -286,6 +287,7 @@ fn collect_decision_store(
             .with_context(|| format!("decision missing id in {}", store_path.display()))?;
         collect_decision_refs(&id, record, refs);
         let card = fold::decision_card(id.clone(), record.clone(), feature_parent.clone(), now);
+        push_ref(refs, &id, "parent", card.parent.clone());
         pending.push(PendingCard {
             kept_id: id,
             card,
@@ -601,16 +603,21 @@ fn validate_refs(
     Ok(())
 }
 
-/// Ids of artifacts frozen in the legacy archive trees: `archive/tasks/`, plus
-/// each archived feature's nested `tasks/` and `decisions.yaml`. A live ref to
-/// one is valid history -- the target was archived, not lost -- so the gate
-/// admits it and the rewrite leaves the legacy id in place. Only task and
-/// decision ids can land here: External/Human blockers carry no `blocked_ref`.
+/// Ids of artifacts frozen in the legacy archive trees: `archive/tasks/`, each
+/// archived feature's slug, and its nested `tasks/` and `decisions.yaml`. A
+/// live ref to one is valid history -- the target was archived, not lost -- so
+/// the gate admits it and the rewrite leaves the legacy id in place. The
+/// feature slugs admit a live decision whose `feature:` names an archived
+/// feature (its `parent` ref); blockers only land task/decision ids here, as
+/// External/Human blockers carry no `blocked_ref`.
 fn frozen_legacy_ids(paths: &MaestroPaths) -> Result<HashSet<String>> {
     let mut ids: HashSet<String> = HashSet::new();
     let archive = paths.archive_dir();
     collect_archived_task_ids(&archive.join("tasks"), &mut ids)?;
     for feature_dir in sorted_child_dirs(&archive.join("features"))? {
+        if let Some(slug) = dir_name(&feature_dir) {
+            ids.insert(normalize_ref(&slug));
+        }
         collect_archived_task_ids(&feature_dir.join("tasks"), &mut ids)?;
         let store_path = feature_dir.join("decisions.yaml");
         if !store_path.is_file() {
@@ -1299,6 +1306,39 @@ mod tests {
             error.to_string().contains("decision-999"),
             "error names the dangling target: {error}"
         );
+
+        cleanup(&root);
+    }
+
+    /// `card.parent` rides the same dangling-ref gate as the typed cross-refs:
+    /// a live decision whose `feature:` names a feature no tree provides
+    /// aborts, while the same ref naming an ARCHIVED feature is valid history
+    /// and admitted frozen.
+    #[test]
+    fn dangling_parent_fails_loud_and_an_archived_parent_is_admitted() {
+        let root = temp_repo("dangling-parent");
+        let paths = brownfield(&root);
+
+        let store_path = paths.decisions_file();
+        let mut store: DecisionStore =
+            serde_yaml::from_str(&read_text(&store_path)).expect("parse the global store");
+        store.decisions.push(decision(
+            "decision-009",
+            DecisionStatus::Open,
+            Some("ghost-feature"),
+        ));
+        write_record(&store_path, &store);
+
+        let error = run(&paths, NOW).expect_err("a dangling parent must fail loud");
+        let message = error.to_string();
+        assert!(
+            message.contains("parent") && message.contains("ghost-feature"),
+            "error names the dangling parent: {message}"
+        );
+
+        fs::create_dir_all(paths.archive_dir().join("features").join("ghost-feature"))
+            .expect("archive the ghost feature");
+        run(&paths, NOW).expect("an archived parent is admitted frozen");
 
         cleanup(&root);
     }
