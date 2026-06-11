@@ -1,6 +1,6 @@
 ---
 name: maestro-audit
-version: 1.1.0
+version: 1.2.0
 description: "Use for read-only Maestro repo audits that propose harness backlog improvements without implementing them."
 ---
 
@@ -23,20 +23,27 @@ Produce proposals only.
    features, active tasks, decisions, and repo instructions.
 2. Re-read the repo from scratch, including docs, code ownership boundaries,
    tests, scripts, and shipped embedded resources relevant to the finding.
-3. Cross-check findings against Maestro state so you do not propose work already
+   Sweep every lens so coverage is checkable, not just whatever surfaced
+   first: correctness, security, performance, test coverage, tech debt,
+   dependencies, developer experience, docs.
+3. Vet each finding before filing: try to refute it against the live repo
+   (re-read the code, re-run the command). Drop findings that do not survive.
+4. Cross-check findings against Maestro state so you do not propose work already
    accepted, dismissed, measured, or covered by active tasks.
-4. Re-propose every finding still seen. Use one stable topic per finding so the
-   verb merges repeats:
+5. Re-propose every finding still seen. Use one stable topic per finding so the
+   verb merges repeats, and end the evidence with a leverage estimate:
 
 ```sh
-maestro harness propose --title "<finding>" --evidence "<file:line evidence and why it matters>" --topic <stable-topic>
+maestro harness propose --title "<finding>" --evidence "<file:line evidence and why it matters>; impact/effort/confidence: <H|M|L>/<H|M|L>/<H|M|L>" --topic <stable-topic>
 ```
 
 ## Evidence
 
 Each proposal needs concrete evidence: file paths, line numbers, command output,
-or exact artifact names. Do not file style opinions without a repo-specific
-impact and a way to verify the improvement.
+or exact artifact names, plus the closing `impact/effort/confidence` estimate
+(`H`, `M`, or `L` each) so the backlog ranks without re-deriving it. Do not
+file style opinions without a repo-specific impact and a way to verify the
+improvement.
 
 ## Hand-off
 

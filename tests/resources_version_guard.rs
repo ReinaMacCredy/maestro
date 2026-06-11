@@ -43,8 +43,8 @@ const RESOURCE_VERSION_GUARD: [(&str, &str, &str, &str); 6] = [
     (
         "skill",
         "maestro-audit",
-        "1.1.0",
-        "8b902cd0fe2085ad026008a9dfeb47c1263964fa47582564f803de61d2e59155",
+        "1.2.0",
+        "36555237e009771c2acc9971afb8f0cd74b9a07eaddc13c5fbfadf23ce8a58bc",
     ),
     (
         "hook",
