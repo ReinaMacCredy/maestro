@@ -69,8 +69,9 @@ pub fn load(path: &Path) -> Result<Option<Card>> {
 }
 
 /// Whether the path itself is a symlink. The store refuses symlinked card
-/// dirs and container files wholesale; see [`load_with_snapshot`].
-fn is_symlink(path: &Path) -> bool {
+/// dirs, `tasks/` pools, and container files wholesale; see
+/// [`load_with_snapshot`].
+pub(crate) fn is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path)
         .map(|metadata| metadata.file_type().is_symlink())
         .unwrap_or(false)
@@ -277,12 +278,18 @@ pub fn home_for_new(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
             }
             CardHome::Dir(paths.cards_dir().join(&card.id).join(CARD_FILE))
         }
-        CardType::Task | CardType::Bug | CardType::Chore => CardHome::Dir(
-            container_dir(paths, card.parent.as_deref())?
-                .join(TASKS_DIR)
-                .join(&card.id)
-                .join(TASK_FILE),
-        ),
+        CardType::Task | CardType::Bug | CardType::Chore => {
+            let pool = container_dir(paths, card.parent.as_deref())?.join(TASKS_DIR);
+            // A symlinked pool would land the CAS write outside the store;
+            // creation fails loud where reads silently refuse.
+            if is_symlink(&pool) {
+                bail!(
+                    "task pool {} is a symlink; the card store refuses symlinked dirs",
+                    pool.display()
+                );
+            }
+            CardHome::Dir(pool.join(&card.id).join(TASK_FILE))
+        }
         CardType::Decision => {
             CardHome::Entry(container_dir(paths, card.parent.as_deref())?.join(DECISIONS_FILE))
         }
@@ -342,16 +349,26 @@ fn locate_basis_in(root: &Path, id: &str) -> Result<Option<LocatedBasis>> {
     if dir_card_exists(&flat) {
         return Ok(Some(LocatedBasis::Dir(flat)));
     }
-    let pooled = root.join(TASKS_DIR).join(id).join(TASK_FILE);
-    if dir_card_exists(&pooled) {
-        return Ok(Some(LocatedBasis::Dir(pooled)));
+    // The pool level needs its own symlink check: `dir_card_exists` covers
+    // only the task dir itself, and a symlinked `tasks/` would route every
+    // pooled probe (and the CAS write a hit backs) outside the store.
+    let pool = root.join(TASKS_DIR);
+    if !is_symlink(&pool) {
+        let pooled = pool.join(id).join(TASK_FILE);
+        if dir_card_exists(&pooled) {
+            return Ok(Some(LocatedBasis::Dir(pooled)));
+        }
     }
     let containers: Vec<PathBuf> = sorted_child_dirs(root)?
         .into_iter()
         .filter(|dir| dir.file_name().is_none_or(|name| name != TASKS_DIR))
         .collect();
     for dir in &containers {
-        let nested = dir.join(TASKS_DIR).join(id).join(TASK_FILE);
+        let pool = dir.join(TASKS_DIR);
+        if is_symlink(&pool) {
+            continue;
+        }
+        let nested = pool.join(id).join(TASK_FILE);
         if dir_card_exists(&nested) {
             return Ok(Some(LocatedBasis::Dir(nested)));
         }
@@ -1092,6 +1109,64 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    /// A symlinked `tasks/` pool routes pooled probes -- and the CAS write a
+    /// probe hit backs -- outside the store. The pool level has its own guard:
+    /// `dir_card_exists` only checks the task dir, which reads as a real dir
+    /// behind a symlinked pool.
+    #[test]
+    fn symlinked_task_pools_are_refused() {
+        let paths = temp_cards_repo("symlinked-pool");
+        let external = std::env::temp_dir().join(format!(
+            "maestro-symlinked-pool-ext-{}-{}",
+            process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("invariant: test clock after Unix epoch")
+                .as_nanos()
+        ));
+        let outside = external.join("card-t00001");
+        ensure_dir(&outside).expect("external task dir");
+        std::fs::write(
+            outside.join(TASK_FILE),
+            serde_yaml::to_string(&typed_card("card-t00001", CardType::Task, None))
+                .expect("invariant: fixture serializes"),
+        )
+        .expect("external record");
+
+        // Root pool symlinked at cards/tasks.
+        crate::foundation::core::fs::create_directory_symlink(
+            &external,
+            &paths.cards_dir().join(TASKS_DIR),
+        )
+        .expect("symlink the root pool");
+        // Nested pool symlinked inside a real feature container.
+        create_card(&paths, &typed_card("csv-export", CardType::Feature, None))
+            .expect("create the feature container");
+        crate::foundation::core::fs::create_directory_symlink(
+            &external,
+            &paths.cards_dir().join("csv-export").join(TASKS_DIR),
+        )
+        .expect("symlink the nested pool");
+
+        assert_eq!(
+            locate(&paths, "card-t00001").expect("locate"),
+            None,
+            "a pooled record behind a symlinked pool is invisible"
+        );
+        for parent in [None, Some("csv-export")] {
+            let error = create_card(&paths, &typed_card("card-t00002", CardType::Task, parent))
+                .expect_err("creating into a symlinked pool must fail");
+            assert!(format!("{error:#}").contains("symlink"), "{error:#}");
+        }
+        assert!(
+            !external.join("card-t00002").exists(),
+            "nothing was written through the symlink"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+        let _ = std::fs::remove_dir_all(&external);
     }
 
     #[test]

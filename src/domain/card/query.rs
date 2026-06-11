@@ -10,7 +10,7 @@ use anyhow::Result;
 
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{
-    CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, load, load_entries,
+    CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, is_symlink, load, load_entries,
 };
 use crate::foundation::core::fs::sorted_child_dirs;
 use crate::foundation::core::paths::MaestroPaths;
@@ -219,8 +219,13 @@ fn collect_entry_file(file: &Path, root: &Path, strict: bool, scan: &mut StoreSc
 }
 
 /// Read every per-task dir of one `tasks/` pool into the scan. A missing
-/// pool contributes nothing.
+/// pool contributes nothing; a symlinked pool is refused like a symlinked
+/// card dir (its children read as real dirs, so the per-dir skip alone would
+/// follow it outside the store).
 fn collect_task_pool(pool: &Path, strict: bool, scan: &mut StoreScan) -> Result<()> {
+    if is_symlink(pool) {
+        return Ok(());
+    }
     for dir in sorted_child_dirs(pool)? {
         collect_record(&dir.join(TASK_FILE), strict, scan)?;
     }
@@ -818,6 +823,51 @@ mod tests {
             scan.failures[0].error.contains("failed to parse"),
             "failure carries the full load error chain: {}",
             scan.failures[0].error
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A symlinked `tasks/` pool is skipped by the scan: its children read as
+    /// real dirs, so without the pool-level check the walk would follow the
+    /// link and list cards living outside the store.
+    #[test]
+    fn scan_skips_a_symlinked_task_pool() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-scan-sympool-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+
+        let inside = card("task-001", CardType::Task, "ready");
+        let path = card_path(&paths, "task-001");
+        let snap = load_with_snapshot(&path).expect("absent loads None");
+        save_with_snapshot(&path, &inside, &snap).expect("seed real card");
+
+        let external = root.join("outside-pool");
+        let outside_dir = external.join("task-999");
+        ensure_dir(&outside_dir).expect("external task dir");
+        std::fs::write(
+            outside_dir.join("task.yaml"),
+            serde_yaml::to_string(&card("task-999", CardType::Task, "ready"))
+                .expect("invariant: fixture serializes"),
+        )
+        .expect("external record");
+        crate::foundation::core::fs::create_directory_symlink(
+            &external,
+            &paths.cards_dir().join("tasks"),
+        )
+        .expect("symlink the root pool");
+
+        let scanned = scan(&paths).expect("scan");
+        let ids: Vec<&str> = scanned.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["task-001"],
+            "the symlinked pool contributes nothing"
         );
 
         let _ = std::fs::remove_dir_all(&root);
