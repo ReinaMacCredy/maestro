@@ -32,7 +32,8 @@ use serde_yaml::{Mapping, Value};
 use crate::domain::card::fold::{self, string_field};
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{
-    card_path, hash_id, load_with_snapshot, locate, mint_hash_id, save_with_snapshot,
+    RESERVED_CONTAINER_NAMES, card_path, hash_id, load_with_snapshot, locate, mint_hash_id,
+    save_with_snapshot,
 };
 use crate::domain::decisions::normalize_decision_id;
 use crate::domain::run::managed_event_logs;
@@ -177,6 +178,13 @@ fn collect_features(paths: &MaestroPaths, now: &str, pending: &mut Vec<PendingCa
         let id = string_field(&source, "id")
             .or_else(|| dir_name(&feature_dir))
             .with_context(|| format!("feature missing id: {}", yaml.display()))?;
+        if RESERVED_CONTAINER_NAMES.contains(&id.as_str()) {
+            bail!(
+                "feature id {id} is reserved by the card store layout; rename the legacy \
+                 feature dir {} (and its `id:` field) before migrating",
+                feature_dir.display()
+            );
+        }
         let card = fold::feature_card(id.clone(), source, now);
         pending.push(PendingCard {
             kept_id: id,
@@ -1212,6 +1220,33 @@ mod tests {
         assert_eq!(
             report.skipped, 3,
             "the surviving global decisions and backlog item count as skipped"
+        );
+
+        cleanup(&root);
+    }
+
+    /// A legacy feature whose id collides with a container-layout name would
+    /// mint `cards/tasks/card.yaml` -- a record every scan skips as the work
+    /// pool. The migrator must refuse it before writing anything.
+    #[test]
+    fn reserved_legacy_feature_id_fails_loud() {
+        let root = temp_repo("reserved-id");
+        let paths = brownfield(&root);
+
+        let feature = FeatureRecord::proposed("tasks", "Shadowing slug", "2026-06-01T00:00:00Z");
+        write_record(
+            &paths.features_dir().join("tasks").join("feature.yaml"),
+            &feature,
+        );
+
+        let error = run(&paths, NOW).expect_err("reserved feature id must fail loud");
+        assert!(
+            error.to_string().contains("reserved"),
+            "error names the reserved-id rule: {error}"
+        );
+        assert!(
+            !card_path(&paths, "tasks").exists(),
+            "no reserved-path record was written"
         );
 
         cleanup(&root);

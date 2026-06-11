@@ -227,7 +227,7 @@ pub(crate) const IDEAS_FILE: &str = "ideas.yaml";
 /// Names the container layout claims inside every container dir: a feature id
 /// equal to one of these would shadow the work pool, an entry file, or the
 /// container's own record/prose files.
-const RESERVED_CONTAINER_NAMES: &[&str] = &[
+pub(crate) const RESERVED_CONTAINER_NAMES: &[&str] = &[
     TASKS_DIR,
     DECISIONS_FILE,
     IDEAS_FILE,
