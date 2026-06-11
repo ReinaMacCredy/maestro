@@ -27,7 +27,26 @@ fn extract_hook_script_writes_the_bundled_record_script() {
     let contents = fs::read_to_string(record_path(&paths))
         .expect("invariant: extracted record.sh should be readable");
     assert!(contents.contains("# maestro:hook-version:"));
-    assert!(contents.contains("maestro hook record"));
+    assert!(
+        !contents.contains("@MAESTRO_BIN@"),
+        "the installed script must pin a concrete binary path:\n{contents}"
+    );
+    assert!(
+        contents.contains("exec \"$MAESTRO_BIN\" hook record"),
+        "the installed script must execute the pinned binary:\n{contents}"
+    );
+    let binary_line = contents
+        .lines()
+        .find(|line| line.starts_with("MAESTRO_BIN='"))
+        .expect("the installed script declares MAESTRO_BIN");
+    let binary_path = binary_line
+        .strip_prefix("MAESTRO_BIN='")
+        .and_then(|value| value.strip_suffix('\''))
+        .expect("MAESTRO_BIN is single-quoted");
+    assert!(
+        PathBuf::from(binary_path).is_absolute(),
+        "MAESTRO_BIN should be absolute: {binary_path}"
+    );
 }
 
 #[test]

@@ -1,5 +1,6 @@
 use std::env;
 use std::io::IsTerminal;
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
@@ -8,7 +9,9 @@ use crate::domain::skills;
 use crate::foundation::core::backup::backup_operation_timestamp;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::read_to_string_if_exists;
-use crate::foundation::core::paths::{MaestroPaths, announce_repo_root, discover_repo_root};
+use crate::foundation::core::paths::{
+    MaestroPaths, announce_repo_root, discover_repo_root, discover_repo_root_from,
+};
 use crate::foundation::core::safe_write::write_string_atomic;
 use crate::interfaces::cli::UpgradeArgs;
 use crate::operations::update;
@@ -97,26 +100,24 @@ pub fn run_auto_check() -> Result<()> {
         return Ok(());
     }
 
-    let repo_root = match discover_repo_root() {
-        Ok(repo_root) => repo_root,
-        Err(_) => return Ok(()),
-    };
-    let paths = MaestroPaths::new(repo_root);
-    let now = current_unix_seconds()?;
-    if !auto_check_due(&paths, now)? {
+    let Some(paths) = auto_check_paths_from(env::current_dir()?)? else {
         return Ok(());
-    }
-
-    let outcome = update::run_update(&update::UpdateOptions {
-        paths: Some(&paths),
-        executable_path: &executable_path,
-        backup_timestamp: "",
-        current_version: env!("MAESTRO_VERSION"),
-        check_only: true,
-        force: false,
-        global_skills_home: None,
-    })?;
-    record_auto_check(&paths, now)?;
+    };
+    let now = current_unix_seconds()?;
+    let Some(outcome) = run_due_auto_check(&paths, now, || {
+        update::run_update(&update::UpdateOptions {
+            paths: Some(&paths),
+            executable_path: &executable_path,
+            backup_timestamp: "",
+            current_version: env!("MAESTRO_VERSION"),
+            check_only: true,
+            force: false,
+            global_skills_home: None,
+        })
+    })?
+    else {
+        return Ok(());
+    };
 
     if let update::BinaryStatus::UpdateAvailable { release, .. } = outcome.binary_status {
         let colors = Colors::detect();
@@ -130,6 +131,41 @@ pub fn run_auto_check() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn auto_check_paths_from(start_dir: impl AsRef<Path>) -> Result<Option<MaestroPaths>> {
+    match discover_repo_root_from(start_dir) {
+        Ok(repo_root) => {
+            let paths = MaestroPaths::new(repo_root);
+            if paths.maestro_dir().is_dir() {
+                Ok(Some(paths))
+            } else {
+                Ok(None)
+            }
+        }
+        Err(error)
+            if matches!(
+                error.downcast_ref::<MaestroError>(),
+                Some(MaestroError::RepoRootNotFound { .. })
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn run_due_auto_check(
+    paths: &MaestroPaths,
+    now: u64,
+    check: impl FnOnce() -> Result<update::UpdateOutcome>,
+) -> Result<Option<update::UpdateOutcome>> {
+    if !auto_check_due(paths, now)? {
+        return Ok(None);
+    }
+    let outcome = check();
+    record_auto_check(paths, now)?;
+    outcome.map(Some)
 }
 
 fn render_outcome(outcome: &update::UpdateOutcome, verbose: bool, colors: Colors) -> String {
@@ -417,7 +453,10 @@ fn sentence(message: impl AsRef<str>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Colors, auto_check_due, record_auto_check, render_failure, render_outcome};
+    use super::{
+        Colors, auto_check_due, auto_check_paths_from, record_auto_check, render_failure,
+        render_outcome, run_due_auto_check,
+    };
     use crate::foundation::core::paths::MaestroPaths;
     use crate::operations::update;
 
@@ -690,6 +729,53 @@ mod tests {
         assert!(
             auto_check_due(&paths, 100 + 24 * 60 * 60)
                 .expect("invariant: day-old stamp should be due")
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn auto_check_skips_git_only_repo_without_scaffolding_maestro() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "maestro-auto-check-git-only-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(temp_dir.join(".git")).expect("invariant: git marker dir");
+
+        let paths = auto_check_paths_from(&temp_dir).expect("invariant: repo discovery should run");
+
+        assert!(paths.is_none(), "a .git-only repo is not invited");
+        assert!(
+            !temp_dir.join(".maestro").exists(),
+            "auto-check discovery must not scaffold .maestro"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn failed_auto_check_still_records_the_retry_stamp() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "maestro-auto-check-fail-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let paths = MaestroPaths::new(&temp_dir);
+        std::fs::create_dir_all(paths.maestro_dir()).expect("invariant: maestro dir");
+
+        let error = run_due_auto_check(&paths, 100, || {
+            Err(anyhow::anyhow!("simulated offline update check"))
+        })
+        .expect_err("the failing check error should be returned");
+
+        assert!(
+            error.to_string().contains("simulated offline update check"),
+            "{error:#}"
+        );
+        assert!(
+            !auto_check_due(&paths, 100 + 60).expect("invariant: recent failed check should skip"),
+            "a failed check should still back off until the interval expires"
         );
 
         let _ = std::fs::remove_dir_all(&temp_dir);

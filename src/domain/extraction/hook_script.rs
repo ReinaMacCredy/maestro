@@ -6,6 +6,7 @@
 //! frontmatter `version:` plays for skills, so local edits survive `maestro
 //! update` until the shipped version changes.
 
+use std::env;
 use std::path::PathBuf;
 
 use anyhow::{Result, bail};
@@ -23,10 +24,12 @@ const RECORD_SH: &str = include_str!("../../../embedded/hooks/record.sh");
 
 /// Report name and on-disk filename for the bundled hook script.
 const RECORD_SH_NAME: &str = "record.sh";
+const MAESTRO_BIN_PLACEHOLDER: &str = "@MAESTRO_BIN@";
 
 /// Extract the bundled hook recorder script into `.maestro/hooks/`.
 pub fn extract_hook_script(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<ExtractReport> {
-    extract_hook_script_from(paths, RECORD_SH, mode)
+    let contents = bundled_record_script()?;
+    extract_hook_script_from(paths, &contents, mode)
 }
 
 /// Require the bundled hook recorder script that install wires every hook
@@ -76,7 +79,8 @@ pub fn extract_hook_script_from(
 /// Validate bundled hook script extraction without writing files.
 pub fn validate_hook_script(paths: &MaestroPaths, mode: ExtractMode<'_>) -> Result<()> {
     managed_path(paths, ".maestro", SymlinkPolicy::RejectAllComponents)?;
-    plan_hook_script(paths, RECORD_SH, mode)?;
+    let contents = bundled_record_script()?;
+    plan_hook_script(paths, &contents, mode)?;
     Ok(())
 }
 
@@ -87,13 +91,33 @@ pub fn preview_hook_script(
 ) -> Result<Vec<FolderPreview>> {
     let path = hook_file_path(paths, RECORD_SH_NAME)?;
     let existing = read_existing(&path)?;
+    let contents = bundled_record_script()?;
     Ok(vec![preview_folder(
         RECORD_SH_NAME,
         mode,
         existing.as_deref(),
-        RECORD_SH,
+        &contents,
         hook_script_version,
     )])
+}
+
+fn bundled_record_script() -> Result<String> {
+    let executable_path = env::current_exe()?;
+    Ok(pin_record_script_binary(
+        RECORD_SH,
+        &executable_path.display().to_string(),
+    ))
+}
+
+fn pin_record_script_binary(contents: &str, executable_path: &str) -> String {
+    contents.replace(
+        MAESTRO_BIN_PLACEHOLDER,
+        &shell_single_quote(executable_path),
+    )
+}
+
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 /// Plan the single-file hook script write. The version gate keys on the
@@ -149,7 +173,19 @@ mod tests {
 
     #[test]
     fn bundled_record_script_declares_a_hook_version() {
-        assert_eq!(hook_script_version(RECORD_SH).as_deref(), Some("1.0.1"));
+        assert_eq!(hook_script_version(RECORD_SH).as_deref(), Some("1.0.2"));
+    }
+
+    #[test]
+    fn record_script_binary_placeholder_is_shell_quoted() {
+        assert_eq!(
+            pin_record_script_binary("MAESTRO_BIN=@MAESTRO_BIN@\n", "/tmp/maestro bin"),
+            "MAESTRO_BIN='/tmp/maestro bin'\n"
+        );
+        assert_eq!(
+            pin_record_script_binary("MAESTRO_BIN=@MAESTRO_BIN@\n", "/tmp/o'clock/maestro"),
+            "MAESTRO_BIN='/tmp/o'\\''clock/maestro'\n"
+        );
     }
 
     #[test]
