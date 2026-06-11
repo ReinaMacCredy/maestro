@@ -589,7 +589,9 @@ fn feature_guarded_lifecycle_via_cli() {
     let ship_output = stdout(maestro(&ship_args, temp_dir.path()), &ship_args);
     assert!(ship_output.contains("shipped billing-csv-export"));
     assert!(ship_output.contains("ship receipt:"));
-    assert!(ship_output.contains("next: maestro status"));
+    // The closing moment points at the archive, not the status dead end (R4).
+    assert!(ship_output.contains("next: maestro archive billing-csv-export"));
+    assert!(!ship_output.contains("optional: maestro feature archive"));
 
     let show_after_ship = stdout(
         maestro(&["feature", "show", "billing-csv-export"], temp_dir.path()),
@@ -2420,7 +2422,8 @@ fn feature_archive_moves_terminal_child_cards_with_feature() {
     ];
     let cancelled = stdout(maestro(&cancel_args, root), &cancel_args);
     assert!(cancelled.contains("cancel receipt:"));
-    assert!(cancelled.contains("next: maestro status"));
+    // The closing moment points at the archive, not the status dead end (R4).
+    assert!(cancelled.contains("next: maestro archive billing-csv-export"));
 
     // A live standalone task blocked by the terminal child task-002 entangles it.
     stdout(
@@ -2516,18 +2519,33 @@ fn feature_archive_ignores_open_decisions_and_moves_them_with_the_container() {
     assert!(live_decisions.contains("Pick the writer"));
 }
 
-/// `feature archive --shipped` archives every shipped feature (each cascading its
-/// children) and leaves non-shipped features in the live tree.
+/// `feature archive --closed` archives every terminal feature -- shipped AND
+/// cancelled (each cascading its children) -- and leaves live features in the
+/// live tree. Doctor surfaces the backlog before the sweep and goes green after.
 #[test]
-fn feature_archive_shipped_sweeps_only_shipped_features() {
+fn feature_archive_closed_sweeps_terminal_features() {
     let temp_dir = TestTempDir::new("maestro-feature-archive-bulk");
     let root = temp_dir.path();
     init_git_marker(root);
     stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
 
-    // Two shipped features (each with a verified child) + one still in progress.
+    // Two shipped features (each with a verified child), one cancelled, one
+    // still in progress.
     ship_feature(root, "Alpha export", "alpha-export", "task-001");
     ship_feature(root, "Beta export", "beta-export", "task-002");
+
+    stdout(
+        maestro(&["feature", "new", "Delta export"], root),
+        &["feature", "new", "Delta export"],
+    );
+    let cancel_delta = [
+        "feature",
+        "cancel",
+        "delta-export",
+        "--reason",
+        "scope dropped",
+    ];
+    stdout(maestro(&cancel_delta, root), &cancel_delta);
 
     stdout(
         maestro(&["feature", "new", "Gamma export"], root),
@@ -2553,12 +2571,19 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
         &["feature", "start", "gamma-export"],
     );
 
-    // --shipped archives both shipped features and their children; gamma stays live.
-    let bulk = ["feature", "archive", "--shipped"];
+    // Doctor reports the archive backlog as an advisory before the sweep (R4).
+    let doctor = stdout(maestro(&["doctor"], root), &["doctor"]);
+    assert!(doctor.contains(
+        "warning: 3 closed feature(s) not archived; sweep with `maestro feature archive --closed`"
+    ));
+
+    // --closed archives the shipped and cancelled features and their children;
+    // in-progress gamma stays live.
+    let bulk = ["feature", "archive", "--closed"];
     let out = stdout(maestro(&bulk, root), &bulk);
-    assert!(out.contains("archived shipped features"));
+    assert!(out.contains("archived closed features"));
     assert!(out.contains("archive summary:"));
-    assert!(out.contains("features: 2 archived"));
+    assert!(out.contains("features: 3 archived"));
     assert!(out.contains("child tasks: 2 archived"));
     assert!(out.contains("next: maestro status"));
 
@@ -2566,25 +2591,31 @@ fn feature_archive_shipped_sweeps_only_shipped_features() {
     let archive_cards = root.join(".maestro/archive/cards");
     assert!(archive_cards.join("alpha-export/card.yaml").is_file());
     assert!(archive_cards.join("beta-export/card.yaml").is_file());
+    assert!(archive_cards.join("delta-export/card.yaml").is_file());
     assert!(archive_cards.join("task-001/card.yaml").is_file());
     assert!(archive_cards.join("task-002/card.yaml").is_file());
     // The in-progress feature is untouched and stays in the live store.
     assert!(cards_dir.join("gamma-export").join("card.yaml").is_file());
     assert!(!archive_cards.join("gamma-export").exists());
 
-    // Idempotent: no shipped features remain live.
-    let again = stdout(maestro(&bulk, root), &bulk);
-    assert!(again.contains("no shipped features to archive"));
+    // With the backlog swept, the doctor advisory becomes a green check.
+    let doctor_after = stdout(maestro(&["doctor"], root), &["doctor"]);
+    assert!(doctor_after.contains("check archive: ok (no closed features awaiting archive)"));
+    assert!(!doctor_after.contains("closed feature(s) not archived"));
 
-    // A feature id and --shipped are mutually exclusive.
-    let both = ["feature", "archive", "alpha-export", "--shipped"];
+    // Idempotent: no closed features remain live.
+    let again = stdout(maestro(&bulk, root), &bulk);
+    assert!(again.contains("no closed features to archive"));
+
+    // A feature id and --closed are mutually exclusive.
+    let both = ["feature", "archive", "alpha-export", "--closed"];
     let err = assert_failure(maestro(&both, root), &both);
     assert!(err.contains("not both"));
 
-    // Neither an id nor --shipped: the remedy must not claim "not both".
+    // Neither an id nor --closed: the remedy must not claim "not both".
     let neither = ["feature", "archive"];
     let err = assert_failure(maestro(&neither, root), &neither);
-    assert!(err.contains("provide a feature id or --shipped"));
+    assert!(err.contains("provide a feature id or --closed"));
     assert!(!err.contains("not both"));
 }
 

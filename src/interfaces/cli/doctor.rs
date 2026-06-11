@@ -126,6 +126,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
 
     if let Some(scan) = &scan {
         check_features(paths, &scan.cards, &mut checks, &mut warnings, &mut errors);
+        check_archive_backlog(&scan.cards, &mut checks, &mut warnings);
         check_backlog(&scan.cards, &mut checks, &mut errors);
         check_decisions(paths, &scan.cards, &mut checks, &mut warnings, &mut errors);
         warnings.extend(card::query::integrity_warnings(paths, &scan.cards));
@@ -213,6 +214,33 @@ fn check_features(
             detail: format!("{count} feature(s)"),
         }),
         Err(error) => errors.push(error),
+    }
+}
+
+/// Closed features still in the live store are an archive backlog: the lid in
+/// `.maestro/archive/cards/INDEX.md` only remembers what gets archived, so the
+/// backlog is surfaced as an advisory (never an error -- nothing is broken).
+fn check_archive_backlog(
+    cards: &[(card::schema::Card, PathBuf)],
+    checks: &mut Vec<DoctorCheck>,
+    warnings: &mut Vec<String>,
+) {
+    let closed = cards
+        .iter()
+        .filter(|(card, _)| {
+            card.card_type == card::schema::CardType::Feature
+                && card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed)
+        })
+        .count();
+    if closed == 0 {
+        checks.push(DoctorCheck {
+            name: "archive",
+            detail: "no closed features awaiting archive".to_string(),
+        });
+    } else {
+        warnings.push(format!(
+            "{closed} closed feature(s) not archived; sweep with `maestro feature archive --closed`"
+        ));
     }
 }
 

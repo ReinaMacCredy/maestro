@@ -139,9 +139,9 @@ pub fn run(args: FeatureArgs) -> Result<()> {
         FeatureCommand::List { all } => list_features(&paths, all),
         FeatureCommand::Archive {
             id,
-            shipped,
+            closed,
             dry_run,
-        } => archive_features(&paths, id, shipped, dry_run),
+        } => archive_features(&paths, id, closed, dry_run),
         FeatureCommand::Unarchive { id } => match feature::unarchive_feature(&paths, &id) {
             Ok(note) => {
                 print_feature_unarchive_note(&id, &note);
@@ -337,14 +337,14 @@ fn print_green_sweep_next(paths: &MaestroPaths, feature_id: &str) -> Result<()> 
     Ok(())
 }
 
-/// Dispatch `feature archive`: exactly one of a single id or `--shipped`.
+/// Dispatch `feature archive`: exactly one of a single id or `--closed`.
 fn archive_features(
     paths: &MaestroPaths,
     id: Option<String>,
-    shipped: bool,
+    closed: bool,
     dry_run: bool,
 ) -> Result<()> {
-    match (id, shipped) {
+    match (id, closed) {
         (Some(id), false) => match feature::archive_feature(paths, &id, dry_run) {
             Ok(report) => {
                 print_feature_archive_note(&id, &report, dry_run);
@@ -352,35 +352,36 @@ fn archive_features(
             }
             Err(error) => bail!("{}", feature_archive_error_message(&id, &error.to_string())),
         },
-        (None, true) => archive_shipped(paths, dry_run),
+        (None, true) => archive_closed(paths, dry_run),
         (Some(_), true) => bail!(
-            "provide a feature id or --shipped, not both\n  maestro feature archive <id>\n  maestro feature archive --shipped"
+            "provide a feature id or --closed, not both\n  maestro feature archive <id>\n  maestro feature archive --closed"
         ),
         (None, false) => bail!(
-            "provide a feature id or --shipped\n  maestro feature archive <id>\n  maestro feature archive --shipped"
+            "provide a feature id or --closed\n  maestro feature archive <id>\n  maestro feature archive --closed"
         ),
     }
 }
 
-/// Bulk-archive every shipped feature (§5 L3). Collect-and-continue: one
-/// feature's failure never aborts the sweep; the summary exits non-zero iff any
-/// failed, so a re-run safely retries (archived features no-op, failures retry).
-fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
-    let shipped: Vec<String> = feature::list(paths)?
+/// Bulk-archive every closed (terminal) feature (§5 L3). Collect-and-continue:
+/// one feature's failure never aborts the sweep; the summary exits non-zero iff
+/// any failed, so a re-run safely retries (archived features no-op, failures
+/// retry).
+fn archive_closed(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
+    let closed: Vec<String> = feature::list(paths)?
         .into_iter()
-        .filter(|view| view.status == feature::FeatureStatus::Shipped)
+        .filter(|view| view.status.is_terminal())
         .map(|view| view.id)
         .collect();
 
-    if shipped.is_empty() {
-        println!("no shipped features to archive");
+    if closed.is_empty() {
+        println!("no closed features to archive");
         return Ok(());
     }
 
     let mut failures = Vec::new();
     let mut archived = 0usize;
     let mut child_tasks = 0usize;
-    for id in &shipped {
+    for id in &closed {
         match feature::archive_feature(paths, id, dry_run) {
             Ok(report) => {
                 archived += 1;
@@ -391,9 +392,9 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
     }
 
     if dry_run {
-        println!("dry-run: would archive shipped features");
+        println!("dry-run: would archive closed features");
     } else {
-        println!("archived shipped features");
+        println!("archived closed features");
     }
     println!("archive summary:");
     let feature_verb = if dry_run { "would archive" } else { "archived" };
@@ -411,16 +412,16 @@ fn archive_shipped(paths: &MaestroPaths, dry_run: bool) -> Result<()> {
             println!("  - {failure}");
         }
         println!("next:");
-        println!("  retry: maestro feature archive --shipped");
+        println!("  retry: maestro feature archive --closed");
         bail!(
-            "{} shipped feature(s) failed to archive (re-run to retry):\n  {}",
+            "{} closed feature(s) failed to archive (re-run to retry):\n  {}",
             failures.len(),
             failures.join("\n  ")
         );
     }
     if dry_run {
         println!("writes: none");
-        println!("run: maestro feature archive --shipped");
+        println!("run: maestro feature archive --closed");
     } else {
         println!("next: maestro status");
     }
@@ -614,8 +615,7 @@ fn cancel_feature(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -
         println!("retry: maestro feature cancel {id} --reason \"<reason>\"");
     } else if report.changed {
         println!("inspect: maestro feature show {}", report.id);
-        println!("next: maestro status");
-        println!("optional: maestro feature archive {}", report.id);
+        println!("next: maestro archive {}", report.id);
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
@@ -654,8 +654,7 @@ fn ship_feature(
             println!("  verification: {claims_only} claims-only task(s)");
         }
         println!("inspect: maestro feature show {}", report.id);
-        println!("next: maestro status");
-        println!("optional: maestro feature archive {}", report.id);
+        println!("next: maestro archive {}", report.id);
     } else {
         println!("inspect: maestro feature show {}", report.id);
         println!("next: maestro status");
