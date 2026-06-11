@@ -9,19 +9,25 @@
 //! its own directory, mirrored to the same store-relative path under
 //! `archive/cards/`.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::query::{Coarse, coarse_of, scan_dir_with_paths, scan_with_paths};
-use crate::domain::card::store::{card_path, is_dir_backed};
+use crate::domain::card::schema::CardType;
+use crate::domain::card::store::{card_path, is_dir_backed, load_entries, save_entries};
 use crate::domain::feature::registry::{
     archived_card_path, load_archived_record, load_record, validate_feature_id,
 };
 use crate::foundation::core::fs::{append_text_file, ensure_dir};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
+
+/// First-write header of `archive/cards/INDEX.md`, shared by the feature
+/// digest (A2) and the loose sweep (R2) so either writer can create the file.
+const INDEX_HEADER: &str = "# Archived cards\n\n";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeatureArchiveReport {
@@ -151,7 +157,7 @@ pub fn archive_feature(
             );
             append_text_file(
                 paths.archive_cards_dir().join("INDEX.md"),
-                "# Archived features\n\n",
+                INDEX_HEADER,
                 &line,
             )?;
         }
@@ -163,6 +169,133 @@ pub fn archive_feature(
         note: archive_note(id, dry_run, feature_live, &archived),
         child_tasks: archived.len(),
     })
+}
+
+/// What `maestro archive --loose` did: swept ids (boxed) and the locked loose
+/// decisions deliberately left live (kept rules).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LooseSweepReport {
+    pub swept: Vec<String>,
+    pub kept_rules: Vec<String>,
+}
+
+/// Sweep terminal parentless cards into the archive (SPEC-archive-memory-2 R2).
+///
+/// Loose means parent-less and not a feature. Workable cards and ideas sweep
+/// once coarse-closed; decisions sweep only when `superseded` -- a `locked`
+/// loose decision is standing law and stays live, reported as a kept rule.
+/// Every swept card appends one lid line to `archive/cards/INDEX.md`.
+///
+/// Dir-backed cards move like cascade children (same store-relative path under
+/// `archive/cards/`). Entry-backed cards move between container files: the
+/// archive-side append commits before the live-side removal, so a torn run
+/// leaves a duplicate to clean up rather than losing the card.
+///
+/// Idempotent: a store with nothing loose to sweep is a no-op at exit 0.
+pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
+    let mut dir_moves: Vec<(PathBuf, PathBuf)> = Vec::new();
+    // Entry sweeps grouped by live container file, ids in scan (id) order.
+    let mut entry_sweeps: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
+    let mut swept: Vec<String> = Vec::new();
+    let mut lid_lines = String::new();
+    let mut kept_rules: Vec<String> = Vec::new();
+    let date = utc_now_timestamp()[..10].to_string();
+
+    for (card, path) in scan_with_paths(paths)? {
+        if card.parent.is_some() || card.card_type == CardType::Feature {
+            continue;
+        }
+        let sweeps = match card.card_type {
+            CardType::Decision => match card.status.as_str() {
+                "superseded" => true,
+                "locked" => {
+                    kept_rules.push(card.id.clone());
+                    false
+                }
+                _ => false,
+            },
+            _ => coarse_of(&card.status) == Some(Coarse::Closed),
+        };
+        if !sweeps {
+            continue;
+        }
+        if is_dir_backed(&path) {
+            dir_moves.push(child_move(
+                &card.id,
+                &path,
+                &paths.cards_dir(),
+                &paths.archive_cards_dir(),
+            )?);
+        } else {
+            entry_sweeps.entry(path).or_default().push(card.id.clone());
+        }
+        lid_lines.push_str(&format!(
+            "- {date} {}: {} -- {}\n",
+            card.id, card.status, card.title
+        ));
+        swept.push(card.id);
+    }
+
+    if swept.is_empty() {
+        return Ok(LooseSweepReport { swept, kept_rules });
+    }
+
+    // Pre-flight the whole sweep before anything moves: dir targets must be
+    // free and no archive container may already hold a swept id.
+    for (src, target) in &dir_moves {
+        if target.exists() {
+            bail!(
+                "cannot sweep {} — an archived copy already exists at {}",
+                src.display(),
+                target.display()
+            );
+        }
+    }
+    let mut entry_stages = Vec::new();
+    for (live_file, ids) in &entry_sweeps {
+        let live = load_entries(live_file)?;
+        let relative = live_file.strip_prefix(paths.cards_dir()).with_context(|| {
+            format!("entry file outside the store root: {}", live_file.display())
+        })?;
+        let archive_file = paths.archive_cards_dir().join(relative);
+        let archive = load_entries(&archive_file)?;
+        for id in ids {
+            if archive.cards.iter().any(|card| &card.id == id) {
+                bail!(
+                    "cannot sweep {id} — an archived copy already exists in {}",
+                    archive_file.display()
+                );
+            }
+        }
+        let (sweep, keep): (Vec<_>, Vec<_>) = live
+            .cards
+            .iter()
+            .cloned()
+            .partition(|card| ids.contains(&card.id));
+        entry_stages.push((live_file.clone(), live, keep, archive_file, archive, sweep));
+    }
+
+    ensure_dir(paths.archive_cards_dir())?;
+    for (src, dst) in &dir_moves {
+        if let Some(parent) = dst.parent() {
+            ensure_dir(parent)?;
+        }
+        fs::rename(src, dst)
+            .with_context(|| format!("failed to move {} to {}", src.display(), dst.display()))?;
+    }
+    for (live_file, live_snapshot, keep, archive_file, archive_snapshot, sweep) in &entry_stages {
+        let mut archived = archive_snapshot.cards.clone();
+        archived.extend(sweep.iter().cloned());
+        save_entries(archive_file, &archived, archive_snapshot)?;
+        save_entries(live_file, keep, live_snapshot)?;
+    }
+    append_text_file(
+        paths.archive_cards_dir().join("INDEX.md"),
+        INDEX_HEADER,
+        &lid_lines,
+    )?;
+
+    Ok(LooseSweepReport { swept, kept_rules })
 }
 
 /// Restore an archived feature and its archived child cards (§5.9, symmetric).

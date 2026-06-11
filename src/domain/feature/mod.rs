@@ -7,7 +7,9 @@ pub(crate) mod registry;
 pub mod schema;
 mod verification;
 
-pub use archive::{FeatureArchiveReport, archive_feature, unarchive_feature};
+pub use archive::{
+    FeatureArchiveReport, LooseSweepReport, archive_feature, archive_loose, unarchive_feature,
+};
 pub use registry::{
     AcceptanceTextEdit, AmendReport, CancelReport, ContractAdditions, ContractChangeCounts,
     ContractEdits, FeatureDiagnostic, FeatureRosterEntry, FeatureView, NoteReport, SetReport,

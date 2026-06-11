@@ -92,12 +92,27 @@ pub fn dep(args: DepArgs) -> Result<()> {
 /// `parent=<feature>` children to the archive sibling tree (SPEC E4/D5). The
 /// flat verb drives the same `feature::archive_feature` cascade as `maestro
 /// feature archive`, so the typed terminal gate, sweep re-run, and no-clobber
-/// pre-flight hold on both spellings.
+/// pre-flight hold on both spellings. `--loose` sweeps terminal parentless
+/// cards instead (SPEC-archive-memory-2 R2).
 pub fn archive(args: ArchiveArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
         return Ok(());
     };
-    let report = feature::archive_feature(&paths, &args.feature, false)?;
+    if args.loose {
+        let report = feature::archive_loose(&paths)?;
+        if report.swept.is_empty() && report.kept_rules.is_empty() {
+            println!("nothing loose to archive");
+        }
+        for id in &report.swept {
+            println!("boxed: {id}");
+        }
+        for id in &report.kept_rules {
+            println!("kept:  {id} (rule)");
+        }
+        return Ok(());
+    }
+    let feature_id = args.feature.as_deref().unwrap_or_default();
+    let report = feature::archive_feature(&paths, feature_id, false)?;
     println!("{}", report.note);
     Ok(())
 }
@@ -197,7 +212,17 @@ pub fn show(args: ShowArgs) -> Result<()> {
         return Ok(());
     };
     card::store::validate_card_id(&args.id)?;
-    let Some(c) = card::store::resolve(&paths, &args.id)?.map(|resolved| resolved.card) else {
+    // Not in the live store -> read-only archive fallback, so a lid line or
+    // old reference never dead-ends (SPEC-archive-memory-2 R2; same seam the
+    // task verbs use).
+    let live = card::store::resolve(&paths, &args.id)?.map(|resolved| resolved.card);
+    let archived = if live.is_none() {
+        card::store::resolve_in(&paths.archive_cards_dir(), &args.id)?.map(|resolved| resolved.card)
+    } else {
+        None
+    };
+    let from_archive = archived.is_some();
+    let Some(c) = live.or(archived) else {
         println!("no card {} in the card store (.maestro/cards)", args.id);
         return Ok(());
     };
@@ -206,12 +231,15 @@ pub fn show(args: ShowArgs) -> Result<()> {
     } else {
         // The alias names same-parent siblings, so a parentless card never
         // has one -- skip the store scan that exists only to compute it.
-        let alias = if c.parent.is_some() {
+        let alias = if c.parent.is_some() && !from_archive {
             card::query::display_alias(&card::query::scan(&paths)?, &c)
         } else {
             None
         };
         render_show(&c, alias.as_deref());
+        if from_archive {
+            println!("archived: read-only (lives in .maestro/archive/cards/)");
+        }
     }
     Ok(())
 }

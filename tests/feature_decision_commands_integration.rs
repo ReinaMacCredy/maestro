@@ -1279,7 +1279,7 @@ fn feature_archive_appends_one_digest_line_to_the_archive_index() {
     stdout(maestro(&archive_args, root), &archive_args);
     let index = fs::read_to_string(&index_path).expect("invariant: INDEX.md should exist");
     assert!(
-        index.starts_with("# Archived features\n"),
+        index.starts_with("# Archived cards\n"),
         "the first append writes the header:\n{index}"
     );
     assert!(

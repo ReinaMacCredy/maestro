@@ -134,7 +134,7 @@ pub enum RootCommand {
     Dep(DepArgs),
     #[command(
         about = "Archive a feature card and its child cards (card store)",
-        after_help = "Examples:\n  maestro archive csv-export   # archives the feature card + every parent=csv-export card"
+        after_help = "Examples:\n  maestro archive csv-export   # archives the feature card + every parent=csv-export card\n  maestro archive --loose      # sweeps closed loose tasks/ideas + superseded decisions"
     )]
     Archive(ArchiveArgs),
     #[command(
@@ -782,8 +782,16 @@ pub enum DecisionCommand {
 #[derive(Debug, Args)]
 pub struct ArchiveArgs {
     /// The feature card to archive (its `parent=<feature>` children ride along).
-    #[arg(value_name = "FEATURE")]
-    pub feature: String,
+    #[arg(
+        value_name = "FEATURE",
+        required_unless_present = "loose",
+        conflicts_with = "loose"
+    )]
+    pub feature: Option<String>,
+    /// Sweep terminal parentless cards instead: closed loose tasks/ideas and
+    /// superseded decisions move to the archive; locked decisions stay live.
+    #[arg(long)]
+    pub loose: bool,
 }
 
 #[derive(Debug, Args)]

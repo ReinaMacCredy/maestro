@@ -286,6 +286,135 @@ fn list_grep_searches_live_cards_and_archived_extends_to_the_archive() {
     );
 }
 
+/// SPEC-archive-memory-2 R2: `maestro archive --loose` sweeps terminal
+/// parentless cards -- closed loose tasks/ideas and superseded decisions --
+/// into the archive with one INDEX.md lid line per swept card. A locked loose
+/// decision is standing law: reported as a kept rule, never moved. Open loose
+/// cards are untouched and the sweep is idempotent.
+#[test]
+fn archive_loose_sweeps_terminal_parentless_cards_but_keeps_rules() {
+    let temp = cards_repo("s2-archive-loose");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Keep me open"]);
+    run(repo, &["create", "-t", "task", "Sweep me"]);
+    let swept_task = id_by_title(repo, "Sweep me");
+    run(repo, &["update", &swept_task, "--status", "abandoned"]);
+
+    run(repo, &["decision", "new", "Tabs or spaces"]);
+    let old_rule = id_by_title(repo, "Tabs or spaces");
+    run(
+        repo,
+        &[
+            "decision",
+            "lock",
+            &old_rule,
+            "--decision",
+            "tabs",
+            "--rejected",
+            "spaces: drift",
+        ],
+    );
+    run(repo, &["decision", "new", "Spaces after all"]);
+    let new_rule = id_by_title(repo, "Spaces after all");
+    run(
+        repo,
+        &[
+            "decision",
+            "lock",
+            &new_rule,
+            "--decision",
+            "spaces",
+            "--rejected",
+            "tabs: rendering drift",
+            "--supersedes",
+            &old_rule,
+        ],
+    );
+
+    run(
+        repo,
+        &[
+            "harness",
+            "propose",
+            "--title",
+            "Doctor empty dirs",
+            "--evidence",
+            "two empty card dirs",
+        ],
+    );
+    let idea = id_by_title(repo, "Doctor empty dirs");
+    run(repo, &["harness", "dismiss", &idea, "--reason", "noise"]);
+
+    let receipt = run(repo, &["archive", "--loose"]);
+    for boxed in [&swept_task, &old_rule, &idea] {
+        assert!(
+            receipt.contains(&format!("boxed: {boxed}")),
+            "{boxed} should sweep:\n{receipt}"
+        );
+    }
+    assert!(
+        receipt.contains(&format!("kept:  {new_rule} (rule)")),
+        "the locked rule stays live:\n{receipt}"
+    );
+
+    assert!(
+        repo.join(".maestro/archive/cards/tasks")
+            .join(&swept_task)
+            .join("task.yaml")
+            .is_file(),
+        "a dir-backed loose task moves to the mirrored archive path"
+    );
+    let live_decisions = fs::read_to_string(repo.join(".maestro/cards/decisions.yaml"))
+        .expect("invariant: live decisions.yaml should exist");
+    // The kept rule's `supersedes:` field still references the old id, so
+    // absence is asserted on the swept entry's title, not its id.
+    assert!(
+        live_decisions.contains(&new_rule) && !live_decisions.contains("Tabs or spaces"),
+        "only the superseded entry leaves the live file:\n{live_decisions}"
+    );
+    let archived_decisions = fs::read_to_string(repo.join(".maestro/archive/cards/decisions.yaml"))
+        .expect("invariant: archived decisions.yaml should exist");
+    assert!(
+        archived_decisions.contains(&old_rule),
+        "the superseded entry lands in the archive container:\n{archived_decisions}"
+    );
+
+    let index = fs::read_to_string(repo.join(".maestro/archive/cards/INDEX.md"))
+        .expect("invariant: INDEX.md should exist");
+    assert!(
+        index.contains(&format!("{swept_task}: abandoned -- Sweep me"))
+            && index.contains(&format!("{old_rule}: superseded -- Tabs or spaces"))
+            && index.contains(&format!("{idea}: dismissed -- Doctor empty dirs")),
+        "each swept card gets a lid line:\n{index}"
+    );
+
+    let live = run(repo, &["list"]);
+    assert!(
+        live.contains("Keep me open") && live.contains(&new_rule) && !live.contains(&swept_task),
+        "live list keeps current work + rules:\n{live}"
+    );
+    let recall = run(repo, &["list", "--grep", "Sweep me", "--archived"]);
+    assert!(
+        recall.contains(&swept_task),
+        "swept cards stay recallable:\n{recall}"
+    );
+    let shown = run(repo, &["show", &old_rule]);
+    assert!(
+        shown.contains("Tabs or spaces"),
+        "id-exact show falls through to the archive:\n{shown}"
+    );
+
+    let again = run(repo, &["archive", "--loose"]);
+    assert!(
+        !again.contains("boxed:") && again.contains(&format!("kept:  {new_rule} (rule)")),
+        "a re-run sweeps nothing and still reports the rule:\n{again}"
+    );
+    let index_again = fs::read_to_string(repo.join(".maestro/archive/cards/INDEX.md"))
+        .expect("invariant: INDEX.md should exist");
+    assert_eq!(index, index_again, "a re-run appends no duplicate lid line");
+}
+
 #[test]
 fn update_writes_fields_claims_and_close_closes() {
     let temp = cards_repo("s2-update-close");
