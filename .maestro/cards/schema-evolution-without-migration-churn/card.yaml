@@ -1,0 +1,18 @@
+schema_version: maestro.card.v1
+id: schema-evolution-without-migration-churn
+type: feature
+title: Schema evolution without migration churn
+status: proposed
+created_at: 2026-06-11T17:16:18.881Z
+updated_at: 2026-06-11T17:16:18.939Z
+description: Decide how Maestro should evolve durable artifact schemas without forcing large v1-to-v2 code and migration waves for every change.
+extra:
+  schema_version: maestro.feature.v2
+  id: schema-evolution-without-migration-churn
+  title: Schema evolution without migration churn
+  description: Decide how Maestro should evolve durable artifact schemas without forcing large v1-to-v2 code and migration waves for every change.
+  status: proposed
+  created_at: 2026-06-11T17:16:18.881Z
+  updated_at: 2026-06-11T17:16:18.939Z
+  open_questions:
+  - Should future artifact evolution keep exact schema rejection plus explicit migrations, move to reader-side compatibility, or route changes through card-envelope evolution?

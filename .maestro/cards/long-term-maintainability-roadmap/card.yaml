@@ -1,0 +1,19 @@
+schema_version: maestro.card.v1
+id: long-term-maintainability-roadmap
+type: feature
+title: Long-term maintainability roadmap
+status: proposed
+created_at: 2026-06-11T17:59:38.092Z
+updated_at: 2026-06-11T18:27:21.057Z
+description: Turn the repo-wide audit, schema-evolution design, and 2026-06-12 review-swarm/simplify-code findings into a durable long-term Maestro roadmap with small approved implementation slices.
+extra:
+  schema_version: maestro.feature.v2
+  open_questions:
+  - 'D2: For WS1, should the truth be enum dispatch as intended design, or should Maestro introduce the trait seam the architecture document promised?'
+  - 'D3: For WS2, should full-gate portability optimize for developer machines, CI, or both?'
+  - 'D4: For WS3, should this be a local cleanup only, or should architecture tests enforce no production direct unwrap in selected surfaces?'
+  - 'D5: For WS4, should compatibility aliases be retired opportunistically or guarded by a new import-boundary test in the same slice?'
+  - 'D6: For WS5, what is the exact artifact-family matrix and compatibility policy for supported old versions, current storage versions, and retirement?'
+  - 'D7: For WS6, what side effects are allowed from passive checks, installed hooks, installer repair, and global skill sync without an explicit apply step?'
+  - 'D8: For WS7, which command paths are hot enough to justify shared read models, and what freshness proof is required before caching or skipping work?'
+  - 'D9: For WS8, which compatibility shims and transition artifacts are true downstream API, and which exist only for tests or old migration history?'
