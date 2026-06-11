@@ -30,6 +30,7 @@ use anyhow::{Context, Result, bail};
 use serde_yaml::{Mapping, Value};
 
 use crate::domain::card::fold::{self, string_field};
+use crate::domain::card::query;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{
     RESERVED_CONTAINER_NAMES, card_path, hash_id, load_with_snapshot, locate, mint_hash_id,
@@ -97,7 +98,14 @@ pub fn run(paths: &MaestroPaths, now: &str) -> Result<CardMigrateReport> {
     // reminted card already lives in the store (flat or folded) drops out
     // here, refs and all -- its card is the store's truth now and its refs
     // were validated when it migrated. The reminted id is reproducible
-    // because the mint is deterministic (O6).
+    // because the mint is deterministic (O6). One store scan answers every
+    // membership probe (here and the run-event rewrite) instead of a per-card
+    // layout walk; the scan is strict, which is the migrator's posture --
+    // it refuses a corrupt store rather than migrating around it.
+    let existing_ids: HashSet<String> = query::scan(paths)?
+        .into_iter()
+        .map(|card| card.id)
+        .collect();
     let mut already_migrated: HashSet<String> = HashSet::new();
     let mut fresh: Vec<PendingCard> = Vec::new();
     for entry in pending {
@@ -105,7 +113,7 @@ pub fn run(paths: &MaestroPaths, now: &str) -> Result<CardMigrateReport> {
             CardType::Feature => entry.kept_id.clone(),
             _ => hash_id(&entry.kept_id),
         };
-        if locate(paths, &minted)?.is_some() {
+        if existing_ids.contains(&minted) {
             report.skipped += 1;
             already_migrated.insert(normalize_ref(&entry.kept_id));
         } else {
@@ -154,7 +162,9 @@ pub fn run(paths: &MaestroPaths, now: &str) -> Result<CardMigrateReport> {
         .filter(|entry| entry.card.card_type == CardType::Task)
         .map(|entry| (entry.kept_id.clone(), entry.card.id.clone()))
         .collect();
-    rewrite_run_events(paths, &task_remap)?;
+    // Pass 2 only writes reminted (`card-<hash>`) ids, so the pre-write scan
+    // still answers "does a live card occupy the OLD id" exactly.
+    rewrite_run_events(paths, &task_remap, &existing_ids)?;
 
     Ok(report)
 }
@@ -523,11 +533,16 @@ fn rewrite_note_line(line: &str, remap: &HashMap<String, String>) -> (String, bo
 /// (notes 53). The
 /// token swap is targeted, not a parse-and-reserialize, so every other byte of
 /// the append-only log is preserved.
-fn rewrite_run_events(paths: &MaestroPaths, task_remap: &[(String, String)]) -> Result<()> {
+fn rewrite_run_events(
+    paths: &MaestroPaths,
+    task_remap: &[(String, String)],
+    existing_ids: &HashSet<String>,
+) -> Result<()> {
     let mut active: Vec<(&str, &str)> = Vec::new();
     for (old, new) in task_remap {
-        // Resolver, not the flat path: a recreated task may live pooled now.
-        if locate(paths, old)?.is_none() {
+        // The whole-store scan, not the flat path: a recreated task may live
+        // pooled now, and its events must stay its own.
+        if !existing_ids.contains(old) {
             active.push((old.as_str(), new.as_str()));
         }
     }
