@@ -141,13 +141,13 @@ pub fn create_task(
     if options.covers.iter().any(|cover| cover.trim().is_empty()) {
         bail!("task cover cannot be empty; pass an acceptance id such as ac-1");
     }
-    // Mint a content-addressed `card-<hash>` id from the title plus a process
+    // Mint a typed slug id `task-<slug>-<hex4>` from the title plus a process
     // nonce (SPEC O3'); the create-time CAS (D1) is the collision belt, so two
     // creators racing on the same hash both attempt the write and the loser
     // fails loud rather than silently bumping.
     let paths = lookup::paths_for_tasks_dir(tasks_dir)
         .context("cannot resolve maestro paths from tasks dir")?;
-    let id = card_store::mint_card_id(&paths, title);
+    let id = card_store::mint_card_id(&paths, CardType::Task, title);
     let mut task = TaskRecord::draft(&id, title, &options.created_at);
     task.feature_id = options.feature;
     task.covers = options.covers;
@@ -1091,7 +1091,11 @@ mod tests {
             },
         )
         .expect("create task card with a feature parent");
-        assert!(task.id.starts_with("card-"), "card-mode id: {}", task.id);
+        assert!(
+            task.id.starts_with("task-add-csv-export-"),
+            "card-mode id: {}",
+            task.id
+        );
 
         let counts = crate::feature::query::count_tasks_by_feature(&tasks_dir).expect("count");
         assert_eq!(counts.get(&feature_id).map(|c| c.total), Some(1));

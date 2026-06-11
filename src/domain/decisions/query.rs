@@ -520,12 +520,13 @@ fn structured_note_decision_refs(contents: &str) -> Vec<String> {
 }
 
 /// The decision id a structured note token points at: a canonical `decision-NNN`
-/// (normalized) or a content-addressed `card-<hash>` (taken raw, the post-remint
-/// form). Any other token is not a structured pointer.
+/// (normalized), a content-addressed `card-<hash>` (the post-remint form, frozen
+/// forever per SPEC-card-slug-ids D3), or a typed slug `dec-<slug>-<hex4>` (the
+/// minted form). Any other token is not a structured pointer.
 fn note_decision_pointer(candidate: &str) -> Option<String> {
     if candidate.starts_with("decision-") {
         normalize_decision_id(candidate).ok()
-    } else if candidate.starts_with("card-") {
+    } else if candidate.starts_with("card-") || candidate.starts_with("dec-") {
         Some(candidate.to_string())
     } else {
         None
@@ -609,11 +610,11 @@ mod tests {
     fn dangling_note_pointer_in_card_mode_warns_only_when_unresolved() {
         let paths = card_mode_repo("dangling-card-note");
 
-        // A real decision card minted in card mode carries a `card-<hash>` id.
+        // A real decision card minted in card mode carries a `dec-<slug>-<hex4>` id.
         let decision = create_open(&paths, "Writer choice", None, None).expect("create decision");
         let decision_id = decision.record.id.clone();
         assert!(
-            decision_id.starts_with("card-"),
+            decision_id.starts_with("dec-"),
             "card-mode decision id: {decision_id}"
         );
 

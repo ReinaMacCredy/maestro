@@ -126,9 +126,10 @@ pub fn note(args: NoteArgs) -> Result<()> {
 }
 
 /// Execute `maestro create -t <type> <title>`: mint a new card (DN9). Non-feature
-/// cards get a content-hash `card-<hash>` id; feature cards keep an immutable
-/// creation slug (SPEC E2). The initial status is the uniform coarse-open word
-/// `open`, so a workable card is immediately `ready` once it has no open blocker.
+/// cards get a typed slug id `<type>-<slug>-<hex4>` (SPEC-card-slug-ids D1/D1b);
+/// feature cards keep an immutable creation slug (SPEC E2). The initial status is
+/// the uniform coarse-open word `open`, so a workable card is immediately `ready`
+/// once it has no open blocker.
 pub fn create(args: CreateArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
         return Ok(());
@@ -137,7 +138,7 @@ pub fn create(args: CreateArgs) -> Result<()> {
     let now = utc_now_timestamp();
     let id = match card_type {
         card::schema::CardType::Feature => slugify_ascii(&args.title),
-        _ => card::store::mint_card_id(&paths, &args.title),
+        _ => card::store::mint_card_id(&paths, card_type, &args.title),
     };
     let mut new_card = card::schema::Card::new(&id, card_type, &args.title, "open", &now);
     if let Some(parent) = args.parent {

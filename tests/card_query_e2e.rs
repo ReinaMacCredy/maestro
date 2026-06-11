@@ -91,7 +91,7 @@ fn ready_and_list_reflect_a_migrated_card_store() {
     .expect("create task");
     card_migrate::run(&paths, NOW).expect("migration succeeds");
 
-    // The task is minted with a stable content-hash id (SPEC E2/O3); capture it
+    // The task is minted with a stable typed slug id (SPEC E2/O3); capture it
     // from the store and assert the CLI verbs surface it.
     let task1_id = task::load_task_records(&paths.tasks_dir())
         .expect("scan tasks")
@@ -100,8 +100,8 @@ fn ready_and_list_reflect_a_migrated_card_store() {
         .expect("one migrated task")
         .id;
     assert!(
-        task1_id.starts_with("card-"),
-        "task reminted to a content-hash id: {task1_id}"
+        task1_id.starts_with("task-add-csv-export-"),
+        "task keeps its typed slug id through migration: {task1_id}"
     );
 
     let repo = temp.path();
@@ -113,8 +113,10 @@ fn ready_and_list_reflect_a_migrated_card_store() {
         ready.contains(&task1_id),
         "ready should list the task:\n{ready}"
     );
+    // The task's slug id contains "csv-export", so match the feature row
+    // (id + type column) rather than the bare substring.
     assert!(
-        !ready.contains("csv-export"),
+        !ready.contains("csv-export  feature"),
         "feature card is not workable and must stay out of ready:\n{ready}"
     );
 

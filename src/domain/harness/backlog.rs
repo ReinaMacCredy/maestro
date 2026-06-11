@@ -197,7 +197,7 @@ fn merge_proposals_inner(
             }
             continue;
         }
-        proposal.id = card_store::mint_card_id(paths, &proposal.title);
+        proposal.id = card_store::mint_card_id(paths, CardType::Idea, &proposal.title);
         fingerprints.insert(fingerprint);
         backlog.items.push(proposal);
     }

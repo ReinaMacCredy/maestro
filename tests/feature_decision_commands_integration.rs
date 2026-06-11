@@ -1703,10 +1703,10 @@ fn decision_new_and_lock_write_structured_feature_record() {
         "agent-cli-ux",
     ];
     let out = stdout(maestro(&open_args, temp_dir.path()), &open_args);
-    // Decisions mint opaque content-hash ids now (no decision-001 auto-increment);
+    // Decisions mint typed slug ids now (no decision-001 auto-increment);
     // recover by the unique title.
     let first_id = id_by_title(temp_dir.path(), "Timestamps use RFC3339");
-    assert!(first_id.starts_with("card-"), "{first_id}");
+    assert!(first_id.starts_with("dec-"), "{first_id}");
     assert!(
         out.contains(&format!("opened {first_id} (status: open)")),
         "{out}"

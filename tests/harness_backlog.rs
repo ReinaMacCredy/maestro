@@ -53,8 +53,8 @@ fn refresh_assigns_stable_ids_and_deduplicates_by_key() {
     assert_eq!(backlog.items.len(), 2);
     for item in &backlog.items {
         assert!(
-            item.id.starts_with("card-"),
-            "merge-minted ideas use card ids: {}",
+            item.id.starts_with("idea-"),
+            "merge-minted ideas use typed slug ids: {}",
             item.id
         );
     }
@@ -82,7 +82,7 @@ fn refresh_assigns_stable_ids_and_deduplicates_by_key() {
 }
 
 #[test]
-fn refresh_preserves_existing_ids_and_mints_card_ids() {
+fn refresh_preserves_existing_ids_and_mints_typed_ids() {
     let temp = TestTempDir::new("maestro-harness-backlog");
     let paths = paths_for(&temp);
     let mut existing = BacklogConfig::empty();
@@ -111,8 +111,8 @@ fn refresh_preserves_existing_ids_and_mints_card_ids() {
         .find(|item| item.source == "new")
         .expect("invariant: new proposal lands");
     assert!(
-        minted.id.starts_with("card-"),
-        "new proposals mint card ids: {}",
+        minted.id.starts_with("idea-"),
+        "new proposals mint typed slug ids: {}",
         minted.id
     );
 }

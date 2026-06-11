@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
+use crate::domain::card::schema::CardType;
 use crate::domain::card::store as card_store;
 use crate::domain::decisions::cards;
 use crate::domain::decisions::query::{DecisionSource, decision_exists, normalize_decision_id};
@@ -52,9 +53,9 @@ fn create_open_card(
     if let Some(feature_id) = feature {
         feature::ensure_exists(paths, feature_id)?;
     }
-    // Card mode: content-addressed `card-<hash>` id (title + process nonce, SPEC
+    // Card mode: typed slug id `dec-<slug>-<hex4>` (title + process nonce, SPEC
     // O3'), no reservation marker -- the create-time CAS (D1) guards collisions.
-    let id = card_store::mint_card_id(paths, title);
+    let id = card_store::mint_card_id(paths, CardType::Decision, title);
     let record = open_record(id, title, context, feature);
     let home = cards::create(paths, &record)?;
     Ok(DecisionWriteReport {

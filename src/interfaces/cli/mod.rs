@@ -156,7 +156,7 @@ pub enum RootCommand {
     Show(ShowArgs),
     #[command(
         about = "Update a card's status, title, description, or claim (card store)",
-        after_help = "Examples:\n  maestro update card-0a1b2c --status needs_verification\n  maestro update card-0a1b2c --claim\n  maestro update card-0a1b2c --title \"New title\""
+        after_help = "Examples:\n  maestro update task-add-csv-export-0a1b --status needs_verification\n  maestro update task-add-csv-export-0a1b --claim\n  maestro update task-add-csv-export-0a1b --title \"New title\""
     )]
     Update(UpdateArgs),
     #[command(about = "Close a card: status -> closed (card store)")]

@@ -71,8 +71,8 @@ fn create_mints_a_card_and_show_round_trips_it() {
 
     let id = id_by_title(repo, "Add CSV export");
     assert!(
-        id.starts_with("card-"),
-        "a task is minted a content-hash id: {id}"
+        id.starts_with("task-add-csv-export-"),
+        "a task is minted a typed slug id: {id}"
     );
 
     let shown = run(repo, &["show", &id]);
@@ -189,7 +189,7 @@ fn show_json_mirrors_the_card() {
 }
 
 #[test]
-fn create_uses_a_slug_for_features_and_a_hash_for_other_types() {
+fn create_uses_a_slug_for_features_and_a_typed_slug_for_other_types() {
     let temp = cards_repo("s2-create-ids");
     let repo = temp.path();
 
@@ -205,8 +205,8 @@ fn create_uses_a_slug_for_features_and_a_hash_for_other_types() {
 
     let bug = run(repo, &["create", "-t", "bug", "Fix ordering race"]);
     assert!(
-        bug.contains("created card-"),
-        "a non-feature card is minted a content-hash id:\n{bug}"
+        bug.contains("created bug-fix-ordering-race-"),
+        "a non-feature card is minted a typed slug id:\n{bug}"
     );
 }
 

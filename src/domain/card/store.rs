@@ -14,6 +14,7 @@ use crate::foundation::core::fs::{
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{CARD_SCHEMA_VERSION, Compat, classify};
+use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_millis_timestamp;
 
 /// A card and the exact bytes it was read from, captured for the
@@ -147,23 +148,88 @@ pub(crate) fn mint_hash_id(input: &str, mut is_taken: impl FnMut(&str) -> bool) 
 /// the same millisecond by the same process still hash apart (SPEC O3').
 static CREATION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// Mint a fresh `card-<hash>` id for a newly created non-feature card (SPEC
-/// E2/O3'). The hash input is the title plus a process-unique nonce
-/// (millisecond timestamp + pid + a process-local counter), so two cards
-/// created back-to-back differ even with identical titles. The disk-existence
-/// predicate leaves the create-time CAS (D1) as the real collision guard; the
-/// nonce only keeps the first attempt from colliding.
-pub(crate) fn mint_card_id(paths: &MaestroPaths, title: &str) -> String {
+/// Generated-id prefixes, reserved against feature ids (SPEC-card-slug-ids
+/// D1b): a feature named like a generated card would re-merge the namespaces
+/// the prefix exists to separate. Legacy `card-<hex>` ids are not minted
+/// anymore but stay valid forever (D3).
+pub(crate) const GENERATED_ID_PREFIXES: &[&str] = &["task-", "bug-", "chore-", "dec-", "idea-"];
+
+/// The id prefix a generated card carries for its type (D1b): the type word,
+/// with `decision` shortened to `dec`. Features mint no generated id (their id
+/// is the user's creation slug), so they have none.
+fn type_prefix(card_type: CardType) -> Option<&'static str> {
+    match card_type {
+        CardType::Feature => None,
+        CardType::Task => Some("task"),
+        CardType::Bug => Some("bug"),
+        CardType::Chore => Some("chore"),
+        CardType::Decision => Some("dec"),
+        CardType::Idea => Some("idea"),
+    }
+}
+
+/// Cap the title slug so generated ids stay readable in `ls`: at most 40
+/// chars, cut at a word boundary. `slugify_ascii` output is pure ASCII, so
+/// byte slicing is char-safe.
+fn capped_slug(title: &str) -> String {
+    let slug = slugify_ascii(title);
+    if slug.len() <= 40 {
+        return slug;
+    }
+    match slug[..40].rfind('-') {
+        Some(cut) if cut > 0 => slug[..cut].to_string(),
+        _ => slug[..40].to_string(),
+    }
+}
+
+/// One `<prefix>-<slug>-<hex4>` candidate; a slug-less title (no ASCII
+/// alphanumerics) collapses to `<prefix>-<hex4>`.
+fn typed_id(prefix: &str, slug: &str, input: &str) -> String {
+    let tail = &sha256_hex(input.as_bytes())[..4];
+    if slug.is_empty() {
+        format!("{prefix}-{tail}")
+    } else {
+        format!("{prefix}-{slug}-{tail}")
+    }
+}
+
+/// Mint a fresh typed slug id `<type>-<slug>-<hex4>` for a newly created
+/// non-feature card (SPEC-card-slug-ids D1/D1b). The slug is frozen at
+/// creation -- a later retitle never renames the card -- and the 4-hex tail
+/// hashes the title plus a process-unique nonce (millisecond timestamp, pid,
+/// and a process-local counter), so two cards created back-to-back differ
+/// even with identical titles. The disk-existence predicate leaves the
+/// create-time CAS (D1) as the real collision guard; the nonce only keeps the
+/// first attempt from colliding.
+pub(crate) fn mint_card_id(paths: &MaestroPaths, card_type: CardType, title: &str) -> String {
     let ts = utc_now_millis_timestamp();
     let seq = CREATION_COUNTER.fetch_add(1, Ordering::Relaxed);
     let input = format!("{title}|{ts}|{}|{seq}", process::id());
     // An unreadable store reads as free rather than salt-bumping forever; the
     // create-time CAS stays the real collision guard either way.
-    mint_hash_id(&input, |id| {
+    let is_taken = |id: &str| {
         locate(paths, id)
             .map(|home| home.is_some())
             .unwrap_or(false)
-    })
+    };
+    let Some(prefix) = type_prefix(card_type) else {
+        // Features never mint (their id is the creation slug); fall back to
+        // the legacy hash mint rather than panicking on a misuse.
+        return mint_hash_id(&input, is_taken);
+    };
+    let slug = capped_slug(title);
+    let base = typed_id(prefix, &slug, &input);
+    if !is_taken(&base) {
+        return base;
+    }
+    let mut salt = 1u32;
+    loop {
+        let candidate = typed_id(prefix, &slug, &format!("{input}-{salt}"));
+        if !is_taken(&candidate) {
+            return candidate;
+        }
+        salt += 1;
+    }
 }
 
 /// [`save_with_snapshot`] for a card rebuilt by a typed-record fold. The fold
@@ -292,6 +358,17 @@ pub fn home_for_new(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
             if RESERVED_CONTAINER_NAMES.contains(&card.id.as_str()) {
                 bail!(
                     "feature id {} is reserved by the card store layout",
+                    card.id
+                );
+            }
+            // D1b: the generated-id prefixes are reserved, so a feature can
+            // never look like a minted task/bug/chore/dec/idea id.
+            if let Some(prefix) = GENERATED_ID_PREFIXES
+                .iter()
+                .find(|prefix| card.id.starts_with(*prefix))
+            {
+                bail!(
+                    "feature id {} starts with the reserved generated-id prefix {prefix}; pick another name",
                     card.id
                 );
             }
@@ -811,11 +888,72 @@ mod tests {
     fn mint_card_id_varies_per_call() {
         let paths = temp_cards_repo("mint-card");
 
-        let first = mint_card_id(&paths, "Add CSV export");
-        let second = mint_card_id(&paths, "Add CSV export");
+        let first = mint_card_id(&paths, CardType::Task, "Add CSV export");
+        let second = mint_card_id(&paths, CardType::Task, "Add CSV export");
         assert_ne!(first, second, "same title must still mint distinct ids");
-        assert!(first.starts_with("card-") && second.starts_with("card-"));
+        assert!(
+            first.starts_with("task-add-csv-export-") && second.starts_with("task-add-csv-export-"),
+            "{first} / {second}"
+        );
 
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    #[test]
+    fn mint_card_id_carries_type_prefix_slug_and_hex_tail() {
+        let paths = temp_cards_repo("mint-typed");
+
+        let dec = mint_card_id(&paths, CardType::Decision, "Fly, not train!");
+        let tail = dec
+            .strip_prefix("dec-fly-not-train-")
+            .unwrap_or_else(|| panic!("dec id carries prefix + frozen slug: {dec}"));
+        assert_eq!(tail.len(), 4, "4-hex tail: {dec}");
+        assert!(tail.chars().all(|c| c.is_ascii_hexdigit()), "{dec}");
+
+        assert!(
+            mint_card_id(&paths, CardType::Bug, "Fix ordering race")
+                .starts_with("bug-fix-ordering-race-")
+        );
+        assert!(mint_card_id(&paths, CardType::Idea, "grep").starts_with("idea-grep-"));
+
+        // The slug caps at a word boundary so ls stays readable.
+        let long = mint_card_id(
+            &paths,
+            CardType::Task,
+            "migrate-v2 should leave the repository doctor-clean afterwards every time",
+        );
+        let slug = long
+            .strip_prefix("task-")
+            .and_then(|rest| rest.rsplit_once('-'))
+            .map(|(slug, _tail)| slug)
+            .unwrap_or_default();
+        assert!(slug.len() <= 40, "capped slug: {long}");
+        assert!(!slug.ends_with('-'), "{long}");
+
+        // A title with no ASCII alphanumerics collapses to `<prefix>-<hex4>`.
+        let bare = mint_card_id(&paths, CardType::Chore, "###");
+        let tail = bare
+            .strip_prefix("chore-")
+            .unwrap_or_else(|| panic!("{bare}"));
+        assert_eq!(tail.len(), 4, "slug-less id is prefix + tail: {bare}");
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    #[test]
+    fn home_for_new_rejects_feature_ids_with_generated_prefixes() {
+        let paths = temp_cards_repo("feature-prefix-guard");
+        for id in ["task-cleanup", "bug-tracker", "dec-log", "idea-board"] {
+            let err = home_for_new(&paths, &typed_card(id, CardType::Feature, None))
+                .expect_err("generated-id prefixes are reserved against feature ids");
+            assert!(
+                err.to_string().contains("reserved generated-id prefix"),
+                "{err}"
+            );
+        }
+        // Words that merely share letters with a prefix stay legal.
+        assert!(home_for_new(&paths, &typed_card("decision-log", CardType::Feature, None)).is_ok());
+        assert!(home_for_new(&paths, &typed_card("tasks-board", CardType::Feature, None)).is_ok());
         let _ = std::fs::remove_dir_all(paths.cards_dir());
     }
 

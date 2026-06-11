@@ -23,7 +23,7 @@ fn create_open_persists_first_global_decision() {
     .expect("invariant: create should succeed");
 
     assert!(
-        report.record.id.starts_with("card-"),
+        report.record.id.starts_with("dec-"),
         "card-mode decision id: {}",
         report.record.id
     );
