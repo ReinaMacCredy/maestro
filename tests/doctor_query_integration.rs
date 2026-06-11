@@ -982,3 +982,185 @@ fn untabify(output: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+/// SPEC-archive-memory-2 R7: `query graph <id>` walks the typed edges
+/// (parent/blocks/supersedes) two hops as a tree; `--dot` exports Graphviz DOT
+/// -- the whole web bare, one connected component with an id. Decision
+/// supersession (kept in the record, not a dep) rides as a supersedes edge,
+/// and a swept target renders as `[archived]` so the lineage survives R2.
+#[test]
+fn query_graph_walks_typed_edges_two_hops_and_exports_dot() {
+    let temp = setup_repo("maestro-query-graph");
+    let repo = temp.path();
+
+    // Web: feature <- child task <- blocker <- hop-3 blocker (a 3-hop chain
+    // from the feature), plus a disconnected decision pair (new supersedes old).
+    run_success(repo, &["feature", "new", "Billing CSV export"]);
+    run_success(
+        repo,
+        &[
+            "create",
+            "-t",
+            "task",
+            "Export rows",
+            "--parent",
+            "billing-csv-export",
+        ],
+    );
+    let child = id_by_title(repo, "Export rows");
+    run_success(repo, &["task", "create", "Schema freeze"]);
+    let blocker = id_by_title(repo, "Schema freeze");
+    run_success(repo, &["task", "create", "Vendor signoff"]);
+    let hop3 = id_by_title(repo, "Vendor signoff");
+    run_success(
+        repo,
+        &[
+            "task",
+            "block",
+            &child,
+            "--reason",
+            "schema first",
+            "--by",
+            &blocker,
+        ],
+    );
+    run_success(
+        repo,
+        &[
+            "task",
+            "block",
+            &blocker,
+            "--reason",
+            "vendor first",
+            "--by",
+            &hop3,
+        ],
+    );
+
+    run_success(repo, &["decision", "new", "Tabs or spaces"]);
+    let old_rule = id_by_title(repo, "Tabs or spaces");
+    run_success(
+        repo,
+        &[
+            "decision",
+            "lock",
+            &old_rule,
+            "--decision",
+            "tabs",
+            "--rejected",
+            "spaces: drift",
+        ],
+    );
+    run_success(repo, &["decision", "new", "Spaces after all"]);
+    let new_rule = id_by_title(repo, "Spaces after all");
+    run_success(
+        repo,
+        &[
+            "decision",
+            "lock",
+            &new_rule,
+            "--decision",
+            "spaces",
+            "--rejected",
+            "tabs: rendering drift",
+            "--supersedes",
+            &old_rule,
+        ],
+    );
+
+    // Tree from the feature: the child is hop 1, its blocker hop 2; the hop-3
+    // blocker is beyond the two-hop horizon and stays out.
+    let tree = run_success(repo, &["query", "graph", "billing-csv-export"]);
+    assert!(
+        tree.starts_with("billing-csv-export (feature, "),
+        "the root line names the card:\n{tree}"
+    );
+    assert!(
+        tree.contains(&format!("- child: {child} (task, ")),
+        "hop 1 shows the child task:\n{tree}"
+    );
+    assert!(
+        tree.contains(&format!("  - blocked-by: {blocker} (task, ")),
+        "hop 2 shows the child's blocker indented:\n{tree}"
+    );
+    assert!(
+        !tree.contains(&hop3),
+        "hop 3 stays beyond the tree horizon:\n{tree}"
+    );
+
+    // From the child both directions are one hop: its parent and its blocker.
+    let from_child = run_success(repo, &["query", "graph", &child]);
+    assert!(
+        from_child.contains("- parent: billing-csv-export (feature, "),
+        "the parent edge reads from the child's side:\n{from_child}"
+    );
+    assert!(
+        from_child.contains(&format!("- blocked-by: {blocker} (task, ")),
+        "the blocker is one hop from the child:\n{from_child}"
+    );
+    assert!(
+        from_child.contains(&format!("  - blocked-by: {hop3} (task, ")),
+        "hop 2 from the child reaches the vendor blocker:\n{from_child}"
+    );
+
+    // The decision pair: supersession reads from the record, not a dep.
+    let rules = run_success(repo, &["query", "graph", &new_rule]);
+    assert!(
+        rules.contains(&format!(
+            "- supersedes: {old_rule} (decision, superseded) Tabs or spaces"
+        )),
+        "the kept rule points at the rule it replaced:\n{rules}"
+    );
+
+    // Whole-web DOT: every node and labeled edge, ready for rendering.
+    let dot = run_success(repo, &["query", "graph", "--dot"]);
+    assert!(dot.starts_with("digraph cards {"), "{dot}");
+    assert!(
+        dot.contains("\"billing-csv-export\" [label=\"billing-csv-export\\nfeature:"),
+        "nodes carry id/type:status/title labels:\n{dot}"
+    );
+    assert!(
+        dot.contains(&format!(
+            "\"{child}\" -> \"billing-csv-export\" [label=\"parent\"];"
+        )),
+        "the parent edge is exported:\n{dot}"
+    );
+    assert!(
+        dot.contains(&format!(
+            "\"{child}\" -> \"{blocker}\" [label=\"blocked-by\"];"
+        )),
+        "the blocks edge is exported from the blocked side:\n{dot}"
+    );
+    assert!(
+        dot.contains(&format!(
+            "\"{new_rule}\" -> \"{old_rule}\" [label=\"supersedes\"];"
+        )),
+        "the supersession edge is exported:\n{dot}"
+    );
+
+    // Component DOT: the task web only, the decision pair stays out.
+    let component = run_success(repo, &["query", "graph", &child, "--dot"]);
+    assert!(component.contains(&hop3), "{component}");
+    assert!(
+        !component.contains(&new_rule),
+        "the disconnected decision pair stays out of the component:\n{component}"
+    );
+
+    // R2 tie-in: sweeping the superseded rule turns the live edge into an
+    // [archived] marker, so the lineage stays visible after the sweep.
+    run_success(repo, &["archive", "--loose"]);
+    let after_sweep = run_success(repo, &["query", "graph", &new_rule]);
+    assert!(
+        after_sweep.contains(&format!("- supersedes: {old_rule} [archived]")),
+        "a swept supersession target is marked archived:\n{after_sweep}"
+    );
+
+    // Guard rails: bare graph errors with the two shapes; an unknown id names
+    // the recall surfaces.
+    let bare = maestro(repo, &["query", "graph"]);
+    assert_failure(&bare, &["query", "graph"]);
+    assert!(stderr(&bare).contains("provide a card id or --dot"));
+    let missing = maestro(repo, &["query", "graph", "nope-404"]);
+    assert_failure(&missing, &["query", "graph", "nope-404"]);
+    assert!(stderr(&missing).contains("no card nope-404 in the live store"));
+}

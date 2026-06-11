@@ -970,6 +970,17 @@ pub enum QueryCommand {
         #[arg(long = "task-id", value_name = "TASK_ID")]
         task_id_flag: Option<String>,
     },
+    #[command(
+        about = "Walk a card's typed edges (parent/blocks/related/supersedes)",
+        after_help = "Examples:\n  maestro query graph task-0a1b2c        # connected cards, two hops\n  maestro query graph --dot > cards.dot  # the whole web as Graphviz DOT\n  maestro query graph task-0a1b2c --dot  # one card's connected component"
+    )]
+    Graph {
+        /// Card id to walk from; omit with --dot to export the whole web.
+        id: Option<String>,
+        /// Emit Graphviz DOT instead of a tree.
+        #[arg(long)]
+        dot: bool,
+    },
 }
 
 #[derive(Debug, Args)]
