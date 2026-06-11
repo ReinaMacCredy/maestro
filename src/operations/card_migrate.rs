@@ -442,8 +442,9 @@ fn rewrite_string_field(map: &mut Mapping, key: &str, remap: &HashMap<String, St
 }
 
 /// Write one card, guarding id collisions and skipping cards a prior run already
-/// minted. After writing a feature card, its prose sidecars are copied and their
-/// structured decision pointers reminted. Returns whether a new card was written.
+/// minted. A feature card's prose sidecars are copied (and their structured
+/// decision pointers reminted) before its record is written. Returns whether a
+/// new card was written.
 fn mint(
     paths: &MaestroPaths,
     minted: &mut HashSet<String>,
@@ -468,8 +469,11 @@ fn mint(
     let path = card_path(paths, &card.id);
     let snapshot = load_with_snapshot(&path)
         .with_context(|| format!("failed to read card snapshot {}", path.display()))?;
-    save_with_snapshot(&path, card, &snapshot)
-        .with_context(|| format!("failed to write card {}", card.id))?;
+    // Prose first, card.yaml last: the record is the commit point the re-run
+    // idempotency probe keys on. Were the record written first, a prose-copy
+    // failure would leave a card the re-run skips and prose that never heals;
+    // prose orphaned by a crash here is simply overwritten when the re-run
+    // converges (the legacy source persists until the post-migration cleanup).
     if let Some(src) = prose_src {
         let card_dir = path
             .parent()
@@ -477,6 +481,8 @@ fn mint(
         copy_feature_prose(src, card_dir)?;
         rewrite_note_pointers(card_dir, remap)?;
     }
+    save_with_snapshot(&path, card, &snapshot)
+        .with_context(|| format!("failed to write card {}", card.id))?;
     Ok(true)
 }
 
@@ -1339,6 +1345,36 @@ mod tests {
         fs::create_dir_all(paths.archive_dir().join("features").join("ghost-feature"))
             .expect("archive the ghost feature");
         run(&paths, NOW).expect("an archived parent is admitted frozen");
+
+        cleanup(&root);
+    }
+
+    /// card.yaml is the mint's commit point: when a prose copy fails, the
+    /// record is not written, so the re-run retries the whole card instead of
+    /// skipping a half-minted one (the idempotency probe keys on the record).
+    #[test]
+    fn a_failed_prose_copy_leaves_no_card_and_the_rerun_converges() {
+        let root = temp_repo("prose-commit-point");
+        let paths = brownfield(&root);
+
+        // A directory at the copy target makes `fs::copy` fail mid-prose.
+        let card_dir = paths.cards_dir().join("csv-export");
+        fs::create_dir_all(card_dir.join("notes.md")).expect("plant the obstacle");
+
+        let error = run(&paths, NOW).expect_err("the prose copy failure surfaces");
+        assert!(format!("{error:#}").contains("failed to copy"), "{error:#}");
+        assert!(
+            !card_dir.join("card.yaml").exists(),
+            "no record is written when the prose copy failed"
+        );
+
+        fs::remove_dir_all(card_dir.join("notes.md")).expect("clear the obstacle");
+        run(&paths, NOW).expect("the re-run converges");
+        assert!(card_dir.join("card.yaml").is_file(), "the card minted");
+        assert!(
+            read_text(&card_dir.join("notes.md")).contains("design notes"),
+            "the prose followed the re-run"
+        );
 
         cleanup(&root);
     }
