@@ -451,6 +451,18 @@ checked, not asserted, so a green ship is a real signal.
 `maestro decision new "<the fork>" --feature <id>` records an architectural decision as a card under
 `.maestro/cards/card-<hex>/`, so the reasoning outlives any single agent session.
 
+### The archive is memory
+
+Closing work does not discard it. `maestro archive <feature>` moves a closed feature tree
+into `.maestro/archive/cards/`, and `maestro archive --loose` sweeps closed loose tasks,
+ideas, and superseded decisions after it. Every archived card appends a one-line digest to
+`.maestro/archive/cards/INDEX.md`; `maestro resume` opens with the most recent of those
+lines, `maestro list --grep <term> --archived` searches the full history (kept fast by the
+local text index, which falls back to a plain scan when missing or stale), and
+`maestro query graph <id>` renders a card's dependency neighborhood with `[archived]`
+targets marked. Closing verbs print the `next: maestro archive <id>` nudge, and
+`maestro doctor` warns when closed cards pile up in the live store.
+
 ### Harness self-improvement
 
 The harness is the part of maestro that improves the tool you build with, through the same
@@ -591,9 +603,10 @@ edits. `maestro sync --global-skills` refreshes only the user-level global skill
 | `decision` | Create, lock, show, and list decision cards |
 | `harness` | List, show, apply, dismiss, and measure self-improvement idea cards |
 | `create` / `update` / `close` | Create generic cards, mutate workable-card fields, or close workable cards |
-| `ready` / `list` / `show` | Discover and inspect cards in the flat store (`--parent`, `--type`, `--assignee`, `--status`) |
-| `claim` / `note` / `dep` / `archive` | Claim a workable card, append a note, add a blocking edge, or archive a feature tree |
-| `event` / `query` | Record harness events and inspect computed read models |
+| `ready` / `list` / `show` | Discover and inspect cards in the flat store (`--parent`, `--type`, `--assignee`, `--status`, `--grep`) |
+| `claim` / `note` / `dep` / `archive` | Claim a workable card, append a note, add a blocking edge, or archive a closed feature tree (`--loose` sweeps loose closed cards) |
+| `event` / `query` | Record harness events and inspect computed read models, including `query graph` for a card's dependency web |
+| `index` | Maintain the local text index that accelerates `list --grep` |
 | `mcp` / `hook` / `watch` | Advanced integrations for MCP, agent hooks, and task snapshots |
 | `version` | Print the version and binary path |
 
