@@ -37,7 +37,7 @@ One entity `card` replaces feature/task/harness/decision. Structure (DN10) = a g
 (`src/domain/card/`). The per-type lifecycle logic was *preserved* (moved behind the
 trait), not rewritten.
 
-```
+```text
 generic CARD CORE  -- never changes when a type is added/altered
   schema · store(save-if-unchanged) · id-reservation · scan · archive ·
   query(ready/list) · CLI(create/show/update/dep/close)
@@ -62,7 +62,7 @@ generic CARD CORE  -- never changes when a type is added/altered
   and never parsed — addressing by position broke under reparenting, so it was demoted
   from the original dotted-id design.
 - **storage (one flat store, feature is just a card):**
-  ```
+  ```text
   .maestro/cards/<id>/card.yaml             # every card, parent as a field
   .maestro/cards/<feat>/{spec.md,notes.md,qa.md}  # prose + QA sidecars on feature cards
   .maestro/harness/harness.yml              # config only

@@ -56,7 +56,7 @@ extra:
     claim_checks:
     - claim: migrate-v2 leaves doctor clean by recreating decisions.yaml and .maestro/decisions when absent
       matched: true
-      source: /Users/reinamaccredy/Code/maestro/.maestro/runs/cli-2026-06-07/events.jsonl
+      source: .maestro/runs/cli-2026-06-07/events.jsonl
     commands:
     - cmd: cargo build
       exit_code: 0
