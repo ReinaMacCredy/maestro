@@ -1211,6 +1211,44 @@ fn feature_new_scaffolds_spec_in_the_card_dir_and_feature_spec_reads_it() {
     );
 }
 
+/// L6b: `feature spec` crosses the archive boundary like `feature show` -- an
+/// archived feature renders its archived spec.md, not the unreadable-card
+/// recovery view.
+#[test]
+fn feature_spec_falls_through_to_an_archived_feature() {
+    let temp_dir = TestTempDir::new("maestro-feature-spec-archived");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    let create_args = ["feature", "new", "Billing CSV export"];
+    stdout(maestro(&create_args, root), &create_args);
+    fs::write(
+        root.join(".maestro/cards/billing-csv-export/spec.md"),
+        "# Billing CSV export\n\n## Current state\n\nrows export by hand today\n",
+    )
+    .expect("invariant: spec.md should be writable");
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope cut",
+    ];
+    stdout(maestro(&cancel_args, root), &cancel_args);
+    let archive_args = ["feature", "archive", "billing-csv-export"];
+    stdout(maestro(&archive_args, root), &archive_args);
+
+    let spec_args = ["feature", "spec", "billing-csv-export"];
+    let spec = stdout(maestro(&spec_args, root), &spec_args);
+    assert!(spec.contains("archived: true"), "{spec}");
+    assert!(
+        spec.contains("rows export by hand today"),
+        "the archived spec.md renders: {spec}"
+    );
+    assert!(!spec.contains("status: unreadable"), "{spec}");
+}
+
 /// S8: `feature spec --section --append/--replace` fills the spec during
 /// brainstorm/plan -- appends accumulate, replace overwrites, an unknown
 /// section is created, and the bare verb renders what was written.

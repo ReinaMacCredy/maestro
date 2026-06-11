@@ -913,14 +913,29 @@ fn write_feature_spec(
 }
 
 fn show_feature_spec(paths: &MaestroPaths, id: &str) -> Result<()> {
-    let view = match feature::show(paths, id) {
-        Ok(view) => view,
-        Err(error) => return show_unreadable_feature_spec(paths, id, error),
+    // L6b: reads cross the boundary -- mirror `show_feature`'s archive
+    // fallthrough so a historical spec still renders. Only when neither tree
+    // resolves does the unreadable-card recovery view take over, carrying the
+    // live error.
+    let (view, archived) = match feature::show(paths, id) {
+        Ok(view) => (view, false),
+        Err(live_err) => match feature::show_archived(paths, id) {
+            Ok(view) => (view, true),
+            Err(_) => return show_unreadable_feature_spec(paths, id, live_err),
+        },
     };
     println!("status: {}", feature::status_label(&view.status));
     println!("feature: {}", view.id);
+    if archived {
+        println!("archived: true");
+    }
     println!();
-    let spec_path = feature::feature_sidecar_dir(paths, &view.id).join("spec.md");
+    let sidecar_dir = if archived {
+        paths.archive_cards_dir().join(&view.id)
+    } else {
+        feature::feature_sidecar_dir(paths, &view.id)
+    };
+    let spec_path = sidecar_dir.join("spec.md");
     match std::fs::read_to_string(&spec_path) {
         Ok(spec) => print!("{}", spec.trim_end()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
