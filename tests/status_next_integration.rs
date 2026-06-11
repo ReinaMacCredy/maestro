@@ -418,6 +418,46 @@ fn resume_feature_target_does_not_select_unrelated_tasks() {
     );
 }
 
+/// SPEC-archive-memory-2 R3: once something is archived, `resume` surfaces a
+/// short memory section -- the freshest INDEX.md lid lines plus a pointer to
+/// the full file. An unarchived repo shows no section at all, and `status`
+/// stays memory-free either way.
+#[test]
+fn resume_surfaces_recent_archive_memory() {
+    let temp = setup_repo("maestro-resume-memory");
+    let repo = temp.path();
+
+    let before = run(repo, &["resume"]);
+    assert!(
+        !before.contains("memory:"),
+        "no archive, no memory section: {before}"
+    );
+
+    run(repo, &["feature", "new", "Old export"]);
+    run(
+        repo,
+        &["feature", "cancel", "old-export", "--reason", "scope cut"],
+    );
+    run(repo, &["feature", "archive", "old-export"]);
+
+    let resume = run(repo, &["resume"]);
+    assert!(resume.contains("memory:"), "{resume}");
+    assert!(
+        resume.contains("old-export: closed -- no outcome recorded"),
+        "the lid line surfaces:\n{resume}"
+    );
+    assert!(
+        resume.contains("full lid: .maestro/archive/cards/INDEX.md"),
+        "{resume}"
+    );
+
+    let status = run(repo, &["status"]);
+    assert!(
+        !status.contains("memory:"),
+        "status stays memory-free: {status}"
+    );
+}
+
 #[test]
 fn disabled_escalation_keeps_status_and_task_next_output_unchanged() {
     let temp = setup_repo("maestro-escalation-disabled-output");

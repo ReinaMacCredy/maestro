@@ -1,5 +1,6 @@
 use std::env;
 use std::fmt::Write as _;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -99,6 +100,7 @@ fn build_resume_report(
         next,
         required_reads,
         guardrails,
+        memory: memory_lines(paths),
         source_refs,
         write_path,
         full,
@@ -380,6 +382,25 @@ fn handoff_prompt(
     )
 }
 
+/// The last few archive lid lines (SPEC-archive-memory-2 R3): one file read,
+/// newest last, bullet prefix stripped for the renderer. No INDEX.md (nothing
+/// archived yet) is an empty section, never an error.
+fn memory_lines(paths: &MaestroPaths) -> Vec<String> {
+    let Ok(contents) = fs::read_to_string(paths.archive_cards_dir().join("INDEX.md")) else {
+        return Vec::new();
+    };
+    let lid: Vec<&str> = contents
+        .lines()
+        .filter(|line| line.starts_with("- "))
+        .collect();
+    lid.iter()
+        .rev()
+        .take(3)
+        .rev()
+        .map(|line| line.trim_start_matches("- ").to_string())
+        .collect()
+}
+
 fn render_resume_report(report: &ResumeReport) -> String {
     let mut out = String::new();
     writeln!(&mut out, "objective: {}", report.objective).unwrap();
@@ -396,6 +417,10 @@ fn render_resume_report(report: &ResumeReport) -> String {
     writeln!(&mut out, "  {}", report.next).unwrap();
     write_list(&mut out, "required reads", &report.required_reads);
     write_list(&mut out, "guardrails", &report.guardrails);
+    if !report.memory.is_empty() {
+        write_list(&mut out, "memory", &report.memory);
+        writeln!(&mut out, "  full lid: .maestro/archive/cards/INDEX.md").unwrap();
+    }
     if let Some(full) = &report.full {
         write_list(&mut out, "prior decisions", &full.prior_decisions);
         write_list(&mut out, "last verified tasks", &full.last_verified_tasks);
@@ -500,6 +525,9 @@ struct ResumeReport {
     next: String,
     required_reads: Vec<String>,
     guardrails: Vec<String>,
+    /// Recent archive lid lines (SPEC-archive-memory-2 R3); empty when
+    /// nothing has been archived.
+    memory: Vec<String>,
     source_refs: Vec<String>,
     #[serde(skip_serializing)]
     write_path: PathBuf,
