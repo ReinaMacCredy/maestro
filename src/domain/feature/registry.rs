@@ -1025,8 +1025,17 @@ fn raw_card_declares_non_feature(path: &Path) -> bool {
         return false;
     };
     raw.lines().any(|line| {
+        // Only a column-0 `type:` is the card's own field; an indented one is
+        // a nested key (e.g. inside `extra`). The value side tolerates a
+        // trailing comment and YAML quoting, so `type: "feature" # note`
+        // still reads as a feature and surfaces as unreadable.
         line.strip_prefix("type:").is_some_and(|value| {
-            let value = value.trim();
+            let value = value
+                .split('#')
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .trim_matches(|ch| matches!(ch, '"' | '\''));
             !value.is_empty() && value != "feature"
         })
     })
@@ -1796,6 +1805,28 @@ mod cutover_tests {
             !paths.cards_dir().join("tasks").join("card.yaml").exists(),
             "no card.yaml may be planted in the pool dir"
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The roster's type sniff reads quoted and commented `type:` scalars,
+    /// so a malformed feature card surfaces as unreadable instead of being
+    /// dropped as a non-feature; an indented `type:` stays a nested key.
+    #[test]
+    fn type_sniff_reads_quoted_and_commented_scalars() {
+        let (root, paths) = card_mode_repo("type-sniff");
+        let file = paths.cards_dir().join("sniff.yaml");
+        for (raw, non_feature) in [
+            ("type: task", true),
+            ("type: feature", false),
+            ("type: \"feature\"", false),
+            ("type: 'feature'", false),
+            ("type: feature # container", false),
+            ("type: \"task\" # worker", true),
+            ("extra:\n  type: task", false),
+        ] {
+            std::fs::write(&file, raw).expect("write sniff fixture");
+            assert_eq!(raw_card_declares_non_feature(&file), non_feature, "{raw:?}");
+        }
         let _ = std::fs::remove_dir_all(&root);
     }
 }
