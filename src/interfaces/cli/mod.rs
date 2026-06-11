@@ -1059,7 +1059,9 @@ pub(super) fn cli_run_id() -> String {
         if let Ok(value) = env::var(key)
             && !value.trim().is_empty()
         {
-            return value;
+            // Trimmed: the raw value becomes a claim/assignee token, and
+            // stray whitespace would break later equality lookups.
+            return value.trim().to_string();
         }
     }
     let date = crate::foundation::core::time::utc_now_timestamp()
@@ -1085,7 +1087,9 @@ pub(super) fn claim_session() -> String {
         if let Ok(value) = env::var(key)
             && !value.trim().is_empty()
         {
-            return value;
+            // Trimmed: the raw value becomes a claim/assignee token, and
+            // stray whitespace would break later equality lookups.
+            return value.trim().to_string();
         }
     }
     let nanos = std::time::SystemTime::now()
