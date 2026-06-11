@@ -57,6 +57,16 @@ pub(crate) fn load_with_snapshot(paths: &MaestroPaths) -> Result<BacklogSnapshot
     let ideas_file = paths.cards_dir().join(card_store::IDEAS_FILE);
     let entries = card_store::load_entries(&ideas_file)?;
     for card in entries.cards.clone() {
+        // A dual-home id (a crash between the container fold's write and
+        // removal passes leaves the entry AND the flat dir): the dir shadows
+        // the entry, matching the resolver's probe order. Listing both would
+        // make the save partition write the same dir snapshot twice -- a
+        // guaranteed CAS self-conflict after a partial write -- while the
+        // entry copy never reaches the ideas.yaml rewrite. The shadowed entry
+        // drops on the next save, converging the id back to one home.
+        if dirs.iter().any(|(id, _)| *id == card.id) {
+            continue;
+        }
         let artifact = format!("{}#{}", ideas_file.display(), card.id);
         items.push(cards::item_from_card(card, &artifact)?);
     }
@@ -534,6 +544,49 @@ mod tests {
             "only the first writer's card landed"
         );
         assert_eq!(reloaded.find("hb-001").expect("item").title, "first writer");
+    }
+
+    /// A dual-home id -- a crash between the container fold's write and
+    /// removal passes leaves the same idea as an `ideas.yaml` entry AND a
+    /// flat dir. The load lists it once (the dir copy shadows the entry,
+    /// matching the resolver's probe order), and the next save converges the
+    /// id back to one home instead of self-conflicting on the double write.
+    #[test]
+    fn card_mode_load_dedups_a_dual_home_id() {
+        let (_root, paths) = card_mode_paths("backlog-dual-home");
+        let mut config = BacklogConfig::empty();
+        config.items = vec![item("hb-001", "entry copy")];
+        backlog::save(&paths, &config).expect("seed the entry");
+
+        // Plant the flat-dir copy the interrupted fold would leave behind.
+        let card = crate::domain::harness::cards::card_for(&item("hb-001", "dir copy"))
+            .expect("card for the dir copy");
+        let yaml = paths.cards_dir().join("hb-001").join("card.yaml");
+        fs::create_dir_all(yaml.parent().expect("flat dir")).expect("create flat dir");
+        fs::write(&yaml, serde_yaml::to_string(&card).expect("serialize")).expect("write card");
+
+        let snapshot = backlog::load_with_snapshot(&paths).expect("load");
+        let listed: Vec<&str> = snapshot
+            .backlog
+            .items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect();
+        assert_eq!(listed, vec!["hb-001"], "the id lists once");
+        assert_eq!(
+            snapshot.backlog.find("hb-001").expect("item").title,
+            "dir copy",
+            "the dir copy shadows the entry"
+        );
+
+        backlog::save_with_snapshot(&paths, &snapshot.backlog, &snapshot)
+            .expect("the save that would have self-conflicted converges the id");
+        let raw =
+            fs::read_to_string(paths.cards_dir().join("ideas.yaml")).expect("ideas.yaml survives");
+        assert!(!raw.contains("hb-001"), "the shadowed entry dropped: {raw}");
+        let reloaded = backlog::load(&paths).expect("reload");
+        assert_eq!(reloaded.items.len(), 1);
+        assert_eq!(reloaded.items[0].title, "dir copy");
     }
 
     /// D4 reconciliation only drops fingerprinted detector items. A
