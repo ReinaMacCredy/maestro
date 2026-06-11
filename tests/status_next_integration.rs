@@ -554,6 +554,23 @@ fn hot_verbs_persist_the_detect_stamp_and_self_heal_when_the_cards_tree_changes(
         .expect("invariant: friction card should be removable");
     let healed = run(repo, &["status"]);
     assert!(healed.contains("HARNESS FRICTION"), "{healed}");
+
+    // The stamp also covers the harness config -- its thresholds shape what
+    // detect proposes -- so an edit invalidates the skip and the re-detection
+    // persists a fresh stamp.
+    let stamp_path = repo.join(".maestro/harness/detect-stamp");
+    let before = fs::read_to_string(&stamp_path).expect("read the stamp");
+    assert!(
+        before.contains("config="),
+        "the stamp covers the config: {before}"
+    );
+    let config_path = repo.join(".maestro/harness/harness.yml");
+    let mut config = fs::read_to_string(&config_path).expect("read harness.yml");
+    config.push_str("# threshold review note\n");
+    fs::write(&config_path, config).expect("edit harness.yml");
+    run(repo, &["status"]);
+    let after = fs::read_to_string(&stamp_path).expect("re-read the stamp");
+    assert_ne!(before, after, "a config edit invalidates the detect stamp");
 }
 
 #[test]

@@ -37,10 +37,12 @@ pub fn set_claims_only_verification(paths: &MaestroPaths) -> Result<()> {
     harness_domain::set_claims_only_verification(paths)
 }
 
-/// Metadata-only stamp over the detect evidence: run-event logs plus the whole
-/// card store. Idea cards are NOT excluded -- detect's own writes are absorbed
-/// by persisting the stamp AFTER a merge saves (post-write stamping), so any
-/// later task/decision/feature/run mutation still mismatches.
+/// Metadata-only stamp over the detect evidence: run-event logs, the whole
+/// card store, and the harness config (its thresholds and policy shape what
+/// detect proposes, so an edit must invalidate the skip cache like any
+/// evidence change). Idea cards are NOT excluded -- detect's own writes are
+/// absorbed by persisting the stamp AFTER a merge saves (post-write stamping),
+/// so any later task/decision/feature/run mutation still mismatches.
 pub fn evidence_stamp(paths: &MaestroPaths) -> Result<String> {
     let runs = run_event_stamp(paths)?;
     let cards = tree_stamp(&managed_path(
@@ -48,9 +50,23 @@ pub fn evidence_stamp(paths: &MaestroPaths) -> Result<String> {
         ".maestro/cards",
         SymlinkPolicy::RejectAllComponents,
     )?)?;
+    let mut config = Stamp::default();
+    update_stamp_for_path(
+        &managed_path(
+            paths,
+            ".maestro/harness/harness.yml",
+            SymlinkPolicy::RejectAllComponents,
+        )?,
+        &mut config,
+    )?;
     Ok(format!(
-        "runs={}:{};cards={}:{}",
-        runs.count, runs.max_modified_nanos, cards.count, cards.max_modified_nanos
+        "runs={}:{};cards={}:{};config={}:{}",
+        runs.count,
+        runs.max_modified_nanos,
+        cards.count,
+        cards.max_modified_nanos,
+        config.count,
+        config.max_modified_nanos
     ))
 }
 
