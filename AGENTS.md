@@ -92,6 +92,15 @@ cargo test
 target/debug/maestro version
 ```
 
+After committing, always release locally so manual testing runs the newest
+binary:
+
+```bash
+cargo build --release
+cp target/release/maestro ~/.local/bin/maestro
+maestro version   # g<short-sha> must match HEAD
+```
+
 Do not tag, publish, push, or create GitHub releases without explicit approval.
 
 ## NOTES
