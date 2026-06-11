@@ -1,5 +1,5 @@
 ---
-version: 1.10.0
+version: 1.11.0
 ---
 
 # Maestro Harness Protocol
@@ -14,6 +14,7 @@ uses Maestro. Follow these rules.
 4. Complete tasks with `maestro task complete <id> --summary "<what>" --claim "<claim>" --proof "<observed evidence>"`; Maestro records the proof and auto-runs verification.
 5. Hooks auto-record your tool calls as proof. Verification matches each `--claim` against recorded or inline proof - an empty or unbacked claim fails.
 6. When the user corrects your behavior, record it: `maestro event intervention --note "<what was wrong>" [--topic <slug>]`.
+7. Before proposing an idea or re-opening a settled question, run `maestro list --grep <topic> --archived` and cite any precedent card in the proposal.
 
 ## Where to look
 
