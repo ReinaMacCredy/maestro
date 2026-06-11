@@ -82,14 +82,16 @@ pub fn load_with_snapshot(path: &Path) -> Result<CardSnapshot> {
     // Refuse to follow a symlinked card directory. A `.maestro/cards/<id>` that is
     // a symlink could redirect this load to a card.yaml outside the store; this is
     // the single-load mirror of `cards::scan`'s symlink skip, placed on the shared
-    // store seam so feature/decision/harness single-loads are covered too. An
-    // absent directory is not a symlink, so card creation (which loads the absent
-    // path to obtain a None snapshot) is unaffected.
+    // store seam so feature/decision/harness single-loads are covered too. Bail
+    // rather than report absence: an "absent" snapshot would let a create path
+    // save through the link (CAS sees no prior bytes), landing card.yaml and its
+    // lock files outside the store. Probes that want quiet absence use
+    // `dir_card_exists`, which never reaches this load.
     if path.parent().is_some_and(is_symlink) {
-        return Ok(CardSnapshot {
-            card: None,
-            raw: None,
-        });
+        bail!(
+            "card dir {} is a symlink; the card store refuses symlinked dirs",
+            path.parent().unwrap_or(path).display()
+        );
     }
     let Some(contents) = read_to_string_if_exists(path)? else {
         return Ok(CardSnapshot {
@@ -1162,6 +1164,42 @@ mod tests {
         }
         assert!(
             !external.join("card-t00002").exists(),
+            "nothing was written through the symlink"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+        let _ = std::fs::remove_dir_all(&external);
+    }
+
+    #[test]
+    fn a_symlinked_card_dir_fails_the_single_load_loud() {
+        let paths = temp_cards_repo("symlinked-card-dir");
+        let external = std::env::temp_dir().join(format!(
+            "maestro-symlinked-card-ext-{}-{}",
+            process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("invariant: test clock after Unix epoch")
+                .as_nanos()
+        ));
+        ensure_dir(&external).expect("external dir");
+        // A pre-planted symlink at the deterministic feature slug: treating it
+        // as absence would let `create` save card.yaml through the link.
+        crate::foundation::core::fs::create_directory_symlink(
+            &external,
+            &paths.cards_dir().join("csv-export"),
+        )
+        .expect("symlink the card dir");
+
+        let error = load_with_snapshot(&paths.cards_dir().join("csv-export").join(CARD_FILE))
+            .expect_err("a symlinked card dir must not read as absent");
+        assert!(format!("{error:#}").contains("symlink"), "{error:#}");
+
+        let error = create_card(&paths, &typed_card("csv-export", CardType::Feature, None))
+            .expect_err("creating through a symlinked card dir must fail");
+        assert!(format!("{error:#}").contains("symlink"), "{error:#}");
+        assert!(
+            !external.join(CARD_FILE).exists(),
             "nothing was written through the symlink"
         );
 
