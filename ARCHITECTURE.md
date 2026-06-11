@@ -16,7 +16,7 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 | Layer | Path | Owns |
 |---|---|---|
 | foundation/core | `src/foundation/core/` | paths, schema-version consts, atomic + content-hash-CAS writes, id-reservation markers, hashing, slugs, time, managed blocks, `MaestroError` + `.hint()` |
-| domain | `src/domain/` | durable concepts: Card (core + `CardType` seam), Feature, Task, Harness, Decision, Proof, Run, Install, Skills, Extraction |
+| domain | `src/domain/` | durable concepts: Card (core + `CardType` enum dispatch), Feature, Task, Harness, Decision, Proof, Run, Install, Skills, Extraction |
 | operations | `src/operations/` | cross-domain workflows: init, sync, update, task_verify, harness apply/measure, feature_prepare, migrate |
 | interfaces | `src/interfaces/` | adapters: cli, mcp, tui, hooks, shell — parse + render; domain rules stay behind owning facades |
 
@@ -33,21 +33,31 @@ Four layers; dependencies point one way: **interfaces -> operations -> domain ->
 ## 2. The card model (as-built)
 
 One entity `card` replaces feature/task/harness/decision. Structure (DN10) = a generic
-**deep card core** + a per-type **`CardType` trait** behind a `type`-dispatch **seam**
-(`src/domain/card/`). The per-type lifecycle logic was *preserved* (moved behind the
-trait), not rewritten.
+**deep card core** + a closed `pub enum CardType` (`feature | task | bug | chore |
+idea | decision`). There is no `CardType` trait in the shipped model. The type seam
+is explicit exhaustive `match` dispatch at the card-store, query, edit, and CLI
+boundaries; per-type lifecycle rules stay in the owning domain modules.
 
 ```text
 generic CARD CORE  -- never changes when a type is added/altered
   schema · store(save-if-unchanged) · id-reservation · scan · archive ·
   query(ready/list) · CLI(create/show/update/dep/close)
-        |  dispatch by type
-   trait CardType:  legal_transitions() · is_terminal() · extra fields · gates
-        ├ feature  (proposed->ready->in_progress->closed, +cancelled)   container
-        ├ task/bug/chore  (draft->…->verified, +rejected/abandoned/superseded)
-        ├ idea     (proposed->accepted->measured, +dismissed)
-        └ decision (open->locked, +superseded)
+        |  dispatch by exhaustive match on CardType
+   enum CardType: feature · task · bug · chore · idea · decision
+        ├ card store: placement · id prefix · save basis · reconcile
+        ├ card query/edit/CLI: ready/list filters · type hints · close guards
+        └ domain lifecycles:
+             feature  (proposed->ready->in_progress->closed, +cancelled) container
+             task/bug/chore  (draft->…->verified, +rejected/abandoned/superseded)
+             idea     (proposed->accepted->measured, +dismissed)
+             decision (open->locked, +superseded)
 ```
+
+Trait revisit trigger: introduce a per-type behavior trait only if a seventh card
+type lands, or if WS5 schema-compatibility work makes match-based per-type behavior
+multiply enough that a trait removes real duplication. Until then, exhaustive matches
+are the intended safety mechanism: adding a `CardType` variant forces every dispatch
+site to be reviewed by the compiler.
 
 - **card fields:** `id`, `type`, `status`, `parent` (feature | null), `deps[]`, `lane`,
   `claimed_by = <agent>#<session>` (agent in claude | codex | future-cli), title,
@@ -56,21 +66,27 @@ generic CARD CORE  -- never changes when a type is added/altered
   3rd-level `epic` / `message` PARKED).
 - **status:** each type stores its REAL state; a coarse `open | in_progress | closed`
   is DERIVED for the board (single source of truth, can't desync).
-- **ids:** stable and opaque — hash `card-<hex>` minted via `mint_card_id` for every
-  non-feature card; features keep their creation slug. The dotted `<feature>.<N>` form
-  is a **display alias** rendered only by `show` (marked "display only"), never a ref
-  and never parsed — addressing by position broke under reparenting, so it was demoted
-  from the original dotted-id design.
-- **storage (one flat store, feature is just a card):**
+- **ids:** stable and opaque after creation. Features use their creation slug; other
+  cards mint readable typed slug ids (`task-<slug>-<hex4>`, `bug-...`, `chore-...`,
+  `dec-...`, `idea-...`). Legacy `card-<hex>` ids stay valid but are not minted for
+  new non-feature cards. The dotted `<feature>.<N>` form is a **display alias**
+  rendered only by `show` (marked "display only"), never a ref and never parsed —
+  addressing by position broke under reparenting, so it was demoted from the original
+  dotted-id design.
+- **storage (one card store, feature is just a card):**
   ```text
-  .maestro/cards/<id>/card.yaml             # every card, parent as a field
-  .maestro/cards/<feat>/{spec.md,notes.md,qa.md}  # prose + QA sidecars on feature cards
-  .maestro/harness/harness.yml              # config only
+  .maestro/cards/<feature>/card.yaml                    # feature container card
+  .maestro/cards/<feature>/{spec.md,notes.md,qa.md}     # feature prose + QA
+  .maestro/cards/<feature>/tasks/<task>/task.yaml       # task/bug/chore cards
+  .maestro/cards/<feature>/decisions.yaml               # decision entries
+  .maestro/cards/ideas.yaml                             # harness idea entries
+  .maestro/harness/harness.yml                          # config only
   .maestro/archive/cards/
   ```
   Folds the old `features/` + `tasks/` + `harness/backlog.yaml` + `decisions/` trees
-  into one store (`maestro migrate` remints v1 repos). Per-card DIR = contention-free.
-  (NOT Dolt; file-native.)
+  into one store (`maestro migrate` remints v1 repos). Task-family records keep
+  per-card dirs for contention-free work; decisions and ideas are entry-backed where
+  their owning domain still treats them as rosters. (NOT Dolt; file-native.)
 - **management:** global QUERY, not directory navigation — `maestro ready [<feature>]`,
   `maestro list --parent --type --assignee --status`, beads-style verbs
   (`claim`/`show`/`note`/`dep add`/`archive`), emoji-free, `--json` parity.
@@ -91,7 +107,7 @@ harness item -> `type:idea` · decision -> `type:decision` · plus new `bug`/`ch
 |---|---|---|
 | D1 | one save-if-unchanged seam | 3 concurrency strategies -> 1 CAS (closes the feature race) |
 | D2 | one id-reservation seam | triplicated reserve loop -> `mint_card_id` |
-| D3 | the `CardType` trait | 3 lifecycle styles -> 1 driver (decision/idea gain real guards) |
+| D3 | closed `CardType` enum + exhaustive dispatch | 3 lifecycle styles -> 1 reviewed type seam (decision/idea gain real guards) |
 | D4 | one card-scan seam | strict/tolerant + symlink-safe walk copied 5x |
 | D5 | one archive + one note-append | `append_note_file` verbatim 2-3x; archive task~=feature |
 | D6 | cross-card rules into the card domain | guards/ref-typing leaking into cli/mcp adapters |
