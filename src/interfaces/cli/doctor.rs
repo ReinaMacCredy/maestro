@@ -128,6 +128,7 @@ fn doctor_report(paths: &MaestroPaths) -> Result<DoctorReport> {
         check_features(paths, &scan.cards, &mut checks, &mut warnings, &mut errors);
         check_backlog(&scan.cards, &mut checks, &mut errors);
         check_decisions(paths, &scan.cards, &mut checks, &mut warnings, &mut errors);
+        warnings.extend(card::query::integrity_warnings(paths, &scan.cards));
     }
     check_install(paths, &mut checks, &mut errors);
 

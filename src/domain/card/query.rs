@@ -3,7 +3,7 @@
 //! filter (G3). These are pure functions over the scanned card set; the CLI
 //! verbs that surface them are a thin adapter layer.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -225,6 +225,65 @@ fn collect_task_pool(pool: &Path, strict: bool, scan: &mut StoreScan) -> Result<
         collect_record(&dir.join(TASK_FILE), strict, scan)?;
     }
     Ok(())
+}
+
+/// Store-shape warnings for the doctor, each naming its repair: an id living
+/// at more than one home (a crash-interrupted fold leaves both copies; reads
+/// stay stable because the resolver's probe order shadows deterministically),
+/// a parent no live card matches (a hand-edited or stranded child), and a
+/// record at the reserved `cards/tasks/card.yaml` path, which every scan
+/// skips as the work pool.
+pub fn integrity_warnings(paths: &MaestroPaths, cards: &[(Card, PathBuf)]) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let repo_root = paths.repo_root();
+    let relative = |path: &Path| {
+        path.strip_prefix(repo_root)
+            .unwrap_or(path)
+            .display()
+            .to_string()
+    };
+
+    let mut homes: BTreeMap<&str, Vec<&Path>> = BTreeMap::new();
+    for (card, path) in cards {
+        homes.entry(card.id.as_str()).or_default().push(path);
+    }
+    for (id, copies) in &homes {
+        if copies.len() > 1 {
+            warnings.push(format!(
+                "card {id} exists at {} homes: {}; byte-equal copies are folded by `maestro migrate`, divergent ones need the stale copy removed",
+                copies.len(),
+                copies
+                    .iter()
+                    .map(|path| relative(path))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    }
+
+    for (card, path) in cards {
+        let Some(parent) = card.parent.as_deref() else {
+            continue;
+        };
+        if !homes.contains_key(parent) {
+            warnings.push(format!(
+                "card {} ({}) points at parent {parent}, which no live card matches; correct the parent field or restore the parent",
+                card.id,
+                relative(path)
+            ));
+        }
+    }
+
+    let reserved = paths.cards_dir().join(TASKS_DIR).join(CARD_FILE);
+    if reserved.is_file() {
+        warnings.push(format!(
+            "{} is a card record at a reserved path (the root task pool), invisible to every scan; move the card to a non-reserved id and remove the file",
+            relative(&reserved)
+        ));
+    }
+
+    warnings.sort();
+    warnings
 }
 
 /// The `ready` rule (SPEC E3/E8): a card is ready when it is a workable type,
@@ -760,6 +819,76 @@ mod tests {
             "failure carries the full load error chain: {}",
             scan.failures[0].error
         );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The doctor's store-shape warnings: a dual-home id, a parent no live
+    /// card matches, and a record at the reserved root-pool path each warn
+    /// with their repair; a healthy store warns nothing.
+    #[test]
+    fn integrity_warnings_flag_dual_homes_dangling_parents_and_reserved_records() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("maestro-integrity-{}-{nanos}", process::id()));
+        let paths = MaestroPaths::new(&root);
+        ensure_dir(paths.cards_dir()).expect("create cards dir");
+
+        let create = |card: &Card| {
+            crate::domain::card::store::create_card(&paths, card).expect("create card")
+        };
+        create(&card("csv-export", CardType::Feature, "proposed"));
+        let mut parented = card("card-t00001", CardType::Task, "ready");
+        parented.parent = Some("csv-export".to_string());
+        create(&parented);
+
+        let healthy = scan_with_failures(&paths).expect("scan");
+        assert_eq!(
+            integrity_warnings(&paths, &healthy.cards),
+            Vec::<String>::new(),
+            "a healthy store warns nothing"
+        );
+
+        // Dual home: the idea entry plus a flat leaf dir with the same id.
+        create(&card("card-i00001", CardType::Idea, "proposed"));
+        let flat = card("card-i00001", CardType::Idea, "proposed");
+        let path = card_path(&paths, "card-i00001");
+        let snap = load_with_snapshot(&path).expect("absent loads None");
+        save_with_snapshot(&path, &flat, &snap).expect("seed the flat copy");
+        // Stranded child: a task whose parent no live card matches.
+        let mut stray = card("card-t00002", CardType::Task, "ready");
+        stray.parent = Some("ghost-feature".to_string());
+        create(&stray);
+        // A record at the reserved root-pool path, invisible to the walk.
+        std::fs::write(
+            paths.cards_dir().join("tasks").join("card.yaml"),
+            serde_yaml::to_string(&card("tasks", CardType::Feature, "proposed"))
+                .expect("serialize"),
+        )
+        .expect("seed the reserved record");
+
+        let scan = scan_with_failures(&paths).expect("scan");
+        let warnings = integrity_warnings(&paths, &scan.cards);
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("card-i00001") && w.contains("2 homes")),
+            "{warnings:?}"
+        );
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("card-t00002") && w.contains("ghost-feature")),
+            "{warnings:?}"
+        );
+        assert!(
+            warnings.iter().any(|w| w.contains("reserved path")),
+            "{warnings:?}"
+        );
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
 
         let _ = std::fs::remove_dir_all(&root);
     }

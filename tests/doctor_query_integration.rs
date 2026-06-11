@@ -651,6 +651,39 @@ fn doctor_warns_on_dangling_supersedes_but_ignores_prose_mentions() {
 }
 
 #[test]
+fn doctor_warns_on_a_dual_home_card_without_failing() {
+    let temp = setup_repo("maestro-doctor-dual-home");
+    let repo = temp.path();
+
+    run_success(repo, &["feature", "new", "Dual Home"]);
+    run_success(
+        repo,
+        &["decision", "new", "Pick storage", "--feature", "dual-home"],
+    );
+    let decision_id = id_by_title(repo, "Pick storage");
+    // Plant the flat leaf copy a crash-interrupted container fold leaves
+    // beside the entry.
+    let flat_dir = repo.join(".maestro/cards").join(&decision_id);
+    fs::create_dir_all(&flat_dir).expect("invariant: flat card dir should be creatable");
+    fs::write(
+        flat_dir.join("card.yaml"),
+        format!(
+            "schema_version: maestro.card.v1\nid: {decision_id}\ntype: decision\ntitle: Pick storage\nstatus: open\ncreated_at: \"1\"\nupdated_at: \"1\"\n"
+        ),
+    )
+    .expect("invariant: flat card copy should be writable");
+
+    let doctor = maestro(repo, &["doctor"]);
+    assert_success(&doctor, &["doctor"]);
+    let out = stdout(&doctor);
+    assert!(
+        out.contains(&format!("card {decision_id} exists at 2 homes")),
+        "{out}"
+    );
+    assert!(out.contains("doctor: ok"), "{out}");
+}
+
+#[test]
 fn doctor_warns_on_recordless_live_task_and_feature_dirs_without_failing() {
     let temp = setup_repo("maestro-doctor-recordless-dirs");
     let repo = temp.path();
