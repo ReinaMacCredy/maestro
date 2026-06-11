@@ -96,6 +96,13 @@ impl MaestroPaths {
         self.archive_dir().join("cards")
     }
 
+    /// Return the archive lid (`.maestro/archive/cards/INDEX.md`): one digest
+    /// line per archived card, appended by the archive writers and read back
+    /// by `resume`'s memory section.
+    pub fn archive_index_file(&self) -> PathBuf {
+        self.archive_cards_dir().join("INDEX.md")
+    }
+
     /// Return the backup artifact directory.
     pub fn backups_dir(&self) -> PathBuf {
         self.maestro_dir().join("backups")

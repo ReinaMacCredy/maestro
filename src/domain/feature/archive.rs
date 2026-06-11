@@ -155,11 +155,7 @@ pub fn archive_feature(
                 &utc_now_timestamp()[..10],
                 terminal_children.len()
             );
-            append_text_file(
-                paths.archive_cards_dir().join("INDEX.md"),
-                INDEX_HEADER,
-                &line,
-            )?;
+            append_text_file(paths.archive_index_file(), INDEX_HEADER, &line)?;
         }
     }
 
@@ -289,11 +285,7 @@ pub fn archive_loose(paths: &MaestroPaths) -> Result<LooseSweepReport> {
         save_entries(archive_file, &archived, archive_snapshot)?;
         save_entries(live_file, keep, live_snapshot)?;
     }
-    append_text_file(
-        paths.archive_cards_dir().join("INDEX.md"),
-        INDEX_HEADER,
-        &lid_lines,
-    )?;
+    append_text_file(paths.archive_index_file(), INDEX_HEADER, &lid_lines)?;
 
     Ok(LooseSweepReport { swept, kept_rules })
 }

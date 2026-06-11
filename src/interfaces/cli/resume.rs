@@ -386,7 +386,7 @@ fn handoff_prompt(
 /// newest last, bullet prefix stripped for the renderer. No INDEX.md (nothing
 /// archived yet) is an empty section, never an error.
 fn memory_lines(paths: &MaestroPaths) -> Vec<String> {
-    let Ok(contents) = fs::read_to_string(paths.archive_cards_dir().join("INDEX.md")) else {
+    let Ok(contents) = fs::read_to_string(paths.archive_index_file()) else {
         return Vec::new();
     };
     let lid: Vec<&str> = contents

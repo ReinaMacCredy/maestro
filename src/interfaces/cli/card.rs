@@ -117,7 +117,10 @@ pub fn archive(args: ArchiveArgs) -> Result<()> {
         }
         return Ok(());
     }
-    let feature_id = args.feature.as_deref().unwrap_or_default();
+    let feature_id = args
+        .feature
+        .as_deref()
+        .expect("clap requires <feature> unless --loose");
     let report = feature::archive_feature(&paths, feature_id, false)?;
     println!("{}", report.note);
     Ok(())

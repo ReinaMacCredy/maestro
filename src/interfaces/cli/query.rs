@@ -58,12 +58,46 @@ pub fn run(args: QueryArgs) -> Result<()> {
 /// `--dot` is the escape hatch for anything deeper: it exports the whole web.
 const GRAPH_TREE_HOPS: usize = 2;
 
-/// One directed edge as the data stores it: `from` owns the field, `kind` is
-/// the from-card's perspective word.
+/// One directed edge as the data stores it: `from` owns the field.
 struct GraphEdge {
     from: String,
     to: String,
-    kind: &'static str,
+    kind: EdgeKind,
+}
+
+/// The typed-edge taxonomy `query graph` walks. Forward and reverse labels
+/// live in one exhaustive pairing so a new kind cannot ship with a silently
+/// mislabeled reverse side.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum EdgeKind {
+    Parent,
+    BlockedBy,
+    Related,
+    Supersedes,
+}
+
+impl EdgeKind {
+    /// The holder's perspective word, as the tree and DOT print it.
+    fn label(self) -> &'static str {
+        match self {
+            Self::Parent => "parent",
+            Self::BlockedBy => "blocked-by",
+            Self::Related => "related",
+            Self::Supersedes => "supersedes",
+        }
+    }
+
+    /// The word the edge target's side sees: `parent` reads as `child` from
+    /// the parent, `blocked-by` as `blocks`, `supersedes` as `superseded-by`;
+    /// `related` is symmetric.
+    fn reverse_label(self) -> &'static str {
+        match self {
+            Self::Parent => "child",
+            Self::BlockedBy => "blocks",
+            Self::Related => "related",
+            Self::Supersedes => "superseded-by",
+        }
+    }
 }
 
 fn query_graph(paths: &MaestroPaths, id: Option<String>, dot: bool) -> Result<()> {
@@ -104,16 +138,16 @@ fn graph_edges(cards: &[card::schema::Card]) -> Vec<GraphEdge> {
     let mut seen = BTreeSet::new();
     for c in cards {
         if let Some(parent) = &c.parent {
-            push_edge(&mut edges, &mut seen, &c.id, parent, "parent");
+            push_edge(&mut edges, &mut seen, &c.id, parent, EdgeKind::Parent);
         }
         for dep in &c.deps {
-            // The holder's perspective word: a Blocks dep points at the card
-            // BLOCKING the holder (`ready` waits on dep targets), so the edge
-            // reads "blocked-by", matching `show`'s "blocked by" rendering.
+            // A Blocks dep points at the card BLOCKING the holder (`ready`
+            // waits on dep targets), so it reads "blocked-by", matching
+            // `show`'s "blocked by" rendering.
             let kind = match dep.kind {
-                card::schema::DepKind::Blocks => "blocked-by",
-                card::schema::DepKind::Related => "related",
-                card::schema::DepKind::Supersedes => "supersedes",
+                card::schema::DepKind::Blocks => EdgeKind::BlockedBy,
+                card::schema::DepKind::Related => EdgeKind::Related,
+                card::schema::DepKind::Supersedes => EdgeKind::Supersedes,
             };
             push_edge(&mut edges, &mut seen, &c.id, &dep.target, kind);
         }
@@ -123,7 +157,7 @@ fn graph_edges(cards: &[card::schema::Card]) -> Vec<GraphEdge> {
                 .get(serde_yaml::Value::String("supersedes".to_string()))
         {
             for target in targets.iter().filter_map(serde_yaml::Value::as_str) {
-                push_edge(&mut edges, &mut seen, &c.id, target, "supersedes");
+                push_edge(&mut edges, &mut seen, &c.id, target, EdgeKind::Supersedes);
             }
         }
     }
@@ -132,10 +166,10 @@ fn graph_edges(cards: &[card::schema::Card]) -> Vec<GraphEdge> {
 
 fn push_edge(
     edges: &mut Vec<GraphEdge>,
-    seen: &mut BTreeSet<(String, String, &'static str)>,
+    seen: &mut BTreeSet<(String, String, EdgeKind)>,
     from: &str,
     to: &str,
-    kind: &'static str,
+    kind: EdgeKind,
 ) {
     if seen.insert((from.to_string(), to.to_string(), kind)) {
         edges.push(GraphEdge {
@@ -146,22 +180,16 @@ fn push_edge(
     }
 }
 
-/// Undirected adjacency with the label each endpoint sees: `parent` reads as
-/// `child` from the parent's side, `blocked-by` as `blocks`, `supersedes` as
-/// `superseded-by`; `related` is symmetric.
+/// Undirected adjacency with the label each endpoint sees.
 fn adjacency(edges: &[GraphEdge]) -> BTreeMap<&str, Vec<(&'static str, &str)>> {
     let mut adj: BTreeMap<&str, Vec<(&'static str, &str)>> = BTreeMap::new();
     for edge in edges {
-        let reverse = match edge.kind {
-            "parent" => "child",
-            "blocked-by" => "blocks",
-            "supersedes" => "superseded-by",
-            _ => "related",
-        };
         adj.entry(&edge.from)
             .or_default()
-            .push((edge.kind, &edge.to));
-        adj.entry(&edge.to).or_default().push((reverse, &edge.from));
+            .push((edge.kind.label(), &edge.to));
+        adj.entry(&edge.to)
+            .or_default()
+            .push((edge.kind.reverse_label(), &edge.from));
     }
     for neighbors in adj.values_mut() {
         neighbors.sort();
@@ -183,13 +211,27 @@ fn print_graph_tree(
 
     // Pre-mark every edge target outside the live store: an archived card (the
     // lid points at it) or a genuinely dangling ref. Sources are always live --
-    // edges are read off scanned cards.
+    // edges are read off scanned cards. One archive scan classifies them all,
+    // and a malformed target reads as missing instead of failing the render.
+    let unknown: BTreeSet<&str> = edges
+        .iter()
+        .map(|edge| edge.to.as_str())
+        .filter(|target| !by_id.contains_key(target))
+        .collect();
     let mut dangling: BTreeMap<&str, &'static str> = BTreeMap::new();
-    for edge in edges {
-        let target = edge.to.as_str();
-        if !by_id.contains_key(target) && !dangling.contains_key(target) {
-            let found = card::store::resolve_in(&paths.archive_cards_dir(), target)?.is_some();
-            dangling.insert(target, if found { "[archived]" } else { "[missing]" });
+    if !unknown.is_empty() {
+        let archived: BTreeSet<String> =
+            card::query::scan_dir_with_paths(&paths.archive_cards_dir())?
+                .into_iter()
+                .map(|(card, _)| card.id)
+                .collect();
+        for target in unknown {
+            let mark = if archived.contains(target) {
+                "[archived]"
+            } else {
+                "[missing]"
+            };
+            dangling.insert(target, mark);
         }
     }
 
@@ -318,7 +360,7 @@ fn render_dot(
             "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
             dot_escape(&edge.from),
             dot_escape(&edge.to),
-            edge.kind
+            edge.kind.label()
         ));
     }
     out.push_str("}\n");

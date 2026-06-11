@@ -228,8 +228,11 @@ fn check_archive_backlog(
     let closed = cards
         .iter()
         .filter(|(card, _)| {
+            // The same predicate `feature archive --closed` sweeps with, so the
+            // advisory count and the sweep's reach cannot drift apart.
             card.card_type == card::schema::CardType::Feature
-                && card::query::coarse_of(&card.status) == Some(card::query::Coarse::Closed)
+                && feature::FeatureStatus::parse(&card.status)
+                    .is_some_and(|status| status.is_terminal())
         })
         .count();
     if closed == 0 {
