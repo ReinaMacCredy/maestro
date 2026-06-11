@@ -372,9 +372,9 @@ fn dot_escape(text: &str) -> String {
 }
 
 fn query_matrix(paths: &MaestroPaths) -> Result<()> {
-    let features = feature::list(paths)?;
     let current_commit = git::head(paths.repo_root()).unwrap_or(None);
     let entries = task::load_task_entries(&paths.tasks_dir())?;
+    let features = feature::list_with_entries(paths, &entries)?;
     let mut task_rows = entries
         .iter()
         .map(|entry| matrix_row(&entry.task, current_commit.clone()))
@@ -425,13 +425,14 @@ fn query_matrix(paths: &MaestroPaths) -> Result<()> {
 }
 
 fn query_friction(paths: &MaestroPaths) -> Result<()> {
-    let sessions = proof::managed_event_files(paths)?.len();
+    let logs = run::managed_event_logs(paths)?;
+    let sessions = logs.len();
     let mut events = 0_usize;
     let mut user_prompts = 0_usize;
     let mut corrections = 0_usize;
     let mut kinds = BTreeMap::<String, usize>::new();
 
-    run::visit_managed_events(paths, |record| {
+    run::visit_managed_event_logs(&logs, |record| {
         let event = record.event();
         events += 1;
         let kind = event

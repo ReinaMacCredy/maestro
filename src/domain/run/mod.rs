@@ -16,5 +16,5 @@ pub use event::{HookEventContract, hook_event_contract};
 pub use evidence::{
     RunEvidenceLoad, RunEvidenceRecord, load_run_evidence, write_evidence_for_session,
 };
-pub use reader::{RunEvent, RunEventRecord, visit_managed_events};
+pub use reader::{RunEvent, RunEventRecord, visit_managed_event_logs, visit_managed_events};
 pub(crate) use record::{RecordOutcome, record_hook_event};

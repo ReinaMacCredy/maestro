@@ -117,6 +117,17 @@ pub fn list_tolerant(paths: &MaestroPaths) -> Vec<DecisionListEntry> {
     entries
 }
 
+pub fn known_decision_ids(paths: &MaestroPaths) -> Result<BTreeSet<String>> {
+    let mut ids = BTreeSet::new();
+    for (record, _, _) in cards::scan(paths, false)? {
+        ids.insert(record.id);
+    }
+    for legacy in decision_entries(&paths.decisions_dir())? {
+        ids.insert(decision_display_id(&legacy.file_name));
+    }
+    Ok(ids)
+}
+
 fn decision_list_entry(
     record: DecisionRecord,
     source: DecisionSource,

@@ -91,6 +91,7 @@ fn graph_report(
     tasks: &[TaskRecord],
 ) -> Result<TaskDoctorReport> {
     let task_ids: HashSet<String> = tasks.iter().map(|task| task.id.clone()).collect();
+    let mut decision_ids = None;
     let mut edges: HashMap<String, Vec<String>> = HashMap::new();
     let mut errors = Vec::new();
 
@@ -107,13 +108,18 @@ fn graph_report(
                 // External and human blockers are free-form by design and cannot be validated.
                 BlockerKind::External | BlockerKind::Human => continue,
                 BlockerKind::Decision => {
-                    if let Some(paths) = decision_paths
-                        && !decisions::decision_exists(paths, &blocked_ref.id)?
-                    {
-                        errors.push(format!(
-                            "{} has blocker {} referencing missing decision {}",
-                            task.id, blocker.id, blocked_ref.id
-                        ));
+                    if let Some(paths) = decision_paths {
+                        if decision_ids.is_none() {
+                            decision_ids = Some(decisions::known_decision_ids(paths)?);
+                        }
+                        if let Some(ids) = &decision_ids
+                            && !ids.contains(&decisions::normalize_decision_id(&blocked_ref.id)?)
+                        {
+                            errors.push(format!(
+                                "{} has blocker {} referencing missing decision {}",
+                                task.id, blocker.id, blocked_ref.id
+                            ));
+                        }
                     }
                     continue;
                 }

@@ -349,12 +349,8 @@ pub(crate) fn create_directory_symlink(target: &Path, link: &Path) -> std::io::R
 /// times. A missing `parent` yields an empty list; an unreadable modification
 /// time falls back to the Unix epoch.
 pub(crate) fn child_dirs(parent: &Path) -> Result<Vec<(PathBuf, SystemTime)>> {
-    let entries = match fs::read_dir(parent) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to read {}", parent.display()));
-        }
+    let Some(entries) = read_child_entries(parent)? else {
+        return Ok(Vec::new());
     };
     let mut dirs = Vec::new();
     for entry in entries {
@@ -374,13 +370,36 @@ pub(crate) fn child_dirs(parent: &Path) -> Result<Vec<(PathBuf, SystemTime)>> {
     Ok(dirs)
 }
 
+fn child_dir_paths(parent: &Path) -> Result<Vec<PathBuf>> {
+    let Some(entries) = read_child_entries(parent)? else {
+        return Ok(Vec::new());
+    };
+    let mut dirs = Vec::new();
+    for entry in entries {
+        let entry = entry.with_context(|| format!("failed to list {}", parent.display()))?;
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", entry.path().display()))?;
+        if !file_type.is_dir() || file_type.is_symlink() {
+            continue;
+        }
+        dirs.push(entry.path());
+    }
+    Ok(dirs)
+}
+
+fn read_child_entries(parent: &Path) -> Result<Option<fs::ReadDir>> {
+    match fs::read_dir(parent) {
+        Ok(entries) => Ok(Some(entries)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("failed to read {}", parent.display())),
+    }
+}
+
 /// List non-symlink child directories of `parent`, sorted by path. A missing
 /// `parent` yields an empty list.
 pub(crate) fn sorted_child_dirs(parent: &Path) -> Result<Vec<PathBuf>> {
-    let mut dirs: Vec<PathBuf> = child_dirs(parent)?
-        .into_iter()
-        .map(|(path, _)| path)
-        .collect();
+    let mut dirs = child_dir_paths(parent)?;
     dirs.sort();
     Ok(dirs)
 }

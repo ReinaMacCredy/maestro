@@ -939,6 +939,24 @@ pub fn cancel(paths: &MaestroPaths, id: &str, reason: &str, dry_run: bool) -> Re
 pub fn list(paths: &MaestroPaths) -> Result<Vec<FeatureView>> {
     let records = scan_records_strict(paths)?;
     let counts_by_feature = count_tasks_by_feature(&paths.tasks_dir())?;
+    views_from_records(records, counts_by_feature)
+}
+
+/// [`list`] over an already-loaded task entry set, so query surfaces that need
+/// task rows do not re-scan the same cards only to compute per-feature counts.
+pub fn list_with_entries(
+    paths: &MaestroPaths,
+    task_entries: &[TaskEntry],
+) -> Result<Vec<FeatureView>> {
+    let records = scan_records_strict(paths)?;
+    let counts_by_feature = count_tasks_by_feature_in_entries(task_entries);
+    views_from_records(records, counts_by_feature)
+}
+
+fn views_from_records(
+    records: Vec<FeatureRecord>,
+    counts_by_feature: std::collections::HashMap<String, FeatureTaskCounts>,
+) -> Result<Vec<FeatureView>> {
     Ok(records
         .into_iter()
         .map(|record| {
