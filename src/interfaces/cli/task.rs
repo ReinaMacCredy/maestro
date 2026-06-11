@@ -625,7 +625,7 @@ fn task_terminal_reason_required(id: &str, verb: &str, state: &str) -> String {
 fn task_terminal_error_message(id: &str, replacement: Option<&str>, error: &str) -> String {
     if error.contains("terminal state") {
         return format!(
-            "blocked: {id} is already terminal\nstate: {}\ninspect: maestro task show {id}\nnext: maestro status\noptional: maestro task archive {id}",
+            "blocked: {id} is already terminal\nstate: {}\ninspect: maestro task show {id}\nnext: maestro status",
             parse_terminal_state(error).unwrap_or("unknown")
         );
     }
@@ -667,7 +667,6 @@ fn print_terminal_receipt(task: &TaskRecord, reason: &str, replacement: Option<&
     }
     println!("inspect: maestro task show {}", task.id);
     println!("next: maestro status");
-    println!("optional: maestro task archive {}", task.id);
 }
 
 fn terminal_verb(task: &TaskRecord) -> &'static str {
