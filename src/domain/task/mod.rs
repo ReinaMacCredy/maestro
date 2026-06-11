@@ -168,6 +168,12 @@ pub fn load_task_record(tasks_dir: &Path, id: &str) -> Result<TaskRecord> {
     Ok(task)
 }
 
+/// [`load_task_record`] with true absence as `Ok(None)` instead of an error,
+/// so fallbacks (archive probes) never swallow a real read failure.
+pub fn try_load_task_record(tasks_dir: &Path, id: &str) -> Result<Option<TaskRecord>> {
+    lookup::try_load_task_record(tasks_dir, id)
+}
+
 /// Read an archived task card (`archive/cards/<id>/card.yaml`) with its card
 /// directory. Read-only: archived tasks stay immutable, so no save snapshot is
 /// exposed. `None` when no Task-typed card holds the id in the archive.

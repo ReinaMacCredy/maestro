@@ -28,6 +28,17 @@ pub(super) fn validate_task_lookup_id(id: &str) -> Result<()> {
     Ok(())
 }
 
+/// The [`load_task_with_snapshot`] read with true absence as `Ok(None)`: a
+/// read failure (parse, schema, symlink) still propagates, so a caller
+/// probing for fallbacks cannot mistake an unreadable live task for a
+/// missing one.
+pub(crate) fn try_load_task_record(tasks_dir: &Path, id: &str) -> Result<Option<TaskRecord>> {
+    let paths =
+        paths_for_tasks_dir(tasks_dir).context("cannot resolve maestro paths from tasks dir")?;
+    validate_task_lookup_id(id)?;
+    Ok(cards::load_one(&paths, id)?.map(|(task, _)| task))
+}
+
 /// Load a task by id with its optimistic save snapshot. Reads the `Task`-typed
 /// card from whatever home the resolver finds (no archive fallback -- the card
 /// archive tree is its own scan).

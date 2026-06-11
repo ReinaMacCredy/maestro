@@ -508,12 +508,15 @@ pub fn unapply(paths: &MaestroPaths, id: &str, reason: Option<&str>) -> Result<U
 }
 
 /// Classify an accepted item's linked task without mutating it: a live task is
-/// pending-abandon, a vanished one is archived or missing, and a non-live task
-/// blocks the unapply. The abandon itself is performed by `unapply` only after
-/// the backlog save commits, so a lost save race never strands the task.
+/// pending-abandon, a truly absent one is archived or missing, and a non-live
+/// task blocks the unapply. An UNREADABLE task (parse, schema, symlink) is
+/// neither: the error propagates rather than clearing the link as "missing"
+/// over a task that still exists. The abandon itself is performed by `unapply`
+/// only after the backlog save commits, so a lost save race never strands the
+/// task.
 fn inspect_linked_task(paths: &MaestroPaths, task_id: &str) -> Result<UnappliedTask> {
-    match task::load_task_record(&paths.tasks_dir(), task_id) {
-        Ok(record) => {
+    match task::try_load_task_record(&paths.tasks_dir(), task_id)? {
+        Some(record) => {
             if !matches!(
                 record.state,
                 TaskState::Draft | TaskState::Exploring | TaskState::Ready
@@ -525,8 +528,8 @@ fn inspect_linked_task(paths: &MaestroPaths, task_id: &str) -> Result<UnappliedT
             }
             Ok(UnappliedTask::Abandoned(task_id.to_string()))
         }
-        Err(_) => {
-            if matches!(task::load_archived_task_record(paths, task_id), Ok(Some(_))) {
+        None => {
+            if task::load_archived_task_record(paths, task_id)?.is_some() {
                 Ok(UnappliedTask::Archived(task_id.to_string()))
             } else {
                 Ok(UnappliedTask::Missing(task_id.to_string()))

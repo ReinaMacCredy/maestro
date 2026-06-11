@@ -2065,6 +2065,42 @@ fn harness_unapply_clears_a_vanished_spawned_task_link() {
 }
 
 #[test]
+fn harness_unapply_surfaces_an_unreadable_spawned_task() {
+    // An unreadable live record is a read failure, not absence: unapply must
+    // surface it and keep the link, never clear it as "missing" over a task
+    // that still exists.
+    let (temp, note) = setup_missing_verification_note("maestro-harness-unapply-corrupt");
+    let repo = temp.path();
+    let apply = run_success(repo, &["harness", "apply", &note]);
+    let spawned = spawned_task_id(&apply);
+
+    let record_path = card_record_path(repo, &spawned);
+    let original = fs::read_to_string(&record_path)
+        .expect("invariant: spawned task record should be readable");
+    fs::write(&record_path, "state: [unclosed")
+        .expect("invariant: spawned task record should be writable");
+
+    let unapply = maestro(repo, &["harness", "unapply", &note]);
+    assert!(
+        !unapply.status.success(),
+        "unapply must not treat an unreadable task as missing"
+    );
+    assert!(
+        stderr(&unapply).contains("failed to parse"),
+        "got:\n{}",
+        stderr(&unapply)
+    );
+
+    // Repairing the record makes the same unapply converge with the link intact.
+    fs::write(&record_path, original).expect("invariant: record should be repairable");
+    let unapply = run_success(repo, &["harness", "unapply", &note]);
+    assert!(
+        unapply.contains(&format!("{spawned} -> abandoned (link cleared)")),
+        "{unapply}"
+    );
+}
+
+#[test]
 fn harness_unapply_requires_an_accepted_item() {
     let (temp, note) = setup_missing_verification_note("maestro-harness-unapply-not-accepted");
     let repo = temp.path();
