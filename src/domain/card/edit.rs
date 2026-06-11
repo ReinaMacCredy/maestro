@@ -5,7 +5,7 @@
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::query::{Coarse, coarse_of};
-use crate::domain::card::schema::{Dep, DepKind};
+use crate::domain::card::schema::{Card, Dep, DepKind};
 use crate::domain::card::store::{
     CARD_FILE, load, locate, resolve, save_resolved, validate_card_id,
 };
@@ -83,6 +83,20 @@ pub fn claim(paths: &MaestroPaths, id: &str, claimed_by: &str, now: &str) -> Res
         bail!("no card {id} to claim");
     };
     let mut card = resolved.card.clone();
+    let outcome = apply_claim(&mut card, claimed_by, now)?;
+    if outcome != ClaimOutcome::AlreadyMine {
+        save_resolved(&card, &resolved)?;
+    }
+    Ok(outcome)
+}
+
+/// The in-memory half of [`claim`]: validate claimability and stamp the claim
+/// onto an already-loaded card without persisting it. `update --claim` composes
+/// this with its field edits so the combined mutation lands in one CAS write --
+/// two sequential saves would let the second silently clobber the first.
+/// `AlreadyMine` leaves the card untouched.
+pub fn apply_claim(card: &mut Card, claimed_by: &str, now: &str) -> Result<ClaimOutcome> {
+    let id = card.id.as_str();
     if !card.card_type.workable() {
         bail!(
             "{id} is a {}, not a workable card; only task/bug/chore are claimable",
@@ -117,7 +131,6 @@ pub fn claim(paths: &MaestroPaths, id: &str, claimed_by: &str, now: &str) -> Res
     card.claimed_at = Some(now.to_string());
     card.status = "in_progress".to_string();
     card.updated_at = now.to_string();
-    save_resolved(&card, &resolved)?;
     Ok(outcome)
 }
 

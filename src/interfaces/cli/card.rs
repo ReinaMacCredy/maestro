@@ -200,8 +200,11 @@ pub fn show(args: ShowArgs) -> Result<()> {
 
 /// Execute `maestro update <id>`: a generic field mutation (DN9). `--status`,
 /// `--title`, and `--description` write through the D1 CAS seam; `--claim`
-/// delegates to the same `card::edit::claim` the standalone `claim` verb uses.
-/// A bare `update` (no id) or an update with no flags exits 0 with usage.
+/// composes the same claim mutation the standalone `claim` verb applies into
+/// that single write, so a partial update can never land. `--status` with
+/// `--claim` is refused up front: a claim forces `in_progress`, so one would
+/// silently clobber the other. A bare `update` (no id) or an update with no
+/// flags exits 0 with usage.
 pub fn update(args: UpdateArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
         return Ok(());
@@ -215,46 +218,60 @@ pub fn update(args: UpdateArgs) -> Result<()> {
         println!("nothing to update for {id}; pass --status, --title, --description, or --claim");
         return Ok(());
     }
+    if args.claim && args.status.is_some() {
+        return Err(anyhow!(
+            "--status conflicts with --claim (a claim sets in_progress); pass one or the other"
+        ));
+    }
     card::store::validate_card_id(id)?;
     let now = utc_now_timestamp();
+    let Some(resolved) = card::store::resolve(&paths, id)? else {
+        println!("no card {id} in the card store (.maestro/cards)");
+        return Ok(());
+    };
+    let mut c = resolved.card.clone();
+    if let Some(status) = args.status.as_deref() {
+        // SPEC E3: feature/idea/decision keep their per-type lifecycle
+        // verbs; a generic status write would bypass their gates (ship/QA,
+        // lock stamps, backlog reconciliation).
+        if !c.card_type.workable() {
+            return Err(anyhow!(
+                "cannot set --status on {id} -- a {} keeps its own lifecycle verbs; {}",
+                c.card_type.as_str(),
+                per_type_verbs_hint(c.card_type)
+            ));
+        }
+        if !card::query::WORKABLE_STATUS_WORDS.contains(&status) {
+            return Err(anyhow!(
+                "unknown --status {status:?}; expected one of: {}",
+                card::query::WORKABLE_STATUS_WORDS.join(", ")
+            ));
+        }
+        c.status = status.to_string();
+    }
+    if let Some(title) = args.title.as_deref() {
+        c.title = title.to_string();
+    }
+    if let Some(description) = args.description.as_deref() {
+        c.description = Some(description.to_string());
+    }
     if has_fields {
-        let Some(resolved) = card::store::resolve(&paths, id)? else {
-            println!("no card {id} in the card store (.maestro/cards)");
-            return Ok(());
-        };
-        let mut c = resolved.card.clone();
-        if let Some(status) = args.status.as_deref() {
-            // SPEC E3: feature/idea/decision keep their per-type lifecycle
-            // verbs; a generic status write would bypass their gates (ship/QA,
-            // lock stamps, backlog reconciliation).
-            if !c.card_type.workable() {
-                return Err(anyhow!(
-                    "cannot set --status on {id} -- a {} keeps its own lifecycle verbs; {}",
-                    c.card_type.as_str(),
-                    per_type_verbs_hint(c.card_type)
-                ));
-            }
-            if !card::query::WORKABLE_STATUS_WORDS.contains(&status) {
-                return Err(anyhow!(
-                    "unknown --status {status:?}; expected one of: {}",
-                    card::query::WORKABLE_STATUS_WORDS.join(", ")
-                ));
-            }
-            c.status = status.to_string();
-        }
-        if let Some(title) = args.title.as_deref() {
-            c.title = title.to_string();
-        }
-        if let Some(description) = args.description.as_deref() {
-            c.description = Some(description.to_string());
-        }
         c.updated_at = now.clone();
+    }
+    let claim_outcome = if args.claim {
+        let identity = claim_identity();
+        let outcome = card::edit::apply_claim(&mut c, &identity, &now)?;
+        Some((identity, outcome))
+    } else {
+        None
+    };
+    if c != resolved.card {
         card::store::save_resolved(&c, &resolved)?;
+    }
+    if has_fields {
         println!("updated {id}");
     }
-    if args.claim {
-        let identity = claim_identity();
-        let outcome = card::edit::claim(&paths, id, &identity, &now)?;
+    if let Some((identity, outcome)) = claim_outcome {
         print_claim_outcome(id, &identity, &outcome);
     }
     Ok(())

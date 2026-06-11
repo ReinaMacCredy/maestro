@@ -275,6 +275,52 @@ fn update_writes_fields_claims_and_close_closes() {
 }
 
 #[test]
+fn update_composes_claim_with_field_edits_in_one_write() {
+    let temp = cards_repo("s2-update-claim");
+    let repo = temp.path();
+
+    run(repo, &["create", "-t", "task", "Wire the verb"]);
+    let id = id_by_title(repo, "Wire the verb");
+
+    // A claim forces in_progress, so pairing it with --status is contradictory.
+    let conflict = run_err(repo, &["update", &id, "--status", "ready", "--claim"]);
+    assert!(
+        conflict.contains("--status conflicts with --claim"),
+        "the contradictory pair is refused up front:\n{conflict}"
+    );
+
+    // --title + --claim compose into one write; both effects land together.
+    let combined = run(
+        repo,
+        &[
+            "update",
+            &id,
+            "--title",
+            "Wire the verb (claimed)",
+            "--claim",
+        ],
+    );
+    assert!(
+        combined.contains(&format!("updated {id}")),
+        "the field write is confirmed:\n{combined}"
+    );
+    assert!(
+        combined.contains(&format!("claimed {id} as codex#s1")),
+        "the claim is confirmed:\n{combined}"
+    );
+    let shown = run(repo, &["show", &id]);
+    assert!(
+        shown.contains("Wire the verb (claimed)"),
+        "the title landed:\n{shown}"
+    );
+    assert!(shown.contains("@codex#s1"), "the claim landed:\n{shown}");
+    assert!(
+        shown.contains("in_progress"),
+        "the claim moved the card in_progress:\n{shown}"
+    );
+}
+
+#[test]
 fn ready_and_list_render_the_beads_structure() {
     let temp = cards_repo("s2-beads-output");
     let repo = temp.path();
