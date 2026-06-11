@@ -744,7 +744,7 @@ fn backup_maestro(paths: &MaestroPaths, now: &str) -> Result<Option<PathBuf>> {
     Ok(Some(target))
 }
 
-pub(crate) fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
+fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
     let metadata = fs::symlink_metadata(src)
         .with_context(|| format!("failed to inspect {}", src.display()))?;
     if metadata.file_type().is_symlink() {

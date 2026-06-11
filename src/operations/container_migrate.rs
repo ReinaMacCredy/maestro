@@ -8,9 +8,10 @@
 //! verify its target slot (writing nothing), then write -- ONE `save_entries`
 //! per container file, one pooled dir per task -- and only then remove the
 //! flat dirs. A crash between write and removal leaves both copies; the next
-//! run sees the byte-equal pair, removes the leftover dir, and counts it as a
-//! finished move. A target slot holding DIFFERENT content aborts loud before
-//! anything is written, because either copy could carry the newer edit.
+//! run sees the byte-equal pair, carries any sidecar the crash stranded flat,
+//! removes the leftover dir, and counts it as a finished move. A target slot
+//! holding DIFFERENT content aborts loud before anything is written, because
+//! either copy could carry the newer edit.
 //!
 //! The live store only: archived flat dirs keep reading through the
 //! resolver's flat fallback, and an unarchive lands the dir back here where
@@ -27,8 +28,8 @@ use crate::domain::card::store::{
     CARD_FILE, CardHome, EntriesSnapshot, card_dir_ids, home_for_new, load, load_entries,
     load_with_snapshot, save_entries, save_with_snapshot,
 };
+use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::operations::card_migrate::copy_recursive;
 
 /// Per-type tally of a container-fold run.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -56,6 +57,7 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
     // Pass 1: collect and verify, writing nothing.
     let mut entry_folds: BTreeMap<PathBuf, (EntriesSnapshot, Vec<Card>)> = BTreeMap::new();
     let mut task_moves: Vec<TaskMove> = Vec::new();
+    let mut sidecar_syncs: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut leftover_dirs: Vec<PathBuf> = Vec::new();
 
     for id in card_dir_ids(&cards_dir)? {
@@ -92,7 +94,10 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
             }
             CardHome::Dir(target_yaml) => match load(&target_yaml)? {
                 Some(existing) if existing == card => {
+                    // The record landed but the crash may have stranded
+                    // sidecars flat; carry them before the dir is removed.
                     report.finished += 1;
+                    sidecar_syncs.push((flat_dir.clone(), pooled_dir(&target_yaml)?));
                     leftover_dirs.push(flat_dir);
                 }
                 Some(_) => bail!(divergent_copies(&card.id, &flat_dir, &target_yaml)),
@@ -122,6 +127,9 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
         copy_task_dir(fold)?;
         leftover_dirs.push(fold.flat_dir.clone());
     }
+    for (flat_dir, target_dir) in &sidecar_syncs {
+        merge_sidecars(flat_dir, target_dir)?;
+    }
 
     // Pass 3: the flat dirs go only after every write landed.
     for dir in leftover_dirs {
@@ -147,18 +155,55 @@ fn copy_task_dir(fold: &TaskMove) -> Result<()> {
     let snapshot = load_with_snapshot(&fold.target_yaml)?;
     save_with_snapshot(&fold.target_yaml, &fold.card, &snapshot)
         .with_context(|| format!("failed to write pooled card {}", fold.card.id))?;
-    let target_dir = fold
-        .target_yaml
+    merge_sidecars(&fold.flat_dir, &pooled_dir(&fold.target_yaml)?)
+}
+
+/// The pooled dir a `tasks/<id>/task.yaml` record lives in.
+fn pooled_dir(target_yaml: &Path) -> Result<PathBuf> {
+    Ok(target_yaml
         .parent()
-        .with_context(|| format!("pooled path missing parent: {}", fold.target_yaml.display()))?;
-    for entry in fs::read_dir(&fold.flat_dir)
-        .with_context(|| format!("failed to read {}", fold.flat_dir.display()))?
+        .with_context(|| format!("pooled path missing parent: {}", target_yaml.display()))?
+        .to_path_buf())
+}
+
+/// Copy every sidecar (everything beside the record) into the pooled dir,
+/// taking only what is missing there: a crash-interrupted run may have copied
+/// some already, and a landed copy may carry a newer edit.
+fn merge_sidecars(flat_dir: &Path, target_dir: &Path) -> Result<()> {
+    for entry in
+        fs::read_dir(flat_dir).with_context(|| format!("failed to read {}", flat_dir.display()))?
     {
-        let entry = entry.with_context(|| format!("failed to list {}", fold.flat_dir.display()))?;
+        let entry = entry.with_context(|| format!("failed to list {}", flat_dir.display()))?;
         if entry.file_name().to_str() == Some(CARD_FILE) {
             continue;
         }
-        copy_recursive(&entry.path(), &target_dir.join(entry.file_name()))?;
+        copy_missing(&entry.path(), &target_dir.join(entry.file_name()))?;
+    }
+    Ok(())
+}
+
+/// Recursive copy that never overwrites: existing target files win, missing
+/// ones are filled in. Symlinks are skipped, matching the legacy fold's copy.
+fn copy_missing(src: &Path, dst: &Path) -> Result<()> {
+    let metadata = fs::symlink_metadata(src)
+        .with_context(|| format!("failed to inspect {}", src.display()))?;
+    if metadata.file_type().is_symlink() {
+        return Ok(());
+    }
+    if metadata.is_dir() {
+        ensure_dir(dst)?;
+        for entry in
+            fs::read_dir(src).with_context(|| format!("failed to read {}", src.display()))?
+        {
+            let entry = entry.with_context(|| format!("failed to list {}", src.display()))?;
+            copy_missing(&entry.path(), &dst.join(entry.file_name()))?;
+        }
+    } else if !dst.exists() {
+        if let Some(parent) = dst.parent() {
+            ensure_dir(parent)?;
+        }
+        fs::copy(src, dst)
+            .with_context(|| format!("failed to copy {} to {}", src.display(), dst.display()))?;
     }
     Ok(())
 }
@@ -363,6 +408,51 @@ mod tests {
                 .count(),
             1,
             "no duplicate entry"
+        );
+
+        cleanup(&root);
+    }
+
+    /// A crash after the pooled record landed but before the sidecars copied:
+    /// the re-run must carry the stranded sidecars (without clobbering any
+    /// that already landed) before it removes the flat dir.
+    #[test]
+    fn an_interrupted_task_move_carries_stranded_sidecars() {
+        let root = temp_repo("stranded");
+        let paths = flat_store(&root);
+        let flat = paths.cards_dir().join("card-t1");
+        fs::write(flat.join("notes.md"), "stale flat copy\n").expect("flat notes");
+        fs::create_dir_all(flat.join("proof")).expect("flat proof dir");
+        fs::write(flat.join("proof").join("evidence.txt"), "stranded\n").expect("flat proof");
+
+        // Simulate the crash: the record landed byte-equal, notes.md landed
+        // and was since edited at its new home, proof/ never copied.
+        let pooled = paths
+            .cards_dir()
+            .join("csv-export")
+            .join("tasks")
+            .join("card-t1");
+        fs::create_dir_all(&pooled).expect("pooled dir");
+        fs::write(
+            pooled.join(TASK_FILE),
+            serde_yaml::to_string(&typed_card("card-t1", CardType::Task, Some("csv-export")))
+                .expect("serialize fixture"),
+        )
+        .expect("pooled record");
+        fs::write(pooled.join("notes.md"), "edited at home\n").expect("pooled notes");
+
+        let report = run(&paths).expect("fold finishes the move");
+        assert_eq!(report.finished, 1, "the leftover dir counts as finished");
+        assert!(!flat.exists(), "flat dir removed");
+        assert_eq!(
+            fs::read_to_string(pooled.join("proof").join("evidence.txt")).expect("carried"),
+            "stranded\n",
+            "the never-copied sidecar rode the re-run"
+        );
+        assert_eq!(
+            fs::read_to_string(pooled.join("notes.md")).expect("kept"),
+            "edited at home\n",
+            "the landed copy is never overwritten"
         );
 
         cleanup(&root);
