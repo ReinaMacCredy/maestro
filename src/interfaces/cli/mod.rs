@@ -123,12 +123,12 @@ pub enum RootCommand {
     Decision(DecisionArgs),
     #[command(
         about = "List workable cards with no open blockers (card store)",
-        after_help = "Examples:\n  maestro ready                # every unblocked task/bug/chore\n  maestro ready agent-cli-ux   # only those parented to a feature"
+        after_help = "Examples:\n  maestro ready                # every unblocked task/bug/chore\n  maestro ready --json\n  maestro ready agent-cli-ux   # only those parented to a feature"
     )]
     Ready(ReadyArgs),
     #[command(
         about = "List cards filtered by parent, type, assignee, or coarse status (card store)",
-        after_help = "Examples:\n  maestro list --parent agent-cli-ux\n  maestro list --type bug --status open\n  maestro list --assignee claude#s1"
+        after_help = "Examples:\n  maestro list --parent agent-cli-ux\n  maestro list --json --type bug --status open\n  maestro list --assignee claude#s1"
     )]
     List(ListArgs),
     #[command(about = "Author dependency edges between cards (card store)")]
@@ -275,6 +275,9 @@ pub struct StatusArgs {
 
 #[derive(Debug, Args)]
 pub struct ReadyArgs {
+    /// Print machine-readable ready JSON.
+    #[arg(long)]
+    pub json: bool,
     /// Restrict to cards parented to this feature id (one level).
     #[arg(value_name = "FEATURE")]
     pub feature: Option<String>,
@@ -301,6 +304,9 @@ pub struct ListArgs {
     /// Include archived cards (rows marked archived).
     #[arg(long)]
     pub archived: bool,
+    /// Print machine-readable list JSON.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]

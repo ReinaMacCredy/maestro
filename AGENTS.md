@@ -60,6 +60,29 @@ maestro/
   Template refresh needs an explicit mutation path, visible diff, backup, or
   force/apply story.
 
+## CONCURRENT AGENT CONTRACT
+
+- Multiple agents may run Maestro commands in the same repo. Durable card-store
+  writes use snapshot/CAS: the command writes only if the card or entry file
+  still matches the bytes it read.
+- A racing writer gets a retryable error containing
+  `changed since it was read; re-run the command`. Re-run the command so it
+  reads the newest store state and reapplies the intended change.
+- Dir-backed card deletion also compares the card file snapshot before removing
+  the directory and sidecars. Entry-backed card deletion rewrites the entry file
+  through whole-file CAS.
+- Append-only logs and notes use append-mode writes; they preserve complete
+  lines but do not provide a cross-file transaction. Multi-file commands can
+  interleave at file boundaries, so treat a failed command as partial unless its
+  operation documents rollback.
+- Agent-facing read contracts are JSON, not human text. `maestro ready --json`
+  emits `version`, `schema`, and `cards` with stable `rank`, `id`, `type`,
+  `title`, `status`, `parent`, and `claimed_by`. `maestro list --json` emits
+  `version`, `schema`, and `cards` with stable `id`, `type`, `title`, `status`,
+  `parent`, `claimed_by`, `claimed_at`, and `archived`. These fields are
+  additive-only: new fields may appear, but existing meanings are not silently
+  renamed or reinterpreted.
+
 ## ANTI-PATTERNS (THIS PROJECT)
 
 - Do not silently mutate existing Harness files from `install`, passive update

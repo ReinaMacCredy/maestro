@@ -142,6 +142,45 @@ fn ready_and_list_reflect_a_migrated_card_store() {
     let tasks = run(repo, &["list", "--type", "task"]);
     assert!(tasks.contains(&task1_id), "task should list:\n{tasks}");
 
+    let ready_json = run(repo, &["ready", "--json"]);
+    let ready_value: serde_json::Value =
+        serde_json::from_str(&ready_json).expect("ready --json emits valid JSON");
+    assert_eq!(ready_value["version"], serde_json::json!(1));
+    assert_eq!(ready_value["schema"], serde_json::json!("maestro.ready.v1"));
+    let ready_cards = ready_value["cards"]
+        .as_array()
+        .expect("ready cards should be an array");
+    let ready_task = ready_cards
+        .iter()
+        .find(|card| card["id"] == serde_json::json!(task1_id))
+        .expect("ready JSON should include the migrated task");
+    assert_eq!(ready_task["rank"], serde_json::json!(1));
+    assert_eq!(ready_task["type"], serde_json::json!("task"));
+    assert_eq!(ready_task["title"], serde_json::json!("Add CSV export"));
+    assert_eq!(ready_task["status"], serde_json::json!("draft"));
+    assert_eq!(ready_task["parent"], serde_json::json!("csv-export"));
+    assert_eq!(ready_task["claimed_by"], serde_json::Value::Null);
+
+    let list_json = run(repo, &["list", "--type", "task", "--json"]);
+    let list_value: serde_json::Value =
+        serde_json::from_str(&list_json).expect("list --json emits valid JSON");
+    assert_eq!(list_value["version"], serde_json::json!(1));
+    assert_eq!(list_value["schema"], serde_json::json!("maestro.list.v1"));
+    let list_cards = list_value["cards"]
+        .as_array()
+        .expect("list cards should be an array");
+    let listed_task = list_cards
+        .iter()
+        .find(|card| card["id"] == serde_json::json!(task1_id))
+        .expect("list JSON should include the migrated task");
+    assert_eq!(listed_task["type"], serde_json::json!("task"));
+    assert_eq!(listed_task["title"], serde_json::json!("Add CSV export"));
+    assert_eq!(listed_task["status"], serde_json::json!("draft"));
+    assert_eq!(listed_task["parent"], serde_json::json!("csv-export"));
+    assert_eq!(listed_task["claimed_by"], serde_json::Value::Null);
+    assert_eq!(listed_task["claimed_at"], serde_json::Value::Null);
+    assert_eq!(listed_task["archived"], serde_json::json!(false));
+
     // --parent is the children-of-a-feature query.
     let children = run(repo, &["list", "--parent", "csv-export"]);
     assert!(

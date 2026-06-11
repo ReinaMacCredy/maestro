@@ -9,7 +9,8 @@ use anyhow::{Context, Result, bail};
 use crate::domain::card::schema::{Card, CardType};
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{
-    child_dirs, ensure_dir, read_to_string_if_exists, sorted_child_dirs, write_string_if_unchanged,
+    child_dirs, ensure_dir, read_to_string_if_exists, remove_dir_if_file_unchanged,
+    sorted_child_dirs, write_string_if_unchanged,
 };
 use crate::foundation::core::hash::sha256_hex;
 use crate::foundation::core::paths::MaestroPaths;
@@ -737,11 +738,11 @@ pub(crate) fn save_folded_resolved_releasing(
 /// its entry rewritten out of the container file under whole-file CAS.
 pub fn remove_resolved(basis: &ResolvedCard) -> Result<()> {
     match &basis.basis {
-        ResolvedBasis::Dir { yaml, .. } => {
+        ResolvedBasis::Dir { yaml, snapshot } => {
             let dir = yaml
                 .parent()
                 .with_context(|| format!("card path missing parent: {}", yaml.display()))?;
-            fs::remove_dir_all(dir).with_context(|| format!("failed to remove {}", dir.display()))
+            remove_dir_if_file_unchanged(yaml, snapshot.raw.as_deref(), dir)
         }
         ResolvedBasis::Entry { file, snapshot } => {
             let cards: Vec<Card> = snapshot
@@ -1290,6 +1291,36 @@ mod tests {
             .expect("present");
         remove_resolved(&resolved).expect("remove the dir");
         assert!(!dir.exists(), "the whole task dir is removed");
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    #[test]
+    fn remove_resolved_rejects_a_stale_dir_backed_card() {
+        let paths = temp_cards_repo("remove-dir-stale");
+        create_card(&paths, &typed_card("card-t00001", CardType::Task, None))
+            .expect("create a pooled task");
+        let resolved = resolve(&paths, "card-t00001")
+            .expect("resolve")
+            .expect("present");
+        let path = resolved.path().to_path_buf();
+        let fresh = load_with_snapshot(&path).expect("load fresh snapshot");
+        let mut edited = fresh.card.clone().expect("card exists");
+        edited.status = "in_progress".to_string();
+        save_with_snapshot(&path, &edited, &fresh).expect("concurrent edit wins");
+
+        let error = remove_resolved(&resolved).expect_err("stale remove must fail");
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("changed since it was read"),
+            "stale removal gets the retryable CAS error:\n{message}"
+        );
+        assert!(
+            resolve(&paths, "card-t00001")
+                .expect("resolve after stale remove")
+                .is_some(),
+            "stale removal must not delete the edited card"
+        );
 
         let _ = std::fs::remove_dir_all(paths.cards_dir());
     }

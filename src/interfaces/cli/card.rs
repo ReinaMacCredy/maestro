@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use serde::Serialize;
 
 use crate::domain::card;
 use crate::domain::feature;
@@ -10,6 +11,10 @@ use crate::interfaces::cli::{
     ReadyArgs, ShowArgs, UpdateArgs,
 };
 
+const READY_JSON_SCHEMA: &str = "maestro.ready.v1";
+const LIST_JSON_SCHEMA: &str = "maestro.list.v1";
+const CARD_QUERY_JSON_VERSION: u8 = 1;
+
 /// Execute `maestro ready`: workable cards with no open blockers.
 pub fn ready(args: ReadyArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
@@ -20,7 +25,11 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
     if let Some(feature) = args.feature.as_deref() {
         ready.retain(|c| c.parent.as_deref() == Some(feature));
     }
-    render_ready(&ready);
+    if args.json {
+        render_ready_json(&ready)?;
+    } else {
+        render_ready(&ready);
+    }
     Ok(())
 }
 
@@ -71,7 +80,11 @@ pub fn list(args: ListArgs) -> Result<()> {
                     .map(|c| (c, true)),
             )
             .collect();
-    render_list(&rows);
+    if args.json {
+        render_list_json(&rows)?;
+    } else {
+        render_list(&rows);
+    }
     Ok(())
 }
 
@@ -447,6 +460,21 @@ fn render_ready(cards: &[&card::schema::Card]) {
     }
 }
 
+fn render_ready_json(cards: &[&card::schema::Card]) -> Result<()> {
+    let cards = cards
+        .iter()
+        .enumerate()
+        .map(|(index, card)| ReadyCardJson::new(index + 1, card))
+        .collect();
+    let report = ReadyJson {
+        version: CARD_QUERY_JSON_VERSION,
+        schema: READY_JSON_SCHEMA,
+        cards,
+    };
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
 /// Render `list` in the beads structure (SPEC DN9): a count header plus numbered
 /// rows carrying the real per-type status and parent, emoji-free. Archived rows
 /// (SPEC-archive-memory A1) carry a trailing `(archived: <parent>)` marker.
@@ -484,6 +512,20 @@ fn render_list(rows: &[(&card::schema::Card, bool)]) {
             c.title,
         );
     }
+}
+
+fn render_list_json(rows: &[(&card::schema::Card, bool)]) -> Result<()> {
+    let cards = rows
+        .iter()
+        .map(|(card, archived)| ListCardJson::new(card, *archived))
+        .collect();
+    let report = ListJson {
+        version: CARD_QUERY_JSON_VERSION,
+        schema: LIST_JSON_SCHEMA,
+        cards,
+    };
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
 }
 
 /// Render `show <id>` (SPEC DN9): header line + parent + edges grouped by kind +
@@ -537,5 +579,73 @@ fn claim_label(c: &card::schema::Card) -> String {
     match c.claimed_by.as_deref() {
         Some(who) => format!("@{who}"),
         None => "(unclaimed)".to_string(),
+    }
+}
+
+#[derive(Serialize)]
+struct ReadyJson<'a> {
+    version: u8,
+    schema: &'static str,
+    cards: Vec<ReadyCardJson<'a>>,
+}
+
+#[derive(Serialize)]
+struct ReadyCardJson<'a> {
+    rank: usize,
+    id: &'a str,
+    #[serde(rename = "type")]
+    card_type: &'static str,
+    title: &'a str,
+    status: &'a str,
+    parent: Option<&'a str>,
+    claimed_by: Option<&'a str>,
+}
+
+impl<'a> ReadyCardJson<'a> {
+    fn new(rank: usize, card: &'a card::schema::Card) -> Self {
+        Self {
+            rank,
+            id: &card.id,
+            card_type: card.card_type.as_str(),
+            title: &card.title,
+            status: &card.status,
+            parent: card.parent.as_deref(),
+            claimed_by: card.claimed_by.as_deref(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct ListJson<'a> {
+    version: u8,
+    schema: &'static str,
+    cards: Vec<ListCardJson<'a>>,
+}
+
+#[derive(Serialize)]
+struct ListCardJson<'a> {
+    id: &'a str,
+    #[serde(rename = "type")]
+    card_type: &'static str,
+    title: &'a str,
+    status: &'a str,
+    parent: Option<&'a str>,
+    claimed_by: Option<&'a str>,
+    claimed_at: Option<&'a str>,
+    archived: bool,
+}
+
+impl<'a> ListCardJson<'a> {
+    fn new(card: &'a card::schema::Card, archived: bool) -> Self {
+        Self {
+            id: &card.id,
+            card_type: card.card_type.as_str(),
+            title: &card.title,
+            status: &card.status,
+            parent: card.parent.as_deref(),
+            claimed_by: card.claimed_by.as_deref(),
+            claimed_at: card.claimed_at.as_deref(),
+            archived,
+        }
     }
 }

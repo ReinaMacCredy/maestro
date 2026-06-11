@@ -141,6 +141,33 @@ pub fn write_string_if_unchanged(
     crate::foundation::core::safe_write::write_string_atomic(path, contents)
 }
 
+/// Remove `dir` only when `record_path` still matches the snapshot the caller
+/// read. This gives dir-backed stores the same stale-writer rejection as
+/// [`write_string_if_unchanged`] before deleting record sidecars with the dir.
+pub fn remove_dir_if_file_unchanged(
+    record_path: impl AsRef<Path>,
+    expected: Option<&str>,
+    dir: impl AsRef<Path>,
+) -> Result<()> {
+    let record_path = record_path.as_ref();
+    let dir = dir.as_ref();
+    let parent = record_path.parent().unwrap_or_else(|| Path::new(""));
+    let name = record_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .with_context(|| format!("path has no valid file name: {}", record_path.display()))?;
+    let lock_name = format!(".{name}.write-lock");
+    let _reservation = reserve_store_write_marker(parent, &lock_name, record_path)?;
+    let current = read_to_string_if_exists(record_path)?;
+    if current.as_deref() != expected {
+        bail!(
+            "{} changed since it was read; re-run the command so Maestro can merge from the latest store",
+            record_path.display()
+        );
+    }
+    fs::remove_dir_all(dir).with_context(|| format!("failed to remove {}", dir.display()))
+}
+
 fn reserve_store_write_marker(
     parent: &Path,
     lock_name: &str,
