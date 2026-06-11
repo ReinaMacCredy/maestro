@@ -10,12 +10,9 @@ use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
 /// owns a directory keyed by its stable id; feature cards carry `spec.md` /
 /// `notes.md` as sidecar prose, never inlined here.
 ///
-/// Slice 1 (P1) is the additive data container plus its CAS-backed store:
-/// per-type lifecycle rules, the coarse `open|in_progress|closed` derivation,
-/// the computed display alias, the `ready`/claim semantics, and the migration
-/// all land in later phases. The `status` is stored as a free string because
-/// the per-type status vocabulary is still open (SPEC O5); only the LOCKED
-/// fields are typed here.
+/// The envelope owns the shared identity, display, relationship, and claim
+/// fields. The `status` is stored as a free string because each card type owns
+/// its fine-grained lifecycle; board-level status is derived from it.
 ///
 /// `Eq` is intentionally absent: the `extra` carrier holds a
 /// [`serde_yaml::Mapping`], whose `Value` may contain floats, so only
@@ -57,12 +54,10 @@ pub struct Card {
     /// Optional longer description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Transitional carrier for the pre-fold source record's type-specific
-    /// payload (P1 migration). Shared identity/display fields live in the card
-    /// envelope above; typed readers seed those fields back into this map before
-    /// deserializing legacy records. P2 collapses the remaining keys into typed
-    /// per-type fields, at which point the carrier disappears. Empty for cards
-    /// minted natively by the card model.
+    /// Carrier for type-specific payload that has not yet moved into first-class
+    /// card fields. Shared identity/display fields live in the card envelope
+    /// above; typed readers seed those fields back into this map before
+    /// deserializing records. Empty for cards minted natively by the card model.
     #[serde(default, skip_serializing_if = "serde_yaml::Mapping::is_empty")]
     pub extra: serde_yaml::Mapping,
 }

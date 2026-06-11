@@ -2,8 +2,8 @@
 //! tasks, harness-backlog items, and decisions into a single flat
 //! `.maestro/cards/<id>/` store.
 //!
-//! Slice 1 (P1) is the additive data container plus its CAS-backed store; the
-//! four existing entities are untouched until the migration and cutover slices.
+//! The CAS-backed store is the persistence seam; type-specific behavior stays in
+//! the owning domain facades.
 
 pub mod edit;
 pub mod fold;

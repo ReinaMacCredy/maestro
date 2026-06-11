@@ -4,7 +4,7 @@
 //! title (content-hash ids do not sort by creation order). The legacy guard for
 //! the new verbs (exit 0 with a guiding line) is covered too.
 
-mod card_support;
+pub mod card_support;
 mod support;
 
 use std::fs;

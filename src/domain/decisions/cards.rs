@@ -1,4 +1,4 @@
-//! Decision <-> card glue for the SPEC-beads-model P1 dual-read cutover.
+//! Decision <-> card glue for card-backed decision records.
 //!
 //! A migrated repo routes the structured decision stores (global
 //! `.maestro/decisions.yaml` plus per-feature `features/<id>/decisions.yaml`)

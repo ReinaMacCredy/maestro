@@ -91,7 +91,7 @@ impl MaestroPaths {
     ///
     /// The card-model archive sibling of `cards/`; `archive <feature>` moves the
     /// feature card and its `parent=<feature>` children here as whole directories
-    /// (SPEC-beads-model E4/D5).
+    /// with digest entries recorded in `INDEX.md`.
     pub fn archive_cards_dir(&self) -> PathBuf {
         self.archive_dir().join("cards")
     }

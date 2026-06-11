@@ -2,9 +2,9 @@ mod support;
 
 use std::fs;
 
+use maestro::domain::harness::schema::{HarnessConfig, StackKind, detect_stack};
+use maestro::domain::harness::templates::{HARNESS_MD, harness_yml};
 use maestro::foundation::core::paths::MaestroPaths;
-use maestro::harness::schema::{HarnessConfig, StackKind, detect_stack};
-use maestro::harness::templates::{HARNESS_MD, harness_yml};
 use support::TestTempDir;
 
 #[test]

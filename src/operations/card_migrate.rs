@@ -1,6 +1,6 @@
 //! Fold the four legacy artifact trees (features, tasks, decisions, harness
 //! backlog) into the unified flat card store at `.maestro/cards/` (SPEC
-//! beads-model, P1 slice 2 + P3 remint).
+//! beads-model).
 //!
 //! Additive and idempotent. It reads the four trees and mints one
 //! `cards/<id>/card.yaml` per artifact. Feature cards keep their immutable

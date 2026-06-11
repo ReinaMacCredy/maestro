@@ -1,4 +1,4 @@
-mod card_support;
+pub mod card_support;
 mod support;
 
 use std::fs;
@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 use card_support::{card_dir, card_doc, id_by_title};
-use maestro::decisions::template::decision_markdown;
+use maestro::domain::decisions::template::decision_markdown;
 use maestro::foundation::core::fs::ensure_dir;
 use serde_yaml::Value as YamlValue;
 use support::TestTempDir;

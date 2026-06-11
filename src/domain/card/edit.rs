@@ -1,4 +1,4 @@
-//! Write-side card edits (SPEC-beads-model P4): mutations that load a card,
+//! Write-side card edits: mutations that load a card,
 //! change it, and persist through the CAS seam (D1). The read-side counterpart
 //! is `query`; both sit above the `store` persistence seam.
 

@@ -661,7 +661,8 @@ mod tests {
         // The real verb writes a feature card whose `extra` carries a parseable
         // FeatureRecord; the bare `save_feature_card` shortcut leaves `extra`
         // empty, which `create_open`'s `feature::ensure_exists` cannot read.
-        let feature_id = crate::feature::create(&paths, "Csv export").expect("create feature card");
+        let feature_id =
+            crate::domain::feature::create(&paths, "Csv export").expect("create feature card");
 
         let global = create_open(&paths, "Use fire-and-forget hooks", None, None)
             .expect("create global decision");

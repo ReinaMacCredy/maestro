@@ -95,11 +95,11 @@ pub fn dep(args: DepArgs) -> Result<()> {
 }
 
 /// Execute `maestro archive <feature>`: move the feature card and its
-/// `parent=<feature>` children to the archive sibling tree (SPEC E4/D5). The
-/// flat verb drives the same `feature::archive_feature` cascade as `maestro
-/// feature archive`, so the typed terminal gate, sweep re-run, and no-clobber
-/// pre-flight hold on both spellings. `--loose` sweeps terminal parentless
-/// cards instead (SPEC-archive-memory-2 R2).
+/// `parent=<feature>` children to the archive sibling tree. The flat verb
+/// drives the same `feature::archive_feature` cascade as `maestro feature
+/// archive`, so the typed terminal gate, sweep re-run, and no-clobber pre-flight
+/// hold on both spellings. `--loose` sweeps terminal parentless cards instead
+/// (SPEC-archive-memory-2 R2).
 pub fn archive(args: ArchiveArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
         return Ok(());

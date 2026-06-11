@@ -1,4 +1,4 @@
-mod card_support;
+pub mod card_support;
 mod support;
 
 use std::collections::BTreeSet;

@@ -1,12 +1,10 @@
 //! Shared card-mode test helpers for the SPEC-beads-model legacy-removal cutover.
 //!
-//! After the card model became the sole store, creation verbs mint opaque
-//! content-hash ids (`card-XXXXXX`) instead of the old sequential `task-001`, so
+//! The card model is the sole store, and creation verbs mint typed slug ids
+//! (`task-<slug>-<hex4>`) instead of the old sequential `task-001`, so
 //! a test can no longer hardcode the id it just created. Recover it by its unique
 //! title via the same `card::query::scan` the production board reads
 //! (`id_by_title`), the pattern proven in `card_commands_integration`.
-
-#![allow(dead_code)]
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,20 +23,6 @@ pub fn cards_repo(name: &str) -> TestTempDir {
     let temp = TestTempDir::new(name);
     fs::create_dir_all(temp.path().join(".maestro/cards"))
         .expect("invariant: cards dir should be creatable");
-    temp
-}
-
-/// A card-mode repo that also carries a harness config, for verbs whose
-/// behavior reads `.maestro/harness/harness.yml` (verification gating, claims).
-pub fn cards_repo_with_harness(name: &str, harness_yml: &str) -> TestTempDir {
-    let temp = cards_repo(name);
-    fs::create_dir_all(temp.path().join(".maestro/harness"))
-        .expect("invariant: harness dir should be creatable");
-    fs::write(
-        temp.path().join(".maestro/harness/harness.yml"),
-        harness_yml,
-    )
-    .expect("invariant: harness.yml should be writable");
     temp
 }
 

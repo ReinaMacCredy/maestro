@@ -1077,7 +1077,8 @@ mod tests {
         let paths = card_mode_repo("detach");
         let tasks_dir = paths.tasks_dir();
 
-        let feature_id = crate::feature::create(&paths, "Csv export").expect("create feature card");
+        let feature_id =
+            crate::domain::feature::create(&paths, "Csv export").expect("create feature card");
         let task = create_task(
             &tasks_dir,
             "Add CSV export",
@@ -1097,7 +1098,8 @@ mod tests {
             task.id
         );
 
-        let counts = crate::feature::query::count_tasks_by_feature(&tasks_dir).expect("count");
+        let counts =
+            crate::domain::feature::query::count_tasks_by_feature(&tasks_dir).expect("count");
         assert_eq!(counts.get(&feature_id).map(|c| c.total), Some(1));
 
         set_feature(
@@ -1115,7 +1117,8 @@ mod tests {
             .card;
         assert_eq!(card.parent, None, "the parent field is cleared in place");
 
-        let counts = crate::feature::query::count_tasks_by_feature(&tasks_dir).expect("recount");
+        let counts =
+            crate::domain::feature::query::count_tasks_by_feature(&tasks_dir).expect("recount");
         assert_eq!(
             counts.get(&feature_id),
             None,

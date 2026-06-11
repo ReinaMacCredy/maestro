@@ -1,4 +1,4 @@
-//! Task <-> card glue for the SPEC-beads-model P1 dual-read cutover.
+//! Task <-> card glue for card-backed task records.
 //!
 //! Mirrors the feature cutover (`domain/feature/registry.rs`): a migrated repo
 //! routes task reads and writes through the flat `.maestro/cards/<id>/card.yaml`
@@ -32,10 +32,9 @@ use crate::foundation::core::time::utc_now_timestamp;
 pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecord> {
     // A card minted natively by the card model (DN9 `maestro create`) carries no
     // `extra`, so the slim-payload read below has nothing to parse. Synthesize
-    // the record the task subsystem needs from the card's own fields instead. This
-    // bridge retires in S4 (E7), when the task lifecycle moves onto the native
-    // fields and the carrier disappears; until then `status`/`doctor` must read a
-    // canonically-created task card without crashing.
+    // the record the task subsystem needs from the card's own fields instead.
+    // `status` and `doctor` must read a canonically-created task card without
+    // crashing while task behavior still consumes TaskRecord.
     if card.extra.is_empty() {
         return Ok(record_from_native_card(card));
     }

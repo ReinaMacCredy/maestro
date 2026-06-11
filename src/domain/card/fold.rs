@@ -1,5 +1,5 @@
-//! Build a card from a legacy source record's YAML mapping (SPEC-beads-model P1
-//! cutover). The migration reads the mapping off disk; the live save path
+//! Build a card from a source record's YAML mapping. The migration reads the
+//! mapping off disk; the live save path
 //! serializes a typed record to the same mapping. Both feed these builders, so a
 //! migrated card and a freshly-saved card share one derivation path. `extra`
 //! keeps only the type-specific payload while the envelope stores shared identity

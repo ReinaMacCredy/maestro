@@ -1690,7 +1690,7 @@ mod cutover_tests {
         let root =
             std::env::temp_dir().join(format!("maestro-cutover-{label}-{}-{nanos}", process::id()));
         let paths = MaestroPaths::new(&root);
-        // The card store's mere existence flips dispatch to card mode (P1).
+        // The card store's mere existence flips dispatch to card mode.
         ensure_dir(paths.cards_dir()).expect("create cards dir");
         (root, paths)
     }

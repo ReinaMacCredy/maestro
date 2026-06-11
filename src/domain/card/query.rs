@@ -1,4 +1,4 @@
-//! Read-side card queries (SPEC-beads-model P4): the single scan seam (D4), the
+//! Read-side card queries: the single scan seam, the
 //! coarse status derivation (DN3), the `ready` rule (E3/E8), and the `list`
 //! filter (G3). These are pure functions over the scanned card set; the CLI
 //! verbs that surface them are a thin adapter layer.

@@ -2,9 +2,9 @@ mod support;
 
 use std::fs;
 
-use maestro::decisions::template::{decision_file_name, decision_markdown};
-use maestro::feature::query::{FeatureTaskCounts, count_tasks_for_feature};
-use maestro::feature::schema::FeatureRecord;
+use maestro::domain::decisions::template::{decision_file_name, decision_markdown};
+use maestro::domain::feature::query::{FeatureTaskCounts, count_tasks_for_feature};
+use maestro::domain::feature::schema::FeatureRecord;
 use maestro::foundation::core::fs::ensure_dir;
 use maestro::foundation::core::paths::MaestroPaths;
 use support::TestTempDir;
@@ -14,7 +14,7 @@ fn created_feature_record_carries_v2_schema_version() {
     let temp_dir = TestTempDir::new("maestro-feature-schema");
     let paths = MaestroPaths::new(temp_dir.path());
 
-    maestro::feature::create(&paths, "Billing CSV export")
+    maestro::domain::feature::create(&paths, "Billing CSV export")
         .expect("invariant: create should succeed");
 
     // A feature is now a `feature`-typed card at `.maestro/cards/<slug>/card.yaml`;
