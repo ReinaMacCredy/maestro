@@ -9,7 +9,7 @@
 
 use serde_yaml::{Mapping, Value};
 
-use crate::domain::card::schema::{Card, CardType};
+use crate::domain::card::schema::{Card, CardType, Dep, DepKind};
 use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
 
 /// Build a feature card. A feature is a container, so `parent` is always `None`.
@@ -44,7 +44,7 @@ pub fn task_card(id: String, source: Mapping, parent: Option<String>, now: &str)
         title: title_or_id(&source, &id),
         status: string_field(&source, "state").unwrap_or_default(),
         parent: parent.or_else(|| string_field(&source, "feature_id")),
-        deps: Vec::new(),
+        deps: blocker_deps(&source),
         lane: None,
         claimed_by: string_field(&source, "claimed_by"),
         claimed_at: string_field(&source, "claimed_at"),
@@ -126,6 +126,42 @@ pub(crate) fn string_field(map: &Mapping, key: &str) -> Option<String> {
     map.get(Value::String(key.to_string()))
         .and_then(Value::as_str)
         .map(str::to_string)
+}
+
+/// Blocking edges derived from the source mapping's unresolved blockers: every
+/// open blocker with a `blocked_ref` gates readiness as a `blocks` dep on that
+/// in-store id (task and decision refs alike -- `ready` requires a closed
+/// target either way). External/Human blockers carry no ref and gate through
+/// the task lifecycle, not the dep graph. Without this derive, a blocked task
+/// reads as ready: `ready` consults only `card.deps`, and the blocker list
+/// lives in the `extra` carrier it never opens.
+fn blocker_deps(source: &Mapping) -> Vec<Dep> {
+    let Some(Value::Sequence(blockers)) = source.get(Value::String("blockers".to_string())) else {
+        return Vec::new();
+    };
+    let mut deps: Vec<Dep> = Vec::new();
+    for blocker in blockers.iter().filter_map(Value::as_mapping) {
+        let resolved = blocker
+            .get(Value::String("resolved_at".to_string()))
+            .is_some_and(|value| !value.is_null());
+        if resolved {
+            continue;
+        }
+        let Some(target) = blocker
+            .get(Value::String("blocked_ref".to_string()))
+            .and_then(Value::as_mapping)
+            .and_then(|reference| string_field(reference, "id"))
+        else {
+            continue;
+        };
+        if !deps.iter().any(|dep| dep.target == target) {
+            deps.push(Dep {
+                kind: DepKind::Blocks,
+                target,
+            });
+        }
+    }
+    deps
 }
 
 pub(crate) fn nonempty_field(map: &Mapping, key: &str) -> Option<String> {

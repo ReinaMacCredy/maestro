@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -176,16 +177,32 @@ pub(crate) fn save_folded_with_snapshot(
     snapshot: &CardSnapshot,
 ) -> Result<()> {
     if let Some(existing) = &snapshot.card {
+        merge_folded_deps(&mut card, existing, &BTreeSet::new());
         carry_card_only_fields(&mut card, existing);
     }
     save_with_snapshot(path, &card, snapshot)
+}
+
+/// Union the existing card's dep edges into a folded card. The fold derives
+/// its own blocking edges (a task's unresolved blockers); every other edge
+/// (`dep add`) lives only on the existing card. A `released` target names a
+/// `blocks` edge a just-resolved blocker no longer owns -- it is dropped
+/// unless the fold re-derived it from a still-open blocker.
+fn merge_folded_deps(card: &mut Card, existing: &Card, released: &BTreeSet<String>) {
+    for dep in &existing.deps {
+        if dep.kind.is_blocking() && released.contains(&dep.target) {
+            continue;
+        }
+        if !card.deps.contains(dep) {
+            card.deps.push(dep.clone());
+        }
+    }
 }
 
 /// Carry the card-only fields a typed-record fold cannot derive (`deps`
 /// edges, `lane`, a card-set `description`) from the existing card, so the
 /// rebuilt copy does not wipe them.
 fn carry_card_only_fields(card: &mut Card, existing: &Card) {
-    card.deps = existing.deps.clone();
     if card.lane.is_none() {
         card.lane = existing.lane.clone();
     }
@@ -611,7 +628,20 @@ pub fn create_card(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
 /// card-only fields (`deps`, `lane`, a card-set `description`) from the
 /// resolved card before the write would wipe them -- the resolved twin of
 /// [`save_folded_with_snapshot`].
-pub(crate) fn save_folded_resolved(mut card: Card, basis: &ResolvedCard) -> Result<()> {
+pub(crate) fn save_folded_resolved(card: Card, basis: &ResolvedCard) -> Result<()> {
+    save_folded_resolved_releasing(card, basis, &BTreeSet::new())
+}
+
+/// [`save_folded_resolved`], dropping the existing `blocks` edges whose
+/// targets the record's just-resolved blockers released. Only the task fold
+/// derives blocking edges from its record, so only the task save names
+/// releases; everyone else goes through the plain wrapper.
+pub(crate) fn save_folded_resolved_releasing(
+    mut card: Card,
+    basis: &ResolvedCard,
+    released: &BTreeSet<String>,
+) -> Result<()> {
+    merge_folded_deps(&mut card, &basis.card, released);
     carry_card_only_fields(&mut card, &basis.card);
     save_resolved(&card, basis)
 }

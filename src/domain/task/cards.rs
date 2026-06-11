@@ -8,6 +8,7 @@
 //! `TaskRecord.feature_id` is `#[serde(skip)]` and never appears in the record
 //! mapping (`record_from_card` / `record_to_mapping`).
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -177,10 +178,20 @@ pub(crate) fn load_one_archived(
 }
 
 /// Persist a task record back to the home it was resolved from (the
-/// card-store CAS rejects a racing writer, SPEC D1).
+/// card-store CAS rejects a racing writer, SPEC D1). The fold derives
+/// `blocks` edges from the record's open blockers; a just-resolved blocker
+/// releases its edge here, so readiness tracks the blocker list (an id also
+/// held by a still-open blocker survives via the fold's own deps).
 pub(crate) fn save(record: &TaskRecord, resolved: &ResolvedCard) -> Result<()> {
     let card = card_for(record)?;
-    card_store::save_folded_resolved(card, resolved)
+    let released: BTreeSet<String> = record
+        .blockers
+        .iter()
+        .filter(|blocker| blocker.resolved_at.is_some())
+        .filter_map(|blocker| blocker.blocked_ref.as_ref())
+        .map(|reference| reference.id.clone())
+        .collect();
+    card_store::save_folded_resolved_releasing(card, resolved, &released)
 }
 
 /// Reconstruct every live `Task`-typed card with its artifact directory (the
@@ -242,7 +253,8 @@ mod tests {
 
     use super::*;
     use crate::domain::card::schema::{Dep, DepKind};
-    use crate::domain::task::template::TaskState;
+    use crate::domain::task::blockers;
+    use crate::domain::task::template::{BlockerKind, BlockerRef, TaskState};
     use crate::foundation::core::fs::ensure_dir;
 
     fn card_mode_repo(label: &str) -> MaestroPaths {
@@ -387,6 +399,133 @@ mod tests {
             saved.claimed_by.as_deref(),
             Some("claude#s1"),
             "the typed claim is lifted to the top-level copy"
+        );
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    /// The fold derives a `blocks` dep from every open blocker that names an
+    /// in-store ref; resolved blockers and ref-less External/Human blockers
+    /// derive nothing. Without this, `ready` (which consults only `card.deps`)
+    /// lists a blocked task as workable.
+    #[test]
+    fn fold_derives_blocking_deps_from_open_ref_blockers() {
+        let mut record = parented_draft();
+        blockers::add_blocker(
+            &mut record,
+            "blk-001".to_string(),
+            BlockerKind::Task,
+            Some(BlockerRef {
+                kind: BlockerKind::Task,
+                id: "card-bbb222".to_string(),
+            }),
+            "waits on the parser".to_string(),
+            "parser lands first".to_string(),
+            "2026-06-08T01:00:00Z".to_string(),
+        );
+        blockers::add_blocker(
+            &mut record,
+            "blk-002".to_string(),
+            BlockerKind::Decision,
+            Some(BlockerRef {
+                kind: BlockerKind::Decision,
+                id: "card-ccc333".to_string(),
+            }),
+            "ruling pending".to_string(),
+            "format undecided".to_string(),
+            "2026-06-08T01:00:00Z".to_string(),
+        );
+        blockers::resolve_blocker(&mut record, "blk-002", "2026-06-08T02:00:00Z".to_string())
+            .expect("resolve the decision blocker");
+        blockers::add_blocker(
+            &mut record,
+            "blk-003".to_string(),
+            BlockerKind::External,
+            None,
+            "vendor outage".to_string(),
+            "upstream API down".to_string(),
+            "2026-06-08T03:00:00Z".to_string(),
+        );
+
+        let card = card_for(&record).expect("fold record into card");
+        assert_eq!(
+            card.deps,
+            vec![Dep {
+                kind: DepKind::Blocks,
+                target: "card-bbb222".to_string(),
+            }],
+            "only the open ref blocker becomes a blocking dep"
+        );
+    }
+
+    /// Through the store: a typed save unions the derived blocker edge with a
+    /// manually-added dep, and resolving the blocker releases only the derived
+    /// edge -- the manual one survives the union's release set.
+    #[test]
+    fn typed_save_unions_blocker_deps_and_releases_them_on_resolve() {
+        let paths = card_mode_repo("blocker-deps");
+        create(&paths, &parented_draft()).expect("create the task card");
+
+        let resolved = card_store::resolve(&paths, "task-001")
+            .expect("resolve the card")
+            .expect("card exists");
+        let mut card = resolved.card.clone();
+        card.deps.push(Dep {
+            kind: DepKind::Blocks,
+            target: "card-9f7d".to_string(),
+        });
+        card_store::save_resolved(&card, &resolved).expect("manual dep add");
+
+        let (mut record, resolved) = load_one(&paths, "task-001")
+            .expect("typed read")
+            .expect("card exists");
+        blockers::add_blocker(
+            &mut record,
+            "blk-001".to_string(),
+            BlockerKind::Task,
+            Some(BlockerRef {
+                kind: BlockerKind::Task,
+                id: "card-bbb222".to_string(),
+            }),
+            "waits on the parser".to_string(),
+            "parser lands first".to_string(),
+            "2026-06-08T01:00:00Z".to_string(),
+        );
+        save(&record, &resolved).expect("typed save with the open blocker");
+
+        let saved = card_store::resolve(&paths, "task-001")
+            .expect("reload")
+            .expect("card present")
+            .card;
+        let targets: Vec<&str> = saved.deps.iter().map(|dep| dep.target.as_str()).collect();
+        assert!(
+            targets.contains(&"card-bbb222"),
+            "the open blocker derives a blocking dep: {targets:?}"
+        );
+        assert!(
+            targets.contains(&"card-9f7d"),
+            "the manual edge survives the typed save: {targets:?}"
+        );
+
+        let (mut record, resolved) = load_one(&paths, "task-001")
+            .expect("typed reread")
+            .expect("card exists");
+        blockers::resolve_blocker(&mut record, "blk-001", "2026-06-08T04:00:00Z".to_string())
+            .expect("resolve the blocker");
+        save(&record, &resolved).expect("typed save after resolve");
+
+        let saved = card_store::resolve(&paths, "task-001")
+            .expect("reload after resolve")
+            .expect("card present")
+            .card;
+        let targets: Vec<&str> = saved.deps.iter().map(|dep| dep.target.as_str()).collect();
+        assert!(
+            !targets.contains(&"card-bbb222"),
+            "the resolved blocker's derived edge is released: {targets:?}"
+        );
+        assert!(
+            targets.contains(&"card-9f7d"),
+            "the manual edge is kept: {targets:?}"
         );
 
         let _ = std::fs::remove_dir_all(paths.cards_dir());
