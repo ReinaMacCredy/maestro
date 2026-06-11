@@ -6,10 +6,14 @@
 //! and display fields. The caller resolves the stable `id` (the feature dir name
 //! when a record omits it); everything else is read off the mapping.
 
+use anyhow::{Context, Result, bail};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_yaml::{Mapping, Value};
 
 use crate::domain::card::schema::{Card, CardType, Dep, DepKind};
-use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
+use crate::foundation::core::error::MaestroError;
+use crate::foundation::core::schema::{CARD_SCHEMA_VERSION, Compat, classify};
 
 /// Build a feature card. A feature is a container, so `parent` is always `None`.
 pub fn feature_card(id: String, source: Mapping, now: &str) -> Card {
@@ -172,6 +176,40 @@ pub(crate) fn seed_optional_string_if_absent(map: &mut Mapping, key: &str, value
     if let Some(value) = value {
         seed_string_if_absent(map, key, value);
     }
+}
+
+pub(crate) fn record_from_extra<T>(extra: Mapping, artifact: &str) -> Result<T>
+where
+    T: DeserializeOwned,
+{
+    serde_yaml::from_value(Value::Mapping(extra))
+        .with_context(|| format!("failed to parse {artifact}"))
+}
+
+pub(crate) fn record_to_mapping<T>(record: &T, label: &str) -> Result<Mapping>
+where
+    T: Serialize,
+{
+    match serde_yaml::to_value(record).with_context(|| format!("failed to serialize {label}"))? {
+        Value::Mapping(map) => Ok(map),
+        _ => bail!("{label} did not serialize to a mapping"),
+    }
+}
+
+pub(crate) fn ensure_exact_schema(
+    artifact: &str,
+    found: &str,
+    expected: &'static str,
+) -> Result<()> {
+    if classify(found, expected) == Compat::Exact {
+        return Ok(());
+    }
+    Err(MaestroError::SchemaMismatch {
+        artifact: artifact.to_string(),
+        expected,
+        found: found.to_string(),
+    }
+    .into())
 }
 
 pub(crate) fn title_or_id(record: &Mapping, id: &str) -> String {

@@ -18,8 +18,7 @@
 
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
-use serde_yaml::{Mapping, Value};
+use anyhow::Result;
 
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
@@ -37,8 +36,8 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<DecisionR
     // A card minted natively by the card model (DN9 `maestro create`) carries no
     // `extra`, so the slim-payload read below has nothing to parse. Synthesize
     // the record from the card's own fields instead, so `status`/`doctor` can read
-    // a canonically-created decision card without crashing. This bridge retires in
-    // S4 (E7), when the decision lifecycle moves onto the native fields.
+    // a canonically-created decision card without crashing while decision
+    // behavior still consumes DecisionRecord.
     if card.extra.is_empty() {
         return Ok(record_from_native_card(card));
     }
@@ -60,8 +59,7 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<DecisionR
     fold::seed_optional_string_if_absent(&mut extra, "feature", parent.as_deref());
     fold::seed_optional_string_if_absent(&mut extra, "context", description.as_deref());
     fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
-    let mut record: DecisionRecord = serde_yaml::from_value(Value::Mapping(extra))
-        .with_context(|| format!("failed to parse {artifact}"))?;
+    let mut record: DecisionRecord = fold::record_from_extra(extra, &artifact)?;
     // The card verbs (`update`) write only the top-level copy fields, so they
     // are the freshest source for what they own (SPEC DN3: the card status is
     // the single source of truth). The overlay is conservative: an unrecognized
@@ -95,9 +93,9 @@ fn decision_status_from_word(status: &str) -> Option<DecisionStatus> {
 
 /// Build a [`DecisionRecord`] from a native card's own fields (no `extra`
 /// carrier). The fork/lock prose (`decision`, `rejected`, `preview`) and the
-/// supersession edges a migrated decision carries have no native home yet (the
-/// S4 gap), so the record keeps `None`/empty for those; the home rides
-/// `card.parent` and the status maps from the card's status word.
+/// supersession edges a migrated decision carries have no native card fields
+/// yet, so the record keeps `None`/empty for those; the home rides `card.parent`
+/// and the status maps from the card's status word.
 fn record_from_native_card(card: Card) -> DecisionRecord {
     DecisionRecord {
         id: card.id,
@@ -115,22 +113,13 @@ fn record_from_native_card(card: Card) -> DecisionRecord {
     }
 }
 
-/// Serialize a decision record to the mapping the card builder folds into the
-/// envelope plus slim `extra`.
-fn record_to_mapping(record: &DecisionRecord) -> Result<Mapping> {
-    match serde_yaml::to_value(record).context("failed to serialize decision record")? {
-        Value::Mapping(map) => Ok(map),
-        _ => bail!("decision record did not serialize to a mapping"),
-    }
-}
-
 /// Fold a decision record into its card. `feature` rides the source mapping, so
 /// the explicit `feature_parent` arg is only a fallback; passing the record's own
 /// `feature` keeps live-save and migration in step.
 fn card_for(record: &DecisionRecord) -> Result<Card> {
     Ok(fold::decision_card(
         record.id.clone(),
-        record_to_mapping(record)?,
+        fold::record_to_mapping(record, "decision record")?,
         record.feature.clone(),
         &utc_now_timestamp(),
     ))

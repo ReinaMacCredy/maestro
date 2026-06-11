@@ -12,8 +12,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
-use serde_yaml::{Mapping, Value};
+use anyhow::{Context, Result};
 
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
@@ -31,9 +30,9 @@ pub(crate) fn item_from_card(card: Card, artifact: &str) -> Result<BacklogItem> 
     // carries no `extra`, so the slim-payload read below has nothing to parse.
     // Synthesize a minimal item from the card's own fields so `harness list` can
     // read it without crashing. The detector metadata a migrated item carries
-    // (fingerprint, occurrences, evidence, history) has no native home yet (the S4
-    // gap), so it stays empty; the aggregate merge is fingerprint-keyed, so an
-    // empty-fingerprint native idea is the "non-harness idea source" D7/P5 owns.
+    // (fingerprint, occurrences, evidence, history) has no native card fields
+    // yet, so it stays empty; the aggregate merge treats an empty-fingerprint
+    // native idea as non-detected input and does not merge it with scanner output.
     if card.extra.is_empty() {
         return Ok(item_from_native_card(card));
     }
@@ -48,8 +47,7 @@ pub(crate) fn item_from_card(card: Card, artifact: &str) -> Result<BacklogItem> 
     fold::seed_string_if_absent(&mut extra, "id", &id);
     fold::seed_string_if_absent(&mut extra, "title", &title);
     fold::seed_string_if_absent(&mut extra, "status", &status);
-    let mut item: BacklogItem = serde_yaml::from_value(Value::Mapping(extra))
-        .with_context(|| format!("failed to parse {artifact}"))?;
+    let mut item: BacklogItem = fold::record_from_extra(extra, artifact)?;
     // The card verbs (`update`) write only the top-level copy fields, so they
     // are the freshest source for the title and status they own (SPEC DN3).
     // Identity is the envelope's, never the payload's: a divergent `extra.id`
@@ -87,20 +85,11 @@ fn item_from_native_card(card: Card) -> BacklogItem {
     }
 }
 
-/// Serialize a backlog item to the mapping the card builder folds into the
-/// envelope plus slim `extra`.
-fn item_to_mapping(item: &BacklogItem) -> Result<Mapping> {
-    match serde_yaml::to_value(item).context("failed to serialize backlog item")? {
-        Value::Mapping(map) => Ok(map),
-        _ => bail!("backlog item did not serialize to a mapping"),
-    }
-}
-
 /// Fold a backlog item into its idea card.
 pub(crate) fn card_for(item: &BacklogItem) -> Result<Card> {
     Ok(fold::idea_card(
         item.id.clone(),
-        item_to_mapping(item)?,
+        fold::record_to_mapping(item, "backlog item")?,
         &utc_now_timestamp(),
     ))
 }

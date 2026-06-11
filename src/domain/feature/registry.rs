@@ -22,7 +22,6 @@ use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
-use serde_yaml::{Mapping, Value};
 
 use crate::domain::card::fold;
 use crate::domain::card::query as card_query;
@@ -44,7 +43,7 @@ use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{append_text_file, read_to_string_if_exists};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::safe_write::write_string_atomic;
-use crate::foundation::core::schema::{Compat, FEATURE_SCHEMA_VERSION, classify};
+use crate::foundation::core::schema::FEATURE_SCHEMA_VERSION;
 use crate::foundation::core::slug::slugify_ascii;
 use crate::foundation::core::time::utc_now_timestamp;
 
@@ -1515,7 +1514,7 @@ pub(crate) fn load_archived_record(paths: &MaestroPaths, id: &str) -> Result<Fea
 fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
     // A feature card minted natively by the card model (DN9 `maestro create -t
     // feature`) carries no `extra`, so reconstruct the record from the card's own
-    // fields. Mirrors the task reader; retires with the carrier in S4 (E7).
+    // fields while feature behavior still consumes FeatureRecord.
     if card.extra.is_empty() {
         return Ok(record_from_native_card(card));
     }
@@ -1537,16 +1536,8 @@ fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
     fold::seed_optional_string_if_absent(&mut extra, "description", description.as_deref());
     fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
     fold::seed_string_if_absent(&mut extra, "updated_at", &updated_at);
-    let mut record: FeatureRecord = serde_yaml::from_value(Value::Mapping(extra))
-        .with_context(|| format!("failed to parse {artifact}"))?;
-    if classify(&record.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
-        return Err(MaestroError::SchemaMismatch {
-            artifact,
-            expected: FEATURE_SCHEMA_VERSION,
-            found: record.schema_version,
-        }
-        .into());
-    }
+    let mut record: FeatureRecord = fold::record_from_extra(extra, &artifact)?;
+    fold::ensure_exact_schema(&artifact, &record.schema_version, FEATURE_SCHEMA_VERSION)?;
     // The card verbs (`update`) write only the top-level copy fields, so they
     // are the freshest source for what they own (SPEC DN3: the card status is
     // the single source of truth). The overlay is conservative: an unrecognized
@@ -1578,24 +1569,14 @@ fn feature_status_from_word(status: &str) -> Option<FeatureStatus> {
 
 /// Build a [`FeatureRecord`] from a native card's own fields (no `extra`
 /// carrier). The product contract a migrated feature carries (acceptance,
-/// non-goals, amends) has no native home yet (the S4 gap), so the record keeps
-/// the proposed defaults for those; `status` is mapped from the card's status
-/// word.
+/// non-goals, amends) has no native card fields yet, so the record keeps the
+/// proposed defaults for those; `status` is mapped from the card's status word.
 fn record_from_native_card(card: Card) -> FeatureRecord {
     let mut record = FeatureRecord::proposed(&card.id, &card.title, &card.created_at);
     record.updated_at = card.updated_at;
     record.description = card.description;
     record.status = feature_status_from_word(&card.status).unwrap_or(FeatureStatus::Proposed);
     record
-}
-
-/// Serialize a feature record to the YAML mapping the card builder folds into the
-/// envelope plus slim `extra`. Round-trips with [`record_from_card`].
-fn record_to_mapping(record: &FeatureRecord) -> Result<Mapping> {
-    match serde_yaml::to_value(record).context("failed to serialize feature record")? {
-        Value::Mapping(map) => Ok(map),
-        _ => bail!("feature record did not serialize to a mapping"),
-    }
 }
 
 /// Persist a feature record against its load-time card snapshot, so the write is
@@ -1607,7 +1588,7 @@ pub(crate) fn save_record(
 ) -> Result<()> {
     let card = fold::feature_card(
         record.id.clone(),
-        record_to_mapping(record)?,
+        fold::record_to_mapping(record, "feature record")?,
         &utc_now_timestamp(),
     );
     card_store::save_folded_with_snapshot(&card_store::card_path(paths, &record.id), card, snapshot)
@@ -1619,7 +1600,7 @@ pub(crate) fn save_record(
 fn save_new_record(paths: &MaestroPaths, record: &FeatureRecord) -> Result<()> {
     let card = fold::feature_card(
         record.id.clone(),
-        record_to_mapping(record)?,
+        fold::record_to_mapping(record, "feature record")?,
         &utc_now_timestamp(),
     );
     card_store::create_card(paths, &card).map(|_| ())
@@ -1706,7 +1687,7 @@ mod cutover_tests {
 
         let card = fold::feature_card(
             record.id.clone(),
-            record_to_mapping(&record).expect("serialize feature"),
+            fold::record_to_mapping(&record, "feature record").expect("serialize feature"),
             "2026-06-08T02:00:00Z",
         );
         for key in [

@@ -12,17 +12,15 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
-use serde_yaml::{Mapping, Value};
+use anyhow::{Context, Result};
 
 use crate::domain::card::fold;
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{self as card_store, CardHome, ResolvedCard};
 use crate::domain::task::lookup;
 use crate::domain::task::template::{TaskRecord, TaskState};
-use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::paths::MaestroPaths;
-use crate::foundation::core::schema::{Compat, TASK_SCHEMA_VERSION, classify};
+use crate::foundation::core::schema::TASK_SCHEMA_VERSION;
 use crate::foundation::core::time::utc_now_timestamp;
 
 /// Reconstruct a [`TaskRecord`] from a task card's slim `extra` payload plus the
@@ -59,16 +57,8 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
     fold::seed_optional_string_if_absent(&mut extra, "claimed_at", claimed_at.as_deref());
     fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
     fold::seed_string_if_absent(&mut extra, "updated_at", &updated_at);
-    let mut record: TaskRecord = serde_yaml::from_value(Value::Mapping(extra))
-        .with_context(|| format!("failed to parse {artifact}"))?;
-    if classify(&record.schema_version, TASK_SCHEMA_VERSION) != Compat::Exact {
-        return Err(MaestroError::SchemaMismatch {
-            artifact,
-            expected: TASK_SCHEMA_VERSION,
-            found: record.schema_version,
-        }
-        .into());
-    }
+    let mut record: TaskRecord = fold::record_from_extra(extra, &artifact)?;
+    fold::ensure_exact_schema(&artifact, &record.schema_version, TASK_SCHEMA_VERSION)?;
     // Identity is the envelope's, never the payload's: a divergent `extra.id`
     // would route later saves and lookups at a different logical record.
     record.id = id;
@@ -108,9 +98,9 @@ fn task_state_from_status(status: &str) -> Option<TaskState> {
 
 /// Build a [`TaskRecord`] from a native card's own fields (no `extra` carrier).
 /// The acceptance contract, verification binding, and fine state history a
-/// migrated task carries have no native home yet (the S4 gap), so the record
-/// keeps the draft defaults for those; the fine `state` is mapped from the
-/// card's coarse status word.
+/// migrated task carries have no native card fields yet, so the record keeps
+/// the draft defaults for those; the fine `state` is mapped from the card's
+/// coarse status word.
 fn record_from_native_card(card: Card) -> TaskRecord {
     let mut record = TaskRecord::draft(&card.id, &card.title, &card.created_at);
     record.feature_id = card.parent;
@@ -121,23 +111,12 @@ fn record_from_native_card(card: Card) -> TaskRecord {
     record
 }
 
-/// Serialize a task record to the mapping the card builder folds into the
-/// envelope plus slim `extra`. Round-trips with [`record_from_card`].
-/// `feature_id` is `#[serde(skip)]`, so it is absent here and the fold takes the
-/// parent explicitly.
-fn record_to_mapping(record: &TaskRecord) -> Result<Mapping> {
-    match serde_yaml::to_value(record).context("failed to serialize task record")? {
-        Value::Mapping(map) => Ok(map),
-        _ => bail!("task record did not serialize to a mapping"),
-    }
-}
-
 /// Fold a task record into its card against the current clock. `updated_at` is
 /// read from the record's own mapping, so the clock is only a fallback.
 fn card_for(record: &TaskRecord) -> Result<Card> {
     Ok(fold::task_card(
         record.id.clone(),
-        record_to_mapping(record)?,
+        fold::record_to_mapping(record, "task record")?,
         record.feature_id.clone(),
         &utc_now_timestamp(),
     ))
