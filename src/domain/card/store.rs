@@ -602,6 +602,15 @@ pub fn create_card(paths: &MaestroPaths, card: &Card) -> Result<CardHome> {
     if locate(paths, &card.id)?.is_some() {
         bail!("card {} already exists", card.id);
     }
+    // Archived ids stay reserved: archive fallbacks (`show`, `update`'s
+    // not-found hint) resolve by id, so a live re-mint would shadow the
+    // archived card and make those reads ambiguous.
+    if locate_in(&paths.archive_cards_dir(), &card.id)?.is_some() {
+        bail!(
+            "card {} already exists in the archive; pick a new id",
+            card.id
+        );
+    }
     let home = home_for_new(paths, card)?;
     match &home {
         CardHome::Dir(yaml) => {
@@ -1027,6 +1036,31 @@ mod tests {
         }
 
         let _ = std::fs::remove_dir_all(paths.cards_dir());
+    }
+
+    /// Archived ids stay reserved: a live re-mint would shadow the archived
+    /// card in every by-id archive fallback (`show`, the `update` hint).
+    #[test]
+    fn create_card_rejects_an_id_that_lives_in_the_archive() {
+        let paths = temp_cards_repo("create-archived");
+        let archived = paths
+            .archive_cards_dir()
+            .join("card-arch01")
+            .join(CARD_FILE);
+        let snapshot = load_with_snapshot(&archived).expect("absent loads None");
+        save_with_snapshot(
+            &archived,
+            &typed_card("card-arch01", CardType::Feature, None),
+            &snapshot,
+        )
+        .expect("plant the archived card");
+
+        let error = create_card(&paths, &typed_card("card-arch01", CardType::Idea, None))
+            .expect_err("an archived id must stay reserved");
+        assert!(format!("{error:#}").contains("archive"), "{error:#}");
+
+        let _ = std::fs::remove_dir_all(paths.cards_dir());
+        let _ = std::fs::remove_dir_all(paths.archive_dir());
     }
 
     /// S5': workable cards keep per-task dirs, grouped under `tasks/` pools.
