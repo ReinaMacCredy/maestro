@@ -223,7 +223,14 @@ fn nested_help_lists_section_38_command_tree() {
     );
     assert_contains_all(
         &maestro(&["list", "--help"]),
-        &["--parent", "--type", "--assignee", "--status"],
+        &[
+            "--parent",
+            "--type",
+            "--assignee",
+            "--status",
+            "--grep",
+            "--archived",
+        ],
     );
     assert_contains_all(&maestro(&["dep", "--help"]), &["add"]);
     assert_contains_all(

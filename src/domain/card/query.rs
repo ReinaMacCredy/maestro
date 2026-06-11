@@ -10,7 +10,8 @@ use anyhow::Result;
 
 use crate::domain::card::schema::{Card, CardType};
 use crate::domain::card::store::{
-    CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, is_symlink, load, load_entries,
+    CARD_FILE, DECISIONS_FILE, IDEAS_FILE, TASK_FILE, TASKS_DIR, is_dir_backed, is_symlink, load,
+    load_entries,
 };
 use crate::foundation::core::fs::sorted_child_dirs;
 use crate::foundation::core::paths::MaestroPaths;
@@ -365,6 +366,44 @@ pub fn query<'a>(cards: &'a [Card], filter: &ListFilter) -> Vec<&'a Card> {
     cards.iter().filter(|card| filter.matches(card)).collect()
 }
 
+/// [`query`] over (card, record path) pairs with an optional `--grep` term
+/// (SPEC-archive-memory A1): the path is what makes sidecar grep possible,
+/// and the same call runs over the live and archive trees.
+pub fn query_scanned<'a>(
+    cards: &'a [(Card, PathBuf)],
+    filter: &ListFilter,
+    grep: Option<&str>,
+) -> Vec<&'a Card> {
+    cards
+        .iter()
+        .filter(|(card, path)| {
+            filter.matches(card) && grep.is_none_or(|term| grep_matches(card, path, term))
+        })
+        .map(|(card, _)| card)
+        .collect()
+}
+
+/// Case-insensitive substring match for `list --grep`: the title, the prose
+/// body, and -- for a dir-backed card -- its `notes.md` and `spec.md`
+/// sidecars. An entry-backed card's container file carries other cards' text
+/// too, so only its own record fields are searched.
+fn grep_matches(card: &Card, path: &Path, term: &str) -> bool {
+    let needle = term.to_lowercase();
+    if card.title.to_lowercase().contains(&needle) {
+        return true;
+    }
+    if body_of(card).is_some_and(|body| body.to_lowercase().contains(&needle)) {
+        return true;
+    }
+    is_dir_backed(path)
+        && path.parent().is_some_and(|dir| {
+            ["notes.md", "spec.md"].iter().any(|sidecar| {
+                std::fs::read_to_string(dir.join(sidecar))
+                    .is_ok_and(|text| text.to_lowercase().contains(&needle))
+            })
+        })
+}
+
 /// The CLI-only dotted display alias (SPEC E2): `<parent>.<N>`, where N is the
 /// card's 1-based position among its id-sorted siblings (cards sharing its
 /// `parent`). Computed at render time and never stored or parsed back -- the
@@ -611,6 +650,73 @@ mod tests {
         );
         assert_eq!(combined.len(), 1);
         assert_eq!(combined[0].id, "task-002");
+    }
+
+    /// `--grep` (SPEC-archive-memory A1): case-insensitive over title and
+    /// body for every card, over `notes.md`/`spec.md` sidecars only for a
+    /// dir-backed card -- an entry-backed card must not match its container
+    /// directory's shared sidecar text.
+    #[test]
+    fn grep_matches_title_body_and_dir_backed_sidecars() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("maestro-grep-{}-{nanos}", process::id()));
+        let cards_dir = root.join("cards");
+        let feature_dir = cards_dir.join("csv-export");
+        ensure_dir(&feature_dir).expect("create feature dir");
+        std::fs::write(
+            feature_dir.join("notes.md"),
+            "- 2026-06-11 chose the STREAMING writer\n",
+        )
+        .expect("write feature notes");
+        std::fs::write(cards_dir.join("notes.md"), "shared-log term\n")
+            .expect("write container notes");
+
+        let mut task = card("task-wire-up-1a2b", CardType::Task, "open");
+        task.description = Some("emits a header row".to_string());
+        let pairs = vec![
+            (
+                card("csv-export", CardType::Feature, "proposed"),
+                feature_dir.join(CARD_FILE),
+            ),
+            (
+                task,
+                cards_dir
+                    .join(TASKS_DIR)
+                    .join("task-wire-up-1a2b")
+                    .join(TASK_FILE),
+            ),
+            (
+                card("dec-pick-writer-aaaa", CardType::Decision, "open"),
+                cards_dir.join(DECISIONS_FILE),
+            ),
+        ];
+
+        let hits = |term: &str| -> Vec<&str> {
+            query_scanned(&pairs, &ListFilter::default(), Some(term))
+                .iter()
+                .map(|c| c.id.as_str())
+                .collect()
+        };
+
+        assert_eq!(hits("CSV"), vec!["csv-export"], "title, case-insensitive");
+        assert_eq!(hits("header ROW"), vec!["task-wire-up-1a2b"], "body");
+        assert_eq!(hits("streaming"), vec!["csv-export"], "dir-backed sidecar");
+        assert_eq!(
+            hits("shared-log"),
+            Vec::<&str>::new(),
+            "an entry-backed card never greps its container's sidecar"
+        );
+        assert_eq!(hits("nothing-here"), Vec::<&str>::new());
+        assert_eq!(
+            query_scanned(&pairs, &ListFilter::default(), None).len(),
+            3,
+            "no term keeps every card"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

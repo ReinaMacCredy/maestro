@@ -291,6 +291,13 @@ pub struct ListArgs {
     /// Only cards in this coarse status (open, in_progress, closed).
     #[arg(long, value_name = "STATUS")]
     pub status: Option<String>,
+    /// Only cards whose title, description, or notes.md/spec.md sidecars
+    /// contain this case-insensitive substring.
+    #[arg(long, value_name = "TERM")]
+    pub grep: Option<String>,
+    /// Include archived cards (rows marked archived).
+    #[arg(long)]
+    pub archived: bool,
 }
 
 #[derive(Debug, Args)]

@@ -210,6 +210,82 @@ fn create_uses_a_slug_for_features_and_a_typed_slug_for_other_types() {
     );
 }
 
+/// SPEC-archive-memory A1: `list --grep` filters case-insensitively over
+/// title, description, and sidecars, composing with the existing filters;
+/// `--archived` extends the same query into `archive/cards/` with rows
+/// marked `(archived: <parent>)`.
+#[test]
+fn list_grep_searches_live_cards_and_archived_extends_to_the_archive() {
+    let temp = cards_repo("s2-grep-archived");
+    let repo = temp.path();
+
+    run(repo, &["feature", "new", "CSV export"]);
+    run(
+        repo,
+        &[
+            "create",
+            "-t",
+            "task",
+            "Wire the exporter",
+            "--parent",
+            "csv-export",
+            "--description",
+            "emits a header row first",
+        ],
+    );
+    run(repo, &["create", "-t", "task", "Unrelated work"]);
+    let task_id = id_by_title(repo, "Wire the exporter");
+
+    let by_title = run(repo, &["list", "--grep", "EXPORT"]);
+    assert!(
+        by_title.contains("csv-export") && by_title.contains(&task_id),
+        "title grep is case-insensitive:\n{by_title}"
+    );
+    assert!(
+        !by_title.contains("Unrelated work"),
+        "non-matching cards stay out:\n{by_title}"
+    );
+
+    let by_body = run(repo, &["list", "--grep", "header row"]);
+    assert!(
+        by_body.contains(&task_id),
+        "description grep matches:\n{by_body}"
+    );
+
+    let composed = run(repo, &["list", "--type", "task", "--grep", "export"]);
+    assert!(
+        composed.contains(&task_id) && !composed.contains("csv-export  feature"),
+        "--grep composes with --type:\n{composed}"
+    );
+
+    let none = run(repo, &["list", "--grep", "no-such-term"]);
+    assert!(none.contains("no cards match"), "{none}");
+
+    // Archive the feature (terminal-gated: settle the child, cancel, archive).
+    run(repo, &["close", &task_id]);
+    run(
+        repo,
+        &["feature", "cancel", "csv-export", "--reason", "scope cut"],
+    );
+    run(repo, &["feature", "archive", "csv-export"]);
+
+    let live_only = run(repo, &["list", "--grep", "export"]);
+    assert!(
+        !live_only.contains("csv-export"),
+        "archived cards stay out without --archived:\n{live_only}"
+    );
+
+    let with_archive = run(repo, &["list", "--grep", "export", "--archived"]);
+    assert!(
+        with_archive.contains(&task_id) && with_archive.contains("(archived: csv-export)"),
+        "an archived child row carries its parent marker:\n{with_archive}"
+    );
+    assert!(
+        with_archive.contains("(archived)"),
+        "the parentless feature row is marked archived:\n{with_archive}"
+    );
+}
+
 #[test]
 fn update_writes_fields_claims_and_close_closes() {
     let temp = cards_repo("s2-update-close");

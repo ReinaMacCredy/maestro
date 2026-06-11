@@ -24,7 +24,9 @@ pub fn ready(args: ReadyArgs) -> Result<()> {
     Ok(())
 }
 
-/// Execute `maestro list`: cards filtered by parent, type, assignee, or coarse status.
+/// Execute `maestro list`: cards filtered by parent, type, assignee, coarse
+/// status, or a `--grep` substring; `--archived` extends the same query into
+/// the archive tree (SPEC-archive-memory A1).
 pub fn list(args: ListArgs) -> Result<()> {
     let Some(paths) = card_paths()? else {
         return Ok(());
@@ -47,8 +49,23 @@ pub fn list(args: ListArgs) -> Result<()> {
         assignee: args.assignee.as_deref(),
         status,
     };
-    let cards = card::query::scan(&paths)?;
-    render_list(&card::query::query(&cards, &filter));
+    let grep = args.grep.as_deref();
+    let live = card::query::scan_with_paths(&paths)?;
+    let archived = if args.archived {
+        card::query::scan_dir_with_paths(&paths.archive_cards_dir())?
+    } else {
+        Vec::new()
+    };
+    let rows: Vec<(&card::schema::Card, bool)> = card::query::query_scanned(&live, &filter, grep)
+        .into_iter()
+        .map(|c| (c, false))
+        .chain(
+            card::query::query_scanned(&archived, &filter, grep)
+                .into_iter()
+                .map(|c| (c, true)),
+        )
+        .collect();
+    render_list(&rows);
     Ok(())
 }
 
@@ -394,28 +411,34 @@ fn render_ready(cards: &[&card::schema::Card]) {
 }
 
 /// Render `list` in the beads structure (SPEC DN9): a count header plus numbered
-/// rows carrying the real per-type status and parent, emoji-free.
-fn render_list(cards: &[&card::schema::Card]) {
-    if cards.is_empty() {
+/// rows carrying the real per-type status and parent, emoji-free. Archived rows
+/// (SPEC-archive-memory A1) carry a trailing `(archived: <parent>)` marker.
+fn render_list(rows: &[(&card::schema::Card, bool)]) {
+    if rows.is_empty() {
         println!("no cards match");
         return;
     }
-    println!("{} {}:", cards.len(), plural(cards.len()));
-    let id_width = cards.iter().map(|c| c.id.len()).max().unwrap_or(0);
-    let type_width = cards
+    println!("{} {}:", rows.len(), plural(rows.len()));
+    let id_width = rows.iter().map(|(c, _)| c.id.len()).max().unwrap_or(0);
+    let type_width = rows
         .iter()
-        .map(|c| c.card_type.as_str().len())
+        .map(|(c, _)| c.card_type.as_str().len())
         .max()
         .unwrap_or(0);
-    let status_width = cards.iter().map(|c| c.status.len()).max().unwrap_or(0);
-    let parent_width = cards
+    let status_width = rows.iter().map(|(c, _)| c.status.len()).max().unwrap_or(0);
+    let parent_width = rows
         .iter()
-        .map(|c| c.parent.as_deref().unwrap_or("-").len())
+        .map(|(c, _)| c.parent.as_deref().unwrap_or("-").len())
         .max()
         .unwrap_or(0);
-    for (i, c) in cards.iter().enumerate() {
+    for (i, (c, archived)) in rows.iter().enumerate() {
+        let marker = match (archived, c.parent.as_deref()) {
+            (true, Some(parent)) => format!("  (archived: {parent})"),
+            (true, None) => "  (archived)".to_string(),
+            (false, _) => String::new(),
+        };
         println!(
-            "  {}. {:<id_width$}  {:<type_width$}  {:<status_width$}  {:<parent_width$}  {}",
+            "  {}. {:<id_width$}  {:<type_width$}  {:<status_width$}  {:<parent_width$}  {}{marker}",
             i + 1,
             c.id,
             c.card_type.as_str(),
