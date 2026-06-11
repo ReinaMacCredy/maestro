@@ -11,16 +11,15 @@
 //!
 //! The run is two-pass so the remint can rewrite references before any card is
 //! written (SPEC E5): first collect every card and its outgoing refs, then
-//! assign the `card-<hash>` ids and rewrite the five structured ref classes (the
-//! dir name, each record's own `id`, the typed cross-refs in `extra`, the
-//! `cards/<feature>/notes.md` decision pointers, and the `runs/**/events.jsonl`
-//! `task_id`s), and only then write. The authoritative dangling-ref gate runs
-//! over the rewritten ref set; human prose is never touched.
+//! assign the `card-<hash>` ids and rewrite structured refs (card envelope ids,
+//! typed cross-refs in `extra`, `cards/<feature>/notes.md` decision pointers,
+//! and `runs/**/events.jsonl` `task_id`s), and only then write. The authoritative
+//! dangling-ref gate runs over the rewritten ref set; human prose is never
+//! touched.
 //!
-//! Each source record's whole YAML mapping is copied verbatim into the card's
-//! `extra` carrier while the card's identity fields are derived copies; the
-//! remint then rewrites only the structured id fields inside `extra`. Cutover
-//! reconstructs the original typed record with one `serde_yaml::from_value`.
+//! Each card's envelope owns shared identity/display fields; `extra` carries only
+//! the type-specific payload. Cutover readers seed the envelope fields back into
+//! that payload before deserializing the legacy typed record.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -365,18 +364,13 @@ fn assign_ids(pending: &mut [PendingCard]) -> Result<HashMap<String, String>> {
     Ok(remap)
 }
 
-/// E5: rewrite every structured id field in each card's `extra` to its new id --
-/// the record's own `id` plus the typed cross-refs (task blockers, decision
-/// supersedes/superseded_by, idea spawned_task/history). Human prose is never
+/// E5: rewrite every structured cross-ref in each card's `extra` to its new id
+/// (task blockers, decision supersedes/superseded_by, idea spawned_task/history).
+/// The record's own id lives only in the card envelope. Human prose is never
 /// touched. A ref whose target is not in the remap is left as-is so the
 /// `validate_refs` gate can name it.
 fn rewrite_refs(pending: &mut [PendingCard], remap: &HashMap<String, String>) {
     for entry in pending.iter_mut() {
-        let new_id = entry.card.id.clone();
-        entry
-            .card
-            .extra
-            .insert(Value::String("id".to_string()), Value::String(new_id));
         match entry.card.card_type {
             CardType::Task | CardType::Bug | CardType::Chore => {
                 rewrite_task_refs(&mut entry.card.extra, remap)
@@ -848,6 +842,7 @@ mod tests {
     use crate::domain::feature::FeatureStatus;
     use crate::domain::feature::schema::FeatureRecord;
     use crate::domain::harness::{BacklogConfig, BacklogItem, HistoryEntry};
+    use crate::domain::task;
     use crate::domain::task::{
         Blocker, BlockerKind, BlockerRef, BlockerSource, TaskRecord, TaskState,
     };
@@ -882,6 +877,18 @@ mod tests {
         load_card(&card_path(paths, id))
             .expect("load card")
             .unwrap_or_else(|| panic!("card {id} missing"))
+    }
+
+    fn assert_extra_omits(card: &Card, fields: &[&str]) {
+        for field in fields {
+            assert!(
+                !card
+                    .extra
+                    .contains_key(serde_yaml::Value::String((*field).to_string())),
+                "{} extra omits envelope-owned {field}",
+                card.id
+            );
+        }
     }
 
     /// Persist a card directly, as a post-migration verb would (used to simulate
@@ -1118,19 +1125,29 @@ mod tests {
         assert_eq!(idea.created_at, "2026-06-01T09:00:00Z");
         assert_eq!(idea.updated_at, "2026-06-02T09:00:00Z");
 
-        // Losslessness for the feature: its id is unchanged and it has no
-        // structured cross-refs, so `extra` stays the verbatim source mapping.
+        // Losslessness for the feature: shared fields live in the envelope,
+        // and the typed reader reconstructs the original record from the card.
         let feature_src = read_value(&paths.features_dir().join("csv-export").join("feature.yaml"));
-        assert_eq!(
-            Value::Mapping(feature_card.extra.clone()),
-            feature_src,
-            "feature extra lossless"
+        assert_extra_omits(
+            &feature_card,
+            &[
+                "id",
+                "title",
+                "status",
+                "created_at",
+                "updated_at",
+                "description",
+            ],
         );
-        let _: FeatureRecord = serde_yaml::from_value(Value::Mapping(feature_card.extra.clone()))
-            .expect("feature extra reconstructs a FeatureRecord");
+        let feature_original: FeatureRecord =
+            serde_yaml::from_value(feature_src).expect("feature fixture parses");
+        let feature_reconstructed =
+            crate::domain::feature::registry::load_record(&paths, "csv-export")
+                .expect("feature card reconstructs a FeatureRecord");
+        assert_eq!(feature_reconstructed, feature_original);
 
-        // Task typed round-trip is the cutover guarantee: `extra` reconstructs the
-        // exact record, with its own id and blocker ref reminted to the hash form.
+        // Task typed round-trip is the cutover guarantee: the card reconstructs
+        // the exact record, with its own id and blocker ref reminted to the hash form.
         let task_src_path = paths
             .features_dir()
             .join("csv-export")
@@ -1142,37 +1159,60 @@ mod tests {
                 .expect("parse task");
         let mut task_expected = task_original.clone();
         task_expected.id = hash_id("task-001");
+        task_expected.feature_id = Some("csv-export".to_string());
         task_expected.blockers[0].blocked_ref = Some(BlockerRef {
             kind: BlockerKind::Decision,
             id: hash_id("decision-001"),
         });
-        let task_reconstructed: TaskRecord =
-            serde_yaml::from_value(Value::Mapping(task1_card.extra.clone()))
-                .expect("reconstruct task");
+        assert_extra_omits(
+            &task1_card,
+            &[
+                "id",
+                "title",
+                "state",
+                "created_at",
+                "updated_at",
+                "claimed_by",
+                "claimed_at",
+            ],
+        );
+        let task_reconstructed = task::load_task_record(&paths.tasks_dir(), &hash_id("task-001"))
+            .expect("load migrated task");
         assert_eq!(
             task_reconstructed, task_expected,
-            "task extra reconstructs with reminted id + blocker ref"
+            "task card reconstructs with reminted id + blocker ref"
         );
 
         // Decision cross-refs are reminted: superseded_by and supersedes.
-        let d1: DecisionRecord = serde_yaml::from_value(Value::Mapping(
-            load(&paths, &hash_id("decision-001")).extra.clone(),
-        ))
-        .expect("reconstruct decision-001");
+        let d1_card = load(&paths, &hash_id("decision-001"));
+        assert_extra_omits(
+            &d1_card,
+            &["id", "title", "status", "feature", "context", "created_at"],
+        );
+        let (d1, _, _) =
+            crate::domain::decisions::cards::load_one(&paths, &hash_id("decision-001"))
+                .expect("load decision-001")
+                .expect("decision-001 exists");
         assert_eq!(d1.id, hash_id("decision-001"));
         assert_eq!(
             d1.superseded_by.as_deref(),
             Some(hash_id("decision-002").as_str())
         );
-        let d2: DecisionRecord = serde_yaml::from_value(Value::Mapping(
-            load(&paths, &hash_id("decision-002")).extra.clone(),
-        ))
-        .expect("reconstruct decision-002");
+        let d2_card = load(&paths, &hash_id("decision-002"));
+        assert_extra_omits(
+            &d2_card,
+            &["id", "title", "status", "feature", "context", "created_at"],
+        );
+        let (d2, _, _) =
+            crate::domain::decisions::cards::load_one(&paths, &hash_id("decision-002"))
+                .expect("load decision-002")
+                .expect("decision-002 exists");
         assert_eq!(d2.supersedes, vec![hash_id("decision-001")]);
 
         // Idea cross-refs are reminted: spawned_task and history.task.
-        let idea_rec: BacklogItem =
-            serde_yaml::from_value(Value::Mapping(idea.extra.clone())).expect("reconstruct idea");
+        assert_extra_omits(&idea, &["id", "title", "status"]);
+        let idea_rec = crate::domain::harness::cards::item_from_card(idea, "migrated idea card")
+            .expect("reconstruct idea");
         assert_eq!(idea_rec.id, hash_id("hb-1"));
         assert_eq!(
             idea_rec.spawned_task.as_deref(),
@@ -1411,10 +1451,8 @@ mod tests {
         run(&paths, NOW).expect("a resolved blocker never gates the migration");
 
         // The vanished target is not remapped: the historical ref is left as-is.
-        let migrated: TaskRecord = serde_yaml::from_value(Value::Mapping(
-            load(&paths, &hash_id("task-003")).extra.clone(),
-        ))
-        .expect("reconstruct task-003");
+        let migrated = task::load_task_record(&paths.tasks_dir(), &hash_id("task-003"))
+            .expect("load task-003");
         assert_eq!(
             migrated.blockers[0]
                 .blocked_ref
@@ -1468,10 +1506,8 @@ mod tests {
 
         run(&paths, NOW).expect("a ref into the legacy archive is valid history");
 
-        let migrated: TaskRecord = serde_yaml::from_value(Value::Mapping(
-            load(&paths, &hash_id("task-003")).extra.clone(),
-        ))
-        .expect("reconstruct task-003");
+        let migrated = task::load_task_record(&paths.tasks_dir(), &hash_id("task-003"))
+            .expect("load task-003");
         assert_eq!(
             migrated.blockers[0]
                 .blocked_ref
@@ -1555,10 +1591,10 @@ mod tests {
         assert_eq!(report.decisions, 2, "both decisions migrated");
 
         // The short-form ref is reminted to the canonical decision's hash.
-        let d2_rec: DecisionRecord = serde_yaml::from_value(Value::Mapping(
-            load(&paths, &hash_id("decision-002")).extra.clone(),
-        ))
-        .expect("reconstruct decision-002");
+        let (d2_rec, _, _) =
+            crate::domain::decisions::cards::load_one(&paths, &hash_id("decision-002"))
+                .expect("load decision-002")
+                .expect("decision-002 exists");
         assert_eq!(d2_rec.supersedes, vec![hash_id("decision-001")]);
 
         cleanup(&root);

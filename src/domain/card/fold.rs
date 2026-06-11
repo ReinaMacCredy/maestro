@@ -1,11 +1,10 @@
 //! Build a card from a legacy source record's YAML mapping (SPEC-beads-model P1
 //! cutover). The migration reads the mapping off disk; the live save path
 //! serializes a typed record to the same mapping. Both feed these builders, so a
-//! migrated card and a freshly-saved card are byte-identical -- this single
-//! source is the point of the COPY design (`extra` = the verbatim source
-//! mapping, the identity fields above it are derived copies). The caller resolves
-//! the stable `id` (the feature dir name when a record omits it); everything else
-//! is read off the mapping.
+//! migrated card and a freshly-saved card share one derivation path. `extra`
+//! keeps only the type-specific payload while the envelope stores shared identity
+//! and display fields. The caller resolves the stable `id` (the feature dir name
+//! when a record omits it); everything else is read off the mapping.
 
 use serde_yaml::{Mapping, Value};
 
@@ -14,21 +13,36 @@ use crate::foundation::core::schema::CARD_SCHEMA_VERSION;
 
 /// Build a feature card. A feature is a container, so `parent` is always `None`.
 pub fn feature_card(id: String, source: Mapping, now: &str) -> Card {
+    let title = title_or_id(&source, &id);
+    let status = string_field(&source, "status").unwrap_or_default();
+    let created_at = created_at_or(&source, "created_at", now);
+    let updated_at = updated_at_or(&source, "updated_at", "created_at", now);
+    let description = string_field(&source, "description");
     Card {
         schema_version: CARD_SCHEMA_VERSION.to_string(),
         card_type: CardType::Feature,
-        title: title_or_id(&source, &id),
-        status: string_field(&source, "status").unwrap_or_default(),
+        title,
+        status,
         parent: None,
         deps: Vec::new(),
         lane: None,
         claimed_by: None,
         claimed_at: None,
-        created_at: created_at_or(&source, "created_at", now),
-        updated_at: updated_at_or(&source, "updated_at", "created_at", now),
-        description: string_field(&source, "description"),
+        created_at,
+        updated_at,
+        description,
         id,
-        extra: source,
+        extra: without_envelope_fields(
+            source,
+            &[
+                "id",
+                "title",
+                "status",
+                "created_at",
+                "updated_at",
+                "description",
+            ],
+        ),
     }
 }
 
@@ -38,21 +52,40 @@ pub fn feature_card(id: String, source: Mapping, now: &str) -> Card {
 /// path. Task lifecycle lives under `state`, not `status`; the word is kept
 /// verbatim.
 pub fn task_card(id: String, source: Mapping, parent: Option<String>, now: &str) -> Card {
+    let title = title_or_id(&source, &id);
+    let status = string_field(&source, "state").unwrap_or_default();
+    let parent = parent.or_else(|| string_field(&source, "feature_id"));
+    let deps = blocker_deps(&source);
+    let claimed_by = string_field(&source, "claimed_by");
+    let claimed_at = string_field(&source, "claimed_at");
+    let created_at = created_at_or(&source, "created_at", now);
+    let updated_at = updated_at_or(&source, "updated_at", "created_at", now);
     Card {
         schema_version: CARD_SCHEMA_VERSION.to_string(),
         card_type: CardType::Task,
-        title: title_or_id(&source, &id),
-        status: string_field(&source, "state").unwrap_or_default(),
-        parent: parent.or_else(|| string_field(&source, "feature_id")),
-        deps: blocker_deps(&source),
+        title,
+        status,
+        parent,
+        deps,
         lane: None,
-        claimed_by: string_field(&source, "claimed_by"),
-        claimed_at: string_field(&source, "claimed_at"),
-        created_at: created_at_or(&source, "created_at", now),
-        updated_at: updated_at_or(&source, "updated_at", "created_at", now),
+        claimed_by,
+        claimed_at,
+        created_at,
+        updated_at,
         description: None,
         id,
-        extra: source,
+        extra: without_envelope_fields(
+            source,
+            &[
+                "id",
+                "title",
+                "state",
+                "created_at",
+                "updated_at",
+                "claimed_by",
+                "claimed_at",
+            ],
+        ),
     }
 }
 
@@ -65,21 +98,30 @@ pub fn decision_card(
     feature_parent: Option<String>,
     now: &str,
 ) -> Card {
+    let title = title_or_id(&source, &id);
+    let status = string_field(&source, "status").unwrap_or_default();
+    let parent = string_field(&source, "feature").or(feature_parent);
+    let created_at = created_at_or(&source, "created_at", now);
+    let updated_at = updated_at_or(&source, "locked_at", "created_at", now);
+    let description = string_field(&source, "context");
     Card {
         schema_version: CARD_SCHEMA_VERSION.to_string(),
         card_type: CardType::Decision,
-        title: title_or_id(&source, &id),
-        status: string_field(&source, "status").unwrap_or_default(),
-        parent: string_field(&source, "feature").or(feature_parent),
+        title,
+        status,
+        parent,
         deps: Vec::new(),
         lane: None,
         claimed_by: None,
         claimed_at: None,
-        created_at: created_at_or(&source, "created_at", now),
-        updated_at: updated_at_or(&source, "locked_at", "created_at", now),
-        description: string_field(&source, "context"),
+        created_at,
+        updated_at,
+        description,
         id,
-        extra: source,
+        extra: without_envelope_fields(
+            source,
+            &["id", "title", "status", "feature", "context", "created_at"],
+        ),
     }
 }
 
@@ -92,11 +134,13 @@ pub fn idea_card(id: String, source: Mapping, now: &str) -> Card {
         .or_else(|| nonempty_field(&source, "last_seen"))
         .unwrap_or_else(|| now.to_string());
     let updated_at = nonempty_field(&source, "last_seen").unwrap_or_else(|| created_at.clone());
+    let title = title_or_id(&source, &id);
+    let status = string_field(&source, "status").unwrap_or_default();
     Card {
         schema_version: CARD_SCHEMA_VERSION.to_string(),
         card_type: CardType::Idea,
-        title: title_or_id(&source, &id),
-        status: string_field(&source, "status").unwrap_or_default(),
+        title,
+        status,
         parent: None,
         deps: Vec::new(),
         lane: None,
@@ -106,7 +150,27 @@ pub fn idea_card(id: String, source: Mapping, now: &str) -> Card {
         updated_at,
         description: None,
         id,
-        extra: source,
+        extra: without_envelope_fields(source, &["id", "title", "status"]),
+    }
+}
+
+fn without_envelope_fields(mut source: Mapping, fields: &[&str]) -> Mapping {
+    for field in fields {
+        source.remove(Value::String((*field).to_string()));
+    }
+    source
+}
+
+pub(crate) fn seed_string_if_absent(map: &mut Mapping, key: &str, value: &str) {
+    let key = Value::String(key.to_string());
+    if !map.contains_key(&key) {
+        map.insert(key, Value::String(value.to_string()));
+    }
+}
+
+pub(crate) fn seed_optional_string_if_absent(map: &mut Mapping, key: &str, value: Option<&str>) {
+    if let Some(value) = value {
+        seed_string_if_absent(map, key, value);
     }
 }
 

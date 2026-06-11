@@ -96,8 +96,8 @@ pub fn card_dir(repo: &Path, id: &str) -> PathBuf {
 /// the same store probe production uses -- a dir-backed card's whole file, or
 /// the card's own entry from its container file (`decisions.yaml`/`ideas.yaml`).
 /// Top-level carries the card header (`id`/`type`/`title`/`status`/timestamps);
-/// a card minted by a legacy entity verb (e.g. `task create`) also carries the
-/// verbatim source record under `extra`. Use [`task_record`] to read the task
+/// a card minted by a legacy entity verb (e.g. `task create`) carries its
+/// type-specific payload under `extra`. Use [`task_record`] to read the task
 /// fields directly.
 pub fn card_doc(repo: &Path, id: &str) -> Value {
     let paths = MaestroPaths::new(repo);
@@ -125,9 +125,33 @@ pub fn card_doc(repo: &Path, id: &str) -> Value {
     }
 }
 
-/// The folded task record carried under `card.extra` for a card minted by the
-/// legacy `task` verbs, so an assertion written against the old `task.yaml`
-/// shape (`doc["state"]`, `doc["acceptance"]`, ...) reads unchanged.
+/// The folded task record reconstructed from a card minted by the legacy `task`
+/// verbs, so an assertion written against the old `task.yaml` shape
+/// (`doc["state"]`, `doc["acceptance"]`, ...) reads unchanged.
 pub fn task_record(repo: &Path, id: &str) -> Value {
-    card_doc(repo, id)["extra"].clone()
+    let card = card_doc(repo, id);
+    let mut record = card["extra"].clone();
+    if let Some(map) = record.as_mapping_mut() {
+        seed_string(map, "id", &card["id"]);
+        seed_string(map, "title", &card["title"]);
+        seed_string(map, "state", &card["status"]);
+        seed_string(map, "created_at", &card["created_at"]);
+        seed_string(map, "updated_at", &card["updated_at"]);
+        seed_optional_string(map, "claimed_by", &card["claimed_by"]);
+        seed_optional_string(map, "claimed_at", &card["claimed_at"]);
+    }
+    record
+}
+
+fn seed_string(map: &mut serde_yaml::Mapping, key: &str, value: &Value) {
+    let key = Value::String(key.to_string());
+    if !map.contains_key(&key) {
+        map.insert(key, value.clone());
+    }
+}
+
+fn seed_optional_string(map: &mut serde_yaml::Mapping, key: &str, value: &Value) {
+    if !value.is_null() {
+        seed_string(map, key, value);
+    }
 }

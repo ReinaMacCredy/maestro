@@ -66,7 +66,7 @@ fn create_open_card(
 }
 
 /// Build an open decision record. Shared so the legacy store push and the card
-/// create mint byte-identical records.
+/// create derive from the same typed record.
 fn open_record(
     id: String,
     title: &str,

@@ -74,8 +74,8 @@ fn run(repo: &Path, args: &[&str]) -> String {
     stdout(&output)
 }
 
-/// The folded task record (the old `task.yaml` shape) carried under `card.extra`,
-/// so an assertion written against `doc["state"]`/`doc["blockers"]` reads unchanged.
+/// The folded task record reconstructed into the old `task.yaml` shape, so an
+/// assertion written against `doc["state"]`/`doc["blockers"]` reads unchanged.
 fn task_yaml(repo: &Path, id: &str) -> YamlValue {
     task_record(repo, id)
 }

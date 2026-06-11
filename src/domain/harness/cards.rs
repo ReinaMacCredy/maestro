@@ -22,13 +22,13 @@ use crate::domain::harness::schema::BacklogItem;
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
 
-/// Reconstruct a [`BacklogItem`] from an idea card's verbatim source mapping
-/// (`extra`, the COPY-design payload). No per-item schema check: the version lives
-/// on `BacklogConfig`, not the item, and the card-store load already validated
+/// Reconstruct a [`BacklogItem`] from an idea card's slim `extra` payload plus
+/// the envelope fields it omits. No per-item schema check: the version lives on
+/// `BacklogConfig`, not the item, and the card-store load already validated
 /// `card.schema_version`.
 pub(crate) fn item_from_card(card: Card, artifact: &str) -> Result<BacklogItem> {
     // A card minted natively by the card model (DN9 `maestro create -t idea`)
-    // carries no `extra`, so the verbatim-mapping read below has nothing to parse.
+    // carries no `extra`, so the slim-payload read below has nothing to parse.
     // Synthesize a minimal item from the card's own fields so `harness list` can
     // read it without crashing. The detector metadata a migrated item carries
     // (fingerprint, occurrences, evidence, history) has no native home yet (the S4
@@ -44,6 +44,10 @@ pub(crate) fn item_from_card(card: Card, artifact: &str) -> Result<BacklogItem> 
         extra,
         ..
     } = card;
+    let mut extra = extra;
+    fold::seed_string_if_absent(&mut extra, "id", &id);
+    fold::seed_string_if_absent(&mut extra, "title", &title);
+    fold::seed_string_if_absent(&mut extra, "status", &status);
     let mut item: BacklogItem = serde_yaml::from_value(Value::Mapping(extra))
         .with_context(|| format!("failed to parse {artifact}"))?;
     // The card verbs (`update`) write only the top-level copy fields, so they
@@ -83,9 +87,8 @@ fn item_from_native_card(card: Card) -> BacklogItem {
     }
 }
 
-/// Serialize a backlog item to the mapping the card builder folds into `extra`.
-/// Feeding the same mapping the migration reads off `backlog.yaml` keeps a saved
-/// card byte-identical to a migrated one.
+/// Serialize a backlog item to the mapping the card builder folds into the
+/// envelope plus slim `extra`.
 fn item_to_mapping(item: &BacklogItem) -> Result<Mapping> {
     match serde_yaml::to_value(item).context("failed to serialize backlog item")? {
         Value::Mapping(map) => Ok(map),
@@ -204,8 +207,7 @@ mod tests {
         }
     }
 
-    /// Fidelity: an item folded into a card and read back is byte-identical, which
-    /// is why a migrated card and a live-saved card reconstruct the same item.
+    /// Fidelity: an item folded into a slim card and read back is identical.
     #[test]
     fn item_round_trips_through_the_card() {
         let item = item();
@@ -215,11 +217,19 @@ mod tests {
         assert_eq!(card.id, "hb-001");
         assert_eq!(card.parent, None, "harness ideas are global, never docked");
         assert_eq!(card.status, "proposed", "status derives from the item");
+        for key in ["id", "title", "status"] {
+            assert!(
+                !card
+                    .extra
+                    .contains_key(serde_yaml::Value::String(key.to_string())),
+                "extra omits envelope-owned {key}"
+            );
+        }
 
         let reconstructed = item_from_card(card, "test").expect("reconstruct the item");
         assert_eq!(
             reconstructed, item,
-            "every field survives the round-trip through card.extra"
+            "every field survives the round-trip through the slim card"
         );
     }
 

@@ -1509,9 +1509,9 @@ pub(crate) fn load_archived_record(paths: &MaestroPaths, id: &str) -> Result<Fea
     record_from_card(card, path.display().to_string())
 }
 
-/// Reconstruct a [`FeatureRecord`] from a feature card's verbatim source mapping
-/// (`extra`, the COPY-design payload), re-checking the feature schema the same
-/// way the legacy read does. `artifact` names the card path for error messages.
+/// Reconstruct a [`FeatureRecord`] from a feature card's slim `extra` payload
+/// plus the envelope fields it omits, re-checking the feature schema the same way
+/// the legacy read does. `artifact` names the card path for error messages.
 fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
     // A feature card minted natively by the card model (DN9 `maestro create -t
     // feature`) carries no `extra`, so reconstruct the record from the card's own
@@ -1520,12 +1520,23 @@ fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
         return Ok(record_from_native_card(card));
     }
     let Card {
+        id,
         title,
         status,
         description,
+        created_at,
+        updated_at,
         extra,
         ..
     } = card;
+    let mut extra = extra;
+    fold::seed_string_if_absent(&mut extra, "id", &id);
+    fold::seed_string_if_absent(&mut extra, "title", &title);
+    let record_status = feature_status_from_word(&status).unwrap_or(FeatureStatus::Proposed);
+    fold::seed_string_if_absent(&mut extra, "status", record_status.as_str());
+    fold::seed_optional_string_if_absent(&mut extra, "description", description.as_deref());
+    fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
+    fold::seed_string_if_absent(&mut extra, "updated_at", &updated_at);
     let mut record: FeatureRecord = serde_yaml::from_value(Value::Mapping(extra))
         .with_context(|| format!("failed to parse {artifact}"))?;
     if classify(&record.schema_version, FEATURE_SCHEMA_VERSION) != Compat::Exact {
@@ -1540,6 +1551,7 @@ fn record_from_card(card: Card, artifact: String) -> Result<FeatureRecord> {
     // are the freshest source for what they own (SPEC DN3: the card status is
     // the single source of truth). The overlay is conservative: an unrecognized
     // status word and an absent description keep the record's own.
+    record.id = id;
     record.title = title;
     if let Some(mapped) = feature_status_from_word(&status) {
         record.status = mapped;
@@ -1577,9 +1589,8 @@ fn record_from_native_card(card: Card) -> FeatureRecord {
     record
 }
 
-/// Serialize a feature record to the YAML mapping the card builder folds into
-/// `extra`. Round-trips with [`record_from_card`]; feeding the same mapping the
-/// migration reads off disk keeps a saved card byte-identical to a migrated one.
+/// Serialize a feature record to the YAML mapping the card builder folds into the
+/// envelope plus slim `extra`. Round-trips with [`record_from_card`].
 fn record_to_mapping(record: &FeatureRecord) -> Result<Mapping> {
     match serde_yaml::to_value(record).context("failed to serialize feature record")? {
         Value::Mapping(map) => Ok(map),
@@ -1682,6 +1693,41 @@ mod cutover_tests {
         // The card store's mere existence flips dispatch to card mode (P1).
         ensure_dir(paths.cards_dir()).expect("create cards dir");
         (root, paths)
+    }
+
+    #[test]
+    fn feature_record_round_trips_through_slim_card_extra() {
+        let mut record =
+            FeatureRecord::proposed("csv-export", "CSV export", "2026-06-08T00:00:00Z");
+        record.description = Some("export reports to CSV".to_string());
+        record.updated_at = "2026-06-08T01:00:00Z".to_string();
+        record.status = FeatureStatus::InProgress;
+        record.acceptance = vec!["writes headers".to_string()];
+
+        let card = fold::feature_card(
+            record.id.clone(),
+            record_to_mapping(&record).expect("serialize feature"),
+            "2026-06-08T02:00:00Z",
+        );
+        for key in [
+            "id",
+            "title",
+            "status",
+            "created_at",
+            "updated_at",
+            "description",
+        ] {
+            assert!(
+                !card
+                    .extra
+                    .contains_key(serde_yaml::Value::String(key.to_string())),
+                "extra omits envelope-owned {key}"
+            );
+        }
+
+        let reconstructed =
+            record_from_card(card, "test".to_string()).expect("reconstruct the feature");
+        assert_eq!(reconstructed, record);
     }
 
     /// In card mode the feature write race is closed: two readers each take a

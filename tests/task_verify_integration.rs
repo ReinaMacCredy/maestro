@@ -7,7 +7,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use card_support::{card_dir, card_record_path, id_by_title};
+use card_support::{card_dir, card_record_path, id_by_title, task_record};
 use serde_json::Value;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use sha2::{Digest, Sha256};
@@ -227,11 +227,11 @@ fn rename_card(repo: &Path, from: &str, to: &str) {
     .expect("invariant: card record should be writable");
 }
 
-/// The folded task record under `card.extra`. Every assertion written against the
-/// legacy `task.yaml` shape (`task["state"]`, `task["verification"]`, ...) reads
-/// unchanged because the record was copied verbatim into `extra` by the cutover.
+/// The folded task record reconstructed from the card. Every assertion written
+/// against the legacy `task.yaml` shape (`task["state"]`, `task["verification"]`,
+/// ...) reads unchanged.
 fn task_yaml(repo: &Path, id: &str) -> YamlValue {
-    card_doc(repo, id)["extra"].clone()
+    task_record(repo, id)
 }
 
 fn card_doc(repo: &Path, id: &str) -> YamlValue {

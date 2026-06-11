@@ -8,13 +8,13 @@
 //! folds it -- so every read keeps its `decision_entries` markdown loop and only
 //! swaps the YAML-store loop for a `Decision`-typed card scan.
 //!
-//! Unlike a task, a `DecisionRecord` serializes faithfully and its `feature` is a
-//! real field, so `card.extra = to_value(record)` round-trips with no field
-//! recovery; the home (global vs per-feature) is read back from `card.parent`,
-//! which the migration set from the source `feature` field (falling back to the
-//! per-feature store dir). `DecisionRecord` carries no schema version of its own
-//! (the version lives on the enclosing `DecisionStore`), so the card-store load
-//! already validates the only version present.
+//! The envelope carries shared fields (`id`, `title`, `status`, parent feature,
+//! context, timestamps); `card.extra` carries only the decision-specific payload.
+//! The home (global vs per-feature) is read back from `card.parent`, which the
+//! migration set from the source `feature` field (falling back to the per-feature
+//! store dir). `DecisionRecord` carries no schema version of its own (the version
+//! lives on the enclosing `DecisionStore`), so the card-store load already
+//! validates the only version present.
 
 use std::path::PathBuf;
 
@@ -29,13 +29,13 @@ use crate::domain::decisions::schema::{DecisionRecord, DecisionStatus};
 use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::time::utc_now_timestamp;
 
-/// Reconstruct a [`DecisionRecord`] from a decision card's verbatim source
-/// mapping (`extra`, the COPY-design payload). No per-record schema check: the
-/// version lives on `DecisionStore`, not the record, and the card-store load
-/// already validated `card.schema_version`.
+/// Reconstruct a [`DecisionRecord`] from a decision card's slim `extra` payload
+/// plus the envelope fields it omits. No per-record schema check: the version
+/// lives on `DecisionStore`, not the record, and the card-store load already
+/// validated `card.schema_version`.
 pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<DecisionRecord> {
     // A card minted natively by the card model (DN9 `maestro create`) carries no
-    // `extra`, so the verbatim-mapping read below has nothing to parse. Synthesize
+    // `extra`, so the slim-payload read below has nothing to parse. Synthesize
     // the record from the card's own fields instead, so `status`/`doctor` can read
     // a canonically-created decision card without crashing. This bridge retires in
     // S4 (E7), when the decision lifecycle moves onto the native fields.
@@ -48,9 +48,18 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<DecisionR
         status,
         parent,
         description,
+        created_at,
         extra,
         ..
     } = card;
+    let mut extra = extra;
+    fold::seed_string_if_absent(&mut extra, "id", &id);
+    fold::seed_string_if_absent(&mut extra, "title", &title);
+    let record_status = decision_status_from_word(&status).unwrap_or(DecisionStatus::Open);
+    fold::seed_string_if_absent(&mut extra, "status", record_status.as_str());
+    fold::seed_optional_string_if_absent(&mut extra, "feature", parent.as_deref());
+    fold::seed_optional_string_if_absent(&mut extra, "context", description.as_deref());
+    fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
     let mut record: DecisionRecord = serde_yaml::from_value(Value::Mapping(extra))
         .with_context(|| format!("failed to parse {artifact}"))?;
     // The card verbs (`update`) write only the top-level copy fields, so they
@@ -106,9 +115,8 @@ fn record_from_native_card(card: Card) -> DecisionRecord {
     }
 }
 
-/// Serialize a decision record to the mapping the card builder folds into
-/// `extra`. Feeding the same mapping the migration reads off `decisions.yaml`
-/// keeps a saved card byte-identical to a migrated one.
+/// Serialize a decision record to the mapping the card builder folds into the
+/// envelope plus slim `extra`.
 fn record_to_mapping(record: &DecisionRecord) -> Result<Mapping> {
     match serde_yaml::to_value(record).context("failed to serialize decision record")? {
         Value::Mapping(map) => Ok(map),
@@ -274,9 +282,8 @@ mod tests {
         }
     }
 
-    /// Fidelity: a record folded into a card and read back is byte-identical,
-    /// and the home derives from `card.parent`. This is why a migrated card and a
-    /// live-saved card reconstruct the same record.
+    /// Fidelity: a record folded into a slim card and read back is identical,
+    /// and the home derives from `card.parent`.
     #[test]
     fn record_round_trips_through_the_card() {
         let record = feature_decision();
@@ -286,6 +293,14 @@ mod tests {
         assert_eq!(card.id, "decision-002");
         assert_eq!(card.parent.as_deref(), Some("csv-export"));
         assert_eq!(card.status, "locked", "status derives from the record");
+        for key in ["id", "title", "status", "feature", "context", "created_at"] {
+            assert!(
+                !card
+                    .extra
+                    .contains_key(serde_yaml::Value::String(key.to_string())),
+                "extra omits envelope-owned {key}"
+            );
+        }
         assert_eq!(
             source_from_parent(card.parent.as_deref()),
             DecisionSource::Feature {
@@ -297,7 +312,7 @@ mod tests {
             record_from_card(card, "test".to_string()).expect("reconstruct the record");
         assert_eq!(
             reconstructed, record,
-            "every field survives the round-trip through card.extra"
+            "every field survives the round-trip through the slim card"
         );
     }
 

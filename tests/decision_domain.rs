@@ -29,15 +29,13 @@ fn create_open_persists_first_global_decision() {
     );
     assert_eq!(report.record.status, DecisionStatus::Open);
     assert_eq!(report.record.context.as_deref(), Some("too many files"));
+    let card = card_doc(temp.path(), &report.record.id);
+    assert_eq!(card["status"], "open");
+    assert_eq!(card["description"], "too many files");
     assert!(
-        card_doc(temp.path(), &report.record.id)
-            .get("extra")
-            .is_some(),
-        "the global decision is persisted as a card with its record under extra"
+        card.get("extra").is_none(),
+        "the global decision has no decision-specific payload yet"
     );
-    let extra = card_doc(temp.path(), &report.record.id)["extra"].clone();
-    assert_eq!(extra["status"], "open");
-    assert_eq!(extra["context"], "too many files");
     assert!(
         !paths.decisions_file().is_file(),
         "card-mode creation must not write the legacy decisions.yaml store"

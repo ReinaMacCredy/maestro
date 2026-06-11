@@ -6,7 +6,8 @@
 //! link -- which the legacy store derives from the directory path -- is carried by
 //! `card.parent` here, recovered on load and written back on save, because
 //! `TaskRecord.feature_id` is `#[serde(skip)]` and never appears in the record
-//! mapping (`record_from_card` / `record_to_mapping`).
+//! mapping. The card stores shared fields in the envelope and type-specific
+//! payload under slim `extra` (`record_from_card` / `record_to_mapping`).
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -24,13 +25,13 @@ use crate::foundation::core::paths::MaestroPaths;
 use crate::foundation::core::schema::{Compat, TASK_SCHEMA_VERSION, classify};
 use crate::foundation::core::time::utc_now_timestamp;
 
-/// Reconstruct a [`TaskRecord`] from a task card's verbatim source mapping
-/// (`extra`, the COPY-design payload), re-checking the task schema the same way
-/// the legacy read does, then recovering the path-derived `feature_id` from
-/// `card.parent` (the field is `#[serde(skip)]`, so it is never in the mapping).
+/// Reconstruct a [`TaskRecord`] from a task card's slim `extra` payload plus the
+/// envelope fields it omits, re-checking the task schema the same way the legacy
+/// read does, then recovering the path-derived `feature_id` from `card.parent`
+/// (the field is `#[serde(skip)]`, so it is never in the mapping).
 pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecord> {
     // A card minted natively by the card model (DN9 `maestro create`) carries no
-    // `extra`, so the verbatim-mapping read below has nothing to parse. Synthesize
+    // `extra`, so the slim-payload read below has nothing to parse. Synthesize
     // the record the task subsystem needs from the card's own fields instead. This
     // bridge retires in S4 (E7), when the task lifecycle moves onto the native
     // fields and the carrier disappears; until then `status`/`doctor` must read a
@@ -45,9 +46,20 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
         parent,
         claimed_by,
         claimed_at,
+        created_at,
+        updated_at,
         extra,
         ..
     } = card;
+    let mut extra = extra;
+    fold::seed_string_if_absent(&mut extra, "id", &id);
+    fold::seed_string_if_absent(&mut extra, "title", &title);
+    let record_state = task_state_from_status(&status).unwrap_or(TaskState::Draft);
+    fold::seed_string_if_absent(&mut extra, "state", record_state.as_str());
+    fold::seed_optional_string_if_absent(&mut extra, "claimed_by", claimed_by.as_deref());
+    fold::seed_optional_string_if_absent(&mut extra, "claimed_at", claimed_at.as_deref());
+    fold::seed_string_if_absent(&mut extra, "created_at", &created_at);
+    fold::seed_string_if_absent(&mut extra, "updated_at", &updated_at);
     let mut record: TaskRecord = serde_yaml::from_value(Value::Mapping(extra))
         .with_context(|| format!("failed to parse {artifact}"))?;
     if classify(&record.schema_version, TASK_SCHEMA_VERSION) != Compat::Exact {
@@ -110,9 +122,8 @@ fn record_from_native_card(card: Card) -> TaskRecord {
     record
 }
 
-/// Serialize a task record to the mapping the card builder folds into `extra`.
-/// Round-trips with [`record_from_card`]; feeding the same mapping the migration
-/// reads off `task.yaml` keeps a saved card byte-identical to a migrated one.
+/// Serialize a task record to the mapping the card builder folds into the
+/// envelope plus slim `extra`. Round-trips with [`record_from_card`].
 /// `feature_id` is `#[serde(skip)]`, so it is absent here and the fold takes the
 /// parent explicitly.
 fn record_to_mapping(record: &TaskRecord) -> Result<Mapping> {
@@ -285,9 +296,8 @@ mod tests {
         record
     }
 
-    /// Fidelity: a record folded into a card and read back is byte-identical,
-    /// including the path-derived `feature_id` recovered from `card.parent`. This
-    /// is why a migrated card and a live-saved card reconstruct the same record.
+    /// Fidelity: a record folded into a slim card and read back is identical,
+    /// including the path-derived `feature_id` recovered from `card.parent`.
     #[test]
     fn record_round_trips_through_the_card() {
         let record = parented_draft();
@@ -300,12 +310,28 @@ mod tests {
             card.status, "in_progress",
             "status derives from the record state"
         );
+        for key in [
+            "id",
+            "title",
+            "state",
+            "created_at",
+            "updated_at",
+            "claimed_by",
+            "claimed_at",
+        ] {
+            assert!(
+                !card
+                    .extra
+                    .contains_key(serde_yaml::Value::String(key.to_string())),
+                "extra omits envelope-owned {key}"
+            );
+        }
 
         let reconstructed =
             record_from_card(card, "test".to_string()).expect("reconstruct the record");
         assert_eq!(
             reconstructed, record,
-            "every field, including the recovered feature_id, survives the round-trip"
+            "every field, including the recovered feature_id, survives the slim-card round-trip"
         );
     }
 
@@ -341,6 +367,10 @@ mod tests {
         let record = parented_draft();
 
         let mut typo = card_for(&record).expect("fold record into card");
+        typo.extra.insert(
+            serde_yaml::Value::String("state".to_string()),
+            serde_yaml::Value::String("in_progress".to_string()),
+        );
         typo.status = "in-progress".to_string();
         let reconstructed = record_from_card(typo, "test".to_string()).expect("reconstruct");
         assert_eq!(

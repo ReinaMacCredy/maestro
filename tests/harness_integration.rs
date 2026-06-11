@@ -8,7 +8,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use card_support::{card_dir, card_doc, card_record_path, id_by_title, sole_idea_id};
+use card_support::{card_dir, card_doc, card_record_path, id_by_title, sole_idea_id, task_record};
 use serde_json::Value as JsonValue;
 use serde_yaml::{Mapping as YamlMapping, Value as YamlValue};
 use support::TestTempDir;
@@ -419,8 +419,8 @@ fn idea_record(repo: &Path, id: &str) -> String {
 
 /// Seed a backlog item directly as its persisted form: an `idea` card at
 /// `.maestro/cards/<id>/card.yaml`. The old `backlog.yaml` item mapping is copied
-/// verbatim under `extra` (the COPY-design payload `item_from_card` reads), with
-/// the envelope's `title`/`status` mirroring it so `harness list` reads cleanly.
+/// under `extra` as a legacy fat payload, with the envelope's `title`/`status`
+/// mirroring it so `harness list` reads cleanly.
 /// `item_fields` is the indented body that used to live under `items: - ...`,
 /// minus the `id` line (the id is the directory name). Keeping the id `hb-001`
 /// lets the `harness show/apply/... hb-001` literals in these tests stand.
@@ -480,7 +480,7 @@ fn task_checks(repo: &Path, id: &str) -> Vec<String> {
 }
 
 fn task_state(repo: &Path, id: &str) -> String {
-    read_card(repo, id)["extra"]["state"]
+    task_record(repo, id)["state"]
         .as_str()
         .expect("invariant: task state should be a string")
         .to_string()

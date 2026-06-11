@@ -2037,20 +2037,52 @@ fn feature_verbs_reject_path_traversal_ids() {
     assert!(unarchive_stderr.contains("invalid feature id"));
 }
 
-/// The folded decision record carried under a decision card's `extra`, serialized
-/// back to YAML so an assertion written against the old per-feature `decisions.yaml`
+/// The folded decision record reconstructed from a decision card, serialized back
+/// to YAML so an assertion written against the old per-feature `decisions.yaml`
 /// text (`record.contains("status: locked")`, ...) reads against the card store.
 fn decision_record_yaml(root: &Path, id: &str) -> String {
-    serde_yaml::to_string(&card_doc(root, id)["extra"])
-        .expect("invariant: decision record should serialize")
+    let card = card_doc(root, id);
+    let mut record = card["extra"].clone();
+    if let Some(map) = record.as_mapping_mut() {
+        seed_string(map, "id", &card["id"]);
+        seed_string(map, "title", &card["title"]);
+        seed_string(map, "status", &card["status"]);
+        seed_optional_string(map, "feature", &card["parent"]);
+        seed_optional_string(map, "context", &card["description"]);
+        seed_string(map, "created_at", &card["created_at"]);
+    }
+    serde_yaml::to_string(&record).expect("invariant: decision record should serialize")
 }
 
-/// The folded FeatureRecord carried under `card.extra` for a feature card --
-/// card-mode replacement for reading the legacy `.maestro/features/<slug>/feature.yaml`.
-/// Returned as a value so a "did this verb mutate the record?" check compares the
-/// folded record before/after.
+/// The folded FeatureRecord reconstructed from a feature card -- card-mode
+/// replacement for reading the legacy `.maestro/features/<slug>/feature.yaml`.
+/// Returned as a value so a "did this verb mutate the record?" check compares
+/// the folded record before/after.
 fn feature_record(root: &Path, slug: &str) -> YamlValue {
-    card_doc(root, slug)["extra"].clone()
+    let card = card_doc(root, slug);
+    let mut record = card["extra"].clone();
+    if let Some(map) = record.as_mapping_mut() {
+        seed_string(map, "id", &card["id"]);
+        seed_string(map, "title", &card["title"]);
+        seed_string(map, "status", &card["status"]);
+        seed_optional_string(map, "description", &card["description"]);
+        seed_string(map, "created_at", &card["created_at"]);
+        seed_string(map, "updated_at", &card["updated_at"]);
+    }
+    record
+}
+
+fn seed_string(map: &mut serde_yaml::Mapping, key: &str, value: &YamlValue) {
+    let key = YamlValue::String(key.to_string());
+    if !map.contains_key(&key) {
+        map.insert(key, value.clone());
+    }
+}
+
+fn seed_optional_string(map: &mut serde_yaml::Mapping, key: &str, value: &YamlValue) {
+    if !value.is_null() {
+        seed_string(map, key, value);
+    }
 }
 
 fn feature_acceptance(root: &Path, slug: &str) -> Vec<String> {

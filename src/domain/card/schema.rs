@@ -57,13 +57,12 @@ pub struct Card {
     /// Optional longer description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Transitional carrier for the verbatim pre-fold source record (P1
-    /// migration). The four legacy entities fold into cards by copying their
-    /// whole record mapping here untouched while the identity fields above are
-    /// derived copies; cutover reconstructs the original typed record with one
-    /// `serde_yaml::from_value` over this map. P2 collapses these keys into
-    /// typed per-type fields, at which point the carrier disappears. Empty for
-    /// cards minted natively by the card model.
+    /// Transitional carrier for the pre-fold source record's type-specific
+    /// payload (P1 migration). Shared identity/display fields live in the card
+    /// envelope above; typed readers seed those fields back into this map before
+    /// deserializing legacy records. P2 collapses the remaining keys into typed
+    /// per-type fields, at which point the carrier disappears. Empty for cards
+    /// minted natively by the card model.
     #[serde(default, skip_serializing_if = "serde_yaml::Mapping::is_empty")]
     pub extra: serde_yaml::Mapping,
 }
