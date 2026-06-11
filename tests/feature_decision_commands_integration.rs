@@ -1306,6 +1306,109 @@ fn feature_spec_section_writes_fill_the_spec_from_the_cli() {
     assert!(bare.contains("--section needs the text to write"), "{bare}");
 }
 
+/// S8 receipt: written text containing markdown headings gets a note -- the
+/// section body runs to the next heading, so embedded headings become section
+/// boundaries a later `--section` edit silently stops at.
+#[test]
+fn feature_spec_write_notes_embedded_headings() {
+    let temp_dir = TestTempDir::new("maestro-feature-spec-headings");
+    init_git_marker(temp_dir.path());
+    stdout(
+        maestro(&["init", "--yes"], temp_dir.path()),
+        &["init", "--yes"],
+    );
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], temp_dir.path()),
+        &["feature", "new", "Billing CSV export"],
+    );
+
+    let plain_args = [
+        "feature",
+        "spec",
+        "billing-csv-export",
+        "--section",
+        "Current state",
+        "--append",
+        "rows export by hand today",
+    ];
+    let plain = stdout(maestro(&plain_args, temp_dir.path()), &plain_args);
+    assert!(!plain.contains("note:"), "{plain}");
+
+    let heading_args = [
+        "feature",
+        "spec",
+        "billing-csv-export",
+        "--section",
+        "Current state",
+        "--append",
+        "intro\n\n## Rollout\n\nlater",
+    ];
+    let noted = stdout(maestro(&heading_args, temp_dir.path()), &heading_args);
+    assert!(
+        noted.contains("note: the text contains markdown headings"),
+        "{noted}"
+    );
+    assert!(
+        noted.contains("a later --section \"Current state\" edit stops at the first one"),
+        "{noted}"
+    );
+}
+
+/// The unarchive pre-flight's child-level collision gets the same remediation
+/// decoration as its feature-level and archive-side twins, instead of the
+/// bare domain error.
+#[test]
+fn feature_unarchive_decorates_a_live_child_collision() {
+    let temp_dir = TestTempDir::new("maestro-feature-unarchive-child-conflict");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    stdout(
+        maestro(&["feature", "new", "Billing CSV export"], root),
+        &["feature", "new", "Billing CSV export"],
+    );
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope dropped",
+    ];
+    stdout(maestro(&cancel_args, root), &cancel_args);
+    let archive_args = ["feature", "archive", "billing-csv-export"];
+    stdout(maestro(&archive_args, root), &archive_args);
+
+    // An archived child outside the container (the root pool of the archive
+    // tree) restores by an individual move; plant a live copy at its target.
+    let task_yaml = "schema_version: maestro.card.v1\nid: card-conflict1\ntype: task\ntitle: Conflicting child\nstatus: verified\nparent: billing-csv-export\ncreated_at: \"1\"\nupdated_at: \"1\"\n";
+    for home in [
+        root.join(".maestro/archive/cards/tasks/card-conflict1"),
+        root.join(".maestro/cards/tasks/card-conflict1"),
+    ] {
+        fs::create_dir_all(&home).expect("invariant: task dir should be creatable");
+        fs::write(home.join("task.yaml"), task_yaml)
+            .expect("invariant: task record should be writable");
+    }
+
+    let unarchive_args = ["feature", "unarchive", "billing-csv-export"];
+    let err = assert_failure(maestro(&unarchive_args, root), &unarchive_args);
+    assert!(
+        err.contains("cannot unarchive billing-csv-export:"),
+        "{err}"
+    );
+    assert!(
+        err.contains("a live copy of card-conflict1 already occupies"),
+        "{err}"
+    );
+    assert!(
+        err.contains(
+            "resolve the live copy conflict, then retry: maestro feature unarchive billing-csv-export"
+        ),
+        "{err}"
+    );
+}
+
 #[test]
 fn feature_spec_renders_multiline_decision_preview() {
     let temp_dir = TestTempDir::new("maestro-feature-spec-preview");

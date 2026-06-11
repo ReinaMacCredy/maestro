@@ -737,6 +737,12 @@ fn feature_unarchive_error_message(id: &str, error: &str) -> String {
             "cannot unarchive {id}:\n  live feature already exists\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/cards/{id}\nnext:\n  resolve the live feature conflict, then retry: maestro feature unarchive {id}"
         );
     }
+    if error.contains("a live copy of") {
+        let detail = error.split(" — ").nth(1).unwrap_or(error);
+        return format!(
+            "cannot unarchive {id}:\n  {detail}\ninspect:\n  live: maestro feature show {id}\n  archived: .maestro/archive/cards/{id}\nnext:\n  resolve the live copy conflict, then retry: maestro feature unarchive {id}"
+        );
+    }
     error.to_string()
 }
 
@@ -890,6 +896,17 @@ fn write_feature_spec(
         ""
     };
     println!("{verb} section \"{}\"{created}", section.trim());
+    // The section body runs to the next heading, so headings inside the
+    // written text become section boundaries a later --section edit stops at.
+    if text
+        .lines()
+        .any(|line| line.starts_with("## ") || line.starts_with("# "))
+    {
+        println!(
+            "note: the text contains markdown headings, which start new sections; a later --section \"{}\" edit stops at the first one",
+            section.trim()
+        );
+    }
     println!("spec: .maestro/cards/{id}/spec.md");
     println!("inspect: maestro feature spec {id}");
     Ok(())
