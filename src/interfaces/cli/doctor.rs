@@ -6,13 +6,13 @@ use anyhow::{Context, Result, bail};
 use crate::domain::card;
 use crate::domain::decisions;
 use crate::domain::feature;
+use crate::domain::harness::HarnessConfig;
 use crate::domain::install::{InstallLock, InstallState, MirrorKind};
 use crate::domain::task;
 use crate::foundation::core::error::MaestroError;
 use crate::foundation::core::fs::{ALLOC_MARKER_PREFIX, child_dirs};
 use crate::foundation::core::paths::{MaestroPaths, discover_repo_root};
 use crate::foundation::core::schema::{Compat, HARNESS_SCHEMA_VERSION, classify};
-use crate::harness::schema::HarnessConfig;
 use crate::operations::harness;
 
 /// Execute `maestro doctor`.

@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use anyhow::{Result, bail};
 
-use crate::decisions;
 use crate::domain::card;
+use crate::domain::decisions;
 use crate::domain::feature;
 use crate::domain::proof;
 use crate::domain::run;
