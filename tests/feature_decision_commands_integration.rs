@@ -1249,6 +1249,49 @@ fn feature_spec_falls_through_to_an_archived_feature() {
     assert!(!spec.contains("status: unreadable"), "{spec}");
 }
 
+/// SPEC-archive-memory A2: archiving a terminal feature appends ONE digest
+/// line to `archive/cards/INDEX.md` (date, id, coarse `closed`, outcome,
+/// child count); a dry-run writes nothing and a re-run duplicates nothing.
+#[test]
+fn feature_archive_appends_one_digest_line_to_the_archive_index() {
+    let temp_dir = TestTempDir::new("maestro-archive-index");
+    let root = temp_dir.path();
+    init_git_marker(root);
+    stdout(maestro(&["init", "--yes"], root), &["init", "--yes"]);
+
+    let create_args = ["feature", "new", "Billing CSV export"];
+    stdout(maestro(&create_args, root), &create_args);
+    let cancel_args = [
+        "feature",
+        "cancel",
+        "billing-csv-export",
+        "--reason",
+        "scope cut",
+    ];
+    stdout(maestro(&cancel_args, root), &cancel_args);
+
+    let index_path = root.join(".maestro/archive/cards/INDEX.md");
+    let dry_args = ["feature", "archive", "billing-csv-export", "--dry-run"];
+    stdout(maestro(&dry_args, root), &dry_args);
+    assert!(!index_path.exists(), "a dry-run must not write the index");
+
+    let archive_args = ["feature", "archive", "billing-csv-export"];
+    stdout(maestro(&archive_args, root), &archive_args);
+    let index = fs::read_to_string(&index_path).expect("invariant: INDEX.md should exist");
+    assert!(
+        index.starts_with("# Archived features\n"),
+        "the first append writes the header:\n{index}"
+    );
+    assert!(
+        index.contains("billing-csv-export: closed -- no outcome recorded; 0 child task(s)"),
+        "an outcome-less feature falls back in its digest line:\n{index}"
+    );
+
+    stdout(maestro(&archive_args, root), &archive_args);
+    let again = fs::read_to_string(&index_path).expect("invariant: INDEX.md should exist");
+    assert_eq!(index, again, "a sweep re-run appends no duplicate line");
+}
+
 /// S8: `feature spec --section --append/--replace` fills the spec during
 /// brainstorm/plan -- appends accumulate, replace overwrites, an unknown
 /// section is created, and the bare verb renders what was written.

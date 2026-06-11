@@ -19,8 +19,9 @@ use crate::domain::card::store::{card_path, is_dir_backed};
 use crate::domain::feature::registry::{
     archived_card_path, load_archived_record, load_record, validate_feature_id,
 };
-use crate::foundation::core::fs::ensure_dir;
+use crate::foundation::core::fs::{append_text_file, ensure_dir};
 use crate::foundation::core::paths::MaestroPaths;
+use crate::foundation::core::time::utc_now_timestamp;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeatureArchiveReport {
@@ -135,6 +136,24 @@ pub fn archive_feature(
             fs::rename(src, dst).with_context(|| {
                 format!("failed to move {} to {}", src.display(), dst.display())
             })?;
+        }
+        // SPEC-archive-memory A2: one digest line per archived feature, after
+        // the moves succeed and only on the feature-moving run -- a sweep
+        // re-run (feature already archived) must not duplicate it. "closed"
+        // is the coarse word (DN3); the outcome is the write-once
+        // `ship --outcome` line.
+        if feature_live {
+            let outcome = record.outcome.as_deref().unwrap_or("no outcome recorded");
+            let line = format!(
+                "- {} {id}: closed -- {outcome}; {} child task(s)\n",
+                &utc_now_timestamp()[..10],
+                terminal_children.len()
+            );
+            append_text_file(
+                paths.archive_cards_dir().join("INDEX.md"),
+                "# Archived features\n\n",
+                &line,
+            )?;
         }
     }
 
