@@ -2,7 +2,9 @@
 //! container layout (SPEC-card-sprawl S2-S5'): decisions become entries in
 //! their container's `decisions.yaml`, ideas entries in the root `ideas.yaml`,
 //! and workable cards per-task dirs under their container's `tasks/` pool.
-//! Feature dirs are not touched -- they ARE the container layout.
+//! A flat decision/idea's `notes.md` (written by the pre-container note verb)
+//! folds into the container's shared log with `[<id>]` attribution. Feature
+//! dirs are not touched -- they ARE the container layout.
 //!
 //! Idempotent and crash-safe in three passes: collect every flat card and
 //! verify its target slot (writing nothing), then write -- ONE `save_entries`
@@ -17,7 +19,7 @@
 //! resolver's flat fallback, and an unarchive lands the dir back here where
 //! the next run folds it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +30,7 @@ use crate::domain::card::store::{
     CARD_FILE, CardHome, EntriesSnapshot, card_dir_ids, home_for_new, load, load_entries,
     load_with_snapshot, save_entries, save_with_snapshot,
 };
-use crate::foundation::core::fs::ensure_dir;
+use crate::foundation::core::fs::{append_text_file, ensure_dir};
 use crate::foundation::core::paths::MaestroPaths;
 
 /// Per-type tally of a container-fold run.
@@ -49,6 +51,14 @@ struct TaskMove {
     card: Card,
 }
 
+/// One flat decision/idea `notes.md` queued to fold into its container's
+/// shared log.
+struct NotesFold {
+    card_id: String,
+    flat_notes: PathBuf,
+    container_dir: PathBuf,
+}
+
 /// Fold every flat leaf card dir into the container layout.
 pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
     let cards_dir = paths.cards_dir();
@@ -57,6 +67,7 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
     // Pass 1: collect and verify, writing nothing.
     let mut entry_folds: BTreeMap<PathBuf, (EntriesSnapshot, Vec<Card>)> = BTreeMap::new();
     let mut task_moves: Vec<TaskMove> = Vec::new();
+    let mut notes_folds: Vec<NotesFold> = Vec::new();
     let mut sidecar_syncs: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut leftover_dirs: Vec<PathBuf> = Vec::new();
 
@@ -70,9 +81,22 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
         }
         match home_for_new(paths, &card)? {
             CardHome::Entry(file) => {
-                // An entry carries only the record: any other file in the flat
-                // dir (a note, an evidence dir, a stale lock) would be lost.
-                ensure_only_record_file(&flat_dir)?;
+                // An entry carries only the record. A `notes.md` (the one
+                // sidecar the legacy note verb wrote on every card type)
+                // folds into the container's shared log; anything else (an
+                // evidence dir, a stale lock) has nowhere to go and aborts.
+                if let Some(flat_notes) = foldable_notes(&flat_dir)? {
+                    notes_folds.push(NotesFold {
+                        card_id: card.id.clone(),
+                        flat_notes,
+                        container_dir: file
+                            .parent()
+                            .with_context(|| {
+                                format!("entry file missing parent: {}", file.display())
+                            })?
+                            .to_path_buf(),
+                    });
+                }
                 if !entry_folds.contains_key(&file) {
                     entry_folds.insert(file.clone(), (load_entries(&file)?, Vec::new()));
                 }
@@ -122,6 +146,9 @@ pub fn run(paths: &MaestroPaths) -> Result<ContainerMigrateReport> {
         let mut cards = snapshot.cards.clone();
         cards.extend(append.iter().cloned());
         save_entries(file, &cards, snapshot)?;
+    }
+    for fold in &notes_folds {
+        fold_notes(fold)?;
     }
     for fold in &task_moves {
         copy_task_dir(fold)?;
@@ -208,23 +235,96 @@ fn copy_missing(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Refuse to fold a flat dir into an entry while it holds anything besides its
-/// record -- the entry has nowhere to carry a sidecar.
-fn ensure_only_record_file(flat_dir: &Path) -> Result<()> {
+/// The one sidecar an entry fold can carry: a `notes.md` beside the record,
+/// which folds into the container's shared log. Anything else in the flat dir
+/// has nowhere to go and aborts loud.
+fn foldable_notes(flat_dir: &Path) -> Result<Option<PathBuf>> {
+    let mut notes = None;
     for entry in
         fs::read_dir(flat_dir).with_context(|| format!("failed to read {}", flat_dir.display()))?
     {
         let entry = entry.with_context(|| format!("failed to list {}", flat_dir.display()))?;
-        if entry.file_name().to_str() != Some(CARD_FILE) {
-            bail!(
+        match entry.file_name().to_str() {
+            Some(CARD_FILE) => {}
+            Some("notes.md") => notes = Some(entry.path()),
+            _ => bail!(
                 "cannot fold {} into a container entry: {} holds {} besides its record; move or remove it first",
                 flat_dir.file_name().unwrap_or_default().to_string_lossy(),
                 flat_dir.display(),
                 entry.file_name().to_string_lossy()
-            );
+            ),
         }
     }
+    Ok(notes)
+}
+
+/// Fold a flat decision/idea dir's `notes.md` into its container's shared
+/// log -- the same file (and the same `<date>  [<id>] <text>` line shape) the
+/// note verb writes entry-backed notes to. The legacy per-card title header
+/// is dropped, dated lines keep their date under the new attribution, and
+/// lines the log already holds are skipped so a crash-interrupted fold
+/// re-runs clean.
+fn fold_notes(fold: &NotesFold) -> Result<()> {
+    let source = fs::read_to_string(&fold.flat_notes)
+        .with_context(|| format!("failed to read {}", fold.flat_notes.display()))?;
+    let log_path = fold.container_dir.join("notes.md");
+    let existing = if log_path.exists() {
+        fs::read_to_string(&log_path)
+            .with_context(|| format!("failed to read {}", log_path.display()))?
+    } else {
+        String::new()
+    };
+    let logged: HashSet<&str> = existing.lines().collect();
+
+    let mut pending: Vec<String> = Vec::new();
+    let mut past_header = false;
+    for line in source.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        if !past_header {
+            past_header = true;
+            if line.starts_with("# ") {
+                continue;
+            }
+        }
+        let attributed = match dated(line) {
+            Some((date, text)) => format!("{date}  [{}] {text}", fold.card_id),
+            None => format!("[{}] {line}", fold.card_id),
+        };
+        if logged.contains(attributed.as_str()) || pending.contains(&attributed) {
+            continue;
+        }
+        pending.push(attributed);
+    }
+    if pending.is_empty() {
+        return Ok(());
+    }
+
+    // Header seeding mirrors edit::append_note: the container card's title,
+    // or the root-log fallback.
+    let header = load(&fold.container_dir.join(CARD_FILE))?
+        .map(|container| container.title)
+        .unwrap_or_else(|| "Notes".to_string());
+    let mut block = pending.join("\n");
+    block.push('\n');
+    append_text_file(&log_path, &format!("# {header}\n\n"), &block)
+        .with_context(|| format!("failed to fold notes into {}", log_path.display()))?;
     Ok(())
+}
+
+/// Split a legacy `YYYY-MM-DD  <text>` note line into its date and text.
+fn dated(line: &str) -> Option<(&str, &str)> {
+    let date = line.get(..10)?;
+    let rest = line.get(10..)?;
+    let date_shaped = date.chars().enumerate().all(|(i, c)| {
+        if i == 4 || i == 7 {
+            c == '-'
+        } else {
+            c.is_ascii_digit()
+        }
+    });
+    (date_shaped && rest.starts_with(char::is_whitespace)).then(|| (date, rest.trim_start()))
 }
 
 fn divergent_copies(id: &str, flat_dir: &Path, target: &Path) -> String {
@@ -546,7 +646,7 @@ mod tests {
         let root = temp_repo("sidecar");
         let paths = flat_store(&root);
         fs::write(
-            paths.cards_dir().join("card-d2").join("notes.md"),
+            paths.cards_dir().join("card-d2").join("evidence.txt"),
             "stranded\n",
         )
         .expect("decision sidecar");
@@ -554,7 +654,90 @@ mod tests {
         let error = run(&paths).expect_err("a sidecar on an entry fold must abort");
         let message = format!("{error:#}");
         assert!(message.contains("card-d2"), "{message}");
-        assert!(message.contains("notes.md"), "{message}");
+        assert!(message.contains("evidence.txt"), "{message}");
+
+        cleanup(&root);
+    }
+
+    /// A flat decision/idea dir holding the one sidecar the legacy note verb
+    /// wrote -- `notes.md` -- folds it into the container's shared log with
+    /// `[<id>]` attribution instead of aborting.
+    #[test]
+    fn entry_notes_fold_into_the_container_log() {
+        let root = temp_repo("notes-fold");
+        let paths = flat_store(&root);
+        fs::write(
+            paths.cards_dir().join("card-d1").join("notes.md"),
+            "# Card card-d1\n\n2026-06-08  picked the writer\nfree-form remark\n",
+        )
+        .expect("decision notes");
+        fs::write(
+            paths.cards_dir().join("card-i1").join("notes.md"),
+            "2026-06-09  raw idea\n",
+        )
+        .expect("idea notes");
+
+        run(&paths).expect("fold succeeds");
+
+        let container_log =
+            fs::read_to_string(paths.cards_dir().join("csv-export").join("notes.md"))
+                .expect("container log");
+        assert!(
+            container_log.starts_with("# Card csv-export\n\n"),
+            "container log seeds the feature title: {container_log:?}"
+        );
+        assert!(
+            container_log.contains("2026-06-08  [card-d1] picked the writer\n"),
+            "dated line keeps its date under the attribution: {container_log:?}"
+        );
+        assert!(
+            container_log.contains("[card-d1] free-form remark\n"),
+            "undated line is carried attributed: {container_log:?}"
+        );
+        assert!(
+            !container_log.contains("# Card card-d1"),
+            "the per-card title header is dropped: {container_log:?}"
+        );
+        let root_log =
+            fs::read_to_string(paths.cards_dir().join("notes.md")).expect("root shared log");
+        assert!(
+            root_log.starts_with("# Notes\n\n"),
+            "root log seeds the fallback header: {root_log:?}"
+        );
+        assert!(
+            root_log.contains("2026-06-09  [card-i1] raw idea\n"),
+            "{root_log:?}"
+        );
+
+        cleanup(&root);
+    }
+
+    /// A crash after the entry and its notes landed but before the flat dir
+    /// was removed: the re-run's finished arm refolds the notes without
+    /// duplicating lines the log already holds.
+    #[test]
+    fn a_refolded_notes_file_does_not_duplicate_log_lines() {
+        let root = temp_repo("notes-refold");
+        let paths = flat_store(&root);
+        let flat_notes = paths.cards_dir().join("card-d2").join("notes.md");
+        fs::write(&flat_notes, "2026-06-08  first ruling\n").expect("decision notes");
+
+        run(&paths).expect("first fold");
+
+        // Resurrect the flat dir byte-equal, as a crash before pass 3 would
+        // leave it.
+        seed_flat(&paths, &typed_card("card-d2", CardType::Decision, None));
+        fs::write(&flat_notes, "2026-06-08  first ruling\n").expect("reseed notes");
+
+        let report = run(&paths).expect("refold finishes the move");
+        assert_eq!(report.finished, 1);
+        let log = fs::read_to_string(paths.cards_dir().join("notes.md")).expect("shared log");
+        assert_eq!(
+            log.matches("2026-06-08  [card-d2] first ruling").count(),
+            1,
+            "no duplicate line: {log:?}"
+        );
+        assert!(!paths.cards_dir().join("card-d2").exists());
 
         cleanup(&root);
     }
