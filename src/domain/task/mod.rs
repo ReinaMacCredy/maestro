@@ -96,10 +96,14 @@ impl BlockerTarget {
         let Some(by) = by else {
             return Ok(Self::Human);
         };
-        let card = card_store::resolve(paths, &by)
-            .ok()
-            .flatten()
-            .map(|resolved| resolved.card);
+        // A ref that cannot be a card id (a URL, a path) is free-form external;
+        // only id-shaped refs consult the store, where a failure is a real
+        // unreadable-card error, not absence -- swallowing it would misfile a
+        // tracked card ref as External.
+        if card_store::validate_card_id(&by).is_err() {
+            return Ok(Self::from_prefix(by));
+        }
+        let card = card_store::resolve(paths, &by)?.map(|resolved| resolved.card);
         match card.map(|card| card.card_type) {
             Some(CardType::Task | CardType::Bug | CardType::Chore) => Ok(Self::Task(by)),
             Some(CardType::Decision) => Ok(Self::Decision(by)),
@@ -899,6 +903,40 @@ mod tests {
         assert!(
             message.contains("maestro dep add") && message.contains("feature"),
             "error routes to the dep edge: {message}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A store read failure propagates instead of silently misfiling a tracked
+    /// card ref as External; a ref that cannot be a card id (a URL) never
+    /// consults the store and stays free-form external.
+    #[test]
+    fn blocker_target_propagates_store_errors_and_keeps_freeform_refs() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("invariant: test clock after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "maestro-from-ref-error-{}-{nanos}",
+            std::process::id()
+        ));
+        let paths = MaestroPaths::new(&root);
+        let path = crate::domain::card::store::card_path(&paths, "card-bad001");
+        std::fs::create_dir_all(path.parent().expect("card path has a dir"))
+            .expect("create the card dir");
+        std::fs::write(&path, "title: [unclosed").expect("plant the corrupt card");
+
+        let error = BlockerTarget::from_ref(&paths, Some("card-bad001".to_string()))
+            .expect_err("an unreadable card must surface, not misfile as External");
+        assert!(
+            format!("{error:#}").contains("failed to parse"),
+            "{error:#}"
+        );
+
+        assert_eq!(
+            BlockerTarget::from_ref(&paths, Some("https://github.com/acme/pull/42".to_string()))
+                .expect("free-form ref"),
+            BlockerTarget::External("https://github.com/acme/pull/42".to_string())
         );
         let _ = std::fs::remove_dir_all(&root);
     }
