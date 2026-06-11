@@ -186,7 +186,13 @@ pub fn show(args: ShowArgs) -> Result<()> {
     if args.json {
         println!("{}", serde_json::to_string_pretty(&c)?);
     } else {
-        let alias = card::query::display_alias(&card::query::scan(&paths)?, &c);
+        // The alias names same-parent siblings, so a parentless card never
+        // has one -- skip the store scan that exists only to compute it.
+        let alias = if c.parent.is_some() {
+            card::query::display_alias(&card::query::scan(&paths)?, &c)
+        } else {
+            None
+        };
         render_show(&c, alias.as_deref());
     }
     Ok(())

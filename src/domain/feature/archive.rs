@@ -15,8 +15,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::domain::card::query::{Coarse, coarse_of, scan_dir_with_paths, scan_with_paths};
-use crate::domain::card::store::is_dir_backed;
-use crate::domain::feature::registry::{load_archived_record, load_record, validate_feature_id};
+use crate::domain::card::store::{card_path, is_dir_backed};
+use crate::domain::feature::registry::{
+    archived_card_path, load_archived_record, load_record, validate_feature_id,
+};
 use crate::foundation::core::fs::ensure_dir;
 use crate::foundation::core::paths::MaestroPaths;
 
@@ -45,8 +47,8 @@ pub fn archive_feature(
     dry_run: bool,
 ) -> Result<FeatureArchiveReport> {
     validate_feature_id(id)?;
-    let live_card = paths.cards_dir().join(id).join("card.yaml");
-    let archive_card = paths.archive_cards_dir().join(id).join("card.yaml");
+    let live_card = card_path(paths, id);
+    let archive_card = archived_card_path(paths, id);
 
     let (record, feature_live) = if live_card.is_file() {
         (load_record(paths, id)?, true)
@@ -158,9 +160,9 @@ pub fn unarchive_feature(paths: &MaestroPaths, id: &str) -> Result<String> {
     validate_feature_id(id)?;
     let live_dir = paths.cards_dir().join(id);
     let archive_dir = paths.archive_cards_dir().join(id);
-    let feature_archived = archive_dir.join("card.yaml").is_file();
+    let feature_archived = archived_card_path(paths, id).is_file();
 
-    if !feature_archived && !live_dir.join("card.yaml").is_file() {
+    if !feature_archived && !card_path(paths, id).is_file() {
         bail!("archived feature not found: {id}");
     }
 

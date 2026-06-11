@@ -1416,7 +1416,7 @@ fn patch_spec_section(original: &str, section: &str, text: &str, replace: bool) 
 }
 
 /// Path to a feature's archived card (`.maestro/archive/cards/<id>/card.yaml`).
-fn archived_card_path(paths: &MaestroPaths, id: &str) -> PathBuf {
+pub(crate) fn archived_card_path(paths: &MaestroPaths, id: &str) -> PathBuf {
     paths.archive_cards_dir().join(id).join("card.yaml")
 }
 
