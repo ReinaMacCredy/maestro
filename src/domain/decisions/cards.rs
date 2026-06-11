@@ -43,8 +43,10 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<DecisionR
         return Ok(record_from_native_card(card));
     }
     let Card {
+        id,
         title,
         status,
+        parent,
         description,
         extra,
         ..
@@ -54,7 +56,11 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<DecisionR
     // The card verbs (`update`) write only the top-level copy fields, so they
     // are the freshest source for what they own (SPEC DN3: the card status is
     // the single source of truth). The overlay is conservative: an unrecognized
-    // status word and an absent description keep the record's own.
+    // status word and an absent description keep the record's own. Identity is
+    // never the payload's to override: a hand-edited `extra.id`/`extra.feature`
+    // would otherwise route later saves at a different logical record.
+    record.id = id;
+    record.feature = parent;
     record.title = title;
     if let Some(mapped) = decision_status_from_word(&status) {
         record.status = mapped;
@@ -313,6 +319,28 @@ mod tests {
         assert_eq!(reconstructed.status, DecisionStatus::Locked);
         assert_eq!(reconstructed.title, "retitled");
         assert_eq!(reconstructed.context.as_deref(), Some("fresh context"));
+    }
+
+    /// Identity is the envelope's: a hand-edited `extra.id`/`extra.feature`
+    /// must not route the typed view (and any save keyed off it) at a
+    /// different logical record than the card the resolver actually loaded.
+    #[test]
+    fn typed_read_keeps_the_envelope_identity() {
+        let record = feature_decision();
+        let mut card = card_for(&record).expect("fold record into card");
+        card.extra.insert(
+            serde_yaml::Value::String("id".to_string()),
+            serde_yaml::Value::String("decision-999".to_string()),
+        );
+        card.extra.insert(
+            serde_yaml::Value::String("feature".to_string()),
+            serde_yaml::Value::String("other-feature".to_string()),
+        );
+
+        let reconstructed =
+            record_from_card(card, "test".to_string()).expect("reconstruct the record");
+        assert_eq!(reconstructed.id, "decision-002");
+        assert_eq!(reconstructed.feature.as_deref(), Some("csv-export"));
     }
 
     /// SPEC D1 in card mode: two readers each take a load-time snapshot; the

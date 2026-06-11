@@ -38,6 +38,7 @@ pub(crate) fn item_from_card(card: Card, artifact: &str) -> Result<BacklogItem> 
         return Ok(item_from_native_card(card));
     }
     let Card {
+        id,
         title,
         status,
         extra,
@@ -47,6 +48,9 @@ pub(crate) fn item_from_card(card: Card, artifact: &str) -> Result<BacklogItem> 
         .with_context(|| format!("failed to parse {artifact}"))?;
     // The card verbs (`update`) write only the top-level copy fields, so they
     // are the freshest source for the title and status they own (SPEC DN3).
+    // Identity is the envelope's, never the payload's: a divergent `extra.id`
+    // would desync the item from the card home later saves resolve by id.
+    item.id = id;
     item.title = title;
     if !status.is_empty() {
         item.status = status;

@@ -38,6 +38,7 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
         return Ok(record_from_native_card(card));
     }
     let Card {
+        id,
         title,
         status,
         parent,
@@ -56,6 +57,9 @@ pub(crate) fn record_from_card(card: Card, artifact: String) -> Result<TaskRecor
         }
         .into());
     }
+    // Identity is the envelope's, never the payload's: a divergent `extra.id`
+    // would route later saves and lookups at a different logical record.
+    record.id = id;
     record.feature_id = parent;
     // The card verbs (`update`, `close`, `claim`) write only the top-level copy
     // fields, so they are the freshest source for what they own (SPEC DN3: the
