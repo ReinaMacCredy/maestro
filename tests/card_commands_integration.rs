@@ -705,3 +705,82 @@ fn the_new_verbs_on_a_legacy_repo_print_the_guiding_notice() {
         );
     }
 }
+
+/// SPEC-archive-memory-2 R6: the text index transparently accelerates
+/// `list --grep [--archived]`. The first indexed read creates it, a write
+/// staleness self-heals on the next read, a corrupt file falls back silently
+/// (and heals), a sub-trigram term skips the index entirely, and
+/// `index rebuild` is the explicit recovery verb -- results are identical on
+/// every path.
+#[test]
+fn text_index_accelerates_grep_transparently_with_silent_fallback() {
+    let temp = cards_repo("s2-text-index");
+    let repo = temp.path();
+    let index_file = repo.join(".maestro/index/text.json");
+
+    run(repo, &["create", "-t", "task", "Streaming exporter"]);
+    run(repo, &["create", "-t", "task", "Importer cleanup"]);
+    let importer = id_by_title(repo, "Importer cleanup");
+    run(repo, &["update", &importer, "--status", "abandoned"]);
+    run(repo, &["archive", "--loose"]);
+
+    // The first indexed read answers from a scan and writes the index.
+    assert!(!index_file.exists(), "no index before the first grep");
+    let live_hits = run(repo, &["list", "--grep", "exporter"]);
+    assert!(live_hits.contains("Streaming exporter"), "{live_hits}");
+    assert!(
+        index_file.exists(),
+        "list --grep creates the index transparently"
+    );
+
+    // The index covers the archive; the live-only view still scopes it out.
+    let live_only = run(repo, &["list", "--grep", "importer"]);
+    assert!(
+        !live_only.contains(&importer),
+        "an archived candidate stays out without --archived:\n{live_only}"
+    );
+    let with_archive = run(repo, &["list", "--grep", "importer", "--archived"]);
+    assert!(
+        with_archive.contains(&importer),
+        "the archived card is recalled through the index:\n{with_archive}"
+    );
+
+    // A write between reads goes stale; the next read self-heals in-verb.
+    run(repo, &["create", "-t", "task", "Quarterly exporter report"]);
+    let after_write = run(repo, &["list", "--grep", "exporter"]);
+    assert!(
+        after_write.contains("Streaming exporter")
+            && after_write.contains("Quarterly exporter report"),
+        "a card written after indexing is found without a manual rebuild:\n{after_write}"
+    );
+
+    // A corrupt index is never an error: the read falls back, then heals it.
+    fs::write(&index_file, "not json{{{").expect("invariant: index file is writable");
+    let corrupt_read = run(repo, &["list", "--grep", "exporter"]);
+    assert!(
+        corrupt_read.contains("Streaming exporter")
+            && corrupt_read.contains("Quarterly exporter report"),
+        "a corrupt index must not change results:\n{corrupt_read}"
+    );
+    let healed = fs::read_to_string(&index_file).expect("invariant: index file readable");
+    assert!(
+        healed.starts_with('{'),
+        "the read heals the corrupt index:\n{healed}"
+    );
+
+    // A term shorter than one trigram skips the index (plain scan, same answer).
+    let short = run(repo, &["list", "--grep", "ex"]);
+    assert!(
+        short.contains("Streaming exporter") && short.contains("Quarterly exporter report"),
+        "{short}"
+    );
+
+    // Explicit recovery verb with its receipt.
+    let receipt = run(repo, &["index", "rebuild"]);
+    assert!(receipt.contains("text index rebuilt"), "{receipt}");
+    assert!(
+        receipt.contains("(2 live, 1 archived)"),
+        "the receipt counts both trees:\n{receipt}"
+    );
+    assert!(receipt.contains("next: maestro list --grep"), "{receipt}");
+}

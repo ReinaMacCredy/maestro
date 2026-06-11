@@ -101,6 +101,20 @@ impl MaestroPaths {
         self.maestro_dir().join("backups")
     }
 
+    /// Return the local index directory (`.maestro/index`).
+    ///
+    /// Machine-local derived state (gitignored, like `runs/`): created on
+    /// demand by the text index, never by `init`, and safe to delete --
+    /// `maestro index rebuild` or the next indexed read recreates it.
+    pub fn index_dir(&self) -> PathBuf {
+        self.maestro_dir().join("index")
+    }
+
+    /// Return the text index file behind `list --grep` (SPEC-archive-memory-2 R6).
+    pub fn text_index_file(&self) -> PathBuf {
+        self.index_dir().join("text.json")
+    }
+
     /// Return the install lockfile path.
     pub fn install_lock_file(&self) -> PathBuf {
         self.maestro_dir().join("install-lock.yaml")

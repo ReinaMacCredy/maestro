@@ -50,21 +50,27 @@ pub fn list(args: ListArgs) -> Result<()> {
         status,
     };
     let grep = args.grep.as_deref();
+    // The text index narrows grep to a superset of possible matches (R6);
+    // `None` -- term too short, index missing and unrebuildable -- falls back
+    // to the plain scan, so results never depend on the index.
+    let candidates = grep.and_then(|term| card::index::candidates(&paths, term));
+    let candidates = candidates.as_ref();
     let live = card::query::scan_with_paths(&paths)?;
     let archived = if args.archived {
         card::query::scan_dir_with_paths(&paths.archive_cards_dir())?
     } else {
         Vec::new()
     };
-    let rows: Vec<(&card::schema::Card, bool)> = card::query::query_scanned(&live, &filter, grep)
-        .into_iter()
-        .map(|c| (c, false))
-        .chain(
-            card::query::query_scanned(&archived, &filter, grep)
-                .into_iter()
-                .map(|c| (c, true)),
-        )
-        .collect();
+    let rows: Vec<(&card::schema::Card, bool)> =
+        card::query::query_scanned(&live, &filter, grep, candidates)
+            .into_iter()
+            .map(|c| (c, false))
+            .chain(
+                card::query::query_scanned(&archived, &filter, grep, candidates)
+                    .into_iter()
+                    .map(|c| (c, true)),
+            )
+            .collect();
     render_list(&rows);
     Ok(())
 }

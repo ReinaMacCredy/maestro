@@ -13,6 +13,7 @@ pub mod event;
 pub mod feature;
 pub mod harness;
 pub mod hook;
+pub mod index;
 pub mod init;
 pub mod install;
 pub mod mcp;
@@ -167,6 +168,8 @@ pub enum RootCommand {
     Harness(HarnessArgs),
     #[command(about = "Query computed read models (matrix, friction, decisions, proof, backlog)")]
     Query(QueryArgs),
+    #[command(about = "Maintain the local text index that accelerates list --grep")]
+    Index(IndexArgs),
     #[command(about = "Run or inspect the MCP server (serve, stdin, tools, list)")]
     Mcp(McpArgs),
     #[command(about = "Hook entry points invoked by the agent harness")]
@@ -984,6 +987,21 @@ pub enum QueryCommand {
 }
 
 #[derive(Debug, Args)]
+pub struct IndexArgs {
+    #[command(subcommand)]
+    pub command: IndexCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum IndexCommand {
+    #[command(
+        about = "Rebuild the text index over live + archived cards from scratch",
+        after_help = "The archive is maestro's memory: list --grep [--archived] searches it,\nand the index keeps that search fast as the store grows. The index is\nlocal derived state (.maestro/index/); reads fall back to a plain scan\nwhenever it is missing or stale, so rebuilding is recovery, not setup."
+    )]
+    Rebuild,
+}
+
+#[derive(Debug, Args)]
 pub struct McpArgs {
     #[command(subcommand)]
     pub command: McpCommand,
@@ -1062,6 +1080,7 @@ pub fn run(cli: Cli) -> Result<()> {
         RootCommand::Close(args) => card::close(args),
         RootCommand::Harness(args) => harness::run(args),
         RootCommand::Query(args) => query::run(args),
+        RootCommand::Index(args) => index::run(args),
         RootCommand::Mcp(args) => mcp::run(args),
         RootCommand::Hook(args) => hook::run(args),
         RootCommand::Watch(args) => watch::run(args),

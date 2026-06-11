@@ -368,20 +368,32 @@ pub fn query<'a>(cards: &'a [Card], filter: &ListFilter) -> Vec<&'a Card> {
 
 /// [`query`] over (card, record path) pairs with an optional `--grep` term
 /// (SPEC-archive-memory A1): the path is what makes sidecar grep possible,
-/// and the same call runs over the live and archive trees.
+/// and the same call runs over the live and archive trees. `candidates` is
+/// the text index's superset of possible matches (SPEC-archive-memory-2 R6):
+/// a card outside it skips the grep -- and its sidecar reads -- entirely;
+/// `None` greps every card.
 pub fn query_scanned<'a>(
     cards: &'a [(Card, PathBuf)],
     filter: &ListFilter,
     grep: Option<&str>,
+    candidates: Option<&std::collections::BTreeSet<String>>,
 ) -> Vec<&'a Card> {
     cards
         .iter()
         .filter(|(card, path)| {
-            filter.matches(card) && grep.is_none_or(|term| grep_matches(card, path, term))
+            filter.matches(card)
+                && grep.is_none_or(|term| {
+                    candidates.is_none_or(|set| set.contains(&card.id))
+                        && grep_matches(card, path, term)
+                })
         })
         .map(|(card, _)| card)
         .collect()
 }
+
+/// The dir-backed sidecar files grep (and the text index) read; one list so
+/// the index can never go blind to a surface the grep searches.
+pub(crate) const GREP_SIDECARS: &[&str] = &["notes.md", "spec.md"];
 
 /// Case-insensitive substring match for `list --grep`: the title, the prose
 /// body, and -- for a dir-backed card -- its `notes.md` and `spec.md`
@@ -397,7 +409,7 @@ fn grep_matches(card: &Card, path: &Path, term: &str) -> bool {
     }
     is_dir_backed(path)
         && path.parent().is_some_and(|dir| {
-            ["notes.md", "spec.md"].iter().any(|sidecar| {
+            GREP_SIDECARS.iter().any(|sidecar| {
                 std::fs::read_to_string(dir.join(sidecar))
                     .is_ok_and(|text| text.to_lowercase().contains(&needle))
             })
@@ -695,7 +707,7 @@ mod tests {
         ];
 
         let hits = |term: &str| -> Vec<&str> {
-            query_scanned(&pairs, &ListFilter::default(), Some(term))
+            query_scanned(&pairs, &ListFilter::default(), Some(term), None)
                 .iter()
                 .map(|c| c.id.as_str())
                 .collect()
@@ -711,7 +723,7 @@ mod tests {
         );
         assert_eq!(hits("nothing-here"), Vec::<&str>::new());
         assert_eq!(
-            query_scanned(&pairs, &ListFilter::default(), None).len(),
+            query_scanned(&pairs, &ListFilter::default(), None, None).len(),
             3,
             "no term keeps every card"
         );
